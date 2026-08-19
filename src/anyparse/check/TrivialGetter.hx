@@ -16,12 +16,16 @@ using StringTools;
 using Lambda;
 
 /**
- * Flags a property that only bridges a private same-class backing field through trivial
- * accessors, and collapses it to a plainer form. The user's rule: don't hand-write a trivial
- * getter/setter over a backing field, use property access instead.
+ * Flags a property that only bridges a backing field through trivial accessors, and collapses it
+ * to a plainer form. The user's rule: don't hand-write a trivial getter/setter over a backing
+ * field, use property access instead.
  * `Severity.Info`, with an autofix that renames the backing field into the property within the
  * class and deletes the collapsed accessors — airtight only when every backing-field reference
  * is a bare or `this.` access (other shapes stay report-only).
+ *
+ * The backing field comes in two spellings, and the shapes below are stated for the BRIDGED one
+ * (a private same-class field of a DIFFERENT name). The other is the SELF-BACKED spelling, which
+ * has its own section at the end.
  *
  * ## Shapes
  *
@@ -98,6 +102,36 @@ using Lambda;
  *
  * Internal writes to a `(get, never)` / `(get, null)` backing field from other methods are FINE
  * — that is what `(default, null)` preserves — so no write gate applies to those shapes.
+ *
+ * ## The SELF-BACKED spelling: the property IS its own backing field
+ *
+ * A trivial getter may return the PROPERTY's own name. Haxe permits that only where the property
+ * has physical storage of its own: `@:isVar` grants it to `(get, set)` and `(get, never)`, and an
+ * already-physical accessor side grants it to `(get, null)`. Every shape above applies unchanged
+ * — the same accessor combinations collapse to the same clauses — but the fix is a strict SUBSET
+ * of the bridged one, because there is no second member: no field deletion, no initializer
+ * relocation, no reference rename, and no `@:bypassAccessor` marking. That last one is not an
+ * omission: an external write already routes through `set_x` before the collapse and still does
+ * after, which is exactly the property the bridged arm's three-way write decision exists to
+ * restore. Only two things differ in the outcome:
+ *
+ * - `@:isVar` is dropped WITH the collapse. Every target clause here has a physical side, so the
+ *   metadata is dead the moment the getter goes — and it cannot be dropped on its own, since Haxe
+ *   rejects the pre-collapse shape without it ("Add @:isVar here to enable it"). One edit, not two.
+ * - A self-backed `(get, never)` collapses to `(default, never)`, not the bridged `(default,
+ *   null)`. `never` refuses a write from every position, the constructor included, so there is no
+ *   in-class writer to keep legal and widening to `null` would buy nothing.
+ *
+ * Gates: the subtype side is the shared `subtypeOverridesProperty`; `subtypeReferencesField` is
+ * exempt (nothing is deleted, so no subtype reference is stranded) and there is no cross-file
+ * slice for the same reason. The supertype side is new — an `override` accessor refuses, because
+ * a self-backed property can legally sit over a supertype's plain `get_x` and deleting the
+ * override would re-point every call on that implementation.
+ *
+ * NOTE the interaction with `hxq encapsulate-field`, which emits exactly the self-backed
+ * both-trivial shape (`@:isVar var x(get, set)` plus a forwarding pair) as a SEAM for logic the
+ * user is about to add. Until that logic arrives the accessors do nothing, so this rule reports
+ * it — the same way it reports a hand-written bridged pair used as a seam. The finding is `Info`.
  */
 @:nullSafety(Strict)
 final class TrivialGetter implements Check implements ConfigAware implements CrossFileFix {
@@ -105,11 +139,17 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** Default cap on statement-level backing-field writes a shape-A collapse marks `@:bypassAccessor` before it instead falls back to inlining the getter. */
 	private static inline final DEFAULT_MAX_BYPASS_WRITES: Int = 3;
 
-	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
-	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
+	/** The write accessor that refuses a write from EVERY position, the constructor included — the one whose SELF-BACKED collapse target is `(default, never)` rather than `(default, null)`. */
+	private static inline final WRITE_NEVER: String = 'never';
+
+	/** The `messageFor` shape tag of the `(get, set)` -> `(default, set)` collapse: a trivial getter over a real setter. */
+	private static inline final SHAPE_SET_A: String = 'setA';
 
 	/** The metadata that gives a property physical storage of its OWN — what makes a self-backed trivial getter legal, and dead the moment the collapse gives the property a `default` side. */
 	private static inline final IS_VAR_META: String = '@:isVar';
+
+	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
+	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -125,8 +165,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	public function description(): String {
-		return 'a property bridging a private backing field through trivial accessors — (get, never)/(get, null) collapses to ('
-			+ 'default, null); (get, set) collapses to (default, set) when only the getter is trivial, or to a plain field when both are';
+		return 'a property bridging a backing field through trivial accessors — (get, never)/(get, null) collapses to (default, '
+			+ 'null); (get, set) collapses to (default, set) when only the getter is trivial, or to a plain field when both are. The '
+			+ 'backing field is a private same-class field, or the property ITSELF under @:isVar, which the collapse drops with it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -287,8 +328,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	private static inline function subtypeFieldBlocks(
 		index: Null<SymbolIndex>, className: Null<String>, field: String, selfBacked: Bool, inlineGetter: Null<QueryNode>
 	): Bool {
-		return !selfBacked && inlineGetter == null && index != null && className != null
-			&& index.subtypeReferencesField(className, field);
+		return !selfBacked && inlineGetter == null && index != null && className != null && index.subtypeReferencesField(className, field);
 	}
 
 	/** Whether `c` is an identifier character. */
@@ -332,6 +372,36 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		return spans.exists(s -> span.from >= s.from && span.to <= s.to);
 	}
 
+	/** Whether `c` is a space or a tab (a line-internal separator, newline excluded). */
+	private static inline function isHorizontalSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code;
+	}
+
+	/**
+	 * The collapse target of a read-only property (`(get, never)` / `(get, null)`): `(default,
+	 * null)`, except for a SELF-BACKED `(get, never)`, which becomes `(default, never)`. The
+	 * difference is measured: `never` refuses a write from EVERY position, the constructor
+	 * included, so a self-backed `(get, never)` property has no writer to keep legal and
+	 * `(default, null)` would widen its access for nothing. The bridged arm has the opposite
+	 * need — its private backing field IS written inside the class, and those writes become
+	 * property writes, which only `null` permits.
+	 */
+	private static inline function readOnlyClauseText(propName: String, write: String, field: String): String {
+		return write == WRITE_NEVER && field == propName ? '(default, never)' : '(default, null)';
+	}
+
+	/**
+	 * Whether either accessor carries `override`, which refuses the self-backed collapse. A
+	 * self-backed property can legally sit over an INHERITED accessor method (a supertype
+	 * declaring a plain `get_x` the subclass's `@:isVar var x(get, ...)` then overrides —
+	 * measured to compile), and deleting the override would silently re-point every call on
+	 * the supertype's own implementation. The bridged arm reaches the same shapes through
+	 * `subtypeOverridesProperty` in the other direction; this is its supertype-side twin.
+	 */
+	private static inline function accessorOverrides(getter: { isOverride: Bool }, setter: Null<{ isOverride: Bool }>): Bool {
+		return getter.isOverride || (setter != null && setter.isOverride);
+	}
+
 	/**
 	 * Flag each collapsible property of `cls` (`classifyProperty` decides the shape and applies
 	 * the soundness gates), using the shared `memberTables`. A class whose property a subtype overrides in the
@@ -361,8 +431,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			// re-parse gate would then drop EVERY edit the pass had for this file. The collapse arm
 			// removes the field and the accessors together, so it is judged as one set.
 			if (
-				c.inlineGetter == null
-				&& MemberBranchScan.survivingDeletions(branch, cls, deletions, isDeclKind).length != deletions.length
+				c.inlineGetter == null && MemberBranchScan.survivingDeletions(branch, cls, deletions, isDeclKind).length != deletions.length
 			)
 				continue;
 			// A subtype references the backing field the collapse deletes; still emit when every such
@@ -580,11 +649,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		var from: Int = meta.from;
 		while (from > 0 && isHorizontalSpace(source.fastCodeAt(from - 1))) from--;
 		return new Span(from, meta.to);
-	}
-
-	/** Whether `c` is a space or a tab (a line-internal separator, newline excluded). */
-	private static inline function isHorizontalSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code;
 	}
 
 	/**
@@ -859,7 +923,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 							final access: Null<{ read: String, write: String }> = accessorClause(source, span);
 							if (
 								access != null && access.read == 'get'
-								&& (access.write == 'never' || access.write == 'null' || access.write == 'set')
+								&& (access.write == WRITE_NEVER || access.write == 'null' || access.write == 'set')
 							) properties.push({
 								name: name,
 								node: child,
@@ -1005,20 +1069,11 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			message: String,
 			bypassStmts: Array<QueryNode>,
 			inlineGetter: Null<QueryNode>
-		}> = if (prop.write == 'never' || prop.write == 'null')
-			trivGet == null ? null : {
-				field: trivGet,
-				clauseText: readOnlyClauseText(prop.name, prop.write, trivGet),
-				deleted: [getter.node],
-				ctorInit: null,
-				message: messageFor('nullcase', prop.name, trivGet),
-				bypassStmts: [],
-				inlineGetter: null
-			}
-		else if (prop.write == 'set')
-			classifySetProperty(cls, prop, getter.node, getter.isInline, getter.isOverride, trivGet, setters, privateFieldNodes, maxBypass)
-		else
-			null;
+		}> = prop.write == 'set'
+			? classifySetProperty(
+				cls, prop, getter.node, getter.isInline, getter.isOverride, trivGet, setters, privateFieldNodes, maxBypass
+			)
+			: classifyReadOnlyProperty(prop.name, prop.write, getter.node, trivGet);
 		if (raw == null) return null;
 		// SELF-BACKED: the trivially returned name is the property's OWN, which Haxe permits only
 		// when the property has physical storage of its own (`@:isVar`, or an already-physical
@@ -1057,30 +1112,29 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * The collapse target of a read-only property (`(get, never)` / `(get, null)`): `(default,
-	 * null)`, except for a SELF-BACKED `(get, never)`, which becomes `(default, never)`. The
-	 * difference is measured: `never` refuses a write from EVERY position, the constructor
-	 * included, so a self-backed `(get, never)` property has no writer to keep legal and
-	 * `(default, null)` would widen its access for nothing. The bridged arm has the opposite
-	 * need — its private backing field IS written inside the class, and those writes become
-	 * property writes, which only `null` permits.
+	 * The `(get, never)` / `(get, null)` classification: a trivial getter collapses the property
+	 * onto its own storage (`readOnlyClauseText` picks the clause) and the getter is deleted.
+	 * Internal writes never gate here — that is exactly what the surviving write side preserves.
+	 * Null for any other write accessor, and for a getter carrying real logic.
 	 */
-	private static inline function readOnlyClauseText(propName: String, write: String, field: String): String {
-		return write == 'never' && field == propName ? '(default, never)' : '(default, null)';
-	}
-
-	/**
-	 * Whether either accessor carries `override`, which refuses the self-backed collapse. A
-	 * self-backed property can legally sit over an INHERITED accessor method (a supertype
-	 * declaring a plain `get_x` the subclass's `@:isVar var x(get, ...)` then overrides —
-	 * measured to compile), and deleting the override would silently re-point every call on
-	 * the supertype's own implementation. The bridged arm reaches the same shapes through
-	 * `subtypeOverridesProperty` in the other direction; this is its supertype-side twin.
-	 */
-	private static inline function accessorOverrides(
-		getter: { isOverride: Bool }, setter: Null<{ isOverride: Bool }>
-	): Bool {
-		return getter.isOverride || (setter != null && setter.isOverride);
+	private static function classifyReadOnlyProperty(propName: String, write: String, getterNode: QueryNode, trivGet: Null<String>): Null<{
+		field: String,
+		clauseText: String,
+		deleted: Array<QueryNode>,
+		ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
+		message: String,
+		bypassStmts: Array<QueryNode>,
+		inlineGetter: Null<QueryNode>
+	}> {
+		return trivGet == null || (write != WRITE_NEVER && write != 'null') ? null : {
+			field: trivGet,
+			clauseText: readOnlyClauseText(propName, write, trivGet),
+			deleted: [getterNode],
+			ctorInit: null,
+			message: messageFor('nullcase', propName, trivGet),
+			bypassStmts: [],
+			inlineGetter: null
+		};
 	}
 
 	/**
@@ -1104,7 +1158,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function messageFor(shape: String, propName: String, field: String, count: Int = 0): String {
 		return switch shape {
-			case 'setA': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
+			case SHAPE_SET_A: 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
 				+ '(default, set)\' and remove get_$propName';
 			case 'setABypass': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
 				+ '(default, set)\', remove get_$propName and mark $count external write(s) with @:bypassAccessor';
@@ -1446,7 +1500,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			clauseText: '(default, set)',
 			deleted: [getterNode],
 			ctorInit: null,
-			message: messageFor('setA', prop.name, trivGet),
+			message: messageFor(SHAPE_SET_A, prop.name, trivGet),
 			bypassStmts: [],
 			inlineGetter: null
 		};
@@ -1469,7 +1523,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				deleted: [getterNode],
 				ctorInit: ci == null ? null : { stmt: ci.stmt, rhsSpan: ci.rhsSpan },
 				message: writes.length == 0
-					? messageFor('setA', prop.name, trivGet)
+					? messageFor(SHAPE_SET_A, prop.name, trivGet)
 					: messageFor('setABypass', prop.name, trivGet, writes.length),
 				bypassStmts: writes,
 				inlineGetter: null

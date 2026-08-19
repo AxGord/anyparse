@@ -66,9 +66,7 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 	}
 
 	public function testIsVarGetNullCollapsesToDefaultNull(): Void {
-		final fixed: String = fixedText(cls(
-			'@:isVar public var angle(get, null):Float;\n\tfunction get_angle():Float return angle;'
-		));
+		final fixed: String = fixedText(cls('@:isVar public var angle(get, null):Float;\n\tfunction get_angle():Float return angle;'));
 		Assert.isTrue(fixed.indexOf('public var angle(default, null):Float;') >= 0);
 		Assert.equals(-1, fixed.indexOf('@:isVar'));
 	}
@@ -81,9 +79,7 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 
 	/** `never` blocks writes everywhere, so the exact-preserving target is `(default, never)`, not the bridged arm's `(default, null)`. */
 	public function testIsVarGetNeverCollapsesToDefaultNever(): Void {
-		final fixed: String = fixedText(cls(
-			'@:isVar public var angle(get, never):Float = 1;\n\tfunction get_angle():Float return angle;'
-		));
+		final fixed: String = fixedText(cls('@:isVar public var angle(get, never):Float = 1;\n\tfunction get_angle():Float return angle;'));
 		Assert.isTrue(fixed.indexOf('public var angle(default, never):Float = 1;') >= 0);
 		Assert.equals(-1, fixed.indexOf('@:isVar'));
 	}
@@ -101,9 +97,9 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 
 	/** Only the `@:isVar` token goes; a sibling metadata annotation on the same line survives. */
 	public function testIsVarDropsOnlyItsOwnMeta(): Void {
-		final fixed: String = fixedText(cls(
-			'@:isVar @:noCompletion public var angle(get, null):Float;\n\tfunction get_angle():Float return angle;'
-		));
+		final fixed: String = fixedText(
+			cls('@:isVar @:noCompletion public var angle(get, null):Float;\n\tfunction get_angle():Float return angle;')
+		);
 		Assert.isTrue(fixed.indexOf('@:noCompletion public var angle(default, null):Float;') >= 0);
 		Assert.equals(-1, fixed.indexOf('@:isVar'));
 	}
@@ -141,24 +137,24 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 
 	/** An `override` getter answers a supertype contract the collapse would silently break. */
 	public function testOverrideGetterNotFlagged(): Void {
-		final vs: Array<Violation> = violations(cls(
-			'@:isVar public var angle(get, null):Float;\n\toverride function get_angle():Float return angle;'
-		));
+		final vs: Array<Violation> = violations(
+			cls('@:isVar public var angle(get, null):Float;\n\toverride function get_angle():Float return angle;')
+		);
 		Assert.equals(0, vs.length);
 	}
 
 	/** An implemented interface may require the physical accessor, so an unresolvable one keeps blocking. */
 	public function testImplementedInterfaceBlocks(): Void {
-		final src: String = 'class C implements I {\n\t@:isVar public var angle(get, null):Float;\n'
-			+ '\tfunction get_angle():Float return angle;\n}';
+		final src: String =
+			'class C implements I {\n\t@:isVar public var angle(get, null):Float;\n\tfunction get_angle():Float return angle;\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	/** A `dynamic` getter is real re-bindable behaviour and never collapses. */
 	public function testDynamicGetterNotFlagged(): Void {
-		final vs: Array<Violation> = violations(cls(
-			'@:isVar public var angle(get, null):Float;\n\tdynamic function get_angle():Float return angle;'
-		));
+		final vs: Array<Violation> = violations(
+			cls('@:isVar public var angle(get, null):Float;\n\tdynamic function get_angle():Float return angle;')
+		);
 		Assert.equals(0, vs.length);
 	}
 
