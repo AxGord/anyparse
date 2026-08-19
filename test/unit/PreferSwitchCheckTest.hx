@@ -271,6 +271,35 @@ class PreferSwitchCheckTest extends Test {
 		Assert.equals(1, violations(src, ENUM_ABSTRACT).length);
 	}
 
+	/**
+	 * The bare-identifier constant arm reaches the STATEMENT rule too, and not by a second
+	 * implementation: `prefer-switch` and `prefer-switch-expression` share ONE scanner
+	 * (`SwitchChain`), so gate 6 is a single body of code and the two rules cannot drift apart
+	 * on what counts as a `case` pattern. This is that shared gate seen from the statement side.
+	 */
+	public function testBareStaticInlineConstantChainFlagged(): Void {
+		final src: String = "class C {\n\tstatic inline final alpha:String = 'a';\n\tstatic inline final beta:String = 'b';\n"
+			+ '\tstatic function f(text:String):Void {\n\t\tif (text == alpha) p(); else if (text == beta) q(); else r();\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-switch', vs[0].rule);
+		Assert.isTrue(fixedSource(src).indexOf('case alpha: p();') >= 0);
+	}
+
+	/**
+	 * …and so does the refusal. A local operand is a CAPTURE in a pattern, which would make the
+	 * first arm swallow every value; the statement rule inherits the binding proof unchanged.
+	 */
+	public function testBareLocalOperandChainNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				"class C {\n\tstatic function f(text:String):Void {\n\t\tfinal target = 'a';\n\t\tfinal other = 'b';\n"
+				+ '\t\tif (text == target) p(); else if (text == other) q(); else r();\n\t}\n}'
+			).length
+		);
+	}
+
 	private inline function wrap(body: String): String {
 		return wrapWithParams('', body);
 	}
