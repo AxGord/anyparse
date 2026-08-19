@@ -52,6 +52,15 @@ import anyparse.runtime.Span;
  * the very fixture above, which came back with an orphaned `using` before the grouping landed. `Lambda.foreach` has no such
  * collision — no stdlib collection declares `foreach` — which is why `prefer-foreach` ships as
  * an ordinary trusted fix, on the same footing as `prefer-find`.
+ *
+ * ## The shadow no longer costs the site
+ *
+ * A receiver whose type declares `exists` is not out of reach, only out of reach of the EXTENSION
+ * spelling: `Lambda.exists(m, x -> …)` names the module outright and never consults the receiver's
+ * members. `BoolLoopScan` emits that QUALIFIED form wherever the shadow gate fires (and inserts no
+ * `using`, which a static call does not need), so the `Map` receiver above converts rather than
+ * staying silent. The one gate the fallback adds is its own name: `Lambda` must still MEAN the
+ * module here — see `UsingScan.qualifiedCallReaches`.
  */
 @:nullSafety(Strict)
 final class PreferExists implements Check implements DefaultOff implements RiskyFix implements GroupedFix {

@@ -262,6 +262,9 @@ final class BoolLoopScan {
 			if (span != null) byKey['${span.from}:${span.to}'] = cand;
 		});
 		final rewrites: Array<{ span: Span, text: String }> = [];
+		// Parallel to `rewrites`: whether each took the EXTENSION spelling, which is what decides
+		// the `using` insert and its group. A QUALIFIED rewrite names `Lambda` outright.
+		final extensionForm: Array<Bool> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
@@ -270,18 +273,38 @@ final class BoolLoopScan {
 			final edit: Null<{ span: Span, text: String }> = buildEdit(cand, source, s, kind);
 			if (edit == null || RefactorSupport.editsOverlapAny([edit], rewrites)) continue;
 			rewrites.push(edit);
+			extensionForm.push(!cand.head.qualified);
 		}
-		if (rewrites.length == 0) return [];
-		if (UsingScan.hasUsingModule(header, LAMBDA_MODULE)) return [for (e in rewrites) { span: e.span, text: e.text, group: null }];
+		return rewrites.length == 0 ? [] : withUsingInsert(rewrites, extensionForm, header);
+	}
+
+	/**
+	 * The rewrites as `GroupedEdit`s, plus the `using Lambda;` the EXTENSION-form ones need — atomic
+	 * with exactly those, and absent when none of them is present.
+	 *
+	 * The inserted `using` and the calls that need it are ONE group: a verifier that reverted every
+	 * rewrite while keeping the `using` would leave a file that still compiles, so nothing
+	 * downstream could tell that subset was wrong — the orphan-import class `GroupedFix` exists for.
+	 * Grouping only bites in a file that needed a new `using`; a file that already had one keeps
+	 * per-edit granularity, which is the common case. A QUALIFIED rewrite stays OUTSIDE the group —
+	 * it does not depend on the import, so binding it there would make an unrelated revert take it
+	 * down too, and a file whose every claimed site is shadowed gets the calls and no import at all.
+	 */
+	private static function withUsingInsert(
+		rewrites: Array<{ span: Span, text: String }>, extensionForm: Array<Bool>, header: UsingHeader
+	): Array<GroupedEdit> {
+		final flat: Array<GroupedEdit> = [for (e in rewrites) { span: e.span, text: e.text, group: null }];
+		if (!extensionForm.contains(true) || UsingScan.hasUsingModule(header, LAMBDA_MODULE)) return flat;
 		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-		if (RefactorSupport.editsOverlapAny([usingEdit], rewrites))
-			return [for (e in rewrites) { span: e.span, text: e.text, group: null }];
-		// The inserted `using` and the calls that need it are ONE atomic group: a verifier that
-		// reverted every rewrite while keeping the `using` would leave a file that still compiles,
-		// so nothing downstream could tell that subset was wrong — the orphan-import class
-		// `GroupedFix` exists for. Grouping only bites in a file that needed a new `using`; a file
-		// that already had one keeps per-edit granularity, which is the common case.
-		final grouped: Array<GroupedEdit> = [for (e in rewrites) { span: e.span, text: e.text, group: USING_GROUP }];
+		if (RefactorSupport.editsOverlapAny([usingEdit], rewrites)) return flat;
+		final grouped: Array<GroupedEdit> = [
+			for (i in 0...rewrites.length)
+				{
+					span: rewrites[i].span,
+					text: rewrites[i].text,
+					group: extensionForm[i] ? USING_GROUP : null
+				}
+		];
 		grouped.push({ span: usingEdit.span, text: usingEdit.text, group: USING_GROUP });
 		return grouped;
 	}
@@ -541,7 +564,11 @@ final class BoolLoopScan {
 		final iterable: QueryNode = operands[0];
 		if (iterable.kind == s.intervalKind) return null;
 		if (iterable.kind == s.callKind && !callIterableIsIterable(iterable, probe)) return null;
-		if (receiverDeclaresMethod(iterable, probe)) return null;
+		// A receiver member beats the extension, but not the QUALIFIED call — so a shadow no longer
+		// refuses the site, it picks the other spelling. It still refuses when the bare name
+		// `Lambda` does not reach the module here, which is the fallback's own gate.
+		final shadowed: Bool = receiverDeclaresMethod(iterable, probe);
+		if (shadowed && !probe.qualified()) return null;
 		final body: QueryNode = unwrapSole(operands[1], s);
 		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final then: QueryNode = unwrapSole(body.children[1], s);
@@ -552,7 +579,8 @@ final class BoolLoopScan {
 			loopVar: loopVar,
 			iterable: iterable,
 			cond: body.children[0],
-			value: value
+			value: value,
+			qualified: shadowed
 		};
 	}
 
@@ -592,6 +620,13 @@ final class BoolLoopScan {
 	 * that cannot compile, which the oracle reverts on every run rather than once. The question is
 	 * `SymbolIndex.memberShadowsExtension`, the same one `prefer-static-extension` has always asked.
 	 *
+	 * A hit no longer REFUSES the site: it selects the QUALIFIED spelling `Lambda.exists(m, x -> …)`,
+	 * which names the module outright and never consults the receiver's members. The two forms carry
+	 * the SAME type requirement — `Lambda`'s first parameter is an `Iterable<A>` either way — so the
+	 * fallback changes which call is written and nothing about whether the fold is sound. The refusal
+	 * survives only where `UsingScan.qualifiedCallReaches` says the bare name `Lambda` does not reach
+	 * the module from this file.
+	 *
 	 * It applies to EVERY iterable shape, not just the CALL one the `Iterable` proof above gates —
 	 * the two ask about different things (what the receiver IS versus what it DECLARES) and a
 	 * plain identifier is exactly where the measured `Map` sites live. Both fail closed on an
@@ -627,6 +662,8 @@ final class BoolLoopScan {
 		var recvBuilt: Bool = false;
 		var purity: Null<PurityCtx> = null;
 		var purityBuilt: Bool = false;
+		var reaches: Bool = false;
+		var reachesBuilt: Bool = false;
 		return {
 			nominal: () -> {
 				if (!valueBuilt) {
@@ -649,6 +686,13 @@ final class BoolLoopScan {
 					purity = symbols == null ? null : PurityScan.contextOf(plugin, source, tree, symbols);
 				}
 				return purity;
+			},
+			qualified: () -> {
+				if (!reachesBuilt) {
+					reachesBuilt = true;
+					reaches = UsingScan.qualifiedCallReaches(UsingScan.headerOf(tree, source, plugin), LAMBDA_MODULE, method, index);
+				}
+				return reaches;
 			},
 			index: index,
 			method: method
@@ -684,7 +728,7 @@ final class BoolLoopScan {
 		final anchorSpan: Null<Span> = cand.anchor.span;
 		final parts: Null<Parts> = callParts(cand, source, s, kind);
 		if (anchorSpan == null || parts == null) return null;
-		final core: String = '${excerpt(parts.iterable)}.${method(kind)}(${cand.head.loopVar} -> ${excerpt(parts.predicate)})';
+		final core: String = callText(cand.head, excerpt(parts.iterable), excerpt(parts.predicate), kind);
 		final guard: Null<String> = parts.guard;
 		final flag: Null<Flag> = cand.flag;
 		// The message shows the SINK the fold writes to, so a reader can tell the two arms apart
@@ -717,7 +761,7 @@ final class BoolLoopScan {
 		// by other paths and must survive, so the region stops at the loop.
 		final region: Span = cand.subsumesTrailing ? new Span(anchorSpan.from, trailingSpan.to) : anchorSpan;
 		if (droppedRegionHasComment(source, region, parts.kept)) return null;
-		final core: String = '${parts.iterable}.${method(kind)}(${cand.head.loopVar} -> ${parts.predicate})';
+		final core: String = callText(cand.head, parts.iterable, parts.predicate, kind);
 		final guard: Null<String> = parts.guard;
 		final flag: Null<Flag> = cand.flag;
 		if (flag == null) return { span: region, text: guard == null ? 'return $core;' : 'return $guard && $core;' };
@@ -727,6 +771,17 @@ final class BoolLoopScan {
 		final annotation: Null<String> = flag.annotation;
 		final head: String = annotation == null ? flag.name : '${flag.name}:$annotation';
 		return { span: region, text: '$FINAL_KEYWORD $head = $core;' };
+	}
+
+	/**
+	 * The fold's call, in the spelling `head` selected: the extension `xs.exists(v -> c)`, or — when
+	 * a receiver member shadows it — the QUALIFIED `Lambda.exists(xs, v -> c)`, which routes around
+	 * that member and needs no `using Lambda;` at all.
+	 */
+	private static function callText(head: Head, iterable: String, predicate: String, kind: BoolLoopKind): String {
+		return head.qualified
+			? '$LAMBDA_MODULE.${method(kind)}($iterable, ${head.loopVar} -> $predicate)'
+			: '$iterable.${method(kind)}(${head.loopVar} -> $predicate)';
 	}
 
 	/**
@@ -755,7 +810,11 @@ final class BoolLoopScan {
 		}
 		return {
 			guard: guardText,
-			iterable: parenthesizeUnless(source.substring(iterSpan.from, iterSpan.to), postfixSafe(cand.head.iterable.kind, s)),
+			// The QUALIFIED spelling puts the receiver in an ARGUMENT slot, where no expression needs
+			// parenthesising; only the extension form binds `.exists(` onto it as a postfix.
+			iterable: parenthesizeUnless(
+				source.substring(iterSpan.from, iterSpan.to), cand.head.qualified || postfixSafe(cand.head.iterable.kind, s)
+			),
 			// The inversion is a WRAP, never De Morgan: distributing `!` through a chain reorders
 			// the operands a null narrowing depends on. `!!c` and `c` agree, so a condition that
 			// was already a `!` arrives here as its stripped operand and needs no wrap.
@@ -876,6 +935,14 @@ private typedef Head = {
 
 	/** The value the loop's own `return` carries — `true` for the `exists` direction. */
 	var value: Bool;
+
+	/**
+	 * Whether this site takes the QUALIFIED spelling `Lambda.<m>(xs, v -> c)` rather than the
+	 * extension `xs.<m>(v -> c)` — true exactly when the receiver's own type declares the method
+	 * and the module name still reaches `Lambda` here. It changes only WHICH call is written: a
+	 * qualified site needs no `using Lambda;` and clears every other gate the same way.
+	 */
+	var qualified: Bool;
 }
 
 /** A recovered bool-returning loop: the node the finding anchors on, its trailing return, an optional guard and the destructured head. */
@@ -938,6 +1005,13 @@ private typedef Probes = {
 	 * the report-only degradation, not an optimistic guess.
 	 */
 	var purity: () -> Null<PurityCtx>;
+
+	/**
+	 * Whether the QUALIFIED `Lambda.<method>(…)` spelling reaches the module from this file
+	 * (`UsingScan.qualifiedCallReaches`) — the fallback a receiver-shadowed site takes. Memoised
+	 * and built on FIRST demand, so a file holding no shadowed site never reads its header.
+	 */
+	var qualified: () -> Bool;
 	var index: () -> Null<SymbolIndex>;
 	var method: String;
 }
