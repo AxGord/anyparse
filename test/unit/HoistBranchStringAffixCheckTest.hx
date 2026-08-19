@@ -51,7 +51,8 @@ class HoistBranchStringAffixCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = edits(REGION);
 		Assert.equals(1, es.length);
 		Assert.equals(
-			'return \'Data$${sep()}{$${sep()}  \' + #if flash \'A: $$a\' #elseif mobile \'B: $$b\' #else \'C: $$c\' #end + \'$${sep()}}\';',
+			'return \'Data$${sep()}{$${sep()}\' + #if flash\n\'  A: $$a\'\n#elseif mobile\n\'  B: $$b\'\n#else\n\'  C: $$c\'\n#end'
+			+ ' + \'$${sep()}}\';',
 			es[0].text
 		);
 	}
@@ -68,14 +69,14 @@ class HoistBranchStringAffixCheckTest extends Test {
 	public function testHeadOnlyWhenTailDoesNotPay(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(PREFIX_ONLY);
 		Assert.equals(1, es.length);
-		Assert.equals('return \'Hello, \' + #if a \'$$x!\' #else \'$$y?\' #end;', es[0].text);
+		Assert.equals('return \'Hello, \' + #if a\n\'$$x!\'\n#else\n\'$$y?\'\n#end;', es[0].text);
 	}
 
 	/** The cut may fall INSIDE a literal segment when that segment holds no escape and no interpolation sigil. */
 	public function testCutInsideAPlainLiteralSegment(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(wrapRegion('return \'connection-alpha\';', 'return \'connection-beta\';'));
 		Assert.equals(1, es.length);
-		Assert.equals('return \'connection-\' + #if a \'alpha\' #else \'beta\' #end;', es[0].text);
+		Assert.equals('return \'connection-\' + #if a\n\'alpha\'\n#else\n\'beta\'\n#end;', es[0].text);
 	}
 
 	/** A literal segment holding a backslash escape is never cut inside — a safe miss, not a mangled escape. */
@@ -111,7 +112,12 @@ class HoistBranchStringAffixCheckTest extends Test {
 			wrapRegion('return \'Hello, \' + \'$$x and more\';', 'return \'Hello, \' + \'$$y and less\';')
 		);
 		Assert.equals(1, es.length);
-		Assert.equals('return \'Hello,\' + #if a \' \' + \'$$x and more\' #else \' \' + \'$$y and less\' #end;', es[0].text);
+		Assert.equals('return \'Hello, \' + #if a\n\'$$x and more\'\n#else\n\'$$y and less\'\n#end;', es[0].text);
+	}
+
+	/** Branches that wrote the SAME string share everything, and a hoist would leave them nothing to vary. */
+	public function testIdenticalBranchesNotFlagged(): Void {
+		Assert.equals(0, violations(wrapRegion('return \'Hello there\';', 'return \'Hello there\';')).length);
 	}
 
 	/** A comment in a region the rebuild drops is a safe miss. */

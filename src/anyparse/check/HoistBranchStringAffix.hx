@@ -52,8 +52,16 @@ import anyparse.runtime.Span;
  * An `if` / `else` chain of `return`s is NOT claimed, and that is a boundary rather than an
  * omission: `prefer-ternary-return` / `prefer-if-expression-return` already collapse it to a
  * single `return` with a value-position conditional, after which an affix hoist would have to
- * claim the same span as `prefer-ternary-expression` and hand off to it. There is no such
- * contention here, because nothing else claims a `Conditional`.
+ * claim the same span as `prefer-ternary-expression` and hand off to it.
+ *
+ * ONE other check does claim this span: `cond-assign-merge` sees the same region as "every branch
+ * exits with the same keyword" and merges it into one `return` with a conditional value -- this
+ * rule's output MINUS the hoist. Both edits cannot land, and `Cli.computeFileLintEdits` keeps
+ * whichever check comes first in `Linter.builtins()`, so this one is registered AHEAD of it. That
+ * ordering is load-bearing: with `cond-assign-merge` first the region becomes a value-position
+ * `ConditionalExpr`, which this rule (statement position only) no longer claims, and the shared
+ * edges would stay written N times with nothing left to reclaim them. It costs nothing in the
+ * default configuration, where this rule is off and `cond-assign-merge` owns the site alone.
  *
  * ## The emitted region is a first-class node, not a raw splice
  *
@@ -112,18 +120,24 @@ import anyparse.runtime.Span;
  * ## Where a cut may fall
  *
  * The shared text is the longest common run of raw source characters across the branches, snapped
- * back to a cut the string model can express: a segment boundary of the literal, or a position
- * inside a segment whose raw text holds neither a backslash nor the interpolation sigil. That
- * second clause is what lets `'connection-alpha'` / `'connection-beta'` share `connection-`
- * although each is ONE literal segment; it refuses to cut inside `\n` or `${f()}`, where a
- * character-level split would corrupt the escape or the hole. Conservative in the safe direction:
- * a segment holding an escape ANYWHERE blocks a cut inside it, even one before the escape.
+ * back to a cut the string model can express. A SEGMENT BOUNDARY always qualifies. A position
+ * INSIDE a segment qualifies only in the segment nearest the edge -- the case where no whole
+ * segment is shared at all -- and only when that segment's raw text holds neither a backslash nor
+ * the interpolation sigil. That is what lets `'connection-alpha'` / `'connection-beta'` share
+ * `connection-` although each is ONE literal segment, while refusing to cut inside `\n` or
+ * `${f()}`, where a character-level split would corrupt the escape or the hole.
  *
- * A cut never consumes a branch's first (or last) operand entirely, because the emitted remainder
- * is a source SLICE and an operand cut down to nothing would leave a stray `+` -- and, for a
- * single-operand branch, an empty string. Branches whose strings are ENTIRELY shared are identical
- * statements, which is `cond-region-merge` / `duplicate-code` territory rather than a hoist, and
- * the same gate refuses them.
+ * Restricting the character-level cut to the first segment is a readability choice with a reason:
+ * it exists to reach literals the segment model cannot split at all, not to extend a cut that
+ * already landed on a boundary. Without the restriction the motivating site shares the two leading
+ * spaces of `'   OS: '` / `'  OS : '` as well, and the emitted branches start mid-indentation for
+ * two characters nobody would have written that way.
+ *
+ * A single-operand branch always keeps a character of its own, and a branch whose remainder text
+ * comes out identical to every other branch's is refused: nothing varies, which is
+ * `cond-region-merge` / `duplicate-code` territory rather than a hoist. Where a branch has SEVERAL
+ * operands an outer one may be eaten whole -- the remainder then starts at the next operand and
+ * the `+` that joined them goes with it.
  *
  * ## Paying for itself
  *
@@ -316,7 +330,16 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 			// anonymous struct literal.
 			final open: Literal = head;
 			final close: Literal = tail;
-			out.push({ single: operands.length == 1, head: open, tail: close });
+			final second: Null<Span> = operands.length > 1 ? operands[1].span : null;
+			final penultimate: Null<Span> = operands.length > 1 ? operands[operands.length - 2].span : null;
+			if (operands.length > 1 && (second == null || penultimate == null)) return null;
+			out.push({
+				count: operands.length,
+				secondFrom: second == null ? 0 : second.from,
+				penultimateTo: penultimate == null ? 0 : penultimate.to,
+				head: open,
+				tail: close
+			});
 		}
 		return out;
 	}
@@ -365,9 +388,11 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	private static function affixesOf(branches: Array<Branch>, region: Span, directives: Array<CondDirective>, ctx: Ctx): Null<Match> {
 		final quote: String = branches[0].head.quote;
 		for (b in branches) if (b.head.quote != quote || b.tail.quote != quote) return null;
-		var head: Int = sharedRun(branches, ctx, true, [for (b in branches) b.head.to - b.head.from - 1]);
+		var head: Int = sharedRun(branches, ctx, true, [for (b in branches) b.head.to - b.head.from - (b.count == 1 ? 1 : 0)]);
 		if ((branches.length - 1) * head <= AFFIX_SYNTAX_COST) head = 0;
-		final budgets: Array<Int> = [for (b in branches) b.tail.to - b.tail.from - 1 - (b.single ? head : 0)];
+		final budgets: Array<Int> = [
+			for (b in branches) b.count == 1 ? b.tail.to - b.tail.from - 1 - head : b.tail.to - b.tail.from
+		];
 		var tail: Int = sharedRun(branches, ctx, false, budgets);
 		if ((branches.length - 1) * tail <= AFFIX_SYNTAX_COST) tail = 0;
 		if (head == 0 && tail == 0) return null;
@@ -376,9 +401,16 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 		for (b in branches) {
 			final start: Int = b.head.from + head;
 			final end: Int = b.tail.to - tail;
+			// Both outer operands eaten whole with nothing between them leaves the branch no value at
+			// all -- the shape where every branch wrote the same string.
+			if (b.count <= 2 && start == b.head.to && end == b.tail.from) return null;
 			kept.push(new Span(start, end));
 			texts.push(remainderText(b, start, end, ctx));
 		}
+		// Nothing varies: the branches wrote one string N times, which is a merge rather than a hoist.
+		var varies: Bool = false;
+		for (t in texts) if (t != texts[0]) varies = true;
+		if (!varies) return null;
 		final first: Literal = branches[0].head;
 		final last: Literal = branches[0].tail;
 		return IfExpressionChain.droppedComment(region, kept, ctx.comments) ? null : {
@@ -428,7 +460,7 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 		for (i in 0...count) {
 			final s: Span = lit.segments[leading ? i : count - 1 - i];
 			final length: Int = s.to - s.from;
-			if (offset + length > want) return plainText(ctx.source.substring(s.from, s.to)) ? want : offset;
+			if (offset + length > want) return i == 0 && plainText(ctx.source.substring(s.from, s.to)) ? want : offset;
 			offset += length;
 			if (offset == want) return want;
 		}
@@ -442,19 +474,35 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	 */
 	private static function remainderText(b: Branch, start: Int, end: Int, ctx: Ctx): String {
 		final q: String = b.head.quote;
-		return b.single
-			? q + ctx.source.substring(start, end) + q
-			: q + ctx.source.substring(start, b.head.to) + q + ctx.source.substring(b.head.close, b.tail.open) + q
-				+ ctx.source.substring(b.tail.from, end) + q;
+		if (b.count == 1) return q + ctx.source.substring(start, end) + q;
+		final openEaten: Bool = start == b.head.to;
+		final closeEaten: Bool = end == b.tail.from;
+		// The middle slice starts and ends at the seam an eaten operand leaves behind, so the `+` that
+		// joined it is dropped with it.
+		final middle: String = ctx.source.substring(
+			openEaten ? b.secondFrom : b.head.close, closeEaten ? b.penultimateTo : b.tail.open
+		);
+		return (openEaten ? '' : q + ctx.source.substring(start, b.head.to) + q) + middle
+			+ (closeEaten ? '' : q + ctx.source.substring(b.tail.from, end) + q);
 	}
 
-	/** The single `return` the region collapses to, with the region itself spliced into the value slot. */
+	/**
+	 * The single `return` the region collapses to, with the region itself spliced into the value slot.
+	 *
+	 * The newline before every branch value and every following directive is LOAD-BEARING, not
+	 * cosmetic: the writer lays a conditional EXPRESSION out from its source seams, and given the
+	 * whole region on one line it picks the directive ladder but leaves an over-wide branch value
+	 * flat, which a SECOND round-trip then breaks. `lint --fix` canonicalizes once per pass, so the
+	 * one-line form ships a file `fmt --list` still reports as drifted. Emitting the seams the writer
+	 * would have chosen makes the first round-trip a fixed point. `#if <cond>` stays welded to the
+	 * `return` line so that a hoist with no head never emits a bare `return` followed by a newline.
+	 */
 	private static function buildText(m: Match): String {
 		final buffer: StringBuf = new StringBuf();
 		buffer.add('return ');
 		if (m.head != '') buffer.add('${m.head} + ');
 		buffer.add(m.directives[0]);
-		for (i in 0...m.branches.length) buffer.add(' ${m.branches[i]} ${m.directives[i + 1]}');
+		for (i in 0...m.branches.length) buffer.add('\n${m.branches[i]}\n${m.directives[i + 1]}');
 		if (m.tail != '') buffer.add(' + ${m.tail}');
 		buffer.add(';');
 		return buffer.toString();
@@ -493,9 +541,14 @@ private typedef Literal = {
 	var segments: Array<Span>;
 }
 
-/** One branch's `return` value: the two literals the cuts apply to, and whether they are the SAME operand. */
+/**
+ * One branch's `return` value: how many concatenation operands it has, the two literals the cuts
+ * apply to, and the seams a wholly-eaten outer operand leaves the remainder starting / ending at.
+ */
 private typedef Branch = {
-	var single: Bool;
+	var count: Int;
+	var secondFrom: Int;
+	var penultimateTo: Int;
 	var head: Literal;
 	var tail: Literal;
 }
