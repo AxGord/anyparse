@@ -57,6 +57,28 @@ package anyparse.grammar.haxe;
  * same divergence for its `tail`. Byte round-trip is exact either way,
  * which is what the region owes.
  *
+ * THE MIRROR CASE IS NOT FREE, and that was measured rather than
+ * assumed. A POST-operand splice — `A + B #if mobile - 120 #end`,
+ * `HxExpr.CondSpliceTail`, 26 regions in 16 files of the same census —
+ * is the same shape with the term order reversed (`(op, operand)`
+ * pairs), and a `@:postfix('#if') CondSpliceOpTail(operand, inner)`
+ * ctor written next to the raw one parses every sampled site and
+ * round-trips them byte-for-byte. It still never fires. The postfix
+ * dispatch is not an ordered choice: `Lowering.lowerPostfixLoop` emits
+ * one `if` / `else if` chain keyed on the operator literal with, in its
+ * own words, "no precedence gate and no `_savedPos` rollback — once a
+ * postfix operator matches, the body commits". Two branches spelling
+ * `#if` therefore compile to two arms of one chain, the first wins
+ * unconditionally, and the second is dead code — read out of the
+ * generated engine, both arms present, both guarded by the identical
+ * `peekLit(ctx,"#if") && … && matchKw(ctx,"#if")`. Reordering does not
+ * help either: whichever arm is first COMMITS, so a fragment it cannot
+ * represent throws instead of falling through to the raw capture.
+ * Reaching those 26 regions needs either a rewind in the postfix loop
+ * or an Alt-typed body on `CondSpliceTail` (an `@:peg` enum HAS the
+ * rewind), and both change a ctor 26 live regions depend on. A
+ * separate slice, with its own fidelity surface — not this one.
+ *
  * `HaxeQueryPlugin.opaqueCondRegionKinds` still lists this ctor. That
  * is not a leftover: `RefactorSupport.opaqueCondRegionMentioning`
  * walks the parts of an opaque node's span NO CHILD covers, so listing
