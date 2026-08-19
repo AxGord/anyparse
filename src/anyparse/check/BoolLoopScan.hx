@@ -56,9 +56,14 @@ using StringTools;
  *   the loop is replaced, because the other branches still run into that return. The successor is
  *   propagated by `scan` and is dropped at every construct where falling off the end does not
  *   continue after it (a loop body, a `switch`, a `try`, a conditional-compilation region).
- * - No key-value loop (`Lambda` iterates values, not pairs), no range `a...b` and no call
- *   iterable (`m.keys()` yields an `Iterator`, which is not `Iterable`) — the same three
- *   refusals `prefer-find` makes, for the same reasons.
+ * - No key-value loop (`Lambda` iterates values, not pairs) and no range `a...b` — two of the
+ *   three refusals `prefer-find` makes, for the same reasons.
+ * - A CALL iterable is refused unless its type RESOLVES to one of `ITERABLE_TYPE_NAMES`.
+ *   `prefer-find` still refuses every call outright, on the grounds that one may yield an
+ *   `Iterator`, which is not `Iterable`. That is true of `m.keys()` and false of
+ *   `text.split(' ')`, so the blanket refusal is a stand-in for a type the project can
+ *   already answer: `CheckScan.typeNominalResolver` reads the file's declared types and the
+ *   run's `SymbolIndex`, and an unresolved call keeps the refusal.
  * - The binder cannot leak: the loop's entire body is the `if` and a literal return, so `x`
  *   occurs only inside the condition by construction. No separate gate is needed, and none is
  *   written — a gate that cannot fail is a gate nothing can test.
@@ -99,6 +104,26 @@ final class BoolLoopScan {
 	/** The boolean literal's source text for `false`; any other text makes the literal unreadable and the site skipped. */
 	private static inline final FALSE_LITERAL: String = 'false';
 
+	/**
+	 * The nominal types a CALL iterable may resolve to for the rewrite to compile — `Lambda`'s
+	 * first parameter is an `Iterable<A>`, and these are the names that unify with it. Compiled
+	 * on 4.3.7 with `using Lambda;`, one probe per name:
+	 *
+	 * - `Array`, `List`, `Iterable` — both `exists` and `foreach` resolve and type-check.
+	 * - `Iterator` — `Iterator<Int> has no field exists` / `no field foreach`. This is the case
+	 *   the blanket call refusal existed for (`m.keys()`), and it is now refused BY TYPE.
+	 * - `haxe.ds.Vector` — `has no field exists`: it declares no `iterator()`, so it never
+	 *   unifies with `Iterable`, however iterable a `for` loop makes it look.
+	 * - `Map` — absent for a REASON the type alone does not state: `Lambda.foreach` accepts it,
+	 *   but `m.exists(f)` binds to `Map`'s OWN `exists(key:K)` member and the static extension
+	 *   never applies, so the `exists` direction would silently retarget. One name, two
+	 *   directions, and only a whole-name refusal keeps them from disagreeing.
+	 *
+	 * Kept as an ACCEPT list, not a refuse list: an unrecognised container fails by construction,
+	 * which is the same report-only degradation an unresolved type gets.
+	 */
+	private static final ITERABLE_TYPE_NAMES: Array<String> = ['Array', 'List', 'Iterable'];
+
 	/** The extension method `kind` rewrites to — the name a second `using` must be proven not to supply. */
 	public static inline function method(kind: BoolLoopKind): String {
 		return kind == BoolLoopKind.Exists ? 'exists' : 'foreach';
@@ -111,13 +136,16 @@ final class BoolLoopScan {
 		final s: Null<Seams> = readSeams(plugin);
 		if (s == null) return [];
 		final out: Array<Violation> = [];
+		// Lazy: the resolution scope reads the std and the configured libraries, and only a CALL
+		// iterable demands it — the one shape whose type has to be proved.
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree == null) continue;
 			final source: String = entry.source;
 			final file: String = entry.file;
-			scan(tree, null, source, s, kind, cand -> {
+			scan(tree, null, source, s, kind, lazyTypeProbe(source, plugin, tree, file, index), cand -> {
 				final v: Null<Violation> = buildViolation(cand, source, s, kind, ruleId, file);
 				if (v != null) out.push(v);
 			});
@@ -146,8 +174,14 @@ final class BoolLoopScan {
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), LAMBDA_MODULE, method(kind), plugin, () -> symbols, [])) return [];
+		// The same file the violations name, so the CALL-iterable proof resolves imports from
+		// where the loop is written — the report pass proved it against exactly that context.
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		final probe: TypeProbe = lazyTypeProbe(
+			source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index)
+		);
 		final byKey: Map<String, Cand> = [];
-		scan(tree, null, source, s, kind, cand -> {
+		scan(tree, null, source, s, kind, probe, cand -> {
 			final span: Null<Span> = cand.anchor.span;
 			if (span != null) byKey['${span.from}:${span.to}'] = cand;
 		});
@@ -227,7 +261,7 @@ final class BoolLoopScan {
 	 *   conditional-compilation region's flattened branches are not a statement list at all.
 	 */
 	private static function scan(
-		node: QueryNode, succ: Null<QueryNode>, source: String, s: Seams, kind: BoolLoopKind, emit: (Cand) -> Void
+		node: QueryNode, succ: Null<QueryNode>, source: String, s: Seams, kind: BoolLoopKind, probe: TypeProbe, emit: (Cand) -> Void
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
@@ -248,13 +282,13 @@ final class BoolLoopScan {
 			// and their edits overlap, so the merged form — reported here first — takes it.
 			var inner: Null<QueryNode> = childSucc;
 			if (isList) {
-				final cand: Null<Cand> = candidateAt(kids[i], childSucc, i < kids.length - 1, source, s, kind);
+				final cand: Null<Cand> = candidateAt(kids[i], childSucc, i < kids.length - 1, source, s, kind, probe);
 				if (cand != null) {
 					emit(cand);
 					inner = null;
 				}
 			}
-			scan(kids[i], inner, source, s, kind, emit);
+			scan(kids[i], inner, source, s, kind, probe, emit);
 		}
 	}
 
@@ -268,7 +302,7 @@ final class BoolLoopScan {
 	 * branches and other paths still run into it, so only the loop is replaced.
 	 */
 	private static function candidateAt(
-		a: QueryNode, b: Null<QueryNode>, adjacent: Bool, source: String, s: Seams, kind: BoolLoopKind
+		a: QueryNode, b: Null<QueryNode>, adjacent: Bool, source: String, s: Seams, kind: BoolLoopKind, probe: TypeProbe
 	): Null<Cand> {
 		if (b == null) return null;
 		final trailing: Null<QueryNode> = boolReturnLiteral(b, s);
@@ -278,7 +312,7 @@ final class BoolLoopScan {
 		// return must carry the OPPOSITE literal, which is what makes the collapse an identity.
 		final loopValue: Bool = kind == BoolLoopKind.Exists;
 		if (trailingValue == null || trailingValue == loopValue) return null;
-		final bare: Null<Head> = forIfHead(a, source, s);
+		final bare: Null<Head> = forIfHead(a, source, s, probe);
 		if (bare != null && bare.value == loopValue) return {
 			anchor: a,
 			trailing: b,
@@ -290,7 +324,7 @@ final class BoolLoopScan {
 		// `exists` direction — see the type doc for why the `foreach` mirror is refused outright.
 		if (kind != BoolLoopKind.Exists || !s.ifKinds.contains(a.kind) || a.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final loop: QueryNode = unwrapSole(a.children[1], s);
-		final guarded: Null<Head> = forIfHead(loop, source, s);
+		final guarded: Null<Head> = forIfHead(loop, source, s, probe);
 		return guarded == null || guarded.value != loopValue ? null : {
 			anchor: a,
 			trailing: b,
@@ -303,20 +337,22 @@ final class BoolLoopScan {
 	/**
 	 * The `for (v in xs) if (cond) return <bool>;` destructure — loop variable, iterable, condition
 	 * and the literal's value — or null when `forNode` is not that shape (wrong kind/arity, a
-	 * key-value / range / call iterable, an `else`-bearing or non-literal-returning body).
+	 * key-value / range iterable, a call iterable whose type is not a proven `Iterable`, an
+	 * `else`-bearing or non-literal-returning body).
 	 *
 	 * The key-value refusal is an explicit MODEL test, and the operand count after it is taken with
 	 * the VALUE binder filtered OUT. Read together those look redundant — and that is the point:
 	 * were the refusal dropped, a key-value loop would reach `FOR_CHILD_COUNT` exactly like a
 	 * single-binder one and be rewritten, so the refusal is the sole gate and a test can prove it.
 	 */
-	private static function forIfHead(forNode: QueryNode, source: String, s: Seams): Null<Head> {
+	private static function forIfHead(forNode: QueryNode, source: String, s: Seams, probe: TypeProbe): Null<Head> {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
 		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
 		final iterable: QueryNode = operands[0];
-		if (iterable.kind == s.intervalKind || iterable.kind == s.callKind) return null;
+		if (iterable.kind == s.intervalKind) return null;
+		if (iterable.kind == s.callKind && !callIterableIsIterable(iterable, probe)) return null;
 		final body: QueryNode = unwrapSole(operands[1], s);
 		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final lit: Null<QueryNode> = boolReturnLiteral(unwrapSole(body.children[1], s), s);
@@ -327,6 +363,49 @@ final class BoolLoopScan {
 			iterable: iterable,
 			cond: body.children[0],
 			value: value
+		};
+	}
+
+	/**
+	 * Whether a CALL iterable is PROVABLY one of `ITERABLE_TYPE_NAMES` — the gate that replaced a
+	 * blanket refusal of every call.
+	 *
+	 * The proof is `CheckScan.typeNominalResolver`, the resolver three shipped checks already
+	 * consume: `TypeInfoProvider` answers the declared types written in this file, and the run's
+	 * `SymbolIndex` — the std plus the configured libraries plus the report files — answers a
+	 * member's written return type across files. Nothing else is consulted; there is no second
+	 * mechanism beside the one the project already has.
+	 *
+	 * An untabled / unannotated / cross-scope call resolves to null and is REFUSED, which is the
+	 * report-only degradation the whole rule family defaults to. That null is an ANSWER about
+	 * this run's evidence, not a gap: widening it would mean guessing at a container the rewrite
+	 * has to unify with `Iterable<A>`.
+	 */
+	private static function callIterableIsIterable(iterable: QueryNode, probe: TypeProbe): Bool {
+		final resolve: Null<(QueryNode) -> Null<String>> = probe();
+		if (resolve == null) return false;
+		final nominal: Null<String> = resolve(iterable);
+		return nominal != null && ITERABLE_TYPE_NAMES.contains(nominal);
+	}
+
+	/**
+	 * The per-file type probe, memoised and built on FIRST demand: a scan that meets no call
+	 * iterable never forces the index, and one that meets several pays for it once. `index` is
+	 * itself the run's lazy resolver, so a project with a declared scope reuses that index rather
+	 * than building a second one. Null from `typeNominalResolver` (a grammar carrying no type
+	 * information) makes every call iterable unprovable, i.e. exactly the old refusal.
+	 */
+	private static function lazyTypeProbe(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: () -> Null<SymbolIndex>
+	): TypeProbe {
+		var resolver: Null<(QueryNode) -> Null<String>> = null;
+		var built: Bool = false;
+		return () -> {
+			if (!built) {
+				built = true;
+				resolver = CheckScan.typeNominalResolver(source, plugin, tree, file, index());
+			}
+			return resolver;
 		};
 	}
 
@@ -542,3 +621,9 @@ private typedef Parts = {
 	var predicate: String;
 	var kept: Array<Span>;
 }
+
+/**
+ * The memoised nominal-type resolver a CALL iterable is proved against, or null when the grammar
+ * carries no type information — deferred so a scan that meets no call iterable never builds one.
+ */
+private typedef TypeProbe = () -> Null<(QueryNode) -> Null<String>>;
