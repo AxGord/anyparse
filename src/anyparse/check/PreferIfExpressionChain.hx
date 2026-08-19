@@ -46,8 +46,11 @@ import anyparse.runtime.Span;
  * chain node's else-slot, so an inner rung is never re-reported — with:
  *
  * - **A whitelisted host.** The head's PARENT kind must be in `ifExpressionChainHostKinds`
- *   (a `return`, a local / member initializer, an assignment r-value, an arrow-lambda
- *   body). This is a READABILITY gate, not a correctness one: an `if`-expression is a legal
+ *   (a `return`, a local /
+ *   member initializer, an assignment r-value, an arrow-lambda body, a `switch` ARM's
+ *   value — the last reached through the expression-statement wrapper, which `slotKindOf`
+ *   makes transparent inside an arm and nowhere else). This is a READABILITY gate, not a
+ *   correctness one: an `if`-expression is a legal
  *   expression atom everywhere a ternary is, and its else-arm parses at the same precedence
  *   as the ternary's, so no slot re-associates (verified on 4.3.7 in a call argument, an
  *   array element and index, an object-literal value, a map value, and the then-arm of an
@@ -213,6 +216,8 @@ final class PreferIfExpressionChain implements Check {
 			chainKinds: chainKinds,
 			conditionalKinds: IfExpressionChain.conditionalKinds(shape),
 			hostKinds: hostKinds,
+			exprStatementKind: shape.exprStatementKind,
+			armKinds: [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k],
 			parenKind: shape.parenKind,
 			opaqueKinds: shape.opaqueKinds ?? []
 		};
@@ -235,8 +240,24 @@ final class PreferIfExpressionChain implements Check {
 			if (m != null) out.push(m);
 		}
 		final elseSlot: Int = isChain ? ELSE_SLOT_INDEX : -1;
+		final childHost: String = slotKindOf(node, parentKind, s);
 		for (i in 0...node.children.length)
-			walk(node.children[i], source, comments, s, plugin, resolveIndex, out, node.kind, i == elseSlot);
+			walk(node.children[i], source, comments, s, plugin, resolveIndex, out, childHost, i == elseSlot);
+	}
+
+	/**
+	 * The kind the walk hands a child as its SLOT — normally the parent's own kind, but the
+	 * ARM kind when the parent is the expression-STATEMENT wrapper of a switch arm's value.
+	 * That wrapper is what stands between an arm and the chain it holds, and it is
+	 * transparent HERE ONLY: a bare expression statement in an ordinary block keeps its own
+	 * kind and so is no host, which is what scopes the arm host to the arm.
+	 *
+	 * The carried value is the SLOT rather than the true parent kind, and the two differ only
+	 * across that one rewrite — a statement wrapper never nests in another — so the test can
+	 * read `parentKind` as the wrapper's real parent.
+	 */
+	private static inline function slotKindOf(node: QueryNode, parentKind: Null<String>, s: Seams): String {
+		return node.kind == s.exprStatementKind && parentKind != null && s.armKinds.contains(parentKind) ? parentKind : node.kind;
 	}
 
 	/**
@@ -313,6 +334,8 @@ private typedef Seams = {
 	var chainKinds: Array<String>;
 	var conditionalKinds: Array<String>;
 	var hostKinds: Array<String>;
+	var exprStatementKind: Null<String>;
+	var armKinds: Array<String>;
 	var parenKind: Null<String>;
 	var opaqueKinds: Array<String>;
 }

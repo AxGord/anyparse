@@ -732,11 +732,18 @@ typedef RefShape = {
 	/**
 	 * Parent kinds in which a value-position conditional chain may be rewritten to an
 	 * if-EXPRESSION chain (`if (c1) v1 else if (c2) v2 else v3`) — the positions where the
-	 * multi-line if-chain reads at least as well as the nested ternary it replaces (Haxe: a
-	 * `return`, a local / member initializer, an assignment r-value, an arrow-lambda body).
+	  * multi-line if-chain reads at least as well as the nested ternary it replaces (Haxe: a
+	 * `return`, a local / member initializer, an assignment r-value, an arrow-lambda body, a
+	 * `switch` ARM's value).
 	 * A SUPERSET of `switchExpressionHostKinds`, which lists the same value hosts for the
-	 * heavier `switch` rewrite; the lambda bodies are added here because a comparator written
-	 * as an if-chain is the established shape while a `switch` in that slot is not.
+	 * heavier `switch` rewrite; the lambda bodies and the arms are added here because a
+	 * comparator written as an if-chain, and a ladder in an arm, are the established shapes
+	 * while a `switch` in either slot is not.
+	 *
+	 * An ARM kind listed here is reached THROUGH the grammar's expression-statement wrapper:
+	 * `prefer-if-expression-chain` treats `exprStatementKind` as transparent when its parent is
+	 * a `caseBranchKind` / `defaultBranchKind`, and only there — a bare expression statement in
+	 * an ordinary block keeps its own kind and is no host.
 	 *
 	 * Deliberately a WHITELIST rather than "any expression position", for the same reason the
 	 * switch seam is one: an if-chain spliced into a call argument or into a construct's own
