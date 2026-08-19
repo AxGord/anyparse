@@ -60,6 +60,11 @@ using Lambda;
  *   iterable's values, not map key-value pairs. A call iterable (`xs.keys()` / `<expr>.m()`) or a range `a...b` is likewise skipped — a call may yield an `Iterator`, not an `Iterable`, so `Lambda.find` would not compile, and a call result's type is unknowable without types.
  * - **Adjacency.** The loop and its trailing `return` (Form A), or the declaration
  *   and its loop / guard (Form B), must be real, immediately adjacent block siblings.
+ * - **A receiver declaring `find` takes the QUALIFIED spelling.** Haxe binds a real member before
+ *   any `using` extension, so `m.find(v -> …)` on such a receiver retargets. That does not cost
+ *   the site: `Lambda.find(m, v -> …)` names the module outright, needs no `using Lambda;`, and
+ *   demands exactly the same `Iterable<A>` the extension form did. It is refused only where the
+ *   bare name `Lambda` does not reach the module here (`UsingScan.qualifiedCallReaches`).
  *
  * ## Grammar-agnostic
  *
@@ -159,8 +164,20 @@ final class PreferFind implements Check {
 		// The same file the violations name, so the shadow proof resolves imports from where the
 		// loop is written — the report pass proved it against exactly that context.
 		final file: String = violations.length == 0 ? '' : violations[0].file;
-		collectFixCandidates(tree, source, s, memberProbe(source, plugin, tree, file, () -> symbols), byKey);
+		// The SAME lazy resolver the report pass used, falling back to a one-file index when the
+		// caller supplied none — the two passes must reach the same verdict, because the shadow now
+		// picks the call SPELLING rather than dropping the site: a fix pass blind to it would emit
+		// the extension form for a finding the report wrote as qualified.
+		collectFixCandidates(
+			tree,
+			source,
+			s,
+			memberProbe(source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, symbols)),
+			byKey
+		);
 		final edits: Array<{ span: Span, text: String }> = [];
+		// Only an EXTENSION-form rewrite needs `Lambda` in scope; a qualified one names the module
+		// outright, so a file whose every claimed site is shadowed gets the calls and no import.
 		var rewrote: Bool = false;
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -170,7 +187,7 @@ final class PreferFind implements Check {
 			final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s);
 			if (candEdits == null || RefactorSupport.editsOverlapAny(candEdits, edits)) continue;
 			for (e in candEdits) edits.push(e);
-			rewrote = true;
+			if (!cand.qualified) rewrote = true;
 		}
 		if (rewrote && !UsingScan.hasUsingModule(header, LAMBDA_MODULE)) {
 			final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
@@ -242,19 +259,14 @@ final class PreferFind implements Check {
 	private static function tryReturnForm(
 		forNode: QueryNode, next: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe
 	): Null<Violation> {
-		final head: Null<{
-			loopVar: String,
-			iterable: QueryNode,
-			cond: QueryNode,
-			then: QueryNode
-		}> = forIfHead(forNode, s, probe);
+		final head: Null<Head> = forIfHead(forNode, s, probe);
 		if (head == null) return null;
 		final returned: Null<QueryNode> = returnValue(head.then, s);
 		if (returned == null || returned.kind != s.identKind || returned.name != head.loopVar) return null;
 		if (next.kind != s.returnKind || next.children.length < 1) return null;
 		final fallback: QueryNode = next.children[0];
 		final tail: String = fallback.kind == s.nullLitKind ? '' : coalesceTail(fallback, source);
-		return buildViolation(forNode, head.iterable, head.loopVar, head.cond, tail, file, source);
+		return buildViolation(forNode, head.iterable, head.loopVar, head.cond, tail, file, source, head.qualified);
 	}
 
 	/**
@@ -266,14 +278,9 @@ final class PreferFind implements Check {
 	): Null<Violation> {
 		final declName: Null<String> = nullInitLocalName(decl, s);
 		if (declName == null) return null;
-		final head: Null<{
-			loopVar: String,
-			iterable: QueryNode,
-			cond: QueryNode,
-			then: QueryNode
-		}> = forIfHead(forNode, s, probe);
+		final head: Null<Head> = forIfHead(forNode, s, probe);
 		return head != null && isAssignBreakBody(head.then, declName, head.loopVar, s)
-			? buildViolation(forNode, head.iterable, head.loopVar, head.cond, '', file, source)
+			? buildViolation(forNode, head.iterable, head.loopVar, head.cond, '', file, source, head.qualified)
 			: null;
 	}
 
@@ -286,7 +293,9 @@ final class PreferFind implements Check {
 		decl: QueryNode, ifNode: QueryNode, file: String, source: String, s: Seams, probe: MemberProbe
 	): Null<Violation> {
 		final found: Null<GuardedBreak> = guardedBreakOf(decl, ifNode, s, probe);
-		return found == null ? null : buildViolation(found.forNode, found.iterable, found.loopVar, found.cond, '', file, source);
+		return found == null
+			? null
+			: buildViolation(found.forNode, found.iterable, found.loopVar, found.cond, '', file, source, found.qualified);
 	}
 
 	/**
@@ -310,18 +319,14 @@ final class PreferFind implements Check {
 		// can reach it), so refusing any MENTION of it in the guard is exact.
 		if (mentionsName(ifNode.children[0], declName, s)) return null;
 		final loop: QueryNode = unwrapSole(ifNode.children[1], s);
-		final head: Null<{
-			loopVar: String,
-			iterable: QueryNode,
-			cond: QueryNode,
-			then: QueryNode
-		}> = forIfHead(loop, s, probe);
+		final head: Null<Head> = forIfHead(loop, s, probe);
 		return head == null || !isAssignBreakBody(head.then, declName, head.loopVar, s) ? null : {
 			forNode: loop,
 			declName: declName,
 			loopVar: head.loopVar,
 			iterable: head.iterable,
-			cond: head.cond
+			cond: head.cond,
+			qualified: head.qualified
 		};
 	}
 
@@ -361,7 +366,8 @@ final class PreferFind implements Check {
 
 	/** Assemble the `Info` violation anchored at the loop, with the `xs.find(v -> cond)<tail>` suggestion in the message. */
 	private static function buildViolation(
-		forNode: QueryNode, iterable: QueryNode, loopVar: String, cond: QueryNode, tail: String, file: String, source: String
+		forNode: QueryNode, iterable: QueryNode, loopVar: String, cond: QueryNode, tail: String, file: String, source: String,
+		qualified: Bool
 	): Null<Violation> {
 		final forSpan: Null<Span> = forNode.span;
 		final iterSpan: Null<Span> = iterable.span;
@@ -369,7 +375,7 @@ final class PreferFind implements Check {
 		if (forSpan == null || iterSpan == null || condSpan == null) return null;
 		final iterSrc: String = normalize(source.substring(iterSpan.from, iterSpan.to));
 		final condSrc: String = excerpt(source.substring(condSpan.from, condSpan.to));
-		final suggestion: String = '$iterSrc.find($loopVar -> $condSrc)$tail';
+		final suggestion: String = '${findCall(iterSrc, loopVar, condSrc, qualified)}$tail';
 		return {
 			file: file,
 			span: forSpan,
@@ -377,6 +383,15 @@ final class PreferFind implements Check {
 			severity: Severity.Info,
 			message: 'this manual first-match loop can be $suggestion'
 		};
+	}
+
+	/**
+	 * The fold's call, in the spelling the site selected: the extension `xs.find(v -> c)`, or — when
+	 * a receiver member shadows it — the QUALIFIED `Lambda.find(xs, v -> c)`, which routes around
+	 * that member and needs no `using Lambda;` at all.
+	 */
+	private static function findCall(iterable: String, loopVar: String, cond: String, qualified: Bool): String {
+		return qualified ? '$LAMBDA_MODULE.$FIND_METHOD($iterable, $loopVar -> $cond)' : '$iterable.$FIND_METHOD($loopVar -> $cond)';
 	}
 
 	/** Unwrap a single-statement `{ … }` block to its sole child; every other node passes through unchanged. */
@@ -408,18 +423,35 @@ final class PreferFind implements Check {
 	 *
 	 * Every step fails closed: no `TypeInfoProvider`, an unresolved receiver, or no index at all
 	 * leaves the answer false, which is exactly the behaviour that shipped before this gate.
+	 *
+	 * A hit no longer refuses the site — it selects the QUALIFIED spelling `Lambda.find(xs, …)`,
+	 * whose own reachability is the second question bundled here
+	 * (`UsingScan.qualifiedCallReaches`), memoised per file beside the resolver.
 	 */
 	private static function memberProbe(
 		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: () -> Null<SymbolIndex>
 	): MemberProbe {
 		final lazy: () -> Null<(QueryNode) -> Null<String>> = lazyReceiverResolver(source, plugin, tree, file, index);
-		return iterable -> {
-			final resolve: Null<(QueryNode) -> Null<String>> = lazy();
-			if (resolve == null) return false;
-			final nominal: Null<String> = resolve(iterable);
-			if (nominal == null) return false;
-			final symbols: Null<SymbolIndex> = index();
-			return symbols != null && symbols.memberShadowsExtension(nominal, FIND_METHOD);
+		var reaches: Bool = false;
+		var reachesBuilt: Bool = false;
+		return {
+			shadows: iterable -> {
+				final resolve: Null<(QueryNode) -> Null<String>> = lazy();
+				if (resolve == null) return false;
+				final nominal: Null<String> = resolve(iterable);
+				if (nominal == null) return false;
+				final symbols: Null<SymbolIndex> = index();
+				return symbols != null && symbols.memberShadowsExtension(nominal, FIND_METHOD);
+			},
+			qualified: () -> {
+				if (!reachesBuilt) {
+					reachesBuilt = true;
+					reaches = UsingScan.qualifiedCallReaches(
+						UsingScan.headerOf(tree, source, plugin), LAMBDA_MODULE, FIND_METHOD, index
+					);
+				}
+				return reaches;
+			}
 		};
 	}
 
@@ -494,24 +526,25 @@ final class PreferFind implements Check {
 	 * `Lambda.find` iterates values, so rewriting a `k => v` loop would bind the value where the loop
 	 * bound the key.
 	 */
-	private static function forIfHead(forNode: QueryNode, s: Seams, probe: MemberProbe): Null<{
-		loopVar: String,
-		iterable: QueryNode,
-		cond: QueryNode,
-		then: QueryNode
-	}> {
+	private static function forIfHead(forNode: QueryNode, s: Seams, probe: MemberProbe): Null<Head> {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
 		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
 		final iterable: QueryNode = operands[0];
-		if (isRangeIterable(iterable, s) || isCallIterable(iterable, s) || probe(iterable)) return null;
+		if (isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
+		// A receiver member beats the extension, but not the QUALIFIED call — so a shadow selects
+		// the other spelling rather than refusing the site, and refuses only where the bare name
+		// `Lambda` does not reach the module from this file.
+		final shadowed: Bool = probe.shadows(iterable);
+		if (shadowed && !probe.qualified()) return null;
 		final body: QueryNode = unwrapSole(operands[1], s);
 		return !s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT ? null : {
 			loopVar: loopVar,
 			iterable: iterable,
 			cond: body.children[0],
-			then: body.children[1]
+			then: body.children[1],
+			qualified: shadowed
 		};
 	}
 
@@ -525,12 +558,7 @@ final class PreferFind implements Check {
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
 			final a: QueryNode = kids[i];
 			final b: QueryNode = kids[i + 1];
-			final headA: Null<{
-				loopVar: String,
-				iterable: QueryNode,
-				cond: QueryNode,
-				then: QueryNode
-			}> = forIfHead(a, s, probe);
+			final headA: Null<Head> = forIfHead(a, s, probe);
 			if (headA != null) {
 				final returned: Null<QueryNode> = returnValue(headA.then, s);
 				if (
@@ -545,7 +573,8 @@ final class PreferFind implements Check {
 						sibling: b,
 						loopVar: headA.loopVar,
 						iterable: headA.iterable,
-						cond: headA.cond
+						cond: headA.cond,
+						qualified: headA.qualified
 					};
 				}
 			}
@@ -561,16 +590,12 @@ final class PreferFind implements Check {
 					sibling: a,
 					loopVar: guarded.loopVar,
 					iterable: guarded.iterable,
-					cond: guarded.cond
+					cond: guarded.cond,
+					qualified: guarded.qualified
 				};
 				continue;
 			}
-			final headB: Null<{
-				loopVar: String,
-				iterable: QueryNode,
-				cond: QueryNode,
-				then: QueryNode
-			}> = forIfHead(b, s, probe);
+			final headB: Null<Head> = forIfHead(b, s, probe);
 			if (!(headB != null && isAssignBreakBody(headB.then, declName, headB.loopVar, s))) continue;
 			final span: Null<Span> = b.span;
 			if (span != null) out['${span.from}:${span.to}'] = {
@@ -580,7 +605,8 @@ final class PreferFind implements Check {
 				sibling: a,
 				loopVar: headB.loopVar,
 				iterable: headB.iterable,
-				cond: headB.cond
+				cond: headB.cond,
+				qualified: headB.qualified
 			};
 		}
 		for (c in kids) collectFixCandidates(c, source, s, probe, out);
@@ -593,8 +619,12 @@ final class PreferFind implements Check {
 		final condSpan: Null<Span> = cand.cond.span;
 		final forSpan: Null<Span> = cand.forNode.span;
 		if (iterSpan == null || condSpan == null || forSpan == null) return null;
-		final iterSrc: String = parenthesizeUnless(source.substring(iterSpan.from, iterSpan.to), postfixSafe(cand.iterable.kind, s));
-		final findExpr: String = '$iterSrc.find(${cand.loopVar} -> ${source.substring(condSpan.from, condSpan.to)})';
+		// The QUALIFIED spelling puts the receiver in an ARGUMENT slot, where no expression needs
+		// parenthesising; only the extension form binds `.find(` onto it as a postfix.
+		final iterSrc: String = parenthesizeUnless(
+			source.substring(iterSpan.from, iterSpan.to), cand.qualified || postfixSafe(cand.iterable.kind, s)
+		);
+		final findExpr: String = findCall(iterSrc, cand.loopVar, source.substring(condSpan.from, condSpan.to), cand.qualified);
 		if (cand.form == FindForm.GuardedBreak) {
 			// The declaration is NOT rewritten: its `null` is what the guard's false path must
 			// still observe. Only the loop — the guard's whole body — collapses to the assignment.
@@ -745,6 +775,9 @@ private typedef FixCandidate = {
 	var loopVar: String;
 	var iterable: QueryNode;
 	var cond: QueryNode;
+
+	/** The call spelling the site takes — see `Head.qualified`. */
+	var qualified: Bool;
 }
 
 /** A recovered GUARDED capture-and-break loop: the loop node, the holder local's name, and the destructured head. */
@@ -754,6 +787,9 @@ private typedef GuardedBreak = {
 	var loopVar: String;
 	var iterable: QueryNode;
 	var cond: QueryNode;
+
+	/** The call spelling the site takes — see `Head.qualified`. */
+	var qualified: Bool;
 }
 
 /**
@@ -770,7 +806,29 @@ private enum abstract FindForm(Int) {
 }
 
 /**
- * Whether an iterable's own type provably declares `find` — the receiver-shadow gate, deferred so a
- * file holding no recovered loop never builds a resolver, and false for everything this run cannot prove.
+ * The two deferred questions a recovered loop asks about NAMES: `shadows` — whether the iterable's
+ * own type provably declares `find`, so Haxe binds that member instead of the extension (false for
+ * everything this run cannot prove) — and `qualified`, whether the FALLBACK spelling
+ * `Lambda.find(xs, …)` still reaches the module from this file. Both are built on first demand, so
+ * a file holding no recovered loop builds neither a resolver nor a header read.
  */
-private typedef MemberProbe = (QueryNode) -> Bool;
+private typedef MemberProbe = {
+	var shadows: (QueryNode) -> Bool;
+	var qualified: () -> Bool;
+}
+
+/** The `for (v in xs) if (cond) …` destructure all three forms start from, plus the call spelling the site takes. */
+private typedef Head = {
+	var loopVar: String;
+	var iterable: QueryNode;
+	var cond: QueryNode;
+	var then: QueryNode;
+
+	/**
+	 * Whether this site takes the QUALIFIED spelling `Lambda.find(xs, v -> c)` rather than the
+	 * extension `xs.find(v -> c)` — true exactly when the receiver's own type declares `find` and
+	 * the module name still reaches `Lambda` here. It changes only WHICH call is written: a
+	 * qualified site needs no `using Lambda;` and clears every other gate the same way.
+	 */
+	var qualified: Bool;
+}

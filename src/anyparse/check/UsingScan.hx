@@ -3,15 +3,21 @@ package anyparse.check;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * The `using`-declaration helpers the static-extension checks share — `dead-binder-counter-loop`,
- * `prefer-find` and `prefer-static-extension` each rewrite a call into an extension method, so
- * each has to ask the same three questions of a file's header: is the module already brought in
- * with `using`, where would the insert go, and does some OTHER `using` already bind the method
- * name (which would make the rewrite resolve elsewhere).
+ * `prefer-exists`, `prefer-foreach`, `prefer-find` and `prefer-static-extension` each rewrite a
+ * call into an extension method, so each has to ask the same four questions of a file's header: is
+ * the module already brought in with `using`, where would the insert go, does some OTHER `using`
+ * already bind the method name (which would make the rewrite resolve elsewhere), and — where a
+ * receiver MEMBER shadows the extension and the rule falls back to the QUALIFIED `Module.m(recv, …)`
+ * spelling — does the bare module name still mean that module here (`qualifiedCallReaches`).
  *
  * The header is not always the file's TOP LEVEL: a module whose whole body sits inside one
  * `#if … #end` region carries its imports there too, and `headerOf` reads that region as the header —
@@ -26,6 +32,9 @@ final class UsingScan {
 
 	/** The grammar's `using` declaration kind, spelled literally (see `hasUsingModule`). */
 	public static inline final USING_DECL_KIND: String = 'UsingDecl';
+
+	/** The wildcard import kind — the one form that binds names it does not spell out (`headerRebindsName`). */
+	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
 
 	/** The top-level declaration kinds a `using` insert anchors after — the file's package / import / using header. */
 	private static final USING_ANCHOR_KINDS: Array<String> = [
@@ -146,6 +155,44 @@ final class UsingScan {
 		return verdict;
 	}
 
+	/**
+	 * Whether the QUALIFIED spelling `<module>.<method>(receiver, …)` provably reaches `module`'s
+	 * own static from THIS file — the FALLBACK every `Lambda`-targeting rule emits at a site whose
+	 * receiver type declares a member of the same name.
+	 *
+	 * A real member beats a `using` static extension, so `m.exists(x -> …)` on a receiver whose type
+	 * declares `exists` binds to THAT member and does not compile. The fold itself is untouched by
+	 * that: `Lambda.exists(m, x -> …)` names the module outright and never consults the receiver's
+	 * members. What the qualified call DOES depend on is the one thing the extension form did not —
+	 * that the bare name `module` means the module here — and this is that question.
+	 *
+	 * Three ways it can fail, each a REFUSAL (the rule keeps the report-only finding it had before):
+	 *
+	 * - the file's own module declares a type named `module`. A same-module type wins the simple
+	 *   name outright;
+	 * - the header REBINDS the simple name — `import p.Lambda;`, `import p.X as Lambda;`,
+	 *   `using p.Lambda;` — or carries a WILDCARD `import p.*;`, which binds main types it does not
+	 *   spell out and which no scan of the statement can enumerate without the package's contents;
+	 * - the run's index holds a type named `module` that does not declare `method` as a STATIC. That
+	 *   is the live case: a project may ship its own root-package `Lambda.hx`, which displaces the
+	 *   std one for every file that compiles against it.
+	 *
+	 * The index arm is VACUOUSLY true when nothing by that name is indexed, which is the same
+	 * fail-open posture `memberShadowsExtension` itself takes: no evidence of a shadow is not
+	 * evidence of one, and a resolution scope that models neither the std nor the project would
+	 * otherwise turn the whole fallback off.
+	 */
+	public static function qualifiedCallReaches(
+		header: UsingHeader, module: String, method: String, symbols: () -> Null<SymbolIndex>
+	): Bool {
+		if (headerDeclaresType(header, module) || headerRebindsName(header, module)) return false;
+		final index: Null<SymbolIndex> = symbols();
+		if (index == null) return true;
+		for (fi in index.declaringFiles(module))
+			for (t in fi.types) if (t.name == module && !t.members.exists(m -> m.name == method && m.isStatic)) return false;
+		return true;
+	}
+
 	/** The module paths of every `using` declaration the header binds — the read side of `hasUsingModule`. */
 	public static function usingModules(header: UsingHeader): Array<String> {
 		final out: Array<String> = [];
@@ -175,6 +222,40 @@ final class UsingScan {
 			// dotted name by import path, so a module whose simple name another package reuses
 			// no longer reads as ambiguous-and-therefore-conflicting.
 			if (index == null || !index.typeProvablyLacksMember(path, method)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the file's own module declares a top-level type named `name` — the first way a
+	 * qualified `<name>.<method>(…)` can mean something other than the module it spells.
+	 */
+	private static function headerDeclaresType(header: UsingHeader, name: String): Bool {
+		for (child in headerDecls(header)) {
+			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(child);
+			if (decl != null && decl.name == name) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether an `import` / `using` in the header binds the simple name `name` to something other
+	 * than the module of that very name — an aliased import taking the name, a qualified path whose
+	 * LAST segment is it, or any wildcard import (which binds main types it does not spell out).
+	 *
+	 * A bare `import Lambda;` / `using Lambda;` is the module itself and is NOT a rebind: those
+	 * statements are exactly what a file writes to reach the std module the qualified call wants.
+	 */
+	private static function headerRebindsName(header: UsingHeader, name: String): Bool {
+		for (child in headerDecls(header)) switch (child.kind) {
+			case 'ImportAliasDecl', 'ImportAliasInDecl':
+				if (child.name == name) return true;
+			case WILDCARD_IMPORT_KIND:
+				return true;
+			case 'ImportDecl', USING_DECL_KIND:
+				final path: Null<String> = child.name;
+				if (path != null && path != name && StringTools.endsWith(path, '.$name')) return true;
+			case _:
 		}
 		return false;
 	}

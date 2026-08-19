@@ -366,11 +366,29 @@ class PreferFindCheckTest extends Test {
 		Assert.isTrue(out.indexOf('if (frame1Xml != null)') == -1, out);
 	}
 
-	public function testReceiverDeclaringFindNotFlagged(): Void {
+	public function testReceiverDeclaringFindTakesTheQualifiedForm(): Void {
 		// A real MEMBER always beats a `using` static extension: `m.find(x -> …)` on a receiver whose
 		// own type declares `find` binds to THAT member. No stdlib container declares the name, so a
-		// PROJECT type is the live case this gate is about.
-		Assert.equals(0, violations(memberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;')).length);
+		// PROJECT type is the live case this gate is about — and the fold survives in the QUALIFIED
+		// spelling, which never consults the receiver's members.
+		final vs: Array<Violation> = violations(memberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('Lambda.find(m, x -> x > 2)') != -1, vs[0].message);
+	}
+
+	public function testQualifiedFixEmitsTheStaticCallAndInsertsNoUsing(): Void {
+		// The `using Lambda;` the extension form needs buys the qualified call nothing.
+		final out: String = fixResult('package p;\n\n' + memberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;'));
+		Assert.isTrue(out.indexOf('return Lambda.find(m, x -> x > 2);') != -1, out);
+		Assert.equals(-1, out.indexOf('using Lambda;'));
+	}
+
+	public function testShadowedLambdaModuleRefusesTheQualifiedForm(): Void {
+		// `Lambda` may itself be shadowed — a project declaring its own `Lambda.hx`. The qualified
+		// call would then reach THAT type, so the site keeps its old refusal.
+		final src: String = memberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;')
+			+ '\n\nclass Lambda {\n\tpublic function find(f:Int):Null<Int> {\n\t\treturn null;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
 	}
 
 	public function testReceiverDeclaringAnotherMemberStillFlagged(): Void {

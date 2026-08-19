@@ -159,11 +159,22 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(0, extViolations('', '').length);
 	}
 
-	public function testReceiverDeclaringForeachNotFlagged(): Void {
+	public function testReceiverDeclaringForeachTakesTheQualifiedForm(): Void {
 		// A real MEMBER always beats a `using` static extension: on a receiver whose own type
 		// declares `foreach`, `m.foreach(x -> …)` binds to THAT member and the lambda lands in its
 		// parameter slot. No stdlib container declares the name — a PROJECT type is the live case.
-		Assert.equals(0, violations(memberFn('for (x in m) if (x > 2) return false;\n\t\treturn true;')).length);
+		// The fold survives in the QUALIFIED spelling, which never consults the receiver's members,
+		// and the `foreach` inversion rides on it unchanged.
+		final vs: Array<Violation> = violations(memberFn('for (x in m) if (x > 2) return false;\n\t\treturn true;'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('Lambda.foreach(m, x -> !(x > 2))') != -1, vs[0].message);
+	}
+
+	public function testQualifiedFixEmitsTheStaticCallAndInsertsNoUsing(): Void {
+		// The `using Lambda;` the extension form needs buys the qualified call nothing.
+		final out: String = fixResult('package p;\n\n' + memberFn('for (x in m) if (x > 2) return false;\n\t\treturn true;'));
+		Assert.isTrue(out.indexOf('return Lambda.foreach(m, x -> !(x > 2));') != -1, out);
+		Assert.equals(-1, out.indexOf('using Lambda;'));
 	}
 
 	public function testReceiverDeclaringExistsStillFlagged(): Void {

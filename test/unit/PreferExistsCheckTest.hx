@@ -108,25 +108,108 @@ class PreferExistsCheckTest extends Test {
 		Assert.isTrue(out.indexOf('return b.items().exists(x -> x > 2);') != -1, out);
 	}
 
-	public function testReceiverDeclaringExistsNotFlagged(): Void {
+	public function testReceiverDeclaringExistsTakesTheQualifiedForm(): Void {
 		// A real MEMBER always beats a `using` static extension, so `m.exists(x -> …)` on a receiver
 		// whose own type declares `exists(key)` binds to THAT member and puts the lambda in the key
-		// slot — the shape a `Map` receiver has, and the one that cannot compile.
-		Assert.equals(0, violations(memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
+		// slot — the shape a `Map` receiver has, and the one that cannot compile. The FOLD is still
+		// available in the QUALIFIED spelling, which routes around the member entirely.
+		final vs: Array<Violation> = violations(memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('Lambda.exists(m, x -> x > 2)') != -1, vs[0].message);
 	}
 
-	public function testReceiverInheritingExistsNotFlagged(): Void {
+	public function testReceiverInheritingExistsTakesTheQualifiedForm(): Void {
 		// The inherited half of the same question: the member is declared by a SUPERTYPE, and Haxe
-		// picks it over the extension exactly the same way.
-		Assert.equals(0, violations(inheritedMemberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
+		// picks it over the extension exactly the same way — so the same fallback applies.
+		final vs: Array<Violation> = violations(inheritedMemberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('Lambda.exists(m, x -> x > 2)') != -1, vs[0].message);
 	}
 
-	public function testNullableReceiverDeclaringExistsNotFlagged(): Void {
+	public function testNullableReceiverDeclaringExistsTakesTheQualifiedForm(): Void {
 		// ★ The receiver is `Null<M>`, and Haxe's `Null` is member-TRANSPARENT: `m.exists(…)` looks
 		// `exists` up on `M` all the same. Asking the VALUE nominal answers `Null`, which declares
 		// nothing — which is why the gate asks `CheckScan.receiverNominalResolver`. This is the
-		// second of the two measured TM sites (`baseData:Null<Map<Int, ObjectFrameData>>`).
-		Assert.equals(0, violations(nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
+		// second of the two measured TM sites (`baseData:Null<Map<Int, ObjectFrameData>>`), and the
+		// guarded merge rides on the qualified call unchanged.
+		final vs: Array<Violation> = violations(
+			nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;')
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('m != null && Lambda.exists(m, x -> x > 2)') != -1, vs[0].message);
+	}
+
+	public function testQualifiedFixEmitsTheStaticCallAndInsertsNoUsing(): Void {
+		// The `using Lambda;` the extension form needs buys the qualified call NOTHING — it is a
+		// plain static call on a named module — so the fixer must not add one.
+		final out: String = fixResult('package p;\n\n' + memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;'));
+		Assert.isTrue(out.indexOf('return Lambda.exists(m, x -> x > 2);') != -1, out);
+		Assert.equals(-1, out.indexOf('using Lambda;'));
+	}
+
+	public function testQualifiedFixKeepsAnExistingUsing(): Void {
+		// The other direction of the same question: a `using Lambda;` the file already declares is
+		// left alone — other code may depend on it, and this rule never removes one.
+		final out: String = fixResult(
+			'package p;\n\nusing Lambda;\n\n' + memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;')
+		);
+		Assert.isTrue(out.indexOf('return Lambda.exists(m, x -> x > 2);') != -1, out);
+		Assert.isTrue(out.indexOf('using Lambda;') != -1, out);
+	}
+
+	public function testShadowedLambdaModuleRefusesTheQualifiedForm(): Void {
+		// `Lambda` may itself be shadowed — a project declaring its own `Lambda.hx` (this one did
+		// until recently). Then `Lambda.exists(…)` reaches THAT type, and a member it declares as an
+		// INSTANCE method is not reachable through a type-qualified call at all. Refuse, as the
+		// extension form already does.
+		Assert.equals(0, violations(shadowedLambdaFn('for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
+	}
+
+	public function testImportRebindingLambdaRefusesTheQualifiedForm(): Void {
+		// The same question asked of the file's HEADER rather than the index: an `import` binding the
+		// simple name `Lambda` to another module decides what `Lambda.exists` means here.
+		final src: String = 'package p;\n\nimport q.Lambda;\n\n' + memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;');
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testProjectLambdaInAnotherFileRefusesTheQualifiedForm(): Void {
+		// The INDEX arm of the same question: the shadowing `Lambda` is a module of its own, exactly
+		// the shape a project ships as `src/Lambda.hx` (this one did until recently). It declares no
+		// STATIC `exists`, so `Lambda.exists(m, …)` would not resolve.
+		final own: String = memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;');
+		final lambda: String = 'class Lambda {\n\tpublic static function foreach(it:Int):Bool {\n\t\treturn false;\n\t}\n}';
+		final vs: Array<Violation> = new PreferExists().run(
+			[{ file: 'C.hx', source: own }, { file: 'Lambda.hx', source: lambda }], new HaxeQueryPlugin()
+		);
+		Assert.equals(0, vs.length);
+	}
+
+	public function testProjectLambdaSupplyingTheStaticKeepsTheQualifiedForm(): Void {
+		// The gate is about the METHOD, not the NAME: a project `Lambda` that declares the static the
+		// call wants answers it, so the fallback stands.
+		final own: String = memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;');
+		final lambda: String = 'class Lambda {\n\tpublic static function exists<A>(it:Iterable<A>, f:A -> Bool):Bool {\n'
+			+ '\t\treturn false;\n\t}\n}';
+		final vs: Array<Violation> = new PreferExists().run(
+			[{ file: 'C.hx', source: own }, { file: 'Lambda.hx', source: lambda }], new HaxeQueryPlugin()
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('Lambda.exists(m, x -> x > 2)') != -1, vs[0].message);
+	}
+
+	public function testWildcardImportRefusesTheQualifiedForm(): Void {
+		// A wildcard binds main types it does not spell out, and nothing in the statement says
+		// whether `q` holds a `Lambda`. Refuse rather than guess — the extension form was already
+		// refused here, so the site simply stays a report-only finding.
+		final src: String = 'package p;\n\nimport q.*;\n\n' + memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;');
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShadowedReceiverStillRefusedForANonShadowReason(): Void {
+		// The qualified spelling changes only WHICH call is written, never whether the fold is
+		// SOUND: the call iterable here resolves to an `Iterator`, which is not an `Iterable`, so
+		// neither spelling compiles and the site stays refused even though its receiver shadows.
+		Assert.equals(0, violations(iteratorMemberFn('for (x in m.walker()) if (x > 2) return true;\n\t\treturn false;')).length);
 	}
 
 	public function testReceiverDeclaringAnotherMemberStillFlagged(): Void {
@@ -399,18 +482,19 @@ class PreferExistsCheckTest extends Test {
 		);
 	}
 
-	public function testFlagFormReceiverDeclaringExistsNotFlagged(): Void {
-		Assert.equals(
-			0,
-			new PreferExists().run([
-				{
-					file: 'C.hx',
-					source: 'class C {\n\tfunction f(m:M):Bool {\n\t\tvar found:Bool = false;\n\t\tfor (x in m) if (x > 2) found = true;\n'
-					+ '\t\treturn found;\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n\t\treturn false;\n\t}\n\n'
-					+ '\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
-				}
-			], new HaxeQueryPlugin()).length
-		);
+	public function testFlagFormReceiverDeclaringExistsTakesTheQualifiedForm(): Void {
+		// The FLAG sink reaches the same head and therefore the same fallback: the shadow picks the
+		// qualified spelling, and the fold's own purity gate is untouched by it.
+		final vs: Array<Violation> = new PreferExists().run([
+			{
+				file: 'C.hx',
+				source: 'class C {\n\tfunction f(m:M):Bool {\n\t\tvar found:Bool = false;\n\t\tfor (x in m) if (x > 2) found = true;\n'
+				+ '\t\treturn found;\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n\t\treturn false;\n\t}\n\n'
+				+ '\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+			}
+		], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('final found = Lambda.exists(m, x -> x > 2)') != -1, vs[0].message);
 	}
 
 	public function testFlagFormFixFoldsDeclarationAndLoop(): Void {
@@ -484,6 +568,19 @@ class PreferExistsCheckTest extends Test {
 	private function nullableMemberFn(body: String): String {
 		return 'class C {\n\tfunction f(m:Null<M>):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
 			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
+	/** The `memberFn` shape plus a PROJECT `Lambda` whose `exists` is an INSTANCE member — unreachable through `Lambda.exists(…)`. */
+	private function shadowedLambdaFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}\n\n'
+			+ 'class Lambda {\n\tpublic function exists(f:Int):Bool {\n\t\treturn false;\n\t}\n}';
+	}
+
+	/** A receiver that BOTH declares `exists` and hands out an `Iterator` — two refusals at one site. */
+	private function iteratorMemberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function walker():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
 	}
 
 	/** A receiver declaring the TWIN direction's name and not this one — the gate must not fire. */

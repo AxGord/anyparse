@@ -214,13 +214,25 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapArray(body)).length);
 	}
 
-	public function testContainerDeclaringCountNotFlagged(): Void {
+	public function testContainerDeclaringCountTakesTheQualifiedForm(): Void {
 		// The `count()` arm emits a `using Lambda;` call, and a real MEMBER beats a `using`. The
 		// whitelist matches a SIMPLE nominal, so a project type named after a std container is the
-		// residual this rule's own doc names — with the gate it is a silent skip, not a rewrite
-		// whose `count()` binds somewhere else.
+		// residual this rule's own doc names — and the count survives in the QUALIFIED spelling,
+		// which routes around that member and needs no `using` at all.
 		final src: String = wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
 			+ '\n\nclass Map {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('for (i in 0...Lambda.count(table))') != -1, vs[0].message);
+		assertFixCanonical(src, ['for (i in 0...Lambda.count(table))'], ['using Lambda;', 'var i = 0;']);
+	}
+
+	public function testShadowedLambdaModuleRefusesTheQualifiedCount(): Void {
+		// `Lambda` may itself be shadowed — a project declaring its own `Lambda.hx`. The qualified
+		// count would then reach THAT type, so the container keeps its old refusal.
+		final src: String = wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
+			+ '\n\nclass Map {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}'
+			+ '\n\nclass Lambda {\n\tpublic function count(it:Int):Int {\n\t\treturn 0;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

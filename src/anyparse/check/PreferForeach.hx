@@ -35,7 +35,10 @@ import anyparse.runtime.Span;
  * reflective calls by field name every iteration, plus a closure allocation): negligible on UI
  * paths, worth declining in a measured hot spot, which the `Info` severity is there to say.
  * Unlike `exists`, `foreach` names nothing in the standard collections, so the emitted call
- * cannot be captured by a member — the fix is trusted, as `prefer-find`'s is.
+ * cannot be captured by a member — the fix is trusted, as `prefer-find`'s is. A PROJECT type
+ * declaring `foreach` is the residual, and it no longer costs the site: `BoolLoopScan` falls back
+ * to the QUALIFIED `Lambda.foreach(m, x -> !(cond))`, which routes around the member and needs no
+ * `using` at all.
  */
 @:nullSafety(Strict)
 final class PreferForeach implements Check implements DefaultOff {
