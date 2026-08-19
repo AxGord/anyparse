@@ -1050,6 +1050,15 @@ typedef RefShape = {
 	@:optional var enumAbstractMetaName: String;
 
 	/**
+	 * How the grammar SPELLS an enum-abstract declaration — the emission seam
+	 * `prefer-enum-abstract`'s autofix writes through when it converts a constant-only
+	 * class into one. Unset (the default for every grammar that does not fill it) leaves
+	 * that check report-only, exactly as it was before the fix existed; the DETECTOR reads
+	 * none of this.
+	 */
+	@:optional var enumAbstractSyntax: EnumAbstractSyntax;
+
+	/**
 	 * The grammar's raw dynamic-type name (Haxe `Dynamic`) — the `avoid-dynamic`
 	 * check flags a whole-word occurrence of it in a declared type position (field,
 	 * parameter, return, type argument, or annotated local). A typed abstraction whose
@@ -2707,6 +2716,30 @@ typedef MetaShape = {
 typedef LayoutMetrics = {
 	final lineWidth: Int;
 	final indentWidth: Int;
+}
+
+/**
+ * How a grammar spells an enum-abstract declaration (`RefShape.enumAbstractSyntax`) —
+ * everything `prefer-enum-abstract`'s autofix has to WRITE, so the check itself spells no
+ * target syntax and a grammar that leaves the slot unset keeps the rule report-only.
+ *
+ * `head` is the declaration head that replaces the source's own `<keyword> <Name>`, with
+ * `{name}` standing for the type's name and `{under}` for the underlying primitive the
+ * constants share (Haxe: `enum abstract {name}({under}) to {under}`). The `to` clause is
+ * part of the template rather than an option because it is what makes the conversion
+ * source-compatible: without it every reference that flowed into a slot of the underlying
+ * type stops compiling — measured at >= 22 sites in >= 17 files for ONE five-constant type,
+ * against zero with it.
+ *
+ * `bodyOpen` is the character that opens a type body. The fix requires it to be the first
+ * non-space character AFTER the type name, which is how it refuses a head carrying anything
+ * the template would drop — type parameters above all, since those do NOT project as tree
+ * children and are otherwise invisible to the check.
+ */
+@:nullSafety(Strict)
+typedef EnumAbstractSyntax = {
+	final head: String;
+	final bodyOpen: String;
 }
 
 /**
