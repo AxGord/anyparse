@@ -4,7 +4,6 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -153,6 +152,25 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 		return '{ ${fields.join(', ')} }';
 	}
 
+	/** The resolved kind sets, or null when the grammar names no anonymous-structure type. */
+	public static function buildCtx(shape: RefShape): Null<AnonCtx> {
+		final anon: Null<String> = shape.anonTypeKind;
+		final fieldKinds: Null<Array<String>> = shape.paramKinds;
+		final typeRefKinds: Null<Array<String>> = shape.typeRefChildKinds;
+		return anon == null || fieldKinds == null || typeRefKinds == null ? null : {
+			anonKind: anon,
+			fieldKinds: fieldKinds,
+			optionalFieldKind: shape.optionalParamKind,
+			typeRefKinds: typeRefKinds,
+			typeDeclKinds: shape.typeDeclKinds ?? []
+		};
+	}
+
+	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */
+	private static inline function positiveOr(value: Null<Int>, fallback: Int): Int {
+		return value != null && value > 0 ? value : fallback;
+	}
+
 	/**
 	 * The rendered type of one field: a nested anonymous body reduced by
 	 * `shapeKey`, else the field's projected type references joined in source
@@ -178,8 +196,7 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 			if (name == null) return null;
 			names.push(name);
 		}
-		if (names.length == 0) return null;
-		return names.length == 1 ? names[0] : '${names[0]}<${names.slice(1).join(', ')}>';
+		return names.length == 0 ? null : (names.length == 1 ? names[0] : '${names[0]}<${names.slice(1).join(', ')}>');
 	}
 
 	/**
@@ -235,11 +252,6 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 		return out;
 	}
 
-	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */
-	private static inline function positiveOr(value: Null<Int>, fallback: Int): Int {
-		return value != null && value > 0 ? value : fallback;
-	}
-
 	/** `text` elided to `MESSAGE_PREVIEW` characters so a wide structure does not bloat the report. */
 	private static function preview(text: String): String {
 		return text.length > MESSAGE_PREVIEW ? '${text.substr(0, MESSAGE_PREVIEW)}…' : text;
@@ -265,21 +277,6 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 			out.addChar(c);
 		}
 		return out.toString();
-	}
-
-	/** The resolved kind sets, or null when the grammar names no anonymous-structure type. */
-	public static function buildCtx(shape: RefShape): Null<AnonCtx> {
-		final anon: Null<String> = shape.anonTypeKind;
-		final fieldKinds: Null<Array<String>> = shape.paramKinds;
-		final typeRefKinds: Null<Array<String>> = shape.typeRefChildKinds;
-		if (anon == null || fieldKinds == null || typeRefKinds == null) return null;
-		return {
-			anonKind: anon,
-			fieldKinds: fieldKinds,
-			optionalFieldKind: shape.optionalParamKind,
-			typeRefKinds: typeRefKinds,
-			typeDeclKinds: shape.typeDeclKinds ?? []
-		};
 	}
 
 }

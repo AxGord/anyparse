@@ -30,8 +30,6 @@ class HxAnonFieldTypeProjectionTest extends Test {
 	private static inline final XML_TEXT: String = 'class C { function f():{ xml:Xml, text:String } return null; }';
 	private static inline final INT_INT: String = 'class C { function f():{ xml:Int, text:Int } return null; }';
 
-	private static function ast(source: String): String return Text.render(new HaxeQueryPlugin().parseFile(source));
-
 	/** The defect itself: same field names, different field types, one S-expr. */
 	public function testFieldTypesDiscriminateTwoAnonShapes(): Void {
 		final a: String = ast(XML_TEXT);
@@ -69,5 +67,7 @@ class HxAnonFieldTypeProjectionTest extends Test {
 		final dump: String = ast('class C { var a:Int; function f(p:haxe.io.Bytes):Null<Bar> return null; }');
 		Assert.isFalse(dump.contains('TypeRef'), 'no type annotation outside an anon field may project, got: $dump');
 	}
+
+	private static function ast(source: String): String return Text.render(new HaxeQueryPlugin().parseFile(source));
 
 }

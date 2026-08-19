@@ -128,8 +128,8 @@ class AnonTypeDupCheckTest extends Test {
 	 * and the same shape linted one file at a time reports nothing.
 	 */
 	public function testScopeDecidesTheCount(): Void {
-		final threeInOne: String = 'class C { var a:{ xml:Xml, text:String }; var b:{ xml:Xml, text:String }; '
-			+ 'var c:{ xml:Xml, text:String }; }';
+		final threeInOne: String =
+			'class C { var a:{ xml:Xml, text:String }; var b:{ xml:Xml, text:String }; var c:{ xml:Xml, text:String }; }';
 		final vs: Array<Violation> = violations([threeInOne]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('written 3 times in this file'), vs[0].message);
