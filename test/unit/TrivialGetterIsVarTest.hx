@@ -135,6 +135,21 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 		Assert.equals(1, vs.length);
 	}
 
+	/**
+	 * And the single-file FIX still applies for that subtype read. The bridged arm blocks it —
+	 * deleting `_x` would strand the subtype — but the self-backed collapse deletes no field, so the
+	 * subtype keeps reading the very property that survives.
+	 */
+	public function testSubclassReadingPropertyStillFixes(): Void {
+		final base: String = 'class C {\n\t@:isVar public var angle(get, set):Float;\n\tfunction get_angle():Float return angle;\n'
+			+ '\tfunction set_angle(v:Float):Float { redraw(); return angle = v; }\n}';
+		final sub: String = 'class D extends C {\n\tfunction show():Void { trace(angle); }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: base }, { file: 'D.hx', source: sub }];
+		final r: { check: TrivialGetter, vs: Array<Violation> } = runFilesAndExpectOne(files);
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.isTrue(r.check.fix(base, r.vs, plugin, SymbolIndex.build(files, plugin)).length > 0);
+	}
+
 	/** An `override` getter answers a supertype contract the collapse would silently break. */
 	public function testOverrideGetterNotFlagged(): Void {
 		final vs: Array<Violation> = violations(
