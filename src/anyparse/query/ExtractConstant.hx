@@ -7,6 +7,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
+
 /**
  * `extract-constant` — replace every occurrence of a plain single- or
  * double-quoted string literal inside one type with a reference to a fresh
@@ -49,9 +51,7 @@ final class ExtractConstant {
 	): EditResult {
 		if (!RefactorSupport.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, typeName);
@@ -94,7 +94,7 @@ final class ExtractConstant {
 
 		for (sf in scopeFiles) {
 			final tree: QueryNode = try plugin.parseFile(sf.source) catch (exception: ParseError) return Err(
-				'${sf.file} does not parse: ${exception.toString()}'
+				'${sf.file} does not parse: $exception'
 			)
 			catch (exception: Exception) return Err('${sf.file} does not parse: ${exception.message}');
 
@@ -203,7 +203,7 @@ final class ExtractConstant {
 		if (moduleSource == null) return Err('module "$modulePath" is marked existing but no source was provided');
 		final existing: String = moduleSource;
 		final mtree: QueryNode = try plugin.parseFile(existing) catch (exception: ParseError) return Err(
-			'module "$modulePath" does not parse: ${exception.toString()}'
+			'module "$modulePath" does not parse: $exception'
 		)
 		catch (exception: Exception) return Err('module "$modulePath" does not parse: ${exception.message}');
 		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(mtree, moduleClass);
@@ -232,8 +232,7 @@ final class ExtractConstant {
 	 * cross-file op with an "already imported" error.
 	 */
 	private static function alreadyImportsModule(tree: QueryNode, modulePath: String): Bool {
-		for (c in tree.children) if ((c.kind == 'ImportDecl' || c.kind == 'UsingDecl') && c.name == modulePath) return true;
-		return false;
+		return tree.children.exists(c -> (c.kind == 'ImportDecl' || c.kind == 'UsingDecl') && c.name == modulePath);
 	}
 
 }

@@ -9,6 +9,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -104,8 +105,7 @@ final class MemberSlots {
 
 	/** Whether `name` begins with a property-accessor prefix (`get_` / `set_`). */
 	private static function isAccessor(name: String, shape: RefShape): Bool {
-		for (prefix in shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) return true;
-		return false;
+		return (shape.accessorMethodPrefixes ?? []).exists(prefix -> name.startsWith(prefix));
 	}
 
 	/**

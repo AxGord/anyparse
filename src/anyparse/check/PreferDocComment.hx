@@ -9,6 +9,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -443,9 +444,9 @@ final class PreferDocComment implements Check implements DefaultOff {
 		source: String, anchors: Map<Int, Anchor>, stops: Array<CommentTok>, self: Anchor, indent: String
 	): Bool {
 		final stop: Int = sectionStop(source, stops, self, indent);
-		for (other in anchors) if (other.from > self.to && other.from < stop && other.owner == self.owner && other.kind == self.kind)
-			return false;
-		return true;
+		return anchors.foreach(
+			other -> !(other.from > self.to && other.from < stop && other.owner == self.owner && other.kind == self.kind)
+		);
 	}
 
 	/**

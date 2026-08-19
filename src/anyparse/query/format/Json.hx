@@ -79,7 +79,7 @@ final class Json {
 			final declSpan: Null<Span> = h.declSpan;
 			final decl: AstMetaDecl = {
 				kind: h.declKind,
-				span: declSpan == null ? emptySpan() : spanToJson(declSpan, entry.source),
+				span: declSpan == null ? emptySpan() : spanToJson(declSpan, entry.source)
 			};
 			final dn: Null<String> = h.declName;
 			if (dn != null) decl.name = dn;
@@ -87,7 +87,7 @@ final class Json {
 				file: entry.file,
 				annotation: h.annotation,
 				args: h.args,
-				decl: decl,
+				decl: decl
 			});
 		}
 		final envelope: AstMetaHits = { hits: out };
@@ -102,7 +102,7 @@ final class Json {
 				file: entry.file,
 				kind: h.kind.toString(),
 				span: spanToJson(h.span, entry.source),
-				name: h.name,
+				name: h.name
 			};
 			if (bindingSpan != null) hit.binding = spanToJson(bindingSpan, entry.source);
 			if (doc) {
@@ -125,7 +125,7 @@ final class Json {
 				{
 					file: file,
 					span: spanToJson(m.span, source),
-					bindings: collectBindings(m, source),
+					bindings: collectBindings(m, source)
 				}
 		];
 		final envelope: AstSearchMatches = { matches: entries };
@@ -154,7 +154,7 @@ final class Json {
 			out.push({
 				name: name,
 				text: text,
-				span: span == null ? emptySpan() : spanToJson(span, source),
+				span: span == null ? emptySpan() : spanToJson(span, source)
 			});
 		}
 		return out;
@@ -167,7 +167,7 @@ final class Json {
 		// coordinate convention (refs / ast --at / source agree).
 		return {
 			start: [from.line, from.col],
-			end: [to.line, to.col],
+			end: [to.line, to.col]
 		};
 	}
 

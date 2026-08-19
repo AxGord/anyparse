@@ -280,7 +280,7 @@ final class TriviaTryparseLowering {
 			finalWrapDocs: finalWrapDocs,
 			forceInlineSep: forceInlineSep,
 			elemSelfTrailsNewline: elemSelfTrailsNewline,
-			elemCondFn: elemCondFnExpr,
+			elemCondFn: elemCondFnExpr
 		};
 		return heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
 	}
@@ -592,9 +592,9 @@ final class TriviaTryparseLowering {
 					type: macro :Bool,
 					expr: endsLine,
 					isFinal: true
-				},
+				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -1075,7 +1075,7 @@ final class TriviaTryparseLowering {
 			// (the parser treats `macro` as a variable name in the next element).
 			final block: Array<Expr> = [
 				(macro final _wo = _copyOpt(opt)),
-				macro _wo._inExprPosition = true,
+				macro _wo._inExprPosition = true
 			];
 			if (hasFlatChildOpt) {
 				final flatOnlyParts: Array<Expr> = [
@@ -1159,7 +1159,7 @@ final class TriviaTryparseLowering {
 			macro _writerOpt;
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// ω-typedef-intersection-operand-break: per-iteration element call for
 		// the MAIN inter-element loop only (the heritage/wrap fast paths keep
@@ -1173,7 +1173,7 @@ final class TriviaTryparseLowering {
 		// no mutation of the shared opt).
 		final triviaElemCallMaybeBreak: Expr = operandBreakAfterMultilineBrace ? {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro _elemOpt]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		} : triviaElemCall;
 		// Single `final _elemOpt = …;` declaration spliced at loop scope (NOT a
 		// nested EBlock — that would isolate `_elemOpt` from the element call).
@@ -1405,9 +1405,9 @@ final class TriviaTryparseLowering {
 					type: macro :Bool,
 					expr: macro _caseBodyFlattenable && !_flatCase && $priorAfterTrailRaw == null && $fitGateExpr,
 					isFinal: true
-				},
+				}
 			]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 

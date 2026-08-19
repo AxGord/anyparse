@@ -661,9 +661,8 @@ final class PreferArrowCallback implements Check {
 		final declText: String = declSource.substring(rt.type.span.from, rt.type.span.to);
 		final eq: Int = topLevelIndexOf(declText, '=');
 		if (eq < 0) return null;
-		var rhs: String = declText.substr(eq + 1).trim();
-		if (rhs.endsWith(';')) rhs = rhs.substr(0, rhs.length - 1).trim();
-		return rhs;
+		final rhs: String = declText.substr(eq + 1).trim();
+		return rhs.endsWith(';') ? rhs.substr(0, rhs.length - 1).trim() : rhs;
 	}
 
 	/** The parameter segment at `argIndex` of a function-type SOURCE (`(a:Int, b:X)->Void` / `A->B->Void`), or null. */
@@ -679,10 +678,9 @@ final class PreferArrowCallback implements Check {
 		if (interior.trim() == '') return null;
 		final parts: Array<String> = splitTopCommas(interior);
 		if (parts.length != argCount || argIndex >= parts.length) return null;
-		var part: String = StringTools.trim(parts[argIndex]);
+		final part: String = StringTools.trim(parts[argIndex]);
 		final colon: Int = topLevelIndexOf(part, ':');
-		if (colon >= 0) part = part.substr(colon + 1).trim();
-		return part;
+		return colon >= 0 ? part.substr(colon + 1).trim() : part;
 	}
 
 	/** Type-parameter names in scope at `span` — the enclosing member's and type declaration's header params. */

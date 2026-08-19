@@ -1,9 +1,9 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.core.ShapeTree;
 
 using Lambda;
 using anyparse.macro.MetaInspect;

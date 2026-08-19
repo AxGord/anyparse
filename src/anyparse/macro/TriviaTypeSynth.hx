@@ -6,6 +6,7 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
 
+using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
@@ -503,8 +504,7 @@ class TriviaTypeSynth {
 		// to ensure the branch is a postfix ctor.
 		final meta: Null<Metadata> = branch.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
-		for (entry in meta) if (entry.name == ':postfix' && entry.params.length == 2) return true;
-		return false;
+		return meta.exists(entry -> entry.name == ':postfix' && entry.params.length == 2);
 	}
 
 	/**
@@ -723,21 +723,6 @@ class TriviaTypeSynth {
 	}
 
 	/**
-	 * ω-keep-chain-receiver-comment — true when the branch is the
-	 * `@:postfix('.')` method-chain ctor (`HxExpr.FieldAccess`): a postfix
-	 * branch carrying `@:fmt(captureChainNewline)`. Such a branch grows a
-	 * positional `chainLeadComment:Null<String>` slot (in addition to
-	 * `chainNewline:Bool`) holding the verbatim trailing comment of its operand
-	 * captured before the `.` dispatch. Strictly narrower than
-	 * `isAltChainNewlineBranch` — the infix chain ctors (Add/Sub/And/Or) are
-	 * excluded since they capture operand trivia through the Pratt stash, not a
-	 * dedicated slot. Two operand children (`operand,field`).
-	 */
-	public static function isPostfixChainCommentBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 2 && (branch.hasMeta(':postfix') && branch.fmtHasFlag('captureChainNewline'));
-	}
-
-	/**
 	 * ω-postfix-op-space — true when the branch is a word-op postfix ctor
 	 * opting into source-faithful operator spacing via
 	 * `@:fmt(capturePostfixOpSpace)` (`HxExpr.CondSpliceTail`). Such a
@@ -846,7 +831,7 @@ class TriviaTypeSynth {
 			name: CONVERTERS_CLASS_NAME,
 			kind: TDClass(null, [], false, true, false),
 			fields: fns,
-			meta: [{ name: ':nullSafety', params: [macro Strict], pos: pos }],
+			meta: [{ name: ':nullSafety', params: [macro Strict], pos: pos }]
 		};
 	}
 
@@ -878,7 +863,7 @@ class TriviaTypeSynth {
 			name: 'pairedToRaw_$rawSimple',
 			access: [APublic, AStatic],
 			pos: pos,
-			kind: FFun({ args: [{ name: 'value', type: pairedCT }], ret: rawCT, expr: body }),
+			kind: FFun({ args: [{ name: 'value', type: pairedCT }], ret: rawCT, expr: body })
 		};
 	}
 
@@ -961,7 +946,7 @@ class TriviaTypeSynth {
 					expr: EArrayDecl([
 						{
 							expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, inner),
-							pos: pos,
+							pos: pos
 						}
 					]),
 					pos: pos
@@ -1048,7 +1033,7 @@ class TriviaTypeSynth {
 			name: 'rawToPaired_$rawSimple',
 			access: [APublic, AStatic],
 			pos: pos,
-			kind: FFun({ args: [{ name: 'value', type: rawCT }], ret: pairedCT, expr: body }),
+			kind: FFun({ args: [{ name: 'value', type: rawCT }], ret: pairedCT, expr: body })
 		};
 	}
 
@@ -1265,7 +1250,7 @@ class TriviaTypeSynth {
 					expr: EArrayDecl([
 						{
 							expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, perElem),
-							pos: pos,
+							pos: pos
 						}
 					]),
 					pos: pos
@@ -1655,7 +1640,7 @@ class TriviaTypeSynth {
 				kind: FVar(nullStrCT),
 				pos: pos,
 				access: []
-			},
+			}
 		];
 	}
 
@@ -1708,7 +1693,7 @@ class TriviaTypeSynth {
 				kind: FVar(arrayStrCT),
 				pos: pos,
 				access: []
-			},
+			}
 		];
 		// ω-close-trailing: close-peek Stars (those with `@:trail`)
 		// additionally carry a same-line trailing comment captured right
@@ -1802,7 +1787,7 @@ class TriviaTypeSynth {
 			for (arg in branch.children)
 				{
 					name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
-					type: shapeToComplexType(arg, synthPack),
+					type: shapeToComplexType(arg, synthPack)
 				}
 		];
 		// ω-close-trailing-alt: close-peek `@:trivia` Alt-branch Stars

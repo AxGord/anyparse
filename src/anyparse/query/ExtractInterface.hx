@@ -68,7 +68,7 @@ final class ExtractInterface {
 		if (ifaceName == srcTypeName) return Err('interface name must differ from the source type "$srcTypeName"');
 
 		final tree: QueryNode = try plugin.parseFile(srcSource) catch (exception: ParseError) return Err(
-			'$srcFile does not parse: ${exception.toString()}'
+			'$srcFile does not parse: $exception'
 		)
 		catch (exception: Exception) return Err('$srcFile does not parse: ${exception.message}');
 
@@ -99,7 +99,7 @@ final class ExtractInterface {
 		try
 			plugin.parseFile(newSrc)
 		catch (exception: ParseError)
-			return Err('rewritten $srcFile does not parse: ${exception.toString()}')
+			return Err('rewritten $srcFile does not parse: $exception')
 		catch (exception: Exception)
 			return Err('rewritten $srcFile does not parse: ${exception.message}');
 
@@ -108,7 +108,7 @@ final class ExtractInterface {
 			+ (incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : '');
 		final changes: Array<MoveChange> = [
 			{ file: ifaceFile, newSource: ifaceSource },
-			{ file: srcFile, newSource: newSrc },
+			{ file: srcFile, newSource: newSrc }
 		];
 		return Ok(changes, advisory);
 	}
@@ -259,7 +259,7 @@ final class ExtractInterface {
 		}
 		sb.add('}\n');
 		final canonical: Null<String> = try plugin.writeRoundTrip(sb.toString(), null) catch (exception: ParseError) {
-			return Left('assembled interface does not parse: ${exception.toString()}');
+			return Left('assembled interface does not parse: $exception');
 		} catch (exception: CommentLossException) {
 			return Left('the assembled interface cannot be written without losing the comment `${exception.comment}`');
 		} catch (exception: Exception) {

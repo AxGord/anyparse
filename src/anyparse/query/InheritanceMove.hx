@@ -197,14 +197,14 @@ final class InheritanceMove {
 		if (srcFile == target.file) {
 			final newSource: String = RefactorSupport.applyEdits(src.source, [
 				{ span: m.cut, text: '' },
-				{ span: new Span(wsStart, bodyClose), text: insertText },
+				{ span: new Span(wsStart, bodyClose), text: insertText }
 			]);
 			changes.push({ file: srcFile, newSource: newSource });
 		} else {
 			changes.push({ file: srcFile, newSource: RefactorSupport.applyEdits(src.source, [{ span: m.cut, text: '' }]) });
 			changes.push({
 				file: target.file,
-				newSource: RefactorSupport.applyEdits(target.source, [{ span: new Span(wsStart, bodyClose), text: insertText }]),
+				newSource: RefactorSupport.applyEdits(target.source, [{ span: new Span(wsStart, bodyClose), text: insertText }])
 			});
 		}
 
@@ -212,7 +212,7 @@ final class InheritanceMove {
 			try
 				plugin.parseFile(c.newSource)
 			catch (exception: ParseError)
-				return Err('rewritten ${c.file} does not parse: ${exception.toString()}')
+				return Err('rewritten ${c.file} does not parse: $exception')
 			catch (exception: Exception)
 				return Err('rewritten ${c.file} does not parse: ${exception.message}');
 		}

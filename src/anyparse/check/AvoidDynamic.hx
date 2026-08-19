@@ -1,7 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -13,9 +15,6 @@ import anyparse.runtime.Span;
 
 using StringTools;
 using Lambda;
-
-import anyparse.check.Check.OracleAssisted;
-import anyparse.check.Check.TypeOracle;
 
 /**
  * Flags a raw `Dynamic` in a DECLARED type position — a field type, a function
@@ -731,8 +730,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 
 	/** Whether `file`'s path contains any of the configured exclusion substrings. */
 	private static function pathExcluded(file: String, patterns: Array<String>): Bool {
-		for (p in patterns) if (p.length > 0 && file.indexOf(p) >= 0) return true;
-		return false;
+		return patterns.exists(p -> p.length > 0 && file.indexOf(p) >= 0);
 	}
 
 	/** Append findings from `found` into `into`, dropping duplicates at the same span (overlapping walk paths hit one token twice). */

@@ -1,16 +1,16 @@
 package anyparse.check;
 
+import anyparse.check.AssignmentTreeHoist.LvalueRef;
+import anyparse.check.AssignmentTreeHoist.TreeSeams;
+import anyparse.check.AssignmentTreeHoist.UnitValue;
 import anyparse.check.Check.Violation;
+import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.AssignmentTreeHoist.TreeSeams;
-import anyparse.check.AssignmentTreeHoist.LvalueRef;
-import anyparse.check.AssignmentTreeHoist.UnitValue;
-import anyparse.check.IfExpressionChain.Carried;
 
 /**
  * Flags an `if / else if / … / else` CHAIN, or a 2-branch `if`/`else` carrying a nested

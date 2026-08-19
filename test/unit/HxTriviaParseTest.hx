@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.runtime.Trivial;
 
 /**
  * ω₄d — end-to-end Trivia-mode parse tests. Exercises the generated
@@ -105,7 +106,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -127,13 +128,13 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final outerStmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final outerStmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
 		Assert.equals(1, outerStmts.length);
 		final inner: anyparse.grammar.haxe.trivia.Pairs.HxStatementT = outerStmts[0].node;
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch inner {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch inner {
 			case BlockStmt(stmts, _): stmts;
 			case _: throw 'expected BlockStmt';
 		};
@@ -209,7 +210,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -236,7 +237,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -261,7 +262,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -274,7 +275,7 @@ class HxTriviaParseTest extends Test {
 		Assert.equals(0, ifStmt.elseBodyKwLeading.length);
 		final elseStmt: Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = ifStmt.elseBody;
 		Assert.notNull(elseStmt);
-		final elseStmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch elseStmt {
+		final elseStmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch elseStmt {
 			case BlockStmt(stmts, _): stmts;
 			case _: throw 'expected BlockStmt';
 		};
@@ -299,7 +300,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -312,7 +313,7 @@ class HxTriviaParseTest extends Test {
 		Assert.equals('// between else and block', ifStmt.elseBodyKwLeading[0]);
 		final elseStmt: Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = ifStmt.elseBody;
 		Assert.notNull(elseStmt);
-		final elseStmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch elseStmt {
+		final elseStmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch elseStmt {
 			case BlockStmt(stmts, _): stmts;
 			case _: throw 'expected BlockStmt';
 		};
@@ -336,7 +337,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -367,7 +368,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -395,7 +396,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -422,7 +423,7 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};

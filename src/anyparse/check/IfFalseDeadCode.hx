@@ -1,12 +1,12 @@
 package anyparse.check;
 
-import haxe.Exception;
+import anyparse.check.Check.Violation;
+import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.GrammarPlugin;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import anyparse.check.Check.Violation;
+import haxe.Exception;
 
 using StringTools;
 

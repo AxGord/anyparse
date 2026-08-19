@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -208,8 +209,7 @@ final class TryExpressionShape {
 	 */
 	public static function referencesName(node: QueryNode, name: String, identKind: String, stringInterpKind: Null<String>): Bool {
 		if ((node.kind == identKind || node.kind == stringInterpKind) && node.name == name) return true;
-		for (c in node.children) if (referencesName(c, name, identKind, stringInterpKind)) return true;
-		return false;
+		return node.children.exists(c -> referencesName(c, name, identKind, stringInterpKind));
 	}
 
 	/**
@@ -263,11 +263,9 @@ final class TryExpressionShape {
 		source: String, span: Null<Span>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Bool {
 		if (span == null) return false;
-		for (tok in comments) if (
-			tok.isLine && tok.from >= span.from && tok.to <= span.to && source.substring(tok.to, span.to).indexOf('\n') < 0
-		)
-			return true;
-		return false;
+		return comments.exists(
+			tok -> tok.isLine && tok.from >= span.from && tok.to <= span.to && source.substring(tok.to, span.to).indexOf('\n') < 0
+		);
 	}
 
 	/**

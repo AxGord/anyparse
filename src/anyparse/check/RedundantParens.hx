@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -616,8 +617,7 @@ final class RedundantParens implements Check implements ConfigAware {
 	private static function isAtom(node: QueryNode, slots: ParenSlots): Bool {
 		if (slots.atoms.contains(node.kind)) return true;
 		if (!slots.atomChains.contains(node.kind)) return false;
-		for (c in node.children) if (!isAtom(c, slots)) return false;
-		return true;
+		return node.children.foreach(c -> isAtom(c, slots));
 	}
 
 	/**
@@ -725,8 +725,7 @@ final class RedundantParens implements Check implements ConfigAware {
 		if (parent.children.length != 2 || parent.children[0].kind != slots.parenKind) return false;
 		if (parent.children[1].kind == slots.parenKind) return false;
 		final bare: String = RefactorSupport.unwrapParens(parent.children[0], slots.parenKind).kind;
-		for (family in slots.families) if (family.contains(parent.kind) && family.contains(bare)) return true;
-		return false;
+		return slots.families.exists(family -> family.contains(parent.kind) && family.contains(bare));
 	}
 
 	/**

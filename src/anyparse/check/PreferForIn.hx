@@ -333,8 +333,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		final self: Bool = node.name == name
 			&& (node.kind == s.identKind || node.kind == s.interpIdentKind || s.localDeclKinds.contains(node.kind));
 		if (self) return true;
-		for (c in node.children) if (nameIsLive(c, name, s)) return true;
-		return false;
+		return node.children.exists(c -> nameIsLive(c, name, s));
 	}
 
 	/** `final a:Array<CodePoint> = …` -> `codePoint`; null when the declaration carries no such annotation. */

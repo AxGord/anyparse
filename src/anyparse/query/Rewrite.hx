@@ -38,9 +38,7 @@ final class Rewrite {
 	public static function rewrite(
 		source: String, patternText: String, replacementText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final pattern: Pattern = try plugin.parsePattern(patternText) catch (exception: Exception) return Err(
@@ -133,7 +131,7 @@ final class Rewrite {
 		return buf.toString();
 	}
 
-	// `name` (verbatim) | `name+N` / `name-N` (integer shift).
+	/** `name` (verbatim) | `name+N` / `name-N` (integer shift). */
 	private static function expandSpec(spec: String, source: String, bindings: Map<String, QueryNode>): Null<String> {
 		final plus: Int = spec.indexOf('+');
 		final minus: Int = spec.indexOf('-');
@@ -148,8 +146,10 @@ final class Rewrite {
 		return value == null ? null : '${value + shift}';
 	}
 
-	// Verbatim source for a bound metavar: the captured name for a
-	// name-position binding, else the node's source slice.
+	/**
+	 * Verbatim source for a bound metavar: the captured name for a
+	 * name-position binding, else the node's source slice.
+	 */
 	private static function metavarSource(name: String, source: String, bindings: Map<String, QueryNode>): Null<String> {
 		final node: Null<QueryNode> = bindings[name];
 		if (node == null) return null;

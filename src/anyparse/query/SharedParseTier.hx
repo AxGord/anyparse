@@ -63,10 +63,12 @@ final class SharedParseTier {
 	private final _parses: Map<String, QueryNode>;
 	private final _spans: Map<String, SpanTypeInfo>;
 
-	// The library array instance `promote` has already walked. The scope thunk memoises its
-	// library, so every `resolutionFiles()` call after the first in a run hands back the SAME
-	// array — one per `--fix` pass — and re-walking it would re-hash every library source for
-	// nothing. Reference identity, not content: a different array is a different library.
+	/**
+	 * The library array instance `promote` has already walked. The scope thunk memoises its
+	 * library, so every `resolutionFiles()` call after the first in a run hands back the SAME
+	 * array — one per `--fix` pass — and re-walking it would re-hash every library source for
+	 * nothing. Reference identity, not content: a different array is a different library.
+	 */
 	private var _promotedLibrary: Null<Array<{ file: String, source: String }>> = null;
 
 	public function new(lang: String) {

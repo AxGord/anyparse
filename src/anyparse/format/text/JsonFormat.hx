@@ -7,6 +7,7 @@ import anyparse.format.WriteOptions;
 import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
+import haxe.Exception;
 
 using StringTools;
 
@@ -117,7 +118,7 @@ final class JsonFormat implements TextFormat {
 		methodChainCuddledLinks: false,
 		addLineCommentSpace: true,
 		normalizeLineCommentIndent: false,
-		compressSuccessiveParenthesis: true,
+		compressSuccessiveParenthesis: true
 	};
 
 	private function new() {}
@@ -141,7 +142,7 @@ final class JsonFormat implements TextFormat {
 
 	public function unescapeChar(input: String, pos: Int): UnescapeResult {
 		final esc: Null<Int> = input.charCodeAt(pos);
-		if (esc == null) throw new haxe.Exception('unterminated escape at $pos');
+		if (esc == null) throw new Exception('unterminated escape at $pos');
 		return switch esc {
 			case '"'.code: { char: '"'.code, consumed: 1 };
 			case '\\'.code: { char: '\\'.code, consumed: 1 };
@@ -152,13 +153,13 @@ final class JsonFormat implements TextFormat {
 			case 'b'.code: { char: 0x08, consumed: 1 };
 			case 'f'.code: { char: 0x0C, consumed: 1 };
 			case 'u'.code:
-				if (pos + 5 > input.length) throw new haxe.Exception('incomplete unicode escape at $pos'); // noqa: magic-number
+				if (pos + 5 > input.length) throw new Exception('incomplete unicode escape at $pos'); // noqa: magic-number
 				final hex: String = input.substring(pos + 1, pos + 5);
 				final code: Null<Int> = Std.parseInt('0x$hex');
-				if (code == null) throw new haxe.Exception('invalid unicode escape: $hex');
+				if (code == null) throw new Exception('invalid unicode escape: $hex');
 				{ char: code, consumed: 5 };
 			case _:
-				throw new haxe.Exception('invalid escape: \\${String.fromCharCode(esc)}');
+				throw new Exception('invalid escape: \\${String.fromCharCode(esc)}');
 		};
 	}
 

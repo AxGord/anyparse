@@ -1,9 +1,10 @@
 package anyparse.query;
 
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -224,8 +225,7 @@ final class CondBranchProjection {
 
 	/** Whether `pos` falls inside any of the `tokens` half-open ranges. */
 	private static function inAnyToken(pos: Int, tokens: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
-		for (tok in tokens) if (pos >= tok.from && pos < tok.to) return true;
-		return false;
+		return tokens.exists(tok -> pos >= tok.from && pos < tok.to);
 	}
 
 	/** Whether `a` and `b` hold the same node INSTANCES in the same order — the shared-subtree test. */

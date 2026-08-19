@@ -1,8 +1,13 @@
 package anyparse.check;
 
-import anyparse.check.Check.Violation;
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OracleAssisted;
+import anyparse.check.Check.TypeOracle;
+import anyparse.check.Check.Violation;
+import anyparse.check.LintConfig;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -10,11 +15,6 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
-import anyparse.check.Check.OracleAssisted;
-import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.TypeOracle;
-import anyparse.check.LintConfig;
-import anyparse.query.NominalTypes;
 
 using StringTools;
 

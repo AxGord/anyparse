@@ -58,7 +58,7 @@ final class TriviaEofLowering {
 	): Expr {
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final trailBB: Expr = trailBBAccess ?? macro false;
 		final trailLC: Expr = trailLCAccess ?? macro ([]: Array<String>);
@@ -89,7 +89,7 @@ final class TriviaEofLowering {
 			lineCommentTrailBlank: lineCommentTrailBlank,
 			lineCommentLedAddBlank: lineCommentLedAddBlank,
 			afterFileHeaderCommentBlanks: afterFileHeaderCommentBlanks,
-			betweenMultilineCommentsBlanks: betweenMultilineCommentsBlanks,
+			betweenMultilineCommentsBlanks: betweenMultilineCommentsBlanks
 		};
 		final whileExpr: Expr = triviaEofWhileExpr(c);
 		final elseBody: Expr = triviaEofElseBody(c, whileExpr);
@@ -158,7 +158,7 @@ final class TriviaEofLowering {
 		final whileBodyBlock: Expr = { expr: EBlock(whileBodyParts), pos: c.pos };
 		return {
 			expr: EWhile(macro _si < _arr.length, whileBodyBlock, true),
-			pos: c.pos,
+			pos: c.pos
 		};
 	}
 

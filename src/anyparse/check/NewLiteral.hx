@@ -3,9 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
 
 using StringTools;
 
@@ -124,15 +124,14 @@ final class NewLiteral {
 		for (i in 0...len - 1) {
 			final c: Int = head.fastCodeAt(i);
 			switch c {
-				case '<'.code | '('.code | '['.code | '{'.code:
+				case '<'.code, '('.code, '['.code, '{'.code:
 					depth++;
-				case '>'.code | ')'.code | ']'.code | '}'.code:
+				case '>'.code, ')'.code, ']'.code, '}'.code:
 					if (depth > 0) depth--;
 				case ':'.code:
 					if (depth == 0 && (i == 0 || head.fastCodeAt(i - 1) != '@'.code)) sawColon = true;
 				case ','.code:
 					if (depth == 0) return false;
-				case _:
 			}
 		}
 		return sawColon;

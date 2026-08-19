@@ -10,6 +10,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.StdResolver;
+import haxe.io.Path;
 
 /**
  * The `prefer-typed-throw` check: `throw '<string>'` is flagged `Info` and — when the
@@ -199,7 +200,7 @@ class PreferTypedThrowCheckTest extends Test {
 		}
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
 		final scoped: CachingGrammarPlugin = scopedPlugin(report, [
-			{ file: haxe.io.Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH }
+			{ file: Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH }
 		]);
 		final check: PreferTypedThrow = new PreferTypedThrow();
 		final vs: Array<Violation> = check.run(report, scoped);
@@ -228,7 +229,7 @@ class PreferTypedThrowCheckTest extends Test {
 		}
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
 		final scoped: CachingGrammarPlugin = scopedPlugin(report, [
-			{ file: haxe.io.Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH },
+			{ file: Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH },
 			{ file: 'vendor/crashdumper/CrashDumper.hx', source: STRING_CATCH }
 		]);
 		final vs: Array<Violation> = new PreferTypedThrow().run(report, scoped);

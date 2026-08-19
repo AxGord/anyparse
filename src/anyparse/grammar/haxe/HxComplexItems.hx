@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+using Lambda;
+
 /**
  * Per-element complexity classification of a delimited list, as the writer's
  * `WrapListOptions.complexItemKinds` axis expects it.
@@ -83,14 +85,12 @@ final class HxComplexItems {
 		}
 		if (Std.isOfType(v, Array)) {
 			final arr: Array<Any> = cast v;
-			for (item in arr) if (subtreeHasCallOrNew(item, depth + 1)) return true;
-			return false;
+			return arr.exists(item -> subtreeHasCallOrNew(item, depth + 1));
 		}
 		// `Reflect.isObject` answers true for String on several targets, and a
 		// string's "fields" are its methods — walking them is pure cost.
 		if (Std.isOfType(v, String) || !Reflect.isObject(v)) return false;
-		for (name in Reflect.fields(v)) if (subtreeHasCallOrNew(Reflect.field(v, name), depth + 1)) return true;
-		return false;
+		return Reflect.fields(v).exists(name -> subtreeHasCallOrNew(Reflect.field(v, name), depth + 1));
 	}
 
 }

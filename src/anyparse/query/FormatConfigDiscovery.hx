@@ -30,8 +30,10 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class FormatConfigDiscovery {
 
-	// Directory -> the config text governing it, or null when no ancestor has one.
-	// `Map.exists` distinguishes "not looked up yet" from "looked up, found nothing".
+	/**
+	 * Directory -> the config text governing it, or null when no ancestor has one.
+	 * `Map.exists` distinguishes "not looked up yet" from "looked up, found nothing".
+	 */
 	private static final CACHE: Map<String, Null<String>> = [];
 
 	/**

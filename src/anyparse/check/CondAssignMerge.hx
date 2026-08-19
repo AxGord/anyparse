@@ -9,6 +9,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -381,8 +382,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final bounds: Array<Int> = [region.from].concat(markers);
 		bounds.push(endAt);
 		final arms: Array<Arm> = [];
-		for (a in 0...children.length) {
-			final stmt: QueryNode = children[a];
+		for (a => stmt in children) {
 			final stmtSpan: Null<Span> = stmt.span;
 			if (stmtSpan == null || stmtSpan.from < bounds[a] || stmtSpan.to > bounds[a + 1]) return null;
 			// Re-bind to a non-null local: narrowing does not reach the struct literal below.
@@ -537,8 +537,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 
 	/** Whether a comment token overlaps `region` — the merge rebuilds the statement, so any comment in it would be lost. */
 	private static function hasComment(comments: Array<{ from: Int, to: Int, isLine: Bool }>, region: Span): Bool {
-		for (token in comments) if (token.from < region.to && token.to > region.from) return true;
-		return false;
+		return comments.exists(token -> token.from < region.to && token.to > region.from);
 	}
 
 	private static function sliceStartsWith(s: String, at: Int, what: String): Bool {

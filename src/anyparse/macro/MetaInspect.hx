@@ -1,8 +1,10 @@
 package anyparse.macro;
 
 #if macro
-import haxe.macro.Expr.Metadata;
 import anyparse.core.ShapeTree.ShapeNode;
+import haxe.macro.Expr.Metadata;
+
+using Lambda;
 
 /**
  * Macro-time helpers that read metadata stashed under
@@ -32,8 +34,7 @@ final class MetaInspect {
 	public static function hasMeta(node: ShapeNode, tag: String): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
-		for (entry in meta) if (entry.name == tag) return true;
-		return false;
+		return meta.exists(entry -> entry.name == tag);
 	}
 
 	/**

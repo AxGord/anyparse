@@ -44,9 +44,7 @@ final class RemoveImport {
 	public static function removeImport(
 		source: String, modulePath: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true, ?optsJson: String
 	): EditResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final matches: Array<QueryNode> = tree.children.filter(n -> IMPORT_KINDS.contains(n.kind) && n.name == modulePath);

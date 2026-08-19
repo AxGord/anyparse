@@ -1,8 +1,8 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
-import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
 
 /**
  * One finding produced by a `Check`. `file` is the path the finding

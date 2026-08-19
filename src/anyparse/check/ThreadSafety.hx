@@ -1,11 +1,11 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.Check.ConfigAware;
 
 using StringTools;
 
@@ -209,7 +209,7 @@ final class ThreadSafety implements Check implements ConfigAware {
 				span: edge.span,
 				rule: 'thread-safety',
 				severity: Severity.Warning,
-				message: 'main thread reaches blocking "${edge.to}"$also: $chain -> ${edge.to}',
+				message: 'main thread reaches blocking "${edge.to}"$also: $chain -> ${edge.to}'
 			});
 		}
 	}
@@ -233,7 +233,7 @@ final class ThreadSafety implements Check implements ConfigAware {
 					span: null,
 					rule: 'thread-safety',
 					severity: Severity.Info,
-					message: 'malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"',
+					message: 'malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"'
 				});
 				continue;
 			}
@@ -270,7 +270,7 @@ final class ThreadSafety implements Check implements ConfigAware {
 							span: span,
 							rule: 'thread-safety',
 							severity: Severity.Warning,
-							message: message,
+							message: message
 						});
 					}
 				}

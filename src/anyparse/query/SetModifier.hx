@@ -72,9 +72,7 @@ final class SetModifier {
 		final invalid: Null<String> = validate(changes);
 		if (invalid != null) return Err(invalid);
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final cursor: Int = Span.offsetOf(source, line, col);

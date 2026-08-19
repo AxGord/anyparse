@@ -5,6 +5,7 @@ import anyparse.grammar.ar.ArArchiveParser;
 import anyparse.grammar.ar.ArArchiveWriter;
 import anyparse.grammar.ar.ArEntry;
 import haxe.io.Bytes;
+import haxe.io.BytesOutput;
 import utest.Assert;
 
 /**
@@ -85,7 +86,7 @@ class ArParserTest extends utest.Test {
 
 	/** Build a minimal ar archive in memory with one entry. */
 	private static function buildMinimalAr(): Bytes {
-		final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
+		final output: BytesOutput = new BytesOutput();
 		// Magic
 		output.writeString('!<arch>\n');
 		// Entry header (60 bytes)
@@ -105,7 +106,7 @@ class ArParserTest extends utest.Test {
 
 	/** Build an ar archive with two entries. */
 	private static function buildTwoEntryAr(): Bytes {
-		final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
+		final output: BytesOutput = new BytesOutput();
 		output.writeString('!<arch>\n');
 		// Entry 1: even size (no padding)
 		output.writeString('file1.txt/      '); // 16

@@ -5,10 +5,11 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -269,16 +270,14 @@ final class PreferRangeLoop implements Check {
 	private static function containsKind(node: QueryNode, kind: String, s: Seams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return false;
 		if (node.kind == kind) return true;
-		for (c in node.children) if (containsKind(c, kind, s)) return true;
-		return false;
+		return node.children.exists(c -> containsKind(c, kind, s));
 	}
 
 	/** Whether `node`'s subtree re-declares a local named `name`, skipping reification subtrees. */
 	private static function declaresName(node: QueryNode, name: String, s: Seams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return false;
 		if (s.localDeclKinds.contains(node.kind) && node.name == name) return true;
-		for (c in node.children) if (declaresName(c, name, s)) return true;
-		return false;
+		return node.children.exists(c -> declaresName(c, name, s));
 	}
 
 	/** Collapse whitespace runs to single spaces and trim, so a multi-line bound fits one message line. */
@@ -361,8 +360,7 @@ final class PreferRangeLoop implements Check {
 			final span: Null<Span> = scope.span;
 			if (span != null && RefactorSupport.referencedInRange(source, loopVar, span.from, span.to, [])) return true;
 		}
-		for (c in scope.children) if (capturedByClosure(c, source, loopVar, s)) return true;
-		return false;
+		return scope.children.exists(c -> capturedByClosure(c, source, loopVar, s));
 	}
 
 	/**

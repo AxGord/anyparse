@@ -1,14 +1,15 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
 import anyparse.query.TypeInfoProvider;
-import anyparse.check.Check.ConfigAware;
+import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -384,8 +385,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	/** Whether `node`'s subtree contains a node of any kind in `kinds`. */
 	private static function subtreeContainsAny(node: QueryNode, kinds: Array<String>): Bool {
 		if (kinds.contains(node.kind)) return true;
-		for (c in node.children) if (subtreeContainsAny(c, kinds)) return true;
-		return false;
+		return node.children.exists(c -> subtreeContainsAny(c, kinds));
 	}
 
 	/**
@@ -619,8 +619,7 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Whether every member of `bucket` carries the same rank - the first gate a conditional block passes to sort by its content. A mixed-rank bucket stays pinned: the block moves as one unit or not at all, and atomicity beats ordering. */
 	private static function uniformRank(bucket: Array<OrderedMember>): Bool {
-		for (m in bucket) if (m.rank != bucket[0].rank) return false;
-		return true;
+		return bucket.foreach(m -> m.rank == bucket[0].rank);
 	}
 
 	/**
@@ -824,8 +823,7 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Whether a line in `source[from,to)` starts (after indentation) with the conditional-open keyword - the gap begins a new construct rather than continuing one. */
 	private static function opensConstruct(source: String, from: Int, to: Int): Bool {
-		for (line in source.substring(from, to).split('\n')) if (StringTools.startsWith(StringTools.ltrim(line), '#if')) return true;
-		return false;
+		return source.substring(from, to).split('\n').exists(line -> StringTools.startsWith(StringTools.ltrim(line), '#if'));
 	}
 
 	/**

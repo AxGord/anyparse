@@ -6,6 +6,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * The NO-NULL-VALUE proof `redundant-map-exists` must clear before it will rewrite
  * `m.exists(k) ? m[k] : d` into `m[k] ?? d`.
@@ -168,8 +170,7 @@ final class MapValueScan {
 
 	/** Whether `source` carries a build macro, whose generated members no source scan can see. */
 	private static function carriesBuildMacro(source: String): Bool {
-		for (meta in BUILD_MACRO_METAS) if (source.indexOf(meta) >= 0) return true;
-		return false;
+		return BUILD_MACRO_METAS.exists(meta -> source.indexOf(meta) >= 0);
 	}
 
 	/**
@@ -292,8 +293,7 @@ final class MapValueScan {
 	private static function provenMapExpr(expr: QueryNode, seams: ValueSeams): Bool {
 		final node: QueryNode = RefactorSupport.unwrapParens(expr, seams.parenKind);
 		if (node.kind == seams.newExprKind) {
-			for (c in node.children) if (!seams.typeAnnotationKinds.contains(c.kind)) return false;
-			return true;
+			return node.children.foreach(c -> seams.typeAnnotationKinds.contains(c.kind));
 		}
 		if (node.kind != seams.arrayLiteralKind) return false;
 		final entryKind: Null<String> = seams.mapLiteralEntryKind;

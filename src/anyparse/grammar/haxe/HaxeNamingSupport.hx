@@ -1,13 +1,13 @@
 package anyparse.grammar.haxe;
 
+import anyparse.query.NamingPolicy.HoistedConstant;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
-import haxe.Exception;
 import anyparse.query.SymbolIndex;
-import anyparse.query.NamingPolicy.HoistedConstant;
+import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -350,14 +350,14 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function categoryOf(node: QueryNode, mods: Array<String>): Null<NamingCategory> {
 		return switch node.kind {
-			case 'ClassDecl' | 'ClassForm' | 'AbstractClassDecl' | 'InterfaceDecl' | 'EnumDecl' | 'AbstractDecl' | 'EnumAbstractDecl'
-				| 'TypedefDecl': NamingCategory.Type;
-			case 'FnMember' | 'FinalModifiedMember': NamingCategory.Method;
+			case 'ClassDecl', 'ClassForm', 'AbstractClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'EnumAbstractDecl',
+				'TypedefDecl': NamingCategory.Type;
+			case 'FnMember', 'FinalModifiedMember': NamingCategory.Method;
 			case 'VarMember': mods.contains('static') && mods.contains('inline') ? NamingCategory.Constant : NamingCategory.Field;
 			case 'FinalMember': mods.contains('static') ? NamingCategory.Constant : NamingCategory.Field;
-			case 'SimpleCtor' | 'ParamCtor': NamingCategory.EnumValue;
-			case 'VarStmt' | 'FinalStmt' | 'ForStmt' | 'ForExpr' | 'KeyValueBinder' | 'LocalFnStmt' | 'LocalInlineFnStmt': NamingCategory.Local;
-			case 'Required' | 'Optional' | 'Rest' | 'LambdaParam': NamingCategory.Param;
+			case 'SimpleCtor', 'ParamCtor': NamingCategory.EnumValue;
+			case 'VarStmt', 'FinalStmt', 'ForStmt', 'ForExpr', 'KeyValueBinder', 'LocalFnStmt', 'LocalInlineFnStmt': NamingCategory.Local;
+			case 'Required', 'Optional', 'Rest', 'LambdaParam': NamingCategory.Param;
 			case 'CatchClause': NamingCategory.CatchVar;
 			case _: null;
 		}

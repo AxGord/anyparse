@@ -100,9 +100,7 @@ final class ReplaceNode {
 				+ 'silently dropping the declaration body. Flip modifiers with `apq set-modifier`, '
 				+ 'or pass the complete corrected declaration as newSource.'
 			);
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final node: QueryNode = switch resolveTarget(source, tree, target, plugin) {

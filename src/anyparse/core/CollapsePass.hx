@@ -383,7 +383,7 @@ final class CollapsePass {
 			? null
 			: Concat([
 				rewrite(head, decisions, false, width),
-				Nest(fill.cols, Concat([Line('\n'), gluedTail])),
+				Nest(fill.cols, Concat([Line('\n'), gluedTail]))
 			]);
 	}
 
@@ -461,7 +461,7 @@ final class CollapsePass {
 		d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, width: Int
 	): Null<Doc> {
 		final parts: Null<{ group: Doc, left: Doc, cont: Doc }> = switch d {
-			case Group(Concat([left, cont])) | GroupWithRestProbe(Concat([left, cont])):
+			case Group(Concat([left, cont])), GroupWithRestProbe(Concat([left, cont])):
 				{ group: d, left: left, cont: cont };
 			case _: null;
 		};
@@ -487,7 +487,7 @@ final class CollapsePass {
 			? null
 			: Group(Concat([
 				WrapBoundary(headBreak),
-				Flatten(rewrite(parts.cont, decisions, false, width)),
+				Flatten(rewrite(parts.cont, decisions, false, width))
 			]));
 	}
 
@@ -562,7 +562,7 @@ final class CollapsePass {
 		// add-chain operand still resolves its own collapse), then a fitting call
 		// operand is force-flat.
 		final beforeItems: Array<Doc> = [
-			flattenIfFittingCall(rewrite(chain.operands[0], decisions, insideBroken, width), col, width),
+			flattenIfFittingCall(rewrite(chain.operands[0], decisions, insideBroken, width), col, width)
 		];
 		for (i in 0...chain.ops.length) beforeItems.push(Concat([
 			Text('${chain.ops[i]} '),
@@ -876,12 +876,12 @@ final class CollapsePass {
 		// neither indent nor column bookkeeping (the zero-indent case-guard
 		// ladder).
 		switch d {
-			case Group(Concat(items)) | GroupWithRestProbe(Concat(items)) | Flatten(Concat(items)) if (subtreeOpens(d, decisions)):
+			case Group(Concat(items)), GroupWithRestProbe(Concat(items)), Flatten(Concat(items)) if (subtreeOpens(d, decisions)):
 				return Concat([
 					for (it in items)
 						subtreeOpens(it, decisions) ? commitOpens(it, decisions) : Flatten(commitOpens(it, decisions))
 				]);
-			case Group(inner) | GroupWithRestProbe(inner) | Flatten(inner) if (subtreeOpens(d, decisions)):
+			case Group(inner), GroupWithRestProbe(inner), Flatten(inner) if (subtreeOpens(d, decisions)):
 				return commitOpens(inner, decisions);
 			case _:
 		}
@@ -983,7 +983,7 @@ final class CollapsePass {
 		var found: Bool = false;
 		walk(d, node -> {
 			if (!found) switch node {
-				case CollapseAddProbe(_) | CollapseBoolProbe(_) | CollapseChainProbe(_):
+				case CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_):
 					found = true;
 				case _:
 					if (isCandidate(node)) found = true;
@@ -1017,17 +1017,15 @@ final class CollapsePass {
 			final node: Doc = (cast stack.pop(): Doc);
 			visit(node);
 			switch node {
-				case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
-					| OptSpaceSkipAfterHardline:
-				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-					inner
-				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-					inner
-				) | ConditionalMarkerDecrease(inner):
+				case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
+					OptSpaceSkipAfterHardline:
+				case Nest(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner), WrapBoundary(inner),
+					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl):
+				case IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
 					// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
 					// EXCLUDED from the both-branch descent. Their two branches wrap the
 					// SAME body object and differ only in the separator before it, so a
@@ -1038,14 +1036,13 @@ final class CollapsePass {
 					// decide for itself (`WrapList.startsWithHardline` reads the flat side
 					// of the glue probe for exactly that reason).
 					stack.push(fl);
-				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
-					_, brk, fl
-				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineExceedsWithRest(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(
-					_, brk, fl
-				) | IfArrowContinuationFits(_, _, _, brk, fl):
+				case IfBreak(brk, fl), IfWidthExceeds(_, brk, fl), IfFirstLineExceeds(_, brk, fl), IfLineExceeds(_, brk, fl),
+					IfResidualLineExceeds(_, brk, fl), IfFullLineExceeds(_, brk, fl), IfNaturalFirstLineExceeds(_, brk, fl),
+					IfNaturalFirstLineExceedsWithRest(_, brk, fl), IfNaturalFirstLineFitsOpenDelim(_, brk, fl),
+					IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 					for (it in items) stack.push(it);
 					stack.push(sep);
 			}

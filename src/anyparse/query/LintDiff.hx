@@ -158,7 +158,7 @@ final class LintDiff {
 			removed: removed,
 			addedTotal: addedTotal,
 			removedTotal: removedTotal,
-			severities: severityDeltas(added, removed),
+			severities: severityDeltas(added, removed)
 		};
 	}
 

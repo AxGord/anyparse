@@ -8,6 +8,9 @@ import anyparse.check.FixVerifier;
 import anyparse.check.PreferInline;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+
+using Lambda;
+
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -169,8 +172,7 @@ class PreferInlineOracleTest extends Test {
 	}
 
 	private function mentions(vs: Array<Violation>, name: String): Bool {
-		for (v in vs) if (v.message.indexOf('\'$name\'') >= 0) return true;
-		return false;
+		return vs.exists(v -> v.message.indexOf('\'$name\'') >= 0);
 	}
 
 	#if (sys || nodejs)

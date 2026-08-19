@@ -79,9 +79,7 @@ final class AddParam {
 	 * never mutated — the caller decides whether to write the result.
 	 */
 	public static function addParam(source: String, line: Int, col: Int, paramText: String, plugin: GrammarPlugin): AddParamResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
@@ -123,7 +121,7 @@ final class AddParam {
 		final insertText: String = params.length > 0 ? ', $trimmed' : trimmed;
 		final edit: { span: Span, text: String } = {
 			span: new Span(insertOffset, insertOffset),
-			text: insertText,
+			text: insertText
 		};
 
 		final rewritten: String = RefactorSupport.applyEdits(source, [edit]);
@@ -132,7 +130,7 @@ final class AddParam {
 		try
 			plugin.parseFile(rewritten)
 		catch (exception: ParseError)
-			return Err('rewritten source does not parse: ${exception.toString()}')
+			return Err('rewritten source does not parse: $exception')
 		catch (exception: Exception)
 			return Err('rewritten source does not parse: ${exception.message}');
 

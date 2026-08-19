@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.Check.OracleRelaxable;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
@@ -9,9 +11,6 @@ import anyparse.runtime.Span;
 
 using StringTools;
 using Lambda;
-
-import anyparse.check.Check.RiskyFix;
-import anyparse.check.Check.OracleRelaxable;
 
 /**
  * Flags a method whose inlining BUYS something and that can therefore be marked `inline`, per the user's rule: use
@@ -468,8 +467,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	private static function isConstExpr(node: QueryNode): Bool {
 		if (isSimpleOperand(node)) return true;
 		if (!CONST_OP_KINDS.contains(node.kind)) return false;
-		for (c in node.children) if (c.kind != 'Named' && !isConstExpr(c)) return false;
-		return true;
+		return node.children.foreach(c -> c.kind == 'Named' || isConstExpr(c));
 	}
 
 	/** `fn`'s body child — its `ExprBody` or `BlockBody`, else null (a bodyless declaration). */
@@ -564,8 +562,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * unreachable interface conservatively blocks the candidate.
 	 */
 	private static function interfaceRequires(index: SymbolIndex, ifaces: Array<String>, name: String, file: String): Bool {
-		for (iface in ifaces) if (!index.typeProvablyLacksMember(iface, name, file)) return true;
-		return false;
+		return ifaces.exists(iface -> !index.typeProvablyLacksMember(iface, name, file));
 	}
 
 
@@ -586,8 +583,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	/** Whether `node`'s subtree contains a null literal in a value slot. */
 	private static function subtreeHasNullSafetyRisk(node: QueryNode, parentKind: String): Bool {
 		if (isRiskyHere(node, parentKind)) return true;
-		for (c in node.children) if (subtreeHasNullSafetyRisk(c, node.kind)) return true;
-		return false;
+		return node.children.exists(c -> subtreeHasNullSafetyRisk(c, node.kind));
 	}
 
 }

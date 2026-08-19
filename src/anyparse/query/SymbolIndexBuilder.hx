@@ -244,7 +244,7 @@ final class SymbolIndexBuilder {
 					});
 					pendingMeta = [];
 					pendingExtern = false;
-				case 'ImportAliasDecl' | 'ImportAliasInDecl':
+				case 'ImportAliasDecl', 'ImportAliasInDecl':
 					imports.push({
 						raw: name,
 						kind: ImportKind.Alias,
@@ -489,8 +489,7 @@ final class SymbolIndexBuilder {
 			for (h in Refs.find('this', node, shape)) if (h.kind == RefKind.Write) return true;
 			return false;
 		}
-		for (c in node.children) if (memberRebindsThis(c, shape)) return true;
-		return false;
+		return node.children.exists(c -> memberRebindsThis(c, shape));
 	}
 
 	/**
@@ -751,7 +750,7 @@ final class SymbolIndexBuilder {
 			? null
 			: switch node.kind {
 				case 'ImportDecl': 'import|$raw';
-				case 'ImportAliasDecl' | 'ImportAliasInDecl': 'alias|$raw';
+				case 'ImportAliasDecl', 'ImportAliasInDecl': 'alias|$raw';
 				case 'ImportWildDecl': 'wild|$raw';
 				case 'UsingDecl': 'using|$raw';
 				case _: null;
@@ -815,7 +814,7 @@ final class SymbolIndexBuilder {
 		// run before the path (`typedef A = /* c */ pkg.B;`) rides along in it, and handing that on
 		// as a type reference would resolve to nothing where the simple name resolves fine.
 		final nominal: Null<String> = NominalTypes.outerNominalOf(head);
-		return nominal != null && head.split('.').foreach(seg -> RefactorSupport.isIdentifier(seg)) ? head : nominal;
+		return nominal != null && head.split('.').foreach(RefactorSupport.isIdentifier) ? head : nominal;
 	}
 
 }

@@ -2,16 +2,17 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.ConcatSegment;
-import anyparse.query.FormatConfigDiscovery;
-import haxe.Exception;
+import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -1268,8 +1269,7 @@ private class MacroGate {
 	 */
 	public function blocks(calls: Array<CallRef>, groups: Int): Bool {
 		if (groups < 2) return false;
-		for (call in calls) if (blocksCall(call)) return true;
-		return false;
+		return calls.exists(call -> blocksCall(call));
 	}
 
 	/**
@@ -1284,8 +1284,7 @@ private class MacroGate {
 		if (whitelisted(call.name)) return false;
 		final declarations: Null<Array<String>> = _macros.macroPathsOf(call.name);
 		if (declarations != null) {
-			for (path in declarations) if (!whitelisted(path)) return true;
-			return false;
+			return declarations.exists(path -> !whitelisted(path));
 		}
 		final receiver: Null<String> = call.receiver;
 		if (receiver != null && (_macros.declaresType(receiver) || whitelisted('$receiver.${call.name}'))) return false;
@@ -1305,8 +1304,7 @@ private class MacroGate {
 	 * meant the entry that worked depended on the invocation's scope.
 	 */
 	private function whitelisted(path: String): Bool {
-		for (entry in _whitelist) if (entry == path || entry.endsWith('.$path') || path.endsWith('.$entry')) return true;
-		return false;
+		return _whitelist.exists(entry -> entry == path || entry.endsWith('.$path') || path.endsWith('.$entry'));
 	}
 
 }
@@ -1616,10 +1614,12 @@ private class PlanContext {
 	public final optsJson: Null<String>;
 	public final metrics: LayoutMetrics;
 
-	// Member region ("<from>:<to>") -> its scope, or null when it cannot be scoped.
-	// `Map.exists` distinguishes "not built yet" from "built, unusable". The key
-	// carries BOTH ends because regions share a start: a declaration and each of the
-	// modifier nodes on its line all open at the same offset.
+	/**
+	 * Member region ("<from>:<to>") -> its scope, or null when it cannot be scoped.
+	 * `Map.exists` distinguishes "not built yet" from "built, unusable". The key
+	 * carries BOTH ends because regions share a start: a declaration and each of the
+	 * modifier nodes on its line all open at the same offset.
+	 */
 	private final _scopes: Map<String, Null<MemberScope>> = [];
 
 	private var _originalLines: Null<Array<String>> = null;

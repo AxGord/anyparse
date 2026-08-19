@@ -6,6 +6,7 @@ import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.runtime.Trivial;
 
 /**
  * Session 14 Phase 3 — struct-field `@:trailOpt(LIT)` parser capture.
@@ -58,7 +59,7 @@ class HxStructFieldTrailPresentSliceTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};
@@ -90,7 +91,7 @@ class HxStructFieldTrailPresentSliceTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+		final stmts: Array<Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
 			case BlockBody(b): b.stmts;
 			case _: throw 'expected BlockBody';
 		};

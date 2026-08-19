@@ -1,9 +1,9 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -111,7 +111,7 @@ final class ExtractMethod {
 		// The VALUE binder of `for (k => v in m)` — the loop node names only the KEY, so
 		// without this a collision with `v` goes unseen and the new binding captures it.
 		'KeyValueBinder',
-		'CatchClause',
+		'CatchClause'
 	];
 
 	/**
@@ -129,9 +129,7 @@ final class ExtractMethod {
 	): EditResult {
 		if (!RefactorSupport.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// line:col is 1-based, as apq refs / ast --at / source print.

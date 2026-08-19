@@ -247,7 +247,7 @@ final class LintConfig {
 	public static function discover(path: String): LintConfig {
 		final found: Null<{ content: String, path: String }> = ConfigFinder.findUpFile(path, 'apqlint.json');
 		if (found == null) return new LintConfig([]);
-		final config: Null<LintConfig> = parseOrNull(found.content, haxe.io.Path.directory(found.path));
+		final config: Null<LintConfig> = parseOrNull(found.content, Path.directory(found.path));
 		if (config != null) return config;
 		// A REAL config file that the schema rejects must not degrade
 		// silently — the wholesale fallback quietly collapses the
@@ -426,11 +426,7 @@ final class LintConfig {
 
 	/** Whether `path` exists on disk — false wholesale on a non-sys target, keeping the probe a tie there. */
 	private static function pathExists(path: String): Bool {
-		#if (sys || nodejs)
-		return sys.FileSystem.exists(path);
-		#else
-		return false;
-		#end
+		return #if (sys || nodejs) sys.FileSystem.exists(path) #else false #end;
 	}
 
 }

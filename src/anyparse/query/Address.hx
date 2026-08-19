@@ -2,12 +2,11 @@ package anyparse.query;
 
 import anyparse.query.Matcher.Match;
 import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.Selector.SelectorSegment;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
 using StringTools;
-
-import anyparse.query.Selector.SelectorSegment;
 
 /**
  * The outcome of resolving one target address: the byte offset the op's

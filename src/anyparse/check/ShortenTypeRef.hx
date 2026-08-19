@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -10,9 +11,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
-import anyparse.runtime.Span;
-import anyparse.check.Check.RiskyFix;
 import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
 
 using StringTools;
 

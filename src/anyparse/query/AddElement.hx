@@ -116,9 +116,7 @@ final class AddElement {
 		final trimmed: String = code.trim();
 		if (trimmed.length == 0) return Err('add-element requires a non-empty element text');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// line:col is 1-based, as apq refs / ast --at / source print.
@@ -213,9 +211,7 @@ final class AddElement {
 		final trimmed: String = code.trim();
 		if (trimmed.length == 0) return Err('add-element requires a non-empty element text');
 
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
-			'source does not parse: ${exception.toString()}'
-		)
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// line:col is 1-based, as apq refs / ast --at / source print.

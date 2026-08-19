@@ -153,7 +153,7 @@ class SpanTypeSynth {
 			for (arg in branch.children)
 				{
 					name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
-					type: shapeToComplexType(arg, synthPack),
+					type: shapeToComplexType(arg, synthPack)
 				}
 		];
 		args.push({ name: SPAN_FIELD_NAME, type: spanCT });

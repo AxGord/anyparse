@@ -9,6 +9,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a zero-pad LADDER -- a value-position `if` chain that picks a hand-written run of `0`s by
  * digit count -- and writes it as one `lpad` call:
@@ -284,8 +286,7 @@ final class PreferLpad implements Check implements DefaultOff {
 	 */
 	private static function rebinds(node: QueryNode, binder: String, s: LpadSeams): Bool {
 		if (node.name == binder && node.kind != s.identKind && node.kind != s.interpIdentKind) return true;
-		for (child in node.children) if (rebinds(child, binder, s)) return true;
-		return false;
+		return node.children.exists(child -> rebinds(child, binder, s));
 	}
 
 	/** The decimal integer `node` spells, or null when it is not one (a hex or float spelling included). */
@@ -361,8 +362,7 @@ final class PreferLpad implements Check implements DefaultOff {
 		if (!s.stringKinds.contains(value.kind)) return null;
 		final kids: Array<QueryNode> = value.children;
 		var holeAt: Int = -1;
-		for (k in 0...kids.length) {
-			final kid: QueryNode = kids[k];
+		for (k => kid in kids) {
 			if (kid.kind == s.interpIdentKind) {
 				if (holeAt >= 0 || kid.name != subject) return null;
 				holeAt = k;

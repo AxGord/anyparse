@@ -8,6 +8,7 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -429,8 +430,7 @@ final class SwitchChain {
 	 * counted.
 	 */
 	private static function carriesComment(comments: Array<{ from: Int, to: Int, isLine: Bool }>, from: Int, to: Int): Bool {
-		for (token in comments) if (token.from >= from && token.from < to) return true;
-		return false;
+		return comments.exists(token -> token.from >= from && token.from < to);
 	}
 
 	/**
@@ -462,8 +462,7 @@ final class SwitchChain {
 	 */
 	private static function cannotProveCallFree(pairs: Array<EqPair>, callKind: Null<String>): Bool {
 		if (callKind == null) return true;
-		for (p in pairs) if (RefactorSupport.subtreeContainsKind(p.disc, callKind)) return true;
-		return false;
+		return pairs.exists(p -> RefactorSupport.subtreeContainsKind(p.disc, callKind));
 	}
 
 	/** The verbatim source of each discriminant of `pairs`, or null when one lacks a coordinate. */
@@ -590,8 +589,7 @@ final class SwitchChain {
 		if (index == null) return false;
 		final decls: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.memberDeclarationsOf(typeName, memberName);
 		if (decls.length == 0) return false;
-		for (decl in decls) if (!isPatternConstant(decl.type, decl.member, seams)) return false;
-		return true;
+		return decls.foreach(decl -> isPatternConstant(decl.type, decl.member, seams));
 	}
 
 	/**

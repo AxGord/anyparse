@@ -293,9 +293,8 @@ final class NewFile {
 		if (span == null) return null;
 		final noBody: Null<QueryNode> = member.children.find(c -> c.kind == 'NoBody');
 		final cut: Int = noBody != null && noBody.span != null ? noBody.span.from : span.to;
-		var sig: String = source.substring(span.from, cut).trim();
-		if (sig.endsWith(';')) sig = sig.substr(0, sig.length - 1).trim();
-		return sig;
+		final sig: String = source.substring(span.from, cut).trim();
+		return sig.endsWith(';') ? sig.substr(0, sig.length - 1).trim() : sig;
 	}
 
 	/**

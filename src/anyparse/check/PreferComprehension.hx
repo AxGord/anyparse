@@ -7,6 +7,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -590,8 +591,7 @@ final class PreferComprehension implements Check {
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return true;
 		if (node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)) return true;
-		for (c in node.children) if (referencesName(c, name, s)) return true;
-		return false;
+		return node.children.exists(c -> referencesName(c, name, s));
 	}
 
 	/** `source` with every space, tab, carriage return and newline removed. */
@@ -869,8 +869,7 @@ final class PreferComprehension implements Check {
 	private static function precedingNodesPure(node: QueryNode, at: Int, s: Seams): Bool {
 		final span: Null<Span> = node.span;
 		if (span != null && span.to <= at && !s.pureKinds.contains(node.kind)) return false;
-		for (c in node.children) if (!precedingNodesPure(c, at, s)) return false;
-		return true;
+		return node.children.foreach(c -> precedingNodesPure(c, at, s));
 	}
 
 	/**
@@ -879,16 +878,14 @@ final class PreferComprehension implements Check {
 	 * is a different matter — `pushArgument` hoists it, or the argument text carries it verbatim.
 	 */
 	private static function commentIntersects(span: Span, ctx: Ctx): Bool {
-		for (tok in ctx.comments) if (tok.from < span.to && tok.to > span.from) return true;
-		return false;
+		return ctx.comments.exists(tok -> tok.from < span.to && tok.to > span.from);
 	}
 
 	/** Whether `kind` appears anywhere in `node`'s subtree, reification aside. */
 	private static function containsKind(node: QueryNode, kind: String, s: Seams): Bool {
 		if (s.opaqueKinds.contains(node.kind)) return false;
 		if (node.kind == kind) return true;
-		for (c in node.children) if (containsKind(c, kind, s)) return true;
-		return false;
+		return node.children.exists(c -> containsKind(c, kind, s));
 	}
 
 

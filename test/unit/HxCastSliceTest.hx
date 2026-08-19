@@ -6,6 +6,7 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.HxTypeRef;
 
 /**
  * Tests for the `cast` keyword expression atoms in the Haxe grammar.
@@ -110,7 +111,7 @@ class HxCastSliceTest extends HxTestHelpers {
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = cast(x, Map<String, Int>); }');
 		switch decl.init {
 			case TypedCastExpr(info):
-				final ref: anyparse.grammar.haxe.HxTypeRef = expectNamedTypeFromHxType(info.type);
+				final ref: HxTypeRef = expectNamedTypeFromHxType(info.type);
 				Assert.equals('Map', (ref.name: String));
 				Assert.notNull(ref.params);
 				Assert.equals(2, ref.params.length);
@@ -305,7 +306,7 @@ class HxCastSliceTest extends HxTestHelpers {
 
 	// ======== HxType helper (local to this file) ========
 
-	private function expectNamedTypeFromHxType(t: HxType): anyparse.grammar.haxe.HxTypeRef {
+	private function expectNamedTypeFromHxType(t: HxType): HxTypeRef {
 		return switch t {
 			case Named(ref): ref;
 			case _: throw 'expected HxType.Named, got $t';

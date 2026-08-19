@@ -8,6 +8,8 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 
+using Lambda;
+
 /**
  * The `prefer-inline` check: a method whose body is a BENEFIT class — empty (the call compiles
  * away), an accessor / thin forward / trivial mutator, or a constant / small-arithmetic expression
@@ -499,8 +501,7 @@ class PreferInlineCheckTest extends Test {
 	}
 
 	private function hasMethod(vs: Array<Violation>, name: String): Bool {
-		for (v in vs) if (v.message.indexOf('\'$name\'') >= 0) return true;
-		return false;
+		return vs.exists(v -> v.message.indexOf('\'$name\'') >= 0);
 	}
 
 }

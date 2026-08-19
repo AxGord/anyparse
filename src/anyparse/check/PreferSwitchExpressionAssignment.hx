@@ -1,5 +1,8 @@
 package anyparse.check;
 
+import anyparse.check.AssignmentTreeHoist.LvalueRef;
+import anyparse.check.AssignmentTreeHoist.SwitchArms;
+import anyparse.check.AssignmentTreeHoist.TreeSeams;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
@@ -8,10 +11,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.check.AssignmentTreeHoist.TreeSeams;
-import anyparse.check.AssignmentTreeHoist.LvalueRef;
-import anyparse.check.AssignmentTreeHoist.SwitchArms;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -263,8 +264,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 	private static function writtenOnlyByArms(name: String, root: QueryNode, switchSpan: Span, leafCount: Int, s: Seams): Bool {
 		final writes: Array<Span> = writeSpans(name, root, s.shape);
 		if (writes.length != leafCount) return false;
-		for (w in writes) if (w.from < switchSpan.from || w.from >= switchSpan.to) return false;
-		return true;
+		return writes.foreach(w -> !(w.from < switchSpan.from || w.from >= switchSpan.to));
 	}
 
 	/**
@@ -343,8 +343,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
 		if ((node.kind == s.identKind || node.kind == s.stringInterpKind) && node.name == name) return true;
-		for (c in node.children) if (referencesName(c, name, s)) return true;
-		return false;
+		return node.children.exists(c -> referencesName(c, name, s));
 	}
 
 	/** The reassignment positions of `name` in `tree` — a `Write` hit's own span, the exact scan `prefer-final` uses. */
@@ -380,8 +379,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		final name: Null<String> = lvalue.name;
 		if ((lvalue.kind == s.identKind || lvalue.kind == s.stringInterpKind) && name != null && referencesName(subject, name, s))
 			return true;
-		for (c in lvalue.children) if (subjectTouchesLvalue(subject, c, s)) return true;
-		return false;
+		return lvalue.children.exists(c -> subjectTouchesLvalue(subject, c, s));
 	}
 
 

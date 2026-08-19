@@ -10,6 +10,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -317,8 +318,7 @@ final class PreferIndexAccess implements Check {
 			&& TypeResolver.isInferenceFragileNullGuard(node.children[1], site, root, cfg.shape, declaredTypes)
 		)
 			return true;
-		for (c in node.children) if (containsFragileNullGuard(c, site, root, declaredTypes, cfg)) return true;
-		return false;
+		return node.children.exists(c -> containsFragileNullGuard(c, site, root, declaredTypes, cfg));
 	}
 
 	/**

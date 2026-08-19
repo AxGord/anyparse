@@ -1,14 +1,16 @@
 package anyparse.macro.strategy;
 
 #if macro
-import anyparse.macro.AnnotationKeys;
-import haxe.macro.Context;
-import haxe.macro.Expr;
 import anyparse.core.CoreIR;
 import anyparse.core.LoweringCtx;
 import anyparse.core.RuntimeContrib;
 import anyparse.core.ShapeTree;
 import anyparse.core.Strategy;
+import anyparse.macro.AnnotationKeys;
+import haxe.macro.Context;
+import haxe.macro.Expr;
+
+using Lambda;
 
 /**
  * Ternary strategy — owns mixfix operator metadata on enum branches.
@@ -53,8 +55,7 @@ class Ternary implements Strategy {
 	public function appliesTo(node: ShapeNode): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
-		for (entry in meta) if (entry.name == ':ternary') return true;
-		return false;
+		return meta.exists(entry -> entry.name == ':ternary');
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {

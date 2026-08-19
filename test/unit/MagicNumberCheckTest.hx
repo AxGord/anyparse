@@ -8,6 +8,8 @@ import anyparse.check.Linter;
 import anyparse.check.MagicNumber;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import sys.FileSystem;
+import sys.io.File;
 
 using StringTools;
 
@@ -105,15 +107,15 @@ class MagicNumberCheckTest extends Test {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_mn_cfg_${Sys.time()}';
-		sys.FileSystem.createDirectory(dir);
-		sys.io.File.saveContent('$dir/apqlint.json', '{"rules":{"magic-number":{"ignore":[5000]}}}');
+		FileSystem.createDirectory(dir);
+		File.saveContent('$dir/apqlint.json', '{"rules":{"magic-number":{"ignore":[5000]}}}');
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f(k:Int):Int { return 5000 * k; }\n}';
-		sys.io.File.saveContent(path, src);
+		File.saveContent(path, src);
 		Assert.equals(0, new MagicNumber().run([{ file: path, source: src }], new HaxeQueryPlugin()).length);
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/apqlint.json');
-		sys.FileSystem.deleteDirectory(dir);
+		FileSystem.deleteFile(path);
+		FileSystem.deleteFile('$dir/apqlint.json');
+		FileSystem.deleteDirectory(dir);
 	}
 
 	public function testFixReturnsEmpty(): Void {
@@ -167,15 +169,15 @@ class MagicNumberCheckTest extends Test {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_mn_cs_${Sys.time()}';
-		sys.FileSystem.createDirectory(dir);
-		sys.io.File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"MagicNumber","props":{"ignoreNumbers":[-1,0,1,2,5000]}}]}');
+		FileSystem.createDirectory(dir);
+		File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"MagicNumber","props":{"ignoreNumbers":[-1,0,1,2,5000]}}]}');
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f(k:Int):Int { return 5000 * k; }\n}';
-		sys.io.File.saveContent(path, src);
+		File.saveContent(path, src);
 		Assert.equals(0, new MagicNumber().run([{ file: path, source: src }], new HaxeQueryPlugin()).length);
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/checkstyle.json');
-		sys.FileSystem.deleteDirectory(dir);
+		FileSystem.deleteFile(path);
+		FileSystem.deleteFile('$dir/checkstyle.json');
+		FileSystem.deleteDirectory(dir);
 	}
 
 	public function testObjectFieldValueExempt(): Void {

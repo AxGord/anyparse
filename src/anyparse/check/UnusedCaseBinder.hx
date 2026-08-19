@@ -11,6 +11,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
+
 /**
  * Flags a case-pattern BINDER that neither the arm's guard nor its body ever reads,
  * and replaces it with the wildcard — `case _data:` becomes `case _:`,
@@ -225,9 +227,9 @@ final class UnusedCaseBinder implements Check {
 	 * alternative or in none.
 	 */
 	private static function commentFree(group: Array<PatternBinder>, source: String): Bool {
-		for (binder in group) if (binder.editText == '' && CheckScan.hasCommentMarker(source, binder.editSpan.from, binder.editSpan.to))
-			return false;
-		return true;
+		return group.foreach(
+			binder -> !(binder.editText == '' && CheckScan.hasCommentMarker(source, binder.editSpan.from, binder.editSpan.to))
+		);
 	}
 
 }

@@ -1,16 +1,16 @@
 package anyparse.query;
 
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
-import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.BooleanLogic.BooleanLogicSupport;
-import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.SpanTypeInfoProvider;
+import anyparse.query.StringFold.StringFoldSupport;
 
 /**
  * A `GrammarPlugin` decorator that memoizes `parseFile` / `parseFileTypeRefs` by source

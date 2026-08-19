@@ -10,6 +10,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a value that is IMMEDIATELY returned right after it is produced, collapsing the pair
  * to a single return. The value is produced either by a local DECLARATION or by a plain
@@ -437,8 +439,7 @@ final class JoinReturn implements Check {
 
 	/** Whether `span` is nested inside any lambda span in `lambdaSpans` -- i.e. a captured reference. */
 	private static function inAnyLambda(span: Span, lambdaSpans: Array<Span>): Bool {
-		for (ls in lambdaSpans) if (ls.from <= span.from && span.to <= ls.to) return true;
-		return false;
+		return lambdaSpans.exists(ls -> ls.from <= span.from && span.to <= ls.to);
 	}
 
 	/** Collect the span of every lambda (`RefShape.lambdaKinds`) reachable under `node`. */

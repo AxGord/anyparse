@@ -9,6 +9,8 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import sys.FileSystem;
+import sys.io.File;
 
 using StringTools;
 
@@ -124,15 +126,15 @@ class PreferSingleQuotesCheckTest extends Test {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_psq_cs_${Sys.time()}';
-		sys.FileSystem.createDirectory(dir);
-		sys.io.File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"StringLiteral","props":{"policy":"onlyDouble"}}]}');
+		FileSystem.createDirectory(dir);
+		File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"StringLiteral","props":{"policy":"onlyDouble"}}]}');
 		final path: String = '$dir/Foo.hx';
 		final src: String = 'class Foo {\n\tfunction f() { var s = "hi"; return s; }\n}';
-		sys.io.File.saveContent(path, src);
+		File.saveContent(path, src);
 		Assert.equals(0, new PreferSingleQuotes().run([{ file: path, source: src }], new HaxeQueryPlugin()).length);
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/checkstyle.json');
-		sys.FileSystem.deleteDirectory(dir);
+		FileSystem.deleteFile(path);
+		FileSystem.deleteFile('$dir/checkstyle.json');
+		FileSystem.deleteDirectory(dir);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -5,6 +5,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -244,8 +245,7 @@ final class IfExpressionChain {
 	 * rather than silently losing it.
 	 */
 	public static function droppedComment(headSpan: Span, kept: Array<Span>, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
-		for (tok in comments) if (tok.from >= headSpan.from && tok.to <= headSpan.to && !contained(tok, kept)) return true;
-		return false;
+		return comments.exists(tok -> tok.from >= headSpan.from && tok.to <= headSpan.to && !contained(tok, kept));
 	}
 
 	/** An empty carry — what the phase-one build reads, before the comments have been classified. */
@@ -384,8 +384,7 @@ final class IfExpressionChain {
 	 */
 	public static function holdsElseLessConditional(node: QueryNode, conditionalKinds: Array<String>): Bool {
 		if (isElseLessConditional(node, conditionalKinds)) return true;
-		for (child in node.children) if (holdsElseLessConditional(child, conditionalKinds)) return true;
-		return false;
+		return node.children.exists(child -> holdsElseLessConditional(child, conditionalKinds));
 	}
 
 	/**
@@ -508,8 +507,7 @@ final class IfExpressionChain {
 
 	/** Whether some span in `spans` fully holds `tok` — the "already inside verbatim-copied text" test both comment guards run. */
 	private static function contained(tok: { from: Int, to: Int }, spans: Array<Span>): Bool {
-		for (s in spans) if (tok.from >= s.from && tok.to <= s.to) return true;
-		return false;
+		return spans.exists(s -> tok.from >= s.from && tok.to <= s.to);
 	}
 
 	/**

@@ -7,6 +7,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a double logical negation `!!x` — a not-node wrapping another, through any
  * parentheses between them (`!(!x)` is the same redundancy, spelled longer). In Haxe
@@ -112,8 +114,7 @@ final class DoubleNegation implements Check {
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
 	private static function operandIsNullable(operand: QueryNode, nullableKinds: Array<String>): Bool {
-		for (k in nullableKinds) if (RefactorSupport.subtreeContainsKind(operand, k)) return true;
-		return false;
+		return nullableKinds.exists(k -> RefactorSupport.subtreeContainsKind(operand, k));
 	}
 
 

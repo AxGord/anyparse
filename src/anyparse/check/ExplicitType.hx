@@ -1,15 +1,15 @@
 package anyparse.check;
 
+import anyparse.check.Check.OracleAssisted;
+import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
-import anyparse.check.Check.OracleAssisted;
-import anyparse.check.Check.TypeOracle;
 import anyparse.query.TypeRefPrinter;
+import anyparse.runtime.Span;
 
 using StringTools;
 using Lambda;
@@ -631,7 +631,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 	 */
 	private static function guardedImportOf(fi: FileInfo, simple: String): Bool {
 		for (imp in fi.imports) if (imp.guarded) switch imp.kind {
-			case ImportKind.Import | ImportKind.Using:
+			case ImportKind.Import, ImportKind.Using:
 				final dot: Int = imp.raw.lastIndexOf('.');
 				if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) == simple) return true;
 			case ImportKind.Alias:

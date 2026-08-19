@@ -1,10 +1,6 @@
 package anyparse.macro;
 
 #if macro
-import haxe.macro.Context;
-import haxe.macro.Expr;
-import haxe.macro.ExprTools;
-import haxe.macro.Type;
 import anyparse.core.LoweringCtx;
 import anyparse.core.Mode;
 import anyparse.core.ShapeTree;
@@ -17,6 +13,10 @@ import anyparse.macro.strategy.Prefix;
 import anyparse.macro.strategy.Re;
 import anyparse.macro.strategy.Skip;
 import anyparse.macro.strategy.Ternary;
+import haxe.macro.Context;
+import haxe.macro.Expr;
+import haxe.macro.ExprTools;
+import haxe.macro.Type;
 
 /**
  * `@:build` entry point. Applied to a marker class like

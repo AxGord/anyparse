@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.core.EnvFlag;
+import haxe.io.Path;
 #if nodejs
 import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 #end
@@ -107,7 +108,7 @@ final class StdResolver {
 		final candidates: Array<Null<String>> = [env, whichSiblingStd];
 		for (k in known) candidates.push(k);
 		for (c in candidates) if (c != null) {
-			final path: String = haxe.io.Path.normalize(c);
+			final path: String = Path.normalize(c);
 			if (exists(path)) return path;
 		}
 		return null;
@@ -121,9 +122,9 @@ final class StdResolver {
 	 */
 	public static function resolutionSpecs(stdDir: String): Array<String> {
 		return [
-			haxe.io.Path.join([stdDir, '*.hx']),
-			haxe.io.Path.join([stdDir, 'haxe']),
-			haxe.io.Path.join([stdDir, 'sys'])
+			Path.join([stdDir, '*.hx']),
+			Path.join([stdDir, 'haxe']),
+			Path.join([stdDir, 'sys'])
 		];
 	}
 
@@ -153,8 +154,8 @@ final class StdResolver {
 	 * direction that keeps them inside a std-excluding consumer's scan.
 	 */
 	public static function isUnder(dir: String, path: String): Bool {
-		final root: String = haxe.io.Path.removeTrailingSlashes(haxe.io.Path.normalize(dir));
-		return root != '' && StringTools.startsWith(haxe.io.Path.normalize(path), '$root/');
+		final root: String = Path.removeTrailingSlashes(Path.normalize(dir));
+		return root != '' && StringTools.startsWith(Path.normalize(path), '$root/');
 	}
 
 	/**
@@ -183,11 +184,7 @@ final class StdResolver {
 	private static function isStdRoot(dir: String): Bool {
 		if (_markerRoot == dir) return _markerVerdict;
 		_markerRoot = dir;
-		#if (sys || nodejs)
-		_markerVerdict = FileSystem.exists(haxe.io.Path.join([dir, STD_MARKER]));
-		#else
-		_markerVerdict = false;
-		#end
+		_markerVerdict = #if (sys || nodejs) FileSystem.exists(haxe.io.Path.join([dir, STD_MARKER])) #else false #end;
 		return _markerVerdict;
 	}
 
@@ -214,7 +211,7 @@ final class StdResolver {
 		final bin: Null<String> = whichHaxe();
 		if (bin == null) return null;
 		final real: String = resolveSymlink(bin);
-		return haxe.io.Path.normalize(haxe.io.Path.join([haxe.io.Path.directory(real), '..', 'std']));
+		return Path.normalize(Path.join([Path.directory(real), '..', 'std']));
 	}
 
 	/** Spawn `which haxe` and return its trimmed stdout on a zero exit, or null on any failure (mirrors `HaxelibResolver.runLibpath`). */
@@ -263,11 +260,7 @@ final class StdResolver {
 
 	/** Whether `path` exists AND is a directory — the injected `exists` predicate for the real filesystem. */
 	private static function dirExists(path: String): Bool {
-		#if (sys || nodejs)
-		return FileSystem.exists(path) && FileSystem.isDirectory(path);
-		#else
-		return false;
-		#end
+		return #if (sys || nodejs) FileSystem.exists(path) && FileSystem.isDirectory(path) #else false #end;
 	}
 
 }

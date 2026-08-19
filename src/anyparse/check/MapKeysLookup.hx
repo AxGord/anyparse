@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
-import anyparse.query.RefactorSupport;
-import anyparse.query.NominalTypes;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -339,8 +340,7 @@ final class MapKeysLookup implements Check {
 		final introducesBinding: Bool = cfg.localDeclKinds.contains(node.kind) || cfg.paramKinds.contains(node.kind)
 			|| node.kind == cfg.forKind || cfg.valueBinderKinds.contains(node.kind);
 		if (introducesBinding && (node.name == rootName || node.name == keyName)) return true;
-		for (c in node.children) if (rebinds(c, rootName, keyName, cfg)) return true;
-		return false;
+		return node.children.exists(c -> rebinds(c, rootName, keyName, cfg));
 	}
 
 	/**
@@ -371,8 +371,7 @@ final class MapKeysLookup implements Check {
 			)
 				return true;
 		}
-		for (c in node.children) if (writesMap(c, memberPath, cfg)) return true;
-		return false;
+		return node.children.exists(c -> writesMap(c, memberPath, cfg));
 	}
 
 	/** `pathOf` with a leading self-reference segment dropped, so `this.files` and `files` denote one path. */
@@ -422,8 +421,7 @@ final class MapKeysLookup implements Check {
 	private static function hasLookup(node: QueryNode, path: Array<String>, keyName: String, cfg: Cfg): Bool {
 		if (cfg.opaqueKinds.contains(node.kind)) return false;
 		if (isLookup(node, path, keyName, cfg)) return true;
-		for (c in node.children) if (hasLookup(c, path, keyName, cfg)) return true;
-		return false;
+		return node.children.exists(c -> hasLookup(c, path, keyName, cfg));
 	}
 
 	/** Whether `node` is exactly a `<path>[key]` index access or a `<path>.get(key)` call — one lookup, no descent. */

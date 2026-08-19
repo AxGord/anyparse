@@ -130,16 +130,6 @@ final class ScopeFrames {
 		return false;
 	}
 
-	/** The names `block`'s own direct children bind (kinds in `bindingKinds`) — what unwrapping it would hoist. */
-	public static function topLevelBindingNames(block: QueryNode, bindingKinds: Array<String>): Array<String> {
-		final names: Array<String> = [];
-		for (c in block.children) {
-			final nm: Null<String> = c.name;
-			if (nm != null && bindingKinds.contains(c.kind)) names.push(nm);
-		}
-		return names;
-	}
-
 	/**
 	 * Every statement kind that BINDS a name into its enclosing frame — `RefShape.localDeclKinds` widened with
 	 * the expression-position and static local forms, and with the function-declaration kinds, whose names bind

@@ -1,9 +1,9 @@
 package anyparse.grammar.haxe;
 
 #if macro
+import anyparse.macro.AstPredLowering;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.AstPredLowering;
 
 /**
  * The SWITCH-CASE half of the Haxe grammar's AST-predicate tables.
@@ -69,7 +69,7 @@ final class HxCasePredLowering extends AstPredLowering {
 		'SwitchStmtBare',
 		'TryCatchStmt',
 		'TryCatchStmtBare',
-		'Conditional',
+		'Conditional'
 	];
 
 	/**
@@ -90,7 +90,7 @@ final class HxCasePredLowering extends AstPredLowering {
 		'WhileExpr',
 		'SwitchExpr',
 		'SwitchExprBare',
-		'TryExpr',
+		'TryExpr'
 	];
 
 	/** The case-family predicate fields, appended to `HxAstPredLowering.generate()`'s own. */
@@ -104,7 +104,7 @@ final class HxCasePredLowering extends AstPredLowering {
 			addCaseSiblingUnitField(),
 			caseUnitStructuralBreakField(),
 			caseUnitControlFlowBodyField(),
-			condSpliceRawWrapsCasesField(),
+			condSpliceRawWrapsCasesField()
 		];
 	}
 
@@ -152,13 +152,13 @@ final class HxCasePredLowering extends AstPredLowering {
 	private function caseBodyControlFlowRootField(): Field {
 		final recurse: Expr = {
 			expr: ECall(ident('caseBodyControlFlowRoot'), [field(ident('_m'), 'stmt')]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final exprCall: Expr = { expr: ECall(ident('caseBodyControlFlowExpr'), [ident('_e')]), pos: Context.currentPos() };
 		final body: Expr = nullSwitch(ident('s'), macro false, [
 			caseOf(HX_STATEMENT, CONTROL_FLOW_STMT_CTORS, macro true),
 			caseBind(HX_STATEMENT, 'MetaStmt', [0 => '_m'], recurse),
-			caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], exprCall),
+			caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], exprCall)
 		], macro false);
 		return predField(
 			'caseBodyControlFlowRoot',
@@ -186,11 +186,11 @@ final class HxCasePredLowering extends AstPredLowering {
 	private function caseBodyControlFlowExprField(): Field {
 		final recurse: Expr = {
 			expr: ECall(ident('caseBodyControlFlowExpr'), [field(ident('_mv'), 'expr')]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final body: Expr = nullSwitch(ident('e'), macro false, [
 			caseOf(HX_EXPR, CONTROL_FLOW_EXPR_CTORS, macro true),
-			caseBind(HX_EXPR, 'MetaExpr', [0 => '_mv'], recurse),
+			caseBind(HX_EXPR, 'MetaExpr', [0 => '_mv'], recurse)
 		], macro false);
 		return predField(
 			'caseBodyControlFlowExpr',
@@ -408,7 +408,7 @@ final class HxCasePredLowering extends AstPredLowering {
 			final stmts: Expr = field(ident(holder), fieldName);
 			final refuses: Expr = {
 				expr: ECall(ident('caseBodyRefusesFlat'), [starElem(rule, fieldName, macro _cs[0])]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			return macro {
 				final _cs = $stmts;
@@ -418,7 +418,7 @@ final class HxCasePredLowering extends AstPredLowering {
 		final body: Expr = nullSwitch(ident('c'), macro false, [
 			caseBind(HX_SWITCH_CASE, 'CaseBranch', [0 => '_b'], verdict(HX_CASE_BRANCH, 'body', '_b')),
 			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d')),
-			caseOf(HX_SWITCH_CASE, ['CondSpliceCase'], macro true),
+			caseOf(HX_SWITCH_CASE, ['CondSpliceCase'], macro true)
 		], macro false);
 		return predField(
 			'caseUnitStructuralBreak_${AstPredLowering.simpleName(HX_SWITCH_CASE)}',
@@ -451,7 +451,7 @@ final class HxCasePredLowering extends AstPredLowering {
 			final stmts: Expr = field(ident(holder), fieldName);
 			final isControlFlow: Expr = {
 				expr: ECall(ident('caseBodyControlFlowRoot'), [starElem(rule, fieldName, macro _cs[0])]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			return macro {
 				final _cs = $stmts;
@@ -460,7 +460,7 @@ final class HxCasePredLowering extends AstPredLowering {
 		}
 		final body: Expr = nullSwitch(ident('c'), macro false, [
 			caseBind(HX_SWITCH_CASE, 'CaseBranch', [0 => '_b'], verdict(HX_CASE_BRANCH, 'body', '_b')),
-			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d')),
+			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d'))
 		], macro false);
 		return predField(
 			'caseUnitControlFlowBody_${AstPredLowering.simpleName(HX_SWITCH_CASE)}',

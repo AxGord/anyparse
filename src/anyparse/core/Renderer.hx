@@ -306,32 +306,30 @@ class Renderer {
 				continue;
 			}
 			switch (f.doc) {
-				case Empty | Text(_) | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-					| OptHardlineSkipBeforeHardline:
+				case Empty, Text(_), Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
+					OptHardlineSkipBeforeHardline:
 					// Content-emitting leaf ctors — mutate the scalar layout
 					// accumulators (buf / col / pending* / lastEmit / lineCount).
 					// Delegated to the static `emitLeaf` on the `ctx` carrier.
 					emitLeaf(ctx, f);
-				case Nest(_, _) | Concat(_) | Group(_) | BodyGroup(_) | GroupWithRestProbe(_) | Flatten(_) | WrapBoundary(_) | HardFlatten(
-					_
-				) | CollapseProbe(_):
+				case Nest(_, _), Concat(_), Group(_), BodyGroup(_), GroupWithRestProbe(_), Flatten(_), WrapBoundary(_), HardFlatten(_),
+					CollapseProbe(_):
 					// Structural / descend arms — no scalar layout mutation, only
 					// frame pushes. Delegated to the static `pushStructural` (reads
 					// `col`/`width`/`f`, writes `stack`). See that helper for each
 					// per-ctor semantic.
 					pushStructural(f, stack, ctx.col, pendingSpaceWidth(ctx), width);
-				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
-					_, _, _
-				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineExceedsWithRest(_, _, _) | IfNaturalFirstLineFitsOpenDelim(
-					_, _, _
-				) | IfArrowContinuationFits(_, _, _, _, _) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
+				case IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _),
+					IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
+					IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
+					IfArrowContinuationFits(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
 					pushExceedsBranch(f, stack, ctx.col, pendingSpaceWidth(ctx), width, decisions);
-				case Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+				case Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
 					// mutation (reads `lineCount` for the break-after-wrap snapshot,
 					// writes `stack`). Delegated to the static `pushFill`.
 					pushFill(f, stack, ctx.lineCount);
-				case CollapseAddProbe(_) | CollapseBoolProbe(_) | CollapseChainProbe(_):
+				case CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_):
 					// Collapse-probe markers — pure render pass-through that records a
 					// measure-only decision (reads `col`/`decisions`, writes
 					// `decisions`/`stack`). Delegated to the static `pushCollapseProbe`.
@@ -594,15 +592,13 @@ class Renderer {
 						case _: false;
 					};
 					return { inner: inner, hard: hard };
-				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-					inner
-				) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
-					inner
-				):
+				case Nest(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner), WrapBoundary(inner),
+					HardFlatten(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+					ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl):
+				case IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
 					// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
 					// EXCLUDED from the both-branch descent. Their two branches wrap the
 					// SAME body object and differ only in the separator before it, so a
@@ -613,18 +609,17 @@ class Renderer {
 					// decide for itself (`WrapList.startsWithHardline` reads the flat side
 					// of the glue probe for exactly that reason).
 					stack.push(fl);
-				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
-					_, brk, fl
-				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineExceedsWithRest(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(
-					_, brk, fl
-				) | IfArrowContinuationFits(_, _, _, brk, fl):
+				case IfBreak(brk, fl), IfWidthExceeds(_, brk, fl), IfFirstLineExceeds(_, brk, fl), IfLineExceeds(_, brk, fl),
+					IfResidualLineExceeds(_, brk, fl), IfFullLineExceeds(_, brk, fl), IfNaturalFirstLineExceeds(_, brk, fl),
+					IfNaturalFirstLineExceedsWithRest(_, brk, fl), IfNaturalFirstLineFitsOpenDelim(_, brk, fl),
+					IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 					for (it in items) stack.push(it);
 					stack.push(sep);
-				case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
-					| OptSpaceSkipAfterHardline:
+				case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
+					OptSpaceSkipAfterHardline:
 			}
 		}
 		return null;
@@ -1022,7 +1017,7 @@ class Renderer {
 	 */
 	private static function trailingScanStep(nd: { doc: Doc, mode: Mode }, inner: Array<{ doc: Doc, mode: Mode }>): Null<Bool> {
 		switch nd.doc {
-			case Empty | OptSpace(_) | OptSpaceSkipAfterHardline:
+			case Empty, OptSpace(_), OptSpaceSkipAfterHardline:
 				return null;
 			case Text(s):
 				return textHasTrailingContent(s) ? true : null;
@@ -1037,7 +1032,7 @@ class Renderer {
 				// continuation after the close `)` at all". So descend PAST a
 				// soft Line and keep scanning for a real token.
 				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? false : null;
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				return false;
 			case Nest(_, innerDoc):
 				inner.push({ doc: innerDoc, mode: nd.mode });
@@ -1046,17 +1041,16 @@ class Renderer {
 				var k: Int = items.length;
 				while (--k >= 0) inner.push({ doc: items[k], mode: nd.mode });
 				return null;
-			case Group(innerDoc) | BodyGroup(innerDoc) | GroupWithRestProbe(innerDoc):
+			case Group(innerDoc), BodyGroup(innerDoc), GroupWithRestProbe(innerDoc):
 				inner.push({ doc: innerDoc, mode: MFlat });
 				return null;
-			case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfResidualLineExceeds(
-				_, _, fl
-			) | IfFullLineExceeds(_, _, fl) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineExceedsWithRest(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(
-				_, _, fl
-			) | IfArrowContinuationFits(_, _, _, _, fl) | IfIndentWidthExceeds(_, _, _, fl) | IfGluedFirstLineExceeds(_, _, _, fl):
+			case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
+				IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
+				IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
+				IfArrowContinuationFits(_, _, _, _, fl), IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
 				inner.push({ doc: fl, mode: MFlat });
 				return null;
-			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				var k: Int = items.length;
 				while (k > 0) {
 					k--;
@@ -1064,9 +1058,8 @@ class Renderer {
 					if (k > 0) inner.push({ doc: sep, mode: MFlat });
 				}
 				return null;
-			case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(innerDoc) | CollapseBoolProbe(
-				innerDoc
-			) | CollapseChainProbe(innerDoc):
+			case Flatten(innerDoc), WrapBoundary(innerDoc), HardFlatten(innerDoc), CollapseProbe(innerDoc), CollapseAddProbe(innerDoc),
+				CollapseBoolProbe(innerDoc), CollapseChainProbe(innerDoc):
 				inner.push({ doc: innerDoc, mode: nd.mode });
 				return null;
 			case ConditionalMarkerZero(innerDoc):
@@ -1104,11 +1097,11 @@ class Renderer {
 	 */
 	private static function flatFirstLineStep(node: Doc, stack: Array<Doc>): { add: Int, aborted: Bool } {
 		switch (node) {
-			case Empty | BodyGroup(_):
+			case Empty, BodyGroup(_):
 				// Empty contributes nothing; BodyGroup is deferred — it decides
 				// its own flat/break independently.
 				return { add: 0, aborted: false };
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				return { add: 0, aborted: true };
 			case Text(s):
 				return { add: s.length, aborted: false };
@@ -1123,7 +1116,7 @@ class Renderer {
 				var i: Int = items.length;
 				while (--i >= 0) stack.push(items[i]);
 				return { add: 0, aborted: false };
-			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				var k: Int = items.length;
 				while (k > 0) {
 					k--;
@@ -1131,17 +1124,13 @@ class Renderer {
 					if (k > 0) stack.push(sep);
 				}
 				return { add: 0, aborted: false };
-			case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
-				_, _, inner
-			) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
-				_, _, inner
-			) | IfNaturalFirstLineExceedsWithRest(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(
-				_, _, _, _, inner
-			) | IfIndentWidthExceeds(_, _, _, inner) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-				inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-				inner
-			) | ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), Group(inner), GroupWithRestProbe(inner), IfBreak(_, inner), IfWidthExceeds(_, _, inner),
+				IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner),
+				IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner), IfNaturalFirstLineExceedsWithRest(_, _, inner),
+				IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
+				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
+				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend: structural wrappers (Nest /
 				// Group), the flat side of every render-time `If*` probe, the
 				// force-flat markers, and the cond-indent markers all contribute
@@ -1200,7 +1189,7 @@ class Renderer {
 				// hardlines without any indent. ω-break-group.
 				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { spend: 0, broke: true };
 				return { spend: flat.length, broke: false };
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				// All three opt-hardline variants are hardlines by intent
 				// and can never flatten. Mirror the `Line('\n')`
 				// budget=-1 path: any enclosing Group containing
@@ -1213,7 +1202,7 @@ class Renderer {
 				var j: Int = items.length;
 				while (--j >= 0) local.push(new Frame(f.indent, MFlat, items[j]));
 				return { spend: 0, broke: false };
-			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				// Flat measurement of Fill: items joined by sep flat.
 				// `tailReserve` is a render-time per-item-fit knob, NOT
 				// a flat-width adjustment — irrelevant when the enclosing
@@ -1228,17 +1217,13 @@ class Renderer {
 					if (k > 0) local.push(new Frame(f.indent, MFlat, sep));
 				}
 				return { spend: 0, broke: false };
-			case Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
-				_, _, inner
-			) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
-				_, _, inner
-			) | IfNaturalFirstLineExceedsWithRest(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(
-				_, _, _, _, inner
-			) | IfIndentWidthExceeds(_, _, _, inner) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-				inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-				inner
-			) | ConditionalMarkerDecrease(inner):
+			case Group(inner), GroupWithRestProbe(inner), IfBreak(_, inner), IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner),
+				IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner),
+				IfNaturalFirstLineExceeds(_, _, inner), IfNaturalFirstLineExceedsWithRest(_, _, inner),
+				IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
+				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
+				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend at the same indent in MFlat.
 				// A `Group`'s nested flat content; the flat side of every
 				// render-time `If*` probe (the column/first-line/rest-of-stack/
@@ -1281,7 +1266,7 @@ class Renderer {
 				if (node.mode == MBreak) return { add: 0, aborted: true };
 				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { add: 0, aborted: true };
 				return { add: flat.length, aborted: false };
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				return { add: 0, aborted: true };
 			case BodyGroup(innerDoc):
 				// The sister-walker differentiator: Full descends inline body
@@ -1304,7 +1289,7 @@ class Renderer {
 				var k: Int = items.length;
 				while (--k >= 0) inner.push({ doc: items[k], mode: node.mode });
 				return { add: 0, aborted: false };
-			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				var k: Int = items.length;
 				while (k > 0) {
 					k--;
@@ -1312,7 +1297,7 @@ class Renderer {
 					if (k > 0) inner.push({ doc: sep, mode: MFlat });
 				}
 				return { add: 0, aborted: false };
-			case IfNaturalFirstLineExceeds(_, _, innerDoc) | IfNaturalFirstLineExceedsWithRest(_, _, innerDoc):
+			case IfNaturalFirstLineExceeds(_, _, innerDoc), IfNaturalFirstLineExceedsWithRest(_, _, innerDoc):
 				// An `IfNaturalFirstLineExceeds` relocates its content to its own
 				// line when that content's natural first line overflows `lineWidth`
 				// (the typed var-init `=`-break emitted by
@@ -1342,11 +1327,10 @@ class Renderer {
 				// probe — which then wrapped a condition that fits.
 				inner.push({ doc: node.mode == MBreak ? brDoc : flDoc, mode: node.mode });
 				return { add: 0, aborted: false };
-			case Group(innerDoc) | GroupWithRestProbe(innerDoc) | IfWidthExceeds(_, _, innerDoc) | IfFirstLineExceeds(_, _, innerDoc) | IfLineExceeds(
-				_, _, innerDoc
-			) | IfResidualLineExceeds(_, _, innerDoc) | IfFullLineExceeds(_, _, innerDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, innerDoc) | IfArrowContinuationFits(
-				_, _, _, _, innerDoc
-			) | IfIndentWidthExceeds(_, _, _, innerDoc) | IfGluedFirstLineExceeds(_, _, _, innerDoc):
+			case Group(innerDoc), GroupWithRestProbe(innerDoc), IfWidthExceeds(_, _, innerDoc), IfFirstLineExceeds(_, _, innerDoc),
+				IfLineExceeds(_, _, innerDoc), IfResidualLineExceeds(_, _, innerDoc), IfFullLineExceeds(_, _, innerDoc),
+				IfNaturalFirstLineFitsOpenDelim(_, _, innerDoc), IfArrowContinuationFits(_, _, _, _, innerDoc),
+				IfIndentWidthExceeds(_, _, _, innerDoc), IfGluedFirstLineExceeds(_, _, _, innerDoc):
 				// Static walk: descend in MFlat. Runtime Group decision is
 				// unknowable here; flat-side measurement matches the cascade
 				// rule semantic. The natural-first-line / rest-of-stack probes
@@ -1354,11 +1338,9 @@ class Renderer {
 				// flat shape. GroupWithRestProbe shares semantic at static walk.
 				inner.push({ doc: innerDoc, mode: MFlat });
 				return { add: 0, aborted: false };
-			case Nest(_, innerDoc) | Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(
-				innerDoc
-			) | CollapseBoolProbe(innerDoc) | CollapseChainProbe(innerDoc) | ConditionalMarkerZero(innerDoc) | ConditionalMarkerDecrease(
-				innerDoc
-			):
+			case Nest(_, innerDoc), Flatten(innerDoc), WrapBoundary(innerDoc), HardFlatten(innerDoc), CollapseProbe(innerDoc),
+				CollapseAddProbe(innerDoc), CollapseBoolProbe(innerDoc), CollapseChainProbe(innerDoc), ConditionalMarkerZero(innerDoc),
+				ConditionalMarkerDecrease(innerDoc):
 				// Mode-preserving transparent descend: Nest, the ω-force-flat-
 				// engine markers (rest-of-stack probe measures structural
 				// width — force-flat markers add none), and the cond-indent
@@ -1401,7 +1383,7 @@ class Renderer {
 				if (node.mode == MBreak) return { add: 0, aborted: true, delim: null };
 				if (flat.length > 0) return { add: flat.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(flat) };
 				return { add: 0, aborted: false, delim: null };
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				return { add: 0, aborted: true, delim: null };
 			case OptSpace(s):
 				return { add: s.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(s) };
@@ -1541,7 +1523,7 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: node.forceFlat
 				});
-			case Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner):
+			case Group(inner), GroupWithRestProbe(inner), BodyGroup(inner):
 				pushNaturalGroup(stack, node, inner, width, col, 0);
 			case IfBreak(breakDoc, flatDoc):
 				final picked: Doc = node.forceFlat || node.mode == MFlat ? flatDoc : breakDoc;
@@ -1551,9 +1533,8 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: node.forceFlat
 				});
-			case IfWidthExceeds(nn, breakDoc, flatDoc) | IfLineExceeds(nn, breakDoc, flatDoc) | IfResidualLineExceeds(nn, breakDoc, flatDoc) | IfFullLineExceeds(
-				nn, breakDoc, flatDoc
-			):
+			case IfWidthExceeds(nn, breakDoc, flatDoc), IfLineExceeds(nn, breakDoc, flatDoc),
+				IfResidualLineExceeds(nn, breakDoc, flatDoc), IfFullLineExceeds(nn, breakDoc, flatDoc):
 				// No rest-stack lookahead is needed here: the cond's own
 				// first line determines glue-vs-open; the trailing ` {`
 				// lookahead is already covered by the width arm of the
@@ -1561,12 +1542,12 @@ class Renderer {
 				// decision. Resolve flat unless forced — these probes never
 				// sit at the head of a cond's flatShape spine.
 				pushNaturalExceeds(stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
-			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc) | IfNaturalFirstLineExceedsWithRest(nn, breakDoc, flatDoc):
+			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc), IfNaturalFirstLineExceedsWithRest(nn, breakDoc, flatDoc):
 				// Self-class sibling: resolve recursively at the running col
 				// over a strictly smaller subtree (mirror the width probe's
 				// own arm; bounded by the finite tree).
 				pushNaturalExceeds(stack, node, breakDoc, flatDoc, naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
-			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				// Flat interleave tagged with node.mode (so a broken sep's
 				// Line terminates the first line). Mirror `naturalFirstLine
 				// Width`'s Fill arm; the canonical consumer does not place a
@@ -1587,7 +1568,7 @@ class Renderer {
 						forceFlat: node.forceFlat
 					});
 				}
-			case Flatten(inner) | HardFlatten(inner):
+			case Flatten(inner), HardFlatten(inner):
 				// Enter force-flat region (mirror render's Flatten arm):
 				// push inner MFlat + forceFlat=true so every nested Group
 				// stays flat until a WrapBoundary resets the flag.
@@ -1607,11 +1588,10 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: false
 				});
-			case IfFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
-				_, _, _, inner
-			) | IfGluedFirstLineExceeds(_, _, _, inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(
-				inner
-			) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
+				IfArrowContinuationFits(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
+				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds`), the
 				// nested cond-paren-glue probes (render-time, seen flat here),
@@ -1623,7 +1603,8 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: node.forceFlat
 				});
-			case Empty | Text(_) | Line(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpace(_) | OptSpaceSkipAfterHardline:
+			case Empty, Text(_), Line(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpace(_),
+				OptSpaceSkipAfterHardline:
 				// Leaf-content arms — handled by `naturalGluableStep`; never
 				// reached here (this helper is its `case _` delegate).
 				throw 'unreachable leaf in naturalGluableStructural';
@@ -1717,7 +1698,7 @@ class Renderer {
 					return { add: 0, aborted: true };
 				// Soft line inside a FLAT Group renders as its flat string.
 				return { add: flat.length, aborted: false };
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				// All three are hardlines by intent (mirror
 				// `flatTokenWidthFirstLine`); treat as a first-line
 				// terminator (their render-time drops can't be predicted).
@@ -1776,7 +1757,7 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: node.forceFlat
 				});
-			case Group(inner) | BodyGroup(inner):
+			case Group(inner), BodyGroup(inner):
 				// THE natural decision: resolve THIS Group by its own fit at the
 				// running column (`pushNaturalGroup`). BodyGroup is handled HERE
 				// (same as render), NOT deferred — deferring it would under-
@@ -1816,7 +1797,7 @@ class Renderer {
 				});
 			case IfWidthExceeds(nn, breakDoc, flatDoc):
 				pushNaturalExceeds(stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
-			case IfLineExceeds(nn, breakDoc, flatDoc) | IfFullLineExceeds(nn, breakDoc, flatDoc):
+			case IfLineExceeds(nn, breakDoc, flatDoc), IfFullLineExceeds(nn, breakDoc, flatDoc):
 				// Own flat width PLUS the rest-of-stack lookahead (the same-line
 				// content the pending work-stack will still emit). The lookahead
 				// lets a chain probe see trailing close-delims that ride the same
@@ -1839,14 +1820,14 @@ class Renderer {
 				// FIRST instead of the arrow's break-point pre-empting it (fork's
 				// LATE-pass `applyArrowWrapping` — the arrow is last-resort).
 				pushNaturalExceeds(stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
-			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc) | IfNaturalFirstLineExceedsWithRest(nn, breakDoc, flatDoc):
+			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc), IfNaturalFirstLineExceedsWithRest(nn, breakDoc, flatDoc):
 				// Self-reference: resolve recursively at the running col
 				// over a strictly smaller subtree (bounded by finite tree).
 				pushNaturalExceeds(
 					stack, node, breakDoc, flatDoc,
 					naturalFirstLineWidth(flatDoc, col, node.indent, width, resolveOpenDelim, trailWidth) >= nn
 				);
-			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				// Flat interleave tagged with node.mode (so a broken sep's
 				// Line terminates the first line). Slight over-measure when
 				// items pack onto multiple lines; the canonical consumer
@@ -1868,7 +1849,7 @@ class Renderer {
 						forceFlat: node.forceFlat
 					});
 				}
-			case Flatten(inner) | HardFlatten(inner):
+			case Flatten(inner), HardFlatten(inner):
 				// Enter force-flat region (mirror render's Flatten arm):
 				// push inner MFlat + forceFlat=true so every nested Group
 				// stays flat until a WrapBoundary resets the flag.
@@ -1918,11 +1899,10 @@ class Renderer {
 					mode: glueD ? node.mode : MBreak,
 					forceFlat: node.forceFlat
 				});
-			case IfFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | IfIndentWidthExceeds(
-				_, _, _, inner
-			) | IfGluedFirstLineExceeds(_, _, _, inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(
-				inner
-			) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
+				IfArrowContinuationFits(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
+				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds` — the
 				// NoWrap-pinned call paren is measured kept-flat for the parent
@@ -1938,7 +1918,8 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: node.forceFlat
 				});
-			case Empty | Text(_) | Line(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpace(_) | OptSpaceSkipAfterHardline:
+			case Empty, Text(_), Line(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpace(_),
+				OptSpaceSkipAfterHardline:
 				// Leaf-content arms — handled by `naturalWidthStep`; never
 				// reached here (this helper is its `case _` delegate).
 				throw 'unreachable leaf in naturalWidthStructural';
@@ -1958,9 +1939,7 @@ class Renderer {
 		decisions: Null<Array<{ node: Doc, crosses: Bool, ?indent: Int }>>
 	): Void {
 		switch (f.doc) {
-			case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
-				_, _, _
-			):
+			case IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _):
 				// Flat-width family — flat-token measurer feeds a `crosses`
 				// test, no measure-only capture. Delegated to the static
 				// `pushFlatWidthBranch`.
@@ -2073,9 +2052,8 @@ class Renderer {
 					final pushMode: Mode = commits ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, commits ? breakDoc : flatDoc));
 				}
-			case IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineExceedsWithRest(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
-				_, _, _, _, _
-			) | IfIndentWidthExceeds(_, _, _, _) | IfGluedFirstLineExceeds(_, _, _, _):
+			case IfNaturalFirstLineExceeds(_, _, _), IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
+				IfArrowContinuationFits(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
 				// Natural-shape family — inner Groups resolve by their own
 				// `fitsFlat` (or a precomputed arrow width). Delegated to the
 				// static `pushNaturalBranch`.
@@ -2117,7 +2095,7 @@ class Renderer {
 			case Concat(items):
 				var i: Int = items.length;
 				while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i], f.forceFlat, f.hardFlat));
-			case Group(inner) | BodyGroup(inner):
+			case Group(inner), BodyGroup(inner):
 				// Force-flat (slice B): skip `fitsFlat` entirely and push
 				// the inner as MFlat with `forceFlat=true` propagated.
 				// The `Flatten` region committed to flat for the whole
@@ -2265,9 +2243,8 @@ class Renderer {
 	 */
 	private static function pushFill(f: Frame, stack: Array<Frame>, lineCount: Int): Void {
 		switch (f.doc) {
-			case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt) | FillBreakAfterWrap(
-				items, sep, tailReserveOpt
-			):
+			case Fill(items, sep, tailReserveOpt), FillWithRestProbe(items, sep, tailReserveOpt),
+				FillBreakAfterWrap(items, sep, tailReserveOpt):
 				// Shared arm: identical entry shape for all three ctors. The
 				// rest-probe semantic lives in FillCont resumption (see
 				// top of dispatch loop) — we just tag the FillCont frame
@@ -2726,9 +2703,9 @@ class Renderer {
 				emitText(ctx, s);
 			case Line(flat):
 				emitLine(ctx, f, flat);
-			case OptSpace(_) | OptSpaceSkipAfterHardline | OptHardlineSkipBeforeHardline:
+			case OptSpace(_), OptSpaceSkipAfterHardline, OptHardlineSkipBeforeHardline:
 				emitOptSpaceVariants(ctx, f);
-			case OptHardline | OptHardlineSkipAtOpenDelim:
+			case OptHardline, OptHardlineSkipAtOpenDelim:
 				emitOptHardline(ctx, f);
 			case _:
 		}
@@ -3000,7 +2977,7 @@ class Renderer {
 				// the non-crossing path pushes
 				// `Frame(f.indent, f.mode, flatDoc)` with both flags false.
 				stack.push(new Frame(f.indent, f.mode, flatDoc, f.forceFlat, f.hardFlat));
-			case IfLineExceeds(n, breakDoc, flatDoc) | IfResidualLineExceeds(n, breakDoc, flatDoc):
+			case IfLineExceeds(n, breakDoc, flatDoc), IfResidualLineExceeds(n, breakDoc, flatDoc):
 				// Line-length-aware probe: rule fires when `col +
 				// DocMeasure.flatTokenWidth(flatDoc) +
 				// flatTokenWidthOfRestStack(stack) >= n`. The third term
@@ -3053,7 +3030,7 @@ class Renderer {
 	 */
 	private static function pushNaturalBranch(f: Frame, stack: Array<Frame>, col: Int, width: Int): Void {
 		switch (f.doc) {
-			case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc) | IfNaturalFirstLineExceedsWithRest(n, breakDoc, flatDoc):
+			case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc), IfNaturalFirstLineExceedsWithRest(n, breakDoc, flatDoc):
 				// Natural-shape first-line probe: render `flatDoc`
 				// speculatively at the current pen, resolving each inner
 				// Group/BodyGroup/GroupWithRestProbe by its OWN `fitsFlat`
@@ -3256,31 +3233,28 @@ class Renderer {
 				case Line(flat):
 					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { first: first, last: -1 };
 					total += flat.length;
-				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return { first: first, last: -1 };
-				case Empty | BodyGroup(_):
+				case Empty, BodyGroup(_):
 					// Empty adds nothing; BodyGroup defers its own layout decision.
 				case Concat(items):
 					var i: Int = items.length;
 					while (--i >= 0) stack.push(items[i]);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 					var k: Int = items.length;
 					while (k > 0) {
 						k--;
 						stack.push(items[k]);
 						if (k > 0) stack.push(sep);
 					}
-				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
-					_, _, inner
-				) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
-					_, _, inner
-				) | IfNaturalFirstLineExceedsWithRest(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(
-					_, _, _, _, inner
-				) | IfIndentWidthExceeds(_, _, _, inner) | IfGluedFirstLineExceeds(_, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-					inner
-				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-					inner
-				) | ConditionalMarkerDecrease(inner):
+				case Nest(_, inner), Group(inner), GroupWithRestProbe(inner), IfBreak(_, inner), IfWidthExceeds(_, _, inner),
+					IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner),
+					IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
+					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
+					IfArrowContinuationFits(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
+					IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
+					CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+					ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 			}
 		}

@@ -1,9 +1,9 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.core.ShapeTree;
 
 /**
  * Pass 3S of the macro pipeline - span-info lowering.
@@ -98,7 +98,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 			walks: walks,
 			nominals: nominals,
 			spanOfs: spanOfs,
-			accessorIdCT: _accessorIdCT,
+			accessorIdCT: _accessorIdCT
 		};
 	}
 

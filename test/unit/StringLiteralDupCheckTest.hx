@@ -6,6 +6,8 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.StringLiteralDup;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import sys.FileSystem;
+import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
@@ -139,9 +141,9 @@ class StringLiteralDupCheckTest extends Test {
 	/** Write `configJson` + `fixture` to a fresh temp dir, run the check with on-disk config discovery, return the finding count. */
 	private function findingsWithConfig(tag: String, configJson: String, fixture: String): Int {
 		final dir: String = tmpDir(tag);
-		sys.io.File.saveContent('$dir/apqlint.json', configJson);
+		File.saveContent('$dir/apqlint.json', configJson);
 		final path: String = '$dir/Foo.hx';
-		sys.io.File.saveContent(path, fixture);
+		File.saveContent(path, fixture);
 		final count: Int = new StringLiteralDup().run([{ file: path, source: fixture }], new HaxeQueryPlugin()).length;
 		cleanup(dir, path);
 		return count;
@@ -151,14 +153,14 @@ class StringLiteralDupCheckTest extends Test {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_${tag}_${Sys.time()}';
-		sys.FileSystem.createDirectory(dir);
+		FileSystem.createDirectory(dir);
 		return dir;
 	}
 
 	private function cleanup(dir: String, path: String): Void {
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/apqlint.json');
-		sys.FileSystem.deleteDirectory(dir);
+		FileSystem.deleteFile(path);
+		FileSystem.deleteFile('$dir/apqlint.json');
+		FileSystem.deleteDirectory(dir);
 	}
 
 }

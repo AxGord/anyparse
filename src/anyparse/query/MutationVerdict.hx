@@ -3,6 +3,8 @@ package anyparse.query;
 import anyparse.query.Cli.TestSummaryHeader;
 import anyparse.query.Cli.TestSummaryResult;
 
+using Lambda;
+
 /**
  * The five verdicts `tools/mutation-check.sh` reports per track.
  * `SURVIVED` is the finding the tool exists for — a green suite over a
@@ -104,14 +106,12 @@ class MutationVerdict {
 
 	/** Does any of `names` carry `needle` as a substring? */
 	private static function anyContains(names: Array<String>, needle: String): Bool {
-		for (name in names) if (name.indexOf(needle) >= 0) return true;
-		return false;
+		return names.exists(name -> name.indexOf(needle) >= 0);
 	}
 
 	/** Does `name` carry any of `needles` as a substring? */
 	private static function containsAny(name: String, needles: Array<String>): Bool {
-		for (needle in needles) if (name.indexOf(needle) >= 0) return true;
-		return false;
+		return needles.exists(needle -> name.indexOf(needle) >= 0);
 	}
 
 	/**

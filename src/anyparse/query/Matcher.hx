@@ -1,7 +1,7 @@
 package anyparse.query;
 
-import anyparse.query.Pattern.Metavar;
 import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.Pattern.Metavar;
 import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
 

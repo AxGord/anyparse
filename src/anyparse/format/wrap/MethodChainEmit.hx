@@ -444,7 +444,7 @@ class MethodChainEmit {
 	 */
 	private static function isDotBreak(mode: WrapMode): Bool {
 		return switch mode {
-			case OnePerLine | OnePerLineAfterFirst: true;
+			case OnePerLine, OnePerLineAfterFirst: true;
 			case _: false;
 		};
 	}

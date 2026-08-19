@@ -3,10 +3,9 @@ package anyparse.query;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 using Lambda;
-
-import haxe.Exception;
 
 /**
  * One extracted hub: a high-fan-in member pulled into the "utils bucket"
@@ -153,7 +152,7 @@ final class Clusters {
 			components: componentNodes,
 			hubUses: collectHubUses(intraEdges, componentNodes, hubIds),
 			resolvedSites: countResolvedSites(graph, memberIds),
-			unresolvedSites: countUnresolvedSites(graph, members),
+			unresolvedSites: countUnresolvedSites(graph, members)
 		};
 	}
 

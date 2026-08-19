@@ -1,9 +1,9 @@
 package anyparse.grammar.haxe;
 
 #if macro
+import anyparse.macro.AstPredLowering;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.AstPredLowering;
 
 /**
  * Haxe-grammar AST-predicate tables — the domain knowledge behind the
@@ -60,7 +60,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		'BitXorAssign',
 		'NullCoalAssign',
 		'BoolAndAssign',
-		'BoolOrAssign',
+		'BoolOrAssign'
 	];
 
 	/**
@@ -98,7 +98,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		'NullCoal',
 		'In',
 		'ThinArrow',
-		'Arrow',
+		'Arrow'
 	];
 
 	/**
@@ -124,7 +124,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		'ArrayExpr',
 		'DollarBlockExpr',
 		'DollarReifExpr',
-		'Is',
+		'Is'
 	];
 
 	/**
@@ -158,7 +158,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		'TryCatchStmtBare',
 		'Conditional',
 		'EllipsisStmt',
-		'CondSpliceBlockClose',
+		'CondSpliceBlockClose'
 	];
 
 	/**
@@ -205,7 +205,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		'TypedefDecl',
 		'FnDecl',
 		'VarDecl',
-		'FinalDecl',
+		'FinalDecl'
 	];
 
 	/**
@@ -248,7 +248,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			condLeafWalkerField('tailLeafKeepsBlankAfterConditional', true, '_classifyKeepsBlankLeaf'),
 			importLeafClassifierField('_classifyImportLeafTail', 'betweenImportsTailLeafClassify'),
 			importLeafClassifierField('_classifyImportLeafHead', 'betweenImportsHeadLeafClassify'),
-			keepsBlankLeafClassifierField(),
+			keepsBlankLeafClassifierField()
 		].concat(new HxCasePredLowering(_shape, _mode).generate());
 	}
 
@@ -302,7 +302,7 @@ final class HxAstPredLowering extends AstPredLowering {
 					final _cs = _t.catches;
 					_cs.length == 0 ? $recTryBody : $recLastCatch;
 				}
-			),
+			)
 		], macro false);
 		return predField(
 			'endsWithCloseBrace',
@@ -513,7 +513,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			return { expr: ECall(ident('_stmtExprNoSemiAt'), [e, nested]), pos: Context.currentPos() };
 		final fnBodySwitch: Expr = nullSwitch(field(ident('_f'), 'body'), macro false, [
 			caseOf(HX_FN_EXPR_BODY, ['BlockBody'], macro true),
-			caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro nested || ${at(ident('_e'), macro true)}),
+			caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro nested || ${at(ident('_e'), macro true)})
 		], macro false);
 		final ifArm: Expr = {
 			final recElse: Expr = at(ident('_el'), macro true);
@@ -566,7 +566,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseBind(HX_EXPR, 'CondSpliceTail', [1 => '_raw'], macro _condSpliceTailElseLed(_raw)),
 			// Recursion targets (reached through Assign / IfExpr / … —
 			// standalone `{…}` at statement position is BlockStmt).
-			caseOf(HX_EXPR, STMT_BRACE_TERMINAL_CTORS, macro true),
+			caseOf(HX_EXPR, STMT_BRACE_TERMINAL_CTORS, macro true)
 		], macro endsWithCloseBrace(e));
 		return predField(
 			'_stmtExprNoSemiAt',
@@ -588,7 +588,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private function binopRhsNoSemiField(): Field {
 		final recurse: Expr = { expr: ECall(ident('_stmtExprNoSemiAt'), [ident('r'), macro true]), pos: Context.currentPos() };
 		final body: Expr = nullSwitch(ident('r'), macro false, [
-			caseOf(HX_EXPR, ['ObjectLit', 'ArrayExpr', 'DollarBlockExpr', 'Is'], macro false),
+			caseOf(HX_EXPR, ['ObjectLit', 'ArrayExpr', 'DollarBlockExpr', 'Is'], macro false)
 		], recurse);
 		return predField(
 			'_binopRhsNoSemi',
@@ -705,7 +705,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseBind(HX_STATEMENT, 'CondSpliceStmt', [0 => '_i'], spliceTail),
 			caseBind(HX_STATEMENT, 'OrphanElseStmt', [0 => '_s'], macro stmtNoSemi(_s)),
 			caseOf(HX_STATEMENT, NO_SEMI_STMT_CTORS, macro true),
-			caseBindMulti(HX_STATEMENT, VAR_INIT_STMT_CTORS, [0 => '_d'], varArm),
+			caseBindMulti(HX_STATEMENT, VAR_INIT_STMT_CTORS, [0 => '_d'], varArm)
 		], macro false);
 		return predField(
 			'stmtNoSemi',
@@ -795,7 +795,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		final cases: Array<Case> = [
 			caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
 				expr: ECall(ident(walker), [ident('_c')]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			})
 		];
 		for (c in IMPORT_PATH_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_p'], macro { ctorName: $v{c}, path: _p }));
@@ -820,7 +820,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		final cases: Array<Case> = [
 			caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
 				expr: ECall(ident('tailLeafKeepsBlankAfterConditional'), [ident('_c')]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			})
 		];
 		for (c in KEEPS_BLANK_CTORS) cases.push(caseOf(HX_DECL, [c], macro { ctorName: $v{c}, path: '' }));
@@ -855,7 +855,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private function arrayBracketKindField(): Field {
 		final body: Expr = nullSwitch(ident('e'), macro 0, [
 			caseOf(HX_EXPR, ['Arrow'], macro 1),
-			caseOf(HX_EXPR, ['ForExpr', 'WhileExpr'], macro 2),
+			caseOf(HX_EXPR, ['ForExpr', 'WhileExpr'], macro 2)
 		], macro 0);
 		return predField(
 			'arrayBracketKind',

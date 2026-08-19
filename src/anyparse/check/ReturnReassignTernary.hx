@@ -11,6 +11,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags the function-tail shape `if (cond) x = e; return x;` -- a single-branch `if`
  * whose body is exactly one plain assignment to a LOCAL, immediately followed by a
@@ -370,8 +372,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 
 	/** Whether `span` is nested inside any lambda span in `lambdaSpans` -- i.e. a captured reference. */
 	private static function capturedByNestedFn(span: Span, binding: Span, fnSpans: Array<Span>): Bool {
-		for (fs in fnSpans) if (fs.from <= span.from && span.to <= fs.to && (fs.from > binding.from || binding.to > fs.to)) return true;
-		return false;
+		return fnSpans.exists(fs -> fs.from <= span.from && span.to <= fs.to && (fs.from > binding.from || binding.to > fs.to));
 	}
 
 	/** Collect the span of every lambda (`RefShape.lambdaKinds`) reachable under `node`. */

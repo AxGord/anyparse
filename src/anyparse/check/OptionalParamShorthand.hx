@@ -6,6 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -290,8 +291,7 @@ final class OptionalParamShorthand implements Check {
 
 	/** Whether `parent` (a function's enclosing node) carries a supertype clause. */
 	private static function hasSupertypeClause(parent: QueryNode, supertypeClauseKinds: Array<String>): Bool {
-		for (c in parent.children) if (supertypeClauseKinds.contains(c.kind)) return true;
-		return false;
+		return parent.children.exists(c -> supertypeClauseKinds.contains(c.kind));
 	}
 
 	/**
@@ -348,8 +348,7 @@ final class OptionalParamShorthand implements Check {
 	/** Whether `fn` is a body-less declaration (an interface / abstract method) — G1. */
 	private static function hasNoBody(fn: QueryNode, noBodyKind: Null<String>): Bool {
 		if (noBodyKind == null) return false;
-		for (c in fn.children) if (c.kind == noBodyKind) return true;
-		return false;
+		return fn.children.exists(c -> c.kind == noBodyKind);
 	}
 
 	/**
@@ -375,8 +374,7 @@ final class OptionalParamShorthand implements Check {
 			final rhs: QueryNode = node.children[node.children.length - 1];
 			if (lhs.kind == identKind && lhs.name == name && rhs.kind == nullLitKind) return true;
 		}
-		for (c in node.children) if (hasNullComparisonOrAssign(c, name, identKind, nullLitKind, seams)) return true;
-		return false;
+		return node.children.exists(c -> hasNullComparisonOrAssign(c, name, identKind, nullLitKind, seams));
 	}
 
 	/**
@@ -389,8 +387,7 @@ final class OptionalParamShorthand implements Check {
 			final subject: QueryNode = node.children[0];
 			if (subject.kind == identKind && subject.name == name) return true;
 		}
-		for (c in node.children) if (hasSwitchSubject(c, name, identKind, switchKinds)) return true;
-		return false;
+		return node.children.exists(c -> hasSwitchSubject(c, name, identKind, switchKinds));
 	}
 
 	/**

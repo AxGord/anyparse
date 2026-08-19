@@ -11,6 +11,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -98,8 +99,7 @@ final class DynamicBag {
 
 	/** Whether the module has a top-level `using Reflect;` — required for a `bag.<method>(…)` extension call to be a reflect op. */
 	public static function hasUsingReflect(tree: QueryNode): Bool {
-		for (c in tree.children) if (c.kind == 'UsingDecl' && c.name == 'Reflect') return true;
-		return false;
+		return tree.children.exists(c -> c.kind == 'UsingDecl' && c.name == 'Reflect');
 	}
 
 	/**

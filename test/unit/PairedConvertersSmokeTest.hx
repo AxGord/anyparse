@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HxClassDecl;
 
 /**
  * ω-paired-converters (Phase A1) smoke test.
@@ -42,7 +43,7 @@ class PairedConvertersSmokeTest extends utest.Test {
 	public function testHxModulePairedToRawPreservesClassName(): Void {
 		final paired: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class Foo {}');
 		final raw: HxModule = anyparse.grammar.haxe.trivia.Pairs.Converters.pairedToRaw_HxModule(paired);
-		final classDecl: anyparse.grammar.haxe.HxClassDecl = switch raw.decls[0].decl {
+		final classDecl: HxClassDecl = switch raw.decls[0].decl {
 			case ClassDecl(d): d;
 			case _:
 				Assert.fail('expected ClassDecl');
@@ -56,7 +57,7 @@ class PairedConvertersSmokeTest extends utest.Test {
 			'class Foo { var x:Int; function bar():Void {} }'
 		);
 		final raw: HxModule = anyparse.grammar.haxe.trivia.Pairs.Converters.pairedToRaw_HxModule(paired);
-		final classDecl: anyparse.grammar.haxe.HxClassDecl = switch raw.decls[0].decl {
+		final classDecl: HxClassDecl = switch raw.decls[0].decl {
 			case ClassDecl(d): d;
 			case _:
 				Assert.fail('expected ClassDecl');
@@ -82,7 +83,7 @@ class PairedConvertersSmokeTest extends utest.Test {
 			raw1
 		);
 		final raw2: HxModule = anyparse.grammar.haxe.trivia.Pairs.Converters.pairedToRaw_HxModule(paired2);
-		final cd: anyparse.grammar.haxe.HxClassDecl = switch raw2.decls[0].decl {
+		final cd: HxClassDecl = switch raw2.decls[0].decl {
 			case ClassDecl(d): d;
 			case _:
 				Assert.fail('expected ClassDecl');
@@ -100,7 +101,7 @@ class PairedConvertersSmokeTest extends utest.Test {
 			raw1
 		);
 		final raw2: HxModule = anyparse.grammar.haxe.trivia.Pairs.Converters.pairedToRaw_HxModule(paired2);
-		final cd: anyparse.grammar.haxe.HxClassDecl = switch raw2.decls[0].decl {
+		final cd: HxClassDecl = switch raw2.decls[0].decl {
 			case ClassDecl(d): d;
 			case _:
 				Assert.fail('expected ClassDecl');

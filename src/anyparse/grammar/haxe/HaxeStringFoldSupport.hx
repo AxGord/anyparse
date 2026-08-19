@@ -1,14 +1,13 @@
 package anyparse.grammar.haxe;
 
 import anyparse.query.QueryNode;
+import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
 
 using StringTools;
 using Lambda;
-
-import anyparse.query.StringFold.ConcatSegment;
 
 /**
  * Haxe `StringFoldSupport`. Concatenation is `+` (`Add`).

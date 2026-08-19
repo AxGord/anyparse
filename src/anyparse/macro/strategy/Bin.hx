@@ -1,14 +1,14 @@
 package anyparse.macro.strategy;
 
 #if macro
-import anyparse.macro.AnnotationKeys;
-import haxe.macro.Context;
-import haxe.macro.Expr;
 import anyparse.core.CoreIR;
 import anyparse.core.LoweringCtx;
 import anyparse.core.RuntimeContrib;
 import anyparse.core.ShapeTree;
 import anyparse.core.Strategy;
+import anyparse.macro.AnnotationKeys;
+import haxe.macro.Context;
+import haxe.macro.Expr;
 
 /**
  * Binary strategy — owns metadata for binary format fields.
@@ -48,7 +48,7 @@ class Bin implements Strategy {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return false;
 		for (entry in meta) switch entry.name {
-			case ':bin' | ':magic' | ':align' | ':length':
+			case ':bin', ':magic', ':align', ':length':
 				return true;
 			case _:
 		}
@@ -78,7 +78,7 @@ class Bin implements Strategy {
 				if (entry.params.length != 2) Context.fatalError('@:length expects two arguments (Int, Dec|Oct)', entry.pos);
 				node.annotations['bin.lengthPrefix'] = {
 					width: intOrFail(entry.params[0], ':length'),
-					encoding: readEncodingIdent(entry.params[1], 'length'),
+					encoding: readEncodingIdent(entry.params[1], 'length')
 				};
 			case ':magic':
 				if (entry.params.length != 1) Context.fatalError('@:magic expects exactly one string argument', entry.pos);

@@ -1,9 +1,9 @@
 package anyparse.check;
 
-import anyparse.query.SymbolIndex;
-import anyparse.query.GrammarPlugin;
-import anyparse.runtime.Span;
 import anyparse.check.Check.Violation;
+import anyparse.query.GrammarPlugin;
+import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
 
 /**
  * Flags an `import` (or `using`) declared more than once in the same file: the

@@ -1,11 +1,11 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.LoweringCtx;
+import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.core.LoweringCtx;
-import anyparse.core.ShapeTree;
 
 using StringTools;
 using Lambda;
@@ -135,7 +135,7 @@ class WriterLowering {
 		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [elemAccess]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -365,7 +365,7 @@ class WriterLowering {
 		final chainRulesExpr: Expr = optFieldAccess(chainField);
 		final writeIdent: Expr = {
 			expr: EConst(CIdent(writeFnName)),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// ω-postfix-starsuffix-trivia: per-arg Doc comprehension below
 		// must mirror `lowerPostfixStar`'s trivia branch: when args are
@@ -438,7 +438,7 @@ class WriterLowering {
 			writeIdent: writeIdent,
 			precExpr: precExpr,
 			segCallLeadingBreakExpr: segCallLeadingBreakExpr,
-			body: body,
+			body: body
 		};
 		return isCallTriviaStar ? wrapChainTriviaBody(c) : wrapChainPlainBody(c);
 	}
@@ -461,7 +461,7 @@ class WriterLowering {
 			writeFnName: writeFnName,
 			hasPratt: hasPratt,
 			argNames: argNames,
-			precPostfix: precPostfix,
+			precPostfix: precPostfix
 		};
 
 		// ---- Ternary ----
@@ -580,7 +580,7 @@ class WriterLowering {
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, elemCallArgs),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 
 		final argsAccess: Expr = macro $i{argNames[1]};
@@ -604,7 +604,7 @@ class WriterLowering {
 			callInsideClose: callInside.close,
 			wrapRulesField: wrapRulesField,
 			methodChainField: methodChainField,
-			elemCall: elemCall,
+			elemCall: elemCall
 		};
 		final sepListCall: Expr = lowerPostfixSepListCall(c);
 		// ω-cond-end-call-glue: a callee whose trailing visible text ends with
@@ -695,7 +695,7 @@ class WriterLowering {
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, elemCallArgs),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 
 		final argsAccess: Expr = macro $i{argNames[0]};
@@ -733,7 +733,7 @@ class WriterLowering {
 			leadText: leadText,
 			trailText: trailText,
 			sepText: sepText,
-			starNode: starNode,
+			starNode: starNode
 		};
 		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
 		final emission: Expr = isTriviaStar ? lowerEnumStarTrivia(c) : lowerEnumStarPlain(c);
@@ -1278,7 +1278,7 @@ class WriterLowering {
 			final bareBranch: Expr = blockShapeAware ? fallback : (macro _dhl());
 			final cases: Array<Case> = [
 				{ values: blockPatterns, expr: blockBranch, guard: null },
-				{ values: [macro _], expr: bareBranch, guard: null },
+				{ values: [macro _], expr: bareBranch, guard: null }
 			];
 			{ expr: ESwitch(prevBareRefBody.access, cases, null), pos: Context.currentPos() };
 		};
@@ -1287,13 +1287,13 @@ class WriterLowering {
 		else {
 			final prevElemBodyAccess: Expr = {
 				expr: EField(macro _arr[_si - 1].node, elemBodyField),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
 			final bareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
 			final cases: Array<Case> = [
 				{ values: blockPatterns, expr: blockBranch, guard: null },
-				{ values: [macro _], expr: bareBranch, guard: null },
+				{ values: [macro _], expr: bareBranch, guard: null }
 			];
 			{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
 		};
@@ -1638,7 +1638,7 @@ class WriterLowering {
 		return {
 			interMemberInfo: interMemberInfo,
 			staticVarSubdivInfo: staticVarSubdivInfo,
-			condLeadingDocInfo: condLeadingDocInfo,
+			condLeadingDocInfo: condLeadingDocInfo
 		};
 	}
 
@@ -2178,7 +2178,7 @@ class WriterLowering {
 			final nlFieldName: String = starNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
 			final beforeNlAccess: Expr = {
 				expr: EField(macro value, nlFieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			macro {
 				final _patListDoc: anyparse.core.Doc = $listCall;
@@ -2360,24 +2360,24 @@ class WriterLowering {
 			final firstBareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
 			final firstShapeCases: Array<Case> = [
 				{ values: blockPatterns, expr: firstBlockBranch, guard: null },
-				{ values: [macro _], expr: firstBareBranch, guard: null },
+				{ values: [macro _], expr: firstBareBranch, guard: null }
 			];
 			final firstSepShape: Expr = {
 				expr: ESwitch(prevBareRefBody.access, firstShapeCases, null),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			final subsequentSepExpr: Expr = if (elemBodyField == null)
 				sepExpr;
 			else {
 				final prevElemBodyAccess: Expr = {
 					expr: EField(macro _arr[_si - 1], elemBodyField),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				};
 				final subBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
 				final subBareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
 				final cases: Array<Case> = [
 					{ values: blockPatterns, expr: subBlockBranch, guard: null },
-					{ values: [macro _], expr: subBareBranch, guard: null },
+					{ values: [macro _], expr: subBareBranch, guard: null }
 				];
 				{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
 			};
@@ -2419,7 +2419,7 @@ class WriterLowering {
 			final fieldName: String = starNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
 			final sepBeforeAccess: Expr = {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			final sepText: Null<String> = starNode.annotations[AnnotationKeys.LIT_SEP_TEXT];
 			final sepLeadText: String = '${sepText ?? ','} ';
@@ -2619,7 +2619,7 @@ class WriterLowering {
 			padTrailing: padTrailing,
 			lineLengthAwareSeps: lineLengthAwareSeps,
 			sepBeforeOptActive: sepBeforeOptActive,
-			softFill: softFill,
+			softFill: softFill
 		};
 		emitTryparsePadEmit(c, padFlags, parts);
 	}
@@ -2730,7 +2730,7 @@ class WriterLowering {
 			trailCloseAccess: trailCloseAccess,
 			trailOpenAccess: trailOpenAccess,
 			trailBAAccess: trailBAAccess,
-			trailPresentAccess: trailPresentAccess,
+			trailPresentAccess: trailPresentAccess
 		};
 	}
 
@@ -2812,7 +2812,7 @@ class WriterLowering {
 			closeText: closeText,
 			sepText: sepText,
 			prevBareRefBody: prevBareRefBody,
-			prevTrailFieldName: prevTrailFieldName,
+			prevTrailFieldName: prevTrailFieldName
 		};
 
 		// Trivia Star: the Array element type is Trivial<elemT>, and the
@@ -2830,7 +2830,7 @@ class WriterLowering {
 
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro opt]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final plainCtx: PlainStarCtx = {
 			starNode: starNode,
@@ -2845,7 +2845,7 @@ class WriterLowering {
 			openText: openText,
 			closeText: closeText,
 			sepText: sepText,
-			prevBareRefBody: prevBareRefBody,
+			prevBareRefBody: prevBareRefBody
 		};
 
 		// @:raw types (string content): concatenate items with no whitespace,
@@ -3061,7 +3061,7 @@ class WriterLowering {
 		final keepExpr: Expr = if (hasKeepSlot) {
 			final slotAccess: Expr = {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			macro ($slotAccess ? _dhl() : _dt(' '));
 		} else
@@ -3072,7 +3072,7 @@ class WriterLowering {
 		if (blockPatterns.length == 0) return withPadTrailingDrop(prevPadTrailing, flagBased);
 		final cases: Array<Case> = [
 			{ values: blockPatterns, expr: flagBased, guard: null },
-			{ values: [macro _], expr: macro _dhl(), guard: null },
+			{ values: [macro _], expr: macro _dhl(), guard: null }
 		];
 		final shapeAwareSwitch: Expr = { expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos() };
 		return sameLineSeparatorShapeAware({
@@ -3082,7 +3082,7 @@ class WriterLowering {
 			flagBased: flagBased,
 			shapeAwareSwitch: shapeAwareSwitch,
 			hasKeepSlot: hasKeepSlot,
-			fieldName: fieldName,
+			fieldName: fieldName
 		});
 	}
 
@@ -3260,7 +3260,7 @@ class WriterLowering {
 			if (isOptKw) {
 				final slotAccess: Expr = {
 					expr: EField(macro value, nextFieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
-					pos: Context.currentPos(),
+					pos: Context.currentPos()
 				};
 				out.push({ guard: macro $nextAccess != null, signal: slotAccess });
 				continue;
@@ -3296,7 +3296,7 @@ class WriterLowering {
 		if (childFieldName != null && child.kind == Ref && child.fmtHasFlag('captureSourceNewlineAfter')) {
 			final terminalSlot: Expr = {
 				expr: EField(macro value, childFieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			// Always-on guard. For an optional `child` the slot stores
 			// whatever `collectTrivia` saw at the post-rewind position
@@ -3347,7 +3347,7 @@ class WriterLowering {
 		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
 		final flagSwitch: Expr = buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
 			{ values: ['Next'], expr: nextLayoutExpr },
-			{ values: ['Keep'], expr: sameLayoutExpr },
+			{ values: ['Keep'], expr: sameLayoutExpr }
 		], sameLayoutExpr);
 		final blockPatterns: Array<Expr> = shapeAware ? collectBlockCtorPatterns(bodyTypePath) : [];
 		// ω-block-allman-leftcurly: when the body's runtime ctor is a block,
@@ -3373,7 +3373,7 @@ class WriterLowering {
 		else {
 			final shapeCases: Array<Case> = [
 				{ values: blockPatterns, expr: blockLayoutExpr, guard: null },
-				{ values: [macro _], expr: flagSwitch, guard: null },
+				{ values: [macro _], expr: flagSwitch, guard: null }
 			];
 			{ expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos() };
 		};
@@ -3425,7 +3425,7 @@ class WriterLowering {
 		else {
 			final shapeCases: Array<Case> = [
 				{ values: blockPatterns, expr: sameLayoutExpr, guard: null },
-				{ values: [macro _], expr: nextLayoutExpr, guard: null },
+				{ values: [macro _], expr: nextLayoutExpr, guard: null }
 			];
 			{ expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos() };
 		};
@@ -3880,7 +3880,7 @@ class WriterLowering {
 			writeCall: writeCall,
 			sameSepNb: kwSep.sameSepNb,
 			kwPolicyInlineSep: kwSep.kwPolicyInlineSep,
-			hasKwSlots: hasKwSlots,
+			hasKwSlots: hasKwSlots
 		};
 		final sameLayoutExpr: Expr = buildBodySameLayout(opts, shared);
 		final nextLayoutExpr: Expr = buildBodyNextLayout(opts, shared);
@@ -3891,7 +3891,7 @@ class WriterLowering {
 			nextLayoutExpr: nextLayoutExpr,
 			blockLayoutExpr: blockLayoutExpr,
 			fitExpr: fitExpr,
-			elseIfSameLayoutExpr: buildElseIfCommentReflowLayout(opts, shared, sameLayoutExpr),
+			elseIfSameLayoutExpr: buildElseIfCommentReflowLayout(opts, shared, sameLayoutExpr)
 		};
 		final blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> } = collectBlockCtorPatternsByLeftCurly(opts.bodyTypePath);
 		final ifStmtPattern: Null<Expr> = opts.hasElseIf
@@ -3983,7 +3983,7 @@ class WriterLowering {
 			for (_ in 0...extras - 1) patternArgs.push(macro _);
 			final pattern: Expr = {
 				expr: ECall(ctorRef, patternArgs),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			cases.push({ values: [pattern], guard: macro _ct != null, expr: macro _de() });
 		}
@@ -4324,14 +4324,14 @@ class WriterLowering {
 			fnCtors: fnCtors,
 			condCtor: condCtor,
 			bodyField: bodyField,
-			fieldName: fieldName,
+			fieldName: fieldName
 		});
 		return {
 			classifierFieldName: fieldName,
 			classifyCases: cases,
 			betweenVarsField: betweenVarsField,
 			betweenFunctionsField: betweenFunctionsField,
-			afterVarsField: afterVarsField,
+			afterVarsField: afterVarsField
 		};
 	}
 
@@ -4397,12 +4397,12 @@ class WriterLowering {
 		final pos: Position = Context.currentPos();
 		final condCasePattern: Expr = {
 			expr: ECall({ expr: EConst(CIdent(condCtor)), pos: pos }, [macro _inner]),
-			pos: pos,
+			pos: pos
 		};
 		return {
 			classifierFieldName: fieldName,
 			condCasePattern: condCasePattern,
-			bodyFieldName: bodyField,
+			bodyFieldName: bodyField
 		};
 	}
 
@@ -4443,7 +4443,7 @@ class WriterLowering {
 			modifierFieldName: modifierField,
 			staticCtorName: staticCtor,
 			afterStaticVarsField: afterStaticVarsField,
-			betweenStaticFunctionsField: betweenStaticFunctionsField,
+			betweenStaticFunctionsField: betweenStaticFunctionsField
 		};
 	}
 
@@ -4549,7 +4549,7 @@ class WriterLowering {
 			betweenCtorInfos: ctorBlankInfos.between,
 			transitionAcrossInfos: ctorBlankInfos.transition,
 			headCtorInfos: headCtorInfos,
-			betweenSameCtorIfNotInfos: betweenSameCtorIfNotInfos,
+			betweenSameCtorIfNotInfos: betweenSameCtorIfNotInfos
 		};
 	}
 
@@ -4569,7 +4569,7 @@ class WriterLowering {
 		return {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
-			optField: r.optField,
+			optField: r.optField
 		};
 	}
 
@@ -4591,7 +4591,7 @@ class WriterLowering {
 		return {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
-			optField: r.optField,
+			optField: r.optField
 		};
 	}
 
@@ -4619,7 +4619,7 @@ class WriterLowering {
 		return {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
-			optField: r.optField,
+			optField: r.optField
 		};
 	}
 
@@ -4695,7 +4695,7 @@ class WriterLowering {
 			classifierFieldName: fieldName,
 			classifyCases: cases,
 			optField: optField,
-			tailAdapterOptField: tailAdapterField,
+			tailAdapterOptField: tailAdapterField
 		};
 	}
 
@@ -4717,7 +4717,7 @@ class WriterLowering {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
 			optField: r.optField,
-			prevExcludeCases: null,
+			prevExcludeCases: null
 		};
 	}
 
@@ -4743,7 +4743,7 @@ class WriterLowering {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
 			optField: r.optField,
-			prevExcludeCases: null,
+			prevExcludeCases: null
 		};
 	}
 
@@ -4801,7 +4801,7 @@ class WriterLowering {
 			classifierFieldName: target.fieldName,
 			classifyCases: target.cases,
 			optField: target.optField,
-			prevExcludeCases: exclude.cases,
+			prevExcludeCases: exclude.cases
 		};
 	}
 
@@ -4837,7 +4837,7 @@ class WriterLowering {
 		return {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
-			optField: r.optField,
+			optField: r.optField
 		};
 	}
 
@@ -4920,7 +4920,7 @@ class WriterLowering {
 			adapterOptField: adapterOptField,
 			tailAdapterOptField: tailAdapterOptField,
 			headAdapterOptField: headAdapterOptField,
-			transparentCtorNames: transparentCtorNames.copy(),
+			transparentCtorNames: transparentCtorNames.copy()
 		};
 	}
 
@@ -4961,7 +4961,7 @@ class WriterLowering {
 			enumRuleName: enumRuleName,
 			ctorNamesA: ctorNamesA,
 			ctorNamesB: ctorNamesB,
-			transparentCtorNames: transparentCtorNames,
+			transparentCtorNames: transparentCtorNames
 		});
 		for (name in ctorNamesA) if (built.matchedA.indexOf(name) < 0)
 			Context.fatalError(
@@ -4986,7 +4986,7 @@ class WriterLowering {
 			countOptField: countOptField,
 			tailAdapterOptField: tailAdapterOptField,
 			headAdapterOptField: headAdapterOptField,
-			transparentCtorNames: transparentCtorNames.copy(),
+			transparentCtorNames: transparentCtorNames.copy()
 		};
 	}
 
@@ -5103,7 +5103,7 @@ class WriterLowering {
 		return {
 			fieldName: fieldName,
 			cases: cases,
-			optField: optField,
+			optField: optField
 		};
 	}
 
@@ -5494,7 +5494,7 @@ class WriterLowering {
 			trailOpenAccess: trailOpenAccess,
 			trailBBAccess: trailBBAccess,
 			trailLCAccess: trailLCAccess,
-			sepTrailPresentAccess: sepTrailPresentAccess,
+			sepTrailPresentAccess: sepTrailPresentAccess
 		};
 		// ω-trivia-sep: sep-Star Alt branches (e.g. `HxExpr.ArrayExpr`)
 		// route to the dedicated sep helper. Block-style (no sep)
@@ -5752,7 +5752,7 @@ class WriterLowering {
 		final isInlineExpr: Expr = if (c.hasKeepSlot) {
 			final slotAccess: Expr = {
 				expr: EField(macro value, c.fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
 		} else
@@ -6512,8 +6512,8 @@ class WriterLowering {
 		final kwPolicyInlineSep: Null<Expr> = kwPolicyFlagName == null ? null : {
 			final kwOpt: Expr = optFieldAccess(kwPolicyFlagName);
 			{
-				expr: ESwitch(kwOpt, [{ values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null },], macro _de()),
-				pos: Context.currentPos(),
+				expr: ESwitch(kwOpt, [{ values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null }], macro _de()),
+				pos: Context.currentPos()
 			};
 		};
 		// ω-keep-degraded-optspace: default kw→body separator is `_dop(' ')`
@@ -6668,13 +6668,13 @@ class WriterLowering {
 		final bpPathLC: Array<String> = ['anyparse', 'format', 'BracePlacement'];
 		final nextPatLC: Expr = MacroStringTools.toFieldExpr(bpPathLC.concat(['Next']));
 		final isNextExpr: Expr = {
-			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro true, guard: null },], macro false),
-			pos: Context.currentPos(),
+			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro true, guard: null }], macro false),
+			pos: Context.currentPos()
 		};
 		final sameSepBlockSameLayout: Expr = kwPolicyInlineSep ?? macro _dt(' ');
 		final sameSepBlock: Expr = hasKwSlots ? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt) : {
-			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null },], sameSepBlockSameLayout),
-			pos: Context.currentPos(),
+			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null }], sameSepBlockSameLayout),
+			pos: Context.currentPos()
 		};
 		return macro _dc([$sameSepBlock, $writeCall]);
 	}
@@ -6745,7 +6745,7 @@ class WriterLowering {
 		};
 		final elseAccess: Expr = {
 			expr: EField(macro value, elseFieldName),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		return macro {
 			final _body: anyparse.core.Doc = $writeCall;
@@ -6772,7 +6772,7 @@ class WriterLowering {
 		final nextLayoutExpr: Expr = layouts.nextLayoutExpr;
 		final blockLayoutExpr: Expr = layouts.blockLayoutExpr;
 		final keepNextLayoutExpr: Expr = if (blockSplit.tagged.length > 0) {
-			final cases: Array<Case> = [{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null },];
+			final cases: Array<Case> = [{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null }];
 			cases.push({ values: [macro _], expr: nextLayoutExpr, guard: null });
 			{ expr: ESwitch(bodyValueExpr, cases, null), pos: Context.currentPos() };
 		}
@@ -6784,12 +6784,12 @@ class WriterLowering {
 		if (ifStmtPattern == null) return keepBaseExpr;
 		final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 		final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
-		final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
+		final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null }];
 		final elseIfSwitchForKeep: Expr = {
 			expr: ESwitch(macro opt.elseIf, elseIfCases, keepBaseExpr),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
-		final outerKeepBodyCases: Array<Case> = [{ values: [ifStmtPattern], expr: elseIfSwitchForKeep, guard: null },];
+		final outerKeepBodyCases: Array<Case> = [{ values: [ifStmtPattern], expr: elseIfSwitchForKeep, guard: null }];
 		outerKeepBodyCases.push({ values: [macro _], expr: keepBaseExpr, guard: null });
 		return { expr: ESwitch(bodyValueExpr, outerKeepBodyCases, null), pos: Context.currentPos() };
 	}
@@ -6815,20 +6815,20 @@ class WriterLowering {
 		final policyCases: Array<Case> = [
 			{ values: [samePat], expr: sameLayoutExpr, guard: null },
 			{ values: [nextPat], expr: nextLayoutExpr, guard: null },
-			{ values: [fitPat], expr: layouts.fitExpr, guard: null },
+			{ values: [fitPat], expr: layouts.fitExpr, guard: null }
 		];
 		final policySwitch: Expr = { expr: ESwitch(optFlag, policyCases, sameLayoutExpr), pos: Context.currentPos() };
 		final outerCases: Array<Case> = [];
 		if (ifStmtPattern != null) {
 			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 			final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
-			final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
+			final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null }];
 			// omega-elseif-comment-reflow: the glued arm is the ONE place the knob
 			// acts - `layouts.elseIfSameLayoutExpr` is `sameLayoutExpr` itself
 			// off-path, and the gated variant on it.
 			final elseIfSwitch: Expr = {
 				expr: ESwitch(macro opt.elseIf, elseIfCases, layouts.elseIfSameLayoutExpr),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			outerCases.push({ values: [ifStmtPattern], expr: elseIfSwitch, guard: null });
 		}
@@ -6844,7 +6844,7 @@ class WriterLowering {
 		// elseIf overrides — "keep" means preserve source, so the
 		// policy-driven layout shortcuts do not apply. Route the whole
 		// wrap through `keepLayoutExpr` when `opt.<flag> == Keep`.
-		final outerKeepCases: Array<Case> = [{ values: [keepPat], expr: keepLayoutExpr, guard: null },];
+		final outerKeepCases: Array<Case> = [{ values: [keepPat], expr: keepLayoutExpr, guard: null }];
 		return { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };
 	}
 
@@ -6875,7 +6875,7 @@ class WriterLowering {
 		final blockPatterns: Array<Expr> = blockSplit.tagged.concat(blockSplit.untagged);
 		final isBlockBodyExpr: Expr = blockPatterns.length == 0 ? macro false : {
 			expr: ESwitch(opts.bodyValueExpr, [{ values: blockPatterns, expr: macro true, guard: null }], macro false),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		return macro {
 			final _at556: Null<String> = $afterTrailRt;
@@ -7148,7 +7148,7 @@ class WriterLowering {
 			final suffixFn: String = writeFnFor(suffixRef);
 			final suffixCall: Expr = {
 				expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro opt]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			};
 			final close: String = postfixClose ?? '';
 			if (close.length > 0) {
@@ -8032,7 +8032,7 @@ class WriterLowering {
 				ifExprIndentArgs: ifExprIndentArgs,
 				singleLineFlagName: ctorSingleLineFlag,
 				singleLineMultiCtors: ctorSingleLineMultiCtors,
-				kwNewlineExpr: kwNewlineExpr,
+				kwNewlineExpr: kwNewlineExpr
 			})
 			: subCall;
 
@@ -8371,8 +8371,7 @@ class WriterLowering {
 		// enclosing `ParenExpr`, so the flag stays false and its chain keeps
 		// its own headBreak + Nest. Trivia-only.
 		if (parenHardFlatten && _ctx.trivia) optExpr = macro _setKeepChainInParen($optExpr, true, opt);
-		if (kwNewlineExpr != null) optExpr = macro _setVarKwNewline($optExpr, $kwNewlineExpr, opt);
-		return optExpr;
+		return kwNewlineExpr != null ? macro _setVarKwNewline($optExpr, $kwNewlineExpr, opt) : optExpr;
 	}
 
 	/**
@@ -8578,7 +8577,7 @@ class WriterLowering {
 		// `false` → emit captured bytes via `_dt(sourceText)`. Match fork's
 		// `printStringToken` bail-outs: any `{`/`}` in the slice → verbatim.
 		final captureSourceOpt: Null<String> = _ctx.trivia ? branch.fmtReadString('captureSource') : null;
-		var bodyExpr: Expr = if (captureSourceOpt != null) {
+		final bodyExpr: Expr = if (captureSourceOpt != null) {
 			final sourceAccess: Expr = macro $i{argNames[1]};
 			final optAccess: Expr = optFieldAccess(captureSourceOpt);
 			macro $optAccess && $sourceAccess.indexOf('{') < 0 && $sourceAccess.indexOf('}') < 0 ? $indentWrapped : _dt($sourceAccess);
@@ -8588,8 +8587,7 @@ class WriterLowering {
 		// body force-flat through `HardFlatten` so an inner chain collapses to
 		// one line (the fork never wraps expressions inside interpolations).
 		// The verbatim branch is a single Text → HardFlatten is a no-op.
-		if (branch.fmtHasFlag('captureSource')) bodyExpr = macro _dhf($bodyExpr);
-		return bodyExpr;
+		return branch.fmtHasFlag('captureSource') ? macro _dhf($bodyExpr) : bodyExpr;
 	}
 
 	/**
@@ -8804,7 +8802,7 @@ class WriterLowering {
 		final spineAccess: Expr = { expr: EField(macro _aifCur, spineField), pos: Context.currentPos() };
 		final stepCases: Array<Case> = [
 			{ values: [capture], expr: macro _aifCur = _aifInner, guard: null },
-			{ values: [macro _], expr: macro break, guard: null },
+			{ values: [macro _], expr: macro break, guard: null }
 		];
 		final stepSwitch: Expr = { expr: ESwitch(macro _aifNext, stepCases, null), pos: Context.currentPos() };
 		return macro {
@@ -8913,7 +8911,7 @@ class WriterLowering {
 			cases.push({
 				values: [{ expr: ECall(ctorRef, args), pos: pos }],
 				expr: macro _aifValueTrail == null,
-				guard: null,
+				guard: null
 			});
 		}
 		if (cases.length == 0) return macro true;
@@ -9012,7 +9010,7 @@ class WriterLowering {
 			? macro _u.block.stmts.length == 0 && _u.block.stmtsTrailingOpen == null && _u.block.stmtsTrailingLeading.length == 0
 			: macro _u.block.stmts.length == 0;
 		final bodySwitchExpr: Expr = switch bodyTypeName {
-			case 'HxFnBody' | 'HxFnBodyT':
+			case 'HxFnBody', 'HxFnBodyT':
 				macro switch _body {
 					case NoBody: true;
 					case BlockBody(_b): $blockEmptyExpr;
@@ -9020,7 +9018,7 @@ class WriterLowering {
 					case ExprBody(_): false;
 					case CondBody(_): false;
 				};
-			case 'HxFnExprBody' | 'HxFnExprBodyT':
+			case 'HxFnExprBody', 'HxFnExprBodyT':
 				macro switch _body {
 					case BlockBody(_b): $blockEmptyExpr;
 					case ExprBody(_): false;
@@ -9309,7 +9307,7 @@ class WriterLowering {
 				hasElseIf: false,
 				elseFieldName: null,
 				bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
-				metaBlockGlueArgs: wrapMetaBlockGlue,
+				metaBlockGlueArgs: wrapMetaBlockGlue
 			});
 			chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;
 			i--;
@@ -9450,7 +9448,7 @@ class WriterLowering {
 			condFitGroup: condFitGroup,
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
 			arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
-			loopBodyIfElseArgs: loopBodyIfElseArgs,
+			loopBodyIfElseArgs: loopBodyIfElseArgs
 		}));
 		return { access: fieldAccess, typePath: refName };
 	}
@@ -9507,7 +9505,7 @@ class WriterLowering {
 				$flagAccess = _f;
 				_c;
 			}),
-			baseRawWriteCall,
+			baseRawWriteCall
 		];
 		return { expr: EBlock(block), pos: pos };
 	}
@@ -9712,7 +9710,7 @@ class WriterLowering {
 			final kwOptParts: Array<Expr> = [
 				sepWithBeforeKwTrailingExpr,
 				macro _dt($v{kwLead}),
-				innerExpr,
+				innerExpr
 			];
 			final kwOptBody: Expr = dcCall(kwOptParts);
 			parts.push(macro {
@@ -9948,7 +9946,7 @@ class WriterLowering {
 					endIdx: i,
 					leadText: startLead,
 					trailText: endTrail,
-					knob: startKnob,
+					knob: startKnob
 				};
 			}
 		}
@@ -10190,7 +10188,7 @@ class WriterLowering {
 				indentObjArgs: indentObjArgs,
 				inlineBlockBodyArgs: inlineBlockBodyArgs,
 				arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
-				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow'),
+				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow')
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
 			// ω-cond-comp-expr-body-nest: optional-kw-Ref body
@@ -10244,7 +10242,7 @@ class WriterLowering {
 			elseFieldName: elseFieldName,
 			afterTrailExpr: afterTrailExpr,
 			indentObjArgs: indentObjArgs,
-			inlineBlockBodyArgs: inlineBlockBodyArgs,
+			inlineBlockBodyArgs: inlineBlockBodyArgs
 		}));
 	}
 
@@ -10450,8 +10448,7 @@ class WriterLowering {
 	private function subPositionSuppressOpt(child: ShapeNode, e: Expr): Expr {
 		var out: Expr = e;
 		if (child.fmtHasFlag('suppressCallRestProbe')) out = macro _setSuppressCallRestProbe($out, true, opt);
-		if (child.fmtHasFlag('suppressComplexItems')) out = macro _setSuppressComplexItems($out, opt);
-		return out;
+		return child.fmtHasFlag('suppressComplexItems') ? macro _setSuppressComplexItems($out, opt) : out;
 	}
 
 	/**
@@ -10557,7 +10554,7 @@ class WriterLowering {
 		};
 		final baseRawWriteCall: Expr = {
 			expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(boolFlagArgs, baseRawWriteCall, typePath, propagateExpr);
 		// ω-condition-parens (Stage C): `@:fmt(sharpCondParensInside('<openKnob>',
@@ -10750,7 +10747,7 @@ class WriterLowering {
 			final thisTransparent: Expr = macro $fieldAccess == null || $fieldAccess.length == 0;
 			return {
 				prevAnyStarNonEmpty: null,
-				prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent),
+				prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent)
 			};
 		}
 		// ω-member-meta: inter-Star separator — a non-first bare-tryparse Star
@@ -10784,7 +10781,7 @@ class WriterLowering {
 			prevAnyStarNonEmpty: !isBareTryparseStar(child)
 				? null
 				: afterAlwaysEmits ? (macro true) : orStarNonEmpty(prevAnyStarNonEmpty, fieldAccess),
-			prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent),
+			prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent)
 		};
 	}
 
@@ -10825,7 +10822,7 @@ class WriterLowering {
 		final optArgExpr: Expr = optionalRefOptArgExpr(child, refName, elseChainSuppressExpr);
 		final rawWriteCall: Expr = {
 			expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// ω-indent-objectliteral / ω-expr-body-indent-objectliteral: the additive
 		// `maybeIndentValueIfCtor` Nest is SKIPPED when a same-field
@@ -11045,7 +11042,7 @@ class WriterLowering {
 		return {
 			prevBodyField: justWrappedBody,
 			prevPadTrailing: composePadTrailing(prevPadTrailing, thisPad, thisTransparent),
-			prevTrailFieldName: newPrevTrailFieldName,
+			prevTrailFieldName: newPrevTrailFieldName
 		};
 	}
 
@@ -11113,7 +11110,7 @@ class WriterLowering {
 			hasCondWrap: condWrapArgs != null,
 			fieldAccess: fieldAccess,
 			hasStructFieldTrailOptSlot: hasStructFieldTrailOptSlot,
-			structTrailOptAccess: structTrailOptAccess,
+			structTrailOptAccess: structTrailOptAccess
 		};
 	}
 
@@ -11327,7 +11324,7 @@ class WriterLowering {
 		final arrayField: Expr = optFieldAccess('arrayLiteralBrackets$suffix');
 		final kindCases: Array<Case> = [
 			{ values: [macro 1], expr: mapField, guard: null },
-			{ values: [macro 2], expr: comprField, guard: null },
+			{ values: [macro 2], expr: comprField, guard: null }
 		];
 		final policyExpr: Expr = { expr: ESwitch(macro _abk, kindCases, arrayField), pos: Context.currentPos() };
 		final spaceSwitch: Expr = buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], macro _abp, [
@@ -11696,7 +11693,7 @@ class WriterLowering {
 	private static inline function beforeNewlineAccess(fieldName: String): Expr {
 		return {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -11711,7 +11708,7 @@ class WriterLowering {
 	private static inline function beforeLeadingAccess(fieldName: String): Expr {
 		return {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -11723,7 +11720,7 @@ class WriterLowering {
 	private static inline function beforeNewlineNotAccess(fieldName: String): Expr {
 		return {
 			expr: EUnop(OpNot, false, beforeNewlineAccess(fieldName)),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -11771,7 +11768,7 @@ class WriterLowering {
 	private static function sameLinePolicySwitch(optFlag: Expr, keepExpr: Expr): Expr {
 		return buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
 			{ values: ['Next'], expr: macro _dhl() },
-			{ values: ['Keep'], expr: keepExpr },
+			{ values: ['Keep'], expr: keepExpr }
 		], macro _dt(' '));
 	}
 
@@ -11908,7 +11905,7 @@ class WriterLowering {
 		// width is identical (1) so layout decisions stay byte-identical
 		// outside the after-hardline state; `Next` branch unaffected.
 		final defaultExpr: Expr = optSpaceUpstream ? macro _de() : macro _dossh();
-		final cases: Array<Case> = [{ values: [nextPat], expr: macro _dhl(), guard: null },];
+		final cases: Array<Case> = [{ values: [nextPat], expr: macro _dhl(), guard: null }];
 		return { expr: ESwitch(knobExpr, cases, defaultExpr), pos: Context.currentPos() };
 	}
 
@@ -11930,7 +11927,7 @@ class WriterLowering {
 						for (name in spec.values) MacroStringTools.toFieldExpr(policyModule.concat([name]))
 					],
 					expr: spec.expr,
-					guard: null,
+					guard: null
 				}
 		];
 		return { expr: ESwitch(scrutinee, cases, dflt), pos: Context.currentPos() };
@@ -12231,7 +12228,7 @@ class WriterLowering {
 			buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
 				{ values: ['Before'], expr: macro _dc([_dt(' '), _dt($v{leadText})]) },
 				{ values: ['After'], expr: macro _dc([_dt($v{leadText}), _dop(' ')]) },
-				{ values: ['Both'], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]) },
+				{ values: ['Both'], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]) }
 			], macro _dt($v{leadText}))
 		else if (child.fmtHasFlag('spaceAfterLead'))
 			macro _dc([_dt($v{leadText}), _dop(' ')])
@@ -12255,7 +12252,7 @@ class WriterLowering {
 		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
 			{ values: ['Before'], expr: macro _dt($v{' ' + opText}) },
 			{ values: ['After'], expr: macro _dt($v{opText + ' '}) },
-			{ values: ['Both'], expr: macro _dt($v{' ' + opText + ' '}) },
+			{ values: ['Both'], expr: macro _dt($v{' ' + opText + ' '}) }
 		], macro _dt($v{opText}));
 	}
 
@@ -12282,7 +12279,7 @@ class WriterLowering {
 		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess('intervalPolicy'), [
 			{ values: ['Before'], expr: beforeExpr },
 			{ values: ['After'], expr: afterExpr },
-			{ values: ['Both'], expr: bothExpr },
+			{ values: ['Both'], expr: bothExpr }
 		], tightDoc);
 	}
 
@@ -12443,7 +12440,7 @@ class WriterLowering {
 			prevVars: [],
 			currVars: [],
 			currCompute: [],
-			trackPrev: [],
+			trackPrev: []
 		};
 
 		emitAfterCompute(acc, afterInfos, pos);
@@ -12475,7 +12472,7 @@ class WriterLowering {
 			currCompute: currComputeExpr,
 			trackPrev: trackPrevExpr,
 			blanksCount: blanksCountExpr,
-			headEmit: headEmit,
+			headEmit: headEmit
 		};
 	}
 
@@ -12582,7 +12579,7 @@ class WriterLowering {
 		if (hasPratt) args.push(macro $v{ctxPrec});
 		return {
 			expr: ECall(macro $i{writeFnName}, args),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 	}
 
@@ -12591,16 +12588,13 @@ class WriterLowering {
 	}
 
 	private static function hasPrattBranch(node: ShapeNode): Bool {
-		for (branch in node.children) if (
-			branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null
-		)
-			return true;
-		return false;
+		return node.children.exists(
+			branch -> branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null
+		);
 	}
 
 	private static function hasPostfixBranch(node: ShapeNode): Bool {
-		for (branch in node.children) if (branch.annotations.get(AnnotationKeys.POSTFIX_OP) != null) return true;
-		return false;
+		return node.children.exists(branch -> branch.annotations.get(AnnotationKeys.POSTFIX_OP) != null);
 	}
 
 	private static function simpleName(typePath: String): String {
@@ -12727,7 +12721,7 @@ class WriterLowering {
 				patterns.push({
 					pattern: { expr: ECall(ctorIdent, binders), pos: pos },
 					isMatch: true,
-					isTransparent: false,
+					isTransparent: false
 				});
 			} else if (isTransparent) {
 				if (arity < 1)
@@ -12741,7 +12735,7 @@ class WriterLowering {
 				patterns.push({
 					pattern: { expr: ECall(ctorIdent, binders), pos: pos },
 					isMatch: false,
-					isTransparent: true,
+					isTransparent: true
 				});
 			} else {
 				final pattern: Expr = arity == 0 ? ctorIdent : {
@@ -12770,7 +12764,7 @@ class WriterLowering {
 			case PostfixOpSpace: TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
 			case ChainAfterComment: TriviaTypeSynth.isInfixChainBranch(branch);
 			case ChainRhsTrail: TriviaTypeSynth.isRhsTrailBranch(branch);
-			case TernaryCondTrail | TernaryThenTrail: TriviaTypeSynth.isTernaryTrailBranch(branch);
+			case TernaryCondTrail, TernaryThenTrail: TriviaTypeSynth.isTernaryTrailBranch(branch);
 		};
 	}
 
@@ -12846,7 +12840,7 @@ class WriterLowering {
 				final innerBodyAccess: Expr = { expr: EField(macro _inner, bodyField), pos: pos };
 				final innerClassifier: Expr = {
 					expr: EField({ expr: EField(macro $innerBodyAccess[0], 'node'), pos: pos }, fieldName),
-					pos: pos,
+					pos: pos
 				};
 				final innerSwitch: Expr = { expr: ESwitch(innerClassifier, innerCases, null), pos: pos };
 				macro ($innerBodyAccess.length > 0 ? $innerSwitch : 0);
@@ -13140,7 +13134,7 @@ class WriterLowering {
 		if (!c.isTriviaStar) return dcExpr;
 		final closeTrailRef: Expr = {
 			expr: EConst(CIdent(c.argNames[2])),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		return macro {
 			final _dcResult: anyparse.core.Doc = $dcExpr;
@@ -13415,8 +13409,7 @@ class WriterLowering {
 	 * tail-null tracker for tail-adapter infos). Appends to `acc`.
 	 */
 	private static function emitAfterCompute(acc: CascadeAccum, afterInfos: Array<AfterCtorBlankInfo>, pos: Position): Void {
-		for (i in 0...afterInfos.length) {
-			final info: AfterCtorBlankInfo = afterInfos[i];
+		for (i => info in afterInfos) {
 			acc.prevVars.push({ name: '_prevKindAfter$i', type: macro :Int, expr: macro 0 });
 			acc.currVars.push({ name: '_currKindAfter$i', type: macro :Int, expr: macro 0 });
 			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
@@ -13455,7 +13448,7 @@ class WriterLowering {
 								: macro {
 									$kindIdent = 0;
 									$tailNullIdent = 0;
-								},
+								}
 						}
 					}
 				];
@@ -13476,8 +13469,7 @@ class WriterLowering {
 	 * Appends to `acc`.
 	 */
 	private static function emitBeforeCompute(acc: CascadeAccum, beforeInfos: Array<BeforeCtorBlankInfo>, pos: Position): Void {
-		for (i in 0...beforeInfos.length) {
-			final info: BeforeCtorBlankInfo = beforeInfos[i];
+		for (i => info in beforeInfos) {
 			acc.prevVars.push({ name: '_prevKindBefore$i', type: macro :Int, expr: macro 0 });
 			acc.currVars.push({ name: '_currKindBefore$i', type: macro :Int, expr: macro 0 });
 			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
@@ -13512,8 +13504,7 @@ class WriterLowering {
 	 * Appends to `acc`.
 	 */
 	private static function emitBetweenCompute(acc: CascadeAccum, betweenInfos: Array<BetweenCtorBlankInfo>, pos: Position): Void {
-		for (i in 0...betweenInfos.length) {
-			final info: BetweenCtorBlankInfo = betweenInfos[i];
+		for (i => info in betweenInfos) {
 			acc.prevVars.push({ name: '_prevTailKindBetween$i', type: macro :Int, expr: macro 0 });
 			acc.prevVars.push({ name: '_prevTailPathBetween$i', type: macro :String, expr: macro '' });
 			acc.currVars.push({ name: '_currTailKindBetween$i', type: macro :Int, expr: macro 0 });
@@ -13606,7 +13597,7 @@ class WriterLowering {
 									$tailPathIdent = '';
 									$headKindIdent = 0;
 									$headPathIdent = '';
-								},
+								}
 					}
 			];
 			acc.currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
@@ -13627,8 +13618,7 @@ class WriterLowering {
 	private static function emitBetweenIfNotCompute(
 		acc: CascadeAccum, betweenIfNotInfos: Array<BetweenSameCtorIfNotInfo>, pos: Position
 	): Void {
-		for (i in 0...betweenIfNotInfos.length) {
-			final info: BetweenSameCtorIfNotInfo = betweenIfNotInfos[i];
+		for (i => info in betweenIfNotInfos) {
 			acc.prevVars.push({ name: '_prevKindBetweenIfNot$i', type: macro :Int, expr: macro 0 });
 			acc.currVars.push({ name: '_currKindBetweenIfNot$i', type: macro :Int, expr: macro 0 });
 			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
@@ -13662,8 +13652,7 @@ class WriterLowering {
 	 * pair. Appends to `acc`.
 	 */
 	private static function emitTransitionCompute(acc: CascadeAccum, transitionInfos: Array<TransitionAcrossInfo>, pos: Position): Void {
-		for (i in 0...transitionInfos.length) {
-			final info: TransitionAcrossInfo = transitionInfos[i];
+		for (i => info in transitionInfos) {
 			acc.prevVars.push({ name: '_prevTailKindAcrossA$i', type: macro :Int, expr: macro 0 });
 			acc.prevVars.push({ name: '_prevTailKindAcrossB$i', type: macro :Int, expr: macro 0 });
 			acc.currVars.push({ name: '_currTailKindAcrossA$i', type: macro :Int, expr: macro 0 });
@@ -13745,7 +13734,7 @@ class WriterLowering {
 								$hkaIdent = 0;
 								$hkbIdent = 0;
 							};
-						},
+						}
 					}
 			];
 			acc.currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
@@ -14039,7 +14028,7 @@ class WriterLowering {
 					{ name: '_bamAt', type: macro :Int, expr: macro _inner.length },
 					{ name: '_bamHad', type: macro :Bool, expr: macro false }
 				]),
-				pos: Context.currentPos(),
+				pos: Context.currentPos()
 			},
 			seenExpr: macro _bamHad = _inner.length > _bamAt,
 			applyExpr: macro {
@@ -14057,7 +14046,7 @@ class WriterLowering {
 						}
 					}
 				}
-			},
+			}
 		};
 	}
 
@@ -14247,7 +14236,7 @@ class WriterLowering {
 		final structuralCall: Expr = { expr: ECall(structuralFn, [macro _csUnits[_csS]]), pos: Context.currentPos() };
 		final unitProbeCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _csUnits[_csK], macro _csOpt]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		// omega-case-body-controlflow-glue: emitted ONLY when the element rule's
 		// body Star carries `@:fmt(refuseGlueOnControlFlowRoot)` - the same meta

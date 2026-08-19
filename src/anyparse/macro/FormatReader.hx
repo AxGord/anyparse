@@ -364,7 +364,7 @@ class FormatReader {
 			anyType: null,
 			spacedLeads: [],
 			tightLeads: [],
-			commentPatterns: [],
+			commentPatterns: []
 		};
 	}
 
@@ -391,7 +391,7 @@ class FormatReader {
 			anyType: readStringFieldOpt(cl, 'anyType'),
 			spacedLeads: readStringArrayField(cl, 'spacedLeads'),
 			tightLeads: readStringArrayField(cl, 'tightLeads'),
-			commentPatterns: readCommentPatterns(cl),
+			commentPatterns: readCommentPatterns(cl)
 		};
 	}
 

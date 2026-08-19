@@ -91,7 +91,7 @@ final class CallSites {
 		'StaticFinalStmt',
 		'Required',
 		'Optional',
-		'Rest',
+		'Rest'
 	];
 
 	/**

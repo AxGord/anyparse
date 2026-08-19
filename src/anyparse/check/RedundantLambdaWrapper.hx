@@ -202,8 +202,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	/** Whether `name` occurs anywhere in `node`'s subtree, in ANY slot — the deliberately blunt reading of "used nowhere else". */
 	private static function mentions(node: QueryNode, name: String): Bool {
 		if (node.name == name) return true;
-		for (c in node.children) if (mentions(c, name)) return true;
-		return false;
+		return node.children.exists(c -> mentions(c, name));
 	}
 
 	/** Whether the forwarded callee resolves to a declaration this rule may reduce to a method value. */
@@ -334,8 +333,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 
 	/** Whether every declared parameter is required, undefaulted and non-rest — the shape a method value keeps. */
 	private static function plainParams(decl: QueryNode, seams: Seams): Bool {
-		for (c in decl.children) if (seams.paramKinds.contains(c.kind) && !plainBinder(c, seams)) return false;
-		return true;
+		return decl.children.foreach(c -> !seams.paramKinds.contains(c.kind) || plainBinder(c, seams));
 	}
 
 	/**

@@ -1,10 +1,10 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
-import anyparse.core.ShapeTree;
 
 using Lambda;
 
@@ -80,7 +80,7 @@ class TransformLowering {
 				typePath: name,
 				fnName: transformFnName(name),
 				paramCT: ct,
-				body: lowerRule(name, node, hookName),
+				body: lowerRule(name, node, hookName)
 			});
 		}
 
@@ -89,7 +89,7 @@ class TransformLowering {
 			rootCT: pathToComplexType(_shape.root),
 			rootFnName: transformFnName(_shape.root),
 			fns: fns,
-			hooks: hooks,
+			hooks: hooks
 		};
 	}
 
@@ -168,7 +168,7 @@ class TransformLowering {
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
 		final pattern: Expr = {
 			expr: ECall(ctorRef, [for (name in argNames) macro $i{name}]),
-			pos: Context.currentPos(),
+			pos: Context.currentPos()
 		};
 		final rebuiltArgs: Array<Expr> = [
 			for (i in 0...branch.children.length)
@@ -286,7 +286,7 @@ class TransformLowering {
 			case Star:
 				isTransformable(node.children[0]);
 			case Seq, Alt:
-				node.children.exists(c -> isTransformable(c));
+				node.children.exists(isTransformable);
 			case Terminal, Opt:
 				false;
 		};

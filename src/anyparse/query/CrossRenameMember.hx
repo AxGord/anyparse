@@ -208,7 +208,7 @@ final class CrossRenameMember {
 		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
 		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return Err(
-			'$cursorFile does not parse: ${exception.toString()}'
+			'$cursorFile does not parse: $exception'
 		)
 		catch (exception: Exception) return Err('$cursorFile does not parse: ${exception.message}');
 
@@ -463,7 +463,7 @@ final class CrossRenameMember {
 			final newSource: String = RefactorSupport.applyEdits(entry.source, edits);
 
 			final newTree: QueryNode = try plugin.parseFile(newSource) catch (exception: ParseError) return Err(
-				'rewritten ${entry.file} does not parse: ${exception.toString()}'
+				'rewritten ${entry.file} does not parse: $exception'
 			)
 			catch (exception: Exception) return Err('rewritten ${entry.file} does not parse: ${exception.message}');
 

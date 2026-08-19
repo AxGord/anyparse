@@ -4,6 +4,7 @@ import anyparse.query.StdlibDupScan.CandidateParam;
 import anyparse.query.StdlibDupScan.StdlibCandidate;
 import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 #if nodejs
@@ -341,8 +342,7 @@ final class StdlibDifferential {
 
 	/** Whether any disqualifying spelling occurs in the candidate's own text. */
 	private static function mentionsAny(source: String, markers: Array<String>): Bool {
-		for (marker in markers) if (source.indexOf(marker) >= 0) return true;
-		return false;
+		return markers.exists(marker -> source.indexOf(marker) >= 0);
 	}
 
 	/**

@@ -76,7 +76,7 @@ final class ElseIfCommentReflow {
 	public static function insertHeadTrail(bodyDoc: Doc, trailing: Doc): Null<Doc> {
 		return switch scan(bodyDoc, trailing, false) {
 			case Anchored(doc): doc;
-			case Scanning(_) | Refused: null;
+			case Scanning(_), Refused: null;
 		};
 	}
 
@@ -116,7 +116,7 @@ final class ElseIfCommentReflow {
 	private static function scan(doc: Doc, trailing: Doc, afterCond: Bool): ElseIfHeadScan {
 		return switch doc {
 			// Invisible or width-only glue - neither ends nor breaks the head line.
-			case Empty | OptSpace(_) | OptSpaceSkipAfterHardline:
+			case Empty, OptSpace(_), OptSpaceSkipAfterHardline:
 				Scanning(afterCond);
 			// Rendered head tokens: the `if` keyword, the body-policy space, the
 			// then-body block's `{`.
