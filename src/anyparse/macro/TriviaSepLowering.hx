@@ -554,7 +554,13 @@ final class TriviaSepLowering {
 			// own-line close (`triviaTrailDocKeepAware`).
 			_parts.push(_noWrapFlatten ? _de() : $triviaTrailDocKeepAware);
 			_parts.push(_dt($v{c.closeText}));
-			if (_trailClose != null) _parts.push(trailingCommentDocVerbatim(_trailClose, opt));
+			// ω-sep-star-close-trail: guarded, not verbatim — a `//` close-trailing
+			// ends its source line, and the enclosing list glues its separator
+			// after this Doc (`} // c` + `,` became the comment text `} // c,`).
+			// The guard is forward-looking and drops when the next emit is
+			// already a hardline, so a close-trailing with nothing after it on
+			// the line stays byte-identical.
+			if (_trailClose != null) _parts.push(trailingCommentDocGuarded(_trailClose, opt));
 			// ω-force-flat-engine slice D follow-up: trivia branch builds
 			// hardlined Doc by hand instead of going through one of the 4
 			// cascade-emit functions Slice C wraps. Without `_dwb` here a
@@ -1357,12 +1363,44 @@ final class TriviaSepLowering {
 			// and an enclosing Group defers the grid's hardlines.
 			final _keepMatrixDoc: Null<anyparse.core.Doc> = $keepMatrixComputeExpr;
 			if (_keepMatrixDoc != null) {
-				_dwb(_dbg(_keepMatrixDoc));
+				${triviaSepCloseTrailAppendExpr(macro _dwb(_dbg(_keepMatrixDoc)))};
 			} else if (_forceMulti) {
 				$forceMultiExpr;
 			} else {
-				$noTriviaBranch;
+				${triviaSepCloseTrailAppendExpr(noTriviaBranch)};
 			}
+		};
+	}
+
+	/**
+	 * ω-sep-star-close-trail: append the Star's close-trailing comment
+	 * (`_trailClose`) to a branch Doc that does not emit the slot itself.
+	 *
+	 * `_trailClose` holds a same-line comment captured AFTER the Star's close
+	 * literal — `{a: 1} /* c *\/` parks the comment on the OBJECT literal's
+	 * `fieldsTrailingClose`, never on the enclosing array element's
+	 * `Trivial.trailingComment`, so the enclosing list cannot rescue it. Before
+	 * this wrapper only three emit paths read the slot back out: the two
+	 * empty-list arms (`_arr.length == 0`) and the force-multi loop's `_parts`
+	 * tail. Every literal the fit-driven wrap cascade renders — which is every
+	 * SHORT one, the common case — dropped the comment on the floor. `apq fmt`
+	 * caught the loss and refused the file, so no bytes were corrupted, but the
+	 * file could not be formatted at all.
+	 *
+	 * Emission goes through `trailingCommentDocGuarded`, matching the
+	 * empty-list arm: a `//` close-trailing ends its source line, so the
+	 * enclosing list's `,` (or its close delimiter) would otherwise be
+	 * swallowed into the comment text. The guard is forward-looking and drops
+	 * when the next emit is already a hardline, so every shape whose seam was
+	 * already sound stays byte-identical.
+	 *
+	 * The Doc is bound to a local first: the branch Exprs are statement blocks
+	 * whose value is the Doc, and splicing one twice would emit it twice.
+	 */
+	private static function triviaSepCloseTrailAppendExpr(branch: Expr): Expr {
+		return macro {
+			final _ctBranchDoc: anyparse.core.Doc = $branch;
+			_trailClose != null ? _dc([_ctBranchDoc, trailingCommentDocGuarded(_trailClose, opt)]) : _ctBranchDoc;
 		};
 	}
 
