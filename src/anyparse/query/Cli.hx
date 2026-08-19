@@ -53,6 +53,7 @@ import anyparse.query.MutationVerdict.MutationVerdictResult;
 import anyparse.check.OracleCache;
 import anyparse.query.ShardPlan.ShardPlanResult;
 import anyparse.query.ShardPlan.ShardPlacement;
+import anyparse.query.StdlibDifferential.DifferentialOutcome;
 import anyparse.query.ExitCode.*;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
@@ -714,6 +715,13 @@ final class Cli {
 				return runReach(rest);
 			case 'clusters':
 				return runClusters(rest);
+			case 'stdlib-dup':
+				#if (sys || nodejs)
+				return runStdlibDup(rest);
+				#else
+				stderr('apq stdlib-dup: requires a sys target (probe staging + compiler spawn)\n');
+				return EXIT_USAGE;
+				#end
 			case 'gates':
 				return runGates(rest);
 			case 'diff':
@@ -5765,6 +5773,7 @@ final class Cli {
 		sysPrint('  callers       Transitive call tree INTO a function (approximate call graph)\n');
 		sysPrint('  reach         Shortest call path(s) --from A --to B over the call graph\n');
 		sysPrint('  clusters      Partition a type\'s members by call-edge connectivity (hub bucket + components)\n');
+		sysPrint('  stdlib-dup    Report pure functions a differential run proves equal to a stdlib call\n');
 		sysPrint('  gates         List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names\n');
 		sysPrint('  diff          Structural AST diff between two files\n');
 		sysPrint('  strip         Sed-strip + parse-check (sole-blocker confirmation)\n');
@@ -5786,6 +5795,163 @@ final class Cli {
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
 		sysPrint('  -h, --help      Show help\n');
+	}
+
+	/**
+	 * `apq stdlib-dup <scope...> [--lang <name>] [--limit <n>] [--census] [--work <dir>]` --
+	 * report every pure, self-contained, primitive-signature function in the scope that a
+	 * differential run finds indistinguishable from a stdlib call.
+	 *
+	 * Two tiers, and `--census` stops after the first. Tier one is `StdlibDupScan`: pure analysis,
+	 * no compiler, and its per-stage drop-off is printed to stderr on every run because that count
+	 * is the measurement worth having even when nothing matches. Tier two is
+	 * `StdlibDifferential`: one generated program per candidate, compiled and run on the Haxe
+	 * interpreter, which is why it is opt-out rather than free.
+	 *
+	 * Findings are INFO by design -- agreement over a finite grid is evidence, not proof -- so this
+	 * command never writes an edit and exits `EXIT_OK` whatever it finds.
+	 */
+	private static function runStdlibDup(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var limit: Int = 0;
+		var censusOnly: Bool = false;
+		var work: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--limit':
+					limit = Std.parseInt(expectValue(args, ++i, '--limit')) ?? 0;
+				case '--work':
+					work = expectValue(args, ++i, '--work');
+				case '--census':
+					censusOnly = true;
+				case '-h', '--help':
+					printStdlibDupUsage();
+					return EXIT_OK;
+				case _:
+					if (a.startsWith('--')) {
+						stderr('apq stdlib-dup: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq stdlib-dup: expected <scope> (one or more file/dir/glob specs)\n');
+			printStdlibDupUsage();
+			return EXIT_USAGE;
+		}
+
+		final io = resolveInputPaths(lang, inputSpecs);
+		final paths: Array<String> = io.paths;
+		if (paths.length == 0) {
+			stderr('apq stdlib-dup: ${inputSpecs.join(', ')} matched no source files\n');
+			return EXIT_RUNTIME;
+		}
+
+		final files: Array<{ file: String, source: String }> = [];
+		for (path in paths) {
+			final source: Null<String> = try readSourceForParse(path) catch (exception: Exception) null;
+			if (source == null)
+				stderr('apq stdlib-dup: $path: unreadable, skipped\n')
+			else
+				files.push({ file: path, source: source });
+		}
+		final scan: StdlibDupScan.ScanResult = StdlibDupScan.scanAll(files, io.plugin);
+		final stages: StdlibDupScan.ScanStages = scan.stages;
+		stderr('apq stdlib-dup: ${files.length} file(s); functions ${stages.functions}');
+		stderr(' -> bodied ${stages.bodied} -> arity<=3 ${stages.arityOk}');
+		stderr(' -> primitive signature ${stages.primitiveSig} -> self-contained ${stages.selfContained}\n');
+		if (censusOnly) return EXIT_OK;
+
+		final dir: Null<String> = stdlibDupWorkDir(work);
+		if (dir == null) {
+			stderr('apq stdlib-dup: could not create a work directory for the probes\n');
+			return EXIT_RUNTIME;
+		}
+		final sourceOf: Map<String, String> = [];
+		for (entry in files) sourceOf[entry.file] = entry.source;
+		var driven: Int = 0;
+		var found: Int = 0;
+		for (candidate in scan.candidates) {
+			if (limit > 0 && driven >= limit) break;
+			driven++;
+			final maps: Array<StdlibDifferential.Mapping> = StdlibDifferential.mappings(candidate);
+			final where: String = stdlibDupPosition(candidate, sourceOf[candidate.file] ?? '');
+			switch (StdlibDifferential.run(candidate, maps, dir)) {
+				case Matched(hits, inputs):
+					for (hit in hits) {
+						found++;
+						sysPrint('$where: info: ${stdlibDupSubject(candidate)} looks like ${hit.display}');
+						sysPrint(' — agreed on $inputs generated inputs, ${maps.length} mapping(s) tried [stdlib-dup]\n');
+					}
+				case NoMatch(inputs, tried):
+					stderr('apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: no match ($tried mapping(s), $inputs inputs)\n');
+				case Skipped(reason):
+					stderr('apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: skipped — $reason\n');
+			}
+		}
+		stderr('apq stdlib-dup: drove $driven candidate(s), $found finding(s)\n');
+		return EXIT_OK;
+	}
+
+	/** `<file>:<line>:<col>` of a candidate's declaration, resolved against its own file's source. */
+	private static function stdlibDupPosition(candidate: StdlibDupScan.StdlibCandidate, source: String): String {
+		final pos = candidate.span.lineCol(source);
+		return '${candidate.file}:${pos.line}:${pos.col}';
+	}
+
+	/** How a report names a candidate: `Owner.name` when the enclosing type is known, else the bare name. */
+	private static function stdlibDupSubject(candidate: StdlibDupScan.StdlibCandidate): String {
+		final owner: Null<String> = candidate.owner;
+		return owner == null ? candidate.name : '$owner.${candidate.name}';
+	}
+
+	/** The directory the generated probes are staged in, created on demand; null when it cannot be made. */
+	private static function stdlibDupWorkDir(requested: Null<String>): Null<String> {
+		#if (sys || nodejs)
+		final base: String = if (requested != null)
+			requested
+		else {
+			#if nodejs
+			haxe.io.Path.join([js.node.Os.tmpdir(), 'apq-stdlib-dup']);
+			#else
+			haxe.io.Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'apq-stdlib-dup']);
+			#end
+		}
+		try {
+			if (!FileSystem.exists(base)) FileSystem.createDirectory(base);
+		} catch (exception: Exception) {
+			return null;
+		}
+		return base;
+		#else
+		return null;
+		#end
+	}
+
+	private static function printStdlibDupUsage(): Void {
+		sysPrint('Usage: apq stdlib-dup <scope...> [options]\n');
+		sysPrint('\n');
+		sysPrint('Report pure, self-contained, primitive-signature functions that a differential\n');
+		sysPrint('run cannot tell apart from a stdlib call — "this looks like StringTools.lpad,\n');
+		sysPrint('check it". Findings are informational: nothing is ever rewritten.\n');
+		sysPrint('\n');
+		sysPrint('The per-stage candidate census always goes to stderr. With --census the run\n');
+		sysPrint('stops there and spawns no compiler.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --census        Candidate census only — no probe generation, no haxe spawn\n');
+		sysPrint('  --limit <n>     Drive at most n candidates through the differential\n');
+		sysPrint('  --work <dir>    Stage the generated probes here (default: a temp directory)\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printSymbolsUsage(): Void {
