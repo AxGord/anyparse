@@ -4861,8 +4861,9 @@ final class RefactorSupport {
 		if (holdsConditionalRegion(ctor) || holdsConditionalRegion(loc.field)) return null;
 		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(source, loc.container, ctor, loc.field, shape);
 		if (init == null) return null;
-		if (!guardReachedIntact(source, ctor, decl.name, init.ifStmt.from, shape)) return null;
-		if (!superCallsFollow(loc.container, ctor, init.ifStmt.from, shape)) return null;
+		final guardFrom: Int = init.ifStmt.from;
+		if (!guardReachedIntact(source, ctor, decl.name, guardFrom, shape)) return null;
+		if (!superCallsFollow(loc.container, ctor, guardFrom, shape)) return null;
 		if (
 			MemberWriteScan.writtenInRange(source, decl.name, init.target, 0, decl.span.from)
 			|| MemberWriteScan.writtenInRange(source, decl.name, init.target, decl.span.to, source.length)
@@ -4877,7 +4878,7 @@ final class RefactorSupport {
 		if (init.sole)
 			edits.push({ span: init.ifStmt, text: folded });
 		else {
-			edits.push({ span: new Span(init.ifStmt.from, init.ifStmt.from), text: '$folded\n' });
+			edits.push({ span: new Span(guardFrom, guardFrom), text: '$folded\n' });
 			edits.push({ span: lineExtendedSpan(source, init.assignStmt), text: '' });
 		}
 		return edits;
@@ -4932,12 +4933,7 @@ final class RefactorSupport {
 		final branch: QueryNode = stmt.children[1];
 		final braced: Bool = branch.kind == shape.blockStmtKind;
 		final sole: Bool = !braced || branch.children.length == 1;
-		final first: Null<QueryNode> = if (!braced)
-			branch
-		else if (branch.children.length >= 1)
-			branch.children[0]
-		else
-			null;
+		final first: Null<QueryNode> = branchOpeningStatement(branch, braced);
 		if (condSpan == null || first == null || (!sole && !isSideEffectFree(cond))) return null;
 		final firstSpan: Null<Span> = first.span;
 		if (first.kind != shape.exprStatementKind || first.children.length != 1 || firstSpan == null) return null;
@@ -4950,12 +4946,7 @@ final class RefactorSupport {
 		if (targetSpan == null || valueSpan == null) return null;
 		if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape)) return null;
 		if (referencedInRange(source, fieldName, valueSpan.from, valueSpan.to, [])) return null;
-		final rebuiltEnd: Int = sole ? stmtSpan.to : firstSpan.to;
-		if (
-			hasCommentMarker(source, stmtSpan.from, condSpan.from) || hasCommentMarker(source, condSpan.to, targetSpan.from)
-			|| hasCommentMarker(source, targetSpan.to, valueSpan.from) || hasCommentMarker(source, valueSpan.to, rebuiltEnd)
-		)
-			return null;
+		if (!foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to)) return null;
 		return {
 			ifStmt: stmtSpan,
 			assignStmt: firstSpan,
@@ -5004,6 +4995,27 @@ final class RefactorSupport {
 		final ternaryKind: Null<String> = shape.ternaryKind;
 		final needsParens: Bool = (ternaryKind != null && cond.kind == ternaryKind) || shape.writeParentKinds.contains(cond.kind);
 		return needsParens ? '($text)' : text;
+	}
+
+
+	/** `branch` reduced to the statement it OPENS with, unwrapping one brace level, or null when it holds none. */
+	private static function branchOpeningStatement(branch: QueryNode, braced: Bool): Null<QueryNode> {
+		if (!braced) return branch;
+		return branch.children.length >= 1 ? branch.children[0] : null;
+	}
+
+
+	/**
+	 * Whether the byte ranges a conditional-default fold REGENERATES carry no comment — the gaps
+	 * around the three spans it copies verbatim (the condition, the assignment target, the assigned
+	 * value), up to `rebuiltEnd`: the whole `if` statement when the fold replaces it, the assignment
+	 * statement alone when the `if` survives and only that statement is cut out of its branch.
+	 */
+	private static function foldRegionCommentFree(
+		source: String, stmt: Span, cond: Span, target: Span, value: Span, rebuiltEnd: Int
+	): Bool {
+		return !hasCommentMarker(source, stmt.from, cond.from) && !hasCommentMarker(source, cond.to, target.from)
+			&& !hasCommentMarker(source, target.to, value.from) && !hasCommentMarker(source, value.to, rebuiltEnd);
 	}
 
 }

@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -39,11 +38,17 @@ import anyparse.runtime.Span;
  *
  * The obvious alternative — leave the `if` and add an `else` assigning the default — is the shape
  * a language with definite-assignment analysis would let the compiler check. Haxe does NOT run
- * that analysis for a `final` FIELD. Measured on 4.3.7:
- * `class V { final _d:Int; public function new(c:Bool) if (c) _d = 1; }` compiles SILENTLY on
- * `--interp`, `-js` and `--jvm`, and `_d` reads as `null` on the path that skipped the write. The
- * only net is `@:nullSafety(Strict)`, which is a per-file opt-in (107 of 805 files in the tree
- * that motivated this rule, and none of the three files in the motivating case). So a fix emitting
+ * that analysis for a `final` FIELD. Measured on 4.3.7 with
+ * `class V { final _d:Int; public function new(c:Bool) if (c) _d = 1; }`, which compiles
+ * SILENTLY on EVERY target tried - `--interp`, `-js`, `--jvm` and `-cpp` (a full hxcpp build
+ * and run, not just a typecheck) - and `_d` then reads as that target's ZERO value on the path
+ * that skipped the write: `null` on `--interp`, `undefined` on `-js`, `0` on `--jvm` and `-cpp`. The
+ * only net is the `@:nullSafety` meta, and in EITHER mode: the bare / `Loose` form diagnoses the
+ * shape exactly as `Strict` does (two errors - the field is used before initialization, and a
+ * non-nullable field wants an initial value or a constructor assignment). It stays a per-file
+ * opt-in all the same. Of the 805 files in the tree that motivated this rule, 53 carry
+ * `@:nullSafety(Strict)` and 415 the bare form - leaving 337 with no net at all, the motivating
+ * file among them. So a fix emitting
  * branch-per-arm assignments would have its COMPLETENESS checked by nothing at all. The
  * conditional-value form proves completeness structurally: there is exactly one assignment and it
  * always runs.
@@ -101,8 +106,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 	}
 
 	public function description(): String {
-		return
-			'a private field default overwritten by one conditional constructor write - foldable into one unconditional assignment of a conditional value';
+		return 'a field default overwritten by one conditional constructor write - foldable into one assignment of a conditional value';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
