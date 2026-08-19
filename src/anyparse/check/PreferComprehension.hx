@@ -10,7 +10,7 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * Flags an empty-array local declaration immediately followed by a `for` or `while`
+ * Flags an empty-array local declaration followed by a `for` or `while`
  * loop whose only effect is `a.push(<expr>)`, which an array comprehension replaces —
  * `final a = []; for (x in xs) a.push(e);` collapses to `final a = [for (x in xs) e];`,
  * and `final a = []; while (c) a.push(e);` to `final a = [while (c) e];`.
@@ -19,7 +19,8 @@ using StringTools;
  *
  * ## The shape it accepts
  *
- * Two ADJACENT statements in one block: a local `var` / `final` whose initializer
+ * Two statements in one block — adjacent, or separated by an admissible GAP (see below):
+ * a local `var` / `final` whose initializer
  * is EXACTLY the empty array literal `[]` (a `new Array()` is left to
  * `prefer-array-literal`; after its `--fix` produces `[]` this check catches it on
  * the next run), then a `for` or `while` whose body — descending through braces, nested loops of
@@ -135,14 +136,49 @@ using StringTools;
  * - **Read after the loop.** `a` must be referenced somewhere after the `for`
  *   within its scope, else the comprehension feeds no one (`unused-local`'s
  *   territory).
- * - **Strictly adjacent.** The `for` must be the very next statement; a comment in
- *   the gap between the two would be lost by the merge, so such a pair is skipped.
+ * - **No comment in the region the edit deletes.** For an adjacent pair that is the
+ *   whole decl-to-loop gap, which the merge would swallow; for a gapped pair it is the
+ *   declaration's own LINE, since the gap statements are not touched.
+ *
+ * ## The gap
+ *
+ * The loop need not be the declaration's immediate sibling. Demanding that it was found
+ * ZERO sites in a 809-file application tree, and the shape it was missing is the ordinary
+ * one — the intervening statement DECLARES the loop's subject:
+ *
+ * ```
+ * final substrArr:Array<CodePoint> = [];
+ * var iter = Unifill.uIterator(substr);
+ * while (iter.hasNext()) substrArr.push(iter.next());
+ * ```
+ *
+ * So the DECLARATION moves down to the loop, rather than the gap moving up:
+ * `var iter = …;` then `final substrArr:Array<CodePoint> = [while (iter.hasNext()) iter.next()];`.
+ * That direction is what makes declaration order safe for free — the statement being moved
+ * reads NOTHING (its initializer is exactly `[]`, and a type annotation names types, not
+ * values), while the comprehension's whole read set stays at the loop's own position, where
+ * it was already in scope. Moving the gap UP would have to prove the opposite for every
+ * statement in it, and here it is false.
+ *
+ * Three gates carry the gap, and the walk stops at the first statement failing one — so the
+ * NUMBER of statements crossed is not a parameter, and no count bounds it:
+ *
+ * - **Admissible statements only** (`admissibleGapStatement`): a whitelist of a local
+ *   declaration and an expression statement. That refuses every control-flow break and every
+ *   construct that can hold one, by kind rather than by a blacklist that leaks by category.
+ * - **No occurrence of the array's name**, textually, anywhere in the gap — a read, a write,
+ *   or a SHADOWING redeclaration, which in Haxe makes the loop's `a` a different binding.
+ * - **Each statement owns its line**: the declaration's, because the fix deletes it whole;
+ *   the loop's, because the replacement is spliced at its start.
  *
  * ## Autofix
  *
- * Both statements are replaced by `final a<:T?> = [<comprehension>];`, preceded by
- * each hoisted body comment on its own line at the declaration's indent. The binding
- * becomes single-assignment, so the keyword is emitted as `final` regardless of the
+ * An ADJACENT pair is replaced, both statements at once, by
+ * `final a<:T?> = [<comprehension>];`, preceded by each hoisted body comment on its own line
+ * at the declaration's indent. A GAPPED pair takes TWO disjoint edits instead — the
+ * declaration's line deleted, the loop replaced by that same text at the loop's own indent —
+ * because the statements between them are not part of the rewrite and must not be re-emitted.
+ * The binding becomes single-assignment, so the keyword is emitted as `final` regardless of the
  * original `var` / `final` (consistent with `prefer-final`); the declaration's own
  * type annotation, if written, is preserved verbatim.
  *
@@ -210,14 +246,34 @@ final class PreferComprehension implements Check {
 		return violations;
 	}
 
-	/** Replace each flagged declaration-plus-loop pair with the assembled comprehension declaration. */
+	/**
+	 * Replace each flagged declaration-plus-loop pair with the assembled comprehension declaration.
+	 *
+	 * A match carries a LIST of edits rather than one span of text, which `CheckScan.applyTextMatches`
+	 * cannot express: an ADJACENT pair is one replacement over both statements, but a GAPPED one is
+	 * two disjoint edits — the declaration's line deleted, the loop rewritten — because the statements
+	 * between them are not part of the rewrite and must not be re-emitted. Narrow edits are the better
+	 * shape for the adjacent case too: `computeFileLintEdits` drops a whole check's edits when any one
+	 * of them overlaps an earlier check's, and a span reaching across the gap would collide with every
+	 * other rule firing inside it.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final s: Seams = seams;
-		return CheckScan.applyTextMatches(plugin, source, violations, (tree, src) -> collectMatches(tree, src, s));
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final byKey: Map<String, Array<{ span: Span, text: String }>> = [];
+		for (m in collectMatches(tree, source, seams)) byKey['${m.span.from}:${m.span.to}'] = m.edits;
+		final out: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final edits: Null<Array<{ span: Span, text: String }>> = byKey['${span.from}:${span.to}'];
+			if (edits != null) for (e in edits) out.push(e);
+		}
+		return RefactorSupport.dropContainedEdits(out);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -274,29 +330,85 @@ final class PreferComprehension implements Check {
 	}
 
 	/**
-	 * Descend `node`, testing each adjacent child pair `(decl, for)` and recursing.
-	 * `node` doubles as the enclosing scope for the read-after gate (the pair are its
-	 * direct children). A reification subtree (`opaqueKinds`) is skipped wholesale.
+	 * Descend `node`, testing each child pair `(decl, loop)` and recursing. `node` doubles as
+	 * the enclosing scope for the read-after gate (the pair are its direct children). A
+	 * reification subtree (`opaqueKinds`) is skipped wholesale.
+	 *
+	 * The loop need not be the declaration's immediate sibling: the scan walks forward from a
+	 * qualifying declaration while every statement it passes is an ADMISSIBLE GAP STATEMENT
+	 * (`admissibleGapStatement`), stopping at the first match or at the first statement that is
+	 * not one. Stopping is exact rather than conservative — the gap gates are cumulative, so a
+	 * statement that disqualifies the gap disqualifies every longer one too, and the loop kind
+	 * itself is not admissible, which is what keeps a second loop from being reached past the
+	 * first. The declaration side is tested ONCE per `i`, before the walk forward, so a block of
+	 * ordinary statements costs one span slice each rather than a quadratic sweep.
 	 */
 	private static function walk(node: QueryNode, ctx: Ctx, out: Array<Match>): Void {
 		if (ctx.seams.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
-		for (i in 0...kids.length - 1) {
-			final m: Null<Match> = tryMatch(kids[i], kids[i + 1], node, ctx);
+		for (i in 0...kids.length - 1) if (isEmptyArrayLocal(kids[i], ctx)) {
+			final m: Null<Match> = scanForward(kids, i, node, ctx);
 			if (m != null) out.push(m);
 		}
 		for (c in kids) walk(c, ctx, out);
 	}
 
 	/**
-	 * Whether `decl` is an empty-array local immediately followed by the qualifying
-	 * push-only loop `forNode` inside `scope`; returns the replacement span and text
-	 * when so, else null.
+	 * The match for the declaration at `kids[from]`, found by walking forward over admissible gap
+	 * statements, or null when the walk hits an inadmissible statement (or the end of the list)
+	 * before a loop that qualifies.
 	 */
-	private static function tryMatch(decl: QueryNode, forNode: QueryNode, scope: QueryNode, ctx: Ctx): Null<Match> {
+	private static function scanForward(kids: Array<QueryNode>, from: Int, scope: QueryNode, ctx: Ctx): Null<Match> {
+		var j: Int = from + 1;
+		while (j < kids.length) {
+			final m: Null<Match> = tryMatch(kids[from], kids[j], scope, ctx, j > from + 1);
+			if (m != null) return m;
+			if (!admissibleGapStatement(kids[j], ctx)) return null;
+			j++;
+		}
+		return null;
+	}
+
+	/**
+	 * Whether `decl` is a local declaration whose initializer source is EXACTLY the empty array
+	 * literal `[]`, whitespace ignored — the declaration-side precondition, hoisted out of
+	 * `tryMatch` so the gap walk tests it once per candidate instead of once per
+	 * (declaration, statement) pair.
+	 */
+	private static function isEmptyArrayLocal(decl: QueryNode, ctx: Ctx): Bool {
+		if (!ctx.seams.localDeclKinds.contains(decl.kind) || decl.children.length != 1 || decl.name == null) return false;
+		final initSpan: Null<Span> = decl.children[0].span;
+		return initSpan != null && stripWhitespace(ctx.source.substring(initSpan.from, initSpan.to)) == '[]';
+	}
+
+	/**
+	 * May `node` stand BETWEEN the empty-array declaration and its loop? A WHITELIST of two kinds —
+	 * a local declaration and an expression statement — and a whitelist on purpose: the property
+	 * that has to hold is "moving the declaration below this statement changes nothing", and its
+	 * negation is a category (`return`, `throw`, `break`, `continue`, and every conditional, loop,
+	 * `switch` or `try` that can HOLD one) that a blacklist leaks by exactly the constructs a new
+	 * grammar spells differently. Both admitted kinds are jump-free by construction: a jump is its
+	 * own statement kind, and one nested inside a lambda in an initializer leaves that lambda, not
+	 * this block. An unset seam therefore costs REACH, never soundness.
+	 *
+	 * `throw` is the one construct this refuses that would in fact be safe — the moved declaration
+	 * is `[]`, which is pure, and the gap may not read it — but a `throw` reaches the block through
+	 * its own statement kind anyway, and admitting the expression forms buys nothing measurable.
+	 */
+	private static function admissibleGapStatement(node: QueryNode, ctx: Ctx): Bool {
+		return ctx.seams.localDeclKinds.contains(node.kind) || node.kind == ctx.seams.exprStmtKind;
+	}
+
+	/**
+	 * Whether `decl` is an empty-array local followed by the qualifying push-only loop `forNode`
+	 * inside `scope`; returns the match — its reported span plus the edits that realise it — when
+	 * so, else null. `gapped` says whether statements stand between the two, which decides BOTH the
+	 * extra gates and the SHAPE of the fix (see `gappedEdits`).
+	 */
+	private static function tryMatch(decl: QueryNode, forNode: QueryNode, scope: QueryNode, ctx: Ctx, gapped: Bool): Null<Match> {
 		final s: Seams = ctx.seams;
 		final source: String = ctx.source;
-		if (!s.localDeclKinds.contains(decl.kind) || decl.children.length != 1) return null;
+		if (!isEmptyArrayLocal(decl, ctx)) return null;
 		if (forNode.kind != s.forStmtKind && forNode.kind != s.whileStmtKind) return null;
 		final declName: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
@@ -304,8 +416,7 @@ final class PreferComprehension implements Check {
 		final forSpan: Null<Span> = forNode.span;
 		final scopeSpan: Null<Span> = scope.span;
 		if (declName == null || declSpan == null || initSpan == null || forSpan == null || scopeSpan == null) return null;
-		if (!isEmptyArrayLiteral(source.substring(initSpan.from, initSpan.to))) return null;
-		if (CheckScan.hasCommentMarker(source, declSpan.to, forSpan.from)) return null;
+		if (!gapAdmits(source, declName, declSpan, forSpan, gapped)) return null;
 		final annotation: Null<String> = RefactorSupport.declaredTypeAnnotation(source, declSpan, initSpan, declName);
 		final element: Null<String> = annotation == null ? null : elementTypeOf(annotation, s.elementTypeParams);
 		final acc: Acc = { checks: [], hoisted: [], elementType: element };
@@ -313,12 +424,67 @@ final class PreferComprehension implements Check {
 		if (inner == null) return null;
 		for (cn in acc.checks) if (referencesName(cn, declName, s)) return null;
 		if (!RefactorSupport.referencedInRange(source, declName, forSpan.to, scopeSpan.to, [])) return null;
-		final lead: Null<String> = hoistLeadOrRefuse(declSpan, ctx, acc);
+		final lead: Null<String> = hoistLeadOrRefuse(gapped ? forSpan : declSpan, ctx, acc);
 		if (lead == null) return null;
 		final prefix: String = source.substring(declSpan.from, initSpan.from);
 		final keyword: String = source.substring(declSpan.from, declSpan.from + VAR_KEYWORD.length);
 		final normalized: String = keyword == VAR_KEYWORD ? 'final${prefix.substring(VAR_KEYWORD.length)}' : prefix;
-		return { span: new Span(declSpan.from, forSpan.to), text: '$lead$normalized[$inner];' };
+		return assemble(source, declSpan, forSpan, '$lead$normalized[$inner];', gapped);
+	}
+
+	/**
+	 * The region between the two statements, gated. The comment test names the region the edit
+	 * DELETES — for an adjacent pair the whole decl-to-loop gap, which the merge swallows; for a
+	 * gapped pair only the declaration's own LINE, since the gap statements are left exactly where
+	 * they are and their own comments travel nowhere. The name test is gapped-only and TEXTUAL, so
+	 * it refuses a read, a write and a SHADOWING redeclaration alike — in Haxe a second `var a` in
+	 * the same block makes the loop's `a` a different binding, and the declaration must not cross it.
+	 */
+	private static function gapAdmits(source: String, declName: String, declSpan: Span, forSpan: Span, gapped: Bool): Bool {
+		final commentTo: Int = gapped ? endOfLine(source, declSpan.to) : forSpan.from;
+		return !CheckScan.hasCommentMarker(source, declSpan.to, commentTo)
+			&& (!gapped || !RefactorSupport.referencedInRange(source, declName, declSpan.to, forSpan.from, []));
+	}
+
+	/** The match for an assembled replacement `text`: one edit over both statements, or the two of `gappedEdits`. */
+	private static function assemble(source: String, declSpan: Span, forSpan: Span, text: String, gapped: Bool): Null<Match> {
+		final span: Span = new Span(declSpan.from, forSpan.to);
+		final edits: Null<Array<{ span: Span, text: String }>> = gapped
+			? gappedEdits(source, declSpan, forSpan, text)
+			: [{ span: span, text: text }];
+		return edits == null ? null : { span: span, edits: edits };
+	}
+
+	/**
+	 * The TWO edits a gapped match needs — delete the declaration's own line, and rewrite the loop
+	 * into the declaration-plus-comprehension — or null when either line is not the statement's own.
+	 *
+	 * The declaration moves DOWN to the loop rather than the gap moving up, and that direction is
+	 * what makes declaration order safe for free: the statement being moved reads NOTHING (its
+	 * initializer is exactly `[]`, and a type annotation names types, not values), while the
+	 * comprehension's whole read set — subject, condition, guard, element — stays at the loop's own
+	 * position, where it was already in scope. Moving the gap up instead would have to prove the
+	 * opposite for every statement in it, and in the motivating site it is false: the gap statement
+	 * DECLARES the loop's subject.
+	 *
+	 * Both lines must belong to their statement alone. The declaration's, because the edit deletes
+	 * it whole (`lineExtendedSpan` hands back the span unchanged when the element shares its line,
+	 * which is the refusal); the loop's, because the replacement text starts at the declaration
+	 * keyword and would otherwise be spliced after whatever shares that line.
+	 */
+	private static function gappedEdits(
+		source: String, declSpan: Span, forSpan: Span, text: String
+	): Null<Array<{ span: Span, text: String }>> {
+		final line: Span = RefactorSupport.lineExtendedSpan(source, declSpan);
+		final declOwnsLine: Bool = line.from != declSpan.from || line.to != declSpan.to;
+		final loopOwnsLine: Bool = source.substring(RefactorSupport.startOfLine(source, forSpan.from), forSpan.from).trim() == '';
+		return declOwnsLine && loopOwnsLine ? [{ span: line, text: '' }, { span: forSpan, text: text }] : null;
+	}
+
+	/** The offset of the newline ending the line `at` sits on, or the source length on the last line. */
+	private static function endOfLine(source: String, at: Int): Int {
+		final nl: Int = source.indexOf('\n', at);
+		return nl == -1 ? source.length : nl;
 	}
 
 	/**
@@ -423,11 +589,6 @@ final class PreferComprehension implements Check {
 		if (node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)) return true;
 		for (c in node.children) if (referencesName(c, name, s)) return true;
 		return false;
-	}
-
-	/** Whether `s`, ignoring whitespace, is exactly the empty array literal `[]`. */
-	private static function isEmptyArrayLiteral(source: String): Bool {
-		return stripWhitespace(source) == '[]';
 	}
 
 	/** `source` with every space, tab, carriage return and newline removed. */
@@ -893,14 +1054,15 @@ final class PreferComprehension implements Check {
 
 	/**
 	 * The text prefixing the replacement: each hoisted body comment on its own line at the
-	 * declaration's indent, in source order, or the empty string when none was hoisted. Null
-	 * REFUSES the match — the declaration does not start its line, so a comment placed above it
-	 * would also comment out whatever shares that line.
+	 * indent of `anchor` — the statement the replacement is spliced at, which is the declaration
+	 * for an adjacent pair and the LOOP for a gapped one — in source order, or the empty string
+	 * when none was hoisted. Null REFUSES the match: that statement does not start its line, so a
+	 * comment placed above it would also comment out whatever shares that line.
 	 */
-	private static function hoistLeadOrRefuse(declSpan: Span, ctx: Ctx, acc: Acc): Null<String> {
+	private static function hoistLeadOrRefuse(anchor: Span, ctx: Ctx, acc: Acc): Null<String> {
 		if (acc.hoisted.length == 0) return '';
-		final lineStart: Int = RefactorSupport.startOfLine(ctx.source, declSpan.from);
-		final indent: String = ctx.source.substring(lineStart, declSpan.from);
+		final lineStart: Int = RefactorSupport.startOfLine(ctx.source, anchor.from);
+		final indent: String = ctx.source.substring(lineStart, anchor.from);
 		if (indent.trim() != '') return null;
 		acc.hoisted.sort((a, b) -> a.from - b.from);
 		final buf: StringBuf = new StringBuf();
@@ -958,10 +1120,14 @@ private typedef Seams = {
 	var eagerKinds: Array<String>;
 }
 
-/** A flagged declaration-plus-loop pair: the full replacement span and its comprehension text. */
+/**
+ * A flagged declaration-plus-loop pair: the span it is REPORTED at (declaration start to loop end,
+ * which is also the key the fix looks its edits up by) and the edits that realise it — one for an
+ * adjacent pair, two for a gapped one.
+ */
 private typedef Match = {
 	var span: Span;
-	var text: String;
+	var edits: Array<{ span: Span, text: String }>;
 }
 
 /** Per-file inputs the walkers share: the source, the resolved seams and the file's comment tokens (lexed once). */

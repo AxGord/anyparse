@@ -107,8 +107,98 @@ class PreferComprehensionCheckTest extends Test {
 		);
 	}
 
-	public function testNonAdjacentNotFlagged(): Void {
-		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tfinal n = xs.length;\n\t\tfor (x in xs) out.push(x);')).length);
+	public function testGapDeclaringLoopSubjectFlaggedAndFixed(): Void {
+		// The motivating shape (TM `src/crashdumper/hooks/Util.hx:104`): the intervening statement
+		// DECLARES the loop's own subject, so the declaration moves DOWN to the loop rather than the
+		// statement moving up.
+		final input: String = 'final out:Array<Int> = [];\n\t\tvar it = mk(xs);\n\t\twhile (it.hasNext()) out.push(it.next());';
+		Assert.equals(1, violations(fnRet(input)).length);
+		Assert.equals(fnRet('var it = mk(xs);\n\t\tfinal out:Array<Int> = [while (it.hasNext()) it.next()];'), applyFix(fnRet(input)));
+	}
+
+	public function testGapOfOnePlainStatementFixed(): Void {
+		Assert.equals(
+			fnRet('final n = xs.length;\n\t\tfinal out:Array<Int> = [for (x in xs) x];'),
+			applyFix(fnRet('final out:Array<Int> = [];\n\t\tfinal n = xs.length;\n\t\tfor (x in xs) out.push(x);'))
+		);
+	}
+
+	public function testGapOfTwoStatementsFixed(): Void {
+		// The gap is NOT bounded by a count: every gate is per-statement and the scan stops at the
+		// first statement that fails one, so the number of statements crossed is not a soundness
+		// parameter. Two admissible ones therefore behave exactly like one.
+		Assert.equals(
+			fnRet('final n = xs.length;\n\t\ttrace(n);\n\t\tfinal out:Array<Int> = [for (x in xs) x];'),
+			applyFix(fnRet('final out:Array<Int> = [];\n\t\tfinal n = xs.length;\n\t\ttrace(n);\n\t\tfor (x in xs) out.push(x);'))
+		);
+	}
+
+	public function testGapStopsAtTheFirstInadmissibleStatement(): Void {
+		// The boundary that exists is ADMISSIBILITY, not distance: an inadmissible statement ends the
+		// walk rather than being stepped over, so a loop behind it is never reached.
+		Assert.equals(
+			0,
+			violations(fnRet(
+				'final out:Array<Int> = [];\n\t\tfinal n = xs.length;\n\t\tif (n == 0) return null;\n\t\ttrace(n);'
+				+ '\n\t\tfor (x in xs) out.push(x);'
+			)).length
+		);
+	}
+
+	public function testGapReferencingTheArrayNotFlagged(): Void {
+		// Twin of the next test, differing only in the receiver name: a read of the array in the gap
+		// would move BELOW its own use once the declaration travels down.
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tout.push(0);\n\t\tfor (x in xs) out.push(x);')).length);
+	}
+
+	public function testGapPushingToAnotherArrayFixed(): Void {
+		Assert.equals(
+			fnRet('other.push(0);\n\t\tfinal out:Array<Int> = [for (x in xs) x];'),
+			applyFix(fnRet('final out:Array<Int> = [];\n\t\tother.push(0);\n\t\tfor (x in xs) out.push(x);'))
+		);
+	}
+
+	public function testGapRedeclaringTheArrayNameNotFlagged(): Void {
+		// Haxe lets a local shadow another in the same block, so `out` in the loop is a DIFFERENT
+		// binding. The gap scan is textual and sees the declarator's own name, which is why it holds.
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tvar out = xs;\n\t\tfor (x in xs) out.push(x);')).length);
+	}
+
+	public function testControlFlowInGapNotFlagged(): Void {
+		// The gap whitelist admits a local declaration and an expression statement only, so every
+		// construct that can BREAK control flow — or hold one — ends the walk.
+		final loop: String = '\n\t\tfor (x in xs) out.push(x);';
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tif (xs.length == 0) return null;$loop')).length);
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\treturn null;$loop')).length);
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tthrow "x";$loop')).length);
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tfor (y in xs) trace(y);$loop')).length);
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\t{ trace(1); }$loop')).length);
+		// The twin: the same gap as an ordinary expression statement fires.
+		Assert.equals(1, violations(fnRet('final out:Array<Int> = [];\n\t\ttrace(xs.length);$loop')).length);
+	}
+
+	public function testCommentOnDeclLineWithGapNotFlagged(): Void {
+		// The gapped fix DELETES the declaration's line, so a comment on it would be lost.
+		Assert.equals(
+			0, violations(fnRet('final out:Array<Int> = []; // seed\n\t\tfinal n = xs.length;\n\t\tfor (x in xs) out.push(x);')).length
+		);
+	}
+
+	public function testCommentInsideTheGapKeptAndFixed(): Void {
+		// A comment DEEPER in the gap is not in any edited region — the gap statements stay exactly
+		// where they are — so it is carried by staying put rather than refused.
+		Assert.equals(
+			fnRet('// note\n\t\tfinal n = xs.length;\n\t\tfinal out:Array<Int> = [for (x in xs) x];'),
+			applyFix(fnRet('final out:Array<Int> = [];\n\t\t// note\n\t\tfinal n = xs.length;\n\t\tfor (x in xs) out.push(x);'))
+		);
+	}
+
+	public function testDeclSharingItsLineWithGapNotFlagged(): Void {
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = []; final n = xs.length;\n\t\tfor (x in xs) out.push(x);')).length);
+	}
+
+	public function testLoopSharingItsLineWithGapNotFlagged(): Void {
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tfinal n = xs.length; for (x in xs) out.push(x);')).length);
 	}
 
 	public function testCommentInGapNotFlagged(): Void {
