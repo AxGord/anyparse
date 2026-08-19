@@ -37,7 +37,10 @@ using Lambda;
  *   (a lambda cannot declare one in Haxe, but the seam is grammar-agnostic);
  * - the call's arguments are the parameters, ALL of them, in the SAME ORDER, each a bare
  *   identifier read — a dropped, reordered, duplicated or wrapped argument is refused;
- * - no parameter name occurs anywhere in the callee expression (`x -> x.f(x)` is refused).
+ * - no parameter name occurs anywhere in the callee expression (`x -> x.f(x)` is refused). This one
+ *   is SUBSUMED today — a lambda binder is in the file's binder set, so the shadowing gate below
+ *   refuses the same sources, and no fixture isolates it. It is kept as the explicit invariant the
+ *   accepted callee shapes must preserve if they are ever widened.
  *
  * On the callee, which must resolve to a DECLARED FUNCTION — the rule reduces to a method
  * value, and a method value differs from the wrapper wherever the callee is not one:

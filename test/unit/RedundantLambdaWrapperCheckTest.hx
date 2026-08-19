@@ -93,6 +93,9 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A parameter used as the callee receiver. The lower-initial receiver gate is what refuses this — the parameter-mention scan would too, but it never gets the chance (see the check type doc).
+	 */
 	public function testParamInsideCalleeNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> p.check(p));\n\t}\n}').length);
 	}
@@ -221,6 +224,72 @@ class RedundantLambdaWrapperCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new RedundantLambdaWrapper().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+
+	/**
+	 * Every refusal this class asserts must be decided by the property it NAMES, not by some earlier
+	 * gate on the same path. Each row is a one-variable pair: the refused source, and its twin
+	 * differing only in the gated property. A row whose twin does not fire proves nothing about its
+	 * gate — the fixture never reached it.
+	 */
+	public function testEachRefusalIsOneVariableDecided(): Void {
+		inline function host(signature: String): String return 'class H {\n\t' + signature + '\n}\n';
+		final one: String = 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> H.m(p));\n\t}\n}';
+		final two: String = 'class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> H.m(a, b));\n\t}\n}';
+		final plainTwo: String = host('public static function m(v:Int, k:Int):Bool return true;') + two;
+		final plainOne: String = host('public static function m(v:Int):Bool return true;') + one;
+		discriminate('optional callee parameter', host('public static function m(v:Int, ?k:Int):Bool return true;') + two, plainTwo);
+		discriminate('defaulted callee parameter', host('public static function m(v:Int, k:Int = 1):Bool return true;') + two, plainTwo);
+		discriminate('rest callee parameter', host('public static function m(v:Int, ...more:Int):Bool return true;') + two, plainTwo);
+		discriminate('callee arity', host('public static function m(v:Int, k:Int):Bool return true;') + one, plainOne);
+		discriminate('metadata on the callee', host('@:overload public static function m(v:Int):Bool return true;') + one, plainOne);
+		discriminate('non-static member behind a type receiver', host('public function m(v:Int):Bool return true;') + one, plainOne);
+		discriminate(
+			'lower-initial receiver',
+			host('public static function m(v:Int):Bool return true;')
+			+ 'class C {\n\tvar h:H;\n\tfunction f():Void {\n\t\txs.foreach(p -> h.m(p));\n\t}\n}',
+			plainOne
+		);
+		discriminate(
+			'receiver name shadowed by a parameter',
+			host('public static function m(v:Int):Bool return true;')
+			+ 'class C {\n\tfunction f(H:Dynamic):Void {\n\t\txs.foreach(p -> H.m(p));\n\t}\n}',
+			host('public static function m(v:Int):Bool return true;')
+			+ 'class C {\n\tfunction f(other:Dynamic):Void {\n\t\txs.foreach(p -> H.m(p));\n\t}\n}'
+		);
+		discriminate(
+			'wrapped call body',
+			host('public static function m(v:Int):Bool return true;')
+			+ 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> !H.m(p));\n\t}\n}',
+			plainOne
+		);
+		discriminate(
+			'dynamic member',
+			'class C {\n\tdynamic function m(v:Int):Bool return true;\n\tfunction f():Void {\n\t\txs.foreach(p -> m(p));\n\t}\n}',
+			'class C {\n\tfunction m(v:Int):Bool return true;\n\tfunction f():Void {\n\t\txs.foreach(p -> m(p));\n\t}\n}'
+		);
+		discriminate(
+			'local value binding', 'class C {\n\tfunction f():Void {\n\t\tvar m = (v:Int) -> true;\n\t\txs.foreach(p -> m(p));\n\t}\n}',
+			'class C {\n\tfunction f():Void {\n\t\tfunction m(v:Int):Bool return true;\n\t\txs.foreach(p -> m(p));\n\t}\n}'
+		);
+		discriminate(
+			'inline local function',
+			'class C {\n\tfunction f():Void {\n\t\tinline function m(v:Int):Bool return true;\n\t\txs.foreach(p -> m(p));\n\t}\n}',
+			'class C {\n\tfunction f():Void {\n\t\tfunction m(v:Int):Bool return true;\n\t\txs.foreach(p -> m(p));\n\t}\n}'
+		);
+		discriminate(
+			'member declared in two conditional arms',
+			'class H {\n#if js\n\tpublic static function m(v:Int):Bool return true;\n#else\n\tpublic static function m(v:Int):Bool return false;\n#end\n}\n'
+			+ one,
+			'class H {\n#if js\n\tpublic static function m(v:Int):Bool return true;\n#end\n}\n' + one
+		);
+	}
+
+	/** Assert that `gated` is refused and its one-variable `twin` fires — the pair, not either half, is the evidence. */
+	private function discriminate(label: String, gated: String, twin: String): Void {
+		Assert.equals(0, violations(gated).length, '$label: the gated source must be refused');
+		Assert.equals(1, violations(twin).length, '$label: the one-variable twin must fire, else the fixture never reached this gate');
 	}
 
 }
