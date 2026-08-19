@@ -1554,6 +1554,18 @@ typedef RefShape = {
 	@:optional var typeRefChildKinds: Array<String>;
 
 	/**
+	 * The node kind of an ANONYMOUS STRUCTURE TYPE body (Haxe `Anon` — `{ x:Int }`
+	 * in a type position, and the body of a `typedef`). Distinct from
+	 * `structureFieldHostKinds`, which also covers the object-literal VALUE form:
+	 * this names the TYPE only, so a check reasoning about structural type identity
+	 * never picks up a literal. Its direct children are the field nodes
+	 * (`paramKinds`, with `optionalParamKind` marking `?name:T`), each carrying its
+	 * own type as `typeRefChildKinds` children or a nested body of this same kind.
+	 * Optional; unset makes `anon-type-dup` a no-op.
+	 */
+	@:optional var anonTypeKind: String;
+
+	/**
 	 * The `default:` branch kind of a `switch` (Haxe `DefaultBranch` — a distinct
 	 * kind from `caseBranchKind`, with the branch body as its children) — the
 	 * null-flow engine joins it as an always-matching branch. Optional.

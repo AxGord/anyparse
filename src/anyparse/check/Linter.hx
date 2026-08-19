@@ -262,6 +262,11 @@ final class Linter {
 			new DuplicateCode(),
 			new ListenerSymmetry(),
 			new StringLiteralDup(),
+			// The TYPE-level twin of `string-literal-dup`, and the two can never claim the same
+			// node: that rule groups string LITERALS, this one anonymous structure TYPES. Both are
+			// report-only for the same reason — the name is a human's choice — so neither produces
+			// an edit and registry order carries no meaning between them.
+			new AnonTypeDup(),
 			new AvoidDynamic(),
 			new UnusedReturnValue(),
 			new DocCoverage(),
