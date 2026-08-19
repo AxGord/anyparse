@@ -96,13 +96,6 @@ final class StdlibDifferential {
 	public static inline final MAX_MAPPINGS: Int = 4000;
 
 	/**
-	 * How many values one parameter is driven over, by the candidate's arity. The product is what
-	 * the probe actually runs, so the cap shrinks as the arity grows -- one parameter gets a wide
-	 * grid, three get a narrow one, and neither run takes more than seconds.
-	 */
-	private static final GRID_CAP_BY_ARITY: Array<Int> = [36, 36, 22, 14];
-
-	/**
 	 * The pool id every TRIVIAL baseline carries. A candidate that agrees with one of these across
 	 * the whole grid returns an argument -- or a body constant -- unchanged, and is therefore not a
 	 * reimplementation of anything: it is a setter, an accessor, or a guard whose interesting
@@ -112,6 +105,13 @@ final class StdlibDifferential {
 	 * `replace(v, v, v)`) for one and the same reason.
 	 */
 	public static inline final TRIVIAL_ID: String = '(unchanged)';
+
+	/**
+	 * How many values one parameter is driven over, by the candidate's arity. The product is what
+	 * the probe actually runs, so the cap shrinks as the arity grows -- one parameter gets a wide
+	 * grid, three get a narrow one, and neither run takes more than seconds.
+	 */
+	private static final GRID_CAP_BY_ARITY: Array<Int> = [36, 36, 22, 14];
 
 	/** Identifiers the generated program owns; a candidate carrying one of these names is skipped. */
 	private static final RESERVED_NAMES: Array<String> = ['Probe', 'main', 'live', '__apqEval', '__apqBase'];
@@ -232,14 +232,8 @@ final class StdlibDifferential {
 		return out;
 	}
 
-	/** Whether any disqualifying spelling occurs in the candidate's own text. */
-	private static function mentionsAny(source: String, markers: Array<String>): Bool {
-		for (marker in markers) if (source.indexOf(marker) >= 0) return true;
-		return false;
-	}
-
 	/** Whether a mapping is one of the trivial baselines rather than a pooled stdlib call. */
-	public static function isTrivial(mapping: Mapping): Bool {
+	public static inline function isTrivial(mapping: Mapping): Bool {
 		return mapping.fn.id == TRIVIAL_ID;
 	}
 
@@ -269,24 +263,24 @@ final class StdlibDifferential {
 		final buf: StringBuf = new StringBuf();
 		final arity: Int = candidate.params.length;
 		buf.add('using StringTools;\n\nclass ${PROBE_CLASS} {\n\n');
-		buf.add('\tstatic final live: Array<Bool> = [' + [for (unused in maps) 'true'].join(', ') + '];\n\n');
+		buf.add('\tstatic final live: Array<Bool> = [${[for (unused in maps) 'true'].join(', ')}];\n\n');
 		buf.add('\tstatic var inputs: Int = 0;\n\n');
 		buf.add("\tstatic var constant: String = '';\n\n");
 		buf.add('\tstatic var varying: Bool = false;\n\n');
-		buf.add('\tstatic ' + candidate.source + '\n\n');
+		buf.add('\tstatic ${candidate.source}\n\n');
 		buf.add('\tstatic function main(): Void {\n');
 		for (slot in 0...arity) {
 			final values: Array<String> = grid(candidate, candidate.params[slot].type);
-			buf.add(tabs(slot + 2) + 'for (a$slot in [' + values.join(', ') + ']) {\n');
+			buf.add('${tabs(slot + 2)}for (a$slot in [${values.join(', ')}]) {\n');
 		}
 		final args: String = [for (slot in 0...arity) 'a$slot'].join(', ');
 		final body: String = tabs(arity + 2);
-		buf.add(body + 'inputs++;\n');
-		buf.add(body + 'final base: String = __apqEval(() -> ${candidate.name}($args));\n');
-		buf.add(body + 'if (inputs == 1) constant = base else if (base != constant) varying = true;\n');
+		buf.add('${body}inputs++;\n');
+		buf.add('${body}final base: String = __apqEval(() -> ${candidate.name}($args));\n');
+		buf.add('${body}if (inputs == 1) constant = base else if (base != constant) varying = true;\n');
 		for (index in 0...maps.length)
-			buf.add(body + 'if (live[$index] && __apqEval(() -> ${maps[index].code}) != base) live[$index] = false;\n');
-		for (slot in 0...arity) buf.add(tabs(arity + 1 - slot) + '}\n');
+			buf.add('${body}if (live[$index] && __apqEval(() -> ${maps[index].code}) != base) live[$index] = false;\n');
+		for (slot in 0...arity) buf.add('${tabs(arity + 1 - slot)}}\n');
 		buf.add("\t\tSys.println('INPUTS ' + inputs);\n");
 		buf.add("\t\tif (!varying) Sys.println('CONSTANT');\n");
 		buf.add("\t\tfor (index in 0...live.length) if (live[index]) Sys.println('MATCH ' + index);\n");
@@ -305,20 +299,20 @@ final class StdlibDifferential {
 			final text: String = line.trim();
 			if (text.startsWith('INPUTS ')) inputs = Std.parseInt(text.substr(7)) ?? 0;
 			if (text == 'CONSTANT') return Skipped('constant over all $inputs generated inputs — the grid does not discriminate it');
-			if (text.startsWith('MATCH ')) {
-				final index: Null<Int> = Std.parseInt(text.substr(6));
-				if (index != null && index >= 0 && index < maps.length) hits.push(maps[index]);
-			}
+			if (!text.startsWith('MATCH ')) continue;
+			final index: Null<Int> = Std.parseInt(text.substr(6));
+			if (index != null && index >= 0 && index < maps.length) hits.push(maps[index]);
 		}
 		return hits.length > 0 ? Matched(hits, inputs) : NoMatch(inputs, maps.length);
 	}
 
 	/** Why the harness refuses this candidate outright, or null when it will drive it. */
 	public static function refusal(candidate: StdlibCandidate, maps: Array<Mapping>): Null<String> {
-		if (RESERVED_NAMES.contains(candidate.name)) return 'the probe module owns the name "${candidate.name}"';
-		if (maps.length == 0) return 'no type-consistent mapping onto any pooled stdlib call';
-		if (maps.length > MAX_MAPPINGS) return '${maps.length} mappings exceeds the ${MAX_MAPPINGS} cap';
-		return null;
+		return RESERVED_NAMES.contains(candidate.name)
+			? 'the probe module owns the name "${candidate.name}"'
+			: maps.length == 0
+				? 'no type-consistent mapping onto any pooled stdlib call'
+				: maps.length > MAX_MAPPINGS ? '${maps.length} mappings exceeds the ${MAX_MAPPINGS} cap' : null;
 	}
 
 	/**
@@ -342,47 +336,14 @@ final class StdlibDifferential {
 		#end
 	}
 
-	#if (sys || nodejs)
-	/** Runs `haxe -cp <dir> --run Probe` and maps its result onto an outcome. */
-	private static function interpret(dir: String, maps: Array<Mapping>): DifferentialOutcome {
-		final args: Array<String> = ['-cp', dir, '--run', PROBE_CLASS];
-		#if nodejs
-		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', args, { encoding: 'utf8', timeout: 300000 });
-		final launchError: Null<Dynamic> = (res.error: Dynamic);
-		if (launchError != null) return Skipped('could not launch haxe (${Reflect.field(launchError, 'message')})');
-		final status: Null<Int> = (res.status: Null<Int>);
-		if (status != 0) return Skipped(firstLine(text(res.stderr) + text(res.stdout)));
-		return verdict(text(res.stdout), maps);
-		#else
-		try {
-			final process: sys.io.Process = new sys.io.Process('haxe', args);
-			final out: String = process.stdout.readAll().toString();
-			final err: String = process.stderr.readAll().toString();
-			final code: Null<Int> = process.exitCode();
-			process.close();
-			return code != 0 ? Skipped(firstLine(err + out)) : verdict(out, maps);
-		} catch (exception: Exception) {
-			return Skipped('could not launch haxe (${exception.message})');
-		}
-		#end
+	/** Whether any disqualifying spelling occurs in the candidate's own text. */
+	private static function mentionsAny(source: String, markers: Array<String>): Bool {
+		for (marker in markers) if (source.indexOf(marker) >= 0) return true;
+		return false;
 	}
 
-	/** The first non-empty line of a compiler transcript -- a report wants the reason, not the trace. */
-	private static function firstLine(transcript: String): String {
-		for (line in transcript.split('\n')) if (line.trim() != '') return line.trim();
-		return 'the probe did not compile';
-	}
-	#end
-
-	#if nodejs
-	/** Coerce a possibly-null spawn stream field (Buffer|String under utf8) to a String. */
-	private static function text(value: Dynamic): String {
-		return value == null ? '' : Std.string(value);
-	}
-	#end
-
-	/** A static call entry: `Recv.member(...)`, disqualified by its own spelling appearing in a body. */
 	/**
+	 * A static call entry: `Recv.member(...)`, disqualified by its own spelling appearing in a body.
 	 * The per-parameter value list one candidate is driven over: its OWN body literals of that
 	 * type first (each also affixed on both sides, so an equality can be told apart from a
 	 * `startsWith` / `endsWith` / `contains` that agrees with it on the bare literal), then the
@@ -399,8 +360,8 @@ final class StdlibDifferential {
 		for (literal in candidate.literals) if (literal.type == type) {
 			add(literal.code);
 			if (type == 'String') {
-				add("'~' + " + literal.code);
-				add(literal.code + " + '~'");
+				add('\'~\' + ${literal.code}');
+				add('${literal.code} + \'~\'');
 			}
 		}
 		for (value in GRID[type] ?? []) add(value);
@@ -416,7 +377,7 @@ final class StdlibDifferential {
 	 * most convincing disguise -- the finding is literally true and completely useless.
 	 */
 	private static function fn(id: String, ret: String, params: Array<String>): StdlibFn {
-		final markers: Array<String> = id.indexOf('StringTools.') == 0 ? [id, '.' + member(id)] : [id];
+		final markers: Array<String> = id.indexOf('StringTools.') == 0 ? [id, '.${member(id)}'] : [id];
 		return {
 			id: id,
 			ret: ret,
@@ -435,7 +396,7 @@ final class StdlibDifferential {
 			params: params,
 			instance: true,
 			property: false,
-			markers: ['.' + member(id)]
+			markers: ['.${member(id)}']
 		};
 	}
 
@@ -447,7 +408,7 @@ final class StdlibDifferential {
 			params: params,
 			instance: true,
 			property: true,
-			markers: ['.' + member(id)]
+			markers: ['.${member(id)}']
 		};
 	}
 
@@ -501,7 +462,7 @@ final class StdlibDifferential {
 			if (param.type == want || want == 'Any' || (param.type == 'Int' && want == 'Float'))
 				out.push({ code: binder, display: param.name, param: param.name });
 			else if (want == 'String')
-				out.push({ code: "'$" + binder + "'", display: "'$" + param.name + "'", param: param.name });
+				out.push({ code: '\'$$$binder\'', display: '\'$$${param.name}\'', param: param.name });
 		}
 		for (literal in candidate.literals) if (literal.type == want || want == 'Any' || (literal.type == 'Int' && want == 'Float'))
 			out.push({ code: literal.code, display: literal.code, param: null });
@@ -517,8 +478,46 @@ final class StdlibDifferential {
 
 	/** `count` tab characters, the generated program's indentation unit. */
 	private static function tabs(count: Int): String {
-		return StringTools.rpad('', '\t', count);
+		return ''.rpad('\t', count);
 	}
+
+	#if (sys || nodejs)
+	/** Runs `haxe -cp <dir> --run Probe` and maps its result onto an outcome. */
+	private static function interpret(dir: String, maps: Array<Mapping>): DifferentialOutcome {
+		final args: Array<String> = ['-cp', dir, '--run', PROBE_CLASS];
+		#if nodejs
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', args, { encoding: 'utf8', timeout: 300000 });
+		final launchError: Null<Dynamic> = (res.error: Dynamic);
+		if (launchError != null) return Skipped('could not launch haxe (${Reflect.field(launchError, 'message')})');
+		final status: Null<Int> = (res.status: Null<Int>);
+		return status != 0 ? Skipped(firstLine(text(res.stderr) + text(res.stdout))) : verdict(text(res.stdout), maps);
+		#else
+		try {
+			final process: sys.io.Process = new sys.io.Process('haxe', args);
+			final out: String = process.stdout.readAll().toString();
+			final err: String = process.stderr.readAll().toString();
+			final code: Null<Int> = process.exitCode();
+			process.close();
+			return code != 0 ? Skipped(firstLine(err + out)) : verdict(out, maps);
+		} catch (exception: Exception) {
+			return Skipped('could not launch haxe (${exception.message})');
+		}
+		#end
+	}
+
+	/** The first non-empty line of a compiler transcript -- a report wants the reason, not the trace. */
+	private static function firstLine(transcript: String): String {
+		for (line in transcript.split('\n')) if (line.trim() != '') return line.trim();
+		return 'the probe did not compile';
+	}
+	#end
+
+	#if nodejs
+	/** Coerce a possibly-null spawn stream field (Buffer|String under utf8) to a String. */
+	private static function text(value: Dynamic): String {
+		return value == null ? '' : Std.string(value);
+	}
+	#end
 
 }
 

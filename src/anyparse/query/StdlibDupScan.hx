@@ -118,14 +118,14 @@ final class StdlibDupScan {
 	 */
 	public static final STDLIB_NAMES: Array<String> = ['Math', 'Std', 'StringTools', 'String'];
 
-	/** Members of a `STDLIB_NAMES` receiver that are NOT deterministic; a body touching one is refused. */
-	private static final NONDETERMINISTIC_MEMBERS: Array<String> = ['random'];
-
 	/** Above this arity the mapping enumeration stops being bounded in practice. */
 	private static inline final MAX_ARITY: Int = 3;
 
 	/** Body literals carried into the mapping enumeration, in document order. */
 	private static inline final MAX_LITERALS: Int = 8;
+
+	/** Members of a `STDLIB_NAMES` receiver that are NOT deterministic; a body touching one is refused. */
+	private static final NONDETERMINISTIC_MEMBERS: Array<String> = ['random'];
 
 	/**
 	 * Every candidate in one file, plus the per-stage counts. A file the plugin cannot parse
@@ -352,10 +352,9 @@ final class StdlibDupScan {
 			}
 			for (child in node.children) {
 				final fragment: Null<String> = child.children.length == 0 ? child.name : null;
-				if (fragment != null && spliceableFragment(fragment)) {
-					final text: String = fragment;
-					push(out, { type: 'String', code: "'" + text + "'" });
-				}
+				if (fragment == null || !spliceableFragment(fragment)) continue;
+				final text: String = fragment;
+				push(out, { type: 'String', code: '\'$text\'' });
 			}
 		}
 		for (child in node.children) gatherLiterals(child, shape, out);
