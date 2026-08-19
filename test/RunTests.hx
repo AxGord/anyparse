@@ -503,6 +503,7 @@ import unit.HxImportAliasInSliceTest;
 import unit.HxCondTypeSlotSliceTest;
 import unit.HxBinopStmtNoSemiSliceTest;
 import unit.HxCondSpliceScopeSliceTest;
+import unit.HxCondSpliceExprSliceTest;
 import unit.HxCondMemberSlotSliceTest;
 import unit.HxExprStmtTerminatorSliceTest;
 import unit.HxCondUnbalancedRegionSliceTest;
@@ -830,6 +831,7 @@ class RunTests {
 		addCase(new HxCondModSliceTest());
 		addCase(new HxCondVarInitSliceTest());
 		addCase(new HxCondMemberSlotSliceTest());
+		addCase(new HxCondSpliceExprSliceTest());
 		addCase(new HxCondParamElseSepSliceTest());
 		addCase(new HxFnExprBodySliceTest());
 		addCase(new HxFnExprSliceTest());

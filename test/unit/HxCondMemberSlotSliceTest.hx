@@ -309,12 +309,6 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 		};
 	}
 
-	private function singleMember(source: String): HxClassMember {
-		final ast: HxClassDecl = HaxeParser.parse(source);
-		Assert.equals(1, ast.members.length);
-		return ast.members[0].member;
-	}
-
 	private function expectCondBody(body: HxFnBody): HxConditionalFnBody {
 		return switch body {
 			case CondBody(inner): inner;
@@ -333,13 +327,6 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 		return switch member {
 			case CondNameFnMember(decl): decl;
 			case _: throw 'expected CondNameFnMember, got $member';
-		};
-	}
-
-	private function expectVarSemiCondInitMember(member: HxClassMember): HxVarSemiCondInitDecl {
-		return switch member {
-			case VarSemiCondInitMember(decl): decl;
-			case _: throw 'expected VarSemiCondInitMember, got $member';
 		};
 	}
 

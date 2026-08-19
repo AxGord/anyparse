@@ -639,6 +639,27 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
+	 * The EXPRESSION-scope twin of the case above, and the boundary this slice moved. A member
+	 * initializer guarded by `#if <cond> <expr>; #else <expr>; #end` used to fall through to
+	 * `HxExpr.CondSpliceExpr` whenever the field also carried a property-accessor clause
+	 * (`openfl/ui/Mouse.hx:61`), so a name spelled in the region was refused exactly like the
+	 * dangling-operator splices above. `HxVarSemiCondInitDecl` now binds the accessor clause, the
+	 * region is `Conditional` with both branch values as real children, and the rename reaches
+	 * the occurrence INSIDE the guard.
+	 *
+	 * The guard did not need widening or narrowing for this: it walks the gaps an opaque node's
+	 * own children do not cover, so it stops firing precisely where nodes appeared. The
+	 * dangling-operator refusals two tests up are unchanged.
+	 */
+	public function testModelledAccessorClauseConditionalInitRenames(): Void {
+		final src: String = 'class C {\n\tpublic static var supportsCursor(default, null):Bool = #if !mobile native; #else false; #end\n'
+			+ '\n\tpublic static var native:Bool = true;\n\n\tstatic function f():Bool {\n\t\treturn native;\n\t}\n}';
+		final expected: String = 'class C {\n\tpublic static var supportsCursor(default, null):Bool = #if !mobile hw; #else false; #end\n'
+			+ '\n\tpublic static var hw:Bool = true;\n\n\tstatic function f():Bool {\n\t\treturn hw;\n\t}\n}';
+		assertRename(src, 4, 20, 'hw', expected);
+	}
+
+	/**
 	 * Every splice region ENDS in `#end`, so a byte scan that counts a `#`-prefixed directive
 	 * keyword as a mention would refuse every rename of a binding called `end` in any file
 	 * carrying one - a blanket refusal wearing a name-scoped disguise. It renames.

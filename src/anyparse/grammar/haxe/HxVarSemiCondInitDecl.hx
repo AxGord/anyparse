@@ -62,14 +62,36 @@ package anyparse.grammar.haxe;
  * an enum BRANCH only - with the lead here the writer produced
  * `... -> Void= #if nodejs`.
  *
- * `meta` / `access` / `more` from `HxVarDecl` are not mirrored: member
- * metadata rides `HxMemberDecl.meta`, a property accessor clause and a
- * multi-binding `var a, b` have no meaning next to a guarded initializer,
- * and no source pairs them.
+ * `access` IS mirrored from `HxVarDecl`, same spelling
+ * (`@:optional @:fmt(tightLead) @:lead('(')`), because a source pairs
+ * them after all: `openfl/ui/Mouse.hx:61` and `:66` spell
+ *
+ * ```haxe
+ * public static var supportsCursor(default, null):Bool = #if !mobile true; #else false; #end
+ * ```
+ *
+ * Without the field the accessor clause fail-rewinds this ctor and the
+ * member falls through to `VarMember`, whose `init` reaches
+ * `HxExpr.CondSpliceExpr` — the exact silently-wrong parse
+ * `HxClassMember.VarSemiCondInitMember`'s doc warns about: the raw span
+ * swallows the whole region and binds the NEXT member's `public` as its
+ * tail operand, so `hxq fmt` emitted `#end\n\tpublic\n\tstatic var other`
+ * and tore a modifier off its own member.
+ *
+ * It does NOT weaken the fail-fast discipline that keeps this ctor off
+ * every ordinary field: `access` is optional, but `region` is not, and
+ * the `@:kw('#if')` reached through `HxVarSemiInitRegion` is still what
+ * every non-guarded field fails on. `var a(get, set):Int;` and
+ * `var b(default, null):Int = 1;` rewind exactly as before.
+ *
+ * `meta` / `more` from `HxVarDecl` stay unmirrored: member metadata rides
+ * `HxMemberDecl.meta`, a multi-binding `var a, b` has no meaning next to a
+ * guarded initializer, and no source pairs them.
  */
 @:peg
 typedef HxVarSemiCondInitDecl = {
 	var name: HxVarNameLit;
+	@:optional @:fmt(tightLead) @:lead('(') var access: Null<HxAccessClause>;
 	@:optional @:fmt(typeHintColon) @:lead(':') @:queryTypeSlot var type: Null<HxType>;
 	var region: HxVarSemiInitRegion;
 }
