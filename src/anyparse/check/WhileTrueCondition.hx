@@ -249,7 +249,7 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 		final head: String = 'while ($condText) ${kept.text}';
 		return {
 			span: loopSpan,
-			text: lift == null ? null : (lift == '' ? head : '$head\n$lift')
+			text: lift == null ? null : lift == '' ? head : '$head\n$lift'
 		};
 	}
 

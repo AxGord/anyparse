@@ -33,8 +33,46 @@ using StringTools;
 @:nullSafety(Strict)
 final class HxArrowBlockBodyOpenSliceTest extends Test {
 
-	private static final CFG: String =
-		'{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAnywhereInFile":2,"afterBlocks":"remove","afterLeftCurly":"keep","beforeRightCurly":"keep","classEmptyLines":{"beginType":1,"endType":1},"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,"endType":1}},"wrapping":{"functionSignature":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"totalItemLength <= n","value":100},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1}],"type":"noWrap"}]},"maxLineLength":140,"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWrap"}]},"opBoolChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"itemCount <= n","value":3},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"totalItemLength <= n","value":120},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]},"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]},"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},"whitespace":{"addLineCommentSpace":false,"commaPolicy":"after","ifPolicy":"around","forPolicy":"around","whilePolicy":"around","switchPolicy":"around","catchPolicy":"around","arrowFunctionsPolicy":"around","functionTypeHaxe3Policy":"none","functionTypeHaxe4Policy":"none","binopPolicy":"around","intervalPolicy":"around","openingBracketPolicy":"none","closingBracketPolicy":"none","bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before"},"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"},"typedefBraces":{"openingPolicy":"after","closingPolicy":"before"},"blockBraces":{"openingPolicy":"around","closingPolicy":"before"},"unknownBraces":{"openingPolicy":"after","closingPolicy":"before"}},"parenConfig":{"callParens":{"openingPolicy":"none","closingPolicy":"none"},"funcParamParens":{"openingPolicy":"none","closingPolicy":"none"},"conditionParens":{"openingPolicy":"before","closingPolicy":"after"},"anonFuncParamParens":{"openingPolicy":"none","closingPolicy":"none"},"forLoopParens":{"openingPolicy":"before","closingPolicy":"after"},"expressionParens":{"openingPolicy":"none","closingPolicy":"none"}}},"lineEnds":{"emptyCurly":"noBreak"},"sameLine":{"ifBody":"fitLine","forBody":"fitLine","whileBody":"fitLine","functionBody":"fitLine","expressionIf":"next","comprehensionFor":"fitLine"}}';
+	private static final CFG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,'
+		+ '"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAnywhereInFile":2,"afterBlocks":"remove",'
+		+ '"afterLeftCurly":"keep","beforeRightCurly":"keep","classEmptyLines":{"beginType":1,"endType":1},'
+		+ '"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,'
+		+ '"endType":1}},"wrapping":{"functionSignature":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"rules":[{"conditions":[{"cond":"totalItemLength <= n","value":100},{'
+		+ '"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},'
+		+ '{"conditions":[{"cond":"itemCount <= n","value":1}],"type":"noWrap"}]},'
+		+ '"maxLineLength":140,"callParameter":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],'
+		+ '"type":"noWrap"}]},"opBoolChain":{"defaultWrap":"noWrap",'
+		+ '"rules":[{"conditions":[{"cond":"itemCount <= n","value":3},{"cond":"exceedsMaxLineLength",'
+		+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"totalItemLength <= n","value":120},{'
+		+ '"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
+		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine",'
+		+ '"location":"beforeLast"}]},"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},'
+		+ '"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength",'
+		+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],'
+		+ '"type":"fillLine","location":"beforeLast"}]},' + '"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
+		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},'
+		+ '"whitespace":{"addLineCommentSpace":false,"commaPolicy":"after","ifPolicy":"around",'
+		+ '"forPolicy":"around","whilePolicy":"around","switchPolicy":"around","catchPolicy":"around",'
+		+ '"arrowFunctionsPolicy":"around","functionTypeHaxe3Policy":"none",'
+		+ '"functionTypeHaxe4Policy":"none","binopPolicy":"around","intervalPolicy":"around",'
+		+ '"openingBracketPolicy":"none","closingBracketPolicy":"none",'
+		+ '"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before"},'
+		+ '"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"},'
+		+ '"typedefBraces":{"openingPolicy":"after","closingPolicy":"before"},'
+		+ '"blockBraces":{"openingPolicy":"around","closingPolicy":"before"},'
+		+ '"unknownBraces":{"openingPolicy":"after","closingPolicy":"before"}},'
+		+ '"parenConfig":{"callParens":{"openingPolicy":"none","closingPolicy":"none"},'
+		+ '"funcParamParens":{"openingPolicy":"none","closingPolicy":"none"},'
+		+ '"conditionParens":{"openingPolicy":"before","closingPolicy":"after"},'
+		+ '"anonFuncParamParens":{"openingPolicy":"none","closingPolicy":"none"},'
+		+ '"forLoopParens":{"openingPolicy":"before","closingPolicy":"after"},'
+		+ '"expressionParens":{"openingPolicy":"none","closingPolicy":"none"}}},' + '"lineEnds":{"emptyCurly":"noBreak"},'
+		+ '"sameLine":{"ifBody":"fitLine","forBody":"fitLine","whileBody":"fitLine",'
+		+ '"functionBody":"fitLine","expressionIf":"next","comprehensionFor":"fitLine"}}';
 
 	/**
 	 * Shared by the two shape-B tests (gate alone, and gate with
@@ -52,19 +90,17 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 
 	/** DISCRIMINATES: a chain whose LAST link carries a wide expression-bodied arrow keeps the block-bodied `.onFinished` link cuddled (`-> {`); without the gate the rest-of-stack lookahead strands the `{` on its own line. */
 	public function testChainWideTrailingLinkKeepsArrowCuddled(): Void {
-		final src: String = 'class Sample {\n\n\tfunction run() {\n'
-			+ '\t\tMotions.blend(_sectionPanel, 0.3, { shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n'
-			+ '\t\t\t_sectionPanel.enabled = !state;\n\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n'
-			+ '\t\t}).onTicked(() -> dispatchAlert(new Alert(Alert.MUTATE)));\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tMotions.blend(_sectionPanel, 0.3, {'
+			+ ' shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n\t\t\t_sectionPanel.enabled = !state;\n'
+			+ '\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n\t\t}).onTicked(() -> dispatchAlert(new Alert(Alert.MUTATE)));\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	/** CONTROL: the same chain with a NARROW trailing-link argument -- the rest-of-stack sum stays under `maxLineLength`, so the arrow was already cuddled before the gate. */
 	public function testChainNarrowTrailingLinkStaysCuddled(): Void {
-		final src: String = 'class Sample {\n\n\tfunction run() {\n'
-			+ '\t\tMotions.blend(_sectionPanel, 0.3, { shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n'
-			+ '\t\t\t_sectionPanel.enabled = !state;\n\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n\t\t}).onTicked(() -> d(1));\n\t}\n'
-			+ '\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tMotions.blend(_sectionPanel, 0.3, {'
+			+ ' shade: state ? 0.0 : 1, shiftY: state ? 0.0 : 1 }).onFinished(() -> {\n\t\t\t_sectionPanel.enabled = !state;\n'
+			+ '\t\t\tdispatchAlert(new Alert(Alert.FINISHED));\n\t\t}).onTicked(() -> d(1));\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -134,9 +170,8 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	 */
 	public function testFlatObjectLiteralArrowBodyStillBreaks(): Void {
 		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tfinal resultName = collectionNameValue.mapEntriesHere(\n'
-			+ '\t\t\tentryValueName ->\n'
-			+ '\t\t\t\t{primaryKeyFieldNamexxxxxxxxxx: entryValueName.identifierName, secondaryLabelName: entryValueName.captionName }\n'
-			+ '\t\t);\n\t}\n\n}';
+			+ '\t\t\tentryValueName ->\n\t\t\t\t{primaryKeyFieldNamexxxxxxxxxx: entryValueName.identifierName, '
+			+ 'secondaryLabelName: entryValueName.captionName }\n\t\t);\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -160,10 +195,9 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	 * columns against a 140 budget. Reverting the whole arm leaves this PASSING.
 	 */
 	public function testKeepModeLiteralBreakingLaterStillBreaks(): Void {
-		final src: String = 'class Sample {\n\n\tfunction run() {\n'
-			+ '\t\tfinal resultValueName = receiverObjectNameHereLongerStill.methodNameGoesHereTooNow(entryValueName ->\n'
-			+ '\t\t\t{onDoneCallbackNameValueLong: () -> {\n\t\t\t\tperformActionNow(entryValueName);\n\t\t\t}, tagLabelValue: 1 }\n'
-			+ '\t\t);\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tfinal resultValueName = '
+			+ 'receiverObjectNameHereLongerStill.methodNameGoesHereTooNow(entryValueName ->\n\t\t\t{onDoneCallbackNameValueLong: () -> {\n'
+			+ '\t\t\t\tperformActionNow(entryValueName);\n\t\t\t}, tagLabelValue: 1 }\n\t\t);\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src, keepModeCfg()));
 	}
 

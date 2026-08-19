@@ -14,10 +14,10 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxComprehensionBlockHugSliceTest extends Test {
 
-	private static final FIT: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
-	private static final SAME: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "same"}}';
+	private static final FIT: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
+	private static final SAME: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "sameLine": {"comprehensionFor": "same"}}';
 
 	public function new(): Void {
 		super();
@@ -42,9 +42,8 @@ final class HxComprehensionBlockHugSliceTest extends Test {
 	}
 
 	public function testComprehensionForSameLeadingBreaksNoHug(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n'
-			+ '\t\t\tfor (typeKey => colorList in folderColorsMapValueHere) {\n'
-			+ '\t\t\t\tfinal bitmap = makeBitmapFromColors(colorList);\n\t\t\t\tbitmap;\n\t\t\t}\n\t\t];\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n\t\t\tfor (typeKey => colorList in folderColorsMapValueHere) '
+			+ '{\n\t\t\t\tfinal bitmap = makeBitmapFromColors(colorList);\n\t\t\t\tbitmap;\n\t\t\t}\n\t\t];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, SAME));
 	}
 

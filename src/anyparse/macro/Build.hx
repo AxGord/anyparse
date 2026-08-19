@@ -88,22 +88,24 @@ class Build {
 		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules[shape.root];
 		final rootTriviaBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations[AnnotationKeys.TRIVIA_BEARING] == true;
 		final rootSpansBearing: Bool = ctx.spans && rootNode != null && rootNode.kind != Terminal;
-		final rootReturnCT: ComplexType = if (rootSpansBearing)
-			TPath({
-				pack: packOf(shape.root).concat(['spans']),
-				name: 'Pairs',
-				sub: '${rootSimple}S',
-				params: []
-			});
-		else if (rootTriviaBearing)
-			TPath({
-				pack: packOf(shape.root).concat(['trivia']),
-				name: 'Pairs',
-				sub: '${rootSimple}T',
-				params: []
-			});
-		else
-			TPath({ pack: packOf(shape.root), name: rootSimple, params: [] });
+		final rootReturnCT: ComplexType = TPath(
+			if (rootSpansBearing)
+				{
+					pack: packOf(shape.root).concat(['spans']),
+					name: 'Pairs',
+					sub: '${rootSimple}S',
+					params: []
+				}
+			else if (rootTriviaBearing)
+				{
+					pack: packOf(shape.root).concat(['trivia']),
+					name: 'Pairs',
+					sub: '${rootSimple}T',
+					params: []
+				}
+			else
+				{ pack: packOf(shape.root), name: rootSimple, params: [] }
+		);
 		final rootFnName: String = if (rootSpansBearing)
 			'parse${rootSimple}S';
 		else if (rootTriviaBearing)

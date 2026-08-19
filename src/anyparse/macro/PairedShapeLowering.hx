@@ -90,7 +90,12 @@ class PairedShapeLowering {
 	/** Rule names in a deterministic order, so generated field order does not follow Map iteration order. */
 	private function sortedRuleNames(): Array<String> {
 		final names: Array<String> = [for (name in _shape.rules.keys()) name];
-		names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		names.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		return names;
 	}
 

@@ -140,7 +140,12 @@ class X {
 		final pattern: Pattern = plugin.parsePattern("function $n(?$p:Bool = true):Void {}");
 		final tree: QueryNode = plugin.parseFile(source);
 		final names: Array<String> = boundNames(Matcher.search(pattern, tree), 'n');
-		names.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		names.sort((a, b) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		Assert.equals(
 			'local,member,mod', names.join(','), 'every modifier-free function declaration position must match — got ${names.join(',')}'
 		);
@@ -184,7 +189,12 @@ class Y {
 		final pattern: Pattern = plugin.parsePattern("final $n:$t = new $x();");
 		final tree: QueryNode = plugin.parseFile(source);
 		final names: Array<String> = boundNames(Matcher.search(pattern, tree), 'n');
-		names.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		names.sort((a, b) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		Assert.equals('local,member,mod', names.join(','), 'every final-binding position must match — got ${names.join(',')}');
 	}
 

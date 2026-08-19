@@ -49,7 +49,8 @@ class DuplicateCaseCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 2: b();\n\t\t\tcase _: c();\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 2: b();\n\t\t\tcase _: c();\n\t\t}\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -58,7 +59,8 @@ class DuplicateCaseCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase x if (p): a();\n\t\t\tcase x if (q): b();\n\t\t\tcase _: c();\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase x if (p): a();\n\t\t\tcase x if (q): b();\n'
+				+ '\t\t\tcase _: c();\n\t\t}\n\t}\n}'
 			).length
 		);
 	}

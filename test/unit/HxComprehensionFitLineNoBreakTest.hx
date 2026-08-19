@@ -24,8 +24,8 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxComprehensionFitLineNoBreakTest extends Test {
 
-	private static final CFG: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
+	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
 
 	public function new(): Void {
 		super();

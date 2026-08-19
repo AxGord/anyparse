@@ -88,9 +88,8 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 	 * whose array-pattern cases carry one-line values, one of which
 	 * overflows `maxLineLength`.
 	 */
-	private static final EXPR_SWITCH_SRC: String = 'class E {\n'
-		+ '\tfunction pick(node:Shape, kind:String, current:Bool, tint:Int = 0):Prop {\n'
-		+ '\t\treturn switch [node.shapeInfo.kind, kind] {\n'
+	private static final EXPR_SWITCH_SRC: String = 'class E {\n\tfunction pick(node:Shape, kind:String, current:Bool, tint:Int = 0):Prop {'
+		+ '\n\t\treturn switch [node.shapeInfo.kind, kind] {\n'
 		+ '\t\t\tcase [KindData.KIND_RECTANGLE_SHAPE, KindData.KIND_RECTANGLE_STROKE]: '
 		+ 'LineTint(current ? cast(node, RectangleShape).lineTint : tint);\n'
 		+ '\t\t\tcase [KindData.KIND_OVAL_SHAPE, KindData.KIND_OVAL_STROKE]: LineTint(current ? cast(node, OvalShape).lineTint : tint);\n'

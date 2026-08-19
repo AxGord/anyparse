@@ -15,17 +15,17 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCallParamFunctionLambdaSliceTest extends Test {
 
-	private static final CONFIG: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
+	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
+		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testFunctionLambdaTrailingGluesHead(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n'
-			+ '\t\twidget.bindEnterFrameHandlerHere(EventType.ENTER_FRAME_EVENT, function(eventValue:EventType):Void {\n'
-			+ '\t\t\tadvanceFrameStep();\n\t\t});\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\twidget.bindEnterFrameHandlerHere(EventType.ENTER_FRAME_EVENT, '
+			+ 'function(eventValue:EventType):Void {\n\t\t\tadvanceFrameStep();\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

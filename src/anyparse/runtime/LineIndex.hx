@@ -37,7 +37,12 @@ final class LineIndex {
 	 * source.
 	 */
 	public function lineColAt(offset: Int): Position {
-		final end: Int = offset < 0 ? 0 : (offset < _sourceLength ? offset : _sourceLength);
+		final end: Int = if (offset < 0)
+			0
+		else if (offset < _sourceLength)
+			offset
+		else
+			_sourceLength;
 		var lo: Int = 0;
 		var hi: Int = _lineStarts.length - 1;
 		while (lo < hi) {

@@ -51,7 +51,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** Control: a field of a resolved CLASS type keeps the suggestion — a class method does not reassign the field. */
 	public function testClassTypedFieldMethodCallStillFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
-			'class D { public function nw() {} public function go():Void {} } class C { private var _d:D = new D(); function r():Void _d.go(); }'
+			'class D { public function nw() {} public function go():Void {} } class C {'
+			+ ' private var _d:D = new D(); function r():Void _d.go(); }'
 		);
 		Assert.equals(1, vs.length);
 	}
@@ -109,7 +110,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** A non-ctor `this =` reachable only through `#if` is scanned conservatively (all branches) — the abstract rebinds, so NOT flagged. */
 	public function testConditionalThisWriteAbstractNotFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
-			'abstract Buf(Int) { public inline function new(v:Int) this = v; public inline function f():Void { #if x this = 1; #end } } class C { private var _b:Buf = new Buf(0); function r():Void _b.f(); }'
+			'abstract Buf(Int) { public inline function new(v:Int) this = v; public inline function f():Void { #if x this = 1; #end } } '
+			+ 'class C { private var _b:Buf = new Buf(0); function r():Void _b.f(); }'
 		);
 		Assert.equals(0, vs.length);
 	}
@@ -127,7 +129,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** `@:forward` to a CLASS underlying — a forwarded call mutates the object, never the binding — so the ctor-only abstract field IS flagged. */
 	public function testForwardToClassAbstractFieldFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
-			'@:forward abstract W(Impl) { public inline function new(v:Impl) this = v; } class Impl { public function new() {} public function go():Void {} } class C { private var _w:W = make(); function r():Void _w.go(); function make():W return null; }'
+			'@:forward abstract W(Impl) { public inline function new(v:Impl) this = v; } class Impl { public function new() {} public '
+			+ 'function go():Void {} } class C { private var _w:W = make(); function r():Void _w.go(); function make():W return null; }'
 		);
 		Assert.equals(1, vs.length);
 	}
@@ -135,7 +138,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** `@:forward` to an abstract underlying that itself rebinds `this` in a non-ctor method — the forward inherits the rebind, so NOT flagged. */
 	public function testForwardToRebindingAbstractNotFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
-			'${REBIND_INNER}@:forward abstract W2(Inner) { public inline function new(v:Inner) this = v; } class C { private var _w:W2 = make(); function r():Void _w.bump(); function make():W2 return null; }'
+			'$REBIND_INNER@:forward abstract W2(Inner) { public inline function new(v:Inner) this = v; } class C {'
+			+ ' private var _w:W2 = make(); function r():Void _w.bump(); function make():W2 return null; }'
 		);
 		Assert.equals(0, vs.length);
 	}
@@ -143,7 +147,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** `@:forward` to an underlying not declared in scope — the forwarded call cannot be proven safe, so NOT flagged (conservative). */
 	public function testForwardToUnresolvedUnderlyingNotFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
-			'@:forward abstract W3(Ext) {} class C { private var _w:W3 = make(); function r():Void _w.go(); function make():W3 return null; }'
+			'@:forward abstract W3(Ext) {} class C {'
+			+ ' private var _w:W3 = make(); function r():Void _w.go(); function make():W3 return null; }'
 		);
 		Assert.equals(0, vs.length);
 	}
@@ -178,7 +183,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** A module-level modifier between `@:forward` and the decl (`@:forward private abstract`) must not drop the meta — forwards to a rebinding underlying, so NOT flagged. */
 	public function testForwardMetaBeforeModifierPreserved(): Void {
 		final vs: Array<Violation> = fieldViolations(
-			'${REBIND_INNER}@:forward private abstract Wp(Inner) { public inline function new(v:Inner) this = v; } class C { private var _w:Wp = make(); function r():Void _w.bump(); function make():Wp return null; }'
+			'$REBIND_INNER@:forward private abstract Wp(Inner) { public inline function new(v:Inner) this = v; } class C {'
+			+ ' private var _w:Wp = make(); function r():Void _w.bump(); function make():Wp return null; }'
 		);
 		Assert.equals(0, vs.length);
 	}
@@ -188,7 +194,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		Assert.equals(
 			0,
 			fieldViolations(
-				'@:build(M.build()) private abstract Bp(Int) { public inline function new(v:Int) this = v; public function read():Int return this; } class C { private var _b:Bp = new Bp(0); function r():Int return _b.read(); }'
+				'@:build(M.build()) private abstract Bp(Int) { public inline function new(v:Int) this = v; public function read():Int '
+				+ 'return this; } class C { private var _b:Bp = new Bp(0); function r():Int return _b.read(); }'
 			).length
 		);
 	}
@@ -196,7 +203,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** A `#if`-guarded meta+decl (`#if x @:forward abstract Wg(Inner) ... #end`, openfl `Vector` pattern) lifts the meta out of the region — forwards to a rebinding underlying, so NOT flagged. */
 	public function testGuardedForwardMetaLifted(): Void {
 		final vs: Array<Violation> = fieldViolations(
-			'${REBIND_INNER}#if x @:forward abstract Wg(Inner) { public inline function new(v:Inner) this = v; } #end class C { private var _w:Wg = make(); function r():Void _w.bump(); function make():Wg return null; }'
+			'$REBIND_INNER#if x @:forward abstract Wg(Inner) { public inline function new(v:Inner) this = v; } #end class C {'
+			+ ' private var _w:Wg = make(); function r():Void _w.bump(); function make():Wg return null; }'
 		);
 		Assert.equals(0, vs.length);
 	}
@@ -206,7 +214,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		Assert.equals(
 			1,
 			fieldViolations(
-				'private abstract Bp2(Int) { public inline function new(v:Int) this = v; public function read():Int return this; } class C { private var _b:Bp2 = new Bp2(0); function r():Int return _b.read(); }'
+				'private abstract Bp2(Int) { public inline function new(v:Int) this = v; public function read():Int return this; } '
+				+ 'class C { private var _b:Bp2 = new Bp2(0); function r():Int return _b.read(); }'
 			).length
 		);
 	}
@@ -224,7 +233,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	 */
 	public function testForwardToAliasedUnderlyingWhitelistedNameFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
-			'@:forward abstract Bytes(HaxeBytes) { public inline function new(v:HaxeBytes) this = v; } class C { private var _b:Bytes = make(); function r():Void _b.blit(); function make():Bytes return null; }'
+			'@:forward abstract Bytes(HaxeBytes) { public inline function new(v:HaxeBytes) this = v; } class C {'
+			+ ' private var _b:Bytes = make(); function r():Void _b.blit(); function make():Bytes return null; }'
 		);
 		Assert.equals(1, vs.length);
 	}
@@ -232,7 +242,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** The local mirror of the aliased-underlying case -- same unknown-not-unsafe resolution, same verdict. */
 	public function testForwardToAliasedUnderlyingWhitelistedNameLocalFlagged(): Void {
 		final vs: Array<Violation> = localViolations(
-			'@:forward abstract Bytes(HaxeBytes) { public inline function new(v:HaxeBytes) this = v; } class C { function r():Void { var b:Bytes = make(); b.blit(); trace(b); } function make():Bytes return null; }'
+			'@:forward abstract Bytes(HaxeBytes) { public inline function new(v:HaxeBytes) this = v; } class C { function r():Void {'
+			+ ' var b:Bytes = make(); b.blit(); trace(b); } function make():Bytes return null; }'
 		);
 		Assert.equals(1, vs.length);
 	}

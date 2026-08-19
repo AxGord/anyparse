@@ -84,7 +84,7 @@ final class HaxelibResolver {
 		final status: Null<Int> = (res.status: Null<Int>);
 		if (status == null || status != 0) return null;
 		final out: Dynamic = res.stdout;
-		return out == null ? null : Std.string(out);
+		return out == null ? null : '$out';
 		#elseif sys
 		try {
 			final process: sys.io.Process = new sys.io.Process('haxelib', ['libpath', name]);

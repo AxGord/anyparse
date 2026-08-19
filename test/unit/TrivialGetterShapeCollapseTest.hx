@@ -45,7 +45,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		));
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove get_active',
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove '
+			+ 'get_active',
 			vs[0].message
 		);
 	}
@@ -69,7 +70,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		));
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove get_active and mark 1 external write(s) with @:bypassAccessor',
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove '
+			+ 'get_active and mark 1 external write(s) with @:bypassAccessor',
 			vs[0].message
 		);
 	}
@@ -117,7 +119,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		));
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'active\' has a trivial getter and setter over backing field \'_active\'; use a plain field \'var active\' and remove get_active/set_active',
+			'property \'active\' has a trivial getter and setter over backing field \'_active\'; use a plain field \'var active\' and '
+			+ 'remove get_active/set_active',
 			vs[0].message
 		);
 	}
@@ -189,9 +192,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		// The sibling arm: a TRIVIAL SETTER collapse to (get, default) renames the backing-field
 		// WRITE, which under a loop-variable shadow would become the self-assignment `x = x`.
 		final src: String = cls(
-			'public var x(get, set):Int;\n\tprivate var _x:Int = 0;\n\tprivate var _items:Array<Int> = [];\n'
-			+ '\tfunction get_x():Int { redraw(); return _x; }\n\tfunction set_x(v:Int):Int return _x = v;\n'
-			+ '\tfunction m():Void { for (x in _items) _x = x; }'
+			'public var x(get, set):Int;\n\tprivate var _x:Int = 0;\n\tprivate var _items:Array<Int> = [];\n\tfunction get_x():Int {'
+			+ ' redraw(); return _x; }\n\tfunction set_x(v:Int):Int return _x = v;\n\tfunction m():Void { for (x in _items) _x = x; }'
 		);
 		final fixed: String = fixedText(src);
 		Assert.isTrue(fixed.indexOf('this.x = x') >= 0, 'a shadowed write target must be qualified');
@@ -231,7 +233,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'active\' has a trivial getter over backing field \'_active\', but 4 external write(s) block a (default, set) collapse; mark get_active inline',
+			'property \'active\' has a trivial getter over backing field \'_active\', but 4 external write(s) block a (default, set) '
+			+ 'collapse; mark get_active inline',
 			vs[0].message
 		);
 		final fixed: String = fixedText(src);
@@ -250,26 +253,25 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'active\' has a trivial getter over backing field \'_active\', but 1 external write(s) block a (default, set) collapse; mark get_active inline',
+			'property \'active\' has a trivial getter over backing field \'_active\', but 1 external write(s) block a (default, set) '
+			+ 'collapse; mark get_active inline',
 			vs[0].message
 		);
 	}
 
 	public function testShapeAAlreadyInlineGetterNotFlagged(): Void {
 		final src: String = cls(
-			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n'
-			+ '\tinline function get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n'
-			+ '\tfunction a():Void { _active = true; }\n\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n'
-			+ '\tfunction d():Void { _active = false; }'
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tinline function get_active():Bool return '
+			+ '_active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n'
+			+ '\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n\tfunction d():Void { _active = false; }'
 		);
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testShapeAOverrideGetterNotFlagged(): Void {
 		final src: String = cls(
-			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n'
-			+ '\toverride function get_active():Bool return _active;\n'
-			+ '\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n'
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\toverride function get_active():Bool return '
+			+ '_active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n'
 			+ '\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n\tfunction d():Void { _active = false; }'
 		);
 		Assert.equals(0, violations(src).length);
@@ -297,7 +299,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'active\' has a trivial getter over backing field \'_active\', but 2 external write(s) block a (default, set) collapse; mark get_active inline',
+			'property \'active\' has a trivial getter over backing field \'_active\', but 2 external write(s) block a (default, set) '
+			+ 'collapse; mark get_active inline',
 			vs[0].message
 		);
 	}
@@ -310,7 +313,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove get_active',
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove '
+			+ 'get_active',
 			vs[0].message
 		);
 		Assert.isTrue(fixedText(src).indexOf('@:bypassAccessor') == -1);
@@ -327,7 +331,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove get_active and mark 3 external write(s) with @:bypassAccessor',
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove '
+			+ 'get_active and mark 3 external write(s) with @:bypassAccessor',
 			vs[0].message
 		);
 		final fixed: String = fixedText(src);
@@ -346,7 +351,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'count\' has a trivial getter over backing field \'_count\'; use \'var count(default, set)\', remove get_count and mark 1 external write(s) with @:bypassAccessor',
+			'property \'count\' has a trivial getter over backing field \'_count\'; use \'var count(default, set)\', remove get_count '
+			+ 'and mark 1 external write(s) with @:bypassAccessor',
 			vs[0].message
 		);
 		final fixed: String = fixedText(src);
@@ -504,9 +510,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		final files: Array<{ file: String, source: String }> = [
 			{
 				file: 'Base.hx',
-				source: 'class Base {\n\tpublic var label(get, set):String;\n\tprivate var _label:String = \'\';\n'
-					+ '\tfunction get_label():String return _label;\n'
-					+ '\tfunction set_label(v:String):String { redraw(); return _label = v; }\n}'
+				source: 'class Base {\n\tpublic var label(get, set):String;\n\tprivate var _label:String = \'\';\n\tfunction '
+					+ 'get_label():String return _label;\n\tfunction set_label(v:String):String { redraw(); return _label = v; }\n}'
 			},
 			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function draw():String return _label;\n}' }
 		];
@@ -565,7 +570,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}'
+				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate function get_active():Bool return _active;\n\t#end\n}'
 			).length
 		);
 	}
@@ -580,7 +586,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\t#end\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#if !cpp\n\tpublic function readIt():Bool return _active;\n\t#end\n}'
+				'class C {\n\t#if cpp\n\tpublic var active(get, never):Bool;\n\t#end\n\tprivate var _active:Bool = false;\n\tprivate '
+				+ 'function get_active():Bool return _active;\n\t#if !cpp\n\tpublic function readIt():Bool return _active;\n\t#end\n}'
 			).length
 		);
 	}
@@ -595,7 +602,9 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\t#if debug\n\tprivate function get_active():Bool { trace(\'read\'); return _active; }\n\t#else\n\tprivate function get_active():Bool return _active;\n\t#end\n}'
+				'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\t#if debug\n'
+				+ '\tprivate function get_active():Bool { trace(\'read\'); return _active; }\n\t#else\n'
+				+ '\tprivate function get_active():Bool return _active;\n\t#end\n}'
 			).length
 		);
 	}
@@ -609,7 +618,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tpublic var active(get, never):Bool;\n\t#if cpp\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool return _active;\n\t#end\n}'
+				'class C {\n\tpublic var active(get, never):Bool;\n\t#if cpp\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate function get_active():Bool return _active;\n\t#end\n}'
 			).length
 		);
 	}

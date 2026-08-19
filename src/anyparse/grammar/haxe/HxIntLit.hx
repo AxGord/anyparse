@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+using StringTools;
+
 /**
  * Integer literal terminal for the Haxe grammar.
  *
@@ -35,7 +37,7 @@ package anyparse.grammar.haxe;
 abstract HxIntLit(String) from String to String {
 
 	@:to public function toInt(): Int {
-		final s: String = StringTools.replace(this, '_', '');
+		final s: String = this.replace('_', '');
 		var i: Int = s.length;
 		while (i > 0) {
 			final c: Int = s.charCodeAt(i - 1);

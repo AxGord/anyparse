@@ -1055,7 +1055,12 @@ final class NullFlow {
 			// Feature 3: `!(…)` flips the comparison polarity AND the combine operator (De Morgan) — a
 			// negand proving x null then proves x non-null, and its `&&`/`||` swap; nested `!` unwinds
 			// by recursion (double-not restores the original polarity).
-			final flipCmp: Null<String> = cmpKind == ctx.notEqKind ? ctx.eqKind : (cmpKind == ctx.eqKind ? ctx.notEqKind : cmpKind);
+			final flipCmp: Null<String> = if (cmpKind == ctx.notEqKind)
+				ctx.eqKind
+			else if (cmpKind == ctx.eqKind)
+				ctx.notEqKind
+			else
+				cmpKind;
 			final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
 			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine);
 		}
@@ -1207,7 +1212,12 @@ final class NullFlow {
 		while (i < names.length) {
 			final n: String = names[i];
 			for (al in base.aliases) {
-				final other: Null<String> = al.a == n ? al.b : (al.b == n ? al.a : null);
+				final other: Null<String> = if (al.a == n)
+					al.b
+				else if (al.b == n)
+					al.a
+				else
+					null;
 				if (other != null && !names.contains(other)) names.push(other);
 			}
 			i++;

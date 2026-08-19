@@ -148,7 +148,12 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 		// Sorted: Haxe structural typing makes two field orders THE SAME type, so a
 		// key that preserved source order would split a group and lose the very
 		// candidate the rule exists to find.
-		fields.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		fields.sort((a, b) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		return '{ ${fields.join(', ')} }';
 	}
 
@@ -196,7 +201,11 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 			if (name == null) return null;
 			names.push(name);
 		}
-		return names.length == 0 ? null : (names.length == 1 ? names[0] : '${names[0]}<${names.slice(1).join(', ')}>');
+		return switch (names.length) {
+			case 0: null;
+			case 1: names[0];
+			case _: '${names[0]}<${names.slice(1).join(', ')}>';
+		};
 	}
 
 	/**

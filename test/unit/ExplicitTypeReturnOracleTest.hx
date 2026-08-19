@@ -38,10 +38,8 @@ class ExplicitTypeReturnOracleTest extends Test {
 	/** A GENERIC owner: the compiler prints `Box.T` for the class parameter and `pair.U` for the method one. */
 	private static final BOX: String = 'class Box<T> {\n\n\tpublic final v:T;\n\n\tpublic function new(v:T) {\n\t\tthis.v = v;\n\t}\n\n'
 		+ '\tpublic function get() {\n\t\treturn v;\n\t}\n\n' + '\tpublic function pair<U>(u:U) {\n\t\treturn {a: v, b: u};\n\t}\n\n}\n';
-
-	private static final BOXMAIN: String = 'class Main {\n\n\tstatic function main() {\n'
-		+ '\t\tfinal b:Box<Int> = new Box(1);\n\t\ttrace(b.get(), b.pair(\'s\'));\n\t}\n\n}\n';
-
+	private static final BOXMAIN: String =
+		'class Main {\n\n\tstatic function main() {\n\t\tfinal b:Box<Int> = new Box(1);\n\t\ttrace(b.get(), b.pair(\'s\'));\n\t}\n\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 

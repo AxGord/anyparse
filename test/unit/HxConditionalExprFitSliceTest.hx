@@ -30,18 +30,17 @@ final class HxConditionalExprFitSliceTest extends Test {
 
 	/** Over-wide conditional value with every seam glued (the `cond-assign-merge --fix` output shape). */
 	private static final GLUED: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
-		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC'
-		+ ' : DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC'
-		+ ' #else DEVICETYPE_WEB #end;\n\t}\n}';
+		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET '
+		+ '#elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
 	/**
 	 * The knob-off answer for `GLUED`: seams stay glued, the over-wide android branch's ternary breaks inside —
 	 * `HxCondExprValueFixpointSliceTest.BROKEN_RETURN` verbatim.
 	 */
 	private static final GLUED_TERNARY_BROKEN: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
-		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook()\n\t\t\t? DEVICETYPE_WINDOWSPC\n'
-		+ '\t\t\t: DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n'
-		+ '\t}\n}';
+		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook()\n'
+		+ '\t\t\t? DEVICETYPE_WINDOWSPC\n\t\t\t: DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC '
+		+ '#elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
 	/** The knob-on answer: directives at the statement indent, each branch value one indent step deeper. */
 	private static final LADDER: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
@@ -51,8 +50,8 @@ final class HxConditionalExprFitSliceTest extends Test {
 		+ '\t\t#else\n\t\t\tDEVICETYPE_WEB\n' + '\t\t#end;\n\t}\n}';
 
 	/** A conditional value that fits its line — the knob must leave it alone. */
-	private static final SHORT_FLAT: String = 'class Min {\n\tstatic function f():Void {\n'
-		+ '\t\tv = #if a XXXX #elseif b YYYY #else WWWW #end;\n\t}\n}';
+	private static final SHORT_FLAT: String =
+		'class Min {\n\tstatic function f():Void {\n\t\tv = #if a XXXX #elseif b YYYY #else WWWW #end;\n\t}\n}';
 
 	/**
 	 * A FITTING region whose only source break sits before the first `#elseif` — the hardline-refusal path: the
@@ -60,16 +59,16 @@ final class HxConditionalExprFitSliceTest extends Test {
 	 * though width never forced it. Knob off, the pre-existing source-driven layout is the expected fixed point
 	 * (the `#else` seam follows the first clause's `newlineBefore`, the `#end` stays glued).
 	 */
-	private static final MIXED_SEAM: String = 'class Min {\n\tstatic function f():Void {\n'
-		+ '\t\tv = #if a XXXX\n\t\t#elseif b YYYY #else WWWW #end;\n\t}\n}';
+	private static final MIXED_SEAM: String =
+		'class Min {\n\tstatic function f():Void {\n\t\tv = #if a XXXX\n\t\t#elseif b YYYY #else WWWW #end;\n\t}\n}';
 
 	/** Its knob-on ladder. */
 	private static final MIXED_SEAM_LADDER: String = 'class Min {\n\tstatic function f():Void {\n'
 		+ '\t\tv = #if a\n\t\t\tXXXX\n\t\t#elseif b\n\t\t\tYYYY\n\t\t#else\n\t\t\tWWWW\n\t\t#end;\n\t}\n}';
 
 	/** Its knob-off fixed point. */
-	private static final MIXED_SEAM_SOURCE: String = 'class Min {\n\tstatic function f():Void {\n'
-		+ '\t\tv = #if a XXXX\n\t\t#elseif b YYYY\n\t\t#else WWWW #end;\n\t}\n}';
+	private static final MIXED_SEAM_SOURCE: String =
+		'class Min {\n\tstatic function f():Void {\n\t\tv = #if a XXXX\n\t\t#elseif b YYYY\n\t\t#else WWWW #end;\n\t}\n}';
 
 	/** An over-wide `#if`/`#else` pair with NO `#elseif` clause — the seam signals ride a different slot pair. */
 	private static final NO_ELSEIF_GLUED: String = 'class Min {\n\tstatic function g():Void {\n'
@@ -77,9 +76,9 @@ final class HxConditionalExprFitSliceTest extends Test {
 		+ ' #else SECONDARY_FALLBACK_CONFIGURATION_VALUE_FOR_THE_RELEASE_TARGET #end;\n\t}\n}';
 
 	/** Its ladder. */
-	private static final NO_ELSEIF_LADDER: String = 'class Min {\n\tstatic function g():Void {\n'
-		+ '\t\tv = #if debug\n\t\t\tPRIMARY_FALLBACK_CONFIGURATION_VALUE_FOR_THE_DEVELOPMENT_TARGET\n'
-		+ '\t\t#else\n\t\t\tSECONDARY_FALLBACK_CONFIGURATION_VALUE_FOR_THE_RELEASE_TARGET\n' + '\t\t#end;\n\t}\n}';
+	private static final NO_ELSEIF_LADDER: String = 'class Min {\n\tstatic function g():Void {\n\t\tv = #if debug\n'
+		+ '\t\t\tPRIMARY_FALLBACK_CONFIGURATION_VALUE_FOR_THE_DEVELOPMENT_TARGET\n\t\t#else\n'
+		+ '\t\t\tSECONDARY_FALLBACK_CONFIGURATION_VALUE_FOR_THE_RELEASE_TARGET\n\t\t#end;\n\t}\n}';
 
 	public function new(): Void {
 		super();

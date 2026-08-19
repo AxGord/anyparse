@@ -104,7 +104,8 @@ final class AddParam {
 		if (trimmed.length == 0) return Err('add-param requires a non-empty parameter text');
 		if (!trimmed.startsWith('?') && trimmed.indexOf('=') < 0)
 			return Err(
-				'add-param requires a default value (`name:T = v`) or optional `?name:T` — a required parameter would break existing call sites'
+				'add-param requires a default value (`name:T = v`) '
+				+ 'or optional `?name:T` — a required parameter would break existing call sites'
 			);
 
 		final paramName: Null<String> = parseParamName(trimmed);

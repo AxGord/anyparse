@@ -448,7 +448,8 @@ class ApqReconCliTest extends Test {
 		FileSystem.createDirectory('$dir/bin');
 		File.saveContent(
 			'$dir/bin/.last-sweep.json',
-			'{"pass":0,"fail":0,"skipParse":0,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"other/whatever.hxtest","status":"PASS"}]}'
+			'{"pass":0,"fail":0,"skipParse":0,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"other/whatever.hxtest",'
+			+ '"status":"PASS"}]}'
 		);
 		final savedCwd: String = Sys.getCwd();
 		Sys.setCwd(dir);
@@ -474,7 +475,8 @@ class ApqReconCliTest extends Test {
 		FileSystem.createDirectory('$dir/bin');
 		File.saveContent(
 			'$dir/bin/.last-sweep.json',
-			'{"pass":1,"fail":0,"skipParse":0,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"bad.hxtest","status":"PASS"}]}'
+			'{"pass":1,"fail":0,"skipParse":0,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"bad.hxtest",'
+			+ '"status":"PASS"}]}'
 		);
 		final savedCwd: String = Sys.getCwd();
 		Sys.setCwd(dir);
@@ -767,7 +769,8 @@ class ApqReconCliTest extends Test {
 		FileSystem.createDirectory('$dir/bin');
 		File.saveContent(
 			'$dir/bin/.last-sweep.json',
-			'{"pass":0,"fail":0,"skipParse":1,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"good.hxtest","status":"SKIP_PARSE"}]}'
+			'{"pass":0,"fail":0,"skipParse":1,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"good.hxtest",'
+			+ '"status":"SKIP_PARSE"}]}'
 		);
 		final savedCwd: String = Sys.getCwd();
 		Sys.setCwd(dir);

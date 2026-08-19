@@ -97,8 +97,9 @@ typedef MoveChange = {
 final class MoveSymbol {
 
 	/** The advisory appended to every successful move. */
-	private static final ADVISORY: String =
-		'verify imports in the destination — dependencies reached via a static receiver (T.staticMethod()) or a value position are not auto-detected and may need a manual import. A cross-package move repoints importers and the source/dest imports; a fully-qualified pkg.Type code reference is refused.';
+	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a static receiver ('
+		+ 'T.staticMethod()) or a value position are not auto-detected and may need a manual import. A '
+		+ 'cross-package move repoints importers and the source/dest imports; a fully-qualified ' + 'pkg.Type code reference is refused.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into

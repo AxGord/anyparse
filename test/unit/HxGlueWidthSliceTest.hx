@@ -64,8 +64,8 @@ final class HxGlueWidthSliceTest extends Test {
 	 * its lengths. Glued, the header line is 131 columns; broken, the body line
 	 * is 105.
 	 */
-	private static final GLUE_SRC: String = 'class M {\n\tfunction f():Void {\n'
-		+ '\t\tfor (subItem in listedThings) if (subItem.kind == ItemData.KIND_SUBSTITUTE /*&& cast( subItem, ItemBase ).markedOnDeck*/) {\n'
+	private static final GLUE_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tfor (subItem in listedThings) if ('
+		+ 'subItem.kind == ItemData.KIND_SUBSTITUTE /*&& cast( subItem, ItemBase ).markedOnDeck*/) {\n'
 		+ '\t\t\tsubItem.y = 1;\n\t\t}\n\t}\n}\n';
 
 	/** `GLUE_SRC`'s AST written with the body ALREADY on its own line. */

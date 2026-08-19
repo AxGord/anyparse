@@ -571,9 +571,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 	 * test green.)
 	 */
 	public function testSiblingInlineFunctionParametersRenameIndependently(): Void {
-		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tinline function a(_n:Int):Int {\n'
-			+ '\t\t\treturn _n;\n\t\t}\n\t\tinline function b(n:String):String {\n\t\t\treturn n;\n\t\t}\n'
-			+ '\t\ttrace(a(1) + b("x"));\n\t}\n}';
+		final src: String = 'package pkg;\nclass C {\n\tpublic function draw():Void {\n\t\tinline function a(_n:Int):Int {\n\t\t\treturn '
+			+ '_n;\n\t\t}\n\t\tinline function b(n:String):String {\n\t\t\treturn n;\n\t\t}\n\t\ttrace(a(1) + b("x"));\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		assertFixed(src, ['inline function a(n:Int):Int', 'inline function b(n:String):String'], ['_n']);
 	}

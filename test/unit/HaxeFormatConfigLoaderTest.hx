@@ -527,7 +527,8 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// default so the generic gate also yields no blank.
 		final src: String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {'
+			+ '"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
 		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected all source blanks stripped with ignore+remove');
 	}
@@ -667,7 +668,8 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final src: String =
 			'class M {\n\tpublic function a():Void {}\n\n\tpublic function c():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {'
+			+ '"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);

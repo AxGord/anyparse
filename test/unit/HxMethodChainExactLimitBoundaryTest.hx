@@ -20,46 +20,49 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxMethodChainExactLimitBoundaryTest extends Test {
 
-	private static final CONFIG: String =
-		'{"wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, "expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {"commaPolicy": "after", "binopPolicy": "around", "arrowFunctionsPolicy": "around", "functionTypeHaxe3Policy": "none", "functionTypeHaxe4Policy": "none"}, "sameLine": {"expressionIf": "next"}}';
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "callParameter": {'
+		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
+		+ '"itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, '
+		+ '"expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {"commaPolicy": '
+		+ '"after", "binopPolicy": "around", "arrowFunctionsPolicy": "around", "functionTypeHaxe3Policy": '
+		+ '"none", "functionTypeHaxe4Policy": "none"}, "sameLine": {"expressionIf": "next"}}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testStatementChainAtExactLimitStaysFlat(): Void {
-		final flat: String = 'class C {\n\tfunction f() {\n'
-			+ "\t\tfinal res = fetch('(Notice sent. <marker>Send re-noticexxxxx</<marker>)').setMarkerLink(RENOTICE, Styles.getPanelDialText(), extra);\n"
-			+ '\t}\n}';
+		final flat: String = 'class C {\n\tfunction f() {\n\t\tfinal res = fetch(\'(Notice sent. <marker>Send '
+			+ 're-noticexxxxx</<marker>)\').setMarkerLink(RENOTICE, Styles.getPanelDialText(), extra);\n\t}\n}';
 		Assert.equals(flat, triviaWrite(flat));
 	}
 
 	public function testStatementChainOneOverLimitDotBreaks(): Void {
-		final flat: String = 'class C {\n\tfunction f() {\n'
-			+ "\t\tfinal res = fetch('(Notice sent. <marker>Send re-noticexxxxxx</<marker>)').setMarkerLink(RENOTICE, Styles.getPanelDialText(), extra);\n"
-			+ '\t}\n}';
-		final wrapped: String = 'class C {\n\tfunction f() {\n'
-			+ "\t\tfinal res = fetch('(Notice sent. <marker>Send re-noticexxxxxx</<marker>)')\n"
-			+ "\t\t\t.setMarkerLink(RENOTICE, Styles.getPanelDialText(), extra);\n" + '\t}\n}';
+		final flat: String = 'class C {\n\tfunction f() {\n\t\tfinal res = fetch(\'(Notice sent. <marker>Send '
+			+ 're-noticexxxxxx</<marker>)\').setMarkerLink(RENOTICE, Styles.getPanelDialText(), extra);\n\t}\n}';
+		final wrapped: String = 'class C {\n\tfunction f() {\n\t\tfinal res = fetch(\'(Notice sent. <marker>Send '
+			+ 're-noticexxxxxx</<marker>)\')\n\t\t\t.setMarkerLink(RENOTICE, Styles.getPanelDialText(), extra);\n\t}\n}';
 		final out: String = triviaWrite(flat);
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));
 	}
 
 	public function testCallArgChainAtExactLimitStaysFlat(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n' + '\t\tfinal info:Null<Panel> = cond.newInvite\n'
-			+ "\t\t\t? new Panel(fetch('(Notice sent. <marker>Send re-notice</<marker>)').setMarkerLink(RENOTICE), Styles.getPanelDialogText(), true)\n"
-			+ '\t\t\t: null;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal info:Null<Panel> = cond.newInvite\n'
+			+ "\t\t\t? new Panel(fetch('(Notice sent. <marker>Send re-notice</<marker>)').setMarkerLink(RENOTICE), "
+			+ 'Styles.getPanelDialogText(), true)\n\t\t\t: null;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testCallArgChainOneOverLimitOpensCallParen(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n' + '\t\tfinal info:Null<Panel> = cond.newInvite\n'
-			+ "\t\t\t? new Panel(fetch('(Notice sent. <marker>Send re-noticex</<marker>)').setMarkerLink(RENOTICE), Styles.getPanelDialogText(), true)\n"
-			+ '\t\t\t: null;\n\t}\n}';
-		final wrapped: String = 'class C {\n\tfunction f() {\n' + '\t\tfinal info:Null<Panel> = cond.newInvite\n' + '\t\t\t? new Panel(\n'
-			+ "\t\t\t\tfetch('(Notice sent. <marker>Send re-noticex</<marker>)').setMarkerLink(RENOTICE), Styles.getPanelDialogText(), true\n"
-			+ '\t\t\t)\n' + '\t\t\t: null;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal info:Null<Panel> = cond.newInvite\n'
+			+ "\t\t\t? new Panel(fetch('(Notice sent. <marker>Send re-noticex</<marker>)').setMarkerLink(RENOTICE), "
+			+ 'Styles.getPanelDialogText(), true)\n\t\t\t: null;\n\t}\n}';
+		final wrapped: String = 'class C {\n\tfunction f() {\n\t\tfinal info:Null<Panel> = cond.newInvite\n\t\t\t? new Panel(\n'
+			+ "\t\t\t\tfetch('(Notice sent. <marker>Send re-noticex</<marker>)').setMarkerLink(RENOTICE), Styles.getPanelDialogText(), "
+			+ 'true\n\t\t\t)\n\t\t\t: null;\n\t}\n}';
 		final out: String = triviaWrite(src);
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));

@@ -25,8 +25,13 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 
-	private static final CONFIG: String =
-		'{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": ['
+		+ '{"conditions": [{"cond": "itemCount <= n", "value": 3}, {'
+		+ '"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
+		+ '"totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": '
+		+ '"noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", '
+		+ '"location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", '
+		+ '"rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();
@@ -42,9 +47,8 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 	public function testShortElseIfChainStaysFlat(): Void {
 		final src: String = 'class C {\n\tfunction f(source:String):Bool {\n\t\tvar depth = 0;\n\t\tvar quote = 0;\n\t\tvar i = 0;\n'
 			+ '\t\twhile (i < source.length) {\n\t\t\tfinal ch = source.charCodeAt(i);\n\t\t\tif (quote != 0) {\n\t\t\t\tif (ch == 92)\n'
-			+ '\t\t\t\t\ti++;\n\t\t\t} else if (ch == 40 || ch == 91 || ch == 123) {\n\t\t\t\tdepth++;\n'
-			+ '\t\t\t} else if (ch == 41 || ch == 93 || ch == 125) {\n\t\t\t\tdepth--;\n\t\t\t}\n\t\t\ti++;\n\t\t}\n\t\treturn false;\n'
-			+ '\t}\n}';
+			+ '\t\t\t\t\ti++;\n\t\t\t} else if (ch == 40 || ch == 91 || ch == 123) {\n\t\t\t\tdepth++;\n\t\t\t} else if ('
+			+ 'ch == 41 || ch == 93 || ch == 125) {\n\t\t\t\tdepth--;\n\t\t\t}\n\t\t\ti++;\n\t\t}\n\t\treturn false;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -58,12 +62,11 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		// Header line = 141 columns at tab=4 — the trailing ` {` supplies the
 		// 141st column, so the condition must open (fork parity: the fork
 		// measures the FULL physical line including the cuddled brace).
-		final glued: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tif (_aaaaBbbb1 && !_cccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == 0 && !iiiiJjjj.startsWith(abc) && kkkkLlll.type != MMMMM) {\n'
-			+ '\t\t\thandleItem();\n\t\t}\n\t}\n}';
+		final glued: String = 'class C {\n\tfunction f() {\n\t\tif (_aaaaBbbb1 && !_cccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == '
+			+ '0 && !iiiiJjjj.startsWith(abc) && kkkkLlll.type != MMMMM) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		final opened: String = 'class C {\n\tfunction f() {\n\t\tif (\n'
-			+ '\t\t\t_aaaaBbbb1 && !_cccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == 0 && !iiiiJjjj.startsWith(abc) && kkkkLlll.type != MMMMM\n'
-			+ '\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
+			+ '\t\t\t_aaaaBbbb1 && !_cccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == 0 && !iiiiJjjj.startsWith(abc) '
+			+ '&& kkkkLlll.type != MMMMM\n\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		Assert.equals(opened, triviaWrite(glued));
 		Assert.equals(opened, triviaWrite(opened));
 	}
@@ -72,9 +75,8 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 	public function testHeaderExactlyOnLimitStaysFlat(): Void {
 		// Header line = exactly 140 columns — ON the limit is not past it
 		// (fork opens on a strict `>`), the condition stays glued.
-		final src: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tif (_aaaaBbbb1 && !_ccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == 0 && !iiiiJjjj.startsWith(abc) && kkkkLlll.type != MMMMM) {\n'
-			+ '\t\t\thandleItem();\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tif (_aaaaBbbb1 && !_ccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == 0 '
+			+ '&& !iiiiJjjj.startsWith(abc) && kkkkLlll.type != MMMMM) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -89,8 +91,8 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		// fit probe glues on `< lineWidth + 1` (i.e. `<= lineWidth`), so the
 		// `+ 1` is what keeps a header landing exactly on the limit flat.
 		final src: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n'
-			+ '\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, itemIdentifier))\n'
-			+ '\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+			+ '\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, '
+			+ 'itemIdentifier))\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -99,11 +101,11 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		// The same 140-column condition, authored with the cond on its own line,
 		// collapses back to the glued single-line form (idempotent thereafter).
 		final flat: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n'
-			+ '\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, itemIdentifier))\n'
-			+ '\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+			+ '\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, '
+			+ 'itemIdentifier))\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
 		final wrapped: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n\t\t\tif (\n'
-			+ '\t\t\t\t!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, itemIdentifier)\n'
-			+ '\t\t\t)\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+			+ '\t\t\t\t!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, '
+			+ 'itemIdentifier)\n\t\t\t)\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
 		Assert.equals(flat, triviaWrite(wrapped));
 		Assert.equals(flat, triviaWrite(flat));
 	}
@@ -113,11 +115,11 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		// maxLineLength), guarding the other side of the exactly-on-limit
 		// boundary; the opened form is idempotent.
 		final flat: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n'
-			+ '\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL019, itemStamp, itemIdentifier))\n'
-			+ '\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+			+ '\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL019, itemStamp, '
+			+ 'itemIdentifier))\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
 		final opened: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n\t\t\tif (\n'
-			+ '\t\t\t\t!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL019, itemStamp, itemIdentifier)\n'
-			+ '\t\t\t)\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+			+ '\t\t\t\t!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL019, itemStamp, '
+			+ 'itemIdentifier)\n\t\t\t)\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
 		Assert.equals(opened, triviaWrite(flat));
 		Assert.equals(opened, triviaWrite(opened));
 	}

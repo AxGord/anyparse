@@ -145,13 +145,12 @@ final class EmptyBlock implements Check {
 		// Empty no-else `if (cond) {}` with a side-effect-free condition — safe to
 		// drop only when the `if` is a statement-list member, not a branch body.
 		if (
-			kids.length == 2 && kids[1] == node && RefactorSupport.isSideEffectFree(kids[0]) && grandparent != null
-			&& blockKinds.contains(grandparent.kind)
-		) {
-			final pspan: Null<Span> = parent.span;
-			return pspan == null ? null : { span: RefactorSupport.lineExtendedSpan(source, pspan), text: '' };
-		}
-		return null;
+			kids.length != 2 || kids[1] != node || !RefactorSupport.isSideEffectFree(kids[0])
+			|| (grandparent == null || !blockKinds.contains(grandparent.kind))
+		)
+			return null;
+		final pspan: Null<Span> = parent.span;
+		return pspan == null ? null : { span: RefactorSupport.lineExtendedSpan(source, pspan), text: '' };
 	}
 
 }

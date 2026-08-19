@@ -65,7 +65,8 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testUsingExtensionMemberSkipped(): Void {
 		// `x.trim()` under `using StringTools` is a String-obligation, NOT a "any type with trim" — skip.
 		Assert.isNull(narrow(
-			'using StringTools;\nclass C {\n\tfunction f(s:String):Void {\n\t\tvar x:Dynamic = s;\n\t\tx.trim();\n\t\tvar y:String = x;\n\t}\n}'
+			'using StringTools;\nclass C {\n\tfunction f(s:String):Void {\n\t\tvar x:Dynamic = s;\n\t\tx.trim();\n\t\tvar y:String = x;\n'
+			+ '\t}\n}'
 		));
 	}
 
@@ -153,7 +154,8 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testStdIsOfTypeGuardSkipped(): Void {
 		// The dogfood FP: `Std.isOfType(raw, Array)` guards a genuinely heterogeneous value. Skip.
 		Assert.isNull(narrow(
-			'class C {\n\tfunction f(o:Foo):Void {\n\t\tvar raw:Dynamic = Reflect.field(o, \'k\');\n\t\tif (Std.isOfType(raw, Array)) {\n\t\t\tvar arr:Array<Dynamic> = raw;\n\t\t}\n\t}\n}$FOO'
+			'class C {\n\tfunction f(o:Foo):Void {\n\t\tvar raw:Dynamic = Reflect.field(o, \'k\');\n\t\tif (Std.isOfType(raw, Array)) {\n'
+			+ '\t\t\tvar arr:Array<Dynamic> = raw;\n\t\t}\n\t}\n}$FOO'
 		));
 	}
 

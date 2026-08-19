@@ -131,7 +131,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\tfinal ys = #if debug [for (item in xs) item] #else [] #end;\n\t\treturn ys;\n\t}\n}'
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n'
+				+ '\t\tfinal ys = #if debug [for (item in xs) item] #else [] #end;\n\t\treturn ys;\n\t}\n}'
 			).length
 		);
 	}
@@ -186,7 +187,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(m:Map<String, String>) {\n\t\tvar item:String = "a";\n\t\tfor (k => item in m) trace(k + item);\n\t\ttrace(item);\n\t}\n}'
+				'class C {\n\tfunction f(m:Map<String, String>) {\n\t\tvar item:String = "a";\n'
+				+ '\t\tfor (k => item in m) trace(k + item);\n\t\ttrace(item);\n\t}\n}'
 			).length
 		);
 	}
@@ -199,7 +201,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String = "a";\n\t\tfor (item in xs) trace(item);\n\t\ttrace(item);\n\t}\n}'
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String = "a";\n\t\tfor (item in xs) trace(item);\n'
+				+ '\t\ttrace(item);\n\t}\n}'
 			).length
 		);
 	}
@@ -222,7 +225,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\titem = "y";\n\t\ttrace(item);\n\t\tfor (item in xs) trace(item);\n\t}\n}'
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\titem = "y";\n\t\ttrace(item);\n'
+				+ '\t\tfor (item in xs) trace(item);\n\t}\n}'
 			).length
 		);
 	}
@@ -251,7 +255,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(xs:Array<String>) {\n\t\t#if debug\n\t\tvar item:String;\n\t\tfor (item in xs) trace(item);\n\t\t#end\n\t}\n}'
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\t#if debug\n\t\tvar item:String;\n\t\tfor (item in xs) trace(item);\n'
+				+ '\t\t#end\n\t}\n}'
 			).length
 		);
 	}
@@ -261,7 +266,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\t#if debug\n\t\tfor (item in xs) trace(item);\n\t\t#end\n\t}\n}'
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\t#if debug\n\t\tfor (item in xs) trace(item);\n'
+				+ '\t\t#end\n\t}\n}'
 			).length
 		);
 	}
@@ -288,7 +294,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\t// item is described here\n\t\tfor (item in xs) trace(item);\n\t}\n}'
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\t// item is described here\n'
+				+ '\t\tfor (item in xs) trace(item);\n\t}\n}'
 			).length
 		);
 	}
@@ -298,7 +305,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				"class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String = \"z\";\n\t\tfor (item in xs) trace(item);\n\t\ttrace('$item');\n\t}\n}"
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String = \"z\";\n\t\tfor (item in xs) trace(item);\n'
+				+ "\t\ttrace('$item');\n\t}\n}"
 			).length
 		);
 	}
@@ -330,7 +338,8 @@ class UnusedLocalShadowTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\tinline function use(item:String) trace(item);\n\t\tfor (s in xs) use(s);\n\t}\n}'
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\tinline function use(item:String) trace(item);\n'
+				+ '\t\tfor (s in xs) use(s);\n\t}\n}'
 			).length
 		);
 	}

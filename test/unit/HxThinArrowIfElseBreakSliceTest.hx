@@ -22,8 +22,10 @@ final class HxThinArrowIfElseBreakSliceTest extends Test {
 	// This makes the block / switch / for / while / plain-if negatives HUG, so the
 	// if-else positives — which break after `->` REGARDLESS of the resolved wrap
 	// mode — stand out as the only shape that leading-breaks.
-	private static final CONFIG: String =
-		'{"wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "callParameter": {'
+		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
+		+ '"itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();

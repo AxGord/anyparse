@@ -130,7 +130,8 @@ class AlwaysNullComparisonTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(root:Node):Void { var result = null; function walk(n:Node):Void { if (result != null) return; if (n.match) { result = mk(); return; } for (c in n.kids) { if (result != null) return; walk(c); } } walk(root); } }'
+				'class C { function f(root:Node):Void { var result = null; function walk(n:Node):Void { if (result != null) return; if ('
+				+ 'n.match) { result = mk(); return; } for (c in n.kids) { if (result != null) return; walk(c); } } walk(root); } }'
 			).length
 		);
 	}
@@ -140,7 +141,8 @@ class AlwaysNullComparisonTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f() { var x:Null<String> = null; try { x = "a"; risky(); } catch (e:haxe.Exception) { if (x == null) trace(1); } } }'
+				'class C { function f() { var x:Null<String> = null; try { x = "a"; risky(); } catch (e:haxe.Exception) { if (x == null) '
+				+ 'trace(1); } } }'
 			).length
 		);
 	}
@@ -150,7 +152,8 @@ class AlwaysNullComparisonTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(o:Int) { var v:Null<String> = "s"; switch o { case 1: var v:Null<String> = null; trace(v); case _: v = null; } if (v == null) trace(1); } }'
+				'class C { function f(o:Int) { var v:Null<String> = "s"; switch o {'
+				+ ' case 1: var v:Null<String> = null; trace(v); case _: v = null; } if (v == null) trace(1); } }'
 			).length
 		);
 	}
@@ -160,7 +163,8 @@ class AlwaysNullComparisonTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'enum E { Some(s:String); None; } class C { function f(o:E) { var v:Null<String> = "s"; switch o { case Some(v): v = null; case _: v = null; } if (v == null) trace(1); } }'
+				'enum E { Some(s:String); None; } class C { function f(o:E) { var v:Null<String> = "s"; switch o {'
+				+ ' case Some(v): v = null; case _: v = null; } if (v == null) trace(1); } }'
 			).length
 		);
 	}
@@ -170,7 +174,8 @@ class AlwaysNullComparisonTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f() { var e:Null<String> = null; try { e = "s"; mayThrow(); e = null; } catch (e:haxe.Exception) { trace(e); } if (e == null) trace(1); } }'
+				'class C { function f() { var e:Null<String> = null; try { e = "s"; mayThrow(); e = null; } catch (e:haxe.Exception) {'
+				+ ' trace(e); } if (e == null) trace(1); } }'
 			).length
 		);
 	}
@@ -189,7 +194,8 @@ class AlwaysNullComparisonTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(c:Bool) { var v:Null<String> = "s"; if (c) var v:Null<String> = null; else v = null; if (v == null) trace(1); } }'
+				'class C { function f(c:Bool) { var v:Null<String> = "s"; if (c) var v:Null<String> = null; else v = null; if ('
+				+ 'v == null) trace(1); } }'
 			).length
 		);
 	}

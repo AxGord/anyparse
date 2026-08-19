@@ -469,7 +469,8 @@ import utest.Test;
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tpublic var x(get, never):Int;\n\t#if cpp\n\tstatic\n\t#end\n\tfunction get_x():Int return 1;\n\tpublic var keeper:Int = 0;\n}'
+				'class C {\n\tpublic var x(get, never):Int;\n\t#if cpp\n\tstatic\n\t#end\n\tfunction get_x():Int return 1;\n'
+				+ '\tpublic var keeper:Int = 0;\n}'
 			).length
 		);
 	}

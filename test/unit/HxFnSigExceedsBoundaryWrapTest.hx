@@ -17,8 +17,10 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxFnSigExceedsBoundaryWrapTest extends Test {
 
-	private static final CFG: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "functionSignature": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 100}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}], "type": "noWrap"}]}}}';
+	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
+		+ '"functionSignature": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "totalItemLength <= n", "value": 100}, {"cond": "exceedsMaxLineLength", "value": 0}], '
+		+ '"type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();
@@ -26,22 +28,20 @@ final class HxFnSigExceedsBoundaryWrapTest extends Test {
 
 	/** A two-param signature whose flat width is 141 (one column over 140) OPENS: leading break after `(`, params packed, `)` + return on their own line. */
 	public function testOneColumnOverBoundaryWrapsSignature(): Void {
-		final src: String = 'class M {\n'
-			+ '\tprivate static function mergeCoachUsers(a:Array<FileListShareCoachUser>, b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n'
-			+ '\t\treturn a;\n\t}\n}';
-		final expected: String = 'class M {\n\tprivate static function mergeCoachUsers(\n'
-			+ '\t\ta:Array<FileListShareCoachUser>, b:Array<FileListShareCoachUser>\n\t):Array<FileListShareCoachUser> {\n\t\treturn a;\n'
-			+ '\t}\n}';
+		final src: String = 'class M {\n\tprivate static function mergeCoachUsers(a:Array<FileListShareCoachUser>, '
+			+ 'b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}';
+		final expected: String = 'class M {\n\tprivate static function mergeCoachUsers(\n\t\ta:Array<FileListShareCoachUser>, '
+			+ 'b:Array<FileListShareCoachUser>\n\t):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 
 	/** GUARD: a signature whose flat width is EXACTLY 140 (at the limit, not over) stays hugged on one line. */
 	public function testAtBoundaryStaysUnwrapped(): Void {
-		final src: String = 'class M {\n'
-			+ '\tprivate static function mergeCoachUser(a:Array<FileListShareCoachUser>, b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n'
-			+ '\t\treturn a;\n\t}\n}';
+		final src: String = 'class M {\n\tprivate static function mergeCoachUser(a:Array<FileListShareCoachUser>, '
+			+ 'b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}';
 		Assert.equals(
-			'class M {\n\tprivate static function mergeCoachUser(a:Array<FileListShareCoachUser>, b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}',
+			'class M {\n\tprivate static function mergeCoachUser(a:Array<FileListShareCoachUser>, '
+			+ 'b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}',
 			triviaWrite(src)
 		);
 	}

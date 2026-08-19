@@ -164,7 +164,8 @@ final class InheritanceMove {
 		else if (m.isOverride)
 			'"$memberName" is an override — move the base declaration instead'
 		else if (m.guarded)
-			'"$memberName" is declared inside a conditional-compilation region — moving it out of its branch would change which builds declare it'
+			'"$memberName'
+				+ '" is declared inside a conditional-compilation region — moving it out of its branch would change which builds declare it'
 		else if (resolveMember(targetDecl, memberName, targetSource, shape) != null)
 			'type "$targetType" already declares a member "$memberName"'
 		else

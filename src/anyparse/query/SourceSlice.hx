@@ -49,7 +49,12 @@ final class SourceSlice {
 		computeLines(source, lineStart, lineEnd);
 		if (lineStart.length == 0) return null;
 
-		final from: Int = span.from < 0 ? 0 : (span.from > source.length ? source.length : span.from);
+		final from: Int = if (span.from < 0)
+			0
+		else if (span.from > source.length)
+			source.length
+		else
+			span.from;
 		final declLine: Int = lineOfOffset(lineStart, lineEnd, from);
 
 		var i: Int = declLine - 1;

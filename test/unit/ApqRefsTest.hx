@@ -96,6 +96,20 @@ class ApqRefsTest extends Test {
 	}
 
 	/**
+	 * A `for` confines its brace-less body through its OWN frame (`scopeKinds` +
+	 * `selfScopeDeclKinds`), and must keep doing it: it is one of the two constructs on the right
+	 * side of the brace-less-body gap recorded on `RefShape.positionScopedKinds`.
+	 */
+	public inline function testAForLoopStillConfinesItsBracelessBody(): Void {
+		assertBracelessBodyConfines('for (i in 0...1) var x:Int = 1;');
+	}
+
+	/** And a `catch` clause the same, through its own `selfScopeDeclKinds` frame - the other one. */
+	public inline function testACatchClauseStillConfinesItsBracelessBody(): Void {
+		assertBracelessBodyConfines('try g() catch (e:Any) var x:Int = 1;');
+	}
+
+	/**
 	 * Each `switch` arm frames its own body: two arms declaring the SAME name are two distinct
 	 * bindings, and each arm's read binds to its own. Before arms framed, the first arm's local
 	 * swallowed the second arm's reads as well.
@@ -1008,7 +1022,6 @@ class ApqRefsTest extends Test {
 		Assert.equals(expected, bindings(hits), 'got ${describe(hits)}');
 	}
 
-
 	/**
 	 * A BRACED control-flow body scopes its declaration to the block frame: an inner read resolves
 	 * to it, and the read after the construct belongs to the field. Asserted as one string so the
@@ -1022,21 +1035,6 @@ class ApqRefsTest extends Test {
 		final field: Int = source.indexOf('var x:Int = 60');
 		final expected: String = '${source.indexOf('g(x)') + 2}->$inner ${source.indexOf('return x') + 'return '.length}->$field';
 		Assert.equals(expected, bindings(hits), 'got ${describe(hits)}');
-	}
-
-
-	/**
-	 * A `for` confines its brace-less body through its OWN frame (`scopeKinds` +
-	 * `selfScopeDeclKinds`), and must keep doing it: it is one of the two constructs on the right
-	 * side of the brace-less-body gap recorded on `RefShape.positionScopedKinds`.
-	 */
-	public function testAForLoopStillConfinesItsBracelessBody(): Void {
-		assertBracelessBodyConfines('for (i in 0...1) var x:Int = 1;');
-	}
-
-	/** And a `catch` clause the same, through its own `selfScopeDeclKinds` frame - the other one. */
-	public function testACatchClauseStillConfinesItsBracelessBody(): Void {
-		assertBracelessBodyConfines('try g() catch (e:Any) var x:Int = 1;');
 	}
 
 	/**

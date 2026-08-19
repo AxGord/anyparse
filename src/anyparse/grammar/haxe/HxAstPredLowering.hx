@@ -227,18 +227,16 @@ final class HxAstPredLowering extends AstPredLowering {
 			elementIsConditionalDeclField(),
 			elementIsConditionalFalseField(
 				HX_EXPR, 'e',
-				'Byte-parity: `HxExpr`\'s conditional shapes use the ctor names `ConditionalExpr` / `ConditionalArgs` / '
-				+ '`CondSpliceExpr` / `CondSpliceTail`, never `Conditional` — so the retired ctor-NAME check was '
-				+ 'constantly false for expression elements, and a nested `#if` inside a `#if` args region never '
-				+ 'received the `alignedNestedIncrease` lift. Keep the false verdict; widening to the real ctor set '
-				+ 'is a behavior change to make deliberately, against fork fixtures.'
+				'Byte-parity: `HxExpr`\'s conditional shapes use the ctor names `ConditionalExpr` / `ConditionalArgs` / `CondSpliceExpr` '
+				+ '/ `CondSpliceTail`, never `Conditional` — so the retired ctor-NAME check was constantly false for expression elements, '
+				+ 'and a nested `#if` inside a `#if` args region never received the `alignedNestedIncrease` lift. Keep the false verdict; '
+				+ 'widening to the real ctor set is a behavior change to make deliberately, against fork fixtures.'
 			),
 			elementIsConditionalFalseField(
 				HX_MEMBER_DECL, 'm',
-				'Byte-parity: the retired Dynamic adapter probed the struct\'s `.decl` field, which `HxMemberDecl` '
-				+ 'does not have (its wrapper field is `.member`), so a nested conditional MEMBER never lifted. '
-				+ 'Keep the false verdict; widening to `.member` → `HxClassMember.Conditional` is a behavior '
-				+ 'change to make deliberately, against fork fixtures.'
+				'Byte-parity: the retired Dynamic adapter probed the struct\'s `.decl` field, which `HxMemberDecl` does not have ('
+				+ 'its wrapper field is `.member`), so a nested conditional MEMBER never lifted. Keep the false verdict; widening to '
+				+ '`.member` → `HxClassMember.Conditional` is a behavior change to make deliberately, against fork fixtures.'
 			),
 			stmtExprNoSemiField(),
 			stmtExprNoSemiAtField(),

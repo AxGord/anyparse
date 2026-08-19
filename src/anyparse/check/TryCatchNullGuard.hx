@@ -142,8 +142,8 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 	}
 
 	public function description(): String {
-		return
-			'a declaration initialized by a try-expression defaulting to null, immediately followed by an if (x == null) return/throw guard, collapsible by moving the terminator into every catch clause';
+		return 'a declaration initialized by a try-expression defaulting to null, immediately followed by an if (x == null) '
+			+ 'return/throw guard, collapsible by moving the terminator into every catch clause';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

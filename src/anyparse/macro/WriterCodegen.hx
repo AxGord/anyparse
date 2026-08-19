@@ -140,6 +140,44 @@ class WriterCodegen {
 		return optionsHasField(optionsTypePath, '_inExprPosition');
 	}
 
+	/**
+	 * ω-optclone-chain-fusion — the trailing `_b` (chain-base) argument every
+	 * opt-fanout shim carries.
+	 *
+	 * A composition site threads one opt through several shims in ONE emitted
+	 * expression (`_setSuppressCallRestProbe(_setCallArgChainNest(_setExprPosition(opt)))`).
+	 * Each shim used to clone, so a three-step chain minted three 210-field
+	 * records where one would do: on a real tree 48 % of every `_copyOpt` call
+	 * had a source object the PREVIOUS step had just created, and threading the
+	 * base retired 34.7 % of the calls outright.
+	 *
+	 * `_b` is the chain's ROOT expression. It is spelled with the same
+	 * identifier (`opt`) as the root and sits in the same scope, so the two
+	 * always denote the same binding — including where generated code rebinds
+	 * `opt` (`final opt = _setParenInCondition(… opt …, opt)`, whose `_b` still
+	 * resolves to the outer one). An incoming `o` that is not `_b` can
+	 * therefore only be a clone an EARLIER step of the same expression just
+	 * made: it is reachable from nowhere else, so the shim mutates it in place
+	 * instead of cloning again. The first step still clones, and a callee
+	 * re-roots at its own `opt`, so ownership never crosses a call boundary —
+	 * which is what keeps the output byte-identical.
+	 *
+	 * The `_b != null` conjunct is load-bearing, not defensive: `o` is never
+	 * null, so a bare `o != _b` would read as `true` at every site that passes
+	 * no base and would license in-place mutation there.
+	 *
+	 * One rule for a shim body: after the clone line, only WRITE `_c` — never
+	 * read `o` for a field already written, since on the fusion path `_c` and
+	 * `o` are the same record. Hoist such reads above the clone line the way
+	 * `_setChainModeOverride` does.
+	 *
+	 * Defaults to `null` (own nothing, always clone), so an emission site that
+	 * has not been audited for its chain root stays on the old behaviour.
+	 */
+	private static inline function chainBaseArg(optionsCT: ComplexType): FunctionArg {
+		return { name: '_b', type: macro :Null<$optionsCT>, value: macro null };
+	}
+
 	// -------- public entry point --------
 
 	private static function publicEntry(
@@ -2641,44 +2679,6 @@ class WriterCodegen {
 			}),
 			pos: Context.currentPos(),
 		};
-	}
-
-	/**
-	 * ω-optclone-chain-fusion — the trailing `_b` (chain-base) argument every
-	 * opt-fanout shim carries.
-	 *
-	 * A composition site threads one opt through several shims in ONE emitted
-	 * expression (`_setSuppressCallRestProbe(_setCallArgChainNest(_setExprPosition(opt)))`).
-	 * Each shim used to clone, so a three-step chain minted three 210-field
-	 * records where one would do: on a real tree 48 % of every `_copyOpt` call
-	 * had a source object the PREVIOUS step had just created, and threading the
-	 * base retired 34.7 % of the calls outright.
-	 *
-	 * `_b` is the chain's ROOT expression. It is spelled with the same
-	 * identifier (`opt`) as the root and sits in the same scope, so the two
-	 * always denote the same binding — including where generated code rebinds
-	 * `opt` (`final opt = _setParenInCondition(… opt …, opt)`, whose `_b` still
-	 * resolves to the outer one). An incoming `o` that is not `_b` can
-	 * therefore only be a clone an EARLIER step of the same expression just
-	 * made: it is reachable from nowhere else, so the shim mutates it in place
-	 * instead of cloning again. The first step still clones, and a callee
-	 * re-roots at its own `opt`, so ownership never crosses a call boundary —
-	 * which is what keeps the output byte-identical.
-	 *
-	 * The `_b != null` conjunct is load-bearing, not defensive: `o` is never
-	 * null, so a bare `o != _b` would read as `true` at every site that passes
-	 * no base and would license in-place mutation there.
-	 *
-	 * One rule for a shim body: after the clone line, only WRITE `_c` — never
-	 * read `o` for a field already written, since on the fusion path `_c` and
-	 * `o` are the same record. Hoist such reads above the clone line the way
-	 * `_setChainModeOverride` does.
-	 *
-	 * Defaults to `null` (own nothing, always clone), so an emission site that
-	 * has not been audited for its chain root stays on the old behaviour.
-	 */
-	private static inline function chainBaseArg(optionsCT: ComplexType): FunctionArg {
-		return { name: '_b', type: macro :Null<$optionsCT>, value: macro null };
 	}
 
 }

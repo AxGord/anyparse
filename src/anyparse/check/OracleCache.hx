@@ -291,7 +291,12 @@ final class OracleCache {
 
 	/** Lexicographic comparator for the manifest's file lines, which start with the path, so line order IS path order. */
 	private static function compareStrings(a: String, b: String): Int {
-		return a < b ? -1 : (a > b ? 1 : 0);
+		return if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0;
 	}
 
 	/**
@@ -505,7 +510,7 @@ final class OracleCache {
 		if (launchError != null) return '';
 		final status: Null<Int> = (res.status: Null<Int>);
 		final out: Dynamic = res.stdout;
-		return status == 0 && out != null ? Std.string(out) : '';
+		return status == 0 && out != null ? '$out' : '';
 		#elseif sys
 		try {
 			final process: sys.io.Process = new sys.io.Process('haxe', args);

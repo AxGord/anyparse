@@ -130,8 +130,8 @@ final class PreferTryExpressionAssignment implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a try/catch that assigns the same target in the body and every catch clause (optionally paired with its preceding local declaration), collapsible to a single try-expression assignment';
+		return 'a try/catch that assigns the same target in the body and every catch clause ('
+			+ 'optionally paired with its preceding local declaration), collapsible to a single try-expression assignment';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

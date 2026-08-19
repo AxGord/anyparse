@@ -148,8 +148,8 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 	 */
 	public function testCondFnBodyKeepsFollowingMemberDocAndVisibility(): Void {
 		final src: String = 'class C {\n\t@:from public static inline function ofInt(x:Int):Int64'
-			+ ' #if lua return mk(x, 1); #else return mk(x, 2); #end\n'
-			+ '\n\t/**\n\t\tDoc of the next member.\n\t**/\n\tpublic static inline function toInt(x:Int64):Int {\n\t\treturn x.low;\n\t}\n}';
+			+ ' #if lua return mk(x, 1); #else return mk(x, 2); #end\n\n\t/**\n\t\tDoc of the next member.\n\t**/\n'
+			+ '\tpublic static inline function toInt(x:Int64):Int {\n\t\treturn x.low;\n\t}\n}';
 		expectTwoMembersLedByCondBody(src);
 		Assert.isTrue(writeModule(src).indexOf('public static inline function toInt') != -1, 'the next member keeps `public`');
 		triviaEquals(src, 'Int64.ofInt with a documented member after #end');
@@ -236,10 +236,9 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 
 	public function testCondSharedBodyMemberKeepsTailAndBothSignatures(): Void {
 		// Pony/pony/Tools.hx:492 - two signatures guarded, one shared body.
-		final src: String = 'class C {\n#if (haxe_ver >= 3.300)\n'
-			+ 'public static inline function sget<A, B:Constructible<Void -> Void>>(m:Map<A, B>, key:A):B\n#else\n'
-			+ 'public static inline function sget<A, B: { function new():Void; }>(m:Map<A, B>, key:A):B\n#end\n'
-			+ '\treturn m.exists(key) ? m[key] : m[key] = new B();\n}';
+		final src: String = 'class C {\n#if (haxe_ver >= 3.300)\npublic static inline function sget<A, B:Constructible<Void -> '
+			+ 'Void>>(m:Map<A, B>, key:A):B\n#else\npublic static inline function sget<A, B: {'
+			+ ' function new():Void; }>(m:Map<A, B>, key:A):B\n#end\n\treturn m.exists(key) ? m[key] : m[key] = new B();\n}';
 		final written: String = writeModule(src);
 		Assert.isTrue(written.indexOf('Constructible<Void -> Void>') != -1, 'then-branch signature survives');
 		Assert.isTrue(written.indexOf('{ function new():Void; }') != -1, 'else-branch signature survives');

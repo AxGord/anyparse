@@ -2812,7 +2812,8 @@ final class Cli {
 		final file: Null<String> = o.file;
 		if (file == null || code == null) {
 			stderr(
-				"apq add-element: expected <file> (--after | --before | --append) (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<code> | --from-file <path> | -)\n"
+				'apq add-element: expected <file> (--after | --before | --append) (<line>[:<col>] '
+				+ "| --select '<sel>' | --match '<pattern>') (<code> | --from-file <path> | -)\n"
 			);
 			printAddElementUsage();
 			return EXIT_USAGE;
@@ -3116,7 +3117,8 @@ final class Cli {
 		final file: Null<String> = o.file;
 		if (file == null || newSource == null) {
 			stderr(
-				"apq replace-node: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (<newSource> | --from-file <path> | -)\n"
+				"apq replace-node: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) ("
+				+ '<newSource> | --from-file <path> | -)\n'
 			);
 			printReplaceNodeUsage();
 			return EXIT_USAGE;
@@ -3884,7 +3886,12 @@ final class Cli {
 		// rejoin with the root so file IO uses absolute paths regardless
 		// of CWD.
 		final out: Array<String> = [for (p in cluster.paths) '$root/$p'];
-		out.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		out.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		return out;
 		#else
 		stderr('apq strip: --from-cluster requires a sys target (filesystem walk)\n');
@@ -4217,13 +4224,12 @@ final class Cli {
 			// access heuristic mis-fires on patterns like `foo\|bar` and
 			// sends the user toward `search '$x.field'`, which is wrong.
 			final regexLabel: Null<String> = looksLikeRegex(targetStr);
-			if (regexLabel != null)
-				stderr(
-					'apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel'
-					+ ') — lit is substring-only. Run separate lit calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n'
-				);
-			else
-				stderr('${emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
+			stderr(
+				regexLabel != null
+					? 'apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel) — lit is substring-only. Run separate lit '
+						+ 'calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n'
+					: '${emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n'
+			);
 		} else if (collected.autoWidened) {
 			final tried: String = effectiveKindFilter.join(',');
 			stderr(
@@ -4953,7 +4959,8 @@ final class Cli {
 		if (reif != null) {
 			stderr(
 				'apq search: pattern "$patternStr" contains macro reification ($reif'
-				+ ') which is a macro-time construct, not an AST shape pattern. For literal-string lookup use: apq lit \'<text>\' <files>. For identifier shape patterns use a metavar `$$x` (lowercase).\n'
+				+ ') which is a macro-time construct, not an AST shape pattern. For literal-string lookup use: apq lit \'<text>\' <files>. '
+				+ 'For identifier shape patterns use a metavar `$$x` (lowercase).\n'
 			);
 			return EXIT_USAGE;
 		}
@@ -5097,11 +5104,9 @@ final class Cli {
 		// call. Exit non-zero when the writer output fails to re-parse
 		// (writer produced syntactically broken Haxe).
 		if (o.writerOutput) {
-			if (o.typeRefs) {
-				stderr('apq ast: --type-refs cannot be combined with --writer-output (the type-ref projection is not writable)\n');
-				return EXIT_USAGE;
-			}
-			return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
+			if (!o.typeRefs) return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
+			stderr('apq ast: --type-refs cannot be combined with --writer-output (the type-ref projection is not writable)\n');
+			return EXIT_USAGE;
 		}
 		if (o.writerDiff) {
 			stderr('apq ast: --diff requires --writer-output (it diffs input vs writer-emitted output)\n');
@@ -5920,7 +5925,8 @@ final class Cli {
 					final trivial: Array<StdlibDifferential.Mapping> = hits.filter(StdlibDifferential.isTrivial);
 					if (trivial.length > 0)
 						stderr(
-							'apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: trivial — returns ${trivial[0].display} unchanged over the grid\n'
+							'apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: trivial — returns ${trivial[0].display}'
+							+ ' unchanged over the grid\n'
 						)
 					else
 						for (hit in hits) {
@@ -5940,7 +5946,7 @@ final class Cli {
 
 	/** `<file>:<line>:<col>` of a candidate's declaration, resolved against its own file's source. */
 	private static function stdlibDupPosition(candidate: StdlibDupScan.StdlibCandidate, source: String): String {
-		final pos = candidate.span.lineCol(source);
+		final pos: Position = candidate.span.lineCol(source);
 		return '${candidate.file}:${pos.line}:${pos.col}';
 	}
 
@@ -6083,7 +6089,8 @@ final class Cli {
 
 	private static function printAddElementUsage(): Void {
 		sysPrint(
-			"Usage: apq add-element <file> (--after | --before | --append) (<l>[:<c>] | --select '<sel>' | --match '<pattern>') (<code> | --from-file <path> | -) [options]\n"
+			"Usage: apq add-element <file> (--after | --before | --append) (<l>[:<c>] | --select '<sel>' | --match '<pattern>') ("
+			+ '<code> | --from-file <path> | -) [options]\n'
 		);
 		sysPrint('\n');
 		sysPrint('Insert <code> as a new element into a list-shaped slot. With --after / --before,\n');
@@ -6398,7 +6405,8 @@ final class Cli {
 
 	private static function printMoveUsage(): Void {
 		sysPrint(
-			"Usage: apq move <file> (<line>:<col> | --select 'ClassDecl:<Name>' | --match '<pattern>') <dest-file> --scope <dir> [--write]\n"
+			"Usage: apq move <file> (<line>:<col> | --select 'ClassDecl:<Name>' | --match '<pattern>') <dest-file> --scope <dir> ["
+			+ '--write]\n'
 		);
 		sysPrint('\n');
 		sysPrint('Options:\n');
@@ -6517,7 +6525,8 @@ final class Cli {
 
 	private static function printReplaceNodeUsage(): Void {
 		sysPrint(
-			"Usage: apq replace-node <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (<newSource> | --from-file <path> | -) [--reformat] [--write]\n"
+			"Usage: apq replace-node <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) ("
+			+ '<newSource> | --from-file <path> | -) [--reformat] [--write]\n'
 		);
 		printSelectorAddressingOptions();
 		sysPrint('  --kind <Kind>       With --at: the innermost node of <Kind> at the cursor.\n');
@@ -6543,7 +6552,8 @@ final class Cli {
 
 	private static function printChangeSigUsage(): Void {
 		sysPrint(
-			"Usage: apq change-sig <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <perm>  (perm = comma-separated 0-based new order, e.g. 2,0,1)\n"
+			"Usage: apq change-sig <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <perm>  ("
+			+ 'perm = comma-separated 0-based new order, e.g. 2,0,1)\n'
 		);
 		printOptionsWriteLangHelp();
 		sysPrint('Scope-correct, format-preserving change-signature (parameter reorder).\n');
@@ -6566,7 +6576,8 @@ final class Cli {
 
 	private static function printRemoveParamUsage(): Void {
 		sysPrint(
-			"Usage: apq remove-param <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <index> [--write]  (index = 0-based parameter to remove)\n"
+			"Usage: apq remove-param <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <index> [--write]  ("
+			+ 'index = 0-based parameter to remove)\n'
 		);
 		printOptionsWriteLangHelp();
 		sysPrint('Scope-correct, format-preserving remove-parameter — the inverse of\n');
@@ -6638,17 +6649,23 @@ final class Cli {
 		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
 		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
 		sysPrint(
-			'  --spans             Append `@from-to` byte-range annotation to every rendered node — same-span duplicates (parser bug emitting two nodes at the same position) become a trivial visual signal.\n'
+			'  --spans             Append `@from-to` byte-range annotation to every rendered node — same-span duplicates ('
+			+ 'parser bug emitting two nodes at the same position) become a trivial visual signal.\n'
 		);
 		sysPrint(
-			'  --count             Print just the integer direct-child count at the displayed root (one line per match with --select). Sanity-check for member counts before writing a corpus-driver test assertion.\n'
+			'  --count             Print just the integer direct-child count at the displayed root ('
+			+ 'one line per match with --select). Sanity-check for member counts before writing a corpus-driver test assertion.\n'
 		);
 		sysPrint(
-			'  --type-refs         Render the type-position projection (parseFileTypeRefs) instead of the default tree — the dotted type references of the file (field/var annotations, param + return types, enum-ctor params, type parameters, and the field types of an anonymous structure in any of those). Field NAMES never project as TYPE REFERENCES — the raw dump still shows them as node names, but uses/blast and the rewriting ops see only types.\n'
+			'  --type-refs         Render the type-position projection (parseFileTypeRefs) instead of the default tree — the dotted type '
+			+ 'references of the file (field/var annotations, param + return types, enum-ctor params, type parameters, and the field types '
+			+ 'of an anonymous structure in any of those). Field NAMES never project as TYPE REFERENCES — the raw dump still shows them as '
+			+ 'node names, but uses/blast and the rewriting ops see only types.\n'
 		);
 		sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
 		sysPrint(
-			'  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) writer — mirrors the unit-test entry HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n'
+			'  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) writer — mirrors the unit-test entry '
+			+ 'HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n'
 		);
 		sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
@@ -6997,7 +7014,8 @@ final class Cli {
 		final prefix: String = 'apq search: pattern "$patternStr" ';
 		return switch rootKind {
 			case 'Metavar':
-				'${prefix}is a lone metavar — matches every node. Narrow with structural context (e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
+				'${prefix}is a lone metavar — matches every node. Narrow with structural context ('
+					+ 'e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
 			case 'Literal' | 'StringLit' | 'BoolLit' | 'IntLit' | 'FloatLit' | 'SingleStringExpr' | 'DoubleStringExpr' | 'RawString':
 				'${prefix}is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
 			case _:
@@ -7147,7 +7165,16 @@ final class Cli {
 			final d: Int = levenshtein(query, cand);
 			if (d <= FUZZY_MAX_DIST) scored.push({ name: cand, tier: 1, score: d });
 		}
-		scored.sort((a, b) -> a.tier != b.tier ? a.tier - b.tier : (a.score != b.score ? a.score - b.score : (a.name < b.name ? -1 : 1)));
+		scored.sort((a, b) ->
+			if (a.tier != b.tier)
+				a.tier - b.tier
+			else if (a.score != b.score)
+				a.score - b.score
+			else if (a.name < b.name)
+				-1
+			else
+				1
+		);
 		final take: Int = scored.length < FUZZY_TOP_K ? scored.length : FUZZY_TOP_K;
 		return [for (i in 0...take) scored[i].name];
 	}
@@ -7207,7 +7234,12 @@ final class Cli {
 			for (c in n.children) walk(c);
 		}
 		walk(root);
-		seen.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		seen.sort((a, b) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		return seen;
 	}
 
@@ -7307,7 +7339,7 @@ final class Cli {
 		}
 
 		if (o.write)
-			stderr('apq fmt: formatted $changed file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
+			stderr('apq fmt: formatted $changed file(s)${failed > 0 ? ', $failed failed' : ''}\n');
 		else if (listMode && failed > 0)
 			// Not always a parse failure any more — a file whose re-emission
 			// would drop a comment is refused too (each one already printed
@@ -7500,7 +7532,8 @@ final class Cli {
 
 	private static function printSetDocUsage(): Void {
 		sysPrint(
-			"Usage: apq set-doc <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<text> | --from-file <path> | -) [--reformat] [--write]\n"
+			"Usage: apq set-doc <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<text> | --from-file <path> | -) ["
+			+ '--reformat] [--write]\n'
 		);
 		printSelectorAddressingSection();
 		sysPrint('  --from-file <path>  Read the doc text from a file instead of the argument\n');
@@ -7567,7 +7600,8 @@ final class Cli {
 		}
 		if (file == null || (pos == null && selectExpr == null && matchExpr == null) || changes.length == 0) {
 			stderr(
-				"apq set-modifier: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <change>... (e.g. public, +static, -inline)\n"
+				"apq set-modifier: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <change>... ("
+				+ 'e.g. public, +static, -inline)\n'
 			);
 			printSetModifierUsage();
 			return EXIT_USAGE;
@@ -7675,7 +7709,8 @@ final class Cli {
 
 	private static function printNewUsage(): Void {
 		sysPrint(
-			'Usage: apq new <path> (--class | --implements <iface> | --kind <k> | --raw -) [--extends <T>]... [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]\n'
+			'Usage: apq new <path> (--class | --implements <iface> | --kind <k> | --raw -) [--extends <T>]... [--open] ['
+			+ '--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]\n'
 		);
 		sysPrint('\n');
 		sysPrint('Options:\n');
@@ -7873,7 +7908,7 @@ final class Cli {
 		final failed: Int = tally.failed;
 
 		if (o.write)
-			stderr('apq comment-rewrite: rewrote ${tally.changed} file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
+			stderr('apq comment-rewrite: rewrote ${tally.changed} file(s)${failed > 0 ? ', $failed failed' : ''}\n');
 		else if (listMode && failed > 0)
 			stderr('apq comment-rewrite: $failed file(s) failed\n');
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
@@ -8218,7 +8253,8 @@ final class Cli {
 		// silent no-op.
 		if (o.showSource && o.clusterFilter == null && o.noTargetClusterFilter == null && !o.predictStrip && !o.predictRelax) {
 			stderr(
-				'apq recon: --source requires --cluster <key> / --no-target-cluster <key> / --predict-strip / --predict-relax (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n'
+				'apq recon: --source requires --cluster <key> / --no-target-cluster <key> / --predict-strip / --predict-relax ('
+				+ 'drill / STILL-FAIL modes only; would flood the sweep otherwise)\n'
 			);
 			return EXIT_USAGE;
 		}
@@ -8245,7 +8281,8 @@ final class Cli {
 		)
 			return null;
 		stderr(
-			'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n'
+			'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / '
+			+ '--predict-relax\n'
 		);
 		return EXIT_USAGE;
 	}
@@ -8260,7 +8297,8 @@ final class Cli {
 		if (o.predictRelax) {
 			if (o.predictStrip) {
 				stderr(
-					'apq recon: --predict-relax and --predict-strip are mutually exclusive (opposite models — strip removes tokens, relax inserts the expected one)\n'
+					'apq recon: --predict-relax and --predict-strip are mutually exclusive ('
+					+ 'opposite models — strip removes tokens, relax inserts the expected one)\n'
 				);
 				return EXIT_USAGE;
 			}
@@ -8270,7 +8308,8 @@ final class Cli {
 			}
 			if (o.patterns.length > 0) {
 				stderr(
-					'apq recon: --predict-relax does not take --replace/--with/--delete (the injected token comes from the parser`s `expected` hint)\n'
+					'apq recon: --predict-relax does not take --replace/--with/--delete ('
+					+ 'the injected token comes from the parser`s `expected` hint)\n'
 				);
 				return EXIT_USAGE;
 			}
@@ -8278,19 +8317,22 @@ final class Cli {
 		if (o.noTargetClusterFilter != null) {
 			if (!o.predictRelax) {
 				stderr(
-					'apq recon: --no-target-cluster requires --predict-relax (the footer NO TARGET breakdown is only produced in predict-relax sweep mode)\n'
+					'apq recon: --no-target-cluster requires --predict-relax ('
+					+ 'the footer NO TARGET breakdown is only produced in predict-relax sweep mode)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.clusterFilter != null) {
 				stderr(
-					'apq recon: --cluster and --no-target-cluster are mutually exclusive (one drill at a time — --cluster drills by forward-locus, --no-target-cluster drills by expected-message)\n'
+					'apq recon: --cluster and --no-target-cluster are mutually exclusive ('
+					+ 'one drill at a time — --cluster drills by forward-locus, --no-target-cluster drills by expected-message)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.probePath != null) {
 				stderr(
-					'apq recon: --no-target-cluster requires sweep mode (no NO TARGET aggregation in --probe mode — pass a corpus directory instead)\n'
+					'apq recon: --no-target-cluster requires sweep mode ('
+					+ 'no NO TARGET aggregation in --probe mode — pass a corpus directory instead)\n'
 				);
 				return EXIT_USAGE;
 			}
@@ -8302,7 +8344,8 @@ final class Cli {
 			)
 		) {
 			stderr(
-				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax / --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
+				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax '
+				+ '/ --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
 			);
 			return EXIT_USAGE;
 		}
@@ -8319,19 +8362,22 @@ final class Cli {
 		if (o.writerEqualsAfter) {
 			if (o.probePath == null) {
 				stderr(
-					'apq recon: --writer-equals requires --probe <file> (single-file mode; sweep mode already does byte-comparison via the corpus harness)\n'
+					'apq recon: --writer-equals requires --probe <file> ('
+					+ 'single-file mode; sweep mode already does byte-comparison via the corpus harness)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.predictStrip) {
 				stderr(
-					'apq recon: --writer-equals is incompatible with --predict-strip (the stripped source diverges from expected by construction — apply the slice first, then probe + writer-equals on the unstripped source)\n'
+					'apq recon: --writer-equals is incompatible with --predict-strip (the stripped source diverges from expected by '
+					+ 'construction — apply the slice first, then probe + writer-equals on the unstripped source)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.predictRelax) {
 				stderr(
-					'apq recon: --writer-equals is incompatible with --predict-relax (relax synthesises a missing token; expected bytes won`t match the patched source)\n'
+					'apq recon: --writer-equals is incompatible with --predict-relax ('
+					+ 'relax synthesises a missing token; expected bytes won`t match the patched source)\n'
 				);
 				return EXIT_USAGE;
 			}
@@ -8597,10 +8643,9 @@ final class Cli {
 				+ '" looks like a TypeName and "$maybeDirArg" like a path — `ast` is single-file.\n'
 				+ '         For type lookup across a directory:\n           apq refs $maybeTypeArg $maybeDirArg'
 				+ ' --decls    # value bindings + decl site\n           apq uses $maybeTypeArg $maybeDirArg'
-				+ '            # type-position consumers\n           apq blast $maybeTypeArg $maybeDirArg'
-				+ '           # full change-impact (uses + refs + field-access)\n           apq meta @:peg $maybeDirArg'
-				+ '                    # all PEG decls in scope\n         For a subtree of one file:\n'
-				+ '           apq ast <path-to-file.hx> --select Kind:$maybeTypeArg\n'
+				+ '            # type-position consumers\n           apq blast $maybeTypeArg $maybeDirArg           # full change-impact ('
+				+ 'uses + refs + field-access)\n           apq meta @:peg $maybeDirArg                    # all PEG decls in scope\n'
+				+ '         For a subtree of one file:\n           apq ast <path-to-file.hx> --select Kind:$maybeTypeArg\n'
 			);
 		else
 			stderr('apq ast: only one file argument supported (got "$file" and "$a")\n');
@@ -8916,9 +8961,8 @@ final class Cli {
 		// (`refs --decls` / `uses` / `blast`) that DO recurse a dir.
 		// Silent when the token is lowercase (field-shaped) or empty.
 		final crossProjectHint: String = firstKind.length > 0 && firstKind.fastCodeAt(0) >= 'A'.code && firstKind.fastCodeAt(0) <= 'Z'.code
-			? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind'
-				+ ' src/ --decls (declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind'
-				+ ' src/ (full change-impact).'
+			? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind src/ --decls ('
+				+ 'declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind src/ (full change-impact).'
 			: '';
 		stderr(
 			'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. Kinds present here: ${present.join(', ')}.'
@@ -9528,8 +9572,8 @@ final class Cli {
 		}
 		if (!entries.exists(e -> e.k == patternKind))
 			stderr(
-				'  (pattern root kind "$patternKind'
-				+ '" NOT present in any scanned file — likely the wrong kind for this construct; check `apq ast <file>` to see the actual node shape)\n'
+				'  (pattern root kind "$patternKind" NOT present in any scanned file — likely the wrong kind for this construct; check '
+				+ '`apq ast <file>` to see the actual node shape)\n'
 			);
 	}
 
@@ -9685,8 +9729,8 @@ final class Cli {
 				// file and nothing is retained past it. Keyed by the TREE, not the path:
 				// the parse cache is keyed by CONTENT, and an index handed a node it never
 				// saw degrades every address to `<line>:<col>` in silence.
-				var indexTree: Null<QueryNode> = null;
-				var index: Null<AddressIndex> = null;
+				final indexTree: Null<QueryNode> = null;
+				final index: Null<AddressIndex> = null;
 				sysPrint(LintFormat.json(ordered, sourceOf, v -> {
 					final span: Null<Span> = v.span;
 					final source: Null<String> = sourceOf[v.file];
@@ -9697,8 +9741,6 @@ final class Cli {
 					var current: Null<AddressIndex> = index;
 					if (current == null || indexTree != tree) {
 						current = Address.describerFor(tree, equiv);
-						indexTree = tree;
-						index = current;
 					}
 					final node: Null<QueryNode> = current.nodeAt(span.from);
 					return node == null ? null : current.describe(source, node);
@@ -9803,7 +9845,8 @@ final class Cli {
 		if (!keepNoTargetPerFile && noTargetReasons.length > 0) {
 			noTargetReasons.sort((a, b) -> b.count - a.count);
 			sysPrint(
-				'   no target breakdown (use --no-target-cluster <key> to drill into a specific shape, or --cluster <locus-key> for forward-locus drill):\n'
+				'   no target breakdown ('
+				+ 'use --no-target-cluster <key> to drill into a specific shape, or --cluster <locus-key> for forward-locus drill):\n'
 			);
 			for (entry in noTargetReasons) sysPrint('     ${entry.count}× ${entry.key}\n');
 		}
@@ -9825,7 +9868,12 @@ final class Cli {
 			final dir: Null<String> = stack.pop();
 			if (dir == null) break;
 			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+			names.sort((a: String, b: String) -> if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0);
 			for (name in names) {
 				final path: String = '$dir/$name';
 				if (FileSystem.isDirectory(path)) {
@@ -9947,8 +9995,8 @@ final class Cli {
 				);
 			} else {
 				sysPrint(
-					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely needs '
-					+ '$patternCount separate code mechanisms.\n'
+					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely '
+					+ 'needs $patternCount separate code mechanisms.\n'
 				);
 			}
 		} else if (!combinedOk && baselineOk) {
@@ -10205,7 +10253,12 @@ final class Cli {
 			final dir: Null<String> = stack.pop();
 			if (dir == null) break;
 			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+			names.sort((a: String, b: String) -> if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0);
 			for (name in names) {
 				final path: String = '$dir/$name';
 				if (FileSystem.isDirectory(path)) {
@@ -10450,10 +10503,9 @@ final class Cli {
 		// operator); refs/uses don't know about field positions.
 		// The structural answer is `apq search '$x.<tail>'`.
 		final t: String = leadingDot;
-		return ' — "$n" is a leading-dot field-name slot. $cmd'
-			+ ' matches leaf names / single bindings / type positions, never `expr.field` shape. Try: apq search \'$$x.$t'
-			+ '\' <dir> (field-access shape), apq lit \'$t\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t'
-			+ ' <dir> --decls (where the field is declared).';
+		return ' — "$n" is a leading-dot field-name slot. $cmd matches leaf names / single bindings / type positions, never `expr.field` '
+			+ 'shape. Try: apq search \'$$x.$t\' <dir> (field-access shape), apq lit \'$t'
+			+ '\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t <dir> --decls (where the field is declared).';
 	}
 
 	/**
@@ -10467,14 +10519,12 @@ final class Cli {
 		final lhsFirst: Int = lhs.fastCodeAt(0);
 		final lhsIsUpper: Bool = lhsFirst >= 'A'.code && lhsFirst <= 'Z'.code;
 		return lhsIsUpper
-			? ' — "$n" is a dotted access (Type.method / pkg.Module). $cmd'
-				+ ' matches leaf names / single bindings / type positions, never `Type.method` shape. Try: apq search \'$n'
-				+ '($$_)\' <dir> (call shape), apq search \'$lhs.$rhs\' <dir> (field-access shape), or apq refs $rhs'
-				+ ' <dir> --decls (where the method is declared).'
+			? ' — "$n" is a dotted access (Type.method / pkg.Module). $cmd matches leaf names / single bindings / type positions, never '
+				+ '`Type.method` shape. Try: apq search \'$n($$_)\' <dir> (call shape), apq search \'$lhs.$rhs'
+				+ '\' <dir> (field-access shape), or apq refs $rhs <dir> --decls (where the method is declared).'
 			: ' — "$n" is a dotted access (obj.field). $cmd'
-				+ ' matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs'
-				+ '\' <dir> (field-access shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs'
-				+ ' <dir> --decls (where the field is declared).';
+				+ ' matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs\' <dir> (field-access '
+				+ 'shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs <dir> --decls (where the field is declared).';
 	}
 
 	/**
@@ -10489,9 +10539,8 @@ final class Cli {
 						+ ' <dir> (full change-impact incl. field-access), or apq lit \'$n'
 						+ '\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
 				else
-					' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n'
-						+ '\' <dir> --any-kind (every leaf — strings/idents/field-names) or apq search \'$$x.$n'
-						+ '\' <dir> (field-access shape).${macroEmitHint(n)}';
+					' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every '
+						+ 'leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).${macroEmitHint(n)}';
 			case 'uses':
 				if (isLower)
 					' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n'
@@ -10504,13 +10553,13 @@ final class Cli {
 					+ ' <dir> + apq refs $n <dir> directly.';
 			case 'lit':
 				if (looksLikeMixedIdentifier(n))
-					' — no Literal/IdentExpr leaf matches "$n'
-						+ '" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; --exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs '
-						+ '$n <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
+					' — no Literal/IdentExpr leaf matches "$n" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; '
+						+ '--exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs $n'
+						+ ' <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
 				else
 					' — no string-literal content matches "$n'
-						+ '" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs '
-						+ '$n <dir> --decls.';
+						+ '" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,'
+						+ 'IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
 			case 'meta':
 				''; // meta has no <name> arg (annotation is its own thing) — leave silent.
 			case _:
@@ -10529,8 +10578,8 @@ final class Cli {
 		final tail: StringBuf = new StringBuf();
 		final n: Int = skipEntries.length;
 		tail.add(
-			'\napq $cmd: WARNING: $n'
-			+ ' file(s) skip-parse — answer may be hiding in unparsed files. Locus shows the parse-failure position; if it is far past the construct you searched for, the warning can be ignored.'
+			'\napq $cmd: WARNING: $n file(s) skip-parse — answer may be hiding in unparsed files. Locus shows the parse-failure '
+			+ 'position; if it is far past the construct you searched for, the warning can be ignored.'
 		);
 		final shown: Int = n < SKIP_PATHS_SHOWN ? n : SKIP_PATHS_SHOWN;
 		for (i in 0...shown) {
@@ -11331,7 +11380,8 @@ final class Cli {
 
 	private static function printPatchUsage(): Void {
 		sysPrint(
-			"Usage: apq patch <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>) [--sep <marker>] [--all] [--reformat] [--write]\n"
+			"Usage: apq patch <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>) ["
+			+ '--sep <marker>] [--all] [--reformat] [--write]\n'
 		);
 		printSelectorAddressingOptions();
 		sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
@@ -11957,7 +12007,12 @@ final class Cli {
 		}
 		// --limit 0 = uncapped; unset = DEFAULT_CHAIN_LINES; the budget is
 		// shared across the multiple matches of a bare-name target
-		var budget: Int = limit == 0 ? 0 : (limit > 0 ? limit : DEFAULT_CHAIN_LINES);
+		var budget: Int = if (limit == 0)
+			0
+		else if (limit > 0)
+			limit
+		else
+			DEFAULT_CHAIN_LINES;
 		for (m in matches) {
 			final rendered: String = CallChains.render(graph, m.id, depth, outward, kinds, f -> sources[f], budget);
 			sysPrint(rendered);
@@ -13004,8 +13059,8 @@ final class Cli {
 			case Confirmed:
 				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
 				return {
-					tail: ', risky-fix verified: ${verified.applied.length} file(s) applied, ${verified.reverted.length} reverted to report-only'
-						+ bisectTail(verified.partials),
+					tail: ', risky-fix verified: ${verified.applied.length} file(s) applied, ${verified.reverted.length}'
+						+ ' reverted to report-only${bisectTail(verified.partials)}',
 					appliedCount: verified.appliedEdits,
 					reverts: verified.reverted
 				};
@@ -14008,7 +14063,8 @@ final class Cli {
 		final rootFinal: String = o.rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
 			stderr(
-				"apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset (no cached path at ~/.config/anyparse/fork_path either).\n"
+				"apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset ("
+				+ 'no cached path at ~/.config/anyparse/fork_path either).\n'
 			);
 			stderr('  Either pass a directory:  apq recon /path/to/corpus\n');
 			stderr('  or export the fork root:  ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter\n');
@@ -14927,7 +14983,12 @@ final class Cli {
 			final dir: Null<String> = stack.pop();
 			if (dir == null) break;
 			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+			names.sort((a: String, b: String) -> if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0);
 			for (name in names) {
 				final path: String = '$dir/$name';
 				if (FileSystem.isDirectory(path)) {
@@ -15030,7 +15091,12 @@ final class Cli {
 			final c: ReconCluster = entry.cluster;
 			sysPrint('  cluster "${entry.key}" — ${c.count} path${plural(c.count)}:\n');
 			final sorted: Array<String> = c.paths.copy();
-			sorted.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+			sorted.sort((a, b) -> if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0);
 			for (p in sorted) {
 				if (!showSource) {
 					sysPrint('    $p\n');
@@ -15208,7 +15274,8 @@ final class Cli {
 		for (h in patternHits) if (h == 0) anyZero = true;
 		if (!anyZero) return EXIT_OK;
 		stderr(
-			'apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see per-pattern totals\n'
+			'apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see '
+			+ 'per-pattern totals\n'
 		);
 		return EXIT_RUNTIME;
 	}
@@ -15271,8 +15338,8 @@ final class Cli {
 			final binTime: Float = FileSystem.stat(binPath).mtime.getTime();
 			if (anyHxNewerThan('src', binTime) || anyHxNewerThan('test', binTime)) {
 				stderr(
-					'apq $cmd'
-					+ ': WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals\n'
+					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before '
+					+ 'trusting these totals\n'
 				);
 			}
 		} catch (_: Exception) {
@@ -15698,7 +15765,12 @@ final class Cli {
 		for (k in cur.keys()) allPaths[k] = true;
 		for (k in prev.keys()) allPaths[k] = true;
 		final sorted: Array<String> = [for (k in allPaths.keys()) k];
-		sorted.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		sorted.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		final transitions: Map<String, Int> = [];
 		var changed: Int = 0;
 		for (path in sorted) {
@@ -15713,19 +15785,27 @@ final class Cli {
 			else
 				'$ps->$cs';
 			transitions[key] = (transitions[key] ?? 0) + 1;
-			if (ps == null)
-				sysPrint('ADDED $path (now $cs)\n');
-			else if (cs == null)
-				sysPrint('REMOVED $path (was $ps)\n');
-			else
-				sysPrint('$ps -> $cs: $path\n');
+			sysPrint(
+				if (ps == null)
+					'ADDED $path (now $cs)\n'
+				else if (cs == null)
+					'REMOVED $path (was $ps)\n'
+				else
+					'$ps -> $cs: $path\n'
+			);
 		}
 		final breakdown: Array<String> = [for (k => v in transitions) '$k: $v'];
-		breakdown.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
-		if (changed == 0)
-			sysPrint('--- sweep --diff: 0 fixtures changed (snapshots identical) ---\n');
+		breakdown.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
 		else
-			sysPrint('--- sweep --diff: $changed fixtures changed (${breakdown.join(', ')}) ---\n');
+			0);
+		sysPrint(
+			changed == 0
+				? '--- sweep --diff: 0 fixtures changed (snapshots identical) ---\n'
+				: '--- sweep --diff: $changed fixtures changed (${breakdown.join(', ')}) ---\n'
+		);
 		return EXIT_OK;
 	}
 
@@ -15915,7 +15995,12 @@ final class Cli {
 		}
 		final plugin: GrammarPlugin = pickPlugin(opts.lang);
 		final walk: SelfStatusWalk = walkSelfStatus(plugin, root, opts.showSource);
-		walk.skipLines.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		walk.skipLines.sort((a, b) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		for (line in walk.skipLines) sysPrint('$line\n');
 		final total: Int = walk.parseable + walk.skipParse;
 		sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');
@@ -16033,7 +16118,12 @@ final class Cli {
 
 	/** Clamp a 1-based line number into `[1, lineCount]`. */
 	private static inline function clampLine(n: Int, lineCount: Int): Int {
-		return n < 1 ? 1 : (n > lineCount ? lineCount : n);
+		return if (n < 1)
+			1
+		else if (n > lineCount)
+			lineCount
+		else
+			n;
 	}
 
 	private static function printSourceUsage(): Void {

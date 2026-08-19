@@ -61,28 +61,31 @@ final class Diff {
 					final b: QueryNode = rightN;
 					final pa: Null<Position> = a.span == null ? null : (a.span: Span).lineCol(sourceA);
 					final pb: Null<Position> = b.span == null ? null : (b.span: Span).lineCol(sourceB);
-					if (flat)
-						buf.add('$fileA:${posOrZero(pa)} ↔ $fileB:${posOrZero(pb)}: differs: ${nodeLabel(a)} ↔ ${nodeLabel(b)}\n');
-					else
-						buf.add('$indent${posOrZero(pa)} ↔ ${posOrZero(pb)}: differs: ${nodeLabel(a)} ↔ ${nodeLabel(b)}\n');
+					buf.add(
+						flat
+							? '$fileA:${posOrZero(pa)} ↔ $fileB:${posOrZero(pb)}: differs: ${nodeLabel(a)} ↔ ${nodeLabel(b)}\n'
+							: '$indent${posOrZero(pa)} ↔ ${posOrZero(pb)}: differs: ${nodeLabel(a)} ↔ ${nodeLabel(b)}\n'
+					);
 				case Added:
 					final rightN: Null<QueryNode> = h.right;
 					if (rightN == null) continue;
 					final b: QueryNode = rightN;
 					final pb: Null<Position> = b.span == null ? null : (b.span: Span).lineCol(sourceB);
-					if (flat)
-						buf.add('$fileB:${posOrZero(pb)}: added: ${nodeLabel(b)}\n');
-					else
-						buf.add('$indent       ↔ ${posOrZero(pb)}: added: ${nodeLabel(b)}\n');
+					buf.add(
+						flat
+							? '$fileB:${posOrZero(pb)}: added: ${nodeLabel(b)}\n'
+							: '$indent       ↔ ${posOrZero(pb)}: added: ${nodeLabel(b)}\n'
+					);
 				case Removed:
 					final leftN: Null<QueryNode> = h.left;
 					if (leftN == null) continue;
 					final a: QueryNode = leftN;
 					final pa: Null<Position> = a.span == null ? null : (a.span: Span).lineCol(sourceA);
-					if (flat)
-						buf.add('$fileA:${posOrZero(pa)}: removed: ${nodeLabel(a)}\n');
-					else
-						buf.add('$indent${posOrZero(pa)} ↔        : removed: ${nodeLabel(a)}\n');
+					buf.add(
+						flat
+							? '$fileA:${posOrZero(pa)}: removed: ${nodeLabel(a)}\n'
+							: '$indent${posOrZero(pa)} ↔        : removed: ${nodeLabel(a)}\n'
+					);
 			}
 		}
 		return buf.toString();

@@ -79,7 +79,12 @@ final class TryExpressionShape {
 	 * initializer would stay live on that path).
 	 */
 	public static function singleBody(body: QueryNode, blockStmtKind: Null<String>): Null<QueryNode> {
-		return blockStmtKind != null && body.kind == blockStmtKind ? body.children.length == 1 ? body.children[0] : null : body;
+		return if (blockStmtKind == null || body.kind != blockStmtKind)
+			body
+		else if (body.children.length == 1)
+			body.children[0]
+		else
+			null;
 	}
 
 	/**
@@ -276,7 +281,12 @@ final class TryExpressionShape {
 	 */
 	private static function operand(source: String, node: QueryNode, s: TrySeams): Null<String> {
 		final src: Null<String> = slice(source, node);
-		return src == null ? null : (endsOpen(node, s.tryKinds) ? '($src)' : src);
+		return if (src == null)
+			null
+		else if (endsOpen(node, s.tryKinds))
+			'($src)'
+		else
+			src;
 	}
 
 }

@@ -25,10 +25,9 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 class HxReturnValueBreaksInsideTest extends Test {
 
 	/** Flat, the statement is 141 columns — one past the limit, and only because of the `;`. */
-	private static final SRC: String = 'class C {\n'
-		+ '\tprivate inline function files(fileName:String, sessionXML:String):Array<APIFileUploadBase> {\n'
-		+ "\t\treturn [new APIFileUploadBase('sessionxml', fileName, Mime.ApplicationOctetStream, ByteArray.fromBytes(Bytes.ofString(sessionXML)))];\n"
-		+ '\t}\n}';
+	private static final SRC: String = 'class C {\n\tprivate inline function files(fileName:String, '
+		+ 'sessionXML:String):Array<APIFileUploadBase> {\n\t\treturn [new APIFileUploadBase(\'sessionxml\', '
+		+ 'fileName, Mime.ApplicationOctetStream, ByteArray.fromBytes(Bytes.ofString(sessionXML)))];\n\t}\n}';
 
 	public function new(): Void {
 		super();

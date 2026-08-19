@@ -77,7 +77,8 @@ class PreferForInCheckTest extends Test {
 		Assert.equals(
 			fn('final iter = xs.iterator();\n\t\tfor (cp in iter) {\n\t\t\tuse(cp);\n\t\t}\n\t\tuse(iter);'),
 			applyFix(fn(
-				'final iter = xs.iterator();\n\t\twhile (iter.hasNext()) {\n\t\t\tfinal cp = iter.next();\n\t\t\tuse(cp);\n\t\t}\n\t\tuse(iter);'
+				'final iter = xs.iterator();\n\t\twhile (iter.hasNext()) {\n\t\t\tfinal cp = iter.next();\n\t\t\tuse(cp);\n\t\t}\n'
+				+ '\t\tuse(iter);'
 			))
 		);
 	}
@@ -86,7 +87,8 @@ class PreferForInCheckTest extends Test {
 		Assert.equals(
 			fn('final iter = xs.iterator();\n\t\t// note\n\t\tfor (cp in iter) {\n\t\t\tuse(cp);\n\t\t}'),
 			applyFix(fn(
-				'final iter = xs.iterator();\n\t\t// note\n\t\twhile (iter.hasNext()) {\n\t\t\tfinal cp = iter.next();\n\t\t\tuse(cp);\n\t\t}'
+				'final iter = xs.iterator();\n\t\t// note\n\t\twhile (iter.hasNext()) {\n\t\t\tfinal cp = iter.next();\n\t\t\tuse(cp);\n'
+				+ '\t\t}'
 			))
 		);
 	}

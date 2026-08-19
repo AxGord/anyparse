@@ -91,8 +91,8 @@ final class HxAnonTypeBracesOptionsTest extends Test {
 		// Sibling `removeInnerWhenEmpty` from haxe-formatter's schema is
 		// silently ignored by the ByName parser's `UnknownPolicy.Skip` —
 		// the loader still picks up the recognised opening/closing pair.
-		final json: String =
-			'{ "whitespace": { "bracesConfig": { "anonTypeBraces": { "openingPolicy": "after", "closingPolicy": "before", "removeInnerWhenEmpty": false } } } }';
+		final json: String = '{ "whitespace": { "bracesConfig": { "anonTypeBraces": {'
+			+ ' "openingPolicy": "after", "closingPolicy": "before", "removeInnerWhenEmpty": false } } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.anonTypeBracesOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.anonTypeBracesClose);

@@ -146,7 +146,8 @@ class PreferTernaryExpressionCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():String {\n\t\tfinal x:String = if (a)\n\t\t\tif (b)\n\t\t\t\tp\n\t\t\telse\n\t\t\t\tq\n\t\telse\n\t\t\tr;\n\t\treturn x;\n\t}\n}'
+				'class C {\n\tfunction f():String {\n\t\tfinal x:String = if (a)\n\t\t\tif (b)\n\t\t\t\tp\n\t\t\telse\n\t\t\t\tq\n'
+				+ '\t\telse\n\t\t\tr;\n\t\treturn x;\n\t}\n}'
 			).length
 		);
 	}

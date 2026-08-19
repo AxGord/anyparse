@@ -72,7 +72,8 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'@:nullSafety(Strict) class C { function f() { var v = make(); if (v != null) trace(v); } function make():Null<String> return null; }'
+				'@:nullSafety(Strict) class C { function f() { var v = make(); if (v != null) trace(v); } '
+				+ 'function make():Null<String> return null; }'
 			).length
 		);
 	}
@@ -141,7 +142,8 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'@:nullSafety(Strict) class C { function f(p:Null<String>) { if (p == null) { g(); return; } final p:String = p; trace(p); } function g():Void {} }'
+				'@:nullSafety(Strict) class C { function f(p:Null<String>) { if (p == null) { g(); return; } '
+				+ 'final p:String = p; trace(p); } function g():Void {} }'
 			).length
 		);
 	}

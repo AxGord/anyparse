@@ -529,10 +529,9 @@ class AddressTest extends Test {
 		index: AddressIndex,
 		nodes: Array<QueryNode>
 	} {
-		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar x = 1;\n\t\tvar y = 2;\n\t\ttrace(x);\n\t\ttrace(y);\n\t\t'
-			+ 'if (x > y) trace(x); else trace(y);\n\t\treturn x + y;\n\t}\n'
-			+ '\tfunction g():Void {\n\t\tvar x = 3;\n\t\ttrace(x);\n\t\tif (x > 0) {\n\t\t\ttrace(x);\n\t\t\ttrace(x);\n\t\t}\n\t}\n'
-			+ '\tfunction h():Void {\n\t\ttrace(1);\n\t\ttrace(2);\n\t\ttrace(3);\n\t}\n}\n';
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar x = 1;\n\t\tvar y = 2;\n\t\ttrace(x);\n\t\ttrace(y);\n\t\tif (x > y) '
+			+ 'trace(x); else trace(y);\n\t\treturn x + y;\n\t}\n\tfunction g():Void {\n\t\tvar x = 3;\n\t\ttrace(x);\n\t\tif (x > 0) {\n'
+			+ '\t\t\ttrace(x);\n\t\t\ttrace(x);\n\t\t}\n\t}\n\tfunction h():Void {\n\t\ttrace(1);\n\t\ttrace(2);\n\t\ttrace(3);\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(src);
 		final equiv: KindEquivalence = plugin.selectKindEquivalence();

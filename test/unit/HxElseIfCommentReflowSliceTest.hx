@@ -92,12 +92,11 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '"sameLine": {"ifBody": "fitLine", "elseIfCommentReflow": true}}';
 
 	private static final WIDE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
-		+ '\t\t\t// a fairly long trailing note that pushes the glued head line past the configured limit\n'
-		+ '\t\tif (subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n'
-		+ '\t}\n}';
+		+ '\t\t\t// a fairly long trailing note that pushes the glued head line past the configured limit\n\t\tif ('
+		+ 'subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 	private static final WIDE_GLUED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
-		+ '\t\t} else if (subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) { // a fairly long trailing note that pushes the glued head line past the configured limit\n'
-		+ '\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
+		+ '\t\t} else if (subject is Bitmap && subject.parent != null && somethingElseEntirely.isReady) { // a fairly long trailing note '
+		+ 'that pushes the glued head line past the configured limit\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 	private static final WIDE_COND_OPENED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
 		+ '\t\t} else if (\n' + '\t\t\tsubject is Bitmap && subject.parent != null && somethingElseEntirely.isReady\n'
 		+ '\t\t) { // a fairly long trailing note that pushes the glued head line past the configured limit\n'
@@ -115,13 +114,13 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '"sameLine": {"ifBody": "fitLine"}}';
 
 	/** `sameLine.elseBody: "keep"` routes the whole else through `buildBodyKeepLayout`. */
-	private static final CONFIG_KEEP_ELSE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, '
-		+ '"whitespace": {"addLineCommentSpace": false, "bracesConfig": {"singleStatementBraces": "remove"}}, '
-		+ '"sameLine": {"ifBody": "fitLine", "elseBody": "keep", "elseIfCommentReflow": true}}';
+	private static final CONFIG_KEEP_ELSE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "whitespace": {"addLineCommentSpace": false, "bracesConfig": {'
+		+ '"singleStatementBraces": "remove"}}, "sameLine": {' + '"ifBody": "fitLine", "elseBody": "keep", "elseIfCommentReflow": true}}';
 
 	/** The one config where a bare body reaches the writer as a width PROBE rather than a break. */
-	private static final CONFIG_GLUED_BODY: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 60}, '
-		+ '"whitespace": {"addLineCommentSpace": false}, '
+	private static final CONFIG_GLUED_BODY: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 60}, "whitespace": {"addLineCommentSpace": false}, '
 		+ '"sameLine": {"ifBody": "fitLine", "fitLineIfWithElse": true, "elseIfCommentReflow": true}}';
 
 	private static final WRAPPED_COND_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
@@ -149,8 +148,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\t\t// note\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 	private static final KEEP_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
 		+ '\t\t\t// note\n\t\t\tif (b) {\n\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n}';
-	private static final GLUED_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
-		+ '\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n' + '\t}\n}';
+	private static final GLUED_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif ('
+		+ 'b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n\t}\n}';
 	private static final GLUED_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n'
 		+ '\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n\t\t\t\tgammaValue, deltaValue);\n\t}\n}';
 

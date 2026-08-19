@@ -239,7 +239,8 @@ class MemberOrderCheckTest extends Test {
 		final src: String = 'class C {\n\tpublic var v:Int;\n\tpublic final f:Int = 0;\n\tpublic var g(get, never):Int;\n'
 			+ '\tpublic var ro(default, null):Int;\n}';
 		Assert.equals(
-			'class C {\n\tpublic var ro(default, null):Int;\n\npublic var g(get, never):Int;\n\npublic final f:Int = 0;\n\npublic var v:Int;\n}',
+			'class C {\n\tpublic var ro(default, null):Int;\n\npublic var g(get, never):Int;\n\npublic final f:Int = 0;\n\n'
+			+ 'public var v:Int;\n}',
 			fixedSource(src)
 		);
 	}
@@ -396,7 +397,8 @@ class MemberOrderCheckTest extends Test {
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
-			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n'
+			+ '\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
 		);
 		final fixed: String = canonicalizedFix(src);
@@ -414,7 +416,8 @@ class MemberOrderCheckTest extends Test {
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
-			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n'
+			+ '\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
 		);
 	}
@@ -444,7 +447,8 @@ class MemberOrderCheckTest extends Test {
 			+ '\tprivate var ht:Float = 0;\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
-			'class C {\n\tprivate final b:S = new S();\n\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n\n\tprivate var ht:Float = 0;\n}',
+			'class C {\n\tprivate final b:S = new S();\n\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n\n'
+			+ '\tprivate var ht:Float = 0;\n}',
 			fixedSource(src)
 		);
 		final fixed: String = canonicalizedFix(src);
@@ -475,7 +479,8 @@ class MemberOrderCheckTest extends Test {
 		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n'
+			+ '\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
 		);
 	}

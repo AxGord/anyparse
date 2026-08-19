@@ -28,8 +28,16 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxReturnCallOpenParenSliceTest extends Test {
 
-	private static final CONFIG: String =
-		'{"wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, "expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}}}';
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "callParameter": {'
+		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
+		+ '"itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, '
+		+ '"expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}, "opBoolChain": {"defaultWrap": "noWrap", '
+		+ '"rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", '
+		+ '"value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {'
+		+ '"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}}}';
 
 	public function new(): Void {
 		super();
@@ -38,9 +46,8 @@ final class HxReturnCallOpenParenSliceTest extends Test {
 	// The fix: a single-argument call value (its sole arg is a nested binary
 	// chain) opens the OUTER call paren instead of breaking after `return`.
 	public function testReturnSingleArgCallOpensParen(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n\t\treturn check(\n'
-			+ '\t\t\tstore.validate("name.txt", false, ACTION_UPLOADED, 12345, 1, extraPaddingArgumentValue, morePaddingArgumentsHereNow) == false\n'
-			+ '\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\treturn check(\n\t\t\tstore.validate("name.txt", false, ACTION_UPLOADED, '
+			+ '12345, 1, extraPaddingArgumentValue, morePaddingArgumentsHereNow) == false\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -65,18 +72,16 @@ final class HxReturnCallOpenParenSliceTest extends Test {
 	// call opens the OUTER paren (not a nested inner one) — the RHS-only resolve
 	// gate must leave this expr-paren-open decision untouched.
 	public function testBareNestedCallOpensOuterParen(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n\t\tcontainer.append(\n'
-			+ '\t\t\tnew Wrapper(new Inner(widthValueHere, heightValueHere, 0x6E6F70, 0xF3F3F3, 0xacacac, 0x000000, firstFlagValueHere))\n'
-			+ '\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tcontainer.append(\n\t\t\tnew Wrapper(new Inner(widthValueHere, '
+			+ 'heightValueHere, 0x6E6F70, 0xF3F3F3, 0xacacac, 0x000000, firstFlagValueHere))\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	// Guard: a binary-chain RHS (not a call) keeps its `&&`/`||` chain wrap and
 	// stays glued to `=` — the fix does not turn a chain RHS into a paren-open.
 	public function testBinaryChainRhsKeepsChainWrap(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tfinal ready:Bool = someModeratelyLongOperandName && anotherModeratelyLongOperandName\n'
-			+ '\t\t\t|| yetAnotherLongOperandExpressionToOverflowLineNow;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal ready:Bool = someModeratelyLongOperandName && '
+			+ 'anotherModeratelyLongOperandName\n\t\t\t|| yetAnotherLongOperandExpressionToOverflowLineNow;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

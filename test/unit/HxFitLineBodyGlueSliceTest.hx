@@ -35,12 +35,11 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 		+ '\t\t\t\t\t\timage: item.Image\n\t\t\t\t\t})\n\t\t\t]\n\t\t};\n\t}\n}';
 
 	/** The same comprehension with the body glued to the `if` head - one line and one indent level cheaper. */
-	private static final COMPREHENSION_GLUED: String = 'class SampleContainer {\n'
-		+ '\tpublic function collectRemaining(knownItems:SampleEntryBundles):SampleEntryBundles {\n'
-		+ '\t\treturn {\n\t\t\tfirst: [ for (item in _owner.PrimaryList)\n'
-		+ '\t\t\t\tif (!knownItems.first.exists((u:SamplePrimaryEntryKind) -> u.email == item.Email)) ({\n'
-		+ '\t\t\t\t\talphaName: item.AlphaName, betaName: item.BetaName, id: item.ItemId, email: item.Email, access: VIEW, image: item.Image\n'
-		+ '\t\t\t\t})\n\t\t\t]\n\t\t};\n\t}\n}';
+	private static final COMPREHENSION_GLUED: String = 'class SampleContainer {\n\tpublic function '
+		+ 'collectRemaining(knownItems:SampleEntryBundles):SampleEntryBundles {\n\t\treturn {\n'
+		+ '\t\t\tfirst: [ for (item in _owner.PrimaryList)\n' + '\t\t\t\tif (!knownItems.first.exists((u:SamplePrimaryEntryKind) '
+		+ '-> u.email == item.Email)) ({\n\t\t\t\t\talphaName: item.AlphaName, betaName: '
+		+ 'item.BetaName, id: item.ItemId, email: item.Email, access: VIEW, image: item.Image\n' + '\t\t\t\t})\n\t\t\t]\n\t\t};\n\t}\n}';
 
 	/** A sibling filter body that DOES fit one line deeper - the population the knob must leave alone. */
 	private static final RESCUED_BODY: String = 'class SampleContainer {\n'
@@ -66,10 +65,10 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 		+ '\t\t\t\tpath: model.path,\n\t\t\t\treadonly: model.readonly\n\t\t\t})\n\t\t);\n\t}\n}';
 
 	/** The same lambda with its body glued after the `->` — two lines and one indent level cheaper. */
-	private static final ARROW_BODY_GLUED: String = 'class C {\n\tfunction test() {\n'
-		+ '\t\t_entryList.dataSource = sourceModel.entryViewModels.map(model -> ({\n'
-		+ '\t\t\tlabel: model.entryData != null ? model.entryData.name : throw new Exception(\'Entry data not set\'),\n'
-		+ '\t\t\tpath: model.path,\n' + '\t\t\treadonly: model.readonly\n' + '\t\t}));\n' + '\t}\n' + '}';
+	private static final ARROW_BODY_GLUED: String = 'class C {\n\tfunction test() {\n\t\t_entryList.dataSource = '
+		+ 'sourceModel.entryViewModels.map(model -> ({\n\t\t\tlabel: model.entryData != null ? '
+		+ 'model.entryData.name : throw new Exception(\'Entry data not set\'),\n\t\t\tpath: model.path,\n'
+		+ '\t\t\treadonly: model.readonly\n' + '\t\t}));\n' + '\t}\n' + '}';
 
 	/** A short arrow body that fits on the header line — the knob must not touch it. */
 	private static final ARROW_BODY_FLAT: String = 'class C {\n\tfunction test() {\n'
@@ -79,18 +78,16 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 	 * An arrow body that is NOT an expression paren — an `if` expression the continuation does not rescue either. The
 	 * arrow glue is scoped to paren bodies, so this one keeps its own line.
 	 */
-	private static final ARROW_IF_BODY: String = 'class C {\n\tfunction test() {\n\t\titemData.forEachChild(\n'
-		+ '\t\t\tchild -> if (updateFlags(dfs, child, itemOldPath + child.nodePath.substr(child.nodePath.lastIndexOf(\'/\')))) updated = true\n'
-		+ '\t\t);\n\t}\n}';
+	private static final ARROW_IF_BODY: String = 'class C {\n\tfunction test() {\n\t\titemData.forEachChild(\n\t\t\tchild -> if ('
+		+ 'updateFlags(dfs, child, itemOldPath + child.nodePath.substr(child.nodePath.lastIndexOf(\'/\')))) updated = true\n\t\t);\n\t}\n}';
 
 	/**
 	 * An expression paren in OPERAND position — third operand of an `||` chain, too wide to stay on the chain's
 	 * continuation line. It OPENS, and must keep opening under the knob.
 	 */
 	private static final CHAIN_OPERAND_PAREN: String = 'class C {\n\tfunction test() {\n'
-		+ '\t\tfinal mayModify:Bool = _source.viewKind == ViewKindConstant.LIST || chosenRoot == null || (\n'
-		+ '\t\t\tchosenRoot != null && currentSelection.nodePath.startsWith(chosenRoot) && currentSelection.nodePath.length > chosenRoot.length\n'
-		+ '\t\t);\n\t}\n}';
+		+ '\t\tfinal mayModify:Bool = _source.viewKind == ViewKindConstant.LIST || chosenRoot == null || (\n\t\t\tchosenRoot != null && '
+		+ 'currentSelection.nodePath.startsWith(chosenRoot) && currentSelection.nodePath.length > chosenRoot.length\n\t\t);\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -172,11 +169,16 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 
 	/** project-shaped config parameterised on the one key under test. */
 	private static function config(glue: Bool): String {
-		return '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true,'
-			+ ' "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]},'
-			+ ' "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]},'
-			+ ' "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]},'
-			+ ' "expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
+		return '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+			+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "ignore", "rules": ['
+			+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+			+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "callParameter": {'
+			+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": '
+			+ '"noWrap"}]}, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {'
+			+ '"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": '
+			+ '120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", '
+			+ '"value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "expressionWrapping": {"defaultWrap": '
+			+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
 			+ ' "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}},'
 			+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine", "fitLineBodyGlue": $glue}}';
 	}

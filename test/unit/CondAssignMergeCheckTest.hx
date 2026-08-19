@@ -36,7 +36,8 @@ class CondAssignMergeCheckTest extends Test {
 		Assert.equals('cond-assign-merge', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.equals(
-			'every branch of this conditional-compilation region assigns the same target - merge it into one assignment with a conditional r-value',
+			'every branch of this conditional-compilation region assigns the same target - merge it into one assignment with a '
+			+ 'conditional r-value',
 			vs[0].message
 		);
 	}
@@ -276,7 +277,8 @@ class CondAssignMergeCheckTest extends Test {
 		Assert.equals('cond-assign-merge', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.equals(
-			'every branch of this conditional-compilation region exits with the same keyword - merge it into one statement with a conditional value',
+			'every branch of this conditional-compilation region exits with the same keyword - merge it into one statement with a '
+			+ 'conditional value',
 			vs[0].message
 		);
 	}

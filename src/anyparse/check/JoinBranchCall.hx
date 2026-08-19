@@ -223,6 +223,11 @@ final class JoinBranchCall implements Check {
 		return source.substring(span.from, span.to);
 	}
 
+	/** `node` itself when it is a call carrying at least one argument, else null. */
+	private static inline function callWithArguments(node: QueryNode, s: Seams): Null<QueryNode> {
+		return node.kind == s.callKind && node.children.length > CALLEE_INDEX + 1 ? node : null;
+	}
+
 	/** Bundle the required `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
@@ -357,11 +362,6 @@ final class JoinBranchCall implements Check {
 		if (!pos.statement) return callWithArguments(stmt, s);
 		final inner: QueryNode = stmt.kind == s.blockStmtKind && stmt.children.length == 1 ? stmt.children[0] : stmt;
 		return inner.kind != s.exprStmtKind || inner.children.length != 1 ? null : callWithArguments(inner.children[0], s);
-	}
-
-	/** `node` itself when it is a call carrying at least one argument, else null. */
-	private static function callWithArguments(node: QueryNode, s: Seams): Null<QueryNode> {
-		return node.kind == s.callKind && node.children.length > CALLEE_INDEX + 1 ? node : null;
 	}
 
 	/**

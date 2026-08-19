@@ -1,8 +1,5 @@
 package anyparse.macro;
 
-using StringTools;
-using Lambda;
-
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -10,6 +7,8 @@ import haxe.macro.MacroStringTools;
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
 
+using StringTools;
+using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
@@ -353,7 +352,8 @@ class WriterLowering {
 		// grammar that drops wrapRules can extend this path then.
 		if (callWrapField == null)
 			Context.error(
-				'WriterLowering.methodChain: Call sibling ctor must carry @:fmt(wrapRules(\'<field>\')) for the chain-emit per-segment args layout to share the regular call shape',
+				'WriterLowering.methodChain: Call sibling ctor must carry @:fmt(wrapRules(\'<field>\')) '
+				+ 'for the chain-emit per-segment args layout to share the regular call shape',
 				Context.currentPos()
 			);
 		final cwf: String = callWrapField;
@@ -2760,7 +2760,8 @@ class WriterLowering {
 			Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail) or @:tryparse', Context.currentPos());
 		if (sepText != null && starNode.hasMeta(':tryparse') && !writerBlockEnded && !writerSepFaithful)
 			Context.fatalError(
-				'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag (@:sep(text, tailRelax, blockEnded)) or sepFaithful',
+				'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag (@:sep(text, tailRelax, blockEnded)) '
+				+ 'or sepFaithful',
 				Context.currentPos()
 			);
 		// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
@@ -3218,8 +3219,9 @@ class WriterLowering {
 		// not a space) - the invariant holds by grammar co-location: the same
 		// knob builds the group, and every flag carrier is a field of
 		// `HxConditionalExpr`, consumed only by the group-building ctor.
-		if (child.fmtHasFlag('condExprFitBreak')) return macro $picked ? _dhl() : (opt.conditionalExprFit ? _dl() : _dt(' '));
-		return macro $picked ? _dhl() : _dt(' ');
+		return child.fmtHasFlag('condExprFitBreak')
+			? macro $picked ? _dhl() : (opt.conditionalExprFit ? _dl() : _dt(' '))
+			: macro $picked ? _dhl() : _dt(' ');
 	}
 
 	/**
@@ -3693,8 +3695,8 @@ class WriterLowering {
 		for (entry in all) {
 			if (entry.length != 2 && entry.length != 3)
 				Context.fatalError(
-					'WriterLowering: @:fmt(indentValueIfCtor(...)) requires (ctorName, optField) or (ctorName, optField, leftCurlyField), got '
-					+ '${entry.length} args',
+					'WriterLowering: @:fmt(indentValueIfCtor(...)) requires (ctorName, optField) or ('
+					+ 'ctorName, optField, leftCurlyField), got ${entry.length} args',
 					Context.currentPos()
 				);
 			final lc: Null<String> = entry.length == 3 ? entry[2] : null;
@@ -3736,7 +3738,7 @@ class WriterLowering {
 			if (branch.children.length != 1 || branch.children[0].kind != Ref) continue;
 			final innerName: Null<String> = branch.children[0].annotations.get(AnnotationKeys.BASE_REF);
 			final innerNode: Null<ShapeNode> = innerName == null ? null : _shape.rules[innerName];
-			if (!(innerNode != null && innerNode.kind == Seq && innerNode.children.length > 0)) continue;
+			if (innerNode == null || innerNode.kind != Seq || innerNode.children.length <= 0) continue;
 			final firstField: ShapeNode = innerNode.children[0];
 			final firstLead: Null<String> = firstField.annotations[AnnotationKeys.LIT_LEAD_TEXT] ?? firstField.readMetaString(':lead');
 			if (firstLead != null && firstLead.charAt(0) == '{') result.push(ctor);
@@ -4272,8 +4274,8 @@ class WriterLowering {
 	): InterMemberClassifyInfo {
 		if (args.length != 3 && args.length != 6)
 			Context.fatalError(
-				'WriterLowering: @:fmt(interMemberBlankLines) expects 3 or 6 string args (classifierField, varCtor, fnCtor [, betweenVarsField, betweenFunctionsField, afterVarsField]), got '
-				+ args.length,
+				'WriterLowering: @:fmt(interMemberBlankLines) expects 3 or 6 string args (classifierField, varCtor, fnCtor ['
+				+ ', betweenVarsField, betweenFunctionsField, afterVarsField]), got ${args.length}',
 				Context.currentPos()
 			);
 		final fieldName: String = args[0];
@@ -4302,8 +4304,8 @@ class WriterLowering {
 		if (condArgsResolved != null) {
 			if (condArgsResolved.length != 3)
 				Context.fatalError(
-					'WriterLowering: @:fmt(interMemberCondLookThrough) expects exactly 3 string args (classifierField, condCtor, bodyField), got '
-					+ condArgsResolved.length,
+					'WriterLowering: @:fmt(interMemberCondLookThrough) expects exactly 3 string args ('
+					+ 'classifierField, condCtor, bodyField), got ${condArgsResolved.length}',
 					Context.currentPos()
 				);
 			if (condArgsResolved[0] != fieldName)
@@ -4428,8 +4430,8 @@ class WriterLowering {
 	private function buildStaticVarSubdivisionInfo(elemRefName: String, args: Array<String>): StaticVarSubdivisionInfo {
 		if (args.length != 0 && args.length != 3 && args.length != 4)
 			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) expects 0, 3 or 4 string args (modifierField, staticCtor, afterStaticVarsField [, betweenStaticFunctionsField]), got '
-				+ args.length,
+				'WriterLowering: @:fmt(staticVarSubdivision) expects 0, 3 or 4 string args ('
+				+ 'modifierField, staticCtor, afterStaticVarsField [, betweenStaticFunctionsField]), got ${args.length}',
 				Context.currentPos()
 			);
 		final modifierField: String = args.length >= 3 ? args[0] : 'modifiers';
@@ -4608,8 +4610,8 @@ class WriterLowering {
 	private function buildAfterCtorBlankInfoIf(elemRefName: String, args: Array<String>): AfterCtorBlankInfo {
 		if (args.length < 4)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtorIf) expects ≥ 4 string args (classifierField, predicateAdapter, CtorName1, [CtorName2, …], optField), got '
-				+ args.length,
+				'WriterLowering: @:fmt(blankLinesAfterCtorIf) expects ≥ 4 string args (classifierField, predicateAdapter, CtorName1, ['
+				+ 'CtorName2, …], optField), got ${args.length}',
 				Context.currentPos()
 			);
 		final reduced: Array<String> = [args[0]].concat(args.slice(2));
@@ -4643,8 +4645,8 @@ class WriterLowering {
 	private function buildAfterCtorBlankInfoIfTailLeafNull(elemRefName: String, args: Array<String>): AfterCtorBlankInfo {
 		if (args.length != 4)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtorIfTailLeafNull) expects exactly 4 string args (classifierField, CtorName, tailAdapterField, optField), got '
-				+ args.length,
+				'WriterLowering: @:fmt(blankLinesAfterCtorIfTailLeafNull) expects exactly 4 string args ('
+				+ 'classifierField, CtorName, tailAdapterField, optField), got ${args.length}',
 				Context.currentPos()
 			);
 		final fieldName: String = args[0];
@@ -4669,9 +4671,8 @@ class WriterLowering {
 				matched = true;
 				if (arity < 1)
 					Context.fatalError(
-						'WriterLowering: @:fmt(blankLinesAfterCtorIfTailLeafNull) ctor "$ctorName'
-						+ '" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity '
-						+ arity,
+						'WriterLowering: @:fmt(blankLinesAfterCtorIfTailLeafNull) ctor "$ctorName" must have arity ≥ 1 ('
+						+ 'first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity $arity',
 						Context.currentPos()
 					);
 				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
@@ -4732,8 +4733,8 @@ class WriterLowering {
 	private function buildBeforeCtorBlankInfoIf(elemRefName: String, args: Array<String>): BeforeCtorBlankInfo {
 		if (args.length < 4)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesBeforeCtorIf) expects ≥ 4 string args (classifierField, predicateAdapter, CtorName1, [CtorName2, …], optField), got '
-				+ args.length,
+				'WriterLowering: @:fmt(blankLinesBeforeCtorIf) expects ≥ 4 string args (classifierField, predicateAdapter, CtorName1, ['
+				+ 'CtorName2, …], optField), got ${args.length}',
 				Context.currentPos()
 			);
 		final reduced: Array<String> = [args[0]].concat(args.slice(2));
@@ -4770,8 +4771,8 @@ class WriterLowering {
 		final sepIdx: Int = args.indexOf('|');
 		if (args.length < 5 || sepIdx < 0)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesBeforeCtorIfPrevNot) expects ≥ 5 string args (classifierField, predicateName, TargetCtor1, …, "|", ExcludeCtor1, …, optField) with a "|" separator, got '
-				+ args.length,
+				'WriterLowering: @:fmt(blankLinesBeforeCtorIfPrevNot) expects ≥ 5 string args (classifierField, predicateName, '
+				+ 'TargetCtor1, …, "|", ExcludeCtor1, …, optField) with a "|" separator, got ${args.length}',
 				Context.currentPos()
 			);
 		final classifier: String = args[0];
@@ -4827,8 +4828,8 @@ class WriterLowering {
 	private function buildBetweenSameCtorBlankInfoIfNot(elemRefName: String, args: Array<String>): BetweenSameCtorIfNotInfo {
 		if (args.length < 4)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesBetweenSameCtorIfNot) expects ≥ 4 string args (classifierField, predicateName, CtorName1, [CtorName2, …], optField), got '
-				+ args.length,
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorIfNot) expects ≥ 4 string args ('
+				+ 'classifierField, predicateName, CtorName1, [CtorName2, …], optField), got ${args.length}',
 				Context.currentPos()
 			);
 		final reduced: Array<String> = [args[0]].concat(args.slice(2));
@@ -4864,8 +4865,8 @@ class WriterLowering {
 	): BetweenCtorBlankInfo {
 		if (args.length < 5)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) expects ≥ 5 string args (classifierField, CtorName1, [CtorName2, …], levelOptField, countOptField, adapterOptField), got '
-				+ args.length,
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) expects ≥ 5 string args (classifierField, CtorName1, ['
+				+ 'CtorName2, …], levelOptField, countOptField, adapterOptField), got ${args.length}',
 				Context.currentPos()
 			);
 		final fieldName: String = args[0];
@@ -4875,7 +4876,8 @@ class WriterLowering {
 		final ctorNames: Array<String> = args.slice(1, args.length - 3);
 		if (ctorNames.length == 0)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) requires at least one ctor name between the classifier field and the level/count/adapter tail',
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) '
+				+ 'requires at least one ctor name between the classifier field and the level/count/adapter tail',
 				Context.currentPos()
 			);
 		// ω-cond-comp-tail-transparency — sanity-check no overlap between
@@ -4884,8 +4886,8 @@ class WriterLowering {
 		// Reject at compile time so the grammar author resolves it.
 		for (name in ctorNames) if (transparentCtorNames.indexOf(name) >= 0)
 			Context.fatalError(
-				'WriterLowering: ctor "$name'
-				+ '" appears both in @:fmt(blankLinesBetweenSameCtorByLevel) matched set and in @:fmt(blankLinesBetweenSameCtorTailTransparent) transparent set on the same Star — must be one or the other',
+				'WriterLowering: ctor "$name" appears both in @:fmt(blankLinesBetweenSameCtorByLevel) matched set and in '
+				+ '@:fmt(blankLinesBetweenSameCtorTailTransparent) transparent set on the same Star — must be one or the other',
 				Context.currentPos()
 			);
 		final r: { enumRule: ShapeNode, enumRuleName: String } = resolveClassifierEnum(
@@ -4940,8 +4942,8 @@ class WriterLowering {
 	): TransitionAcrossInfo {
 		if (args.length < 5)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) expects ≥ 5 string args (classifierField, CtorA1, [CtorA2, …], "|", CtorB1, [CtorB2, …], countOptField), got '
-				+ args.length,
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) expects ≥ 5 string args (classifierField, CtorA1, ['
+				+ 'CtorA2, …], "|", CtorB1, [CtorB2, …], countOptField), got ${args.length}',
 				Context.currentPos()
 			);
 		final fieldName: String = args[0];
@@ -5004,9 +5006,7 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
 			);
-		final classifierNode: Null<ShapeNode> = Lambda.find(
-			elemRule.children, c -> c.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == fieldName
-		);
+		final classifierNode: Null<ShapeNode> = elemRule.children.find(c -> c.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == fieldName);
 		if (classifierNode == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) classifier field "$fieldName" not found on element rule $elemRefName',
@@ -6148,8 +6148,8 @@ class WriterLowering {
 				if (shapeArity < 1)
 					Context.fatalError(
 						'WriterLowering: @:fmt(blankLinesOnTransitionAcross) transparent ctor "$ctorName'
-						+ '" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the head/tail-leaf classifier adapters); got arity '
-						+ shapeArity,
+						+ '" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the head/tail-leaf '
+						+ 'classifier adapters); got arity $shapeArity',
 						Context.currentPos()
 					);
 				transparentMatched.push(ctorName);
@@ -8096,15 +8096,13 @@ class WriterLowering {
 		// ---- Case 1: zero-arg lit ----
 		if (litList != null && litList.length == 1 && children.length == 0) return macro _dt($v{litList[0]});
 		// ---- Case 2: multi-lit Bool ----
-		if (litList != null && litList.length > 1 && children.length == 1) {
-			final trueLit: String = litList[0];
-			final falseLit: String = litList[1];
-			return macro if (_v0)
-				_dt($v{trueLit})
-			else
-				_dt($v{falseLit});
-		}
-		return null;
+		if (litList == null || litList.length <= 1 || children.length != 1) return null;
+		final trueLit: String = litList[0];
+		final falseLit: String = litList[1];
+		return macro if (_v0)
+			_dt($v{trueLit})
+		else
+			_dt($v{falseLit});
 	}
 
 	/**
@@ -9936,7 +9934,8 @@ class WriterLowering {
 				final endTrail: Null<String> = c.readMetaString(':trail');
 				if (startLead == null || endTrail == null)
 					Context.fatalError(
-						'WriterLowering: @:fmt(condWrap)/@:fmt(condWrapEnd) span requires @:lead on the start field and @:trail on the end field',
+						'WriterLowering: @:fmt(condWrap)/@:fmt(condWrapEnd) '
+						+ 'span requires @:lead on the start field and @:trail on the end field',
 						Context.currentPos()
 					);
 				if (startKnob == null) Context.fatalError('WriterLowering: @:fmt(condWrap) requires a knob arg', Context.currentPos());
@@ -11577,6 +11576,20 @@ class WriterLowering {
 	}
 
 	/**
+	 * The construct-level cond-fit group for a body field carrying an optional `else` sibling --
+	 * `BodyGroup` with no else, `Group` with one. On a node carrying `@:fmt(arrowValueIfReflow)` the
+	 * `Group` arm is additionally suppressed while the value-if re-flow is active (see the call site);
+	 * `_vifFit` exists only on such a node, and is false unless its knob is on, so every other struct
+	 * is byte-identical.
+	 */
+	private function fitGroupExpr(node: ShapeNode, elseAcc: Expr, grpInner: Expr): Expr {
+		final grouped: Expr = node.fmtReadStringArgs('arrowValueIfReflow') == null
+			? macro _dg($grpInner)
+			: macro (_vifFit ? $grpInner : _dg($grpInner));
+		return macro $elseAcc == null ? _dbg($grpInner) : $grouped;
+	}
+
+	/**
 	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
 	 * `prevPadTrailing` runtime drop. When the immediately preceding
 	 * field fired `@:fmt(padTrailing)`, drop THIS sep at runtime so
@@ -12214,13 +12227,16 @@ class WriterLowering {
 		// on the nested object literal renders as `Address:\n{…}`. The
 		// leading space (Before / Both case) stays a plain `_dt(' ')`
 		// because nothing emits a hardline before the lead.
-		return flagName == null
-			? child.fmtHasFlag('spaceAfterLead') ? macro _dc([_dt($v{leadText}), _dop(' ')]) : macro _dt($v{leadText})
-			: buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
+		return if (flagName != null)
+			buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
 				{ values: ['Before'], expr: macro _dc([_dt(' '), _dt($v{leadText})]) },
 				{ values: ['After'], expr: macro _dc([_dt($v{leadText}), _dop(' ')]) },
 				{ values: ['Both'], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]) },
-			], macro _dt($v{leadText}));
+			], macro _dt($v{leadText}))
+		else if (child.fmtHasFlag('spaceAfterLead'))
+			macro _dc([_dt($v{leadText}), _dop(' ')])
+		else
+			macro _dt($v{leadText});
 	}
 
 	/**
@@ -12550,20 +12566,6 @@ class WriterLowering {
 		return macro ($optFlag == $fitPat);
 	}
 
-	/**
-	 * The construct-level cond-fit group for a body field carrying an optional `else` sibling --
-	 * `BodyGroup` with no else, `Group` with one. On a node carrying `@:fmt(arrowValueIfReflow)` the
-	 * `Group` arm is additionally suppressed while the value-if re-flow is active (see the call site);
-	 * `_vifFit` exists only on such a node, and is false unless its knob is on, so every other struct
-	 * is byte-identical.
-	 */
-	private function fitGroupExpr(node: ShapeNode, elseAcc: Expr, grpInner: Expr): Expr {
-		final grouped: Expr = node.fmtReadStringArgs("arrowValueIfReflow") == null
-			? macro _dg($grpInner)
-			: macro (_vifFit ? $grpInner : _dg($grpInner));
-		return macro $elseAcc == null ? _dbg($grpInner) : $grouped;
-	}
-
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */
 	private static function dcCall(parts: Array<Expr>): Expr {
 		final arr: Expr = { expr: EArrayDecl(parts), pos: Context.currentPos() };
@@ -12730,9 +12732,8 @@ class WriterLowering {
 			} else if (isTransparent) {
 				if (arity < 1)
 					Context.fatalError(
-						'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) ctor "$ctorName'
-						+ '" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity '
-						+ arity,
+						'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) ctor "$ctorName" must have arity ≥ 1 ('
+						+ 'first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity $arity',
 						Context.currentPos()
 					);
 				transparentMatched.push(ctorName);
@@ -12867,8 +12868,8 @@ class WriterLowering {
 		final pipeIdx: Int = args.indexOf('|');
 		if (pipeIdx < 2 || pipeIdx > args.length - 3)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires a "|" separator between subset A and subset B (with at least one ctor on each side); got args '
-				+ args,
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires a "|" separator between subset A and subset B ('
+				+ 'with at least one ctor on each side); got args $args',
 				Context.currentPos()
 			);
 		final ctorNamesA: Array<String> = args.slice(1, pipeIdx);

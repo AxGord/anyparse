@@ -33,7 +33,8 @@ class UnreachableCatchTest extends Test {
 		// The outer dead clause nests an inner dead clause; deleting the outer removes both — the
 		// contained inner edit is dropped, so `inner`/`b` vanish with the outer and only `ok` stays.
 		assertFix(
-			'class C { function f() { try { risky(); } catch (e:Dynamic) { ok(); } catch (e:Dynamic) { try { inner(); } catch (a:Dynamic) { fine(); } catch (b:Dynamic) { dead(); } } } }',
+			'class C { function f() { try { risky(); } catch (e:Dynamic) { ok(); } catch (e:Dynamic) { try { inner(); } catch ('
+			+ 'a:Dynamic) { fine(); } catch (b:Dynamic) { dead(); } } } }',
 			'ok', 'dead'
 		);
 	}
@@ -79,7 +80,8 @@ class UnreachableCatchTest extends Test {
 	public function testThreeClausesOnlyMiddleFlagged(): Void {
 		// Base, Sub, Other — only Sub is covered (by Base); Other is unrelated.
 		final vs: Array<Violation> = violations(
-			'class Base {} class Sub extends Base {} class Other {} class C { function f() { try { g(); } catch (e:Base) {} catch (e:Sub) {} catch (e:Other) {} } }'
+			'class Base {} class Sub extends Base {} class Other {} class C { function f() { try { g(); } catch (e:Base) {} catch ('
+			+ 'e:Sub) {} catch (e:Other) {} } }'
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('Base') != -1);

@@ -15,8 +15,9 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCondWrapFitLineSliceTest extends Test {
 
-	private static final CONFIG: String =
-		'{"wrapping": {"maxLineLength": 140, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine"}}';
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {'
+		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine"}}';
 
 	public function new(): Void {
 		super();
@@ -30,9 +31,8 @@ final class HxCondWrapFitLineSliceTest extends Test {
 	}
 
 	public function testFlatCondWithFittingBodyStaysSameLine(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tif (counterPathValue == Config.READONLY_SEGMENT || counterPathValue.startsWith(Config.READONLY_SEGMENT_SLASH)) return null;\n'
-			+ '\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tif (counterPathValue == Config.READONLY_SEGMENT || '
+			+ 'counterPathValue.startsWith(Config.READONLY_SEGMENT_SLASH)) return null;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

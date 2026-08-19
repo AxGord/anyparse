@@ -30,6 +30,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 	private static final SRC: String = 'class Main {\n\n\tstatic function main() {\n'
 		+ '\t\tvar mapped = [\'a\', \'b\'].map(function(s) return s.length);\n\t\tvar comp = [for (i in 0...3) i];\n'
 		+ '\t\tvar empty = [];\n\t\ttrace(mapped, comp, empty);\n\t}\n\n}\n';
+
 	// One inferable local inside a `macro …` quotation and one as real code. The oracle-assisted
 	// batch reads its findings through `Linter.collect`, so only the second is annotated — the
 	// quotation is the AST this function builds, and annotating a local there rewrites the code the
@@ -48,10 +49,8 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		+ '\tpublic function pair<U>(u:U):Array<U> {\n\t\tvar both = [u].map(x -> x);\n\t\treturn both;\n\t}\n\n'
 		+ '\tpublic function tag():Int {\n\t\tvar entry = [({n: 1} : Entry)];\n\t\treturn entry[0].n;\n\t}\n\n}\n\n'
 		+ 'private typedef Entry = {final n:Int;}\n';
-
 	private static final BOXMAIN: String = 'class Main {\n\n\tstatic function main() {\n'
 		+ '\t\tfinal b:Box<Int> = new Box(1);\n\t\ttrace(b.get(), b.pair(\'s\'), b.tag());\n\t}\n\n}\n';
-
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 
@@ -176,6 +175,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', scope]);
 		return StringTools.replace(File.getContent(target), ' ', '');
 	}
+
 	private function oracleWorks(): Bool {
 		final dir: String = CliFixture.writeDir('eltoracle', [{ name: 'Main.hx', source: SRC }, { name: 'check.hxml', source: HXML }]);
 		final ok: Bool = switch CompilerOracle.typecheck('check.hxml', dir) {

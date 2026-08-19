@@ -116,9 +116,8 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		));
 		Assert.equals(1, es.length);
 		Assert.equals(
-			'x = if (isFirstGroup) new AlphaEntry(info) else if (isOtherGroup)\n'
-			+ '// TODO: handle info later when it arrives from an open item\n'
-			+ 'new BetaEntry(info, true, true) else new BetaEntry(info, true, false);',
+			'x = if (isFirstGroup) new AlphaEntry(info) else if (isOtherGroup)\n// TODO: handle info later when it arrives from an open '
+			+ 'item\nnew BetaEntry(info, true, true) else new BetaEntry(info, true, false);',
 			es[0].text
 		);
 	}
@@ -272,7 +271,8 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'if (a) {\n\t\t\tif (e) {\n\t\t\t\tx = 1;\n\t\t\t} else {\n\t\t\t\tx = if (q) 2;\n\t\t\t}\n\t\t} else if (b) {\n\t\t\tx = 3;\n\t\t} else {\n\t\t\tx = 4;\n\t\t}'
+				'if (a) {\n\t\t\tif (e) {\n\t\t\t\tx = 1;\n\t\t\t} else {\n\t\t\t\tx = if (q) 2;\n\t\t\t}\n\t\t} else if (b) {\n'
+				+ '\t\t\tx = 3;\n\t\t} else {\n\t\t\tx = 4;\n\t\t}'
 			)).length
 		);
 	}

@@ -128,7 +128,8 @@ final class OrphanAccessor implements Check implements DefaultOff {
 
 	public function description(): String {
 		return
-			'a get_X / set_X method whose property X declares no matching accessor slot anywhere in the inheritance chain — an accessor Haxe never calls';
+			'a get_X / set_X method whose property X declares no matching accessor slot anywhere in the inheritance chain — an accessor '
+				+ 'Haxe never calls';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

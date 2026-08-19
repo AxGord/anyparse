@@ -40,8 +40,8 @@ final class NullDereference implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a dereference (field / index / force-unwrap access or call) whose receiver is provably null on every path reaching it — a guaranteed null dereference';
+		return 'a dereference (field / index / force-unwrap access or call) '
+			+ 'whose receiver is provably null on every path reaching it — a guaranteed null dereference';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

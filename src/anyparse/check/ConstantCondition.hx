@@ -195,9 +195,12 @@ final class ConstantCondition implements Check {
 	 * is lost).
 	 */
 	private static function eliminatedBranch(node: QueryNode, isFalse: Bool): Null<QueryNode> {
-		return isFalse
-			? (node.children.length > 1 ? node.children[1] : null)
-			: (node.children.length >= IF_WITH_ELSE_CHILD_COUNT ? node.children[2] : null);
+		return if (isFalse)
+			(node.children.length > 1 ? node.children[1] : null)
+		else if (node.children.length >= IF_WITH_ELSE_CHILD_COUNT)
+			node.children[2]
+		else
+			null;
 	}
 
 	/**

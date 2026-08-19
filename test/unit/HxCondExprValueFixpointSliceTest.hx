@@ -32,13 +32,13 @@ final class HxCondExprValueFixpointSliceTest extends Test {
 
 	/** TM `src/api/APIDevice.hx` `get_deviceTypeId()` merged by `cond-assign-merge --fix`, verbatim. */
 	private static final FLAT_RETURN: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
-		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n'
-		+ '\t}\n}';
+		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET '
+		+ '#elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
 	/** The same values on the pre-existing assignment arm — the divergence is the VALUE's, not the exit's. */
 	private static final FLAT_ASSIGN: String = 'class Min {\n\tstatic function assignArm():Void {\n'
-		+ '\t\tv = #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n'
-		+ '\t}\n}';
+		+ '\t\tv = #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook() ? DEVICETYPE_WINDOWSPC : DEVICETYPE_TABLET '
+		+ '#elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
 	/**
 	 * `FLAT_RETURN`'s one-pass layout: every `#elseif` seam glued, the
@@ -52,9 +52,9 @@ final class HxCondExprValueFixpointSliceTest extends Test {
 	 * breaks inside itself instead.
 	 */
 	private static final BROKEN_RETURN: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'
-		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook()\n\t\t\t? DEVICETYPE_WINDOWSPC\n'
-		+ '\t\t\t: DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif (windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n'
-		+ '\t}\n}';
+		+ '\t\treturn #if ios DEVICETYPE_IPAD #elseif android ChromebookUtils.isChromebook()\n'
+		+ '\t\t\t? DEVICETYPE_WINDOWSPC\n\t\t\t: DEVICETYPE_TABLET #elseif macos DEVICETYPE_MACOSXPC #elseif ('
+		+ 'windows || linux) DEVICETYPE_WINDOWSPC #else DEVICETYPE_WEB #end;\n\t}\n}';
 
 	/** `#elseif c` is glued to the branch before it; only the interior gaps carry a newline. */
 	private static final SEAM_GLUED: String =

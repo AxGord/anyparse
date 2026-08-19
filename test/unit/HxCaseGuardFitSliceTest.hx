@@ -51,9 +51,8 @@ final class HxCaseGuardFitSliceTest extends Test {
 	 * (fitLine is a width decision, not a source-shape one).
 	 */
 	public function testGuardRejoinsSourceBrokenLabelThatFits(): Void {
-		final src: String = 'class M {\n\tfunction f(keyCode:Int):Void {\n\t\tswitch keyCode {\n'
-			+ '\t\t\tcase 1:\n\t\t\t\tfoo();\n\t\t\t\tbar();\n'
-			+ '\t\t\tcase _ if ((\n\t\t\t\tkeyCode >= \'0\'.code && keyCode <= \'9\'.code\n'
+		final src: String = 'class M {\n\tfunction f(keyCode:Int):Void {\n\t\tswitch keyCode {\n\t\t\tcase 1:\n\t\t\t\tfoo();\n'
+			+ '\t\t\t\tbar();\n\t\t\tcase _ if ((\n\t\t\t\tkeyCode >= \'0\'.code && keyCode <= \'9\'.code\n'
 			+ '\t\t\t) || (keyCode >= \'A\'.code && keyCode <= \'Z\'.code)):\n'
 			+ '\t\t\t\tselectItemByFirstChar(String.fromCharCode(keyCode));\n\t\t}\n\t}\n}\n';
 		final out: String = write(src, CONFIG);
@@ -70,10 +69,9 @@ final class HxCaseGuardFitSliceTest extends Test {
 	 * the first operand and the closing paren at column 0).
 	 */
 	public function testOverflowGuardLadderKeepsIndent(): Void {
-		final src: String = 'class M {\n\tfunction f(keyCodeVariable:Int):Void {\n\t\tswitch keyCodeVariable {\n'
-			+ '\t\t\tcase 1:\n\t\t\t\tfoo();\n\t\t\t\tbar();\n'
-			+ '\t\t\tcase _ if ((keyCodeVariable >= \'0\'.code && keyCodeVariable <= \'9\'.code) || (keyCodeVariable >= \'A\'.code && keyCodeVariable <= \'Z\'.code)):\n'
-			+ '\t\t\t\ttrace(2);\n\t\t}\n\t}\n}\n';
+		final src: String = 'class M {\n\tfunction f(keyCodeVariable:Int):Void {\n\t\tswitch keyCodeVariable {\n\t\t\tcase 1:\n'
+			+ '\t\t\t\tfoo();\n\t\t\t\tbar();\n' + '\t\t\tcase _ if ((keyCodeVariable >= \'0\'.code && keyCodeVariable <= \'9\'.code) || ('
+			+ 'keyCodeVariable >= \'A\'.code && keyCodeVariable <= \'Z\'.code)):\n\t\t\t\ttrace(2);\n\t\t}\n\t}\n}\n';
 		final out: String = write(src, CONFIG);
 		for (line in out.split('\n')) if (line.length != 0)
 			Assert.isTrue(

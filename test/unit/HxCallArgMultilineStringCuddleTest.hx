@@ -21,8 +21,11 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCallArgMultilineStringCuddleTest extends Test {
 
-	private static final CONFIG: String =
-		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWrap"}]},"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
+	private static final CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,'
+		+ '"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],'
+		+ '"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],'
+		+ '"type":"noWrap"}]},"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],'
+		+ '"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
 
 	/**
 	 * The cuddled form is a writer fixed point. Summed flat width here is
@@ -90,8 +93,8 @@ final class HxCallArgMultilineStringCuddleTest extends Test {
 	 */
 	public function testSpliceFollowedByChainBreakKeepsIndent(): Void {
 		final src: String = 'class C {\n\tfunction sessionStr():String {\n'
-			+ '\t\treturn \'--------------------------------------$${endl}filename:\\t$${session.fileName}$$endl\' + #if !flash "package:\\t"\n'
-			+ '\t\t\t+ session.packageName + endl + "version:\\t" + session.version + endl + #end\n'
+			+ '\t\treturn \'--------------------------------------$${endl}filename:\\t$${session.fileName}$$endl\' + #if !flash '
+			+ '"package:\\t"\n\t\t\t+ session.packageName + endl + "version:\\t" + session.version + endl + #end\n'
 			+ '\t\t\t\'sess. ID:\\t$${session.id}$${endl}started:\\t$${session.startTime.toString()}\';\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}

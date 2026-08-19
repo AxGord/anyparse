@@ -209,7 +209,12 @@ final class InlineMethod {
 
 		// ExprBody: a single expression, possibly a `ReturnExpr` wrapper.
 		final inner: QueryNode = body.children[0];
-		return inner.kind == 'ReturnExpr' ? inner.children.length > 0 ? inner.children[0] : null : inner;
+		return if (inner.kind != 'ReturnExpr')
+			inner
+		else if (inner.children.length > 0)
+			inner.children[0]
+		else
+			null;
 	}
 
 	/**

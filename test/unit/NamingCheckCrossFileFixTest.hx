@@ -9,7 +9,6 @@ import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * The `naming` autofix crossing FILE boundaries: a private field renamed in its
@@ -511,7 +510,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 */
 	public function testCrossFileFixRenamesOverrideFamilyAcrossFiles(): Void {
 		final baseSrc: String = 'package pkg;\nclass FBase {\n\tpublic function __draw():Int { return 1; }\n}';
-		final subSrc: String = 'package pkg;\nclass FSub extends FBase {\n' + '\toverride public function __draw():Int { return 2; }\n'
+		final subSrc: String = 'package pkg;\nclass FSub extends FBase {\n\toverride public function __draw():Int { return 2; }\n'
 			+ '\tpublic function again():Int { return __draw() + 1; }\n}';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/FBase.hx', source: baseSrc },
@@ -540,7 +539,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 */
 	public function testCrossFileFixRefusesUnprovableOverrideFamily(): Void {
 		final baseSrc: String = 'package pkg;\nclass UBase {\n\tpublic function __draw():Int { return 1; }\n}';
-		final foreignSrc: String = 'package pkg;\nclass Foreign extends Unknown {\n' + '\tpublic function __draw():Int { return 2; }\n}';
+		final foreignSrc: String = 'package pkg;\nclass Foreign extends Unknown {\n\tpublic function __draw():Int { return 2; }\n}';
 		assertCrossFileRefused([
 			{ file: 'pkg/UBase.hx', source: baseSrc },
 			{ file: 'pkg/Foreign.hx', source: foreignSrc }
@@ -555,8 +554,8 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 */
 	public function testCrossFileFixRefusesOverrideOutsideTheEditedScope(): Void {
 		final baseSrc: String = 'package pkg;\nclass SBase {\n\tpublic function __draw():Int { return 1; }\n}';
-		final libSrc: String = 'package ext;\nimport pkg.SBase;\nclass SSub extends SBase {\n'
-			+ '\toverride public function __draw():Int { return 2; }\n}';
+		final libSrc: String =
+			'package ext;\nimport pkg.SBase;\nclass SSub extends SBase {\n\toverride public function __draw():Int { return 2; }\n}';
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/SBase.hx', source: baseSrc }];
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/SSub.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());

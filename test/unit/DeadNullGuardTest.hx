@@ -206,7 +206,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { var x:Foo; function f():Void { function g():Void { var x = null; trace(x); } x = new Foo(); if (x != null) trace(x); g(); } }'
+				'class C { var x:Foo; function f():Void { function g():Void { var x = null; trace(x); } x = new Foo(); if (x != null) '
+				+ 'trace(x); g(); } }'
 			).length
 		);
 	}
@@ -216,7 +217,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?x:String) { x = "a"; try { x = null; risky(); } catch (e:haxe.Exception) { if (x != null) trace(x); } } }'
+				'class C { function f(?x:String) { x = "a"; try { x = null; risky(); } catch (e:haxe.Exception) { if (x != null) '
+				+ 'trace(x); } } }'
 			).length
 		);
 	}
@@ -290,7 +292,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { function f(k:Int, ?x:String) { switch k { case 1: { trace(1); return; } case _: x = "a"; } if (x != null) trace(x); } }'
+				'class C { function f(k:Int, ?x:String) { switch k { case 1: { trace(1); return; } case _: x = "a"; } if (x != null) '
+				+ 'trace(x); } }'
 			).length
 		);
 	}
@@ -308,7 +311,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(k:Int, c:Bool, ?x:String) { switch k { case 1: x = "a"; case _ if (c): x = "b"; } if (x != null) trace(x); } }'
+				'class C { function f(k:Int, c:Bool, ?x:String) { switch k { case 1: x = "a"; case _ if (c): x = "b"; } if (x != null) '
+				+ 'trace(x); } }'
 			).length
 		);
 	}
@@ -318,7 +322,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(k:Int, c:Bool, ?x:String) { switch k { case 1: x = "a"; case _, 4 if (c): x = "b"; } if (x != null) trace(x); } }'
+				'class C { function f(k:Int, c:Bool, ?x:String) { switch k { case 1: x = "a"; case _, 4 if (c): x = "b"; } if ('
+				+ 'x != null) trace(x); } }'
 			).length
 		);
 	}
@@ -388,7 +393,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null; u = mk(); if (ok) { if (u != null) trace(u); } } function mk():String return null; }'
+				'class C { function f(?u:String) { var ok = u != null; u = mk(); if (ok) { if (u != null) trace(u); } } '
+				+ 'function mk():String return null; }'
 			).length
 		);
 	}
@@ -398,7 +404,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null; ok = cond(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null; ok = cond(); if (ok) { if (u != null) trace(u); } } '
+				+ 'function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -408,7 +415,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var g = () -> u = null; var ok = u != null; if (ok) { if (u != null) trace(u); } g(); } }'
+				'class C { function f(?u:String) { var g = () -> u = null; var ok = u != null; if (ok) { if (u != null) trace(u); } '
+				+ 'g(); } }'
 			).length
 		);
 	}
@@ -428,7 +436,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null || cond(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null || cond(); if (ok) { if (u != null) trace(u); } } '
+				+ 'function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -448,7 +457,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var v = u; u = mk(); if (v != null) { if (u != null) trace(u); } } function mk():String return null; }'
+				'class C { function f(?u:String) { var v = u; u = mk(); if (v != null) { if (u != null) trace(u); } } '
+				+ 'function mk():String return null; }'
 			).length
 		);
 	}
@@ -458,7 +468,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var v = u; v = mk(); if (v != null) { if (u != null) trace(u); } } function mk():String return null; }'
+				'class C { function f(?u:String) { var v = u; v = mk(); if (v != null) { if (u != null) trace(u); } } '
+				+ 'function mk():String return null; }'
 			).length
 		);
 	}
@@ -477,7 +488,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String, cond:Bool) { var v = u; if (cond) { u ??= "x"; } if (u != null) { if (v != null) trace(v); } } }'
+				'class C { function f(?u:String, cond:Bool) { var v = u; if (cond) { u ??= "x"; } if (u != null) { if (v != null) '
+				+ 'trace(v); } } }'
 			).length
 		);
 	}
@@ -487,7 +499,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; var ok3 = ok2; if (ok3) { if (u != null) trace(u); } } }'
+				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; var ok3 = ok2; if (ok3) { if (u != null) '
+				+ 'trace(u); } } }'
 			).length
 		);
 	}
@@ -497,7 +510,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; ok2 = cond(); if (ok2) { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; ok2 = cond(); if (ok2) { if (u != null) trace(u); } '
+				+ '} function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -507,7 +521,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; ok = cond(); if (ok2) { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; ok = cond(); if (ok2) { if (u != null) trace(u); } '
+				+ '} function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -517,7 +532,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; u = mk(); if (ok2) { if (u != null) trace(u); } } function mk():String return null; }'
+				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; u = mk(); if (ok2) { if (u != null) trace(u); } } '
+				+ 'function mk():String return null; }'
 			).length
 		);
 	}
@@ -527,7 +543,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null; if (cond()) { var ok = cond(); if (ok) { if (u != null) trace(u); } } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null; if (cond()) { var ok = cond(); if (ok) { if (u != null) '
+				+ 'trace(u); } } } function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -537,7 +554,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null && cond(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null && cond(); if (ok) { if (u != null) trace(u); } } '
+				+ 'function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -547,7 +565,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			2,
 			violations(
-				'class C { function f(?u:String, ?v:String) { var ok = u != null && v != null; if (ok) { if (u != null) trace(u); if (v != null) trace(v); } } }'
+				'class C { function f(?u:String, ?v:String) { var ok = u != null && v != null; if (ok) { if (u != null) trace(u); if ('
+				+ 'v != null) trace(v); } } }'
 			).length
 		);
 	}
@@ -558,7 +577,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null && cond(); if (ok) trace(0) else { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null && cond(); if (ok) trace(0) else { if (u != null) trace(u); } } '
+				+ 'function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -568,7 +588,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null && (cond() || cond()); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null && (cond() || cond()); if (ok) { if (u != null) trace(u); } } '
+				+ 'function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -578,7 +599,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null && cond(); u = mk(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; function mk():String return null; }'
+				'class C { function f(?u:String) { var ok = u != null && cond(); u = mk(); if (ok) { if (u != null) trace(u); } } '
+				+ 'function cond():Bool return true; function mk():String return null; }'
 			).length
 		);
 	}
@@ -588,7 +610,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null && cond(); ok = cond(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null && cond(); ok = cond(); if (ok) { if (u != null) trace(u); } } '
+				+ 'function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -598,7 +621,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var g = () -> u = null; var ok = u != null && cond(); if (ok) { if (u != null) trace(u); } g(); } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var g = () -> u = null; var ok = u != null && cond(); if (ok) { if (u != null) '
+				+ 'trace(u); } g(); } function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -608,7 +632,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null && cond(); while (cond()) { if (ok) { if (u != null) trace(u); } u = mk(); } } function cond():Bool return true; function mk():String return null; }'
+				'class C { function f(?u:String) { var ok = u != null && cond(); while (cond()) { if (ok) { if (u != null) trace(u); } '
+				+ 'u = mk(); } } function cond():Bool return true; function mk():String return null; }'
 			).length
 		);
 	}
@@ -618,7 +643,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null && cond(), junk = 1; if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+				'class C { function f(?u:String) { var ok = u != null && cond(), junk = 1; if (ok) { if (u != null) trace(u); } } '
+				+ 'function cond():Bool return true; }'
 			).length
 		);
 	}
@@ -629,7 +655,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C { function f(?u:String, ?v:String) { var ok = (v = mk()) != null && u != null; if (ok) { if (u != null) trace(u); } } function mk():String return null; }'
+				'class C { function f(?u:String, ?v:String) { var ok = (v = mk()) != null && u != null; if (ok) { if (u != null) '
+				+ 'trace(u); } } function mk():String return null; }'
 			).length
 		);
 	}
@@ -675,7 +702,8 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { function f(?u:String) { var ok = u != null && (u = mk()) == null; if (ok) { if (u != null) trace(u); } } function mk():String return null; }'
+				'class C { function f(?u:String) { var ok = u != null && (u = mk()) == null; if (ok) { if (u != null) trace(u); } } '
+				+ 'function mk():String return null; }'
 			).length
 		);
 	}

@@ -34,10 +34,7 @@ final class Cases {
 			final span: Null<Span> = h.span;
 			if (span == null) continue;
 			final pos: Position = span.lineCol(source);
-			if (flat)
-				buf.add('$file:${pos.line}:${pos.col}: ${h.patternKind}\n');
-			else
-				buf.add('  ${pos.line}:${pos.col}: ${h.patternKind}\n');
+			buf.add(flat ? '$file:${pos.line}:${pos.col}: ${h.patternKind}\n' : '  ${pos.line}:${pos.col}: ${h.patternKind}\n');
 		}
 		return buf.toString();
 	}

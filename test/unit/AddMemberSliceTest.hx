@@ -257,6 +257,13 @@ class AddMemberSliceTest extends Test {
 		assertAdd(source, 'C', 'var y:Int;', expected);
 	}
 
+	/**
+	 * Refusal naming the HOST type as carrying an opaque region.
+	 */
+	private inline function assertRefusedForOpaqueRegion(source: String, typeName: String, memberText: String): Void {
+		assertRefusedMatching(source, typeName, memberText, 'carries a conditional member region', 'the opaque member region');
+	}
+
 	private function assertAdd(source: String, typeName: String, memberText: String, expected: String, reformat: Bool = false): Void {
 		final result: EditResult = addOf(source, typeName, memberText, reformat);
 		switch result {
@@ -308,13 +315,6 @@ class AddMemberSliceTest extends Test {
 			case Err(message):
 				Assert.isTrue(message.indexOf(fragment) >= 0, 'refusal must name $describe: $message');
 		}
-	}
-
-	/**
-	 * Refusal naming the HOST type as carrying an opaque region.
-	 */
-	private function assertRefusedForOpaqueRegion(source: String, typeName: String, memberText: String): Void {
-		assertRefusedMatching(source, typeName, memberText, 'carries a conditional member region', 'the opaque member region');
 	}
 
 	/**

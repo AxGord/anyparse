@@ -273,6 +273,16 @@ final class JoinArrayPushes implements Check {
 	}
 
 	/**
+	 * The span of an initializer that IS the empty array literal — the grammar's array-literal kind
+	 * with no elements — or null. Asked of the tree rather than of the source text: the projection
+	 * already states what the initializer is, and `new Array()` (a different kind) is
+	 * `prefer-array-literal`'s to rewrite first.
+	 */
+	private static inline function emptyArraySpan(init: QueryNode, s: Seams): Null<Span> {
+		return init.kind == s.arrayLiteralKind && init.children.length == 0 ? init.span : null;
+	}
+
+	/**
 	 * Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the
 	 * check is then a no-op). See the class doc for which unset seam costs what.
 	 */
@@ -424,16 +434,6 @@ final class JoinArrayPushes implements Check {
 				root != null && ctx.seams.arrayTypeNames.contains(root);
 			case Unreadable: false;
 		};
-	}
-
-	/**
-	 * The span of an initializer that IS the empty array literal — the grammar's array-literal kind
-	 * with no elements — or null. Asked of the tree rather than of the source text: the projection
-	 * already states what the initializer is, and `new Array()` (a different kind) is
-	 * `prefer-array-literal`'s to rewrite first.
-	 */
-	private static function emptyArraySpan(init: QueryNode, s: Seams): Null<Span> {
-		return init.kind == s.arrayLiteralKind && init.children.length == 0 ? init.span : null;
 	}
 
 	/** The maximal run of adjacent `<name>.push(e);` siblings starting at `start`, unqualified receivers only. */

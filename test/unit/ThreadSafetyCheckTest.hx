@@ -125,7 +125,8 @@ class ThreadSafetyCheckTest extends Test {
 	public function testTernarySpawnCallbackNotFlagged(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"]}}}', [
-			'class A { var flag:Bool; function boot():Void Runner.create(flag ? work1 : work2); function work1():Void Sys.sleep(1); function work2():Void Sys.sleep(1); }',
+			'class A { var flag:Bool; function boot():Void Runner.create(flag ? work1 : work2); function work1():Void Sys.sleep(1); '
+			+ 'function work2():Void Sys.sleep(1); }',
 			'class Runner { public static function create(fn:()->Void):Void {} }',
 		]);
 		Assert.equals(0, vs.length);

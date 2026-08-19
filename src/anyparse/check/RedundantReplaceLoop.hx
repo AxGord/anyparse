@@ -194,8 +194,10 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	}
 
 	public function description(): String {
-		return
-			'a while (x.indexOf(S) != -1) x = x.replace(S, B); loop — replace() already replaces every occurrence in one call; an undecidable PARAMETER pair is reported as a potential infinite loop, while a PARAMETER S with a LITERAL B is decided by that literal: an empty one makes the loop merely redundant, a non-empty one loops forever for exactly those S occurring in it';
+		return 'a while (x.indexOf(S) != -1) x = x.replace(S, B); loop — replace() '
+			+ 'already replaces every occurrence in one call; an undecidable PARAMETER pair is reported as a potential infinite loop, '
+			+ 'while a PARAMETER S with a LITERAL B is decided by that literal: an empty one makes the loop merely redundant, a non-empty '
+			+ 'one loops forever for exactly those S occurring in it';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -664,9 +666,8 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		};
 		final message: String = switch m.arm {
 			case Arm.A:
-				'this while (${m.receiverName}.indexOf($search'
-					+ ') != -1) loop runs at most once — replace() already replaces every occurrence; collapses to ${m.receiverName} = '
-					+ '${m.receiverName}.replace($search, $replacement);';
+				'this while (${m.receiverName}.indexOf($search) != -1) loop runs at most once — replace() already replaces every '
+					+ 'occurrence; collapses to ${m.receiverName} = ${m.receiverName}.replace($search, $replacement);';
 			case Arm.B:
 				'this loop never terminates for any ${m.receiverName} containing $search — replace($search, $replacement'
 					+ ') reintroduces it every time, since $replacement itself contains $search';

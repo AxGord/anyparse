@@ -24,9 +24,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class ModuleScan {
 
-	/** The wildcard import kind — the one bulk form whose binding set depends on the package it names. */
-	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
-
 	/** The import / using declaration kinds a grammar projects at the top level — the anchor set for an insert and for the bound-name scan. */
 	public static final IMPORT_DECL_KINDS: Array<String> = [
 		'ImportDecl',
@@ -36,15 +33,18 @@ final class ModuleScan {
 		'ImportAliasInDecl'
 	];
 
-	/** The BULK import kinds — the two statements that bind names they do not spell out (`shadowedByBulkImport`). */
-	private static final BULK_IMPORT_KINDS: Array<String> = [WILDCARD_IMPORT_KIND, 'UsingDecl'];
-
 	/**
 	 * The `package` declaration kinds. A named `package pkg;` and the ROOT-package `package;` project
 	 * APART, and every anchor that reads only the named one falls through on a root-package file to
 	 * the file-start fallback — which splices the import ABOVE `package`, and does not compile.
 	 */
 	public static final PACKAGE_DECL_KINDS: Array<String> = ['PackageDecl', 'PackageEmpty'];
+
+	/** The wildcard import kind — the one bulk form whose binding set depends on the package it names. */
+	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
+
+	/** The BULK import kinds — the two statements that bind names they do not spell out (`shadowedByBulkImport`). */
+	private static final BULK_IMPORT_KINDS: Array<String> = [WILDCARD_IMPORT_KIND, 'UsingDecl'];
 
 	/**
 	 * The `#if … #end` region holding every type `tree` declares, or null when the file has none — the
@@ -99,6 +99,19 @@ final class ModuleScan {
 		if (span == null) return -1;
 		final newline: Int = source.indexOf('\n', span.from);
 		return newline < 0 ? -1 : newline + 1;
+	}
+
+	/** The file's `package` payload (`''` for the root package, and for a file with no declaration at all). */
+	public static function packageOf(root: QueryNode): String {
+		for (c in root.children) if (c.kind == 'PackageDecl') return c.name ?? '';
+		return '';
+	}
+
+	/** The module `file` declares, read from its own `package` declaration and its basename. */
+	public static function moduleOf(root: QueryNode, file: String): ModulePath {
+		final pkg: String = packageOf(root);
+		final base: String = RefactorSupport.baseNameOf(file);
+		return { path: pkg == '' ? base : '$pkg.$base', pkg: pkg, base: base };
 	}
 
 	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
@@ -311,20 +324,6 @@ final class ModuleScan {
 			if (decl != null) return decl.name;
 		}
 		return null;
-	}
-
-	/** The file's `package` payload (`''` for the root package, and for a file with no declaration at all). */
-	public static function packageOf(root: QueryNode): String {
-		for (c in root.children) if (c.kind == 'PackageDecl') return c.name ?? '';
-		return '';
-	}
-
-
-	/** The module `file` declares, read from its own `package` declaration and its basename. */
-	public static function moduleOf(root: QueryNode, file: String): ModulePath {
-		final pkg: String = packageOf(root);
-		final base: String = RefactorSupport.baseNameOf(file);
-		return { path: pkg == '' ? base : '$pkg.$base', pkg: pkg, base: base };
 	}
 
 }

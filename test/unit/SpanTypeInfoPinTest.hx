@@ -159,7 +159,7 @@ class SpanTypeInfoPinTest extends Test {
 	private static function render<V>(m: Map<Int, V>): String {
 		final keys: Array<Int> = [for (k in m.keys()) k];
 		keys.sort((a, b) -> a - b);
-		return '[' + keys.map(k -> '$k=>${m[k]}').join(', ') + ']';
+		return '[${keys.map(k -> '$k=>${m[k]}').join(', ')}]';
 	}
 
 }

@@ -36,10 +36,9 @@ class PreferSwitchExpressionCheckTest extends Test {
 
 	/** The anonymized constants module the cross-file fixtures resolve against. */
 	private static final CONSTANTS: String = 'class NodeMeta {\n\tpublic static inline final KIND_RECTANGLE_SOLID:String = \'rs\';\n'
-		+ "\tpublic static inline final KIND_RECTANGLE_STROKE:String = 'rk';\n\tpublic static inline final KIND_OVAL_SOLID:String = 'os';\n"
-		+ "\tpublic static inline final KIND_OVAL_STROKE:String = 'ok';\n"
-		+ "\tpublic static inline final KIND_TEXT_NODE_BUBBLE:String = 'tb';\n"
-		+ "\tpublic static inline final KIND_TEXT_NODE_BUBBLE_STROKE:String = 'tk';\n"
+		+ "\tpublic static inline final KIND_RECTANGLE_STROKE:String = 'rk';\n\tpublic static inline final KIND_OVAL_SOLID:String = "
+		+ "'os';\n\tpublic static inline final KIND_OVAL_STROKE:String = 'ok';\n\tpublic static inline final KIND_TEXT_NODE_BUBBLE:String "
+		+ "= 'tb';\n\tpublic static inline final KIND_TEXT_NODE_BUBBLE_STROKE:String = 'tk';\n"
 		+ '\tpublic static inline final KIND_TEXT_NODE_BUBBLE_FILL_SHADE:String = \'tf\';\n}';
 
 	/**
@@ -50,11 +49,10 @@ class PreferSwitchExpressionCheckTest extends Test {
 	private static final TUPLE_CHAIN: String = 'class BoardView {\n\tprivate static function resolveShadeProp(\n'
 		+ '\t\tobj:BoardObject<RecordData>, targetType:String, readCurrent:Bool, newShade:Int = 0\n\t):MoveProperty {\n'
 		+ '\t\treturn obj.boardNodeRecord.kind == NodeMeta.KIND_RECTANGLE_SOLID && targetType == NodeMeta.KIND_RECTANGLE_STROKE\n'
-		+ '\t\t\t? EdgeShade(readCurrent ? cast(obj, RectangleNode).edgeShade : newShade)\n'
-		+ '\t\t\t: obj.boardNodeRecord.kind == NodeMeta.KIND_OVAL_SOLID && targetType == NodeMeta.KIND_OVAL_STROKE\n'
-		+ '\t\t\t\t? EdgeShade(readCurrent ? cast(obj, OvalNode).edgeShade : newShade)\n'
-		+ '\t\t\t\t: obj.boardNodeRecord.kind == NodeMeta.KIND_TEXT_NODE_BUBBLE && targetType == NodeMeta.KIND_TEXT_NODE_BUBBLE_STROKE\n'
-		+ '\t\t\t\t\t? EdgeShade(readCurrent ? cast(obj, TextNodeBubble).edgeShade : newShade)\n'
+		+ '\t\t\t? EdgeShade(readCurrent ? cast(obj, RectangleNode).edgeShade : newShade)\n\t\t\t: obj.boardNodeRecord.kind == '
+		+ 'NodeMeta.KIND_OVAL_SOLID && targetType == NodeMeta.KIND_OVAL_STROKE\n\t\t\t\t? EdgeShade(readCurrent ? cast(obj, '
+		+ 'OvalNode).edgeShade : newShade)\n\t\t\t\t: obj.boardNodeRecord.kind == NodeMeta.KIND_TEXT_NODE_BUBBLE && targetType == '
+		+ 'NodeMeta.KIND_TEXT_NODE_BUBBLE_STROKE\n\t\t\t\t\t? EdgeShade(readCurrent ? cast(obj, TextNodeBubble).edgeShade : newShade)\n'
 		+ '\t\t\t\t\t: obj.boardNodeRecord.kind == NodeMeta.KIND_TEXT_NODE_BUBBLE\n'
 		+ '\t\t\t\t\t\t&& targetType == NodeMeta.KIND_TEXT_NODE_BUBBLE_FILL_SHADE\n'
 		+ '\t\t\t\t\t\t? AreaShade(readCurrent ? cast(obj, TextNodeBubble).areaShade : newShade)\n'

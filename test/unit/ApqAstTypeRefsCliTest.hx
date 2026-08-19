@@ -146,7 +146,7 @@ class ApqAstTypeRefsCliTest extends Test {
 		final stdout: Dynamic = Node.process.stdout;
 		final original: Dynamic = Reflect.field(stdout, 'write');
 		Reflect.setField(stdout, 'write', (chunk: Dynamic) -> {
-			buffer.add(Std.string(chunk));
+			buffer.add('$chunk');
 			return true;
 		});
 		final code: Int = try Cli.run(argv) catch (exception: Exception) {

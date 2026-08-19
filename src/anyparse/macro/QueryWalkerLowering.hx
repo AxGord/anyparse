@@ -430,7 +430,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			final n: Null<Expr> = nameOfValue(f, access);
 			// The reflective version RETURNED here, so only the first present
 			// unwrap slot is ever consulted - later ones stay unreachable.
-			out.push(n == null ? macro return null : (isOptional(f) ? macro return $access == null ? null : $n : macro return $n));
+			out.push(n == null ? macro return null : isOptional(f) ? macro return $access == null ? null : $n : macro return $n);
 			break;
 		}
 		out.push(macro return null);

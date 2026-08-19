@@ -466,7 +466,12 @@ final class BoolLoopScan {
 		final span: Null<Span> = lit.span;
 		if (span == null) return null;
 		final text: String = source.substring(span.from, span.to);
-		return text == TRUE_LITERAL ? true : (text == FALSE_LITERAL ? false : null);
+		return if (text == TRUE_LITERAL)
+			true
+		else if (text == FALSE_LITERAL)
+			false
+		else
+			null;
 	}
 
 	/** Unwrap a single-statement `{ … }` block to its sole child; every other node passes through unchanged. */

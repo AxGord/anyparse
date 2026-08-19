@@ -96,7 +96,7 @@ final class PurityScan {
 	public static function isPure(node: QueryNode, ctx: PurityCtx): Bool {
 		final kind: String = node.kind;
 		if (kind == ctx.identKind) return !readsGetterUnqualified(node, ctx);
-		final childrenPure: () -> Bool = () -> node.children.foreach(c -> isPure(c, ctx));
+		function childrenPure() return node.children.foreach(c -> isPure(c, ctx));
 		if (RefactorSupport.isSafeKind(kind)) return childrenPure();
 		if (kind != ctx.fieldAccessKind) return if (ctx.indexAccessKind != null && kind == ctx.indexAccessKind)
 			childrenPure()

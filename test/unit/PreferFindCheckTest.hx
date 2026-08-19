@@ -327,7 +327,8 @@ class PreferFindCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(fn(
-				'#if js\n\t\tvar r:Null<Int> = null;\n\t\t#else\n\t\tif (ok) for (x in xs) if (x > 2) { r = x; break; }\n\t\t#end\n\t\treturn null;',
+				'#if js\n\t\tvar r:Null<Int> = null;\n\t\t#else\n\t\tif (ok) for (x in xs) if (x > 2) { r = x; break; }\n\t\t#end\n'
+				+ '\t\treturn null;',
 				'Null<Int>'
 			)).length
 		);
@@ -379,10 +380,9 @@ class PreferFindCheckTest extends Test {
 
 	/** A guarded capture-and-break loop over a nullable local — the cascade fixture. */
 	private inline function compositionSource(): String {
-		return 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(xml:Xml):Void {\n'
-			+ '\t\tfinal frame1Xml:Null<Xml> = xml.find(c -> c.nodeName == \'f\');\n\t\tvar oXml:Null<Xml> = null;\n'
-			+ '\t\tif (frame1Xml != null) for (child in frame1Xml) if (child.nodeName == \'o\') {\n\t\t\toXml = child;\n\t\t\tbreak;\n'
-			+ '\t\t}\n\t\ttrace(oXml);\n\t}\n}';
+		return 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(xml:Xml):Void {\n\t\tfinal frame1Xml:Null<Xml> = xml.find(c -> '
+			+ 'c.nodeName == \'f\');\n\t\tvar oXml:Null<Xml> = null;\n\t\tif (frame1Xml != null) for (child in frame1Xml) if ('
+			+ 'child.nodeName == \'o\') {\n\t\t\toXml = child;\n\t\t\tbreak;\n\t\t}\n\t\ttrace(oXml);\n\t}\n}';
 	}
 
 	/** A `p.C` with a `using Other;` and one Form-A first-match loop — the conflicting-`using` fixture. */

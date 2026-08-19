@@ -26,10 +26,9 @@ final class HxTypeParamFieldNoWrapSliceTest extends Test {
 
 	/** The LHS generic type (fits 140) stays on one line; only the `=` breaks - the type-param list does NOT wrap. */
 	public function testLongGenericFieldTypeStaysOnOneLine(): Void {
-		final src: String = 'class M {\n'
-			+ '\tpublic final createPrimaryEntry:RemoteAction<PrimaryEntryRecordModel, PrimaryEntryRecordResponse, PrimaryEntryRecordRequest> =\n'
-			+ '\t\tnew RemoteAction<PrimaryEntryRecordModel, PrimaryEntryRecordResponse, PrimaryEntryRecordRequest>(\'rootScope/CreatePrimary\');\n'
-			+ '}';
+		final src: String = 'class M {\n\tpublic final createPrimaryEntry:RemoteAction<PrimaryEntryRecordModel, '
+			+ 'PrimaryEntryRecordResponse, PrimaryEntryRecordRequest> =\n\t\tnew RemoteAction<PrimaryEntryRecordModel, '
+			+ 'PrimaryEntryRecordResponse, PrimaryEntryRecordRequest>(\'rootScope/CreatePrimary\');\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

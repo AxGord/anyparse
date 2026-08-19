@@ -42,7 +42,8 @@ class IfFalseDeadCodeCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f() {\n\t\tswitch v {\n\t\t\tcase 1: a();\n\t\t#if false\n\t\t\tcase 2: b();\n\t\t#end\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f() {\n\t\tswitch v {\n\t\t\tcase 1: a();\n\t\t#if false\n\t\t\tcase 2: b();\n\t\t#end\n\t\t}\n'
+				+ '\t}\n}'
 			).length
 		);
 	}

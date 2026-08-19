@@ -457,7 +457,8 @@ class TypeRefPrinterTest extends Test {
 		final p: TypeRefPrinter = printer(src);
 		p.print('app.deep.Mod.Widget');
 		Assert.equals(
-			'package app;\n\nimport app.base.Host;\nimport app.deep.Mod.Widget;\nimport pkg.mid.events.Alpha;\nimport pkg.mid.SetBeta;\nimport util.Valid;\n\nclass C {}\n',
+			'package app;\n\nimport app.base.Host;\nimport app.deep.Mod.Widget;\nimport pkg.mid.events.Alpha;\nimport pkg.mid.SetBeta;\n'
+			+ 'import util.Valid;\n\nclass C {}\n',
 			applyImports(p, src)
 		);
 	}
@@ -481,7 +482,8 @@ class TypeRefPrinterTest extends Test {
 		final p: TypeRefPrinter = printer(src);
 		p.print('app.deep.Mod.Widget');
 		Assert.equals(
-			'package app;\n\nimport app.base.Host;\nimport app.deep.Mod.Widget;\nimport app.mid.events.Alpha;\nimport app.mid.SetBeta;\n\nimport z.Zeta;\n\nclass C {}\n',
+			'package app;\n\nimport app.base.Host;\nimport app.deep.Mod.Widget;\nimport app.mid.events.Alpha;\nimport app.mid.SetBeta;\n'
+			+ '\nimport z.Zeta;\n\nclass C {}\n',
 			applyImports(p, src)
 		);
 	}

@@ -214,8 +214,8 @@ class RedundantToStringCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				"class Ticket { public static function makeId(prefix:String = ''):String { "
-				+ "var now:String = Date.now().toString(); while (now.indexOf(' ') != -1) now = now.replace(' ', '_'); return prefix + now; } }"
+				"class Ticket { public static function makeId(prefix:String = ''):String { var now:String = Date.now().toString(); while "
+				+ "(now.indexOf(' ') != -1) now = now.replace(' ', '_'); return prefix + now; } }"
 			).length
 		);
 	}

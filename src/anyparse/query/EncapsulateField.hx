@@ -37,6 +37,9 @@ using StringTools;
 @:nullSafety(Strict)
 final class EncapsulateField {
 
+	/** The stored-field kinds `encapsulate-field` can turn into a property. */
+	private static final DATA_MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'VarField', 'FinalField'];
+
 	/**
 	 * Encapsulate the field `fieldName` of `typeName` in `source`. `reformat`
 	 * canonicalises a drifted file. Returns `Ok(rewritten)` or an `Err`.
@@ -155,9 +158,5 @@ final class EncapsulateField {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		return provider?.declaredTypeSources(source)[fieldFrom];
 	}
-
-
-	/** The stored-field kinds `encapsulate-field` can turn into a property. */
-	private static final DATA_MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'VarField', 'FinalField'];
 
 }

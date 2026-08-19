@@ -187,9 +187,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * and `testSoleWriteCoMoverBlocksChain`.
 	 */
 	public function testStaticReadRhsChainPartial(): Void {
-		final src: String = 'class C { static var n:Int = 0; static function bump():Int { n++; return 0; }'
-			+ ' private var _b:Int; private var _a:Int; public function new() { _b = bump(); _a = n; }'
-			+ ' public function d():Void { _a = 0; } }';
+		final src: String = 'class C { static var n:Int = 0; static function bump():Int { n++; return 0; } private var _b:Int; private var '
+			+ '_a:Int; public function new() { _b = bump(); _a = n; } public function d():Void { _a = 0; } }';
 		assertSoleViolationOn(src, '_b');
 	}
 
@@ -280,9 +279,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * "Known gaps" with it.
 	 */
 	public function testForeignWriteThroughCallIsAnAcceptedGap(): Void {
-		final src: String = 'class C { private var _a:Bump; private var _b:Reader;'
-			+ ' public function new() { _a = new Bump(); _b = new Reader(); }'
-			+ ' public function dispose():Void { _a = null; _b = null; } }';
+		final src: String = 'class C { private var _a:Bump; private var _b:Reader; public function new() {'
+			+ ' _a = new Bump(); _b = new Reader(); } public function dispose():Void { _a = null; _b = null; } }';
 		Assert.equals(2, violations(src).length);
 	}
 

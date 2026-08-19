@@ -29,8 +29,8 @@ class ResolutionScopeCliTest extends Test {
 
 	#if (sys || nodejs)
 	private static final BASE: String = 'package lib;\nclass Base {\n\tpublic function new() {}\n\tpublic function foo(): Void {}\n}';
-	private static final DERIVED: String = 'package proj;\n\nimport lib.Base;\n\nclass Derived extends Base {\n\n'
-		+ '\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n' + '\t\tthis.foo();\n\t}\n\n}\n';
+	private static final DERIVED: String = 'package proj;\n\nimport lib.Base;\n\nclass Derived extends Base {\n\n\tpublic function new() {'
+		+ '\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n\t\tthis.foo();\n\t}\n\n}\n';
 
 	/** A public field with no write anywhere — `prefer-final-public-field`'s candidate. */
 	private static final OWNER: String =
@@ -133,7 +133,8 @@ class ResolutionScopeCliTest extends Test {
 		Sys.setCwd(oldCwd);
 		Assert.equals(
 			1, exit,
-			'a relative report scope overlapping an absolute resolutionRoots entry still resolves the inherited member — the shared base is deduped, not double-indexed'
+			'a relative report scope overlapping an absolute resolutionRoots entry still resolves the inherited member — the shared base '
+			+ 'is deduped, not double-indexed'
 		);
 		CliFixture.removeDir(dir);
 		#else

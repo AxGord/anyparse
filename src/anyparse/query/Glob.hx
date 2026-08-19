@@ -49,7 +49,12 @@ final class Glob {
 			else
 				out.push(norm);
 		}
-		out.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		out.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 		#end
 		return out;
 	}

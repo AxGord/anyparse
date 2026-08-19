@@ -185,8 +185,14 @@ private typedef ReceiverProof = {
 final class CrossRenameMember {
 
 	/** The advisory appended to every successful member rename. */
-	private static final ADVISORY: String =
-		'member rename resolves instance receivers, switch subjects and expected-type returns via declared types only — unresolved receivers and subjects (chained calls, un-annotated locals, casts, a `Null<T>`-wrapped annotation, a type reaching the file through a per-directory `import.hx`), an expected-type value OUTSIDE return position (`x == VALUE`, an annotated assignment, a typed argument) or in a function with no return annotation, an enum-abstract value brought into scope by importing its type, super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left for the compiler to reject; verify by hand.';
+	private static final ADVISORY: String = 'member rename resolves instance receivers, switch subjects and expected-type returns via '
+		+ 'declared types only — unresolved receivers and subjects ('
+		+ 'chained calls, un-annotated locals, casts, a `Null<T>`-wrapped annotation, a type reaching the '
+		+ 'file through a per-directory `import.hx`), an expected-type value OUTSIDE return position ('
+		+ '`x == VALUE`, an annotated assignment, a typed argument) '
+		+ 'or in a function with no return annotation, an enum-abstract value brought into scope by '
+		+ 'importing its type, super-access, `using` extension calls, aliased-import homonyms, and '
+		+ 'overrides declared outside this scope are left for the compiler to reject; verify by hand.';
 
 	/**
 	 * Rename the member declaration at `line:col` (in `cursorFile` /
@@ -243,7 +249,8 @@ final class CrossRenameMember {
 		final ancestor: Null<String> = index.declaringAncestorOf(t.typeName, t.memberName);
 		if (ancestor != null)
 			return Err(
-				'member "${t.memberName}" implements a declaration on "$ancestor" — rename that one instead (its implementations rename with it)'
+				'member "${t.memberName}" implements a declaration on "$ancestor'
+				+ '" — rename that one instead (its implementations rename with it)'
 			);
 		final family: Null<Array<OverrideFamilyMember>> = index.overrideFamilyOf(t.typeName, t.memberName);
 		if (family == null)
@@ -319,7 +326,7 @@ final class CrossRenameMember {
 						var saysStatic: Bool = false;
 						for (j in 0...i) {
 							final s: Null<Span> = siblings[j].span;
-							if (!(s != null && s.from >= groupSpan.from && s.to <= spanNN.from)) continue;
+							if (s == null || s.from < groupSpan.from || s.to > spanNN.from) continue;
 							if (siblings[j].kind == 'Static') {
 								isStatic = true;
 								saysStatic = true;

@@ -196,7 +196,7 @@ final class UnusedLocal implements Check {
 			// middle one is its span MINUS the continuation nested inside it (the chain is
 			// right-recursive), and a head needs its first continuation promoted into its place — so it
 			// is refused rather than approximated.
-			if (continuationKinds.contains(decl.kind) || Lambda.exists(decl.children, k -> continuationKinds.contains(k.kind))) continue;
+			if (continuationKinds.contains(decl.kind) || decl.children.exists(k -> continuationKinds.contains(k.kind))) continue;
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;

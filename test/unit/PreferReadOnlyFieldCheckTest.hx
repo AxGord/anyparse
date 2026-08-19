@@ -68,7 +68,8 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C { public var x:Int = 0; function s():Void { x = 1; } function p():Void { makeC().x = 7; } function makeC():C { return new C(); } }'
+				'class C { public var x:Int = 0; function s():Void { x = 1; } function p():Void { makeC().x = 7; } function makeC():C {'
+				+ ' return new C(); } }'
 			).length
 		);
 	}

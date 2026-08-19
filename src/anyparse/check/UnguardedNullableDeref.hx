@@ -53,8 +53,8 @@ final class UnguardedNullableDeref implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a dereference of a local bound from a nullable source (map[key] / Map.get, Null<T>-returning call) with no null check on the path — a possible NPE';
+		return 'a dereference of a local bound from a nullable source (map[key] / Map.get, Null<T>-returning call) '
+			+ 'with no null check on the path — a possible NPE';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

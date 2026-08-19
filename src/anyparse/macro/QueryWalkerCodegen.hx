@@ -75,7 +75,8 @@ class QueryWalkerCodegen {
 		return {
 			name: '_memoRoot',
 			access: [APrivate, AStatic],
-			doc: 'Parse root of `_memoSource`, or null when that source did not parse. A failed parse is memoised too, so a skip-parse file is not retried by every projection.',
+			doc: 'Parse root of `_memoSource`, or null when that source did not parse. A failed parse is memoised too, so a skip-parse '
+				+ 'file is not retried by every projection.',
 			kind: FVar(nullRootCT(result.rootCT), macro null),
 			pos: Context.currentPos(),
 		};

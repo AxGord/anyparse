@@ -162,7 +162,7 @@ final class NewLiteral {
 	private static function matches(node: QueryNode, source: String, newExprKind: String, typeName: String): Bool {
 		if (node.kind != newExprKind || node.name != typeName) return false;
 		final span: Null<Span> = node.span;
-		return span != null && StringTools.endsWith(source.substring(span.from, span.to).rtrim(), '()');
+		return span != null && source.substring(span.from, span.to).rtrim().endsWith('()');
 	}
 
 	/** Index every `new` node by its `from:to` span key and record its parent (for `fix` to re-find a flagged node and gate on its enclosing declaration). */

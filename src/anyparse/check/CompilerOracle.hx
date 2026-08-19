@@ -68,7 +68,7 @@ final class CompilerOracle {
 			// errors) rather than unavailability. Any other spawn error means haxe never
 			// ran (missing binary, permission) -> Unavailable.
 			final code: Null<Dynamic> = Reflect.field(launchError, 'code');
-			return code != null && Std.string(code) == 'ENOBUFS'
+			return code != null && '$code' == 'ENOBUFS'
 				? Rejected(StringTools.trim(oracleText(res.stderr) + oracleText(res.stdout)))
 				: Unavailable('could not launch haxe (${Reflect.field(launchError, 'message')})');
 		}
@@ -103,7 +103,7 @@ final class CompilerOracle {
 	#if nodejs
 	/** Coerce a possibly-null spawn stream field (Buffer|String under utf8) to a String. */
 	private static function oracleText(value: Dynamic): String {
-		return value == null ? '' : Std.string(value);
+		return value == null ? '' : '$value';
 	}
 	#end
 

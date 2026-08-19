@@ -17,8 +17,12 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxFnSigSingleParamWrapIndentTest extends Test {
 
-	private static final CFG: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "functionSignature": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 100}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}], "type": "noWrap"}]}}, "whitespace": {"functionTypeHaxe4Policy": "none", "functionTypeHaxe3Policy": "none"}}';
+	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "functionSignature": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
+		+ '{"conditions": [{"cond": "totalItemLength <= n", "value": 100}, {'
+		+ '"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+		+ '{"cond": "itemCount <= n", "value": 1}], "type": "noWrap"}]}}, "whitespace": {'
+		+ '"functionTypeHaxe4Policy": "none", "functionTypeHaxe3Policy": "none"}}';
 
 	public function new(): Void {
 		super();
@@ -27,8 +31,8 @@ final class HxFnSigSingleParamWrapIndentTest extends Test {
 	/** A single-param signature that leading-breaks puts the lone param at signature-indent + 1 (2 tabs for a 1-tab method), not + 2. */
 	public function testSingleParamLeadingBreakIndentsOneLevel(): Void {
 		final src: String = 'class M {\n'
-			+ '\tpublic function createOperationz(?sessionLoader:(cb:(handlerArg:GenericBaseKindType<PrimaryObserverKindXy>, finishCb:()->Void)->Void)->Void):ResultCarrierValue<A, A2> {\n'
-			+ '\t\treturn null;\n\t}\n}';
+			+ '\tpublic function createOperationz(?sessionLoader:(cb:(handlerArg:GenericBaseKindType<PrimaryObserverKindXy>, '
+			+ 'finishCb:()->Void)->Void)->Void):ResultCarrierValue<A, A2> {\n\t\treturn null;\n\t}\n}';
 		final expected: String = 'class M {\n\tpublic function createOperationz(\n'
 			+ '\t\t?sessionLoader:(cb:(handlerArg:GenericBaseKindType<PrimaryObserverKindXy>, finishCb:()->Void)->Void)->Void\n'
 			+ '\t):ResultCarrierValue<A, A2> {\n\t\treturn null;\n\t}\n}';

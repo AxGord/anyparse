@@ -15,17 +15,18 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCallParamObjectLiteralSliceTest extends Test {
 
-	private static final CONFIG: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
+		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount '
+		+ '<= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testSingleObjectArgFlatFitsLeadingBreaks(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tlist.push(\n'
-			+ '\t\t\t{Key: \'134\', Value: \'Are you sure you want to permanently delete your account and all content in cloud?\', Description: \'\'}\n'
-			+ '\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tlist.push(\n\t\t\t{Key: \'134\', Value: \'Are you sure you want to '
+			+ 'permanently delete your account and all content in cloud?\', Description: \'\'}\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

@@ -91,8 +91,8 @@ class ApqJsonSchemaProbe extends Test {
 	}
 
 	public function testRoundTripMixedOptional(): Void {
-		final src: String =
-			'{"kind":"root","children":[{"kind":"a","name":"alpha","children":[]},{"kind":"b","children":[{"kind":"deep","name":"d","children":[]}]}]}';
+		final src: String = '{"kind":"root","children":[{"kind":"a","name":"alpha","children":[]},{'
+			+ '"kind":"b","children":[{"kind":"deep","name":"d","children":[]}]}]}';
 		final parsed: ApqProbeNode = ApqProbeNodeParser.parse(src);
 		final out: String = ApqProbeNodeWriter.write(parsed, JsonFormat.instance.defaultWriteOptions);
 		final back: ApqProbeNode = ApqProbeNodeParser.parse(out);

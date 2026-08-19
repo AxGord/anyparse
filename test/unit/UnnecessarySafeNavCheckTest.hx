@@ -64,7 +64,8 @@ class UnnecessarySafeNavCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'@:nullSafety(Strict) class C { function f() { var v = make(); var x = v?.length; } function make():Null<String> return null; }'
+				'@:nullSafety(Strict) class C { function f() { var v = make(); var x = v?.length; } '
+				+ 'function make():Null<String> return null; }'
 			).length
 		);
 	}

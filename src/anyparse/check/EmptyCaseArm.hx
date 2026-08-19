@@ -116,8 +116,8 @@ final class EmptyCaseArm implements Check {
 	}
 
 	public function description(): String {
-		return
-			'a trailing empty case arm of a statement switch with no catch-all, over a subject type free of exhaustiveness checking — dead syntax, deletable';
+		return 'a trailing empty case arm of a statement switch with no catch-all, over a subject type free of exhaustiveness checking — '
+			+ 'dead syntax, deletable';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

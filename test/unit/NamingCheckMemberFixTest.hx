@@ -547,10 +547,9 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 */
 	public function testFixRenamesFieldAcrossCaseArmsDeclaringTheSameName(): Void {
 		final src: String = 'package pkg;\nclass C {\n\tprivate var logo:Null<Sprite>;\n\tpublic function make(kind:Int):Void {\n'
-			+ '\t\tif (logo != null) removeChild(logo);\n\t\tlogo = switch kind {\n\t\t\tcase 0:\n'
-			+ '\t\t\t\tfinal logo:Sprite = new Sprite();\n\t\t\t\tlogo;\n\t\t\tcase _:\n\t\t\t\tfinal logo:Sprite = new Sprite();\n'
-			+ '\t\t\t\tlogo;\n\t\t};\n\t\taddChild(logo);\n\t}\n\tfunction removeChild(o:Sprite):Void {}\n'
-			+ '\tfunction addChild(o:Sprite):Void {}\n}';
+			+ '\t\tif (logo != null) removeChild(logo);\n\t\tlogo = switch kind {\n\t\t\tcase 0:\n\t\t\t\tfinal logo:Sprite = new '
+			+ 'Sprite();\n\t\t\t\tlogo;\n\t\t\tcase _:\n\t\t\t\tfinal logo:Sprite = new Sprite();\n\t\t\t\tlogo;\n\t\t};\n'
+			+ '\t\taddChild(logo);\n\t}\n\tfunction removeChild(o:Sprite):Void {}\n\tfunction addChild(o:Sprite):Void {}\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();

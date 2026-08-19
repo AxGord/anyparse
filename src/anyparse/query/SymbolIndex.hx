@@ -854,50 +854,6 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Whether a `using` extension whose FIRST parameter is written `paramSource` (outer nominal
-	 * `accepts`) binds at a call on a receiver of type `receiver` — the accept half of
-	 * `extensionReturnNominal`, kept apart because it answers in three ways and only the first is
-	 * nominal.
-	 *
-	 * An exact nominal match and a proven nominal subtype are the whole of what a nominal index
-	 * can say. The third way is STRUCTURAL, and it exists because `Lambda`'s entire surface takes
-	 * `Iterable<A>` while no container in the language declares that it implements one:
-	 * `satisfiesIterable` / `satisfiesIterator` decide membership from the receiver's own declared
-	 * members, which is exactly what the compiler unifies against.
-	 *
-	 * The structural way carries a gate the nominal ways do not need — the ELEMENT type. Proving
-	 * the receiver is iterable is not proving that its element type binds the signature's
-	 * parameter: `Iterable<Widget>` accepts a `Bag` of widgets and no other, while `Iterable<T>`
-	 * over the method's own `T` accepts every one. A receiver NOMINAL carries no element type, so
-	 * only the second form is provable, and it is recognised by the one fact that separates a
-	 * method's type PARAMETER from a real type — the name resolves to no declaration in the scope
-	 * where the signature is written. Everything else is refused: a concrete element
-	 * (`Iterable<Widget>`), a nested application (`Iterable<Iterable<A>>`, so `Lambda.flatten`),
-	 * and an unapplied `Iterable` naming no element at all.
-	 *
-	 * That refusal set is the per-member verdict on `Lambda` itself. CLAIMED, all generic in their
-	 * element: `array` / `list` / `map` / `mapi` / `flatMap` / `has` / `exists` / `foreach` /
-	 * `empty` / `count` / `indexOf` / `findIndex` / `iterator`. REFUSED here: `flatten`, whose
-	 * parameter's element is itself an application. Refused one gate EARLIER, by
-	 * `extensionReturnNominal`'s written-return requirement: `filter`, which the std declares with
-	 * an inferred return. Refused DOWNSTREAM, where the answer names a type nothing declares:
-	 * `fold` / `foldi`, returning a bare method type parameter, and `find`, returning `Null<T>` —
-	 * both resolve to no unique declaration, so every consumer that must act keeps its
-	 * conservative branch.
-	 */
-	private function receiverFitsParameter(
-		receiver: String, accepts: String, paramSource: String, host: ResolvedType, fromFile: Null<String>
-	): Bool {
-		if (accepts == receiver || isSubtype(receiver, accepts)) return true;
-		if (accepts != ITERABLE_TYPE_NAME && accepts != ITERATOR_TYPE_NAME) return false;
-		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource);
-		if (args == null || args.length != 1) return false;
-		final element: String = args[0];
-		if (!RefactorSupport.isIdentifier(element) || resolveTypeRef(element, host.file) != null) return false;
-		return accepts == ITERABLE_TYPE_NAME ? satisfiesIterable(receiver, fromFile) : satisfiesIterator(receiver, fromFile);
-	}
-
-	/**
 	 * The effective DECLARED visibility keyword of type `typeName`'s member
 	 * `memberName`, resolved through the supertype closure: a direct member's own
 	 * explicit keyword wins; an UNMARKED override defers to the supertypes (its
@@ -1057,46 +1013,6 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * The `member` declaration `typeName`'s own body or its supertype closure carries, together
-	 * with the file that declared it — null when the closure declares none, or when any link in it
-	 * is unresolvable. The declaring file rides along because a member's WRITTEN return is a
-	 * reference in THAT file's scope: `Array.iterator()` names `haxe.iterators.ArrayIterator`,
-	 * which resolves from `Array.hx` and from nowhere the call site can see.
-	 *
-	 * Each supertype is re-entered through `resolveStartType` against the CURRENT file, the same
-	 * import-aware step `lacksMemberClosure` takes, so a simple name shared by several packages
-	 * picks the one actually in scope. `seen` stops a supertype cycle.
-	 */
-	private function structuralMemberOf(
-		typeName: String, fromFile: Null<String>, member: String, seen: Array<String>
-	): Null<{ member: MemberInfo, file: String }> {
-		// A member's written return may name a type that resolves nowhere near the reading file —
-		// `Array.iterator()` answers `haxe.iterators.ArrayIterator`, written QUALIFIED and imported
-		// by nobody, so the scope-aware step finds nothing and the package-blind one (a simple name
-		// unique among indexed decls) is the only way the link is followed at all.
-		final start: Null<ResolvedType> = resolveStartType(typeName, fromFile) ?? resolveStartType(typeName, null);
-		if (start == null || !markSeen(start, seen)) return null;
-		final host: String = start.file.file;
-		final own: Null<MemberInfo> = start.type.members.find(m -> m.name == member);
-		if (own != null) return { member: own, file: host };
-		// A `typedef` hosts its members through a link neither `members` nor `supertypesRaw`
-		// carries — both are EMPTY on an alias decl — so without this hop every aliased container
-		// answers "declares nothing", which is the whole reason `List` and `Map` were unprovable.
-		// Followed from the ALIAS's own file and by its WRITTEN path, the same two rules the
-		// supertype hop below uses; `markSeen` above stops an alias cycle just as it stops a
-		// supertype one. An anon-struct alias is excluded: its fields are the index's own members.
-		if (start.type.kind == TYPEDEF_DECL_KIND && !start.type.isAnonStruct) {
-			final target: Null<String> = start.type.aliasTargetRaw;
-			return target == null ? null : structuralMemberOf(target, host, member, seen);
-		}
-		for (raw in start.type.supertypesRaw) {
-			final up: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(raw, host, member, seen);
-			if (up != null) return up;
-		}
-		return null;
-	}
-
-	/**
 	 * Whether `sub` is provably NOT a (transitive) subtype of `sup` — the POSITIVE proof of the
 	 * negative, which a false `isSubtype` does NOT supply: `isSubtype` ends a branch on any
 	 * unresolvable supertype link, so its `false` unions "provably unrelated" with "unprovable". True
@@ -1173,7 +1089,6 @@ final class SymbolIndex {
 		return false;
 	}
 
-
 	/**
 	 * Whether ANY indexed type named `typeName` DIRECTLY declares a member named
 	 * `member` — methods included, supertypes NOT consulted. The SHADOW companion of
@@ -1237,10 +1152,11 @@ final class SymbolIndex {
 	 * declaration matches.
 	 */
 	public function declarationsOf(typeName: String, member: String): Array<OverrideFamilyMember> {
-		final out: Array<OverrideFamilyMember> = [];
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == member)
-			out.push({ file: fi.file, typeName: t.name, declFrom: m.declFrom });
-		return out;
+		return [for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == member) {
+			file: fi.file,
+			typeName: t.name,
+			declFrom: m.declFrom
+		}];
 	}
 
 	/**
@@ -1400,12 +1316,6 @@ final class SymbolIndex {
 		return family;
 	}
 
-	/** The SIMPLE-name lookup of a type's declaration kind, or null when the scope declares it zero or ambiguously many times. */
-	private function ownerDeclKind(owner: String): Null<String> {
-		final ds: Array<TypeDeclInfo> = declsNamed(owner);
-		return ds.length == 1 ? ds[0].kind : null;
-	}
-
 	/**
 	 * Whether `matches` holds for ANY (transitive) subtype of `owner`, given that subtype's
 	 * whole source, its raw declaration span, and whether it REDECLARES `field` (shadowing
@@ -1516,6 +1426,21 @@ final class SymbolIndex {
 		return fi == null ? [] : resolveTypeRefAll(raw, fi);
 	}
 
+	/**
+	 * Whether EVERY supertype reference of `typeName`, transitively, names a declaration this
+	 * index holds. `supertypeDeclaresMember` answers `false` both when no ancestor declares the
+	 * member and when an ancestor is not indexed at all, and only the FIRST reading is a proof —
+	 * a consumer that must prove the ABSENCE of an inherited member (an expected-type rewrite,
+	 * which a shadowing field silently redirects) has to ask this too. Walks the same simple-name
+	 * hops `supertypeDeclares` walks, so the two agree about which links exist; `supertypes`
+	 * carries `implements` targets as well as `extends`, so an unindexed interface refuses
+	 * too — and so does a `typeName` the index holds no declaration for at all, the same absence one
+	 * hop earlier.
+	 */
+	public function supertypeChainResolved(typeName: String): Bool {
+		return supertypeChainWalk(typeName, []);
+	}
+
 	/** The `seen`-set identity of a resolved type: its declaring file plus its name — see `markSeen`. */
 	private inline function seenKey(cur: ResolvedType): String {
 		return '${cur.file.file}#${cur.type.name}';
@@ -1536,6 +1461,96 @@ final class SymbolIndex {
 	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
 	private inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
 		return t.isMain ? fi.module : '${fi.module}.${t.name}';
+	}
+
+	/**
+	 * Whether a `using` extension whose FIRST parameter is written `paramSource` (outer nominal
+	 * `accepts`) binds at a call on a receiver of type `receiver` — the accept half of
+	 * `extensionReturnNominal`, kept apart because it answers in three ways and only the first is
+	 * nominal.
+	 *
+	 * An exact nominal match and a proven nominal subtype are the whole of what a nominal index
+	 * can say. The third way is STRUCTURAL, and it exists because `Lambda`'s entire surface takes
+	 * `Iterable<A>` while no container in the language declares that it implements one:
+	 * `satisfiesIterable` / `satisfiesIterator` decide membership from the receiver's own declared
+	 * members, which is exactly what the compiler unifies against.
+	 *
+	 * The structural way carries a gate the nominal ways do not need — the ELEMENT type. Proving
+	 * the receiver is iterable is not proving that its element type binds the signature's
+	 * parameter: `Iterable<Widget>` accepts a `Bag` of widgets and no other, while `Iterable<T>`
+	 * over the method's own `T` accepts every one. A receiver NOMINAL carries no element type, so
+	 * only the second form is provable, and it is recognised by the one fact that separates a
+	 * method's type PARAMETER from a real type — the name resolves to no declaration in the scope
+	 * where the signature is written. Everything else is refused: a concrete element
+	 * (`Iterable<Widget>`), a nested application (`Iterable<Iterable<A>>`, so `Lambda.flatten`),
+	 * and an unapplied `Iterable` naming no element at all.
+	 *
+	 * That refusal set is the per-member verdict on `Lambda` itself. CLAIMED, all generic in their
+	 * element: `array` / `list` / `map` / `mapi` / `flatMap` / `has` / `exists` / `foreach` /
+	 * `empty` / `count` / `indexOf` / `findIndex` / `iterator`. REFUSED here: `flatten`, whose
+	 * parameter's element is itself an application. Refused one gate EARLIER, by
+	 * `extensionReturnNominal`'s written-return requirement: `filter`, which the std declares with
+	 * an inferred return. Refused DOWNSTREAM, where the answer names a type nothing declares:
+	 * `fold` / `foldi`, returning a bare method type parameter, and `find`, returning `Null<T>` —
+	 * both resolve to no unique declaration, so every consumer that must act keeps its
+	 * conservative branch.
+	 */
+	private function receiverFitsParameter(
+		receiver: String, accepts: String, paramSource: String, host: ResolvedType, fromFile: Null<String>
+	): Bool {
+		if (accepts == receiver || isSubtype(receiver, accepts)) return true;
+		if (accepts != ITERABLE_TYPE_NAME && accepts != ITERATOR_TYPE_NAME) return false;
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource);
+		if (args == null || args.length != 1) return false;
+		final element: String = args[0];
+		if (!RefactorSupport.isIdentifier(element) || resolveTypeRef(element, host.file) != null) return false;
+		return accepts == ITERABLE_TYPE_NAME ? satisfiesIterable(receiver, fromFile) : satisfiesIterator(receiver, fromFile);
+	}
+
+	/**
+	 * The `member` declaration `typeName`'s own body or its supertype closure carries, together
+	 * with the file that declared it — null when the closure declares none, or when any link in it
+	 * is unresolvable. The declaring file rides along because a member's WRITTEN return is a
+	 * reference in THAT file's scope: `Array.iterator()` names `haxe.iterators.ArrayIterator`,
+	 * which resolves from `Array.hx` and from nowhere the call site can see.
+	 *
+	 * Each supertype is re-entered through `resolveStartType` against the CURRENT file, the same
+	 * import-aware step `lacksMemberClosure` takes, so a simple name shared by several packages
+	 * picks the one actually in scope. `seen` stops a supertype cycle.
+	 */
+	private function structuralMemberOf(
+		typeName: String, fromFile: Null<String>, member: String, seen: Array<String>
+	): Null<{ member: MemberInfo, file: String }> {
+		// A member's written return may name a type that resolves nowhere near the reading file —
+		// `Array.iterator()` answers `haxe.iterators.ArrayIterator`, written QUALIFIED and imported
+		// by nobody, so the scope-aware step finds nothing and the package-blind one (a simple name
+		// unique among indexed decls) is the only way the link is followed at all.
+		final start: Null<ResolvedType> = resolveStartType(typeName, fromFile) ?? resolveStartType(typeName, null);
+		if (start == null || !markSeen(start, seen)) return null;
+		final host: String = start.file.file;
+		final own: Null<MemberInfo> = start.type.members.find(m -> m.name == member);
+		if (own != null) return { member: own, file: host };
+		// A `typedef` hosts its members through a link neither `members` nor `supertypesRaw`
+		// carries — both are EMPTY on an alias decl — so without this hop every aliased container
+		// answers "declares nothing", which is the whole reason `List` and `Map` were unprovable.
+		// Followed from the ALIAS's own file and by its WRITTEN path, the same two rules the
+		// supertype hop below uses; `markSeen` above stops an alias cycle just as it stops a
+		// supertype one. An anon-struct alias is excluded: its fields are the index's own members.
+		if (start.type.kind == TYPEDEF_DECL_KIND && !start.type.isAnonStruct) {
+			final target: Null<String> = start.type.aliasTargetRaw;
+			return target == null ? null : structuralMemberOf(target, host, member, seen);
+		}
+		for (raw in start.type.supertypesRaw) {
+			final up: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(raw, host, member, seen);
+			if (up != null) return up;
+		}
+		return null;
+	}
+
+	/** The SIMPLE-name lookup of a type's declaration kind, or null when the scope declares it zero or ambiguously many times. */
+	private function ownerDeclKind(owner: String): Null<String> {
+		final ds: Array<TypeDeclInfo> = declsNamed(owner);
+		return ds.length == 1 ? ds[0].kind : null;
 	}
 
 	/**
@@ -1870,7 +1885,6 @@ final class SymbolIndex {
 		return false;
 	}
 
-
 	/**
 	 * The SINGLE project-wide declaration of `raw`'s simple name, or null when that name is absent
 	 * from the index (a genuinely EXTERNAL type) or declared more than once (AMBIGUOUS). Mirrors
@@ -1944,31 +1958,6 @@ final class SymbolIndex {
 			}
 		}
 		return matches;
-	}
-
-	/** The last segment of a dotted module path — `pkg.Mod` -> `Mod`, a root-package `Mod` unchanged. */
-	private static inline function moduleSimpleName(module: String): String {
-		final dot: Int = module.lastIndexOf('.');
-		return dot < 0 ? module : module.substr(dot + 1);
-	}
-
-	/**
-	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
-	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
-	 * name needs, so `simpleRefInScope` cannot stand in for it. Compiled on 4.3.7: same package
-	 * resolves and `import pkg.*;` resolves, while BOTH `import pkg.Mod;` and `using pkg.Mod;`
-	 * fail with `Type not found : Mod` — a module import puts the module's TYPES in simple-name
-	 * scope, but the qualifier of `Mod.Sub` is read as a module PATH, which only the package
-	 * itself or a wildcard over it supplies.
-	 *
-	 * A ROOT-package module needs no arm: its own import path already IS `Mod.Sub`, so the
-	 * root-relative match in `resolveQualifiedRefAll` answers it and the fallback never runs.
-	 */
-	private static function moduleRefInScope(fromFile: FileInfo, fi: FileInfo): Bool {
-		if (fi.pkg == fromFile.pkg) return true;
-		final wild: String = '${fi.pkg}.*';
-		for (imp in fromFile.imports) if (imp.kind == ImportKind.Wild && imp.raw == wild) return true;
-		return false;
 	}
 
 	/**
@@ -2222,6 +2211,22 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * `supertypeChainResolved`'s cycle-guarded recursion. A name the index holds NO declaration for
+	 * answers false — that is the whole question, and answering it here is what lets the recursive
+	 * call stand alone where the caller used to test the next hop itself. A name already visited
+	 * answers true: whatever made it unresolvable was reported by the visit that pushed it, and a
+	 * false short-circuits the entire walk, so no later `seen` hit can mask one.
+	 */
+	private function supertypeChainWalk(typeName: String, seen: Array<String>): Bool {
+		if (seen.contains(typeName)) return true;
+		seen.push(typeName);
+		final decls: Array<TypeDeclInfo> = declsNamed(typeName);
+		if (decls.length == 0) return false;
+		for (t in decls) for (sup in t.supertypes) if (!supertypeChainWalk(sup, seen)) return false;
+		return true;
+	}
+
+	/**
 	 * Parse every `(file, source)` entry through `plugin.parseFile` and
 	 * build the index. A file whose parse throws is recorded in
 	 * `skippedFiles()` and EXCLUDED from the index — `build` never
@@ -2253,6 +2258,12 @@ final class SymbolIndex {
 		return path;
 	}
 
+	/** The last segment of a dotted module path — `pkg.Mod` -> `Mod`, a root-package `Mod` unchanged. */
+	private static inline function moduleSimpleName(module: String): String {
+		final dot: Int = module.lastIndexOf('.');
+		return dot < 0 ? module : module.substr(dot + 1);
+	}
+
 	/**
 	 * Whether a supertype reference is `Dynamic`. `implements Dynamic<T>` marks dynamic FIELD
 	 * ACCESS and declares no NAMED member, so it can never be the inherited `_x` a rename would
@@ -2263,6 +2274,25 @@ final class SymbolIndex {
 	private static inline function dynamicSupertypeRef(raw: String): Bool {
 		final dot: Int = raw.lastIndexOf('.');
 		return (dot < 0 ? raw : raw.substr(dot + 1)) == 'Dynamic';
+	}
+
+	/**
+	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
+	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
+	 * name needs, so `simpleRefInScope` cannot stand in for it. Compiled on 4.3.7: same package
+	 * resolves and `import pkg.*;` resolves, while BOTH `import pkg.Mod;` and `using pkg.Mod;`
+	 * fail with `Type not found : Mod` — a module import puts the module's TYPES in simple-name
+	 * scope, but the qualifier of `Mod.Sub` is read as a module PATH, which only the package
+	 * itself or a wildcard over it supplies.
+	 *
+	 * A ROOT-package module needs no arm: its own import path already IS `Mod.Sub`, so the
+	 * root-relative match in `resolveQualifiedRefAll` answers it and the fallback never runs.
+	 */
+	private static function moduleRefInScope(fromFile: FileInfo, fi: FileInfo): Bool {
+		if (fi.pkg == fromFile.pkg) return true;
+		final wild: String = '${fi.pkg}.*';
+		for (imp in fromFile.imports) if (imp.kind == ImportKind.Wild && imp.raw == wild) return true;
+		return false;
 	}
 
 	/** Whether `text` names any of `params` as a WHOLE identifier token — `Item` does not mention `T`, `Array<T>` does. */
@@ -2294,37 +2324,6 @@ final class SymbolIndex {
 			found = true;
 		}
 		return found;
-	}
-
-	/**
-	 * Whether EVERY supertype reference of `typeName`, transitively, names a declaration this
-	 * index holds. `supertypeDeclaresMember` answers `false` both when no ancestor declares the
-	 * member and when an ancestor is not indexed at all, and only the FIRST reading is a proof —
-	 * a consumer that must prove the ABSENCE of an inherited member (an expected-type rewrite,
-	 * which a shadowing field silently redirects) has to ask this too. Walks the same simple-name
-	 * hops `supertypeDeclares` walks, so the two agree about which links exist; `supertypes`
-	 * carries `implements` targets as well as `extends`, so an unindexed interface refuses
-	 * too — and so does a `typeName` the index holds no declaration for at all, the same absence one
-	 * hop earlier.
-	 */
-	public function supertypeChainResolved(typeName: String): Bool {
-		return supertypeChainWalk(typeName, []);
-	}
-
-	/**
-	 * `supertypeChainResolved`'s cycle-guarded recursion. A name the index holds NO declaration for
-	 * answers false — that is the whole question, and answering it here is what lets the recursive
-	 * call stand alone where the caller used to test the next hop itself. A name already visited
-	 * answers true: whatever made it unresolvable was reported by the visit that pushed it, and a
-	 * false short-circuits the entire walk, so no later `seen` hit can mask one.
-	 */
-	private function supertypeChainWalk(typeName: String, seen: Array<String>): Bool {
-		if (seen.contains(typeName)) return true;
-		seen.push(typeName);
-		final decls: Array<TypeDeclInfo> = declsNamed(typeName);
-		if (decls.length == 0) return false;
-		for (t in decls) for (sup in t.supertypes) if (!supertypeChainWalk(sup, seen)) return false;
-		return true;
 	}
 
 }

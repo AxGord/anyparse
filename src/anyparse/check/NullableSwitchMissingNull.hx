@@ -276,8 +276,12 @@ final class NullableSwitchMissingNull implements Check {
 	private static function unwrapNullable(declared: String, s: Seams): String {
 		final trimmed: String = declared.trim();
 		final open: Int = trimmed.indexOf('<');
-		if (open <= 0 || !trimmed.endsWith('>')) return trimmed;
-		return s.nullMarkers.contains(trimmed.substring(0, open)) ? trimmed.substring(open + 1, trimmed.length - 1).trim() : trimmed;
+		return if (open <= 0 || !trimmed.endsWith('>'))
+			trimmed
+		else if (s.nullMarkers.contains(trimmed.substring(0, open)))
+			trimmed.substring(open + 1, trimmed.length - 1).trim()
+		else
+			trimmed;
 	}
 
 

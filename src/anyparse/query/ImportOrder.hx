@@ -179,6 +179,21 @@ final class ImportOrder {
 	}
 
 	/**
+	 * Every PLAIN `import` statement of `root`'s top level as a slot, in source order — the block
+	 * shape `runsOf` and `insertOffset` read. A statement the grammar recorded no span for carries
+	 * negative offsets: it cannot be placed on a line, so it ENDS the run it sits in rather than
+	 * joining it — the run around a line the machinery cannot see must not be read as one block.
+	 */
+	public static inline function slotsOf(root: QueryNode): Array<ImportSlot> {
+		return slotsOfKind(root, 'ImportDecl');
+	}
+
+	/** The paths of `run`, in run order — the list every order question is asked about. */
+	public static inline function pathsOf(run: Array<ImportLine>): Array<String> {
+		return [for (line in run) line.path];
+	}
+
+	/**
 	 * Where a fresh `import <path>;` LINE belongs in `root` — the whole answer, slot and fallbacks,
 	 * for every caller that inserts one (`AddImport`, `TypeRefPrinter`'s materialisers, `MoveSymbol`'s
 	 * reference-carrying moves). `path` is omitted by a caller with nothing to place, which asks only
@@ -222,21 +237,6 @@ final class ImportOrder {
 		// The one anchor that is not a line start: nothing follows the header, so the fresh line
 		// brings its own separator instead.
 		return newline < 0 ? { offset: source.length, lead: '\n', order: -1 } : { offset: newline + 1, lead: '', order: -1 };
-	}
-
-	/**
-	 * Every PLAIN `import` statement of `root`'s top level as a slot, in source order — the block
-	 * shape `runsOf` and `insertOffset` read. A statement the grammar recorded no span for carries
-	 * negative offsets: it cannot be placed on a line, so it ENDS the run it sits in rather than
-	 * joining it — the run around a line the machinery cannot see must not be read as one block.
-	 */
-	public static inline function slotsOf(root: QueryNode): Array<ImportSlot> {
-		return slotsOfKind(root, 'ImportDecl');
-	}
-
-	/** The paths of `run`, in run order — the list every order question is asked about. */
-	public static inline function pathsOf(run: Array<ImportLine>): Array<String> {
-		return [for (line in run) line.path];
 	}
 
 	/**

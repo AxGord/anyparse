@@ -39,7 +39,12 @@ class ApqAstIntegrationTest extends Test {
 		}
 		final paths: Array<String> = [];
 		collectHxFiles(SRC_ROOT, paths);
-		paths.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		paths.sort((a: String, b: String) -> if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0);
 
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final probeSelector: Selector = Selector.parse('ClassDecl');

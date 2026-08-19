@@ -224,7 +224,8 @@ class RedundantThisCheckTest extends Test {
 			{ file: 'b/Widget.hx', source: 'package b; class Widget {}' },
 			{
 				file: 'pr/S.hx',
-				source: 'package pr; import b.Widget; using Type; class S extends Widget { function m():Class<Dynamic> { return this.getClass(); } }'
+				source: 'package pr; import b.Widget; using Type; class S extends Widget { function m():Class<Dynamic> {'
+				+ ' return this.getClass(); } }'
 			}
 		], new HaxeQueryPlugin());
 		Assert.equals(0, vs.length);
@@ -265,7 +266,8 @@ class RedundantThisCheckTest extends Test {
 			{ file: 'b/Widget.hx', source: 'package b; class Widget {}' },
 			{
 				file: 's/S.hx',
-				source: 'package s; import a.*; import b.*; using Type; class S extends Widget { function m():Class<Dynamic> { return this.getClass(); } }'
+				source: 'package s; import a.*; import b.*; using Type; class S extends Widget { function m():Class<Dynamic> {'
+				+ ' return this.getClass(); } }'
 			}
 		], new HaxeQueryPlugin());
 		Assert.equals(0, vs.length);

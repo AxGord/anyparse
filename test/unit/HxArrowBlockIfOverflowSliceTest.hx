@@ -27,8 +27,10 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxArrowBlockIfOverflowSliceTest extends Test {
 
-	private static final CFG: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
+		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= '
+		+ 'n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();
@@ -41,10 +43,12 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 	 */
 	public function testOverflowingBlockIfBreaksAfterArrow(): Void {
 		final src: String = 'class M {\n\tfunction f() {\n'
-			+ '\t\towner?.forEachEntry(entryUser -> if (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) -> u.id == entryUser.id)) {\n'
-			+ '\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}';
+			+ '\t\towner?.forEachEntry(entryUser -> if (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) '
+			+ '-> u.id == entryUser.id)) {\n\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}';
 		Assert.equals(
-			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser ->\n\t\t\tif (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) -> u.id == entryUser.id)) {\n\t\t\t\tfillMissingTag(entryUser);\n\t\t\t\tbucket.push(entryUser);\n\t\t\t}\n\t\t);\n\t}\n}',
+			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser ->\n'
+			+ '\t\t\tif (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) -> u.id == entryUser.id)) {\n'
+			+ '\t\t\t\tfillMissingTag(entryUser);\n\t\t\t\tbucket.push(entryUser);\n\t\t\t}\n\t\t);\n\t}\n}',
 			triviaWrite(src)
 		);
 	}
@@ -54,7 +58,8 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 		final src: String = 'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser -> if (entryUser.id != 0) {\n'
 			+ '\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}';
 		Assert.equals(
-			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser -> if (entryUser.id != 0) {\n\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}',
+			'class M {\n\tfunction f() {\n\t\towner?.forEachEntry(entryUser -> if (entryUser.id != 0) {\n'
+			+ '\t\t\tfillMissingTag(entryUser);\n\t\t\tbucket.push(entryUser);\n\t\t});\n\t}\n}',
 			triviaWrite(src)
 		);
 	}
@@ -65,11 +70,11 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 	 * nothing (the population `Renderer.selfBreakingBraceBody` already owns).
 	 */
 	public function testOverflowingBraceBodyStaysGlued(): Void {
-		final src: String = 'class M {\n\tfunction f() {\n'
-			+ '\t\towner?.forEachEntryWithPendingBatchAndLostShareBucket(entryUserRecordValue -> {\n'
-			+ '\t\t\tfillMissingTag(entryUserRecordValue);\n\t\t\tbucket.push(entryUserRecordValue);\n\t\t});\n\t}\n}';
+		final src: String = 'class M {\n\tfunction f() {\n\t\towner?.forEachEntryWithPendingBatchAndLostShareBucket(entryUserRecordValue '
+			+ '-> {\n\t\t\tfillMissingTag(entryUserRecordValue);\n\t\t\tbucket.push(entryUserRecordValue);\n\t\t});\n\t}\n}';
 		Assert.equals(
-			'class M {\n\tfunction f() {\n\t\towner?.forEachEntryWithPendingBatchAndLostShareBucket(entryUserRecordValue -> {\n\t\t\tfillMissingTag(entryUserRecordValue);\n\t\t\tbucket.push(entryUserRecordValue);\n\t\t});\n\t}\n}',
+			'class M {\n\tfunction f() {\n\t\towner?.forEachEntryWithPendingBatchAndLostShareBucket(entryUserRecordValue -> {\n'
+			+ '\t\t\tfillMissingTag(entryUserRecordValue);\n\t\t\tbucket.push(entryUserRecordValue);\n\t\t});\n\t}\n}',
 			triviaWrite(src)
 		);
 	}

@@ -43,7 +43,8 @@ class ComplexityCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction edge(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}'
+				'class C {\n\tfunction edge(a:Bool):Bool {\n'
+				+ '\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}'
 			).length
 		);
 	}
@@ -52,12 +53,10 @@ class ComplexityCheckTest extends Test {
 		// if/while/for/switch/catch/ternary/?? plus a long && chain — over the threshold
 		// (score 21: the switch counts once now, not once per case).
 		final src: String = 'class C {\n\tfunction mixed(a:Int):Int {\n\t\tif (a > 0) return 1;\n\t\tif (a > 1) return 2;\n'
-			+ '\t\twhile (a > 2) a--;\n\t\tfor (i in 0...a) trace(i);\n'
-			+ '\t\tswitch a { case 1: trace(1); case 2: trace(2); case 3: trace(3); case _: trace(0); }\n'
-			+ '\t\ttry { throw "x"; } catch (e:String) {} catch (e:Int) {}\n\t\tfinal t = a > 0 ? 1 : 2;\n'
-			+ '\t\tfinal n = (null : Null<Int>) ?? 0;\n'
-			+ '\t\tfinal b = a < 0 && a < 1 && a < 2 && a < 3 && a < 4 && a < 5 && a < 6 && a < 7 && a < 8 && a < 9 && a < 10;\n'
-			+ '\t\treturn b ? t + n : 0;\n\t}\n}';
+			+ '\t\twhile (a > 2) a--;\n\t\tfor (i in 0...a) trace(i);\n\t\tswitch a { case 1: trace(1); case 2: trace(2); case 3: '
+			+ 'trace(3); case _: trace(0); }\n\t\ttry { throw "x"; } catch (e:String) {} catch (e:Int) {}\n'
+			+ '\t\tfinal t = a > 0 ? 1 : 2;\n\t\tfinal n = (null : Null<Int>) ?? 0;\n\t\tfinal b = a < 0 && a < 1 && a < 2 && a < '
+			+ '3 && a < 4 && a < 5 && a < 6 && a < 7 && a < 8 && a < 9 && a < 10;\n\t\treturn b ? t + n : 0;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'mixed'"));
@@ -68,9 +67,8 @@ class ComplexityCheckTest extends Test {
 		// `outer` (score 21), so a block cannot be hidden from the metric by being
 		// wrapped in a local function. `inner` is not reported on its own.
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n'
-			+ '\t\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n'
-			+ '\t\tinner(true);\n\t}\n}'
+			'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n\t\t\treturn a && a && a && a && a && a && a && a '
+			+ '&& a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n\t\tinner(true);\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'outer'"));
@@ -79,9 +77,8 @@ class ComplexityCheckTest extends Test {
 	public function testLambdaFoldsIntoEnclosing(): Void {
 		// The lambda's 20 `&&` count toward `withLambda` (lambdas are not function units).
 		final vs: Array<Violation> = violations(
-			'class C {\n\tfunction withLambda():Bool {\n'
-			+ '\t\tfinal g = (a:Bool) -> a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n'
-			+ '\t\treturn g(true);\n\t}\n}'
+			'class C {\n\tfunction withLambda():Bool {\n\t\tfinal g = (a:Bool) -> a && a && a && a && a && a && a && a && a && a && a && '
+			+ 'a && a && a && a && a && a && a && a && a && a;\n\t\treturn g(true);\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'withLambda'"));
@@ -109,7 +106,8 @@ class ComplexityCheckTest extends Test {
 		Assert.equals(
 			19,
 			CheckstyleConfigLoader.loadComplexityMax(
-				'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":20},{"severity":"ERROR","complexity":25}]}}]}'
+				'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":20},{'
+				+ '"severity":"ERROR","complexity":25}]}}]}'
 			)
 		);
 	}
@@ -137,7 +135,8 @@ class ComplexityCheckTest extends Test {
 		Assert.equals(
 			7,
 			CheckstyleConfigLoader.loadComplexityMax(
-				'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"IGNORE","complexity":3},{"severity":"WARNING","complexity":8}]}}]}'
+				'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"IGNORE","complexity":3},{'
+				+ '"severity":"WARNING","complexity":8}]}}]}'
 			)
 		);
 	}

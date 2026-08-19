@@ -149,7 +149,7 @@ class ApqMetaTest extends Test {
 	}
 
 	private static function describe(hits: Array<MetaHit>): String {
-		return '[' + hits.map(h -> '${h.annotation}(${h.args.join('|')})@${h.declKind}:${h.declName ?? '?'}').join(', ') + ']';
+		return '[${hits.map(h -> '${h.annotation}(${h.args.join('|')})@${h.declKind}:${h.declName ?? '?'}').join(', ')}]';
 	}
 
 }

@@ -19,8 +19,8 @@ import anyparse.check.Linter;
 class PreferTryExpressionAssignmentCheckTest extends Test {
 
 	private static final DECL_PAIR: String = 'class C {\n\tfunction f(nameText:String, argList:Array<String>):Void {\n'
-		+ '\t\tvar p:Runner = null;\n'
-		+ '\t\ttry {\n\t\t\tp = new Runner(nameText, argList);\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n' + '\t}\n}';
+		+ '\t\tvar p:Runner = null;\n\t\ttry {\n\t\t\tp = new Runner(nameText, argList);\n'
+		+ '\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}';
 	private static final STANDALONE: String =
 		'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}';
 
@@ -34,7 +34,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():String {\n\t\tvar msg:String = \'init\';\n\t\ttry {\n\t\t\tmsg = build();\n\t\t} catch (msg:String) {\n\t\t\tmsg = \'err\';\n\t\t}\n\t\treturn msg;\n\t}\n}'
+				'class C {\n\tfunction f():String {\n\t\tvar msg:String = \'init\';\n\t\ttry {\n\t\t\tmsg = build();\n'
+				+ '\t\t} catch (msg:String) {\n\t\t\tmsg = \'err\';\n\t\t}\n\t\treturn msg;\n\t}\n}'
 			).length
 		);
 	}
@@ -59,7 +60,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) // why\n\t\t{\n\t\t\tp = null;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) // why\n\t\t{\n'
+				+ '\t\t\tp = null;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -182,7 +184,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\thost().runner = build();\n\t\t} catch (msg:String) {\n\t\t\thost().runner = null;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\thost().runner = build();\n\t\t} catch (msg:String) {\n'
+				+ '\t\t\thost().runner = null;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -238,7 +241,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\tvar p:Int = 0;\n\t\ttry {\n\t\t\tp += build();\n\t\t} catch (msg:String) {\n\t\t\tp += 1;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\tvar p:Int = 0;\n\t\ttry {\n\t\t\tp += build();\n\t\t} catch (msg:String) {\n'
+				+ '\t\t\tp += 1;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -247,7 +251,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tq = null;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tq = null;\n\t\t}\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -262,7 +267,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tthrow msg;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tthrow msg;\n\t\t}\n'
+				+ '\t}\n}'
 			).length
 		);
 	}
@@ -276,7 +282,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t\tlog(msg);\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n'
+				+ '\t\t\tlog(msg);\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -286,7 +293,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\t/* build it */\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\t/* build it */\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n'
+				+ '\t\t\tp = null;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}
@@ -296,7 +304,8 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build(/* raw */ text);\n\t\t} catch (msg:String) {\n\t\t\tp = null;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp = build(/* raw */ text);\n\t\t} catch (msg:String) {\n'
+				+ '\t\t\tp = null;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}

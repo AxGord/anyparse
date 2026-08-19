@@ -127,7 +127,8 @@ class RedundantCastTypeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Foo {} class C { function f<A:{ function n():Void; }, B:Foo>() { return cast(mk(), Foo); } function mk():Dynamic return null; }'
+				'class Foo {} class C { function f<A:{ function n():Void; }, B:Foo>() { return cast(mk(), Foo); } '
+				+ 'function mk():Dynamic return null; }'
 			).length
 		);
 	}
@@ -136,7 +137,8 @@ class RedundantCastTypeCheckTest extends Test {
 		Assert.equals(
 			1,
 			violations(
-				'class Foo {} class C { function f<A:{ function n():Void; }, B:Foo>():Foo { return cast(mk(), Foo); } function mk():Dynamic return null; }'
+				'class Foo {} class C { function f<A:{ function n():Void; }, B:Foo>():Foo { return cast(mk(), Foo); } '
+				+ 'function mk():Dynamic return null; }'
 			).length
 		);
 	}
@@ -166,7 +168,8 @@ class RedundantCastTypeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Foo {} class C { function f():Foo { inline function h() untyped { return cast(mk(), Foo); } return h(); } function mk():Dynamic return null; }'
+				'class Foo {} class C { function f():Foo { inline function h() untyped { return cast(mk(), Foo); } return h(); } '
+				+ 'function mk():Dynamic return null; }'
 			).length
 		);
 	}
@@ -218,7 +221,8 @@ class RedundantCastTypeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Foo {} class C { function f():Foo { inline function h() { return cast(mk(), Foo); } return h(); } function mk():Dynamic return null; }'
+				'class Foo {} class C { function f():Foo { inline function h() { return cast(mk(), Foo); } return h(); } '
+				+ 'function mk():Dynamic return null; }'
 			).length
 		);
 	}
@@ -228,7 +232,8 @@ class RedundantCastTypeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class Foo {} class C { function f():Foo { final g = function h2() { return cast(mk(), Foo); }; return g(); } function mk():Dynamic return null; }'
+				'class Foo {} class C { function f():Foo { final g = function h2() { return cast(mk(), Foo); }; return g(); } '
+				+ 'function mk():Dynamic return null; }'
 			).length
 		);
 	}

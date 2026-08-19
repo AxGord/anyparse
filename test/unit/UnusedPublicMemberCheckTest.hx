@@ -336,7 +336,8 @@ import utest.Test;
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\t#if cpp\n\tpublic function used():Void {}\n\t#end\n\t#if cpp\n\tpublic function go():Void {\n\t\tused();\n\t}\n\t#end\n}'
+				'class C {\n\t#if cpp\n\tpublic function used():Void {}\n\t#end\n\t#if cpp\n\tpublic function go():Void {\n\t\tused();\n'
+				+ '\t}\n\t#end\n}'
 			).filter(v -> v.message.indexOf('public used') >= 0).length
 		);
 	}
