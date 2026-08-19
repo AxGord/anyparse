@@ -77,12 +77,14 @@ class FieldInitInConstructorCheckTest extends Test {
 		Assert.equals(-1, out.indexOf('if ('));
 	}
 
+	/**
+	 * The else branch writes a DIFFERENT field on purpose: with a second write of the same one the
+	 * whole-file write scan would refuse the site first, and the fixture would pass with the else gate
+	 * ripped out - proving nothing. Here the gate is the only thing standing between the fold and an
+	 * edit that replaces the whole if statement, silently deleting the else branch with it.
+	 */
 	public function testElseBranchRefused(): Void {
-		Assert.equals(
-			0,
-			violations(wrap('\tprivate var _cellsX:Int = 20;', '\t\tif (palette != null) _cellsX = palette.length;\n\t\telse _cellsX = 4;'))
-				.length
-		);
+		Assert.equals(0, violations(wrap(FIELDS, '\t\tif (palette != null) _cellsX = palette.length;\n\t\telse _cellsY = 4;')).length);
 	}
 
 	public function testImpureConditionRefusedWhenTheIfSurvives(): Void {
