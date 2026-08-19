@@ -17,6 +17,15 @@ import anyparse.runtime.Span;
  * already-negated condition drops its `!` instead of gaining a second one. The GUARDED
  * variant is deliberately NOT claimed (negating the guard is what would lose a null
  * narrowing), and so are the `exists` direction and every shape gate the twin refuses.
+ *
+ * ## The FLAG form
+ *
+ * The second sink, in this direction's polarity: `var f:Bool = true;` immediately followed
+ * by `for (x in xs) if (cond) f = false;`, folding to
+ * `final f:Bool = xs.foreach(x -> !(cond));` — with the same `!`-dropping relief the
+ * `return` form gets. `Lambda.foreach` short-circuits on the first `false` exactly as
+ * `exists` does on the first `true`, so the PURITY gate is load-bearing here too and gets
+ * its own refusal fixture.
  */
 class PreferForeachCheckTest extends Test {
 
@@ -163,10 +172,62 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(1, violations(existsMemberFn('for (x in m) if (x > 2) return false;\n\t\treturn true;')).length);
 	}
 
+	public function testFlagFormFlagged(): Void {
+		// The rule id and severity ride on the shared violation builder, which `testBareFormFlagged`
+		// already pins — what is this arm's own is the SINK the message names.
+		final vs: Array<Violation> = violations(flagFn('var all:Bool = true;\n\t\tfor (b in bs) if (!b) all = false;\n\t\treturn all;'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('final all = bs.foreach(b -> b)') != -1, vs[0].message);
+	}
+
+	public function testFlagFormWrapsAnUnnegatedCondition(): Void {
+		final vs: Array<Violation> = violations(flagFn('var all:Bool = true;\n\t\tfor (x in xs) if (x > 2) all = false;\n\t\treturn all;'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('final all = xs.foreach(x -> !(x > 2))') != -1, vs[0].message);
+	}
+
+	public function testFlagFormEffectfulConditionNotFlagged(): Void {
+		// ★ `Lambda.foreach` stops at the first `false` where the loop visits every element, so a
+		// condition that DOES work cannot be folded — the same gate the twin direction carries.
+		Assert.equals(0, violations(flagFn('var all:Bool = true;\n\t\tfor (x in xs) if (!keep(x)) all = false;\n\t\treturn all;')).length);
+	}
+
+	public function testFlagFormGuardReadingTheFlagNotClaimed(): Void {
+		// The measured corpus shape (`if (ordered) for (…) if (mismatch) ordered = false;`): the
+		// statement after the declaration is the guard, not the loop, so the pair is not this shape.
+		Assert.equals(
+			0, violations(flagFn('var all:Bool = true;\n\t\tif (all) for (b in bs) if (!b) all = false;\n\t\treturn all;')).length
+		);
+	}
+
+	public function testFlagFormInitializerMatchingTheLoopLiteralNotFlagged(): Void {
+		// The loop's literal is this direction's, but the declaration already opens at it — the loop
+		// can never change the value, so the fold would not be an identity.
+		Assert.equals(0, violations(flagFn('var all:Bool = false;\n\t\tfor (b in bs) if (!b) all = false;\n\t\treturn all;')).length);
+	}
+
+	public function testExistsDirectionFlagFormNotClaimed(): Void {
+		Assert.equals(0, violations(flagFn('var all:Bool = false;\n\t\tfor (x in xs) if (x > 2) all = true;\n\t\treturn all;')).length);
+	}
+
+	public function testFlagFormFixFoldsDeclarationAndLoop(): Void {
+		final out: String = fixResult(
+			'package p;\n\nusing Lambda;\n\n' + flagFn('var all:Bool = true;\n\t\tfor (b in bs) if (!b) all = false;\n\t\treturn all;')
+		);
+		Assert.isTrue(out.indexOf('final all:Bool = bs.foreach(b -> b);') != -1, out);
+		Assert.equals(-1, out.indexOf('for (b in bs)'));
+	}
+
 	/** A receiver whose OWN type declares `foreach` — the name this direction rewrites to. */
 	private function memberFn(body: String): String {
 		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function foreach(key:Int):Bool {\n'
 			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
+	/** The FLAG form's fixture: `bs` carries the already-negated condition, `keep` the effectful one. */
+	private function flagFn(body: String): String {
+		return 'class C {\n\tfunction f(xs:Array<Int>, bs:Array<Bool>, a:Bool):Bool {\n\t\t$body\n\t}\n\n'
+			+ '\tfunction keep(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}';
 	}
 
 	/** A receiver declaring the TWIN direction's name and not this one — the gate must not fire. */

@@ -445,8 +445,7 @@ final class StdlibDifferential {
 	/** Whether every candidate parameter reaches at least one slot -- a mapping that drops one is a different function. */
 	private static function coversEveryParameter(candidate: StdlibCandidate, chosen: Array<Argument>): Bool {
 		for (param in candidate.params) {
-			var used: Bool = false;
-			for (argument in chosen) if (argument.param == param.name) used = true;
+			final used: Bool = chosen.exists(argument -> argument.param == param.name);
 			if (!used) return false;
 		}
 		return true;

@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.Violation;
+import anyparse.check.LoopScan.LoopSeams;
+import anyparse.check.PurityScan.PurityCtx;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
@@ -17,8 +19,8 @@ using StringTools;
 
 /**
  * The shape engine behind the twin checks `prefer-exists` and `prefer-foreach`: a `for` loop
- * whose whole body is one `if` returning a boolean LITERAL, immediately followed by a `return`
- * of the OPPOSITE literal — the hand-written spelling of `Lambda.exists` / `Lambda.foreach`.
+ * whose whole body is one `if` writing a boolean LITERAL to a SINK, paired with the OPPOSITE
+ * literal at the same sink — the hand-written spelling of `Lambda.exists` / `Lambda.foreach`.
  *
  * ## The two directions, and why one engine
  *
@@ -29,6 +31,49 @@ using StringTools;
  * `BoolLoopKind` serves both; the two `Check` faces differ only in their id, their method name
  * and how they treat the condition. The directions can never both claim one site: the loop's
  * literal decides, and it is `true` for exactly one of them.
+ *
+ * ## The two SINKS, and why the flag form needs a gate the return form does not
+ *
+ * The literal can be RETURNED, or it can be written to a boolean FLAG declared just above:
+ *
+ * ```
+ * var f:Bool = false;
+ * for (x in xs) if (c) f = true;      ->  final f:Bool = xs.exists(x -> c);
+ * ```
+ *
+ * Stating the contract as the return form made the flag form invisible, and it is the form the
+ * measured application actually writes — eleven sites against the return form's own count. The
+ * `var` becomes `final`: after the fold the binding is written exactly once, at its declaration.
+ *
+ * The two sinks are NOT interchangeable, and the difference is the whole reason this arm carries
+ * a purity gate. A `return` LEAVES the loop at the first match, so folding it onto a
+ * short-circuiting `Lambda.exists` changes nothing at all. A flag assignment does not: the loop
+ * runs to the end and evaluates the condition once per element, where `exists` stops at the first
+ * `true` (and `foreach` at the first `false`). Everything the condition DOES for the remaining
+ * elements would silently stop happening.
+ *
+ * That is not hypothetical. Of the eleven flag-form sites measured over a ~800-file application,
+ * FIVE have a condition that is a call doing the work the loop exists for — `addItem(item, false)`,
+ * `itemData.removeLocks(removeList)`, `locks.remove(rm)`, `addSessionToLock(…)`,
+ * `removeSessionFromLock(…)`. Each records whether ANY call succeeded while calling on every
+ * element. Without the gate the rule corrupts all five; with it, one site converts.
+ *
+ * Purity is `PurityScan.isPure` — the project's standing answer, shared with
+ * `extract-repeated-expression`, `unnecessary-switch` and `join-array-pushes`: safe skeleton
+ * kinds, a field or index READ whose resolvable first hop is not a property getter, and a
+ * provably-pure stdlib static. Every other call is impure. `RefactorSupport.isSideEffectFree`
+ * would have been the cheaper reach — and the wrong question: it refuses a field access outright,
+ * which is exactly what the one CONVERTIBLE site's condition is (`child.nodeType == CData`), so
+ * it would have refused all eleven and shipped nothing. When purity cannot be answered at all
+ * (no symbol index, or a grammar carrying no type information) the arm refuses, which is the
+ * report-only degradation the whole rule family defaults to.
+ *
+ * The GUARDED flag form (`var f = false; if (g) for … f = true;`) is not claimed: the statement
+ * after the declaration must BE the loop. Every guarded flag site measured fails the purity gate
+ * as well, so claiming it would buy nothing and would owe the `&&`/`||` merge reasoning a second
+ * time. Neither is a GAP between the declaration and the loop, which `prefer-comprehension` needs
+ * and this arm does not — both convertible sites are strictly adjacent, and the two non-adjacent
+ * ones are effectful.
  *
  * ## The guarded form (`exists` only)
  *
@@ -71,6 +116,24 @@ using StringTools;
  *   chain reorders the operands a null narrowing depends on. The one exception costs nothing:
  *   a condition that is ALREADY a `!` drops it instead of gaining a second.
  *
+ * ## Soundness gates the FLAG form adds
+ *
+ * - The condition is PURE (`PurityScan.isPure`) — see above; this is the one that matters.
+ * - The declaration is a single-variable MUTABLE local (`mutableLocalDeclKinds`, so a `final` is
+ *   not one) whose initializer is a boolean literal, and that literal is the OPPOSITE of the one
+ *   the loop assigns. A matching pair is not this shape (the loop could never change the value),
+ *   and a non-literal initializer is a different program.
+ * - The loop is the declaration's IMMEDIATE next sibling in the same statement list, so nothing
+ *   can read or write the flag in between and the two-statement region the edit replaces is
+ *   contiguous.
+ * - The loop body's `if` then-branch is exactly `<the flag> = <literal>;`. That is what makes the
+ *   `break` / `continue` / `return` refusal structural rather than a written gate: a single
+ *   assignment statement cannot be one, and a body holding anything more fails the shape.
+ * - The loop's assignment is the flag's ONLY write anywhere in the enclosing statement list
+ *   (`LoopScan.countWrites`). The fold emits `final`, which a later write would not compile
+ *   against — and a flag written again is not the shape this fold describes either.
+ * - The declaration's written annotation is carried over verbatim, and an absent one stays absent.
+ *
  * ## Grammar-agnostic
  *
  * Driven by `forStmtKind`, `returnStatementKind`, `blockStmtKind`, `boolLitKind`,
@@ -79,6 +142,10 @@ using StringTools;
  * relief. The boolean literal's VALUE is read from its source text (`true` / `false`); a
  * grammar spelling it otherwise yields neither value and the site is skipped rather than
  * misread.
+ *
+ * The FLAG arm needs three more — `assignKind`, `exprStatementKind`, `mutableLocalDeclKinds` —
+ * plus `LoopScan.seamsOf`, whose scans it reuses rather than restating. Any of them unset turns
+ * that arm off while the RETURN arm keeps working: an unset seam costs REACH, never soundness.
  */
 @:nullSafety(Strict)
 final class BoolLoopScan {
@@ -88,6 +155,15 @@ final class BoolLoopScan {
 
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
+
+	/** An assignment node has exactly [target, value] children. */
+	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
+
+	/** The flag's ONE write: the loop's own assignment, and nothing else in the enclosing statement list. */
+	private static inline final FLAG_WRITES: Int = 1;
+
+	/** The keyword the folded declaration is emitted with — after the fold the binding is written once. */
+	private static inline final FINAL_KEYWORD: String = 'final';
 
 	/** Cap on an excerpt's length in the suggestion message. */
 	private static inline final EXCERPT_MAX: Int = 40;
@@ -145,7 +221,7 @@ final class BoolLoopScan {
 			if (tree == null) continue;
 			final source: String = entry.source;
 			final file: String = entry.file;
-			scan(tree, null, source, s, kind, lazyTypeProbe(source, plugin, tree, file, index, method(kind)), cand -> {
+			scan(tree, null, source, s, kind, lazyProbes(source, plugin, tree, file, index, method(kind)), cand -> {
 				final v: Null<Violation> = buildViolation(cand, source, s, kind, ruleId, file);
 				if (v != null) out.push(v);
 			});
@@ -177,7 +253,7 @@ final class BoolLoopScan {
 		// The same file the violations name, so the CALL-iterable proof resolves imports from
 		// where the loop is written — the report pass proved it against exactly that context.
 		final file: String = violations.length == 0 ? '' : violations[0].file;
-		final probe: TypeProbe = lazyTypeProbe(
+		final probe: Probes = lazyProbes(
 			source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index), method(kind)
 		);
 		final byKey: Map<String, Cand> = [];
@@ -232,6 +308,12 @@ final class BoolLoopScan {
 			opaqueKinds: shape.opaqueKinds ?? [],
 			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
 			andLowerPrecedenceKinds: shape.andLowerPrecedenceKinds ?? [],
+			// The FLAG arm's own seams. An absent one turns that arm off and leaves the RETURN arm
+			// intact, which is why they are read here rather than joining the null check above.
+			mutableDeclKinds: shape.mutableLocalDeclKinds ?? [],
+			loopSeams: LoopScan.seamsOf(shape),
+			assignKind: shape.assignKind,
+			exprStmtKind: shape.exprStatementKind,
 			identKind: shape.identKind,
 			notKind: shape.notKind,
 			intervalKind: shape.intervalKind,
@@ -261,7 +343,7 @@ final class BoolLoopScan {
 	 *   conditional-compilation region's flattened branches are not a statement list at all.
 	 */
 	private static function scan(
-		node: QueryNode, succ: Null<QueryNode>, source: String, s: Seams, kind: BoolLoopKind, probe: TypeProbe, emit: (Cand) -> Void
+		node: QueryNode, succ: Null<QueryNode>, source: String, s: Seams, kind: BoolLoopKind, probe: Probes, emit: (Cand) -> Void
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
@@ -286,6 +368,14 @@ final class BoolLoopScan {
 				if (cand != null) {
 					emit(cand);
 					inner = null;
+				} else if (i < kids.length - 1) {
+					// The FLAG pairing reads the same two slots in the OPPOSITE roles — declaration
+					// then loop, where the return form has loop then return — so the two can never
+					// claim one pair: a node is either a declaration or a loop. Trying it only where
+					// the return form declined keeps that true by construction rather than by a
+					// disjointness argument nothing tests.
+					final flagged: Null<Cand> = flagCandidateAt(kids[i], kids[i + 1], node, source, s, kind, probe);
+					if (flagged != null) emit(flagged);
 				}
 			}
 			scan(kids[i], inner, source, s, kind, probe, emit);
@@ -302,7 +392,7 @@ final class BoolLoopScan {
 	 * branches and other paths still run into it, so only the loop is replaced.
 	 */
 	private static function candidateAt(
-		a: QueryNode, b: Null<QueryNode>, adjacent: Bool, source: String, s: Seams, kind: BoolLoopKind, probe: TypeProbe
+		a: QueryNode, b: Null<QueryNode>, adjacent: Bool, source: String, s: Seams, kind: BoolLoopKind, probe: Probes
 	): Null<Cand> {
 		if (b == null) return null;
 		final trailing: Null<QueryNode> = boolReturnLiteral(b, s);
@@ -318,7 +408,8 @@ final class BoolLoopScan {
 			trailing: b,
 			guard: null,
 			head: bare,
-			subsumesTrailing: adjacent
+			subsumesTrailing: adjacent,
+			flag: null
 		};
 		// The guarded form merges the guard with `&&`, which only reads as the original for the
 		// `exists` direction — see the type doc for why the `foreach` mirror is refused outright.
@@ -330,8 +421,105 @@ final class BoolLoopScan {
 			trailing: b,
 			guard: a.children[0],
 			head: guarded,
-			subsumesTrailing: adjacent
+			subsumesTrailing: adjacent,
+			flag: null
 		};
+	}
+
+	/**
+	 * The FLAG-form pair `decl` / `loop` inside `scope`, or null when they are not it: a
+	 * single-variable MUTABLE local opening at a boolean literal, immediately followed by a loop
+	 * whose whole body writes the OPPOSITE literal to that same name.
+	 *
+	 * The gates in order, cheapest first, and each one a fixture:
+	 *
+	 * - the declaration is a `mutableDeclKinds` single declarator (a `final` cannot be the loop's
+	 *   target at all, and a multi-declarator `var a = false, b = 0;` is not one statement to fold);
+	 * - its initializer is a boolean literal OPPOSITE to the one this direction's loop writes —
+	 *   `false` before `f = true` for `exists`, `true` before `f = false` for `foreach`;
+	 * - the loop destructures with the FLAG sink, which also proves the assignment targets this
+	 *   name and is the body's only statement;
+	 * - the condition is PURE. The loop visits every element and the emitted call does not, so
+	 *   anything the condition DOES would stop happening for the tail of the collection — the
+	 *   measured application has five such sites and this is what refuses them;
+	 * - the loop's assignment is the flag's only write in `scope`, which is what licenses `final`.
+	 *
+	 * `scope` is the statement list holding the pair, i.e. exactly the region a block-scoped local
+	 * is visible in — so a write anywhere it could reach is a write this counts.
+	 */
+	private static function flagCandidateAt(
+		decl: QueryNode, loop: QueryNode, scope: QueryNode, source: String, s: Seams, kind: BoolLoopKind, probe: Probes
+	): Null<Cand> {
+		final loopSeams: Null<LoopSeams> = s.loopSeams;
+		final exprStmtKind: Null<String> = s.exprStmtKind;
+		final assignKind: Null<String> = s.assignKind;
+		if (loopSeams == null || exprStmtKind == null || assignKind == null) return null;
+		final name: Null<String> = LoopScan.singleLocalDeclName(decl, s.mutableDeclKinds, loopSeams);
+		if (name == null) return null;
+		final init: QueryNode = decl.children[0];
+		final initValue: Null<Bool> = init.kind != s.boolLitKind ? null : literalValue(init, source);
+		// The loop writes `true` for the `exists` direction and `false` for `foreach`; the
+		// declaration must open at the OPPOSITE, which is what makes the fold an identity.
+		final loopValue: Bool = kind == BoolLoopKind.Exists;
+		if (initValue == null || initValue == loopValue) return null;
+		final head: Null<Head> = forIfHead(loop, source, s, probe, {
+			name: name,
+			exprStmtKind: exprStmtKind,
+			assignKind: assignKind
+		});
+		if (head == null || head.value != loopValue) return null;
+		if (!conditionIsPure(head.cond, probe)) return null;
+		if (LoopScan.countWrites(scope, name, loopSeams) != FLAG_WRITES) return null;
+		final declSpan: Null<Span> = decl.span;
+		final initSpan: Null<Span> = init.span;
+		return declSpan == null || initSpan == null ? null : {
+			anchor: decl,
+			trailing: loop,
+			guard: null,
+			head: head,
+			subsumesTrailing: true,
+			flag: {
+				name: name,
+				// `declaredTypeAnnotation` answers null for a head it cannot attribute to `name` as
+				// well as for one writing no annotation, and this shape cannot produce the first: the
+				// two conditions behind it are a head with no `=` and a name absent from it, and a
+				// single declarator with a literal initializer has both. The two answers are also
+				// worth the same here — a dropped annotation still compiles, since the call's own
+				// type is the `Bool` it would have restated — so no branch separates them.
+				annotation: RefactorSupport.declaredTypeAnnotation(source, declSpan, initSpan, name)
+			}
+		};
+	}
+
+	/**
+	 * Whether the loop condition can be evaluated FEWER times without changing what the program
+	 * does — `PurityScan.isPure`, the project's standing answer, asked here because the emitted
+	 * call short-circuits where the flag loop does not.
+	 *
+	 * A null context (no reachable symbol index, or a grammar carrying no type information) refuses
+	 * every site. That is the direction the whole rule family fails in, and the only safe one: the
+	 * question is whether dropping work is observable, and "unknown" cannot mean "no".
+	 */
+	private static function conditionIsPure(cond: QueryNode, probe: Probes): Bool {
+		final ctx: Null<PurityCtx> = probe.purity();
+		return ctx != null && PurityScan.isPure(cond, ctx);
+	}
+
+	/**
+	 * The boolean literal of a `<flag> = <bool literal>;` statement, or null for any other
+	 * statement — the FLAG sink's counterpart to `boolReturnLiteral`.
+	 *
+	 * Requiring the whole then-branch to BE this statement is what makes the `break` / `continue`
+	 * / `return` refusal structural: a single assignment cannot be one, and a branch holding
+	 * anything besides fails here rather than at a gate that would have to enumerate jump kinds.
+	 */
+	private static function flagAssignLiteral(stmt: QueryNode, sink: FlagSink, s: Seams): Null<QueryNode> {
+		if (stmt.kind != sink.exprStmtKind || stmt.children.length != 1) return null;
+		final assign: QueryNode = stmt.children[0];
+		if (assign.kind != sink.assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+		final target: QueryNode = assign.children[0];
+		final value: QueryNode = assign.children[1];
+		return target.kind == s.identKind && target.name == sink.name && value.kind == s.boolLitKind ? value : null;
 	}
 
 	/**
@@ -345,7 +533,7 @@ final class BoolLoopScan {
 	 * were the refusal dropped, a key-value loop would reach `FOR_CHILD_COUNT` exactly like a
 	 * single-binder one and be rewritten, so the refusal is the sole gate and a test can prove it.
 	 */
-	private static function forIfHead(forNode: QueryNode, source: String, s: Seams, probe: TypeProbe): Null<Head> {
+	private static function forIfHead(forNode: QueryNode, source: String, s: Seams, probe: Probes, ?sink: FlagSink): Null<Head> {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
 		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
@@ -356,7 +544,8 @@ final class BoolLoopScan {
 		if (receiverDeclaresMethod(iterable, probe)) return null;
 		final body: QueryNode = unwrapSole(operands[1], s);
 		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final lit: Null<QueryNode> = boolReturnLiteral(unwrapSole(body.children[1], s), s);
+		final then: QueryNode = unwrapSole(body.children[1], s);
+		final lit: Null<QueryNode> = sink == null ? boolReturnLiteral(then, s) : flagAssignLiteral(then, sink, s);
 		if (lit == null) return null;
 		final value: Null<Bool> = literalValue(lit, source);
 		return value == null ? null : {
@@ -387,7 +576,7 @@ final class BoolLoopScan {
 	 * this run's evidence, not a gap: widening it would mean guessing at a container the rewrite
 	 * has to unify with `Iterable<A>`.
 	 */
-	private static function callIterableIsIterable(iterable: QueryNode, probe: TypeProbe): Bool {
+	private static function callIterableIsIterable(iterable: QueryNode, probe: Probes): Bool {
 		final resolve: Null<(QueryNode) -> Null<String>> = probe.nominal();
 		if (resolve == null) return false;
 		final nominal: Null<String> = resolve(iterable);
@@ -409,7 +598,7 @@ final class BoolLoopScan {
 	 * unresolved receiver, in opposite directions and correctly: an unproven `Iterable` refuses the
 	 * rewrite, an unproven member does not force one.
 	 */
-	private static function receiverDeclaresMethod(iterable: QueryNode, probe: TypeProbe): Bool {
+	private static function receiverDeclaresMethod(iterable: QueryNode, probe: Probes): Bool {
 		// The RECEIVER-position resolver, not the value one: the measured
 		// `baseData:Null<Map<Int, ObjectFrameData>>` site names `Null` as a value and `Map` as a
 		// member host, and it is the member host the rewrite binds against. The `Iterable` proof
@@ -429,13 +618,15 @@ final class BoolLoopScan {
 	 * than building a second one. Null from `typeNominalResolver` (a grammar carrying no type
 	 * information) makes every call iterable unprovable, i.e. exactly the old refusal.
 	 */
-	private static function lazyTypeProbe(
+	private static function lazyProbes(
 		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: () -> Null<SymbolIndex>, method: String
-	): TypeProbe {
+	): Probes {
 		var value: Null<(QueryNode) -> Null<String>> = null;
 		var valueBuilt: Bool = false;
 		var recv: Null<(QueryNode) -> Null<String>> = null;
 		var recvBuilt: Bool = false;
+		var purity: Null<PurityCtx> = null;
+		var purityBuilt: Bool = false;
 		return {
 			nominal: () -> {
 				if (!valueBuilt) {
@@ -450,6 +641,14 @@ final class BoolLoopScan {
 					recv = CheckScan.typeNominalResolver(source, plugin, tree, file, index(), true);
 				}
 				return recv;
+			},
+			purity: () -> {
+				if (!purityBuilt) {
+					purityBuilt = true;
+					final symbols: Null<SymbolIndex> = index();
+					purity = symbols == null ? null : PurityScan.contextOf(plugin, source, tree, symbols);
+				}
+				return purity;
 			},
 			index: index,
 			method: method
@@ -478,7 +677,7 @@ final class BoolLoopScan {
 		return node.kind == s.blockStmtKind && node.children.length == 1 ? node.children[0] : node;
 	}
 
-	/** Assemble the `Info` finding anchored at the loop (or its guard), with the suggested call in the message. */
+	/** Assemble the `Info` finding anchored at the loop (or its guard, or the flag's declaration), with the suggested call in the message. */
 	private static function buildViolation(
 		cand: Cand, source: String, s: Seams, kind: BoolLoopKind, ruleId: String, file: String
 	): Null<Violation> {
@@ -487,7 +686,16 @@ final class BoolLoopScan {
 		if (anchorSpan == null || parts == null) return null;
 		final core: String = '${excerpt(parts.iterable)}.${method(kind)}(${cand.head.loopVar} -> ${excerpt(parts.predicate)})';
 		final guard: Null<String> = parts.guard;
-		final suggestion: String = guard == null ? core : '${excerpt(guard)} && $core';
+		final flag: Null<Flag> = cand.flag;
+		// The message shows the SINK the fold writes to, so a reader can tell the two arms apart
+		// without opening the file. The annotation is left out of it — it is carried verbatim by the
+		// edit and would only make the one-line suggestion wider than the excerpt cap allows.
+		final suggestion: String = if (flag != null)
+			'$FINAL_KEYWORD ${flag.name} = $core'
+		else if (guard == null)
+			core
+		else
+			'${excerpt(guard)} && $core';
 		return {
 			file: file,
 			span: anchorSpan,
@@ -511,7 +719,14 @@ final class BoolLoopScan {
 		if (droppedRegionHasComment(source, region, parts.kept)) return null;
 		final core: String = '${parts.iterable}.${method(kind)}(${cand.head.loopVar} -> ${parts.predicate})';
 		final guard: Null<String> = parts.guard;
-		return { span: region, text: guard == null ? 'return $core;' : 'return $guard && $core;' };
+		final flag: Null<Flag> = cand.flag;
+		if (flag == null) return { span: region, text: guard == null ? 'return $core;' : 'return $guard && $core;' };
+		// `final`, not the original `var`: the fold leaves the binding written exactly once, at its
+		// declaration, and the single-write gate is what proved that. The annotation rides along
+		// verbatim — it can be what TYPES the initializer, and the call's own type is not it.
+		final annotation: Null<String> = flag.annotation;
+		final head: String = annotation == null ? flag.name : '${flag.name}:$annotation';
+		return { span: region, text: '$FINAL_KEYWORD $head = $core;' };
 	}
 
 	/**
@@ -631,6 +846,16 @@ private typedef Seams = {
 	var opaqueKinds: Array<String>;
 	var valueBinderKinds: Array<String>;
 	var andLowerPrecedenceKinds: Array<String>;
+
+	/**
+	 * The FLAG arm's seams: the MUTABLE local declaration kinds the flag may be declared with, the
+	 * loop scans it borrows (`LoopScan.countWrites`), and the two kinds its sink is spelled from.
+	 * Null / empty here turns that arm off and leaves the RETURN arm working.
+	 */
+	var mutableDeclKinds: Array<String>;
+	var loopSeams: Null<LoopSeams>;
+	var assignKind: Null<String>;
+	var exprStmtKind: Null<String>;
 	var identKind: Null<String>;
 	var notKind: Null<String>;
 	var intervalKind: Null<String>;
@@ -663,6 +888,26 @@ private typedef Cand = {
 
 	/** Whether `trailing` is the anchor's immediate sibling, so the rewrite replaces both rather than the loop alone. */
 	var subsumesTrailing: Bool;
+
+	/**
+	 * The FLAG sink, or null for the RETURN one. When set, `anchor` is the DECLARATION and
+	 * `trailing` the loop that follows it, so the region covers both and the emitted text is a
+	 * declaration rather than a `return`.
+	 */
+	var flag: Null<Flag>;
+}
+
+/** The declaration a FLAG-form fold re-emits: the bound name and its written annotation, if any. */
+private typedef Flag = {
+	var name: String;
+	var annotation: Null<String>;
+}
+
+/** The FLAG sink's spelling, threaded into `forIfHead` so one destructure serves both sinks. */
+private typedef FlagSink = {
+	var name: String;
+	var exprStmtKind: String;
+	var assignKind: String;
 }
 
 /** The re-spliced texts of one rewrite plus the source spans they came from, in ascending order, for the comment gate. */
@@ -674,17 +919,25 @@ private typedef Parts = {
 }
 
 /**
- * Everything the two receiver gates need, deferred: the memoised nominal-type resolver a receiver
- * is proved against (null when the grammar carries no type information, and never built by a scan
- * that meets no gate), the run's equally lazy resolution index, and the ONE method name this
- * direction rewrites to — bound once at construction, since a scan runs for a single `BoolLoopKind`.
+ * Everything the gates need, deferred: the memoised nominal-type resolvers a receiver is proved
+ * against (null when the grammar carries no type information, and never built by a scan that meets
+ * no gate), the purity context the FLAG arm's condition is proved against, the run's equally lazy
+ * resolution index, and the ONE method name this direction rewrites to — bound once at
+ * construction, since a scan runs for a single `BoolLoopKind`.
  */
-private typedef TypeProbe = {
+private typedef Probes = {
 	/** The VALUE resolver, behind the `Iterable`-shape proof a CALL iterable must clear. */
 	var nominal: () -> Null<(QueryNode) -> Null<String>>;
 
 	/** The MEMBER-LOOKUP resolver, behind the receiver-shadow gate — a `Null<T>` receiver answers `T`. */
 	var receiver: () -> Null<(QueryNode) -> Null<String>>;
+
+	/**
+	 * The purity context behind the FLAG arm's condition gate. Null when no symbol index is
+	 * reachable or the grammar carries no type information, and the arm then refuses every site —
+	 * the report-only degradation, not an optimistic guess.
+	 */
+	var purity: () -> Null<PurityCtx>;
 	var index: () -> Null<SymbolIndex>;
 	var method: String;
 }
