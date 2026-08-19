@@ -289,10 +289,12 @@ class FieldInitInConstructorCheckTest extends Test {
 	}
 
 	/**
-	 * A derived name the type already declares leaves the literal inline rather than minting a
-	 * variant spelling: a redefinition does not compile, and one value under two names is worse
-	 * than an unnamed default. The surviving fold is asserted alongside, so the test cannot pass on
-	 * a run that refused the whole rule.
+	 * A derived name the type already DECLARES leaves the literal inline rather than minting a
+	 * variant spelling: a redefinition does not compile, and one value under two names is worse than
+	 * an unnamed default. Reverting the whole-file occurrence scan does NOT flip this one — the
+	 * supertype-closure proof refuses it first, since a type declaring the name is exactly what that
+	 * proof reports. `testDerivedNameBoundElsewhereLeavesTheLiteralInline` is the fixture the
+	 * occurrence scan alone decides.
 	 */
 	public function testCollidingDerivedNameLeavesTheLiteralInline(): Void {
 		final out: String = applyIndexedFixOnce(
@@ -366,6 +368,21 @@ class FieldInitInConstructorCheckTest extends Test {
 		);
 		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
 		Assert.equals(-1, out.indexOf('CELLS_NUM_X_DEFAULT'));
+	}
+
+	/**
+	 * The derived name occurring anywhere ELSE in the file leaves the literal inline. Here it is a
+	 * LOCAL in another method, which no member proof can see: a static of that name would compile
+	 * and silently read as the local's twin at every other site. The absence assertion names the
+	 * EMITTED member text rather than the bare name, which the local itself carries.
+	 */
+	public function testDerivedNameBoundElsewhereLeavesTheLiteralInline(): Void {
+		final out: String = applyIndexedFixOnce(wrap(
+			ONE_FIELD, ONE_GUARD, '',
+			'\n\n\tprivate function probe():Int {\n\t\tfinal CELLS_NUM_X_DEFAULT:Int = 7;\n\t\treturn CELLS_NUM_X_DEFAULT;\n\t}'
+		));
+		Assert.isTrue(out.indexOf('_cellsNumX = palette != null ? palette.length : 20;') != -1);
+		Assert.equals(-1, out.indexOf('private static inline final CELLS_NUM_X_DEFAULT:Int = 20;'));
 	}
 
 	public function testSkipParseNoCrash(): Void {

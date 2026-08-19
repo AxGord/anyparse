@@ -201,7 +201,10 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 	 *    named constant and extracting it would mint a second name for one value. A string carries no
 	 *    interpolation — the fold's own move-safety whitelist proved that before this is asked;
 	 *  - the declaration states a type. The constant transcribes it, and a head that states none gives
-	 *    it nothing to transcribe (and nothing to match a reuse candidate against);
+	 *    it nothing to transcribe (and nothing to match a reuse candidate against). No fixture pins
+	 *    this one and none can: the fold's own `initializerDropSpan` already refuses an unannotated
+	 *    declaration (the ` = <default>` region it would delete runs back into the name), so the
+	 *    annotation is a null-safety guard on a reader that can fail, not a discriminating gate;
 	 *  - an index is available. Haxe rejects a static whose name matches an INHERITED INSTANCE field
 	 *    ("Same field name can't be used for both static and instance"), and without a resolvable
 	 *    supertype closure that cannot be ruled out — the same refusal `ConstantHoist` makes;
