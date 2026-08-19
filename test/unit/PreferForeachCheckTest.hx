@@ -115,9 +115,8 @@ class PreferForeachCheckTest extends Test {
 
 	/** A fixture whose CALL iterables are RESOLVABLE: `B` is indexed alongside `C`, so its members' written return types answer. */
 	private function typedFn(body: String): String {
-		return 'class C {\n\tfunction f(b:B, a:Bool):Bool {\n\t\t$body\n\t}\n}\n\n'
-			+ 'class B {\n\tpublic function items():Array<Int> {\n\t\treturn [];\n\t}\n\n'
-			+ '\tpublic function walker():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+		return 'class C {\n\tfunction f(b:B, a:Bool):Bool {\n\t\t$body\n\t}\n}\n\nclass B {\n\tpublic function items():Array<Int> {\n'
+			+ '\t\treturn [];\n\t}\n\n\tpublic function walker():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
 	}
 
 	private function file(body: String, withUsing: Bool): String {

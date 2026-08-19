@@ -370,11 +370,16 @@ final class BoolLoopScan {
 	 * Whether a CALL iterable is PROVABLY one of `ITERABLE_TYPE_NAMES` — the gate that replaced a
 	 * blanket refusal of every call.
 	 *
-	 * The proof is `CheckScan.typeNominalResolver`, the resolver three shipped checks already
+	 * The proof is `CheckScan.typeNominalResolver`, the resolver seven shipped checks already
 	 * consume: `TypeInfoProvider` answers the declared types written in this file, and the run's
 	 * `SymbolIndex` — the std plus the configured libraries plus the report files — answers a
 	 * member's written return type across files. Nothing else is consulted; there is no second
 	 * mechanism beside the one the project already has.
+	 *
+	 * Those seven read it as a licence to RELAX a conservative wrap; this one ACTS on it, which
+	 * its deep mode documents as needing a gate that rejects a name resolving to no unique
+	 * declaration — the one leak being a verbatim type-PARAMETER name from the package-blind
+	 * fallback. A three-name accept list is that gate: `T` is not one of them.
 	 *
 	 * An untabled / unannotated / cross-scope call resolves to null and is REFUSED, which is the
 	 * report-only degradation the whole rule family defaults to. That null is an ANSWER about
