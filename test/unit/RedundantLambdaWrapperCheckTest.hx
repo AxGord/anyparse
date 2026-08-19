@@ -23,7 +23,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		+ 'public static function pair(a:Int, b:Int):Bool return true;\n}\n';
 
 	public function testStaticForwarderFlagged(): Void {
-		final vs: Array<Violation> = violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}');
+		final vs: Array<Violation> = violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}');
 		Assert.equals(1, vs.length);
 		Assert.equals('redundant-lambda-wrapper', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -39,7 +39,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 
 	public function testTwoParamsInOrderFlagged(): Void {
 		Assert.equals(
-			1, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> Helper.pair(a, b));\n\t}\n}').length
+			1, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> Helper.pair(a, b));\n\t}\n}').length
 		);
 	}
 
@@ -59,37 +59,37 @@ class RedundantLambdaWrapperCheckTest extends Test {
 
 	public function testReorderedParamsNotFlagged(): Void {
 		Assert.equals(
-			0, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> Helper.pair(b, a));\n\t}\n}').length
+			0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> Helper.pair(b, a));\n\t}\n}').length
 		);
 	}
 
 	public function testDroppedParamNotFlagged(): Void {
 		Assert.equals(
-			0, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> Helper.isPos(a));\n\t}\n}').length
+			0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> Helper.isPos(a));\n\t}\n}').length
 		);
 	}
 
 	public function testExtraArgumentNotFlagged(): Void {
-		Assert.equals(0, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach(a -> Helper.pair(a, 1));\n\t}\n}').length);
+		Assert.equals(0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(a -> Helper.pair(a, 1));\n\t}\n}').length);
 	}
 
 	public function testNegatedBodyNotFlagged(): Void {
-		Assert.equals(0, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> !Helper.isPos(p));\n\t}\n}').length);
+		Assert.equals(0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> !Helper.isPos(p));\n\t}\n}').length);
 	}
 
 	public function testParenthesisedBodyNotFlagged(): Void {
-		Assert.equals(0, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> (Helper.isPos(p)));\n\t}\n}').length);
+		Assert.equals(0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> (Helper.isPos(p)));\n\t}\n}').length);
 	}
 
 	public function testCastBodyNotFlagged(): Void {
 		Assert.equals(
-			0, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> cast Helper.isPos(p));\n\t}\n}').length
+			0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> cast Helper.isPos(p));\n\t}\n}').length
 		);
 	}
 
 	public function testBlockBodyNotFlagged(): Void {
 		Assert.equals(
-			0, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> { Helper.isPos(p); });\n\t}\n}').length
+			0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> { Helper.isPos(p); });\n\t}\n}').length
 		);
 	}
 
@@ -119,7 +119,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	}
 
 	public function testArityMismatchNotFlagged(): Void {
-		Assert.equals(0, violations(HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.pair(p));\n\t}\n}').length);
+		Assert.equals(0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.pair(p));\n\t}\n}').length);
 	}
 
 	public function testAnnotatedCalleeNotFlagged(): Void {
@@ -176,7 +176,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 
 	public function testShadowedTypeNameNotFlagged(): Void {
 		Assert.equals(
-			0, violations(HELPER + 'class C {\n\tfunction f(Helper:Dynamic):Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}').length
+			0, violations('${HELPER}class C {\n\tfunction f(Helper:Dynamic):Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}').length
 		);
 	}
 
@@ -201,7 +201,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	}
 
 	public function testFixReplacesLambdaWithCallee(): Void {
-		final src: String = HELPER + 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}';
+		final src: String = '${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> Helper.isPos(p));\n\t}\n}';
 		final check: RedundantLambdaWrapper = new RedundantLambdaWrapper();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
@@ -222,11 +222,6 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { xs.foreach(p -> g(p').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new RedundantLambdaWrapper().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-
 	/**
 	 * Every refusal this class asserts must be decided by the property it NAMES, not by some earlier
 	 * gate on the same path. Each row is a one-variable pair: the refused source, and its twin
@@ -234,7 +229,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	 * gate — the fixture never reached it.
 	 */
 	public function testEachRefusalIsOneVariableDecided(): Void {
-		inline function host(signature: String): String return 'class H {\n\t' + signature + '\n}\n';
+		inline function host(signature: String): String return 'class H {\n\t$signature\n}\n';
 		final one: String = 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> H.m(p));\n\t}\n}';
 		final two: String = 'class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> H.m(a, b));\n\t}\n}';
 		final plainTwo: String = host('public static function m(v:Int, k:Int):Bool return true;') + two;
@@ -280,10 +275,14 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		);
 		discriminate(
 			'member declared in two conditional arms',
-			'class H {\n#if js\n\tpublic static function m(v:Int):Bool return true;\n#else\n\tpublic static function m(v:Int):Bool return false;\n#end\n}\n'
-			+ one,
-			'class H {\n#if js\n\tpublic static function m(v:Int):Bool return true;\n#end\n}\n' + one
+			'class H {\n#if js\n\tpublic static function m(v:Int):Bool return true;\n#else\n'
+			+ '\tpublic static function m(v:Int):Bool return false;\n#end\n}\n$one',
+			'class H {\n#if js\n\tpublic static function m(v:Int):Bool return true;\n#end\n}\n$one'
 		);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new RedundantLambdaWrapper().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	/** Assert that `gated` is refused and its one-variable `twin` fires — the pair, not either half, is the evidence. */

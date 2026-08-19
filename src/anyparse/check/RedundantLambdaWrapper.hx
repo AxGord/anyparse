@@ -164,11 +164,12 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	 * Structure only — whether the callee may become a method value is `reducible`'s question.
 	 */
 	private static function forwarding(node: QueryNode, seams: Seams): Null<Forward> {
-		if (!seams.lambdaKinds.contains(node.kind) || node.children.length == 0) return null;
-		final call: QueryNode = node.children[node.children.length - 1];
+		final childCount: Int = node.children.length;
+		if (!seams.lambdaKinds.contains(node.kind) || childCount == 0) return null;
+		final call: QueryNode = node.children[childCount - 1];
 		if (call.kind != seams.callKind || call.children.length == 0) return null;
 		final params: Array<String> = [];
-		for (i in 0...node.children.length - 1) {
+		for (i in 0...childCount - 1) {
 			final param: QueryNode = node.children[i];
 			final name: Null<String> = param.name;
 			if (name == null || !plainBinder(param, seams)) return null;
@@ -186,9 +187,8 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 
 	/** Whether a lambda parameter node is a plain binder — the bare arrow form, or a non-optional, non-rest, undefaulted declared one. */
 	private static function plainBinder(param: QueryNode, seams: Seams): Bool {
-		if (param.kind == seams.identKind) return true;
-		return seams.paramKinds.contains(param.kind) && param.kind != seams.optionalParamKind && param.kind != seams.restParamKind
-			&& param.children.length == 0;
+		return param.kind == seams.identKind || seams.paramKinds.contains(param.kind) && param.kind != seams.optionalParamKind
+			&& param.kind != seams.restParamKind && param.children.length == 0;
 	}
 
 	/** Whether `name` occurs anywhere in `node`'s subtree, in ANY slot — the deliberately blunt reading of "used nowhere else". */
@@ -200,28 +200,38 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 
 	/** Whether the forwarded callee resolves to a declaration this rule may reduce to a method value. */
 	private static function reducible(forward: Forward, enclosing: Null<Map<String, Signature>>, ctx: Ctx): Bool {
-		final seams: Seams = ctx.seams;
 		final callee: QueryNode = forward.callee;
 		final name: Null<String> = callee.name;
 		if (name == null) return false;
-		if (callee.kind == seams.identKind) {
-			if (ctx.scope.valueNames.exists(name)) return false;
-			final local: Null<Signature> = ctx.scope.localFns.get(name);
-			if (local != null) return local.safe && local.arity == forward.arity;
-			if (enclosing == null) return false;
-			final member: Null<Signature> = enclosing.get(name);
-			return member != null && member.safe && member.arity == forward.arity;
-		}
-		if (callee.kind != seams.fieldAccessKind || !seams.upperInitialTypes || callee.children.length != 1) return false;
+		final signature: Null<Signature> = callee.kind == ctx.seams.identKind
+			? bareSignature(name, enclosing, ctx)
+			: staticSignature(callee, name, ctx);
+		return signature != null && signature.safe && signature.arity == forward.arity;
+	}
+
+	/**
+	 * What a BARE callee name resolves to — a local function first, else a member of the enclosing
+	 * type. Null when a value binder anywhere in the file shadows the name, or nothing declares it.
+	 */
+	private static function bareSignature(name: String, enclosing: Null<Map<String, Signature>>, ctx: Ctx): Null<Signature> {
+		return ctx.scope.valueNames.exists(name) ? null : ctx.scope.localFns.get(name) ?? enclosing?.get(name);
+	}
+
+	/**
+	 * What a `Type.member` callee resolves to. Null unless `Type` is an upper-initial simple name
+	 * declared exactly once in scope, shadowed by no local, and `member` is one of its statics.
+	 */
+	private static function staticSignature(callee: QueryNode, name: String, ctx: Ctx): Null<Signature> {
+		final seams: Seams = ctx.seams;
+		if (callee.kind != seams.fieldAccessKind || !seams.upperInitialTypes || callee.children.length != 1) return null;
 		final receiver: QueryNode = callee.children[0];
 		final typeName: Null<String> = receiver.name;
-		if (receiver.kind != seams.identKind || typeName == null || typeName == '') return false;
-		if (typeName.charAt(0).toUpperCase() != typeName.charAt(0)) return false;
-		if (ctx.scope.valueNames.exists(typeName)) return false;
+		if (receiver.kind != seams.identKind || typeName == null || typeName == '') return null;
+		if (typeName.charAt(0).toUpperCase() != typeName.charAt(0)) return null;
+		if (ctx.scope.valueNames.exists(typeName)) return null;
 		final members: Null<Map<String, Signature>> = ctx.types.get(typeName);
-		if (members == null) return false;
-		final member: Null<Signature> = members.get(name);
-		return member != null && member.safe && member.isStatic && member.arity == forward.arity;
+		final member: Null<Signature> = members == null ? null : members[name];
+		return member != null && member.isStatic ? member : null;
 	}
 
 	/** Every type simple name declared across `parsed`, mapped to its function members — null when the name is declared more than once. */
@@ -235,7 +245,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 
 	private static function collectTypeDecls(node: QueryNode, out: Map<String, Null<Map<String, Signature>>>, seams: Seams): Void {
 		final name: Null<String> = node.name;
-		if (seams.typeHostKinds.contains(node.kind) && name != null) out.set(name, out.exists(name) ? null : membersOf(node, seams));
+		if (seams.typeHostKinds.contains(node.kind) && name != null) out[name] = out.exists(name) ? null : membersOf(node, seams);
 		for (c in node.children) collectTypeDecls(c, out, seams);
 	}
 
@@ -273,7 +283,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 					safe: !blocked && !out.exists(name) && seams.functionKinds.contains(child.kind) && name != seams.constructorName
 						&& plainParams(child, seams)
 				};
-				out.set(name, signature);
+				out[name] = signature;
 			}
 			isStatic = false;
 			blocked = false;
@@ -282,7 +292,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 
 	/** The file's shadowing value binders and its local function declarations. */
 	private static function fileScope(tree: QueryNode, seams: Seams): FileScope {
-		final scope: FileScope = { valueNames: new Map(), localFns: new Map() };
+		final scope: FileScope = { valueNames: [], localFns: [] };
 		collectBindings(tree, scope, seams);
 		return scope;
 	}
@@ -320,7 +330,22 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 		return true;
 	}
 
-	/** Resolve every seam the check reads, or null when one it cannot work without is unset. */
+	/**
+	 * Every declaration seam that BINDS a value name — the set whose members shadow a bare callee.
+	 */
+	private static function binderKindsOf(shape: RefShape): Array<String> {
+		return (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? [])
+			.concat(shape.localDeclExprKinds ?? [])
+			.concat(shape.staticLocalDeclKinds ?? [])
+			.concat(shape.localDeclContinuationKinds ?? [])
+			.concat(shape.selfScopeDeclKinds ?? [])
+			.concat(shape.casePatternBinderKinds ?? [])
+			.concat(shape.iterationValueBinderKinds ?? []);
+	}
+
+	/**
+	 * Resolve every seam the check reads, or null when one it cannot work without is unset.
+	 */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
@@ -346,13 +371,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 			functionKinds: shape.functionKinds ?? [],
 			localFunctionKinds: shape.localFunctionKinds ?? [],
 			inlineFunctionKinds: shape.inlineFunctionKinds ?? [],
-			binderKinds: (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? [])
-				.concat(shape.localDeclExprKinds ?? [])
-				.concat(shape.staticLocalDeclKinds ?? [])
-				.concat(shape.localDeclContinuationKinds ?? [])
-				.concat(shape.selfScopeDeclKinds ?? [])
-				.concat(shape.casePatternBinderKinds ?? [])
-				.concat(shape.iterationValueBinderKinds ?? []),
+			binderKinds: binderKindsOf(shape),
 			modifierKinds: modifiers,
 			metaKinds: plugin.metaShape().metaKinds,
 			staticModifierKind: shape.staticModifierKind,
