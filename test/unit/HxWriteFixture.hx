@@ -1,9 +1,11 @@
 package unit;
 
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
  * Shared trivia-writer round-trip for the Haxe formatter slice tests.
@@ -31,6 +33,19 @@ final class HxWriteFixture {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	}
+
+
+	/**
+	 * `src` parsed and re-emitted by the PLAIN writer (no trivia) under `configJson`, with
+	 * `finalNewline` off for the same reason as `triviaWrite`. The plain writer captures no
+	 * source-newline slots, so it is what a test asks when the question is the grammar's own
+	 * shape gates rather than a formatting knob.
+	 */
+	public static function plainWrite(src: String, configJson: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
+		opts.finalNewline = false;
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
 }

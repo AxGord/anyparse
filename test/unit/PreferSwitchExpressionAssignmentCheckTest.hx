@@ -398,7 +398,10 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
-		Assert.equals('x = switch outer { case A: if (c) 1 else switch inner { case P: 2; case _: 3; }; case _: 0; };', es[0].text);
+		// The nested switch terminates itself: `} case _:` is valid Haxe (compiled on -cpp and run on
+		// --interp with a further case following), and the `;` the builder used to append here was
+		// stranded on its own line by the writer.
+		Assert.equals('x = switch outer { case A: if (c) 1 else switch inner { case P: 2; case _: 3; } case _: 0; };', es[0].text);
 	}
 
 	/** A switch arm holding a 2-branch `if`/`else` (both plain, same l-value) hoists the `if` to an if-expression value. */
@@ -524,6 +527,20 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * An arm whose value is itself a `switch` needs no `;`: the nested `}` already terminates it, and
+	 * the writer strands the redundant token on a line of its own. Valid Haxe either way — a probe with
+	 * a further `case` after the brace-terminated arm compiles and runs — so the token buys nothing.
+	 */
+	public function testNestedSwitchArmValueTakesNoRedundantSemicolon(): Void {
+		final out: String = applyFixOnce(wrap(
+			'var r = 0;\n\t\tswitch (a) {\n\t\t\tcase 1:\n\t\t\t\tswitch (b) {\n\t\t\t\t\tcase 2: r = 20;\n'
+			+ '\t\t\t\t\tcase _: r = 30;\n\t\t\t\t}\n\t\t\tcase _: r = 40;\n\t\t}'
+		));
+		Assert.isTrue(out.indexOf('}\n\t\t\t\t;') == -1, 'no stranded `;` after a nested switch arm - got:\n$out');
+		Assert.isTrue(out.indexOf('case _: 40;') != -1, 'a plain arm value keeps its `;` - got:\n$out');
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
@@ -536,7 +553,6 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
 	}
-
 
 	private function violations(src: String): Array<Violation> {
 		return new PreferSwitchExpressionAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());

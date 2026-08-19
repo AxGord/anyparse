@@ -571,7 +571,12 @@ after a red suite: the sweep snapshot proves nothing) and, more importantly,
 the unanticipated one, where a branch aborts somewhere its author never
 considered. `skipped` is the only benign third state, and only where the
 script decided the step does not apply — the jvm probe on an untouched core,
-which prints `skipped  the core did not move since <base>`.
+which prints `skipped  neither src/ nor the probe moved since <base>`. The trigger diffs
+`src` plus the probe's own two files, because that is what it COMPILES; an earlier
+trigger naming only `src/anyparse/query` and `src/anyparse/check` — the packages the
+probe LINTS by default — self-skipped on a slice that added a field to a `@:peg`
+structure typedef, which is precisely the structure-unification regression this probe
+exists to catch.
 
 No branch prints while they run (the driver announces the fork, and that is
 the only line): interleaved stdout from four concurrent steps is unusable. Each branch writes its own `.out`/`.err` pair

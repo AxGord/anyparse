@@ -255,4 +255,22 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
+
+	/**
+	 * `fixed 0 issue(s)` is ambiguous between "nothing to fix" and "every fix was declined", and
+	 * the second reading is the one that cost T9 and T17 a wrong conclusion each. The tail must
+	 * name the reporting rules with their counts and point at SCOPE; with nothing reported it must
+	 * stay empty, so a genuinely clean run gains no noise.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testDeclinedFixNudgeNamesTheReportingRulesAndPointsAtScope(): Void {
+		final tail: String = Cli.declinedFixNudge(['naming' => 2, 'dead-store' => 1]);
+		Assert.isTrue(tail.indexOf('naming 2') >= 0, 'the rule that reported most comes first with its count - got: $tail');
+		Assert.isTrue(tail.indexOf('dead-store 1') >= 0, 'every reporting rule is named - got: $tail');
+		Assert.isTrue(tail.indexOf('naming 2, dead-store 1') >= 0, 'rules are ordered by finding count - got: $tail');
+		Assert.isTrue(tail.indexOf('WIDER scope') >= 0, 'the tail must point at scope - got: $tail');
+		final none: Map<String, Int> = [];
+		Assert.equals('', Cli.declinedFixNudge(none), 'nothing reported means fixed 0 is the whole truth');
+	}
+
 }

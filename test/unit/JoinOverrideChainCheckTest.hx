@@ -55,7 +55,8 @@ class JoinOverrideChainCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = edits(CHAIN);
 		Assert.equals(1, es.length);
 		Assert.equals(
-			'final x:String = switch b.k { case 3: \'r\'; case _: switch a.k { case 1: \'p\'; case 2: \'q\'; case _: null; }; };',
+			// The nested switch is the LAST arm and terminates itself — `} };` compiles on -cpp.
+			'final x:String = switch b.k { case 3: \'r\'; case _: switch a.k { case 1: \'p\'; case 2: \'q\'; case _: null; } };',
 			es[0].text
 		);
 	}
@@ -201,7 +202,7 @@ class JoinOverrideChainCheckTest extends Test {
 		));
 		Assert.equals(1, es.length);
 		Assert.equals(
-			'final x:String = switch b.k { case E(i): \'$$i\'; case _: switch a.k { case E(i): \'$$i\'; case _: null; }; };', es[0].text
+			'final x:String = switch b.k { case E(i): \'$$i\'; case _: switch a.k { case E(i): \'$$i\'; case _: null; } };', es[0].text
 		);
 	}
 

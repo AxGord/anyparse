@@ -39,7 +39,7 @@
 #
 #   build ──┬─ suite ── corpus          corpus reads what the suite wrote
 #           ├─ fmt
-#           ├─ jvm probe                only when the core moved
+#           ├─ jvm probe                only when src/ or the probe moved
 #           └─ oracle ── lint ── blast  lint reuses the oracle's verdict;
 #                                       blast diffs lint's own output
 #
@@ -640,8 +640,14 @@ case "$jvm_mode" in
     never)  run_jvm=0; jvm_skip_note="--no-jvm" ;;
     auto)
         if [ -n "$base_key" ] && git cat-file -e "$base_key^{commit}" 2> /dev/null; then
-            if git diff --quiet "$base_key" -- src/anyparse/query src/anyparse/check; then
-                jvm_skip_note="the core did not move since $base_key"
+            # The probe COMPILES `-cp src -cp tools -main JvmPortability`, so any of that
+            # is what can break it — not just the two packages it happens to LINT by
+            # default. Narrowing the trigger to query+check made it self-skip on a slice
+            # that added a field to a `@:peg` structure typedef, i.e. exactly the
+            # structure-unification regression the probe exists to catch (T26, run by
+            # hand instead).
+            if git diff --quiet "$base_key" -- src tools/JvmPortability.hx tools/jvm-portability.hxml; then
+                jvm_skip_note="neither src/ nor the probe moved since $base_key"
             else
                 run_jvm=1
             fi
@@ -652,7 +658,7 @@ case "$jvm_mode" in
 esac
 if [ "$run_jvm" -eq 1 ] && ! command -v java > /dev/null 2>&1; then
     run_jvm=0
-    jvm_skip_note="the core moved but java is absent"
+    jvm_skip_note="src/ moved but java is absent"
 fi
 
 # --- 7. run the four branches concurrently -----------------------------

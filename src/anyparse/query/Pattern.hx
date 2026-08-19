@@ -49,11 +49,30 @@ final class Pattern {
 	 */
 	public final kindEquivalence: Null<KindEquivalence>;
 
-	public function new(root: QueryNode, category: PatternCategory, source: String, ?kindEquivalence: Null<KindEquivalence>) {
+	/**
+	 * Metavariable names the user WROTE that no node in `root` carries — the
+	 * pattern is therefore wider (or, for an undecoded name slot, narrower)
+	 * than the source says, and silently so.
+	 *
+	 * A metavar disappears when it lands in a source position the grammar does
+	 * not project as a node: a declared type (`final $n:$t = $v` keeps `$n` and
+	 * `$v`, never `$t`), a `cast($x, $T)` target type, a metadata name (`@:$m`,
+	 * whose placeholder is not even decodable — the name slot reads
+	 * `@:__APQ_MV_m_END__` and can never match). Reported once per lost
+	 * OCCURRENCE-set rather than per occurrence, so `f($x, $x)` with one half
+	 * dropped still names `x`.
+	 */
+	public final ignoredMetavars: Array<String>;
+
+	public function new(
+		root: QueryNode, category: PatternCategory, source: String, ?kindEquivalence: Null<KindEquivalence>,
+		?ignoredMetavars: Null<Array<String>>
+	) {
 		this.root = root;
 		this.category = category;
 		this.source = source;
 		this.kindEquivalence = kindEquivalence;
+		this.ignoredMetavars = ignoredMetavars ?? [];
 	}
 
 	/**
@@ -206,18 +225,59 @@ final class Metavar {
 	 * Returns a new tree (or the same shape if no replacements
 	 * happened).
 	 */
-	public static function reclassify(tree: QueryNode): QueryNode {
+	public static function reclassify(tree: QueryNode, identKind: String): QueryNode {
 		final n: Null<String> = tree.name;
-		final newChildren: Array<QueryNode> = [for (c in tree.children) reclassify(c)];
+		final newChildren: Array<QueryNode> = [for (c in tree.children) reclassify(c, identKind)];
 		if (n != null) {
 			final bare: Null<String> = decodePlaceholderName(n);
 			if (bare != null) {
-				return newChildren.length == 0
+				return tree.kind == identKind && newChildren.length == 0
 					? new QueryNode(KIND, bare, [], tree.span)
 					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span);
 			}
 		}
 		return new QueryNode(tree.kind, n, newChildren, tree.span);
+	}
+
+	/**
+	 * How many times each metavariable name occurs in `substituted` (the
+	 * output of `substituteMetavarsHaxe`). Counted on the substituted text
+	 * rather than the raw source so the string / comment policy that decided
+	 * what IS a metavar is applied exactly once.
+	 */
+	public static function placeholderCounts(substituted: String): Map<String, Int> {
+		final out: Map<String, Int> = [];
+		var i: Int = substituted.indexOf(PLACEHOLDER_PREFIX);
+		while (i >= 0) {
+			final from: Int = i + PLACEHOLDER_PREFIX.length;
+			final end: Int = substituted.indexOf(PLACEHOLDER_SUFFIX, from);
+			if (end < 0) break;
+			final bare: String = substituted.substring(from, end);
+			out[bare] = (out[bare] ?? 0) + 1;
+			i = substituted.indexOf(PLACEHOLDER_PREFIX, end + PLACEHOLDER_SUFFIX.length);
+		}
+		return out;
+	}
+
+	/** How many times each metavariable name survives in a reclassified pattern tree. */
+	public static function treeCounts(tree: QueryNode): Map<String, Int> {
+		final out: Map<String, Int> = [];
+		countInto(tree, out);
+		return out;
+	}
+
+	/**
+	 * Metavariable names written in `substituted` that `tree` carries fewer
+	 * times than the source did — the positions the grammar did not project as
+	 * nodes. `$_` is counted like any other name: a wildcard lost in a type
+	 * annotation is the same silent widening as a named one.
+	 */
+	public static function ignoredNames(substituted: String, tree: QueryNode): Array<String> {
+		final written: Map<String, Int> = placeholderCounts(substituted);
+		final kept: Map<String, Int> = treeCounts(tree);
+		final out: Array<String> = [for (name => count in written) if (count > kept[name] ?? 0) name];
+		out.sort(Reflect.compare);
+		return out;
 	}
 
 	private static inline function isIdentStart(c: Int): Bool {
@@ -258,6 +318,21 @@ final class Metavar {
 			i++;
 		}
 		return len;
+	}
+
+
+	private static function countInto(node: QueryNode, into: Map<String, Int>): Void {
+		final n: Null<String> = node.name;
+		if (n != null) {
+			final bare: Null<String> = if (node.kind == KIND)
+				n;
+			else if (n.startsWith('$'))
+				n.substring(1);
+			else
+				null;
+			if (bare != null) into[bare] = (into[bare] ?? 0) + 1;
+		}
+		for (c in node.children) countInto(c, into);
 	}
 
 }
