@@ -67,6 +67,20 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(0, violations(fixed).length);
 	}
 
+	/**
+	 * The CONTROL every `wrap`-based negative below mutates in exactly one place. Without it those
+	 * negatives are satisfied vacuously -- they all passed against a stub that reported nothing.
+	 */
+	public function testWrapControlFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(wrap(
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
+			)).length
+		);
+	}
+
 	/** ONE construct is the single-construct rules' business (`prefer-switch-expression-assignment`), not a chain. */
 	public function testSingleSwitchNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}')).length);
