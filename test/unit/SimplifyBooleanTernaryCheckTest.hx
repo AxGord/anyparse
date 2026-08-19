@@ -251,6 +251,11 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		return edits.length > 0 ? edits[0].text : '';
 	}
 
+	/** A branch that is itself a mid-reduction ternary is refused: reducing the outer would strand it. */
+	public function testPendingBooleanTernaryBranchNotSimplified(): Void {
+		Assert.equals('', boolFnSimplifyOf('return p ? true : (c ? false : g());'));
+	}
+
 	private function violations(body: String): Array<Violation> {
 		final src: String =
 			'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';

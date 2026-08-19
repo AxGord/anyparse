@@ -264,7 +264,9 @@ final class PreferTernaryReturn implements Check {
 		final notKind: Null<String> = shape.notKind;
 		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
 		if (RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)) return false;
-		return !RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape);
+		return !RefactorSupport.declaresNonNullBool(retType, shape)
+			|| RefactorSupport.statementLikeOrNullTail(other, shape)
+			|| RefactorSupport.pendingBooleanTernaryTail(other, shape);
 	}
 
 	/**

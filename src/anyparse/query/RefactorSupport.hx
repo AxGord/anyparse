@@ -2191,6 +2191,32 @@ final class RefactorSupport {
 	 *
 	 * Parentheses are unwrapped first, so `(switch …)` refuses like a bare one.
 	 */
+	/**
+	 * Whether `operand` is a ternary MID-REDUCTION — one with exactly one boolean-literal
+	 * branch, i.e. exactly what `simplify-boolean-ternary` is about to flatten into `&&` /
+	 * `||`. Collapsing an outer pair onto such a tail strands it: the inner ternary stops
+	 * being the function's DIRECT returned value, loses its licence for good, and the result
+	 * is a hybrid uglier than either endpoint —
+	 *
+	 *     return isSimpleOperand(node)
+	 *         || (!CONST_OP_KINDS.contains(node.kind) ? false : node.children.foreach(…));
+	 *
+	 * measured on `anyparse/check/PreferInline.hx` and `anyparse/check/TrivialGetter.hx`
+	 * during the first apply-and-compile run of this slice. Refusing for ONE `--fix` pass
+	 * fixes it: the inner ternary flattens first, becomes a provably-`Bool` `&&` / `||`, and
+	 * the outer pair then collapses through the ORIGINAL kind-only proof. Purely structural —
+	 * it never asks whether the sibling rule will in fact reduce, so a tail that can never
+	 * reduce simply keeps its guard, which is the right answer for it too.
+	 */
+	public static function pendingBooleanTernaryTail(operand: QueryNode, shape: RefShape): Bool {
+		final ternaryKind: Null<String> = shape.ternaryKind;
+		final boolLitKind: Null<String> = shape.boolLitKind;
+		if (ternaryKind == null || boolLitKind == null) return false;
+		final n: QueryNode = unwrapParens(operand, shape.parenKind);
+		if (n.kind != ternaryKind || n.children.length != 3) return false;
+		return (n.children[1].kind == boolLitKind) != (n.children[2].kind == boolLitKind);
+	}
+
 	public static function statementLikeOrNullTail(operand: QueryNode, shape: RefShape): Bool {
 		final kind: String = unwrapParens(operand, shape.parenKind).kind;
 		if (kind == shape.nullLiteralKind) return true;

@@ -333,6 +333,30 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A tail that is itself a ternary MID-REDUCTION waits one `--fix` pass. Collapsing onto it
+	 * strands the inner ternary out of return-value position, where it can never regain its
+	 * licence — the hybrid `a || (b ? false : g())` measured on `PreferInline.hx` /
+	 * `TrivialGetter.hx`. Once `simplify-boolean-ternary` has flattened the inner one to `&&`,
+	 * the outer pair collapses through the original kind-only proof.
+	 */
+	public function testPendingBooleanTernaryTailNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn d ? false : g();\n\t}\n}'
+			).length
+		);
+	}
+
+	/** …and once it HAS flattened, the same pair collapses. */
+	public function testFlattenedTailThenFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn !d && g();\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('return c ? true : !d && g();', es[0].text);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

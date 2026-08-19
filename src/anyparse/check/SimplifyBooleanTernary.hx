@@ -154,7 +154,8 @@ final class SimplifyBooleanTernary implements Check {
 		final thenBool: Bool = node.children[1].kind == boolLitKind;
 		final elseBool: Bool = node.children[2].kind == boolLitKind;
 		if (thenBool == elseBool) return false;
-		return !RefactorSupport.statementLikeOrNullTail(thenBool ? node.children[2] : node.children[1], shape);
+		final other: QueryNode = thenBool ? node.children[2] : node.children[1];
+		return !RefactorSupport.statementLikeOrNullTail(other, shape) && !RefactorSupport.pendingBooleanTernaryTail(other, shape);
 	}
 
 	/**
