@@ -62,7 +62,7 @@ class HoistBranchStringAffixCheckTest extends Test {
 		final fixed: String = applyFixOnce(REGION);
 		Assert.isTrue(fixed.indexOf('#if flash') != -1, 'the region survives: $fixed');
 		Assert.isTrue(fixed.indexOf('return \'Data') != -1, 'the head is written once: $fixed');
-		Assert.equals(1, occurrences(fixed, 'Data'), 'the head text appears once, not once per branch: $fixed');
+		Assert.equals(1, fixed.split('Data').length - 1, 'the head text appears once, not once per branch: $fixed');
 	}
 
 	/** A side whose shared text does not pay for its own `\'…\' + ` syntax is left alone. */
@@ -146,17 +146,6 @@ class HoistBranchStringAffixCheckTest extends Test {
 	/** A two-branch `#if a / #else` region around `first` and `second`, inside a minimal parseable class. */
 	private function wrapRegion(first: String, second: String): String {
 		return 'class C {\n\tpublic function f():String {\n\t\t#if a\n\t\t$first\n\t\t#else\n\t\t$second\n\t\t#end\n\t}\n}\n';
-	}
-
-	/** How many times `needle` occurs in `text` — the head-written-once assertion. */
-	private function occurrences(text: String, needle: String): Int {
-		var count: Int = 0;
-		var at: Int = text.indexOf(needle);
-		while (at != -1) {
-			count++;
-			at = text.indexOf(needle, at + needle.length);
-		}
-		return count;
 	}
 
 	private function violations(src: String): Array<Violation> {
