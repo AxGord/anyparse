@@ -18,6 +18,23 @@ import anyparse.runtime.Span;
  * fallback, a matching (rather than opposite) trailing literal, an `else` on either
  * `if`, a key-value / range / call iterable, a non-adjacent trailing return and the
  * opposite (`foreach`) direction are all safe misses.
+ *
+ * ## The FLAG form
+ *
+ * The second sink: `var f:Bool = false;` immediately followed by
+ * `for (x in xs) if (cond) f = true;`, which folds to
+ * `final f:Bool = xs.exists(x -> cond);`. Its own gates get a fixture each — the
+ * declaration must open at the OPPOSITE literal, be a `var` rather than a `final`,
+ * stand next to the loop, and be written nowhere else; the loop must assign THAT
+ * name and nothing else.
+ *
+ * The load-bearing one is PURITY. The flag loop visits every element where the
+ * `return` form stops at the first match, so folding to a short-circuiting
+ * `Lambda.exists` is only an identity while the condition does no work —
+ * `testFlagFormEffectfulConditionNotFlagged` is the fixture that says so, and
+ * `testFlagFormFieldReadConditionFlagged` is its twin proving the gate is
+ * `PurityScan` (which admits a field READ) rather than
+ * `RefactorSupport.isSideEffectFree` (which refuses one).
  */
 class PreferExistsCheckTest extends Test {
 
@@ -245,6 +262,179 @@ class PreferExistsCheckTest extends Test {
 		final edits: Array<GroupedEdit> = grouped(src);
 		Assert.equals(2, edits.length);
 		for (e in edits) Assert.isNull(e.group);
+	}
+
+	public function testFlagFormFlagged(): Void {
+		final vs: Array<Violation> = violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;'));
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-exists', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.indexOf('final found = xs.exists(x -> x > 2)') != -1, vs[0].message);
+	}
+
+	public function testFlagFormFieldReadConditionFlagged(): Void {
+		// The motivating TM site's shape (`child.nodeType == CData`): the condition READS a field,
+		// which `RefactorSupport.isSideEffectFree` refuses outright and `PurityScan` admits. The twin
+		// of the refusal below — together they say WHICH purity question the gate asks.
+		final vs: Array<Violation> = violations(
+			flagFn('var found:Bool = false;\n\t\tfor (p in ps) if (p.id > 2) found = true;\n\t\treturn found;')
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('final found = ps.exists(p -> p.id > 2)') != -1, vs[0].message);
+	}
+
+	public function testFlagFormEffectfulConditionNotFlagged(): Void {
+		// ★ The gate the whole arm exists for. This loop calls `keep` on EVERY element;
+		// `Lambda.exists` stops at the first `true`, so the fold would silently drop the remaining
+		// calls. Five real sites in the measured application have exactly this shape.
+		Assert.equals(
+			0, violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (keep(x)) found = true;\n\t\treturn found;')).length
+		);
+	}
+
+	public function testFlagFormEffectfulMethodCallConditionNotFlagged(): Void {
+		// The receiver-call spelling of the same hazard (`locks.remove(rm)` in the measured tree).
+		Assert.equals(
+			0,
+			violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (xs.remove(x)) found = true;\n\t\treturn found;')).length
+		);
+	}
+
+	public function testFlagFormSameLiteralNotFlagged(): Void {
+		Assert.equals(
+			0, violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = false;\n\t\treturn found;')).length
+		);
+	}
+
+	public function testFlagFormNonLiteralInitializerNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(flagFn('var found:Bool = xs.length == 0;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;')).length
+		);
+	}
+
+	public function testFlagFormFinalDeclarationNotFlagged(): Void {
+		// A `final` cannot be the loop's assignment target at all, so the pair is not this shape.
+		Assert.equals(
+			0, violations(flagFn('final found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;')).length
+		);
+	}
+
+	public function testFlagFormWrittenAgainAfterTheLoopNotFlagged(): Void {
+		// The fold emits `final`, which a second write would not compile against.
+		Assert.equals(
+			0,
+			violations(
+				flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\tif (a) found = false;\n\t\treturn found;')
+			).length
+		);
+	}
+
+	public function testFlagFormNonAdjacentLoopNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				flagFn('var found:Bool = false;\n\t\tfinal q = xs.length;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;')
+			).length
+		);
+	}
+
+	public function testFlagFormAssigningAnotherNameNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				flagFn('var found:Bool = false;\n\t\tvar other:Bool = false;\n\t\tfor (x in xs) if (x > 2) other = true;\n\t\treturn found;')
+			).length
+		);
+	}
+
+	public function testFlagFormExtraLoopBodyStatementNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				flagFn('var found:Bool = false;\n\t\tfor (x in xs) { trace(x); if (x > 2) found = true; }\n\t\treturn found;')
+			).length
+		);
+	}
+
+	public function testFlagFormGuardedLoopNotClaimed(): Void {
+		// The guarded merge is claimed for the RETURN form only. Here the statement after the
+		// declaration is the guard, not the loop, so the pair is not this shape — and no measured
+		// site wants it: every guarded flag loop in the application tree fails the purity gate too.
+		Assert.equals(
+			0,
+			violations(flagFn('var found:Bool = false;\n\t\tif (a) for (x in xs) if (x > 2) found = true;\n\t\treturn found;')).length
+		);
+	}
+
+	public function testFlagFormRangeIterableNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				flagFn('var found:Bool = false;\n\t\tfor (i in 0...xs.length) if (xs[i] > 2) found = true;\n\t\treturn found;')
+			).length
+		);
+	}
+
+	public function testFlagFormForeachDirectionNotClaimed(): Void {
+		Assert.equals(
+			0, violations(flagFn('var found:Bool = true;\n\t\tfor (x in xs) if (x > 2) found = false;\n\t\treturn found;')).length
+		);
+	}
+
+	public function testFlagFormReceiverDeclaringExistsNotFlagged(): Void {
+		Assert.equals(
+			0,
+			new PreferExists().run([
+				{
+					file: 'C.hx',
+					source: 'class C {\n\tfunction f(m:M):Bool {\n\t\tvar found:Bool = false;\n'
+					+ '\t\tfor (x in m) if (x > 2) found = true;\n\t\treturn found;\n\t}\n}\n\nclass M {\n'
+					+ '\tpublic function exists(key:Int):Bool {\n\t\treturn false;\n\t}\n\n'
+					+ '\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+				}
+			], new HaxeQueryPlugin()).length
+		);
+	}
+
+	public function testFlagFormFixFoldsDeclarationAndLoop(): Void {
+		final out: String = fixResult(
+			flagFile('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;', true)
+		);
+		Assert.isTrue(out.indexOf('final found:Bool = xs.exists(x -> x > 2);') != -1, out);
+		Assert.equals(-1, out.indexOf('for (x in xs)'));
+	}
+
+	public function testFlagFormFixKeepsAnAbsentAnnotationAbsent(): Void {
+		final out: String = fixResult(
+			flagFile('var found = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;', true)
+		);
+		Assert.isTrue(out.indexOf('final found = xs.exists(x -> x > 2);') != -1, out);
+	}
+
+	public function testFlagFormFixInsertsUsing(): Void {
+		final out: String = fixResult(
+			flagFile('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;', false)
+		);
+		Assert.isTrue(out.indexOf('using Lambda;') != -1, out);
+	}
+
+	public function testFlagFormCommentInDroppedRegionNotFixed(): Void {
+		final src: String = flagFile(
+			'var found:Bool = false;\n\t\t// why\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;', true
+		);
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, new PreferExists().fix(src, violations(src), new HaxeQueryPlugin()).length);
+	}
+
+	/** The FLAG form's fixture: `ps` gives a field-read condition a receiver, `keep` an effectful one. */
+	private function flagFn(body: String): String {
+		return 'class C {\n\tfunction f(xs:Array<Int>, ps:Array<P>, m:Map<String, Int>, a:Bool):Bool {\n\t\t$body\n\t}\n\n'
+			+ '\tfunction keep(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}\n\nclass P {\n\tpublic var id:Int;\n}';
+	}
+
+	private function flagFile(body: String, withUsing: Bool): String {
+		return 'package p;\n\n' + (withUsing ? 'using Lambda;\n\n' : '') + flagFn(body);
 	}
 
 	private function grouped(src: String): Array<GroupedEdit> {
