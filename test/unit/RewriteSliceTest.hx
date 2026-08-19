@@ -88,6 +88,32 @@ class RewriteSliceTest extends Test {
 		Assert.equals(1, text.split('trace(1)').length - 1, 'only the modifier-free member is rewritten — got:\n$text');
 	}
 
+	/**
+	 * A starred pattern is REFUSED by `rewrite`. The star does not bind, so the
+	 * replacement template has no way to name the children it absorbed, and the
+	 * span-replace would delete them: `rewrite 'g(...)' 'g()'` reads as "leave
+	 * the arguments alone" and would in fact drop every one of them. `search`
+	 * and the `--match` locator keep working - only the text-producing op is
+	 * gated, and it names the reason.
+	 */
+	public function testStarPatternIsRefusedByRewrite(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tg(1, 2, 3);\n\t}\n}';
+		final res: EditResult = Rewrite.rewrite(src, 'g(...)', 'k()', true, new HaxeQueryPlugin());
+		Assert.isTrue(isErr(res), 'a `...` pattern must not reach the span-replace');
+		switch res {
+			case Err(message):
+				Assert.isTrue(message.contains('...'), 'the refusal must name the ellipsis - got: $message');
+				Assert.isTrue(message.contains('rewrite'), 'the refusal must say which op refused - got: $message');
+			case Ok(_):
+		}
+	}
+
+	/** The gate is on the PATTERN, not on the word: an unstarred pattern is untouched. */
+	public function testUnstarredPatternStillRewrites(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tg(1);\n\t}\n}';
+		Assert.isTrue(okText(Rewrite.rewrite(src, "g($x)", "k($x)", true, new HaxeQueryPlugin())).contains('k(1)'));
+	}
+
 	private function okText(res: EditResult): String {
 		return switch res {
 			case Ok(text): text;

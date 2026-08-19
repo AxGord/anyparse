@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.Pattern.Metavar;
 import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
 
 /**
@@ -22,9 +23,13 @@ import anyparse.runtime.Span;
  *  - Name-position metavar `$X` (kind matches, name starts with `$`)
  *    binds to the input node's name slot; structural identity
  *    constraints across reuses apply to the bound NAME string.
- *  - Star-children matching is ordered and adjacent — positional
- *    one-to-one between pattern children and input children, no
- *    skip-ahead and no length mismatch.
+ *  - Child matching is ordered and adjacent — positional one-to-one
+ *    between pattern children and input children, no skip-ahead and
+ *    no length mismatch.
+ *  - The one exception is the `...` ellipsis (`PatternStar`): at most
+ *    ONE per child list, it anchors the pattern children before it as
+ *    a prefix and those after it as a suffix, and absorbs the run
+ *    between. It does not bind.
  *  - Whitespace and comments in patterns are ignored (handled by the
  *    plugin's pattern preprocessing, not the matcher).
  */
@@ -65,6 +70,11 @@ final class Matcher {
 	 * 1`) are enforced.
 	 */
 	private static function unify(pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>): Bool {
+		// A star is consumed by its PARENT's child loop below and never reaches
+		// here as a whole-subtree pattern — `PatternStar.validate` refuses a
+		// star root at parse time. Fail closed rather than match everything if
+		// some future caller builds a `Pattern` without that gate.
+		if (pattern.kind == PatternStar.KIND) return false;
 		// Whole-subtree metavar (e.g. bare `$x` / `$_`).
 		if (pattern.kind == Metavar.KIND) {
 			final n: Null<String> = pattern.name;
@@ -102,14 +112,47 @@ final class Matcher {
 			}
 		} else if (pname != iname)
 			return false;
-		// Children: ordered + adjacent. Length must match exactly.
-		final pChildren: Array<QueryNode> = pattern.children;
-		final iChildren: Array<QueryNode> = input.children;
-		if (pChildren.length != iChildren.length) return false;
-		for (k in 0...pChildren.length) {
+		return unifyChildren(pattern.children, input.children, eq, bindings);
+	}
+
+	/**
+	 * Children: ordered + adjacent. Without an ellipsis the length must match
+	 * exactly; with one, the pattern's children split into a PREFIX (matched
+	 * left-to-right from the start) and a SUFFIX (matched right-to-left from
+	 * the end), and the star absorbs the — possibly empty — run between them.
+	 * One star per child list is a parse-time invariant
+	 * (`PatternStar.validate`), which is what keeps this single-pass and
+	 * backtracking-free.
+	 */
+	private static function unifyChildren(
+		pChildren: Array<QueryNode>, iChildren: Array<QueryNode>, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>
+	): Bool {
+		final star: Int = starIndex(pChildren);
+		if (star < 0) {
+			if (pChildren.length != iChildren.length) return false;
+			for (k in 0...pChildren.length) {
+				if (!unify(pChildren[k], iChildren[k], eq, bindings)) return false;
+			}
+			return true;
+		}
+		final suffix: Int = pChildren.length - star - 1;
+		// Prefix and suffix must both FIT: a star spans zero or more children,
+		// never a negative run, so an input shorter than the anchors is a miss
+		// rather than an overlap (`h(1, ..., 1)` does not match `h(1)`).
+		if (iChildren.length < star + suffix) return false;
+		for (k in 0...star) {
 			if (!unify(pChildren[k], iChildren[k], eq, bindings)) return false;
 		}
+		for (k in 0...suffix) {
+			if (!unify(pChildren[pChildren.length - 1 - k], iChildren[iChildren.length - 1 - k], eq, bindings)) return false;
+		}
 		return true;
+	}
+
+	/** Position of the single `...` in a pattern's child list, or `-1` when there is none. */
+	private static function starIndex(children: Array<QueryNode>): Int {
+		for (k in 0...children.length) if (children[k].kind == PatternStar.KIND) return k;
+		return -1;
 	}
 
 }

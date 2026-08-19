@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.runtime.Span;
+
 using StringTools;
 
 /**
@@ -141,11 +143,14 @@ final class Metavar {
 	private static final PLACEHOLDER_SUFFIX: String = '_END__';
 
 	/**
-	 * Substitute `$X` / `$_` tokens with reserved placeholder identifiers
-	 * that the language's lexer accepts as ordinary identifiers. Skips
-	 * occurrences inside string literals (single-quoted, double-quoted)
-	 * and comments (line-style and block-style) — Haxe's specific
-	 * string-comment rules; other grammars override the policy.
+	 * Substitute `$X` / `$_` tokens — and the `...` ellipsis in a child slot,
+	 * see `PatternStar` — with reserved placeholder identifiers that the
+	 * language's lexer accepts as ordinary identifiers. Skips occurrences
+	 * inside string literals (single-quoted, double-quoted) and comments
+	 * (line-style and block-style) — Haxe's specific string-comment rules;
+	 * other grammars override the policy. The ellipsis rides in this ONE pass
+	 * rather than a second scan so the string / comment policy that decides
+	 * what is a token is written down exactly once.
 	 *
 	 * Returns the rewritten source. The placeholder format is
 	 * `__APQ_MV_<bareName>__` — reversed by `decodePlaceholderName`.
@@ -174,6 +179,17 @@ final class Metavar {
 					i = copyRun(i, scanBlockCommentEnd(source, i));
 					continue;
 				}
+			}
+			// `...` standing alone in a child slot is the ellipsis; a range
+			// (`0...n`) or a spread (`f(...arr)`) has an operand on one side
+			// and is copied through as ordinary source.
+			if (
+				c == '.'.code && i + PatternStar.TOKEN_LENGTH <= len && source.fastCodeAt(i + 1) == '.'.code
+				&& source.fastCodeAt(i + 2) == '.'.code && PatternStar.isStarSlot(source, i)
+			) {
+				buf.add(PatternStar.PLACEHOLDER);
+				i += PatternStar.TOKEN_LENGTH;
+				continue;
 			}
 			if (c == '$'.code && i + 1 < len) {
 				final next: Int = source.fastCodeAt(i + 1);
@@ -333,6 +349,149 @@ final class Metavar {
 			if (bare != null) into[bare] = (into[bare] ?? 0) + 1;
 		}
 		for (c in node.children) countInto(c, into);
+	}
+
+}
+
+/**
+ * The `...` ellipsis — "any run of children here", the one variable-arity
+ * construct in the pattern language.
+ *
+ * **Why `...` and not `$...` / `$*`.** `docs/cli-query-tool.md` already
+ * reserved this exact token ("The 'anywhere in this container' form is
+ * reserved for a future ellipsis syntax (`...`)"), so no other spelling was
+ * a free choice. It also reads right: `$` is the language's BINDS marker,
+ * and a star does NOT bind (see below), so spelling it `$...` would promise
+ * a capture that does not exist. And it is free: `f(...)`, `new $T(...)` and
+ * `[...]` are all hard parse refusals today, so no pattern changes meaning.
+ *
+ * **What it does NOT touch.** Haxe's own two `...` are the range operator
+ * (`0...n`) and rest/spread (`f(...arr)`, `function f(...xs:Int)`). Neither
+ * ever stands ALONE in a child slot, so `isStarSlot` recognises the ellipsis
+ * only when the nearest non-space neighbours on both sides are slot
+ * punctuation — an operand on either side means it is a range or a spread and
+ * the token is passed through untouched.
+ *
+ * **It does not bind.** A star absorbs zero or more siblings; `Match.bindings`
+ * maps one name to one `QueryNode` and the `search --json` binding schema is
+ * frozen as `{name, text, span}`, so there is nowhere to put a node LIST
+ * without breaking both. Consequence: `Rewrite` (`apq rewrite`) refuses a
+ * starred pattern outright — its replacement template can only name bound
+ * metavars, so the absorbed children would be deleted in silence. The
+ * `--match` op locator is NOT gated: it only addresses a node, and the op
+ * that follows edits that node under its own semantics.
+ */
+@:nullSafety(Strict)
+final class PatternStar {
+
+	/** `TOKEN.length`, spelled as a constant so neither the scanner's lookahead nor its advance is a magic number. */
+	public static inline final TOKEN_LENGTH: Int = 3;
+
+	public static final KIND: String = 'PatternStar';
+
+	/** The reserved identifier `...` is substituted for, so the grammar's own parser accepts a starred pattern unchanged. */
+	public static final PLACEHOLDER: String = '__APQ_STAR__';
+
+	private static final TOKEN: String = '...';
+	private static final ROOT_STAR_REFUSAL: String = 'pattern: `...` alone matches every node — it is a wildcard, not a pattern ('
+		+ 'use `$$_` for "any ONE node", or put the `...` inside a call / constructor / literal: `f(...)`, `new T(...)`, `[...]`)';
+	private static final NAME_SLOT_REFUSAL: String = 'pattern: `...` cannot stand where the grammar needs a name — it marks a run of '
+		+ 'CHILDREN, so it belongs inside the brackets (' + '`new T(...)`), not in place of the type or callee';
+	private static final TWO_STARS_REFUSAL: String = 'pattern: two `...` in one child list — the matcher anchors one prefix and one suffix '
+		+ 'around a SINGLE star, so a second one has nothing to anchor against ('
+		+ '`new $$T<...>(...)` in particular cannot work: a constructor call keeps its type '
+		+ 'arguments and its value arguments in ONE flat child list, so the two stars would be ' + 'indistinguishable)';
+
+	/**
+	 * True when the `...` starting at `at` stands alone in a child slot —
+	 * the nearest non-space character before it is one of `([{,<` or the
+	 * start of the pattern, and after it one of `)]},>` or the end. A range
+	 * (`0...n`) has an operand before, a spread (`...arr`) has one after.
+	 */
+	public static function isStarSlot(source: String, at: Int): Bool {
+		var before: Int = at - 1;
+		while (before >= 0 && isSpace(source.fastCodeAt(before))) before--;
+		if (before >= 0) {
+			final c: Int = source.fastCodeAt(before);
+			if (c != '('.code && c != '['.code && c != '{'.code && c != ','.code && c != '<'.code) return false;
+		}
+		var after: Int = at + TOKEN_LENGTH;
+		final len: Int = source.length;
+		while (after < len && isSpace(source.fastCodeAt(after))) after++;
+		if (after < len) {
+			final c: Int = source.fastCodeAt(after);
+			if (c != ')'.code && c != ']'.code && c != '}'.code && c != ','.code && c != '>'.code) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Turn each node that IS the placeholder into a `PatternStar` node
+	 * (name-less: nothing can reference it).
+	 *
+	 * "Is the placeholder" is decided by SPAN, not by kind — childless, and
+	 * occupying exactly the placeholder's own text. That is the same trap
+	 * `64f9eee7` fell into for metavars (`new $x()` collapsed wholesale into a
+	 * match-everything hole because the NewExpr was childless too), and the
+	 * same trap in the other direction: `Metavar.reclassify` answers it with a
+	 * plugin-supplied `identKind`, which cannot serve here because the star has
+	 * to reach a TYPE-argument slot as well (`new $T<...>()` projects `Named`,
+	 * not the identifier kind). A span comparison needs no grammar vocabulary
+	 * and separates the two cases exactly: in `new __APQ_STAR__()` the
+	 * `NewExpr`'s span runs from `new` to `)`, so the placeholder is a PART of
+	 * that node and the node is left named — `validate` then refuses it.
+	 *
+	 * Runs BEFORE `Metavar.reclassify` so the metavar path never sees the
+	 * placeholder: the star's whole point is that it is not a metavar.
+	 */
+	public static function reclassify(tree: QueryNode): QueryNode {
+		final children: Array<QueryNode> = [for (c in tree.children) reclassify(c)];
+		final span: Null<Span> = tree.span;
+		return tree.name == PLACEHOLDER && children.length == 0 && span != null && span.to - span.from == PLACEHOLDER.length
+			? new QueryNode(KIND, null, [], span)
+			: new QueryNode(tree.kind, tree.name, children, tree.span);
+	}
+
+	/**
+	 * The three refusals, as one message or `null` when the pattern is sound:
+	 *
+	 *  - a star as the pattern ROOT (`...`, and `new ...()` whose whole node
+	 *    collapses into one) — that is a match-everything wildcard, not a
+	 *    pattern, and `$_` already spells "one of anything";
+	 *  - TWO stars in ONE child list — the matcher anchors a prefix from the
+	 *    left and a suffix from the right around exactly one star, and a
+	 *    second needs backtracking. For the position that would motivate it,
+	 *    `new $T<...>(...)`, it would be a lie anyway: `NewExpr` flattens type
+	 *    arguments and value arguments into one child list, so the two stars
+	 *    are indistinguishable and the pattern would mean exactly `new $T(...)`;
+	 *  - the placeholder surviving in a NAME slot — the ellipsis was written
+	 *    where an identifier is required.
+	 */
+	public static function validate(root: QueryNode): Null<String> {
+		return root.kind == KIND ? ROOT_STAR_REFUSAL : checkNode(root);
+	}
+
+	/** True when `root` contains at least one star — the gate every text-producing op consults. */
+	public static function contains(root: QueryNode): Bool {
+		if (root.kind == KIND) return true;
+		for (c in root.children) if (contains(c)) return true;
+		return false;
+	}
+
+	private static inline function isSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	private static function checkNode(node: QueryNode): Null<String> {
+		if (node.name == PLACEHOLDER) return NAME_SLOT_REFUSAL;
+		var stars: Int = 0;
+		for (c in node.children) if (c.kind == KIND) stars++;
+		if (stars > 1) return TWO_STARS_REFUSAL;
+		for (c in node.children) {
+			final message: Null<String> = checkNode(c);
+			if (message != null) return message;
+		}
+		return null;
 	}
 
 }

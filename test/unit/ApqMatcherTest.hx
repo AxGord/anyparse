@@ -26,6 +26,9 @@ using StringTools;
  */
 class ApqMatcherTest extends Test {
 
+	private static final ARITY_SOURCE: String = 'class X {\n\tfunction f() {\n\t\tvar a = new Foo();\n\t\tvar b = new Foo(1);\n'
+		+ '\t\tvar c = new Foo(1, 2);\n\t\tvar d = new Foo(1, 2, 3);\n\t\tg();\n\t\tg(1);\n\t\tg(1, 2);\n\t}\n}';
+
 	public function testThrowNewMatchesEveryThrowNewSite(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final source: String = 'class X {
@@ -385,6 +388,152 @@ class Y {
 		final tree: QueryNode = plugin.parseFile(source);
 		final matches: Array<Match> = Matcher.search(pattern, tree);
 		Assert.equals(1, matches.length, 'only the new-initialised final may match - got ${matches.length}');
+	}
+
+	/**
+	 * THE SLICE'S FAILING-FIRST TEST. `new` of ANY arity is one question, and
+	 * before the ellipsis it needed one pattern PER arity: the matcher's child
+	 * loop gates on `pChildren.length != iChildren.length`, so `new $T()`,
+	 * `new $T($a)` and `new $T($a, $b)` are three disjoint censuses that a reader
+	 * writing only the first under-counts by whatever the tail holds. `...`
+	 * collapses them into one.
+	 */
+	public function testEllipsisCollapsesTheThreeArityPatternsForNew(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(ARITY_SOURCE);
+		// The split, pinned: each arity pattern sees only its own arity.
+		Assert.equals(1, Matcher.search(plugin.parsePattern("new $T()"), tree).length, 'the 0-arg pattern sees only the 0-arg new');
+		Assert.equals(1, Matcher.search(plugin.parsePattern("new $T($a)"), tree).length, 'the 1-arg pattern sees only the 1-arg new');
+		Assert.equals(1, Matcher.search(plugin.parsePattern("new $T($a, $b)"), tree).length, 'the 2-arg pattern sees only the 2-arg new');
+		// One pattern, every arity.
+		final star: Array<Match> = Matcher.search(plugin.parsePattern("new $T(...)"), tree);
+		Assert.equals(4, star.length, 'one starred pattern must see all four `new` sites - got ${star.length}');
+		Assert.equals('Foo,Foo,Foo,Foo', boundNames(star, 'T').join(','));
+	}
+
+	/** The same collapse for a call: `$f(...)` is every arity of every call. */
+	public function testEllipsisCollapsesArityForACall(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(ARITY_SOURCE);
+		Assert.equals(1, Matcher.search(plugin.parsePattern('g()'), tree).length);
+		Assert.equals(1, Matcher.search(plugin.parsePattern("g($a)"), tree).length);
+		Assert.equals(1, Matcher.search(plugin.parsePattern("g($a, $b)"), tree).length);
+		Assert.equals(3, Matcher.search(plugin.parsePattern('g(...)'), tree).length, 'one starred call pattern must see all three arities');
+	}
+
+	/** `[...]` is an array literal of any length; `{a: ...}` is not attempted (an object field VALUE is one node, not a run). */
+	public function testEllipsisMatchesArrayLiteralOfAnyLength(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(
+			'class X {\n\tfunction f() {\n\t\tvar a = [];\n\t\tvar b = [1];\n\t\tvar c = [1, 2, 3];\n\t}\n}'
+		);
+		Assert.equals(3, Matcher.search(plugin.parsePattern('[...]'), tree).length);
+		Assert.equals(1, Matcher.search(plugin.parsePattern("[$x]"), tree).length, 'the single-item pattern still means exactly one item');
+	}
+
+	/**
+	 * Anchoring. A star splits the pattern's child list into a PREFIX matched
+	 * from the left and a SUFFIX matched from the right; the star absorbs the
+	 * (possibly empty) run between them. All three shapes therefore work and
+	 * mean three different things.
+	 */
+	public function testEllipsisAnchorsPrefixSuffixAndBoth(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(
+			'class X {\n\tfunction f() {\n\t\th(1);\n\t\th(1, 9);\n\t\th(9, 1);\n\t\th(1, 5, 1);\n\t\th(9, 9);\n\t}\n}'
+		);
+		Assert.equals(3, Matcher.search(plugin.parsePattern('h(1, ...)'), tree).length, 'leading 1: h(1), h(1,9), h(1,5,1)');
+		Assert.equals(3, Matcher.search(plugin.parsePattern('h(..., 1)'), tree).length, 'trailing 1: h(1), h(9,1), h(1,5,1)');
+		Assert.equals(
+			1, Matcher.search(plugin.parsePattern('h(1, ..., 1)'), tree).length,
+			'both ends 1: only h(1,5,1) - prefix+suffix must FIT, so the bare h(1) cannot serve one argument to both ends'
+		);
+	}
+
+	/**
+	 * PINNED CONFLATION. `NewExpr` flattens type arguments and value arguments
+	 * into one child list (see the `ast` dump in the slice handoff), and the
+	 * matcher is language-agnostic by construction - it compares kinds and
+	 * positions, never grammar vocabulary. So `new $T(...)` DELIBERATELY matches
+	 * `new Foo<Int>()` as well as `new Foo(x)`: both are constructions, which is
+	 * the question `new $T(...)` asks. The count is "constructions", not
+	 * "constructions carrying arguments". This is not new with the star - the
+	 * pre-existing `new $T($a, $b)` already matches `new Map<String,Int>()`.
+	 */
+	public function testEllipsisDoesNotSeparateTypeArgumentsFromValueArguments(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(
+			'class X {\n\tfunction f() {\n\t\tvar a = new Foo<Int>();\n\t\tvar b = new Foo(x);\n\t\tvar c = new Foo<Int>(x);\n\t}\n}'
+		);
+		Assert.equals(3, Matcher.search(plugin.parsePattern("new $T(...)"), tree).length, 'all three are constructions');
+		// The pre-existing conflation, pinned so a future type-aware fix has to move THIS number too.
+		Assert.equals(
+			2, Matcher.search(plugin.parsePattern("new $T($a)"), tree).length,
+			'`new Foo<Int>()` already reads as one-argument today, star or no star'
+		);
+	}
+
+	/** A star does not bind: nothing lands in `Match.bindings` for it, so no template can name it. */
+	public function testEllipsisDoesNotBind(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(ARITY_SOURCE);
+		final matches: Array<Match> = Matcher.search(plugin.parsePattern("new $T(...)"), tree);
+		Assert.equals(4, matches.length);
+		for (m in matches) {
+			final keys: Array<String> = [for (k in m.bindings.keys()) k];
+			keys.sort(Reflect.compare);
+			Assert.equals('T', keys.join(','), 'only the name metavar binds - got ${keys.join(',')}');
+		}
+	}
+
+	/**
+	 * The range operator and the rest/spread `...` are ordinary Haxe and must
+	 * keep parsing as themselves: the ellipsis is recognised only where it
+	 * stands ALONE in a child slot, which a range and a spread never do.
+	 */
+	public function testRangeAndSpreadPatternsAreUntouched(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(
+			'class Q {\n\tfunction f(arr:Array<Int>, n:Int) {\n\t\tfor (i in 0...n) trace(i);\n\t\tg(...arr);\n\t}\n'
+			+ '\tfunction g(...xs:Int) {}\n}'
+		);
+		Assert.equals(
+			1, Matcher.search(plugin.parsePattern("for ($i in 0...$n) $b"), tree).length, 'the range operator still parses as a range'
+		);
+		Assert.equals(1, Matcher.search(plugin.parsePattern("g(...$a)"), tree).length, 'a spread argument still parses as a spread');
+	}
+
+	/**
+	 * THE TYPE-PARAMETER GATE. A BARE star cannot separate type arguments from
+	 * value arguments (the test above pins that). Writing the type arguments
+	 * out CAN, and the gate is the matcher's ordinary kind check: a metavar in
+	 * a type-argument slot projects as `Named`, and no expression argument is
+	 * ever `Named` — the plugin already declares that partition as
+	 * `GrammarPluginShape.typeAnnotationKinds` (`Named` / `Anon` / the
+	 * function-type forms), which is what makes the disjointness a property of
+	 * the grammar rather than a coincidence of this fixture.
+	 *
+	 * So `new $T<$K>(...)` is "a construction carrying at least one type
+	 * argument, any arity" — a question that needed one pattern per TOTAL child
+	 * count before the star, and that must NOT collect `new Foo(x)`. Delete the
+	 * kind comparison in `Matcher.unify` and this test goes from 2 to 4.
+	 */
+	public function testWrittenOutTypeArgumentsSeparateFromValueArguments(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(
+			'class X {\n\tfunction f() {\n\t\tnew Foo(x);\n\t\tnew Foo(x, y);\n'
+			+ '\t\tnew Map<String, Int>();\n\t\tnew Map<String, Int>(x);\n\t}\n}'
+		);
+		final typed: Array<Match> = Matcher.search(plugin.parsePattern("new $T<$K>(...)"), tree);
+		Assert.equals(2, typed.length, 'only the two `new Map<..>` sites carry a type argument - got ${typed.length}');
+		Assert.equals('Map,Map', boundNames(typed, 'T').join(','));
+		Assert.equals('String,String', boundNames(typed, 'K').join(','), '$$K must bind the TYPE argument, not the value one');
+		Assert.equals(
+			2, Matcher.search(plugin.parsePattern("new $T<$K, $V>(...)"), tree).length, 'two written-out type arguments, any value arity'
+		);
+		Assert.equals(
+			4, Matcher.search(plugin.parsePattern("new $T(...)"), tree).length, 'the bare star still sees all four constructions'
+		);
 	}
 
 	/** The names each match bound to the given metavariable, in match order. */
