@@ -5,11 +5,11 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.EnumAbstractSyntax;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -167,7 +167,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	 * finds no plan and yields no edits, rather than converting a type whose whole-project
 	 * refusals were never evaluated.
 	 */
-	private var plans: Map<String, ConversionPlan> = [];
+	private var _plans: Map<String, ConversionPlan> = [];
 
 	public function new() {}
 
@@ -180,41 +180,17 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final containerKinds: Array<String> = shape.visibilityContainerKinds ?? [];
-		final mutableKinds: Array<String> = shape.mutableFieldDeclKinds ?? [];
-		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
-		final constKinds: Array<String> = [for (k in fieldKinds) if (!mutableKinds.contains(k)) k];
-		final staticKind: Null<String> = shape.staticModifierKind;
-		final numericKinds: Array<String> = shape.numericLiteralKinds ?? [];
-		if (staticKind == null || containerKinds.length == 0 || constKinds.length == 0 || numericKinds.length == 0) return [];
-		final staticKindValue: String = staticKind;
-		final cfg: EnumAbstractCfg = {
-			constKinds: constKinds,
-			staticKind: staticKindValue,
-			inlineKind: shape.inlineModifierKind ?? '',
-			metaKinds: plugin.metaShape().metaKinds,
-			literalTypeNames: shape.literalTypeNames ?? [],
-			modifierKinds: shape.modifierOrderKinds ?? [],
-			numericKinds: numericKinds,
-			negationKind: shape.negationKind ?? '',
-			identKind: shape.identKind,
-			functionKinds: shape.functionKinds ?? [],
-			returnKind: shape.returnStatementKind ?? '',
-			assignKinds: shape.writeParentKinds,
-			ternaryKind: shape.ternaryKind ?? '',
-			resultContainerKinds: resultContainers(shape),
-			classKinds: shape.classDeclKinds ?? [],
-			syntax: shape.enumAbstractSyntax
-		};
+		final cfg: Null<EnumAbstractCfg> = config(plugin);
+		if (cfg == null) return [];
+		final containerKinds: Array<String> = plugin.refShape().visibilityContainerKinds ?? [];
 		final violations: Array<Violation> = [];
 		final candidates: Array<ConversionPlan> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) flagFile(violations, candidates, entry.file, entry.source, tree, containerKinds, cfg);
 		}
-		plans = [];
-		for (plan in acceptedPlans(files, plugin, candidates)) plans[planKey(plan.file, plan.from)] = plan;
+		_plans = [];
+		for (plan in acceptedPlans(files, plugin, candidates)) _plans[planKey(plan.file, plan.from)] = plan;
 		return violations;
 	}
 
@@ -233,7 +209,9 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [for (e in fixGrouped(source, violations, plugin, index)) { span: e.span, text: e.text }];
+		return [
+			for (e in fixGrouped(source, violations, plugin, index)) { span: e.span, text: e.text }
+		];
 	}
 
 	/**
@@ -255,13 +233,48 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final plan: Null<ConversionPlan> = plans[planKey(v.file, span.from)];
+			final plan: Null<ConversionPlan> = _plans[planKey(v.file, span.from)];
 			if (plan == null || source.substring(span.from, span.to) != plan.declSource) continue;
 			if (index != null && (index.hasSubtype(plan.name) || index.transitivelyCarriesRtti(plan.name))) continue;
 			for (e in plan.edits) out.push({ span: e.span, text: e.text, group: group });
 			group++;
 		}
 		return out;
+	}
+
+	/**
+	 * Every grammar seam both arms read, resolved once, or null when one the check cannot work
+	 * without is unset — the grammar-agnostic gate that makes this a no-op for a language that
+	 * describes no containers, no constant fields, no static modifier or no numeric literals.
+	 */
+	private static function config(plugin: GrammarPlugin): Null<EnumAbstractCfg> {
+		final shape: RefShape = plugin.refShape();
+		final containerKinds: Array<String> = shape.visibilityContainerKinds ?? [];
+		final mutableKinds: Array<String> = shape.mutableFieldDeclKinds ?? [];
+		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
+		final constKinds: Array<String> = [for (k in fieldKinds) if (!mutableKinds.contains(k)) k];
+		final staticKind: Null<String> = shape.staticModifierKind;
+		final numericKinds: Array<String> = shape.numericLiteralKinds ?? [];
+		if (staticKind == null || containerKinds.length == 0 || constKinds.length == 0 || numericKinds.length == 0) return null;
+		final staticKindValue: String = staticKind;
+		return {
+			constKinds: constKinds,
+			staticKind: staticKindValue,
+			inlineKind: shape.inlineModifierKind ?? '',
+			metaKinds: plugin.metaShape().metaKinds,
+			literalTypeNames: shape.literalTypeNames ?? [],
+			modifierKinds: shape.modifierOrderKinds ?? [],
+			numericKinds: numericKinds,
+			negationKind: shape.negationKind ?? '',
+			identKind: shape.identKind,
+			functionKinds: shape.functionKinds ?? [],
+			returnKind: shape.returnStatementKind ?? '',
+			assignKinds: shape.writeParentKinds,
+			ternaryKind: shape.ternaryKind ?? '',
+			resultContainerKinds: resultContainers(shape),
+			classKinds: shape.classDeclKinds ?? [],
+			syntax: shape.enumAbstractSyntax
+		};
 	}
 
 	/** The `plans` key for one container: its file plus the container's own start offset. */
@@ -292,8 +305,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 
 	/** Whether `source` contains any of `names` as raw text — the cheap pre-filter ahead of the literal scan. */
 	private static function mentionsAny(source: String, names: Array<String>): Bool {
-		for (n in names) if (source.indexOf(n) >= 0) return true;
-		return false;
+		return names.exists(n -> source.indexOf(n) >= 0);
 	}
 
 	/**
@@ -502,10 +514,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 		if (head == null) return null;
 		final edits: Array<{ span: Span, text: String }> = [head];
 		final kids: Array<QueryNode> = container.children;
-		for (i in 0...kids.length) {
-			if (!cfg.constKinds.contains(kids[i].kind)) continue;
-			if (!memberEdits(kids, i, source, cfg, edits)) return null;
-		}
+		for (i in 0...kids.length) if (cfg.constKinds.contains(kids[i].kind) && !memberEdits(kids, i, source, cfg, edits)) return null;
 		return {
 			file: '',
 			from: span.from,
@@ -533,8 +542,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 		if (keyword.length == 0 || !isBareWord(keyword)) return null;
 		var after: Int = nameStart + name.length;
 		while (after < limit && isSpace(source.charAt(after))) after++;
-		if (after >= source.length || source.charAt(after) != syntax.bodyOpen) return null;
-		return {
+		return after >= source.length || source.charAt(after) != syntax.bodyOpen ? null : {
 			span: new Span(span.from, nameStart + name.length),
 			text: syntax.head.replace(NAME_SLOT, name).replace(UNDER_SLOT, typeName)
 		};
@@ -543,8 +551,8 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	/** Where the declaration HEAD ends at the latest: the first child's start, else the container's own end. */
 	private static function headLimit(container: QueryNode, span: Span): Int {
 		for (child in container.children) {
-			final s: Null<Span> = child.span;
-			if (s != null) return s.from;
+			final childSpan: Null<Span> = child.span;
+			if (childSpan != null) return childSpan.from;
 		}
 		return span.to;
 	}
