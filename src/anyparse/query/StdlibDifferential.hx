@@ -21,7 +21,7 @@ typedef StdlibFn = {
 	final params: Array<String>;
 	final instance: Bool;
 	final property: Bool;
-	final marker: String;
+	final markers: Array<String>;
 };
 
 /**
@@ -194,7 +194,9 @@ final class StdlibDifferential {
 			"'%20z'",
 			"'<i>t</i>'",
 			"'A B C'",
-			"'.hidden'"
+			"'.hidden'",
+			"'a\\\\b'",
+			"'\"q'"
 		],
 		'Bool' => ['true', 'false']
 	];
@@ -211,7 +213,7 @@ final class StdlibDifferential {
 			params: [],
 			instance: false,
 			property: false,
-			marker: ''
+			markers: []
 		};
 		final out: Array<Mapping> = [];
 		for (index in 0...candidate.params.length) {
@@ -221,6 +223,12 @@ final class StdlibDifferential {
 		for (literal in candidate.literals) if (literal.type == candidate.returnType)
 			out.push({ fn: entry, code: literal.code, display: literal.code });
 		return out;
+	}
+
+	/** Whether any disqualifying spelling occurs in the candidate's own text. */
+	private static function mentionsAny(source: String, markers: Array<String>): Bool {
+		for (marker in markers) if (source.indexOf(marker) >= 0) return true;
+		return false;
 	}
 
 	/** Whether a mapping is one of the trivial baselines rather than a pooled stdlib call. */
@@ -239,7 +247,7 @@ final class StdlibDifferential {
 		final out: Array<Mapping> = [];
 		for (entry in POOL) {
 			if (entry.ret != candidate.returnType) continue;
-			if (candidate.source.indexOf(entry.marker) >= 0) continue;
+			if (mentionsAny(candidate.source, entry.markers)) continue;
 			fill(entry, candidate, [], out);
 			if (out.length > MAX_MAPPINGS) return out;
 		}
@@ -256,20 +264,24 @@ final class StdlibDifferential {
 		buf.add('using StringTools;\n\nclass ${PROBE_CLASS} {\n\n');
 		buf.add('\tstatic final live: Array<Bool> = [' + [for (unused in maps) 'true'].join(', ') + '];\n\n');
 		buf.add('\tstatic var inputs: Int = 0;\n\n');
+		buf.add("\tstatic var constant: String = '';\n\n");
+		buf.add('\tstatic var varying: Bool = false;\n\n');
 		buf.add('\tstatic ' + candidate.source + '\n\n');
 		buf.add('\tstatic function main(): Void {\n');
 		for (slot in 0...arity) {
-			final values: Array<String> = GRID[candidate.params[slot].type] ?? [];
+			final values: Array<String> = grid(candidate, candidate.params[slot].type);
 			buf.add(tabs(slot + 2) + 'for (a$slot in [' + values.join(', ') + ']) {\n');
 		}
 		final args: String = [for (slot in 0...arity) 'a$slot'].join(', ');
 		final body: String = tabs(arity + 2);
 		buf.add(body + 'inputs++;\n');
 		buf.add(body + 'final base: String = __apqEval(() -> ${candidate.name}($args));\n');
+		buf.add(body + 'if (inputs == 1) constant = base else if (base != constant) varying = true;\n');
 		for (index in 0...maps.length)
 			buf.add(body + 'if (live[$index] && __apqEval(() -> ${maps[index].code}) != base) live[$index] = false;\n');
 		for (slot in 0...arity) buf.add(tabs(arity + 1 - slot) + '}\n');
 		buf.add("\t\tSys.println('INPUTS ' + inputs);\n");
+		buf.add("\t\tif (!varying) Sys.println('CONSTANT');\n");
 		buf.add("\t\tfor (index in 0...live.length) if (live[index]) Sys.println('MATCH ' + index);\n");
 		buf.add('\t}\n\n');
 		buf.add('\tstatic function __apqEval(produce: () -> Dynamic): String {\n');
@@ -285,6 +297,7 @@ final class StdlibDifferential {
 		for (line in stdout.split('\n')) {
 			final text: String = line.trim();
 			if (text.startsWith('INPUTS ')) inputs = Std.parseInt(text.substr(7)) ?? 0;
+			if (text == 'CONSTANT') return Skipped('constant over all $inputs generated inputs — the grid does not discriminate it');
 			if (text.startsWith('MATCH ')) {
 				final index: Null<Int> = Std.parseInt(text.substr(6));
 				if (index != null && index >= 0 && index < maps.length) hits.push(maps[index]);
@@ -362,14 +375,51 @@ final class StdlibDifferential {
 	#end
 
 	/** A static call entry: `Recv.member(...)`, disqualified by its own spelling appearing in a body. */
+	/**
+	 * The per-parameter value list one candidate is driven over: its OWN body literals of that
+	 * type first (each also affixed on both sides, so an equality can be told apart from a
+	 * `startsWith` / `endsWith` / `contains` that agrees with it on the bare literal), then the
+	 * fixed grid, deduplicated and capped so the cartesian product stays interpretable in seconds.
+	 *
+	 * Seeding from the body is the same idea that bounds the mapping search, applied to the INPUT
+	 * axis: a function branching on `'.drl'` is decided by strings around `'.drl'`, and by nothing
+	 * in a generic grid. Measured on a real tree: unseeded, six string predicates returned the same
+	 * answer for every grid value and therefore "matched" every shape-compatible pooled call.
+	 */
+	private static function grid(candidate: StdlibCandidate, type: String): Array<String> {
+		final values: Array<String> = [];
+		inline function add(value: String): Void if (!values.contains(value)) values.push(value);
+		for (literal in candidate.literals) if (literal.type == type) {
+			add(literal.code);
+			if (type == 'String') {
+				add("'~' + " + literal.code);
+				add(literal.code + " + '~'");
+			}
+		}
+		for (value in GRID[type] ?? []) add(value);
+		final cap: Int = switch (candidate.params.length) {
+			case 1: 36;
+			case 2: 22;
+			case _: 14;
+		}
+		return values.length > cap ? values.slice(0, cap) : values;
+	}
+
+	/**
+	 * A static-call entry. A `StringTools` static also carries its STATIC-EXTENSION spelling as a
+	 * disqualifier: a body written `path.endsWith('.drl')` is already calling
+	 * `StringTools.endsWith`, and reporting that back is the thin-wrapper false positive in its
+	 * most convincing disguise -- the finding is literally true and completely useless.
+	 */
 	private static function fn(id: String, ret: String, params: Array<String>): StdlibFn {
+		final markers: Array<String> = id.indexOf('StringTools.') == 0 ? [id, '.' + member(id)] : [id];
 		return {
 			id: id,
 			ret: ret,
 			params: params,
 			instance: false,
 			property: false,
-			marker: id
+			markers: markers
 		};
 	}
 
@@ -381,7 +431,7 @@ final class StdlibDifferential {
 			params: params,
 			instance: true,
 			property: false,
-			marker: '.' + member(id)
+			markers: ['.' + member(id)]
 		};
 	}
 
@@ -393,7 +443,7 @@ final class StdlibDifferential {
 			params: params,
 			instance: true,
 			property: true,
-			marker: '.' + member(id)
+			markers: ['.' + member(id)]
 		};
 	}
 

@@ -55,6 +55,46 @@ class StdlibDifferentialTest extends Test {
 		Assert.isFalse(StdlibDifferential.isTrivial(maps[trivial.length]), 'baselines lead, pool entries follow');
 	}
 
+	/**
+	 * A body written as a static EXTENSION is already calling the pooled member, so that member is
+	 * disqualified for it. `path.endsWith('.drl')` and `StringTools.endsWith(path, '.drl')` are one
+	 * call written two ways, and only the qualified spelling used to be recognised -- which made
+	 * the most convincing false positive of all: a finding that is literally true and useless.
+	 */
+	public function testStaticExtensionSpellingDisqualifiesItsEntry(): Void {
+		final candidate: StdlibCandidate = one("class C {\n\tfunction isDrl(path:String):Bool return path.endsWith('.drl');\n}");
+		for (map in StdlibDifferential.mappings(candidate))
+			Assert.isTrue(map.display.indexOf('endsWith') < 0, 'the extension call came back as a finding: ${map.display}');
+	}
+
+	/**
+	 * The input grid is SEEDED with the candidate's own string literals, each also affixed on both
+	 * sides. Without the affixes an equality against a literal and a `startsWith` / `endsWith` /
+	 * `contains` of the same literal agree on every value the grid holds.
+	 */
+	public function testGridIsSeededFromTheBody(): Void {
+		final candidate: StdlibCandidate = one("class C {\n\tfunction isJaZh(code:String):Bool return code == 'JA';\n}");
+		final program: String = StdlibDifferential.program(candidate, StdlibDifferential.mappings(candidate));
+		Assert.isTrue(program.indexOf("'JA'") >= 0, 'the body literal itself');
+		Assert.isTrue(program.indexOf("'~' + 'JA'") >= 0, 'the literal with a leading affix');
+		Assert.isTrue(program.indexOf("'JA' + '~'") >= 0, 'the literal with a trailing affix');
+	}
+
+	/**
+	 * A probe that reports `CONSTANT` is a refusal, not a finding: a candidate returning the same
+	 * answer for every input has not been discriminated by the grid, so every call it "agrees"
+	 * with agrees with the constant instead.
+	 */
+	public function testConstantCollapseIsRefused(): Void {
+		final maps: Array<Mapping> = StdlibDifferential.mappings(padDigit());
+		switch (StdlibDifferential.verdict('INPUTS 24\nCONSTANT\nMATCH 0\n', maps)) {
+			case Skipped(reason):
+				Assert.isTrue(reason.indexOf('constant') >= 0, reason);
+			case _:
+				Assert.fail('a CONSTANT line must refuse the candidate, MATCH lines notwithstanding');
+		}
+	}
+
 	/** A body constant of the return type is a baseline too -- a constant function is no reimplementation. */
 	public function testBodyConstantIsABaseline(): Void {
 		final candidate: StdlibCandidate = one("class C {\n\tfunction f(n:Int):String return n > 0 ? '0' : '0';\n}");
