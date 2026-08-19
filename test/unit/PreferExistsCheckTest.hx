@@ -265,7 +265,8 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	public function testFlagFormFlagged(): Void {
-		final vs: Array<Violation> = violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;'));
+		final vs: Array<Violation> =
+			violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;'));
 		Assert.equals(1, vs.length);
 		Assert.equals('prefer-exists', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -276,9 +277,8 @@ class PreferExistsCheckTest extends Test {
 		// The motivating TM site's shape (`child.nodeType == CData`): the condition READS a field,
 		// which `RefactorSupport.isSideEffectFree` refuses outright and `PurityScan` admits. The twin
 		// of the refusal below — together they say WHICH purity question the gate asks.
-		final vs: Array<Violation> = violations(
-			flagFn('var found:Bool = false;\n\t\tfor (p in ps) if (p.id > 2) found = true;\n\t\treturn found;')
-		);
+		final vs: Array<Violation> =
+			violations(flagFn('var found:Bool = false;\n\t\tfor (p in ps) if (p.id > 2) found = true;\n\t\treturn found;'));
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('final found = ps.exists(p -> p.id > 2)') != -1, vs[0].message);
 	}
@@ -295,8 +295,7 @@ class PreferExistsCheckTest extends Test {
 	public function testFlagFormEffectfulMethodCallConditionNotFlagged(): Void {
 		// The receiver-call spelling of the same hazard (`locks.remove(rm)` in the measured tree).
 		Assert.equals(
-			0,
-			violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (xs.remove(x)) found = true;\n\t\treturn found;')).length
+			0, violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (xs.remove(x)) found = true;\n\t\treturn found;')).length
 		);
 	}
 
@@ -318,8 +317,7 @@ class PreferExistsCheckTest extends Test {
 
 	public function testFlagFormNonLiteralInitializerNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations(flagFn('var found:Bool = xs.length == 0;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;')).length
+			0, violations(flagFn('var found:Bool = xs.length == 0;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;')).length
 		);
 	}
 
@@ -355,9 +353,7 @@ class PreferExistsCheckTest extends Test {
 		// target-name check stands between this pair and a fold that would be plain wrong.
 		Assert.equals(
 			0,
-			violations(
-				flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) a = true;\n\t\tfound = a;\n\t\treturn found;')
-			).length
+			violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) a = true;\n\t\tfound = a;\n\t\treturn found;')).length
 		);
 	}
 
@@ -367,18 +363,16 @@ class PreferExistsCheckTest extends Test {
 		// Folding this would drop every `trace` past the first match.
 		Assert.equals(
 			0,
-			violations(
-				flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) { trace(x); found = true; }\n\t\treturn found;')
-			).length
+			violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) if (x > 2) { trace(x); found = true; }\n\t\treturn found;'))
+				.length
 		);
 	}
 
 	public function testFlagFormExtraLoopBodyStatementNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				flagFn('var found:Bool = false;\n\t\tfor (x in xs) { trace(x); if (x > 2) found = true; }\n\t\treturn found;')
-			).length
+			violations(flagFn('var found:Bool = false;\n\t\tfor (x in xs) { trace(x); if (x > 2) found = true; }\n\t\treturn found;'))
+				.length
 		);
 	}
 
@@ -387,17 +381,15 @@ class PreferExistsCheckTest extends Test {
 		// declaration is the guard, not the loop, so the pair is not this shape — and no measured
 		// site wants it: every guarded flag loop in the application tree fails the purity gate too.
 		Assert.equals(
-			0,
-			violations(flagFn('var found:Bool = false;\n\t\tif (a) for (x in xs) if (x > 2) found = true;\n\t\treturn found;')).length
+			0, violations(flagFn('var found:Bool = false;\n\t\tif (a) for (x in xs) if (x > 2) found = true;\n\t\treturn found;')).length
 		);
 	}
 
 	public function testFlagFormRangeIterableNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				flagFn('var found:Bool = false;\n\t\tfor (i in 0...xs.length) if (xs[i] > 2) found = true;\n\t\treturn found;')
-			).length
+			violations(flagFn('var found:Bool = false;\n\t\tfor (i in 0...xs.length) if (xs[i] > 2) found = true;\n\t\treturn found;'))
+				.length
 		);
 	}
 
@@ -431,9 +423,7 @@ class PreferExistsCheckTest extends Test {
 	}
 
 	public function testFlagFormFixKeepsAnAbsentAnnotationAbsent(): Void {
-		final out: String = fixResult(
-			flagFile('var found = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;', true)
-		);
+		final out: String = fixResult(flagFile('var found = false;\n\t\tfor (x in xs) if (x > 2) found = true;\n\t\treturn found;', true));
 		Assert.isTrue(out.indexOf('final found = xs.exists(x -> x > 2);') != -1, out);
 	}
 

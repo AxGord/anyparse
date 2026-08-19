@@ -9974,8 +9974,7 @@ final class Cli {
 		baselineOk: Bool, combinedOk: Bool, isolatedResults: Array<{ ok: Bool, hits: Int }>, patternCount: Int
 	): Void {
 		if (combinedOk && !baselineOk) {
-			var anyIsolatedOk: Bool = false;
-			for (r in isolatedResults) if (r.ok) anyIsolatedOk = true;
+			final anyIsolatedOk: Bool = isolatedResults.exists(r -> r.ok);
 			if (anyIsolatedOk) {
 				var soleCount: Int = 0;
 				for (r in isolatedResults) if (r.ok) soleCount++;
@@ -14894,8 +14893,7 @@ final class Cli {
 			final total: Int = patternHits[idx];
 			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
 		}
-		var anyZero: Bool = false;
-		for (h in patternHits) if (h == 0) anyZero = true;
+		final anyZero: Bool = patternHits.exists(h -> h == 0);
 		if (!anyZero) return exitCode;
 		stderr('apq recon: --predict-strip --probe: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals\n');
 		return EXIT_RUNTIME;
@@ -15256,8 +15254,7 @@ final class Cli {
 		// non-zero. A pattern matching SOMEWHERE but not everywhere is
 		// expected behaviour for a targeted predicate; only the global
 		// 0 case is the guard.
-		var anyZero: Bool = false;
-		for (h in patternHits) if (h == 0) anyZero = true;
+		final anyZero: Bool = patternHits.exists(h -> h == 0);
 		if (!anyZero) return EXIT_OK;
 		stderr(
 			'apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see '

@@ -533,7 +533,9 @@ final class BoolLoopScan {
 	 * were the refusal dropped, a key-value loop would reach `FOR_CHILD_COUNT` exactly like a
 	 * single-binder one and be rewritten, so the refusal is the sole gate and a test can prove it.
 	 */
-	private static function forIfHead(forNode: QueryNode, source: String, s: Seams, probe: Probes, sink: Null<FlagSink> = null): Null<Head> {
+	private static function forIfHead(
+		forNode: QueryNode, source: String, s: Seams, probe: Probes, sink: Null<FlagSink> = null
+	): Null<Head> {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
 		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;

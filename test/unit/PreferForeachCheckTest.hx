@@ -196,32 +196,25 @@ class PreferForeachCheckTest extends Test {
 	public function testFlagFormEffectfulConditionNotFlagged(): Void {
 		// ★ `Lambda.foreach` stops at the first `false` where the loop visits every element, so a
 		// condition that DOES work cannot be folded — the same gate the twin direction carries.
-		Assert.equals(
-			0, violations(flagFn('var all:Bool = true;\n\t\tfor (x in xs) if (!keep(x)) all = false;\n\t\treturn all;')).length
-		);
+		Assert.equals(0, violations(flagFn('var all:Bool = true;\n\t\tfor (x in xs) if (!keep(x)) all = false;\n\t\treturn all;')).length);
 	}
 
 	public function testFlagFormGuardReadingTheFlagNotClaimed(): Void {
 		// The measured corpus shape (`if (ordered) for (…) if (mismatch) ordered = false;`): the
 		// statement after the declaration is the guard, not the loop, so the pair is not this shape.
 		Assert.equals(
-			0,
-			violations(flagFn('var all:Bool = true;\n\t\tif (all) for (b in bs) if (!b) all = false;\n\t\treturn all;')).length
+			0, violations(flagFn('var all:Bool = true;\n\t\tif (all) for (b in bs) if (!b) all = false;\n\t\treturn all;')).length
 		);
 	}
 
 	public function testFlagFormInitializerMatchingTheLoopLiteralNotFlagged(): Void {
 		// The loop's literal is this direction's, but the declaration already opens at it — the loop
 		// can never change the value, so the fold would not be an identity.
-		Assert.equals(
-			0, violations(flagFn('var all:Bool = false;\n\t\tfor (b in bs) if (!b) all = false;\n\t\treturn all;')).length
-		);
+		Assert.equals(0, violations(flagFn('var all:Bool = false;\n\t\tfor (b in bs) if (!b) all = false;\n\t\treturn all;')).length);
 	}
 
 	public function testExistsDirectionFlagFormNotClaimed(): Void {
-		Assert.equals(
-			0, violations(flagFn('var all:Bool = false;\n\t\tfor (x in xs) if (x > 2) all = true;\n\t\treturn all;')).length
-		);
+		Assert.equals(0, violations(flagFn('var all:Bool = false;\n\t\tfor (x in xs) if (x > 2) all = true;\n\t\treturn all;')).length);
 	}
 
 	public function testFlagFormFixFoldsDeclarationAndLoop(): Void {

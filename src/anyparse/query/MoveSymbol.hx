@@ -679,8 +679,7 @@ final class MoveSymbol {
 				final afterIdx: Int = at + path.length;
 				final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(afterIdx));
 				if (!beforeOk || !afterOk) continue;
-				var inImport: Bool = false;
-				for (imp in infoNN.imports) if (imp.raw == path && at >= imp.span.from && at < imp.span.to) inImport = true;
+				final inImport: Bool = infoNN.imports.exists(imp -> imp.raw == path && at >= imp.span.from && at < imp.span.to);
 				if (!inImport)
 					return 'cross-package move: "$file" references "$path" by its fully-qualified path — repointing it is unsafe; '
 						+ 'convert it to a bare "$typeName" (with an import) first';
