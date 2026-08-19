@@ -151,17 +151,19 @@ final class AssignmentTreeHoist {
 	 * require a default -- the caller decides (a nested switch and the l-value arm require one; the
 	 * decl arm may synthesize it).
 	 *
-	 * `emptyDefaultValue`, when given, lets a completely EMPTY default arm (`case _:` / `default:`
-	 * with no body at all) borrow its value from it instead of failing the whole match -- meant for
-	 * the decl-pairing caller's own paired initializer, valid only because that caller already
-	 * proves the target holds exactly that value at the switch (adjacency + no other writes). The
-	 * value is copied VERBATIM (its span rides into `kept`) and contributes nothing to
-	 * `leafCount`: an empty arm performs no write. Every other caller passes nothing, so a nested
-	 * switch and the l-value arm keep refusing an empty arm exactly as before -- neither has a
-	 * value to lend it.
+	 * `emptyDefault`, when given, lets a completely EMPTY default arm (`case _:` / `default:` with
+	 * no body at all) borrow that unit's value instead of failing the whole match -- meant for a
+	 * caller that has PROVEN what the target holds when no arm matches, and contributing nothing to
+	 * `leafCount` since an empty arm performs no write. Two such callers exist: the decl-pairing arm
+	 * of `prefer-switch-expression-assignment` lends its own paired initializer (`verbatimUnit`),
+	 * valid because adjacency plus the no-other-writes gate prove the target still holds it; and
+	 * `join-override-chain` lends the value BUILT from everything earlier in its run, which is the
+	 * same proof one construct further out. Every other caller passes nothing, so a nested switch
+	 * and the l-value arm keep refusing an empty arm exactly as before -- neither has a value to
+	 * lend it.
 	 */
 	public static function switchArms(
-		switchNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried, ?emptyDefaultValue: QueryNode
+		switchNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried, ?emptyDefault: UnitValue
 	): Null<SwitchArms> {
 		if (!switchReady(s) || switchNode.children.length < 2) return null;
 		final subject: QueryNode = switchNode.children[0];
@@ -176,7 +178,7 @@ final class AssignmentTreeHoist {
 			final body: Null<QueryNode> = armBody(branch, s);
 			final unit: Null<UnitValue> = body != null
 				? unitValue(body, ref, source, s, carried)
-				: borrowedEmptyDefaultUnit(branch, emptyDefaultValue, source, s);
+				: borrowedEmptyDefaultUnit(branch, emptyDefault, s);
 			if (unit == null) return null;
 			final header: Null<String> = armHeader(branch, source, s);
 			if (header == null) return null;
@@ -364,19 +366,23 @@ final class AssignmentTreeHoist {
 	}
 
 	/**
-	 * The borrowed value for a completely empty default arm -- `emptyDefaultValue`'s own verbatim
-	 * text and span, contributing no leaf write (`leafCount: 0`; an empty arm writes nothing). Null
-	 * when no fallback was given, `branch` is not a default arm (`isDefaultArm`), or it is not
-	 * truly empty (`isEmptyArm`) -- `armBody`'s null also covers a MULTI-statement body, which must
-	 * keep failing here rather than silently taking the fallback.
+	 * The borrowed value for a completely empty default arm -- `emptyDefault` unchanged. Null when
+	 * no fallback was given, `branch` is not a default arm (`isDefaultArm`), or it is not truly
+	 * empty (`isEmptyArm`) -- `armBody`'s null also covers a MULTI-statement body, which must keep
+	 * failing here rather than silently taking the fallback.
 	 */
-	private static function borrowedEmptyDefaultUnit(
-		branch: QueryNode, emptyDefaultValue: Null<QueryNode>, source: String, s: TreeSeams
-	): Null<UnitValue> {
-		if (emptyDefaultValue == null || !isDefaultArm(branch, s) || !isEmptyArm(branch, s)) return null;
-		final span: Null<Span> = emptyDefaultValue.span;
+	private static function borrowedEmptyDefaultUnit(branch: QueryNode, emptyDefault: Null<UnitValue>, s: TreeSeams): Null<UnitValue> {
+		return emptyDefault != null && isDefaultArm(branch, s) && isEmptyArm(branch, s) ? emptyDefault : null;
+	}
+
+	/**
+	 * `node`'s own source as a hoistable unit -- the verbatim text and span a caller lends to an
+	 * EMPTY default arm through `switchArms`. `leafCount: 0`: lending a value performs no write.
+	 */
+	public static function verbatimUnit(node: QueryNode, source: String): Null<UnitValue> {
+		final span: Null<Span> = node.span;
 		if (span == null) return null;
-		final text: Null<String> = slice(source, emptyDefaultValue);
+		final text: Null<String> = slice(source, node);
 		return text == null ? null : {
 			text: text,
 			kept: [span],
@@ -384,6 +390,44 @@ final class AssignmentTreeHoist {
 			atom: span,
 			leafCount: 0
 		};
+	}
+
+	/**
+	 * Whether `switchNode` spells its no-match path as a completely EMPTY `case _:` / `default:` --
+	 * the one arm shape `switchArms`'s `emptyDefault` can lend a value to. A caller whose merge
+	 * needs the previous state to survive asks this BEFORE the merge: without such an arm the
+	 * fallback it passes is never borrowed, so nothing carries that state.
+	 */
+	public static function hasEmptyDefaultArm(switchNode: QueryNode, s: TreeSeams): Bool {
+		for (i in 1...switchNode.children.length) {
+			final branch: QueryNode = switchNode.children[i];
+			if (isDefaultArm(branch, s) && isEmptyArm(branch, s)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The `<keyword> x:T` prefix of a single-declarator local declaration plus the offset up to
+	 * which its source is copied verbatim (the kept region for a comment guard): before the `=` for
+	 * an initialized declaration, before the trailing `;` for a bare one. `keyword` replaces a
+	 * leading `var` when given; without it the declaration keeps its own. Null on a missing span or
+	 * a malformed declaration.
+	 */
+	public static function declPrefix(
+		decl: QueryNode, declSpan: Span, init: Null<QueryNode>, source: String, ?keyword: String
+	): Null<{ text: String, keptTo: Int }> {
+		final prefixEnd: Int = if (init != null) {
+			final initSpan: Null<Span> = init.span;
+			if (initSpan == null) return null;
+			final eq: Int = source.lastIndexOf('=', initSpan.from);
+			if (eq < declSpan.from) return null;
+			eq;
+		} else {
+			if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
+			declSpan.to - 1;
+		}
+		final raw: String = StringTools.rtrim(source.substring(declSpan.from, prefixEnd));
+		return { text: keyword == null ? raw : (~/^var\b/).replace(raw, keyword), keptTo: prefixEnd };
 	}
 
 	/**
