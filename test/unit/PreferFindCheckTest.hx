@@ -418,6 +418,30 @@ class PreferFindCheckTest extends Test {
 		return '';
 	}
 
+	public function testReceiverDeclaringFindNotFlagged(): Void {
+		// A real MEMBER always beats a `using` static extension: `m.find(x -> …)` on a receiver whose
+		// own type declares `find` binds to THAT member. No stdlib container declares the name, so a
+		// PROJECT type is the live case this gate is about.
+		Assert.equals(0, violations(memberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;')).length);
+	}
+
+	public function testReceiverDeclaringAnotherMemberStillFlagged(): Void {
+		// The gate is about the ONE name the rewrite wants — `exists` is a different member.
+		Assert.equals(1, violations(otherMemberFn('for (x in m) if (x > 2) return x;\n\t\treturn null;')).length);
+	}
+
+	/** A receiver whose OWN type declares `find` — the name this rule rewrites to. */
+	private function memberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Null<Int> {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function find(key:Int):Null<Int> {\n'
+			+ '\t\treturn null;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
+	/** The same receiver declaring a DIFFERENT member — the gate must not fire. */
+	private function otherMemberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Null<Int> {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
 	private function fn(body: String, ret: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>):$ret {\n\t\t$body\n\t}\n}';
 	}

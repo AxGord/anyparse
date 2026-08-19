@@ -91,6 +91,25 @@ class PreferExistsCheckTest extends Test {
 		Assert.isTrue(out.indexOf('return b.items().exists(x -> x > 2);') != -1, out);
 	}
 
+	public function testReceiverDeclaringExistsNotFlagged(): Void {
+		// A real MEMBER always beats a `using` static extension, so `m.exists(x -> …)` on a receiver
+		// whose own type declares `exists(key)` binds to THAT member and puts the lambda in the key
+		// slot — the shape a `Map` receiver has, and the one that cannot compile.
+		Assert.equals(0, violations(memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
+	}
+
+	public function testReceiverInheritingExistsNotFlagged(): Void {
+		// The inherited half of the same question: the member is declared by a SUPERTYPE, and Haxe
+		// picks it over the extension exactly the same way.
+		Assert.equals(0, violations(inheritedMemberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
+	}
+
+	public function testReceiverDeclaringAnotherMemberStillFlagged(): Void {
+		// The gate is about the ONE name the rewrite wants: a receiver declaring `foreach` and not
+		// `exists` is still rewritten by this direction.
+		Assert.equals(1, violations(foreachMemberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;')).length);
+	}
+
 	public function testRangeLoopNotFlagged(): Void {
 		Assert.equals(0, violations(fn('for (i in 0...xs.length) if (xs[i] > 2) return true;\n\t\treturn false;')).length);
 	}
@@ -234,6 +253,25 @@ class PreferExistsCheckTest extends Test {
 	private function typedFn(body: String): String {
 		return 'class C {\n\tfunction f(b:B, a:Bool):Bool {\n\t\t$body\n\t}\n}\n\nclass B {\n\tpublic function items():Array<Int> {\n'
 			+ '\t\treturn [];\n\t}\n\n\tpublic function walker():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
+	/** A receiver whose OWN type declares `exists(key)` — the `Map` shape, spelled inside the index. */
+	private function memberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function exists(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
+	}
+
+	/** The same shape with `exists` declared by a SUPERTYPE rather than the receiver's own body. */
+	private function inheritedMemberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass Base {\n\tpublic function exists(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n}\n\nclass M extends Base {\n\tpublic function iterator():Iterator<Int> {\n'
+			+ '\t\treturn [].iterator();\n\t}\n}';
+	}
+
+	/** A receiver declaring the TWIN direction's name and not this one — the gate must not fire. */
+	private function foreachMemberFn(body: String): String {
+		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function foreach(key:Int):Bool {\n'
+			+ '\t\treturn false;\n\t}\n\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}';
 	}
 
 	private function file(body: String, withUsing: Bool): String {
