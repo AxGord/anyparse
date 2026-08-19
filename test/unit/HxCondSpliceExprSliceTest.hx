@@ -83,7 +83,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 					assertBoolLit(elseClause.expr, false, 'else-branch');
 				}
 		}
-		expectVarMember(ast.members[1].member);
+		Assert.equals('other', (expectVarMember(ast.members[1].member).name: String), 'the next member keeps its own name');
 		triviaEquals(src, 'Mouse.supportsCursor');
 	}
 
