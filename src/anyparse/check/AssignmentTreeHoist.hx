@@ -8,6 +8,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Recursive assignment-tree hoist machinery shared by `prefer-if-expression-assignment` and
  * `prefer-switch-expression-assignment`. A statement-position `switch` or `if`/`else-if` chain
@@ -360,21 +362,6 @@ final class AssignmentTreeHoist {
 		return span == null ? null : source.substring(span.from, span.to);
 	}
 
-	/** All switch-machinery kinds present -- the recursion recognises a switch only when they are. */
-	private static inline function switchReady(s: TreeSeams): Bool {
-		return s.switchKinds != null;
-	}
-
-	/**
-	 * The borrowed value for a completely empty default arm -- `emptyDefault` unchanged. Null when
-	 * no fallback was given, `branch` is not a default arm (`isDefaultArm`), or it is not truly
-	 * empty (`isEmptyArm`) -- `armBody`'s null also covers a MULTI-statement body, which must keep
-	 * failing here rather than silently taking the fallback.
-	 */
-	private static function borrowedEmptyDefaultUnit(branch: QueryNode, emptyDefault: Null<UnitValue>, s: TreeSeams): Null<UnitValue> {
-		return emptyDefault != null && isDefaultArm(branch, s) && isEmptyArm(branch, s) ? emptyDefault : null;
-	}
-
 	/**
 	 * `node`'s own source as a hoistable unit -- the verbatim text and span a caller lends to an
 	 * EMPTY default arm through `switchArms`. `leafCount: 0`: lending a value performs no write.
@@ -411,10 +398,11 @@ final class AssignmentTreeHoist {
 	 * which its source is copied verbatim (the kept region for a comment guard): before the `=` for
 	 * an initialized declaration, before the trailing `;` for a bare one. `keyword` replaces a
 	 * leading `var` when given; without it the declaration keeps its own. Null on a missing span or
-	 * a malformed declaration.
+	 * a malformed declaration. The declaration NODE is not read — `declSpan` is the whole of it this
+	 * needs — so a caller holding only the span can ask too.
 	 */
 	public static function declPrefix(
-		decl: QueryNode, declSpan: Span, init: Null<QueryNode>, source: String, ?keyword: String
+		declSpan: Span, init: Null<QueryNode>, source: String, ?keyword: String
 	): Null<{ text: String, keptTo: Int }> {
 		final prefixEnd: Int = if (init != null) {
 			final initSpan: Null<Span> = init.span;
@@ -426,8 +414,23 @@ final class AssignmentTreeHoist {
 			if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
 			declSpan.to - 1;
 		}
-		final raw: String = StringTools.rtrim(source.substring(declSpan.from, prefixEnd));
+		final raw: String = source.substring(declSpan.from, prefixEnd).rtrim();
 		return { text: keyword == null ? raw : (~/^var\b/).replace(raw, keyword), keptTo: prefixEnd };
+	}
+
+	/** All switch-machinery kinds present -- the recursion recognises a switch only when they are. */
+	private static inline function switchReady(s: TreeSeams): Bool {
+		return s.switchKinds != null;
+	}
+
+	/**
+	 * The borrowed value for a completely empty default arm -- `emptyDefault` unchanged. Null when
+	 * no fallback was given, `branch` is not a default arm (`isDefaultArm`), or it is not truly
+	 * empty (`isEmptyArm`) -- `armBody`'s null also covers a MULTI-statement body, which must keep
+	 * failing here rather than silently taking the fallback.
+	 */
+	private static function borrowedEmptyDefaultUnit(branch: QueryNode, emptyDefault: Null<UnitValue>, s: TreeSeams): Null<UnitValue> {
+		return emptyDefault != null && isDefaultArm(branch, s) && isEmptyArm(branch, s) ? emptyDefault : null;
 	}
 
 	/**

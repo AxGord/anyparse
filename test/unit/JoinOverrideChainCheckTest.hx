@@ -2,15 +2,15 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.check.Check.Violation;
 import anyparse.check.JoinOverrideChain;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
-import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check;
+
+using StringTools;
 
 /**
  * The `join-override-chain` check: a local declaration followed by TWO OR MORE consecutive
@@ -75,9 +75,9 @@ class JoinOverrideChainCheckTest extends Test {
 	/** A later write keeps the declaration `var` — the collapse does not make the local final. */
 	public function testLaterWriteKeepsVarKeyword(): Void {
 		final es: Array<{ span: Span, text: String }> =
-			edits(CHAIN.substr(0, CHAIN.length - 5) + '\t\tif (x == null) x = \'z\';\n\t}\n}\n');
+			edits('${CHAIN.substr(0, CHAIN.length - 5)}\t\tif (x == null) x = \'z\';\n\t}\n}\n');
 		Assert.equals(1, es.length);
-		Assert.isTrue(StringTools.startsWith(es[0].text, 'var x:String = switch b.k {'), es[0].text);
+		Assert.isTrue(es[0].text.startsWith('var x:String = switch b.k {'), es[0].text);
 	}
 
 	/** The merge evaluates the LAST subject first, so an impure subject anywhere disqualifies the run. */
@@ -85,8 +85,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch pick() {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch pick() {\n'
+				+ '\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
 			)).length
 		);
 	}
@@ -96,8 +96,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = make();\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = make();\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
 			)).length
 		);
 	}
@@ -107,8 +107,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = make();\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
+				'var x:String = make();\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
 			)).length
 		);
 	}
@@ -118,8 +118,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch b.k {\n\t\t\tcase 3: x = x;\n\t\t\tcase _:\n\t\t}'
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: x = x;\n\t\t\tcase _:\n\t\t}'
 			)).length
 		);
 	}
@@ -129,8 +129,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _: x = \'s\';\n\t\t}'
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: x = \'r\';\n\t\t\tcase _: x = \'s\';\n\t\t}'
 			)).length
 		);
 	}
@@ -140,8 +140,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t}'
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: x = \'r\';\n\t\t}'
 			)).length
 		);
 	}
@@ -151,7 +151,7 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n' + '\t\ttrace(1);\n'
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\ttrace(1);\n'
 				+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
 			)).length
 		);
@@ -162,8 +162,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch b.k {\n\t\t\tcase 3: y = \'r\';\n\t\t\tcase _:\n\t\t}'
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: y = \'r\';\n\t\t\tcase _:\n\t\t}'
 			)).length
 		);
 	}
@@ -173,8 +173,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\t// why\n' + '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
+				'var x:String = null;\n\t\t// why\n\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
 			)).length
 		);
 	}
@@ -182,8 +182,8 @@ class JoinOverrideChainCheckTest extends Test {
 	/** A bare `$name` interpolation is a plain read, so an arm value holding one still collapses. */
 	public function testInterpolatedArmValueFlagged(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(wrap(
-			'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase E(i): x = \'$$i\';\n\t\t\tcase _:\n\t\t}\n'
-			+ '\t\tswitch b.k {\n\t\t\tcase E(i): x = \'$$i\';\n\t\t\tcase _:\n\t\t}'
+			'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase E(i): x = \'$$i\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+			+ '\t\t\tcase E(i): x = \'$$i\';\n\t\t\tcase _:\n\t\t}'
 		));
 		Assert.equals(1, es.length);
 		Assert.equals(
@@ -196,8 +196,8 @@ class JoinOverrideChainCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(wrap(
-				'var x:String = null;\n' + '\t\tswitch a.k {\n\t\t\tcase E(i): x = \'$${go(i)}\';\n\t\t\tcase _:\n\t\t}\n'
-				+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
+				'var x:String = null;\n\t\tswitch a.k {\n\t\t\tcase E(i): x = \'$${go(i)}\';\n\t\t\tcase _:\n\t\t}\n\t\tswitch b.k {\n'
+				+ '\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}'
 			)).length
 		);
 	}

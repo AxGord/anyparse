@@ -108,8 +108,8 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 	}
 
 	public function description(): String {
-		return
-			'a local declaration followed by a chain of conditional overwrites of it, collapsible to one nested switch-expression assignment';
+		return 'a local declaration followed by a chain of conditional overwrites of it, collapsible to one nested switch-expression '
+			+ 'assignment';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -230,9 +230,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		final region: Null<Span> = last;
 		return count < MIN_CONSTRUCTS || region == null
 			? null
-			: build(
-				decl, name, declSpan, init, new Span(declSpan.from, region.to), (fallback: UnitValue), leafTotal, root, source, comments, s
-			);
+			: build(name, declSpan, init, new Span(declSpan.from, region.to), (fallback: UnitValue), leafTotal, root, source, comments, s);
 	}
 
 	/**
@@ -278,8 +276,8 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 	 * `leafTotal` counted arm leaves, a span is missing, or a comment sits in a dropped region.
 	 */
 	private static function build(
-		decl: QueryNode, name: String, declSpan: Span, init: QueryNode, region: Span, value: UnitValue, leafTotal: Int, root: QueryNode,
-		source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
+		name: String, declSpan: Span, init: QueryNode, region: Span, value: UnitValue, leafTotal: Int, root: QueryNode, source: String,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
 		final writes: Array<Span> = [for (h in Refs.find(name, root, s.shape)) if (h.kind == RefKind.Write) h.span];
 		var inside: Int = 0;
@@ -288,7 +286,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		// A write that OUTLIVES the run keeps the local mutable -- the shape the single-construct
 		// rules refuse, and the one the motivating site has.
 		final prefix: Null<{ text: String, keptTo: Int }> = AssignmentTreeHoist.declPrefix(
-			decl, declSpan, init, source, writes.length == leafTotal ? 'final' : null
+			declSpan, init, source, writes.length == leafTotal ? 'final' : null
 		);
 		if (prefix == null) return null;
 		final kept: Array<Span> = value.kept.copy();

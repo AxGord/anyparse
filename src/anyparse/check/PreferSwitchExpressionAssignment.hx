@@ -300,7 +300,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		decl: QueryNode, declSpan: Span, switchSpan: Span, init: Null<QueryNode>, subject: QueryNode, sa: SwitchArms, source: String,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
-		final prefix: Null<{ text: String, keptTo: Int }> = AssignmentTreeHoist.declPrefix(decl, declSpan, init, source, 'final');
+		final prefix: Null<{ text: String, keptTo: Int }> = AssignmentTreeHoist.declPrefix(declSpan, init, source, 'final');
 		final subjectSrc: Null<String> = AssignmentTreeHoist.slice(source, subject);
 		final subjectSpan: Null<Span> = subject.span;
 		if (prefix == null || subjectSrc == null || subjectSpan == null) return null;
