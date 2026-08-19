@@ -42,6 +42,16 @@ class PreferSwitchExpressionCheckTest extends Test {
 		+ '\tpublic static inline final KIND_TEXT_NODE_BUBBLE_FILL_SHADE:String = \'tf\';\n}';
 
 	/**
+	 * The live bare-constant shape, reduced from `anyparse`'s own `BoolLoopScan.literalValue`:
+	 * two `static inline final` constants declared in the SAME class and reached with no
+	 * receiver.
+	 */
+	private static final BARE_CONSTANT_CHAIN: String = 'class C {\n\tstatic inline final TRUE_LITERAL:String = \'true\';\n'
+		+ "\tstatic inline final FALSE_LITERAL:String = 'false';\n\tstatic function pick(text:String):Null<Bool> {\n"
+		+ '\t\treturn if (text == TRUE_LITERAL)\n\t\t\ttrue\n\t\telse if (text == FALSE_LITERAL)\n\t\t\tfalse\n'
+		+ '\t\telse\n\t\t\tnull;\n\t}\n}';
+
+	/**
 	 * The cross-file fixture, anonymized from a real ternary chain: two discriminants,
 	 * four rungs of `static inline final` string constants declared in another module,
 	 * and a trailing else value.
@@ -276,6 +286,119 @@ class PreferSwitchExpressionCheckTest extends Test {
 	public function testStaticFinalConstantNotFlagged(): Void {
 		final consts: String = "class NodeMeta {\n\tpublic static final ALPHA:String = 'a';\n\tpublic static final BETA:String = 'b';\n}";
 		Assert.equals(0, violations(wrap('return k == NodeMeta.ALPHA ? p : k == NodeMeta.BETA ? q : r;'), consts).length);
+	}
+
+	/**
+	 * The BARE spelling of a same-class `static inline final` constant — the live shape
+	 * (`anyparse`'s own `BoolLoopScan.literalValue`, `text == TRUE_LITERAL`). Identical to
+	 * `testStaticInlineFinalConstantFlagged` except that the constant is reached without a
+	 * receiver, so this fixture pins ONLY the bare-identifier arm.
+	 */
+	public function testBareStaticInlineConstantFlagged(): Void {
+		final vs: Array<Violation> = violations(BARE_CONSTANT_CHAIN);
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-switch-expression', vs[0].rule);
+	}
+
+	/** The bare-constant chain converts, the patterns written exactly as the source spelled them. */
+	public function testBareStaticInlineConstantFixed(): Void {
+		final fixed: String = fixedSource(BARE_CONSTANT_CHAIN);
+		Assert.isTrue(fixed.indexOf('switch (text) {') >= 0);
+		Assert.isTrue(fixed.indexOf('case TRUE_LITERAL: true;') >= 0);
+		Assert.isTrue(fixed.indexOf('case FALSE_LITERAL: false;') >= 0);
+		Assert.isTrue(fixed.indexOf('case _: null;') >= 0);
+	}
+
+	/**
+	 * THE refusal this widening exists for. A bare identifier bound to a LOCAL is the one
+	 * operand class the compiler does not protect: `case target:` is a CAPTURE, so the
+	 * emitted switch matches EVERYTHING and the chain's second and third arms become dead
+	 * code. Measured on 4.3.7 — `pick('a', 'a')` and `pick('zzz', 'a')` both returned 1,
+	 * with only a `WUnusedPattern` warning on the now-unreachable `case _`.
+	 */
+	public function testBareLocalOperandNotFlagged(): Void {
+		Assert.equals(0, violations(wrap(
+			"final target = 'a';\n\t\tfinal other = 'b';\n\t\tfinal v = text == target ? 1 : text == other ? 2 : 0;"
+		)).length);
+	}
+
+	/** A PARAMETER is a local by another name, and captures in a pattern exactly the same way. */
+	public function testBareParameterOperandNotFlagged(): Void {
+		Assert.equals(0, violations(
+			'class C {\n\tfunction f(text:String, target:String, other:String):Int {\n'
+			+ '\t\treturn text == target ? 1 : text == other ? 2 : 0;\n\t}\n}'
+		).length);
+	}
+
+	/**
+	 * A MUTABLE instance field bare-referenced. The compiler rejects it outright — `Only
+	 * inline or read-only (default, never) fields can be used as a pattern` — so this is a
+	 * refusal the language would have caught; it is pinned because the gate must not lean on
+	 * the compiler to catch it, `--fix` writing the file before anyone typechecks it.
+	 */
+	public function testBareMutableInstanceFieldNotFlagged(): Void {
+		Assert.equals(0, violations(
+			"class C {\n\tvar alpha:String = 'a';\n\tvar beta:String = 'b';\n"
+			+ '\tfunction f(text:String):Int {\n\t\treturn text == alpha ? 1 : text == beta ? 2 : 0;\n\t}\n}'
+		).length);
+	}
+
+	/**
+	 * A non-inline `static final` reached BARE is refused for the same reason its qualified
+	 * twin is (`testStaticFinalConstantNotFlagged`): the index cannot see the initializer, and
+	 * a non-scalar one is `Incompatible pattern` at the case site. The two spellings share one
+	 * proof, so they cannot disagree.
+	 */
+	public function testBareStaticFinalNotFlagged(): Void {
+		Assert.equals(0, violations(
+			"class C {\n\tstatic final ALPHA:String = 'a';\n\tstatic final BETA:String = 'b';\n"
+			+ '\tstatic function f(text:String):Int {\n\t\treturn text == ALPHA ? 1 : text == BETA ? 2 : 0;\n\t}\n}'
+		).length);
+	}
+
+	/**
+	 * A local SHADOWING a same-class constant of the same name. The resolver, not the name,
+	 * decides: the occurrence binds to the local, so the chain is refused even though a
+	 * `static inline final ALPHA` is right there. Without the binding proof a name-keyed
+	 * lookup would accept this and emit a capturing `case ALPHA`.
+	 */
+	public function testBareConstantShadowedByLocalNotFlagged(): Void {
+		Assert.equals(0, violations(
+			"class C {\n\tstatic inline final ALPHA:String = 'a';\n\tstatic inline final BETA:String = 'b';\n"
+			+ "\tstatic function f(text:String):Int {\n\t\tfinal ALPHA = 'x';\n\t\tfinal BETA = 'y';\n"
+			+ '\t\treturn text == ALPHA ? 1 : text == BETA ? 2 : 0;\n\t}\n}'
+		).length);
+	}
+
+	/**
+	 * An enum-abstract VALUE reached bare from inside the abstract's own body — a compile-time
+	 * constant carrying no `static` modifier, the same arm the qualified `T.M` proof accepts.
+	 */
+	public function testBareEnumAbstractValueFlagged(): Void {
+		Assert.equals(1, violations(
+			'enum abstract Mode(String) {\n\tfinal ALPHA = \'a\';\n\tfinal BETA = \'b\';\n'
+			+ '\tpublic function rank():Int {\n\t\treturn this == ALPHA ? 1 : this == BETA ? 2 : 0;\n\t}\n}'
+		).length);
+	}
+
+	/**
+	 * A bare identifier the file's own scopes do not bind — an import-static / inherited /
+	 * cross-file constant. `Refs` is per-file and resolves nothing here, and an unresolved
+	 * reference is refused rather than guessed: a miss costs a finding, a wrong yes costs a
+	 * silently-capturing switch.
+	 */
+	public function testBareUnresolvedIdentNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('final v = text == ALPHA ? 1 : text == BETA ? 2 : 0;'), CONSTANTS).length);
+	}
+
+	/**
+	 * A DOTTED receiver (`pkg.Mod.CONST`) stays refused. Such a path IS a legal pattern in
+	 * Haxe, but the index resolves a member against a TYPE name and a dotted path is not one —
+	 * accepting it would mean matching the whole module path, which is a separate piece of
+	 * work. Refused, and pinned so the refusal is a decision rather than an accident.
+	 */
+	public function testDottedReceiverConstantNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('return k == pkg.NodeMeta.ALPHA ? p : k == pkg.NodeMeta.BETA ? q : r;'), CONSTANTS).length);
 	}
 
 	private function wrap(body: String): String {
