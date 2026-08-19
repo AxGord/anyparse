@@ -67,6 +67,40 @@ final class NominalTypes {
 		return base;
 	}
 
+	/**
+	 * A written type source reduced to the type a MEMBER LOOKUP on it resolves against: every
+	 * leading member-TRANSPARENT wrapper application peeled off, to a fixed point, so
+	 * `Null<String>` answers `String` and `Null<Null<Box<Item>>>` answers `Box<Item>`. Anything
+	 * that is not such an application comes back unchanged, and an empty `wrappers` disables the
+	 * peel entirely — which is what every caller that has not thought about it passes.
+	 *
+	 * `wrappers` is `RefShape.memberTransparentWrapperTypeNames`, whose doc carries the rule: a
+	 * wrapper belongs there only when its member set IS its argument's (Haxe's `@:forward`
+	 * `Null<T>`), and the answer may be used ONLY to decide which member a name resolves to. It is
+	 * NOT the value's type: `Null<Int>` still is not an `Int` for an arithmetic or ordered comparison. `null` is not a
+	 * value `<` orders, and what the raw comparison DOES with it is TARGET-SPECIFIC — measured on Haxe 4.3.7, `null >
+	 * 0` is `false` on js and `true` on `-cpp`. That the wrap and the flip happen to agree for a null `Null<Int>` on
+	 * js, `-cpp` and `--interp` alike settles nothing: the same probe has a null `String` operand DISAGREEING on js
+	 * and `--interp` while AGREEING on `-cpp`.
+	 *
+	 * The peel is TEXTUAL over the written annotation, so a typedef that RESOLVES to `Null<T>`
+	 * carries no wrapper to peel and is left alone — following the alias would mean resolving a
+	 * type reference here, and the miss fails closed like every other unresolved link.
+	 */
+	public static function memberLookupReceiverSource(typeSource: String, wrappers: Array<String>): String {
+		if (wrappers.length == 0) return typeSource;
+		var t: String = typeSource.trim();
+		while (true) {
+			final lt: Int = t.indexOf('<');
+			if (lt <= 0 || !t.endsWith('>') || !wrappers.contains(t.substring(0, lt).trim())) return t;
+			final inner: String = t.substring(lt + 1, t.length - 1).trim();
+			// A multi-argument application is not a wrapper of ONE type; peeling it would hand a
+			// comma-joined fragment on as if it were a type name.
+			if (splitTypeArgumentList(inner).length != 1) return t;
+			t = inner;
+		}
+	}
+
 	/** The simple outer nominal of a written type — `pkg.Map<String, Int>` → `Map` — or null when the text is not a nominal at all. */
 	public static function outerNominalOf(typeSource: String): Null<String> {
 		final lt: Int = typeSource.indexOf('<');
@@ -170,11 +204,14 @@ final class NominalTypes {
 	 * last segment returns its raw type source — null when any link is unresolvable. A consumer
 	 * that wants the final NOMINAL wraps this in `outerNominalOf`.
 	 */
-	public static function pathFinalMemberTypeSource(path: Array<String>, rootType: String, index: SymbolIndex): Null<String> {
+	public static function pathFinalMemberTypeSource(
+		path: Array<String>, rootType: String, index: SymbolIndex, ?transparentWrappers: Array<String>
+	): Null<String> {
+		final wrappers: Array<String> = transparentWrappers ?? [];
 		var current: String = rootType;
 		for (i in 1...path.length - 1) {
 			final memberType: Null<String> = index.memberTypeSourceOf(current, path[i]);
-			final nominal: Null<String> = memberType == null ? null : outerNominalOf(memberType);
+			final nominal: Null<String> = memberType == null ? null : outerNominalOf(memberLookupReceiverSource(memberType, wrappers));
 			if (nominal == null) return null;
 			current = nominal;
 		}
@@ -202,23 +239,30 @@ final class NominalTypes {
 	 * existing caller keeps today's answer byte for byte.
 	 */
 	public static function pathReceiverMemberTypeSource(
-		path: Array<String>, rootType: Null<String>, index: SymbolIndex, fromFile: String, substituteTypeArgs: Bool = false
+		path: Array<String>, rootType: Null<String>, index: SymbolIndex, fromFile: String, substituteTypeArgs: Bool = false,
+		?transparentWrappers: Array<String>
 	): Null<String> {
 		if (path.length < 2) return null;
-		final startType: String = rootType ?? path[0];
+		final wrappers: Array<String> = transparentWrappers ?? [];
+		// The path root is a RECEIVER here, never the answer, so a member-transparent wrapper on it
+		// is peeled: `Null<Res>.count` IS `Res.count`. The FINAL member's own source is returned
+		// untouched below, so a `Null<T>`-typed member still reads as `Null<T>`.
+		final startType: String = memberLookupReceiverSource(rootType ?? path[0], wrappers);
 		final resolved: Null<String> = substituteTypeArgs
-			? index.resolveGenericPathFinalMemberTypeSource(fromFile, startType, path.slice(1))
+			? index.resolveGenericPathFinalMemberTypeSource(fromFile, startType, path.slice(1), wrappers)
 			: index.resolvePathFinalMemberTypeSource(fromFile, startType, path.slice(1));
 		if (resolved != null) return resolved;
 		// The package-blind fallback never substitutes; in substitute mode it is only fed the
 		// root's NOMINAL, since a `Box<Item>` start source is not a name any member lookup matches.
 		if (rootType != null)
-			return pathFinalMemberTypeSource(path, substituteTypeArgs ? outerNominalOf(rootType) ?? rootType : rootType, index);
+			return pathFinalMemberTypeSource(
+				path, substituteTypeArgs ? outerNominalOf(startType) ?? startType : startType, index, wrappers
+			);
 		final firstSource: Null<String> = index.resolvePathFinalMemberTypeSource(fromFile, path[0], [path[1]]);
 		if (firstSource == null) return null;
 		if (path.length == 2) return firstSource;
-		final firstNominal: Null<String> = outerNominalOf(firstSource);
-		return firstNominal == null ? null : pathFinalMemberTypeSource(path.slice(1), firstNominal, index);
+		final firstNominal: Null<String> = outerNominalOf(memberLookupReceiverSource(firstSource, wrappers));
+		return firstNominal == null ? null : pathFinalMemberTypeSource(path.slice(1), firstNominal, index, wrappers);
 	}
 
 	/**
@@ -406,11 +450,11 @@ final class NominalTypes {
 	 */
 	private static function expressionNominalWalk(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
-		chain: Null<ChainTypeContext>, seen: Array<Int>
+		chain: Null<ChainTypeContext>, seen: Array<Int>, asReceiver: Bool = false
 	): Null<String> {
 		final direct: Null<String> = chain == null
 			? valueTypeNominal(node, root, shape, declaredTypes, index, file)
-			: valueNominalDeep(node, root, shape, declaredTypes, chain, index, file, seen);
+			: valueNominalDeep(node, root, shape, declaredTypes, chain, index, file, seen, asReceiver);
 		if (direct != null) return direct;
 		final callKind: Null<String> = shape.callKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
@@ -418,7 +462,12 @@ final class NominalTypes {
 		final callee: QueryNode = node.children[0];
 		final method: Null<String> = callee.name;
 		if (callee.kind != fieldKind || method == null || callee.children.length != 1) return null;
-		final receiver: Null<String> = expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen);
+		// The callee's own receiver is asked in RECEIVER mode: `tmp.trim()` on a `tmp: Null<String>`
+		// looks `trim` up on `String`. A receiver that is ITSELF a call keeps today's answer — its
+		// type arrives from `returnNominalOf`, already reduced to the bare nominal `Null`, with no
+		// argument left to peel; recovering it needs a return-SOURCE lookup the index does not have.
+		final receiver: Null<String> =
+			expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen, true);
 		if (receiver == null) return null;
 		final member: Null<String> = index.returnNominalOf(receiver, method);
 		return member ?? staticExtensionNominal(receiver, method, chain, index, file);
@@ -463,13 +512,29 @@ final class NominalTypes {
 		return null;
 	}
 
-	/** `valueTypeNominal`'s deep-mode twin: `valueTypeSourceDeep`'s written type source, reduced to its outer nominal. */
+	/**
+	 * `valueTypeNominal`'s deep-mode twin: `valueTypeSourceDeep`'s written type source, reduced to
+	 * its outer nominal.
+	 *
+	 * `asReceiver` peels a member-TRANSPARENT wrapper off first (`Null<String>` -> `String`), and is
+	 * set ONLY where the answer is about to seed a member lookup. It is deliberately NOT the default:
+	 * an expression's own nominal is what a consumer reads to decide what is legal to DO with the value, and
+	 * `Null<Int>` is not `Int` there. `null` is not a value `<` orders, and what the raw comparison DOES with it is
+	 * TARGET-SPECIFIC — measured on Haxe 4.3.7, `null > 0` is `false` on js and `true` on `-cpp`. That the wrap and
+	 * the flip happen to agree for a null `Null<Int>` on js, `-cpp` and `--interp` alike settles nothing: the same
+	 * probe has a null `String` operand DISAGREEING on js and `--interp` while AGREEING on `-cpp`.
+	 */
 	private static function valueNominalDeep(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
-		index: Null<SymbolIndex>, file: String, seen: Array<Int>
+		index: Null<SymbolIndex>, file: String, seen: Array<Int>, asReceiver: Bool = false
 	): Null<String> {
 		final source: Null<String> = valueTypeSourceDeep(node, root, shape, declaredTypes, chain, index, file, seen);
-		return source == null ? null : outerNominalOf(source);
+		return if (source == null)
+			null
+		else if (asReceiver)
+			outerNominalOf(memberLookupReceiverSource(source, shape.memberTransparentWrapperTypeNames ?? []))
+		else
+			outerNominalOf(source);
 	}
 
 	/**
@@ -512,7 +577,7 @@ final class NominalTypes {
 		else if (index == null)
 			null
 		else
-			pathReceiverMemberTypeSource(path, rootSource, index, file, true);
+			pathReceiverMemberTypeSource(path, rootSource, index, file, true, shape.memberTransparentWrapperTypeNames ?? []);
 	}
 
 	/**
