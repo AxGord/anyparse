@@ -196,8 +196,10 @@ class QueryWalkerCodegen {
 	 */
 	private static function publicWalkRootField(result: QueryWalkerLowering.QueryWalkerResult): Field {
 		final rootCall: Expr = {
-			expr: ECall({ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
-				[macro _r, macro into, macro _rootTypeOut, macro withTypeRefs]),
+			expr: ECall(
+				{ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
+				[macro _r, macro into, macro _rootTypeOut, macro withTypeRefs]
+			),
 			pos: Context.currentPos(),
 		};
 		final body: Expr = macro {

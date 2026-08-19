@@ -218,7 +218,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		return switch child.kind {
 			case Ref:
 				final ref: String = child.annotations[AnnotationKeys.BASE_REF];
-				isTerminalRule(ref) ? [] : [call(walkFnName(ref), [access, ident(intoName), ident(typeOutName), ident('withTypeRefs')])];
+				isTerminalRule(ref) ? [] : [
+					call(walkFnName(ref), [access, ident(intoName), ident(typeOutName), ident('withTypeRefs')])
+				];
 			case Star:
 				final loopVar: String = '_e$depth';
 				final body: Array<Expr> = descend(child.children[0], ident(loopVar), intoName, typeOutName, depth + 1);
@@ -306,15 +308,19 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
 
-		final body: Array<Expr> = [(macro final _children: Array<anyparse.query.QueryNode> = []),
-			(macro final _typeSlot: Array<anyparse.query.QueryNode> = [])];
+		final body: Array<Expr> = [
+			(macro final _children: Array<anyparse.query.QueryNode> = []),
+			(macro final _typeSlot: Array<anyparse.query.QueryNode> = [])
+		];
 		for (i in 0...branch.children.length) for (e in descend(branch.children[i], ident(argNames[i]), '_children', TYPE_SLOT_LOCAL, 0))
 			body.push(e);
 		final nameExpr: Expr = firstNonNullName([
 			for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i]))
 		]);
-		body.push(macro into.push(new anyparse.query.QueryNode($v{ctor}, $nameExpr,
-			anyparse.query.QueryWalkSupport.orderBySpan(_children), _span, anyparse.query.QueryWalkSupport.first(_typeSlot))));
+		body.push(macro into.push(new anyparse.query.QueryNode(
+			$v{ctor}, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), _span,
+			anyparse.query.QueryWalkSupport.first(_typeSlot)
+		)));
 		return { values: [pattern], expr: block(body) };
 	}
 
@@ -334,19 +340,23 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		// of its own, so its `type` field belongs to the `VarStmt` / `VarMember` / … ctor
 		// node that hosts it.
 		if (!isSpanned(node)) {
-			final out: Array<Expr> = [for (child in node.children) for (e in seqFieldDescent(child, 'into', TYPE_OUT_PARAM, null)) e];
+			final out: Array<Expr> = [
+				for (child in node.children) for (e in seqFieldDescent(child, 'into', TYPE_OUT_PARAM, null)) e
+			];
 			return block(out);
 		}
 
-		final body: Array<Expr> = [(macro final _children: Array<anyparse.query.QueryNode> = []),
-			(macro final _typeSlot: Array<anyparse.query.QueryNode> = [])];
+		final body: Array<Expr> = [
+			(macro final _children: Array<anyparse.query.QueryNode> = []),
+			(macro final _typeSlot: Array<anyparse.query.QueryNode> = [])
+		];
 		for (child in node.children)
-			for (e in seqFieldDescent(child, '_children', TYPE_SLOT_LOCAL, field(ident('v'), PairedShapeLowering.SPAN_FIELD)))
-				body.push(e);
+			for (e in seqFieldDescent(child, '_children', TYPE_SLOT_LOCAL, field(ident('v'), PairedShapeLowering.SPAN_FIELD))) body.push(e);
 		final nameExpr: Expr = call(nameFnName(rule), [ident('v')]);
-		body.push(macro into.push(new anyparse.query.QueryNode(v._kind, $nameExpr,
-			anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span,
-			anyparse.query.QueryWalkSupport.first(_typeSlot))));
+		body.push(macro into.push(new anyparse.query.QueryNode(
+			v._kind, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span,
+			anyparse.query.QueryWalkSupport.first(_typeSlot)
+		)));
 		return block(body);
 	}
 
@@ -396,7 +406,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		// on its flat `TypeRef` kind: `uses`, `blast`, `mentions`, `CrossRename`,
 		// `MoveSymbol`, `Naming`, `UnusedImport` - sees a byte-identical tree.
 		final core: Expr = if (child.hasMeta(QUERY_TYPE_META))
-			macro if (withTypeRefs) $refsAware else $walkArm;
+			macro if (withTypeRefs)
+				$refsAware
+			else
+				$walkArm;
 		else if (child.hasMeta(QUERY_TYPE_SLOT_META)) {
 			// The slot is filled from a walk of its own, so the pre-existing arm's
 			// contribution to `into` stays exactly what it was.

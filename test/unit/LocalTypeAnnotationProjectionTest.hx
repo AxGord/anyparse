@@ -99,6 +99,39 @@ class LocalTypeAnnotationProjectionTest extends Test {
 		if (tail != null) Assert.equals('String', tail.name);
 	}
 
+	/**
+	 * A function-type annotation is the case NO kind-based child filter could have handled:
+	 * `Arrow` is `HxType.Arrow` here and `HxExpr.Arrow` (`k => v`) on an initializer, so only
+	 * a slot can say which of the two a node is looking at.
+	 */
+	public function testFunctionTypeAnnotationIsUnambiguousInTheSlot(): Void {
+		final decl: QueryNode = declOf('class C { function f() { var cb:Int->Void = null; } }');
+		final declared: Null<QueryNode> = decl.type;
+		Assert.notNull(declared);
+		if (declared != null) Assert.equals('Arrow', declared.kind);
+		Assert.equals(1, decl.children.length, 'the initializer is still the sole child');
+		Assert.equals('NullLit', decl.children[0].kind);
+	}
+
+	/** A map-literal initializer keeps the SAME kind on the child, and the slot stays empty. */
+	public function testMapArrowInitializerIsNotMistakenForAType(): Void {
+		final decl: QueryNode = declOf('class C { function f() { var m = k => v; } }');
+		Assert.isNull(decl.type);
+		Assert.equals('Arrow', decl.children[0].kind);
+	}
+
+	/** A function PARAMETER carries its annotation in the same slot. */
+	public function testParameterAnnotationProjects(): Void {
+		final dump: String = ast('class C { function g(p:Map<String, Int>) {} }');
+		Assert.isTrue(dump.contains('(Required p (: (Named Map (Named String) (Named Int))))'), 'got: $dump');
+	}
+
+	/** So does a CATCH binding. */
+	public function testCatchBindingAnnotationProjects(): Void {
+		final dump: String = ast('class C { function f() { try { a(); } catch (e:MyErr) { b(); } } }');
+		Assert.isTrue(dump.contains('(CatchClause e (: (Named MyErr))'), 'got: $dump');
+	}
+
 	/** Type arguments nest under their head wherever a type already projected — a return type included. */
 	public function testReturnTypeArgumentsNestUnderTheirHead(): Void {
 		final dump: String = ast('class C { function g():Array<Foo> return null; }');
