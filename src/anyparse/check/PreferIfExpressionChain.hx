@@ -142,11 +142,16 @@ import anyparse.runtime.Span;
  *
  * The negation is `NegationScan`'s, the same engine the `guard-*` family inverts with, so a
  * comparison operator FLIPS (`content == ''` becomes `content != ''`) and a compound De
- * Morgans rather than taking a `!( … )` wrap. Its WORTH GATE is honoured too: an ordered
+ * Morgans rather than taking a `!( … )` wrap. Its WORTH GATE is asked too — an ordered
  * comparison the engine cannot prove NaN- and null-free stays wrapped, which reads worse than
- * the ternary it would replace, so that site declines the inversion and keeps its old answer.
- * A comment anywhere in the condition span declines it as well — the engine rebuilds the
- * condition from its operands and would drop the glue the comment sits in.
+ * the positive form — but only where declining COSTS nothing: a chain that already holds the
+ * minimum rungs converts WITHOUT the fold, so a wrap there buys one more rung and pays for it,
+ * while a chain below the minimum converts only BECAUSE of the fold, and declining would leave
+ * exactly the nested ternary this rule exists to remove. (The conjunctive form paid for those
+ * same chains with the whole condition DUPLICATED, which is worse than one wrap on every axis.)
+ * A comment anywhere in the condition span declines the inversion outright — that one is
+ * correctness, not worth: the engine rebuilds the condition from its operands and would drop
+ * the glue the comment sits in.
  *
  * ## Autofix
  *
@@ -446,8 +451,10 @@ final class PreferIfExpressionChain implements Check {
 	 */
 	private static function invertTail(chain: Chain, source: String, s: Seams, lazy: Lazy): Bool {
 		var inverted: Bool = false;
-		while (chain.rungs.length > 0) {
-			final last: Rung = chain.rungs[chain.rungs.length - 1];
+		while (true) {
+			final count: Int = chain.rungs.length;
+			if (count == 0) break;
+			final last: Rung = chain.rungs[count - 1];
 			final nested: QueryNode = last.value;
 			if (nested.kind != s.ternaryKind || nested.children.length != CHAIN_WITH_ELSE_CHILD_COUNT) break;
 			final condSpan: Null<Span> = last.cond.span;
@@ -457,8 +464,15 @@ final class PreferIfExpressionChain implements Check {
 			if (condSpan == null || CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to)) break;
 			// The engine's OWN worth gate, the one `guard-return` / `guard-continue` / `loop-guard`
 			// ask before they invert: an ordered comparison it cannot prove NaN- and null-free stays
-			// `!(a < b)`, and a wrap reads worse than the ternary it would replace.
-			if (!NegationScan.negationIsClean(last.cond, source, s.logic, lazy.types())) break;
+			// wrapped `!(a < b)`, which reads worse than the positive form.
+			//
+			// It is asked only where declining COSTS nothing. A chain that already holds the minimum
+			// rungs converts WITHOUT this fold, so a wrapped negation there buys one more rung and
+			// pays a `!( … )` for it — decline, and the nested ternary stays, which IS the canon. A
+			// chain BELOW the minimum converts only BECAUSE of the fold: declining leaves exactly the
+			// nested ternary this rule exists to remove, and the alternative the conjunctive form used
+			// to take was the whole condition DUPLICATED — worse than one wrap on every axis.
+			if (count >= MIN_RUNGS && !NegationScan.negationIsClean(last.cond, source, s.logic, lazy.types())) break;
 			final inner: Chain = spine(nested, s);
 			chain.rungs.pop();
 			chain.rungs.push({ cond: last.cond, value: chain.terminal, invert: true });

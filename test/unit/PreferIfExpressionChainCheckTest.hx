@@ -358,12 +358,27 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	/**
-	 * The engine's own WORTH GATE is honoured: an ordered comparison it cannot prove NaN- and
-	 * null-free stays `!(a < b)`, a wrap that reads worse than the ternary it would replace, so
-	 * the inversion is declined and the chain keeps its old silent answer.
+	 * The engine's own WORTH GATE is honoured where declining costs nothing: this chain already
+	 * holds the minimum rungs, so the fold would buy ONE more and pay a `!( … )` wrap for it —
+	 * the ordered comparison cannot be proven NaN- and null-free, so the rung keeps its inner
+	 * ternary, which IS the canon.
 	 */
 	public function testInversionDeclinedForAnUnprovableOrderedComparison(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn a < b ? c ? 1 : 2 : 3;\n\t}\n}').length);
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn d ? 0 : a < b ? c ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (d) 0 else if (a < b) c ? 1 : 2 else 3', es[0].text);
+	}
+
+	/**
+	 * Below the minimum the same wrap IS taken, because declining would leave exactly the nested
+	 * ternary this rule exists to remove — and the conjunctive form it replaces paid for that
+	 * chain with the whole condition DUPLICATED, worse than one wrap on every axis.
+	 */
+	public function testUnprovableOrderedComparisonStillFoldsWhenTheFoldIsTheFinding(): Void {
+		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f():Int {\n\t\treturn a < b ? c ? 1 : 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (!(a < b)) 3 else if (c) 1 else 2', es[0].text);
 	}
 
 	/** With the operand types known the same comparison DOES flip — which is what proves the engine is being ASKED rather than mirrored. */
