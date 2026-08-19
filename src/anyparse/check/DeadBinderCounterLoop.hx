@@ -150,9 +150,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			if (span != null) wanted.push('${span.from}:${span.to}');
 		}
 		final collected: Array<CountEdit> = [];
-		fixWalk(
-			tree, tree, source, types, s, wanted, lambdaBlocked, symbols, lazyQualified(tree, source, plugin, symbols), collected
-		);
+		fixWalk(tree, tree, source, types, s, wanted, lambdaBlocked, symbols, lazyQualified(tree, source, plugin, symbols), collected);
 		// The containment filter runs BEFORE the `using` decision, not after: a nested rewrite whose
 		// edit an enclosing one swallows is not in the output, so neither is the `count()` that
 		// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which

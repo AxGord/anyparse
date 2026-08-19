@@ -132,9 +132,7 @@ class PreferExistsCheckTest extends Test {
 		// nothing — which is why the gate asks `CheckScan.receiverNominalResolver`. This is the
 		// second of the two measured TM sites (`baseData:Null<Map<Int, ObjectFrameData>>`), and the
 		// guarded merge rides on the qualified call unchanged.
-		final vs: Array<Violation> = violations(
-			nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;')
-		);
+		final vs: Array<Violation> = violations(nullableMemberFn('if (m != null) for (x in m) if (x > 2) return true;\n\t\treturn false;'));
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('m != null && Lambda.exists(m, x -> x > 2)') != -1, vs[0].message);
 	}
@@ -188,8 +186,8 @@ class PreferExistsCheckTest extends Test {
 		// The gate is about the METHOD, not the NAME: a project `Lambda` that declares the static the
 		// call wants answers it, so the fallback stands.
 		final own: String = memberFn('for (x in m) if (x > 2) return true;\n\t\treturn false;');
-		final lambda: String = 'class Lambda {\n\tpublic static function exists<A>(it:Iterable<A>, f:A -> Bool):Bool {\n'
-			+ '\t\treturn false;\n\t}\n}';
+		final lambda: String =
+			'class Lambda {\n\tpublic static function exists<A>(it:Iterable<A>, f:A -> Bool):Bool {\n\t\treturn false;\n\t}\n}';
 		final vs: Array<Violation> = new PreferExists().run(
 			[{ file: 'C.hx', source: own }, { file: 'Lambda.hx', source: lambda }], new HaxeQueryPlugin()
 		);

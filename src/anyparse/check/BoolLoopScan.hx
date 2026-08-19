@@ -261,36 +261,49 @@ final class BoolLoopScan {
 			final span: Null<Span> = cand.anchor.span;
 			if (span != null) byKey['${span.from}:${span.to}'] = cand;
 		});
-		final rewrites: Array<Rewrite> = [];
+		final rewrites: Array<{ span: Span, text: String }> = [];
+		// Parallel to `rewrites`: whether each took the EXTENSION spelling, which is what decides
+		// the `using` insert and its group. A QUALIFIED rewrite names `Lambda` outright.
+		final extensionForm: Array<Bool> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final cand: Null<Cand> = byKey['${span.from}:${span.to}'];
 			if (cand == null) continue;
-			final built: Null<{ span: Span, text: String }> = buildEdit(cand, source, s, kind);
-			if (built == null) continue;
-			final edit: { span: Span, text: String } = built;
-			if (RefactorSupport.editsOverlapAny([edit], [for (r in rewrites) r.edit])) continue;
-			rewrites.push({ edit: edit, extension: !cand.head.qualified });
+			final edit: Null<{ span: Span, text: String }> = buildEdit(cand, source, s, kind);
+			if (edit == null || RefactorSupport.editsOverlapAny([edit], rewrites)) continue;
+			rewrites.push(edit);
+			extensionForm.push(!cand.head.qualified);
 		}
-		if (rewrites.length == 0) return [];
-		final spans: Array<{ span: Span, text: String }> = [for (r in rewrites) r.edit];
-		// A QUALIFIED rewrite names `Lambda` outright, so it needs no `using` — a file whose every
-		// claimed site is shadowed gets the calls and no import at all.
-		if (!rewrites.exists(r -> r.extension) || UsingScan.hasUsingModule(header, LAMBDA_MODULE))
-			return [for (r in rewrites) { span: r.edit.span, text: r.edit.text, group: null }];
+		return rewrites.length == 0 ? [] : withUsingInsert(rewrites, extensionForm, header);
+	}
+
+	/**
+	 * The rewrites as `GroupedEdit`s, plus the `using Lambda;` the EXTENSION-form ones need — atomic
+	 * with exactly those, and absent when none of them is present.
+	 *
+	 * The inserted `using` and the calls that need it are ONE group: a verifier that reverted every
+	 * rewrite while keeping the `using` would leave a file that still compiles, so nothing
+	 * downstream could tell that subset was wrong — the orphan-import class `GroupedFix` exists for.
+	 * Grouping only bites in a file that needed a new `using`; a file that already had one keeps
+	 * per-edit granularity, which is the common case. A QUALIFIED rewrite stays OUTSIDE the group —
+	 * it does not depend on the import, so binding it there would make an unrelated revert take it
+	 * down too, and a file whose every claimed site is shadowed gets the calls and no import at all.
+	 */
+	private static function withUsingInsert(
+		rewrites: Array<{ span: Span, text: String }>, extensionForm: Array<Bool>, header: UsingHeader
+	): Array<GroupedEdit> {
+		final flat: Array<GroupedEdit> = [for (e in rewrites) { span: e.span, text: e.text, group: null }];
+		if (!extensionForm.contains(true) || UsingScan.hasUsingModule(header, LAMBDA_MODULE)) return flat;
 		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-		if (RefactorSupport.editsOverlapAny([usingEdit], spans))
-			return [for (r in rewrites) { span: r.edit.span, text: r.edit.text, group: null }];
-		// The inserted `using` and the calls that need it are ONE atomic group: a verifier that
-		// reverted every rewrite while keeping the `using` would leave a file that still compiles,
-		// so nothing downstream could tell that subset was wrong — the orphan-import class
-		// `GroupedFix` exists for. Grouping only bites in a file that needed a new `using`; a file
-		// that already had one keeps per-edit granularity, which is the common case. A QUALIFIED
-		// rewrite stays OUTSIDE the group — it does not depend on the import, so binding it there
-		// would make an unrelated revert take it down too.
+		if (RefactorSupport.editsOverlapAny([usingEdit], rewrites)) return flat;
 		final grouped: Array<GroupedEdit> = [
-			for (r in rewrites) { span: r.edit.span, text: r.edit.text, group: r.extension ? USING_GROUP : null }
+			for (i in 0...rewrites.length)
+				{
+					span: rewrites[i].span,
+					text: rewrites[i].text,
+					group: extensionForm[i] ? USING_GROUP : null
+				}
 		];
 		grouped.push({ span: usingEdit.span, text: usingEdit.text, group: USING_GROUP });
 		return grouped;
@@ -962,12 +975,6 @@ private typedef FlagSink = {
 	var name: String;
 	var exprStmtKind: String;
 	var assignKind: String;
-}
-
-/** One accepted rewrite plus whether it took the EXTENSION spelling — the pair that decides the `using` insert and its group. */
-private typedef Rewrite = {
-	var edit: { span: Span, text: String };
-	var extension: Bool;
 }
 
 /** The re-spliced texts of one rewrite plus the source spans they came from, in ascending order, for the comment gate. */

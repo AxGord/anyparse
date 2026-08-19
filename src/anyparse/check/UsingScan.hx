@@ -4,11 +4,11 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 using Lambda;
+using StringTools;
 
 /**
  * The `using`-declaration helpers the static-extension checks share — `dead-binder-counter-loop`,
@@ -87,7 +87,7 @@ final class UsingScan {
 		final simple: Bool = module.indexOf('.') == -1;
 		for (child in headerDecls(header)) if (child.kind == USING_DECL_KIND) {
 			final name: Null<String> = child.name;
-			if (name != null && (name == module || (simple && StringTools.endsWith(name, '.$module')))) return true;
+			if (name != null && (name == module || (simple && name.endsWith('.$module')))) return true;
 		}
 		return false;
 	}
@@ -188,8 +188,10 @@ final class UsingScan {
 		if (headerDeclaresType(header, module) || headerRebindsName(header, module)) return false;
 		final index: Null<SymbolIndex> = symbols();
 		if (index == null) return true;
-		for (fi in index.declaringFiles(module))
-			for (t in fi.types) if (t.name == module && !t.members.exists(m -> m.name == method && m.isStatic)) return false;
+		for (fi in index.declaringFiles(module)) for (t in fi.types) if (t.name == module && !t.members.exists(m ->
+			m.name == method && m.isStatic
+		))
+			return false;
 		return true;
 	}
 
@@ -254,7 +256,7 @@ final class UsingScan {
 				return true;
 			case 'ImportDecl', USING_DECL_KIND:
 				final path: Null<String> = child.name;
-				if (path != null && path != name && StringTools.endsWith(path, '.$name')) return true;
+				if (path != null && path != name && path.endsWith('.$name')) return true;
 			case _:
 		}
 		return false;

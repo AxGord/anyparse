@@ -169,9 +169,7 @@ final class PreferFind implements Check {
 		// picks the call SPELLING rather than dropping the site: a fix pass blind to it would emit
 		// the extension form for a finding the report wrote as qualified.
 		collectFixCandidates(
-			tree,
-			source,
-			s,
+			tree, source, s,
 			memberProbe(source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, symbols)),
 			byKey
 		);
@@ -446,9 +444,7 @@ final class PreferFind implements Check {
 			qualified: () -> {
 				if (!reachesBuilt) {
 					reachesBuilt = true;
-					reaches = UsingScan.qualifiedCallReaches(
-						UsingScan.headerOf(tree, source, plugin), LAMBDA_MODULE, FIND_METHOD, index
-					);
+					reaches = UsingScan.qualifiedCallReaches(UsingScan.headerOf(tree, source, plugin), LAMBDA_MODULE, FIND_METHOD, index);
 				}
 				return reaches;
 			}
