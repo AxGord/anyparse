@@ -1537,12 +1537,40 @@ typedef RefShape = {
 
 	/**
 	 * Node kinds a local declaration projects for its TYPE ANNOTATION (Haxe `Anon`
-	 * — only a top-level anonymous-struct annotation survives projection; nominal
-	 * and function types are dropped) — a decl's initializer is its last child
-	 * EXCLUDING these, so flow engines must not mistake the type for the init.
-	 * Optional.
+	 * for a top-level anonymous-struct annotation, `TypeRef` for the field types an
+	 * anon-struct field carries; every other nominal and function type is dropped)
+	 * — a decl's initializer is its last child EXCLUDING these, so flow engines
+	 * must not mistake the type for the init. Optional.
 	 */
 	@:optional var declTypeChildKinds: Array<String>;
+
+	/**
+	 * The subset of `declTypeChildKinds` that sits INSIDE the annotation's own
+	 * source text rather than replacing it (Haxe `TypeRef` — `f:Map<A, B>` in an
+	 * anon struct projects `(Required f (TypeRef Map) (TypeRef A) (TypeRef B))`,
+	 * every one of them inside `Map<A, B>`).
+	 *
+	 * The distinction matters to a check that reads the annotation as TEXT bounded
+	 * by the declaration's first child: an `Anon` child ENDS the region (its body is
+	 * walked as declarations of its own, so re-scanning the text would double
+	 * count), while a `TypeRef` child must be scanned THROUGH — stopping at it
+	 * leaves an empty region and the check silently reports nothing. Optional;
+	 * unset means every type child ends the region, which is the pre-`TypeRef`
+	 * behaviour.
+	 */
+	@:optional var typeRefChildKinds: Array<String>;
+
+	/**
+	 * The node kind of an ANONYMOUS STRUCTURE TYPE body (Haxe `Anon` — `{ x:Int }`
+	 * in a type position, and the body of a `typedef`). Distinct from
+	 * `structureFieldHostKinds`, which also covers the object-literal VALUE form:
+	 * this names the TYPE only, so a check reasoning about structural type identity
+	 * never picks up a literal. Its direct children are the field nodes
+	 * (`paramKinds`, with `optionalParamKind` marking `?name:T`), each carrying its
+	 * own type as `typeRefChildKinds` children or a nested body of this same kind.
+	 * Optional; unset makes `anon-type-dup` a no-op.
+	 */
+	@:optional var anonTypeKind: String;
 
 	/**
 	 * The `default:` branch kind of a `switch` (Haxe `DefaultBranch` — a distinct

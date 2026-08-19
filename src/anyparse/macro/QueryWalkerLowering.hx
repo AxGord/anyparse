@@ -6,6 +6,7 @@ import haxe.macro.Expr;
 import anyparse.core.ShapeTree;
 
 using Lambda;
+using anyparse.macro.MetaInspect;
 
 /**
  * Pass 3Q of the macro pipeline - query-walker lowering.
@@ -45,6 +46,29 @@ class QueryWalkerLowering extends PairedShapeLowering {
 
 	/** The `HxType` ctor whose body is a decl host - the one `type` field value the walk descends instead of skipping. */
 	private static inline final ANON_CTOR: String = 'Anon';
+
+	/**
+	 * Grammar opt-in on a `type` field: project it in the DEFAULT walk too, not
+	 * only under `withTypeRefs`.
+	 *
+	 * A `type` slot is normally a name-slot leaf the default projection drops,
+	 * which keeps `ast` / `search` / `refs` / `meta` lean. That is the right
+	 * default for an annotation whose owner already names itself (a var, a
+	 * member, a parameter): the type is looked up through `uses` / `blast`,
+	 * which read `parseFileTypeRefs`.
+	 *
+	 * It is the WRONG default where the type is the only thing distinguishing
+	 * two otherwise identical nodes. An anonymous structure has no name of its
+	 * own — its identity IS its field names and their types — so dropping the
+	 * types made `{ xml:Xml, text:String }` and `{ xml:Int, text:Int }` render
+	 * the byte-identical `(Anon (Required xml) (Required text))`, and any rule
+	 * or rewrite keyed on that tree would have merged two different types.
+	 *
+	 * The tag routes the slot through the SAME `_typeRefs` function
+	 * `parseFileTypeRefs` uses, so the two projections agree on the shape by
+	 * construction rather than by a second, parallel emit.
+	 */
+	private static inline final QUERY_TYPE_REF_META: String = ':queryTypeRef';
 
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];
@@ -265,8 +289,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	/**
 	 * Descend one `Seq` FIELD. The `name` slot is the node's display name, never
 	 * a child. A `type` slot is a name-slot leaf and is skipped - except an
-	 * `HxType.Anon`, whose body hosts declarations, and except under
-	 * `withTypeRefs`, where the skipped type is surfaced as `TypeRef` nodes.
+	 * `HxType.Anon`, whose body hosts declarations, except under
+	 * `withTypeRefs`, where the skipped type is surfaced as `TypeRef` nodes,
+	 * and except a slot the grammar tagged `@:queryTypeRef`, which surfaces
+	 * those same `TypeRef` nodes unconditionally (see `QUERY_TYPE_REF_META`).
 	 */
 	private function seqFieldDescent(child: ShapeNode, intoName: String, fallbackSpan: Null<Expr>): Array<Expr> {
 		final name: String = fieldNameOf(child);
@@ -284,7 +310,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final refsCall: Expr = ref != null && _typeRefRules.contains(ref)
 			? call(typeRefsFnName(ref), [value, ident(intoName), fallback])
 			: macro {};
-		final skipArm: Expr = macro if (withTypeRefs) $refsCall;
+		final skipArm: Expr = child.hasMeta(QUERY_TYPE_REF_META) ? refsCall : macro if (withTypeRefs) $refsCall;
 		final core: Expr = if (ref == null || !altHasCtor(ref, ANON_CTOR))
 			skipArm;
 		else {

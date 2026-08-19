@@ -521,6 +521,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			externKind: externName,
 			enumAbstractKind: shape.enumAbstractDeclKind,
 			anonKind: 'Anon',
+			typeRefKinds: shape.typeRefChildKinds ?? [],
 			varFieldKind: 'VarField',
 			callKind: shape.callKind ?? '',
 			fieldAccessKind: shape.fieldAccessKind ?? '',
@@ -606,6 +607,12 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	 * child's start) for a field / parameter / local, a nested anonymous type for a
 	 * `VarField` (whose own type sits inside a name-wrapping child), else the node
 	 * end. An anonymous type's inner fields are walked independently — no double count.
+	 *
+	 * A `RefShape.typeRefChildKinds` child is SKIPPED rather than taken as the
+	 * boundary: it is a projection of the annotation itself (an anon-struct field's
+	 * `f:Map<A, B>` projects `(TypeRef Map) (TypeRef A) (TypeRef B)`, all three
+	 * inside the text being scanned), so stopping there would cut the region to
+	 * nothing and the check would report no `Dynamic` at all.
 	 */
 	private static function declTypeCutoff(node: QueryNode, ctx: DynCtx, end: Int): Int {
 		if (node.kind == ctx.varFieldKind) {
@@ -615,9 +622,9 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			}
 			return end;
 		}
-		if (node.children.length > 0) {
-			final firstSpan: Null<Span> = node.children[0].span;
-			if (firstSpan != null) return firstSpan.from;
+		for (c in node.children) if (!ctx.typeRefKinds.contains(c.kind)) {
+			final cs: Null<Span> = c.span;
+			if (cs != null) return cs.from;
 		}
 		return end;
 	}
@@ -840,6 +847,9 @@ typedef DynCtx = {
 	final externKind: Null<String>;
 	final enumAbstractKind: Null<String>;
 	final anonKind: String;
+
+	/** Kinds projected INSIDE a declaration's annotation text - they do not end the scanned region. */
+	final typeRefKinds: Array<String>;
 	final varFieldKind: String;
 	final callKind: String;
 	final fieldAccessKind: String;
