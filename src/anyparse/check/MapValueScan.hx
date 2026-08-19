@@ -4,6 +4,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
 
 /**
  * The NO-NULL-VALUE proof `redundant-map-exists` must clear before it will rewrite
@@ -88,6 +89,12 @@ final class MapValueScan {
 	/** The build-macro metadata whose generated members no source scan can see. */
 	private static final BUILD_MACRO_METAS: Array<String> = ['@:build', '@:autoBuild'];
 
+	/** Whether `source` carries a build macro, whose generated members no source scan can see. */
+	private static function carriesBuildMacro(source: String): Bool {
+		for (meta in BUILD_MACRO_METAS) if (source.indexOf(meta) >= 0) return true;
+		return false;
+	}
+
 	/**
 	 * The seams the census reads, or null when the grammar leaves a required one unset — in
 	 * which case no proof is available and the check reports without fixing.
@@ -118,6 +125,9 @@ final class MapValueScan {
 			newExprKind: shape.newExprKind,
 			mapLiteralEntryKind: shape.mapLiteralEntryKind,
 			declKinds: (shape.fieldDeclKinds ?? []).concat(shape.localDeclKinds ?? []),
+			containerKinds: shape.visibilityContainerKinds ?? [],
+			memberDeclKinds: shape.memberDeclKinds ?? [],
+			publicModifierKind: shape.publicModifierKind,
 			paramKinds: shape.paramKinds ?? [],
 			iterationKinds: shape.iterationBindingKinds ?? [],
 			writeParentKinds: shape.writeParentKinds,
@@ -127,36 +137,96 @@ final class MapValueScan {
 	}
 
 	/**
-	 * Whether every occurrence of `name` across `index`'s files proves the map it binds can
-	 * never hold a null VALUE. A source the index cannot produce, one that mentions the name
-	 * and does not parse, and one carrying a build macro all answer false.
+	 * Whether the map named `name` and declared at offset `bindingFrom` of `source` can be
+	 * proven never to hold a null VALUE.
+	 *
+	 * The census is OWNER-scoped, not name-scoped, and that distinction is load-bearing: a
+	 * walk over every file that merely MENTIONS the name reads a same-named binding in an
+	 * unrelated type — or in the standard library, which the resolution scope always carries
+	 * — as evidence against this map. Measured over ten realistic map field names, the
+	 * name-scoped form refused five of them (`cache`, `values`, `index`, `map`, `data`) on
+	 * nothing but a std-library collision, while reporting a message about a stored null
+	 * value. So the reachable set is derived instead: a LOCAL is visible only in its own
+	 * file, and a non-public member only in its declaring file, its subtypes and an
+	 * `@:access` grantee — the same three doors `prefer-final-field` closes.
 	 */
-	public static function provenNonNullValues(name: String, index: SymbolIndex, plugin: GrammarPlugin, seams: ValueSeams): Bool {
-		for (info in index.allFiles()) {
-			final source: Null<String> = index.sourceOf(info.file);
-			if (source == null) return false;
-			final src: String = source;
-			if (src.indexOf(name) < 0) continue;
-			for (meta in BUILD_MACRO_METAS) if (src.indexOf(meta) >= 0) return false;
+	public static function proven(
+		name: String, bindingFrom: Int, source: String, root: QueryNode, index: Null<SymbolIndex>, plugin: GrammarPlugin, seams: ValueSeams
+	): Bool {
+		if (carriesBuildMacro(source)) return false;
+		final decl: Null<Decl> = locate(root, null, -1, null, bindingFrom, seams);
+		if (decl == null) return false;
+		if (!subtreeSafe(root, null, -1, null, -1, name, 0, source.length, seams)) return false;
+		final owner: Null<String> = decl.owner;
+		// A local is unreachable outside the file just censused; a member needs the three
+		// cross-file doors closed.
+		if (owner == null) return true;
+		if (decl.exported || index == null) return false;
+		final report: SymbolIndex = index;
+		if (!RefactorSupport.privateMemberScanIsSound(source, report)) return false;
+		final scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
+		if (scope.hasAccessGrant(owner)) return false;
+		return !scope.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
+			if (redeclares || carriesBuildMacro(src)) return true;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
-			if (tree == null) return false;
-			if (!subtreeSafe(tree, null, -1, null, -1, name, seams)) return false;
-		}
-		return true;
+			return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams);
+		});
 	}
 
 	/**
-	 * Whether every occurrence of `name` in `node`'s subtree sits in a safe slot. `parent` /
-	 * `parentSlot` and `grand` / `grandSlot` carry the two ancestor levels the classification
-	 * needs — a receiver's meaning is decided by its parent AND by what that parent is used
-	 * for (`m.set` is a field access under a call; `m[k]` is an index access that may be an
-	 * assignment target).
+	 * The declaration at offset `at` — its owning type when it is a MEMBER of one, and
+	 * whether that member is public. A local, a parameter and a declaration nested inside a
+	 * function body all answer with a null owner, since the parent of a member is the
+	 * visibility container itself.
+	 */
+	private static function locate(
+		node: QueryNode, parent: Null<QueryNode>, slot: Int, container: Null<QueryNode>, at: Int, seams: ValueSeams
+	): Null<Decl> {
+		final span: Null<Span> = node.span;
+		if (span != null && span.from == at && seams.declKinds.contains(node.kind)) {
+			final host: Null<QueryNode> = parent != null && parent == container ? container : null;
+			return host == null ? { owner: null, exported: false } : {
+				owner: CheckScan.typeDeclName(host, seams.containerKinds),
+				exported: precededByPublic(host, slot, seams)
+			};
+		}
+		final host: Null<QueryNode> = seams.containerKinds.contains(node.kind) ? node : container;
+		for (i in 0...node.children.length) {
+			final found: Null<Decl> = locate(node.children[i], node, i, host, at, seams);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	/** Whether the member at `slot` of `host` carries a `public` modifier — its modifiers are the siblings just before it. */
+	private static function precededByPublic(host: QueryNode, slot: Int, seams: ValueSeams): Bool {
+		var i: Int = slot - 1;
+		while (i >= 0) {
+			final kind: String = host.children[i].kind;
+			if (kind == seams.publicModifierKind) return true;
+			if (seams.memberDeclKinds.contains(kind)) return false;
+			i--;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether every occurrence of `name` in `node`'s subtree that STARTS within `[from, to)`
+	 * sits in a safe slot — the range being how a subtype's own declaration slice is censused
+	 * without the rest of its file. `parent` / `parentSlot` and `grand` / `grandSlot` carry
+	 * the two ancestor levels the classification needs: a receiver's meaning is decided by its
+	 * parent AND by what that parent is used for (`m.set` is a field access under a call;
+	 * `m[k]` is an index access that may be an assignment target).
 	 */
 	private static function subtreeSafe(
-		node: QueryNode, parent: Null<QueryNode>, parentSlot: Int, grand: Null<QueryNode>, grandSlot: Int, name: String, seams: ValueSeams
+		node: QueryNode, parent: Null<QueryNode>, parentSlot: Int, grand: Null<QueryNode>, grandSlot: Int, name: String, from: Int,
+		to: Int, seams: ValueSeams
 	): Bool {
-		if (node.name == name && !occurrenceSafe(node, parent, parentSlot, grand, grandSlot, seams)) return false;
-		for (i in 0...node.children.length) if (!subtreeSafe(node.children[i], node, i, parent, parentSlot, name, seams)) return false;
+		final span: Null<Span> = node.span;
+		final inRange: Bool = span == null || (span.from >= from && span.from < to);
+		if (node.name == name && inRange && !occurrenceSafe(node, parent, parentSlot, grand, grandSlot, seams)) return false;
+		for (i in 0...node.children.length) if (!subtreeSafe(node.children[i], node, i, parent, parentSlot, name, from, to, seams))
+			return false;
 		return true;
 	}
 
@@ -230,6 +300,11 @@ final class MapValueScan {
 }
 
 /** The grammar seams the no-null-value census reads. */
+/** Where a map binding was declared: its owning type when it is a member of one, and whether that member is public. */
+typedef Decl = {
+	final owner: Null<String>;
+	final exported: Bool;
+}
 typedef ValueSeams = {
 	final identKind: String;
 	final fieldAccessKind: String;
@@ -241,6 +316,9 @@ typedef ValueSeams = {
 	final newExprKind: Null<String>;
 	final mapLiteralEntryKind: Null<String>;
 	final declKinds: Array<String>;
+	final containerKinds: Array<String>;
+	final memberDeclKinds: Array<String>;
+	final publicModifierKind: Null<String>;
 	final paramKinds: Array<String>;
 	final iterationKinds: Array<String>;
 	final writeParentKinds: Array<String>;

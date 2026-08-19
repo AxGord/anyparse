@@ -101,7 +101,17 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		if (cfg == null) return [];
 		final c: Cfg = cfg;
 		final valueSeams: Null<ValueSeams> = MapValueScan.seamsOf(c.shape);
-		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		// The REPORT index deliberately, not `lazySymbolIndex` (which prefers the resolution
+		// one): `MapValueScan` reads its `skippedFiles` as the "nothing is hidden from the
+		// scan" proof, and on any project with libraries configured the resolution index's
+		// skipped set is permanently non-empty — which silently refused every site. The
+		// subtype and access-grant lookups inside the census resolve their own wider scope.
+		var reportIndex: Null<SymbolIndex> = null;
+		final resolveSymbols: () -> SymbolIndex = () -> {
+			final built: SymbolIndex = reportIndex ?? SymbolIndex.build(files, plugin);
+			reportIndex = built;
+			return built;
+		};
 		final proven: Map<String, Bool> = [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -116,7 +126,9 @@ final class RedundantMapExists implements Check implements DefaultOff {
 					span: m.span,
 					rule: RULE_ID,
 					severity: Severity.Info,
-					message: isProven(m.name, valueSeams, resolveSymbols, plugin, proven) ? FIXABLE_MESSAGE : UNPROVEN_MESSAGE
+					message: isProven(m, entry.file, entry.source, root, valueSeams, resolveSymbols(), plugin, proven)
+						? FIXABLE_MESSAGE
+						: UNPROVEN_MESSAGE
 				})
 			);
 		}
@@ -146,23 +158,29 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final declaredTypes: Map<Int, String> = c.typed.declaredTypes(source);
 		final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(source);
 		final proven: Map<String, Bool> = [];
+		final file: String = violations.length > 0 ? violations[0].file : '';
 		return RefactorSupport.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [c.ternaryKind], (node, span) -> {
 			final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
-			if (m == null || !isProven(m.name, valueSeams, () -> resolved, plugin, proven)) return null;
+			if (m == null || !isProven(m, file, source, tree, valueSeams, resolved, plugin, proven)) return null;
 			return { span: span, text: '${m.readSource} ?? ${m.fallbackSource}' };
 		}));
 	}
 
-	/** The cached no-null-value verdict for the map named `name`, false when no proof is available at all. */
+	/**
+	 * The cached no-null-value verdict for the map `m` binds, false when no proof is
+	 * available at all. Keyed on the BINDING, not the name: the census is owner-scoped, so
+	 * two same-named maps in different types get their own verdicts.
+	 */
 	private static function isProven(
-		name: String, seams: Null<ValueSeams>, symbols: () -> Null<SymbolIndex>, plugin: GrammarPlugin, cache: Map<String, Bool>
+		m: Match, file: String, source: String, root: QueryNode, seams: Null<ValueSeams>, index: Null<SymbolIndex>, plugin: GrammarPlugin,
+		cache: Map<String, Bool>
 	): Bool {
 		if (seams == null) return false;
-		final cached: Null<Bool> = cache[name];
+		final key: String = '$file:${m.bindingFrom}';
+		final cached: Null<Bool> = cache[key];
 		if (cached != null) return cached;
-		final index: Null<SymbolIndex> = symbols();
-		final verdict: Bool = index != null && MapValueScan.provenNonNullValues(name, index, plugin, seams);
-		cache[name] = verdict;
+		final verdict: Bool = MapValueScan.proven(m.name, m.bindingFrom, source, root, index, plugin, seams);
+		cache[key] = verdict;
 		return verdict;
 	}
 
@@ -211,7 +229,8 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		if (!RefactorSupport.sameSource(recv, read.children[0], source) || !RefactorSupport.sameSource(key, read.children[1], source))
 			return null;
 		for (k in cfg.mutationKinds) if (RefactorSupport.subtreeContainsKind(key, k)) return null;
-		if (!receiverIsMap(recv, root, declaredTypes, declaredTypeSources, cfg)) return null;
+		final bindingFrom: Null<Int> = mapBindingOf(recv, root, declaredTypes, declaredTypeSources, cfg);
+		if (bindingFrom == null) return null;
 		final ternarySpan: Null<Span> = ternary.span;
 		final readSpan: Null<Span> = read.span;
 		final fallbackSpan: Null<Span> = fallback.span;
@@ -227,19 +246,27 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		return {
 			span: ternarySpan,
 			name: name,
+			bindingFrom: bindingFrom,
 			readSource: source.substring(readSpan.from, readSpan.to),
 			fallbackSource: fallback.kind == cfg.ternaryKind ? '($fallbackSource)' : fallbackSource
 		};
 	}
 
-	/** Whether the bare identifier `recv`'s declared type resolves to the grammar's Map abstract. */
-	private static function receiverIsMap(
+	/**
+	 * The offset of `recv`'s binding when its declared type resolves to the grammar's Map
+	 * abstract, else null. The offset is what the no-null-value census anchors on, so the
+	 * type gate and the proof's starting point come out of one lookup.
+	 */
+	private static function mapBindingOf(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg
-	): Bool {
+	): Null<Int> {
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
-		if (bindingFrom == null) return false;
-		final typeName: Null<String> = declaredTypes[bindingFrom];
-		return typeName != null && CheckScan.nominalIsMap(typeName, declaredTypeSources[bindingFrom], cfg.mapTypes, cfg.nullableWrappers);
+		if (bindingFrom == null) return null;
+		final at: Int = bindingFrom;
+		final typeName: Null<String> = declaredTypes[at];
+		return typeName != null && CheckScan.nominalIsMap(typeName, declaredTypeSources[at], cfg.mapTypes, cfg.nullableWrappers)
+			? at
+			: null;
 	}
 
 	/** Resolve the per-grammar seams + type provider, or null when the grammar lacks a needed kind / type info. */
@@ -280,6 +307,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 private typedef Match = {
 	final span: Span;
 	final name: String;
+	final bindingFrom: Int;
 	final readSource: String;
 	final fallbackSource: String;
 };
