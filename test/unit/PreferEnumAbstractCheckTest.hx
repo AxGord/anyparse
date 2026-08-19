@@ -414,8 +414,7 @@ class PreferEnumAbstractCheckTest extends Test {
 		// call site broke bisected down to a COMPILING subset that kept `public static inline final
 		// A = 'a'` inside the `enum abstract` — a plain static field, no longer a value of the
 		// enumeration, and indistinguishable from success to anything that only asks "does it build".
-		final decl: String = THREE_STRING_CONSTANTS;
-		final edits: Array<GroupedEdit> = groupedEdits(decl);
+		final edits: Array<GroupedEdit> = groupedEdits(THREE_STRING_CONSTANTS);
 		Assert.equals(7, edits.length);
 		for (e in edits) Assert.equals(0, e.group);
 	}
