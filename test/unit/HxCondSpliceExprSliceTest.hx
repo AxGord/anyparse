@@ -32,14 +32,24 @@ import anyparse.grammar.haxe.HxVarSemiCondInitDecl;
  *  - **Half ternary** (1 site, TM `popups/fileDialog/FileDialog.hx:91`) —
  *    REFUSED, see `testHalfTernaryRegionStaysRaw`.
  *
- * The refusals are a decision, not an accident: neither shape's fragment
- * IS an expression — binding one would mean inventing the operand the
- * source does not contain, and the writer could then no longer reproduce
- * the bytes. `HxCondSpliceRaw`'s verbatim capture is what keeps those
- * nine files parsing and byte-round-tripping at all, and
- * `RefactorSupport`'s unparsed-region guard reads exactly those raw spans
- * — so a rename touching a name spelled inside one still refuses loudly
- * instead of rewriting some of its occurrences.
+ * The refusals are a decision with a measurement behind it, not an
+ * accident. Modelling the dangling-operator shape means a production
+ * `{cond, expr:HxExpr, op, tail:HxExpr}`, which needs the Pratt loop to
+ * REWIND an operator whose right operand fails to parse — and
+ * `Lowering.lowerPrattLoop` emits no such path: every branch is
+ * `left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1))` with zero `try`
+ * and zero `catch` in the whole generated loop, and 41 of its 42
+ * `ctx.pos = _savedPos` writes are the min-precedence gate rather than a
+ * failure rewind. Adding one is a core-codegen change touching every
+ * infix operator of every grammar, and it would make `a + ;` parse as
+ * `a` instead of erroring at the `+`. The half-ternary has the same
+ * missing-operand problem. Full reasoning on `HxCondSpliceExpr`.
+ *
+ * So `HxCondSpliceRaw`'s verbatim capture stays what keeps those nine
+ * files parsing and byte-round-tripping, and `RefactorSupport`'s
+ * unparsed-region guard reads exactly those raw spans — a rename
+ * touching a name spelled inside one still refuses loudly instead of
+ * rewriting some of its occurrences.
  */
 @:nullSafety(Strict)
 class HxCondSpliceExprSliceTest extends HxTestHelpers {
@@ -65,7 +75,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 		Assert.equals('default,null', accessorIds(decl), 'the (default, null) accessor clause is bound');
 		switch decl.region {
 			case Conditional(inner):
-				Assert.equals('!mobile', (inner.cond : String));
+				Assert.equals('!mobile', (inner.cond: String));
 				assertBoolLit(inner.expr, true, 'then-branch');
 				final elseClause: Null<anyparse.grammar.haxe.HxConditionalSemiExprElse> = inner.elseClause;
 				if (elseClause == null) {
@@ -127,8 +137,10 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 			+ '\t\t\t+ #if flash "  playerType: " + playerType + "\\n" + "  playerVersion: " + playerVersion\n'
 			+ '\t\t\t+ "\\n" + #end\n\t\t\t"  totalMemory: " + totalMemory;\n\t}\n}';
 		switch soleReturnExpr(src) {
-			case Add(_, right): assertCondSplice(right, 'dangling +');
-			case other: Assert.fail('expected Add(_, CondSpliceExpr), got $other');
+			case Add(_, right):
+				assertCondSplice(right, 'dangling +');
+			case other:
+				Assert.fail('expected Add(_, CondSpliceExpr), got $other');
 		}
 		triviaEquals(src, 'SystemData.toString');
 	}
@@ -142,8 +154,10 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\t_p = #if FEATURE_SHARE\n\t\t\tshare\n\t\t\t\t? new A(1)\n'
 			+ '\t\t\t\t:\n\t\t\t#end\n\t\tnew B(2);\n\t}\n}';
 		switch soleStatement(src) {
-			case ExprStmt(Assign(_, right)): assertCondSplice(right, 'half ternary');
-			case other: Assert.fail('expected ExprStmt(Assign(_, CondSpliceExpr)), got $other');
+			case ExprStmt(Assign(_, right)):
+				assertCondSplice(right, 'half ternary');
+			case other:
+				Assert.fail('expected ExprStmt(Assign(_, CondSpliceExpr)), got $other');
 		}
 		triviaEquals(src, 'FileDialog._pathPanel');
 	}
@@ -155,17 +169,22 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	 * for the same reason, pinned so a later slice notices when it moves.
 	 */
 	public function testDanglingBoolOperatorRegionStaysRaw(): Void {
-		final ifSrc: String = 'class C {\n\tfunction f():Void {\n\t\tif (#if neko __f == null || #end center == null)\n\t\t\treturn;\n\t}\n}';
+		final ifSrc: String =
+			'class C {\n\tfunction f():Void {\n\t\tif (#if neko __f == null || #end center == null)\n\t\t\treturn;\n\t}\n}';
 		switch soleStatement(ifSrc) {
-			case IfStmt(stmt): assertCondSplice(stmt.cond, 'dangling || in an if condition');
-			case other: Assert.fail('expected IfStmt whose cond is a CondSpliceExpr, got $other');
+			case IfStmt(stmt):
+				assertCondSplice(stmt.cond, 'dangling || in an if condition');
+			case other:
+				Assert.fail('expected IfStmt whose cond is a CondSpliceExpr, got $other');
 		}
 		triviaEquals(ifSrc, 'PerspectiveProjection.toMatrix3D');
 
 		final varSrc: String = 'class C {\n\tfunction f():Void {\n\t\tvar b = #if flash loadedStage && #end ready;\n\t}\n}';
 		switch soleStatement(varSrc) {
-			case VarStmt(decl): assertCondSplice(decl.init, 'dangling && in a local initializer');
-			case other: Assert.fail('expected VarStmt, got $other');
+			case VarStmt(decl):
+				assertCondSplice(decl.init, 'dangling && in a local initializer');
+			case other:
+				Assert.fail('expected VarStmt, got $other');
 		}
 		triviaEquals(varSrc, 'Preloader.update');
 	}
@@ -180,7 +199,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 		final src: String = 'class C {\n\tfunction f():String {\n\t\treturn "a" + #if flash "b" #else "c" #end + "d";\n\t}\n}';
 		switch soleReturnExpr(src) {
 			case Add(Add(_, ConditionalExpr(inner)), _):
-				Assert.equals('flash', (inner.cond : String));
+				Assert.equals('flash', (inner.cond: String));
 				assertStringLeaf(inner.expr, '"b"', 'then-branch');
 				final elseExpr: Null<HxExpr> = inner.elseExpr;
 				if (elseExpr == null) {
@@ -188,35 +207,42 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 				} else {
 					assertStringLeaf(elseExpr, '"c"', 'else-branch');
 				}
-			case other: Assert.fail('expected Add(Add(_, ConditionalExpr), _), got $other');
+			case other:
+				Assert.fail('expected Add(Add(_, ConditionalExpr), _), got $other');
 		}
 		triviaEquals(src, 'balanced ConditionalExpr');
 	}
 
 	private function assertCondSplice(expr: Null<HxExpr>, label: String): Void {
 		switch expr {
-			case CondSpliceExpr(_): Assert.pass();
-			case null, _: Assert.fail('expected CondSpliceExpr for $label, got $expr');
+			case CondSpliceExpr(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected CondSpliceExpr for $label, got $expr');
 		}
 	}
 
 	private function assertBoolLit(expr: HxExpr, expected: Bool, label: String): Void {
 		switch expr {
-			case BoolLit(v): Assert.equals(expected, (v : Bool), label);
-			case _: Assert.fail('expected BoolLit in $label, got $expr');
+			case BoolLit(v):
+				Assert.equals(expected, (v: Bool), label);
+			case _:
+				Assert.fail('expected BoolLit in $label, got $expr');
 		}
 	}
 
 	private function assertStringLeaf(expr: HxExpr, expected: String, label: String): Void {
 		switch expr {
-			case DoubleStringExpr(v): Assert.equals(expected, (v : String), label);
-			case _: Assert.fail('expected DoubleStringExpr in $label, got $expr');
+			case DoubleStringExpr(v):
+				Assert.equals(expected, (v: String), label);
+			case _:
+				Assert.fail('expected DoubleStringExpr in $label, got $expr');
 		}
 	}
 
 	private function accessorIds(decl: HxVarSemiCondInitDecl): String {
 		final access: Null<anyparse.grammar.haxe.HxAccessClause> = decl.access;
-		return access == null ? '<none>' : access.ids.map(id -> (id : String)).join(',');
+		return access == null ? '<none>' : access.ids.map(id -> (id: String)).join(',');
 	}
 
 	private function soleReturnExpr(source: String): HxExpr {
