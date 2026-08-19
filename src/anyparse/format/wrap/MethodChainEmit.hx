@@ -57,9 +57,11 @@ using StringTools;
  * that structural fact from the macro walk (the innermost segment's operand IS
  * a Call ctor), never from the receiver's rendered text; and the downgrade to
  * `OnePerLineAfterFirst` applies ONLY to a cascade that opted in via
- * `WrapRules.chainItemsAfterCloseParenOnly` — the Haxe policy cascade — so an
- * explicitly configured `onePerLine` keeps the fork's literal every-segment
- * semantic (five fork corpus fixtures depend on that).
+ * `WrapRules.chainItemsAfterCloseParenOnly` — the Haxe policy cascade, or a
+ * `wrapping.methodChain` section that names `itemsAfterCloseParenOnly` — so an
+ * explicitly configured `onePerLine` that stays silent about the key keeps the
+ * fork's literal every-segment semantic (five fork corpus fixtures depend on
+ * that).
  */
 class MethodChainEmit {
 

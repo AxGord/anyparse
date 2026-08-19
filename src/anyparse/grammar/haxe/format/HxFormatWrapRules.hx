@@ -28,4 +28,23 @@ package anyparse.grammar.haxe.format;
 	@:optional var defaultAdditionalIndent: Int;
 
 	@:optional var rules: Array<HxFormatWrapRule>;
+
+	/**
+	 * F3 ω-methodchain-config-key — opt into fork's `isDotAfterPClose`
+	 * definition of a chain ITEM (a `.` counts as one only when it follows a
+	 * `)`) for an EXPLICITLY configured cascade. Read only by
+	 * `wrapping.methodChain`; every other wrap class carries it into the
+	 * runtime struct where no consumer looks at it.
+	 *
+	 * Absent is NOT inherited from the built-in cascade. `wrapRulesFromConfig`
+	 * rebuilds `WrapRules` from scratch, so before this key a user section
+	 * silently dropped `HaxeFormat.defaultMethodChainWrap`'s
+	 * `chainItemsAfterCloseParenOnly` and a broken chain stranded its head
+	 * (`Actuate` alone above `.tween(…)`). Inheriting it by default would fix
+	 * that and cost fork parity: five corpus fixtures encode the literal
+	 * every-segment `onePerLine`. So the key is opt-in, absent == `false`, and
+	 * a project that wants the Haxe layout policy alongside a configured
+	 * cascade names it.
+	 */
+	@:optional var itemsAfterCloseParenOnly: Bool;
 };
