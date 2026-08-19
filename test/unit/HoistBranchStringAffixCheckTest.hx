@@ -73,9 +73,7 @@ class HoistBranchStringAffixCheckTest extends Test {
 
 	/** The cut may fall INSIDE a literal segment when that segment holds no escape and no interpolation sigil. */
 	public function testCutInsideAPlainLiteralSegment(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(wrapRegion(
-			'return \'connection-alpha\';', 'return \'connection-beta\';'
-		));
+		final es: Array<{ span: Span, text: String }> = edits(wrapRegion('return \'connection-alpha\';', 'return \'connection-beta\';'));
 		Assert.equals(1, es.length);
 		Assert.equals('return \'connection-\' + #if a \'alpha\' #else \'beta\' #end;', es[0].text);
 	}
@@ -99,9 +97,7 @@ class HoistBranchStringAffixCheckTest extends Test {
 
 	/** A branch holding more than the `return` could bind a local the hoisted text reads — refused, not guessed. */
 	public function testMultiStatementBranchNotFlagged(): Void {
-		Assert.equals(
-			0, violations(wrapRegion('final t = \'x\';\n\t\treturn \'Hello, $$t!\';', 'return \'Hello, y!\';')).length
-		);
+		Assert.equals(0, violations(wrapRegion('final t = \'x\';\n\t\treturn \'Hello, $$t!\';', 'return \'Hello, y!\';')).length);
 	}
 
 	/** Branches sharing nothing at either edge have nothing to hoist. */
@@ -111,20 +107,16 @@ class HoistBranchStringAffixCheckTest extends Test {
 
 	/** A branch value that is itself a `+` chain keeps its own operators; only the outer edges move. */
 	public function testConcatenationChainBranch(): Void {
-		final es: Array<{ span: Span, text: String }> = edits(wrapRegion(
-			'return \'Hello, \' + \'$$x and more\';', 'return \'Hello, \' + \'$$y and less\';'
-		));
-		Assert.equals(1, es.length);
-		Assert.equals(
-			'return \'Hello,\' + #if a \' \' + \'$$x and more\' #else \' \' + \'$$y and less\' #end;', es[0].text
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrapRegion('return \'Hello, \' + \'$$x and more\';', 'return \'Hello, \' + \'$$y and less\';')
 		);
+		Assert.equals(1, es.length);
+		Assert.equals('return \'Hello,\' + #if a \' \' + \'$$x and more\' #else \' \' + \'$$y and less\' #end;', es[0].text);
 	}
 
 	/** A comment in a region the rebuild drops is a safe miss. */
 	public function testCommentInDroppedRegionNotFlagged(): Void {
-		Assert.equals(
-			0, violations(wrapRegion('return /* why */ \'Hello, $$x!\';', 'return \'Hello, $$y?\';')).length
-		);
+		Assert.equals(0, violations(wrapRegion('return /* why */ \'Hello, $$x!\';', 'return \'Hello, $$y?\';')).length);
 	}
 
 	/** A double-quoted branch string carries no segment children, so there is no modelled cut point. */
@@ -141,12 +133,12 @@ class HoistBranchStringAffixCheckTest extends Test {
 	}
 
 	/** A two-branch `#if a / #else` region around `first` and `second`, inside a minimal parseable class. */
-	private static inline function wrapRegion(first: String, second: String): String {
+	private function wrapRegion(first: String, second: String): String {
 		return 'class C {\n\tpublic function f():String {\n\t\t#if a\n\t\t$first\n\t\t#else\n\t\t$second\n\t\t#end\n\t}\n}\n';
 	}
 
 	/** How many times `needle` occurs in `text` — the head-written-once assertion. */
-	private static function occurrences(text: String, needle: String): Int {
+	private function occurrences(text: String, needle: String): Int {
 		var count: Int = 0;
 		var at: Int = text.indexOf(needle);
 		while (at != -1) {
