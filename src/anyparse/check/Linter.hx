@@ -116,6 +116,7 @@ final class Linter {
 			// registry order, and nothing here gates on the position.
 			new TryCatchNullGuard(),
 			new JoinDeclarationAssignment(),
+			new JoinOverrideChain(),
 			new JoinReturn(),
 			// Registry order is free: the two claim DISJOINT shapes. `join-return` needs the next
 			// statement to BE `return <name>;`, and this check refuses exactly that shape (it would

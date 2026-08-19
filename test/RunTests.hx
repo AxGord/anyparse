@@ -646,6 +646,7 @@ import unit.WhileTrueConditionCheckTest;
 import unit.HxComplexItemWrapTest;
 import unit.HxHeaderWrapLadderSliceTest;
 import unit.HxLoopBodyIfElseSliceTest;
+import unit.JoinOverrideChainCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1245,6 +1246,7 @@ class RunTests {
 		addCase(new PreferTryExpressionReturnCheckTest());
 		addCase(new TryCatchNullGuardCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
+		addCase(new JoinOverrideChainCheckTest());
 		addCase(new JoinStringAppendCheckTest());
 		addCase(new JoinReturnCheckTest());
 		addCase(new JoinSingleUseLocalCheckTest());
