@@ -126,7 +126,7 @@ class PreferForeachCheckTest extends Test {
 	 * where the member answer (unknown) and the extension answer (`Array`) differ.
 	 */
 	public function testReceiverMemberBeatsStaticExtension(): Void {
-		Assert.equals(0, extViolations('using ExtArray;', '\n\tpublic function items():Void {}\n').length);
+		Assert.equals(0, extViolations('using ExtArray;', '\n\tpublic function items() {}\n').length);
 	}
 
 	/** Haxe resolves static extensions in REVERSE declaration order — the LATER `using` wins. */
@@ -142,7 +142,7 @@ class PreferForeachCheckTest extends Test {
 	 */
 	public function testFirstParameterMustAcceptTheReceiver(): Void {
 		Assert.equals(0, extViolations('using ExtInt;', '').length);
-		Assert.equals(1, extViolations('using ExtArray;\nusing ExtInt;', '').length);
+		Assert.equals(0, extViolations('using ExtIter;\nusing ExtInt;', '').length);
 	}
 
 	/** No `using` brings `items` into scope, so the call stays unresolved and keeps the blanket refusal. */

@@ -784,17 +784,19 @@ final class SymbolIndex {
 	 * Every gate fails closed, and one of them is the whole reason this is not `returnNominalOf`
 	 * on the module: the first parameter must ACCEPT the receiver, not merely exist. Accepted are
 	 * an exact nominal match and a proven NOMINAL subtype (`isSubtype`); a structural unification
-	 * is NOT modelled, so `Lambda.exists(it:Iterable<A>, …)` answers null for an `Array` receiver —
-	 * a miss, never a wrong type. The rest: the member must be STATIC (an instance method is not
-	 * reachable through a `using`), must carry a written return (an inferred or `Void` one names no
-	 * type), and must be UNANIMOUS across every declaration of the name — a `#if` pair returning
-	 * two different types proves nothing branch-blind. A module declaring the name with a
-	 * non-accepting first parameter answers null rather than the next candidate's return: that IS
-	 * the correct answer for that module, and the caller walks its remaining `using`s itself.
+	 * is NOT modelled, so `Lambda.exists(it:Iterable<A>, …)` answers null for an `Array` receiver
+	 * — a miss, never a wrong type. The rest: the member must be STATIC (an instance method is
+	 * not reachable through a `using`), and must carry a WRITTEN return — an inference-typed one
+	 * names no type at all, while `:Void` resolves to the nominal `Void`, exactly as
+	 * `returnNominalOf` already answers it for an ordinary member. Every declaration of the name
+	 * must agree, since a `#if` pair returning two different types proves nothing branch-blind. A
+	 * module declaring the name with a non-accepting first parameter answers null rather than the
+	 * next candidate's return: that IS the correct answer for that module, and the caller walks
+	 * its remaining `using`s itself.
 	 *
 	 * What this deliberately does NOT decide is whether the receiver's own type declares `method`
-	 * — a real member BEATS an extension and the extension must not be consulted at all. That gate
-	 * belongs to the caller, which holds the receiver and must prove absence with
+	 * — a real member BEATS an extension and the extension must not be consulted at all. That
+	 * gate belongs to the caller, which holds the receiver and must prove absence with
 	 * `typeProvablyLacksMember` BEFORE asking here (`NominalTypes.staticExtensionNominal`).
 	 */
 	public function extensionReturnNominal(module: String, method: String, receiver: String, ?fromFile: String): Null<String> {
