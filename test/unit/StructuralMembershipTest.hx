@@ -91,6 +91,13 @@ class StructuralMembershipTest extends Test {
 		Assert.isFalse(index.satisfiesIterable('Anon', 'Use.hx'));
 		// A function-type alias has no nominal head to follow.
 		Assert.isFalse(index.satisfiesIterable('Fn', 'Use.hx'));
+		// The head is RAW source, so a comment before the path rides along in it. The raw answer
+		// falls back to the simple name there rather than handing a comment on as a type
+		// reference — which resolves here, because `Sack` is unique among the indexed decls.
+		Assert.isTrue(index.satisfiesIterable('Commented', 'Use.hx'));
+		// The same fallback with a target whose SIMPLE name is not enough leaves it unproven,
+		// which is where the raw path would have been needed and is not available.
+		Assert.isFalse(index.satisfiesIterable('CommentedDup', 'Use.hx'));
 
 		// The second half of the same hop, and the one the REAL path reaches first:
 		// `NominalTypes.staticExtensionNominal` consults an extension only after the receiver is
@@ -114,12 +121,13 @@ class StructuralMembershipTest extends Test {
 			{
 				file: 'haxe/ds/List.hx',
 				source: 'package haxe.ds;\n\nclass List<T> {\n\tpublic function iterator():ListIterator<T> return null;\n}\n\n'
-					+ 'private class ListIterator<T> {\n\tpublic function hasNext() return false;\n\n\tpublic function next() return null;\n}'
+				+ 'private class ListIterator<T> {\n\tpublic function hasNext() return false;\n\n\tpublic function next() return null;\n}'
 			},
 			{ file: 'Map.hx', source: 'typedef Map<K, V> = haxe.ds.Map<K, V>;' },
 			{
 				file: 'haxe/ds/Map.hx',
-				source: 'package haxe.ds;\n\nabstract Map<K, V>(IMap<K, V>) {\n\tpublic inline function iterator():Iterator<V> return null;\n}'
+				source: 'package haxe.ds;\n\nabstract Map<K, V>(IMap<K, V>) {\n\t'
+				+ 'public inline function iterator():Iterator<V> return null;\n}'
 			},
 			{ file: 'Renamed.hx', source: 'typedef Renamed = deep.Sack;' },
 			{ file: 'deep/Sack.hx', source: 'package deep;\n\nclass Sack {\n\tpublic function iterator():DeepIter return null;\n}' },
@@ -127,7 +135,11 @@ class StructuralMembershipTest extends Test {
 			{ file: 'PlainAlias.hx', source: 'typedef PlainAlias = Widget;' },
 			{ file: 'Outside.hx', source: 'typedef Outside = nowhere.Gone;' },
 			{ file: 'Anon.hx', source: 'typedef Anon = { var a:Int; };' },
-			{ file: 'Fn.hx', source: 'typedef Fn = Bag -> Widget;' }
+			{ file: 'Fn.hx', source: 'typedef Fn = Bag -> Widget;' },
+			{ file: 'Commented.hx', source: 'typedef Commented = /* c */ deep.Sack;' },
+			{ file: 'CommentedDup.hx', source: 'typedef CommentedDup = /* c */ deep.Twin;' },
+			{ file: 'deep/Twin.hx', source: 'package deep;\n\nclass Twin {\n\tpublic function iterator():DeepIter return null;\n}' },
+			{ file: 'other/Twin.hx', source: 'package other;\n\nclass Twin {}' }
 		]);
 	}
 

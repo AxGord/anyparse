@@ -176,6 +176,7 @@ final class SymbolIndexBuilder {
 			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
 			if (typeDecl != null) {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
+				final aliasPath: Null<String> = aliasTargetPathOf(source, typeDecl, node, gn.guarded);
 				final isAbstract: Bool = abstractKinds.contains(typeDecl.kind);
 				final paramsText: Null<String> = declTypeParamListText(source, typeDecl);
 				final paramSegments: Array<String> = paramsText == null ? [] : NominalTypes.splitTypeArgumentList(paramsText);
@@ -193,7 +194,8 @@ final class SymbolIndexBuilder {
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == TYPEDEF_DECL_KIND && node.children.exists(c -> c.kind == ANON_KIND),
-					aliasTargetNominal: aliasTargetOf(source, typeDecl, node, gn.guarded),
+					aliasTargetNominal: aliasPath == null ? null : simpleName(aliasPath),
+					aliasTargetRaw: aliasPath,
 					hasRtti: pendingMeta.contains('@:rtti'),
 					hasBuild: pendingMeta.contains('@:build'),
 					hasAutoBuild: pendingMeta.contains('@:autoBuild'),
@@ -774,8 +776,13 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * The SIMPLE outer nominal a plain `typedef T = <Target>;` re-points at, or null for every
-	 * other declaration. The projection carries NO alias link — a `TypedefDecl` aliasing a named
+	 * The WRITTEN head path a plain `typedef T = <Target>;` re-points at — type arguments stripped,
+	 * package PRESERVED (`haxe.ds.List<T>` -> `haxe.ds.List`) — or null for every other
+	 * declaration. `TypeDeclInfo.aliasTargetNominal` is `simpleName` of this and
+	 * `aliasTargetRaw` is this verbatim; both are derived from ONE read so they can never
+	 * disagree, the same pairing `supertypes` / `supertypesRaw` carries.
+	 *
+	 * The projection carries NO alias link — a `TypedefDecl` aliasing a named
 	 * type has no children at all — so the target is read from the declaration's own source: the
 	 * text after the first `=`, stripped of a trailing `;`, accepted only when
 	 * `NominalTypes.outerNominalOf` recognises it as a nominal path (`Widget`, `pkg.Deep.Thing`,
@@ -790,7 +797,7 @@ final class SymbolIndexBuilder {
 	 *    index keeps the FIRST decl of a name, so a followed alias would silently commit to
 	 *    whichever branch happened to be indexed and be wrong for the other compilation.
 	 */
-	private static function aliasTargetOf(source: String, decl: TypeDeclMatch, node: QueryNode, guarded: Bool): Null<String> {
+	private static function aliasTargetPathOf(source: String, decl: TypeDeclMatch, node: QueryNode, guarded: Bool): Null<String> {
 		if (guarded || decl.kind != TYPEDEF_DECL_KIND || node.children.exists(c -> c.kind == ANON_KIND)) return null;
 		final text: String = source.substring(decl.fullSpan.from, decl.fullSpan.to);
 		final eq: Int = text.indexOf('=');
@@ -799,7 +806,16 @@ final class SymbolIndexBuilder {
 		final body: String = tail.endsWith(';') ? tail.substring(0, tail.length - 1) : tail;
 		// A `->` anywhere makes the alias a function type: its head is not the type the alias
 		// denotes. Over-refusing a `Holder<Int -> Void>` argument the same way is harmless.
-		return body.indexOf('->') != -1 ? null : NominalTypes.outerNominalOf(body.trim());
+		if (body.indexOf('->') != -1) return null;
+		final lt: Int = body.indexOf('<');
+		final head: String = (lt < 0 ? body : body.substring(0, lt)).trim();
+		// `outerNominalOf` stays the VALIDATOR and the FALLBACK, so the simple name this function's
+		// callers derive is bit-for-bit what it always was. The head is answered instead only when
+		// EVERY segment of it is an identifier: the head is raw source, so a comment or a metadata
+		// run before the path (`typedef A = /* c */ pkg.B;`) rides along in it, and handing that on
+		// as a type reference would resolve to nothing where the simple name resolves fine.
+		final nominal: Null<String> = NominalTypes.outerNominalOf(head);
+		return nominal != null && head.split('.').foreach(seg -> RefactorSupport.isIdentifier(seg)) ? head : nominal;
 	}
 
 }

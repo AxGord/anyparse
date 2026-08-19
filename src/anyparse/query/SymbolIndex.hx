@@ -222,6 +222,21 @@ typedef TypeDeclInfo = {
 	var aliasTargetNominal: Null<String>;
 
 	/**
+	 * The VERBATIM head path of the same alias target — qualified when written qualified, type
+	 * arguments stripped (`typedef List<T> = haxe.ds.List<T>` -> `haxe.ds.List`) — parallel to
+	 * `aliasTargetNominal` exactly as `supertypesRaw` is to `supertypes`, and null under exactly
+	 * the same conditions.
+	 *
+	 * The package a simple-name reduction throws away is what makes an alias hop RESOLVABLE. The
+	 * std's two most common containers are top-level aliases re-pointing at a packaged type of
+	 * the SAME simple name and importing nothing (`/std/List.hx`, `/std/Map.hx`), so a hop on the
+	 * simple name resolves back to the ALIAS ITSELF and every closure walk through them stops
+	 * dead. Read this wherever an alias link is FOLLOWED; read `aliasTargetNominal` only where the
+	 * answer is compared against another simple name.
+	 */
+	var aliasTargetRaw: Null<String>;
+
+	/**
 	 * True when the type declaration carries `@:rtti` metadata directly. Such a
 	 * class is serialized by reflecting on its runtime field NAMES (e.g. drill
 	 * Node), so a naming autofix must not rename its fields. Feeds
@@ -1061,10 +1076,21 @@ final class SymbolIndex {
 		// unique among indexed decls) is the only way the link is followed at all.
 		final start: Null<ResolvedType> = resolveStartType(typeName, fromFile) ?? resolveStartType(typeName, null);
 		if (start == null || !markSeen(start, seen)) return null;
+		final host: String = start.file.file;
 		final own: Null<MemberInfo> = start.type.members.find(m -> m.name == member);
-		if (own != null) return { member: own, file: start.file.file };
+		if (own != null) return { member: own, file: host };
+		// A `typedef` hosts its members through a link neither `members` nor `supertypesRaw`
+		// carries — both are EMPTY on an alias decl — so without this hop every aliased container
+		// answers "declares nothing", which is the whole reason `List` and `Map` were unprovable.
+		// Followed from the ALIAS's own file and by its WRITTEN path, the same two rules the
+		// supertype hop below uses; `markSeen` above stops an alias cycle just as it stops a
+		// supertype one. An anon-struct alias is excluded: its fields are the index's own members.
+		if (start.type.kind == TYPEDEF_DECL_KIND && !start.type.isAnonStruct) {
+			final target: Null<String> = start.type.aliasTargetRaw;
+			return target == null ? null : structuralMemberOf(target, host, member, seen);
+		}
 		for (raw in start.type.supertypesRaw) {
-			final up: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(raw, start.file.file, member, seen);
+			final up: Null<{ member: MemberInfo, file: String }> = structuralMemberOf(raw, host, member, seen);
 			if (up != null) return up;
 		}
 		return null;
@@ -1668,7 +1694,10 @@ final class SymbolIndex {
 		// an unreadable alias and a `@:forward` abstract (every underlying member is exposed under a
 		// name the index cannot enumerate here) are not provable at all.
 		if (t.kind == TYPEDEF_DECL_KIND && !t.isAnonStruct) {
-			final target: Null<String> = t.aliasTargetNominal;
+			// The RAW path, not the simple name: `typedef List<T> = haxe.ds.List<T>` written in
+			// the root package with no import resolves its own simple name back to ITSELF, so the
+			// hop lands on the alias, hits the cycle test below and proves nothing.
+			final target: Null<String> = t.aliasTargetRaw;
 			if (target == null) return false;
 			final next: Null<ResolvedType> = resolveTypeRef(target, cur.file);
 			// An alias CYCLE proves nothing — unlike a supertype cycle, whose closure is still
