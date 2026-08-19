@@ -81,7 +81,11 @@ class HoistBranchStringAffixCheckTest extends Test {
 
 	/** A literal segment holding a backslash escape is never cut inside — a safe miss, not a mangled escape. */
 	public function testEscapeBearingSegmentNotCut(): Void {
-		Assert.equals(0, violations(wrapRegion('return \'ab\\nQtail\';', 'return \'ab\\\\Rtail\';')).length);
+		// Long enough that BOTH edges would pay for themselves, so the refusal is the escape gate's
+		// and not the one before it: the naive common prefix ends between the `\` and the `n`.
+		Assert.equals(
+			0, violations(wrapRegion('return \'header-part\\nQ-trailing-part\';', 'return \'header-part\\\\R-trailing-part\';')).length
+		);
 	}
 
 	/** Hoisting must SHORTEN the source: two branches sharing five characters do not pay for the quotes and the `+`. */
@@ -103,7 +107,8 @@ class HoistBranchStringAffixCheckTest extends Test {
 
 	/** Branches sharing nothing at either edge have nothing to hoist. */
 	public function testNoSharedEdgeNotFlagged(): Void {
-		Assert.equals(0, violations(wrapRegion('return \'alpha\';', 'return \'omega\';')).length);
+		// No shared character at EITHER edge — `'alpha'` / `'omega'` would still share a trailing `a`.
+		Assert.equals(0, violations(wrapRegion('return \'alpha\';', 'return \'omicron\';')).length);
 	}
 
 	/** A branch value that is itself a `+` chain keeps its own operators; only the outer edges move. */
