@@ -281,7 +281,6 @@ final class BoolLoopScan {
 		final bare: Null<Head> = forIfHead(a, source, s);
 		if (bare != null && bare.value == loopValue) return {
 			anchor: a,
-			forNode: a,
 			trailing: b,
 			guard: null,
 			head: bare,
@@ -294,7 +293,6 @@ final class BoolLoopScan {
 		final guarded: Null<Head> = forIfHead(loop, source, s);
 		return guarded == null || guarded.value != loopValue ? null : {
 			anchor: a,
-			forNode: loop,
 			trailing: b,
 			guard: a.children[0],
 			head: guarded,
@@ -525,11 +523,10 @@ private typedef Head = {
 	var value: Bool;
 }
 
-/** A recovered bool-returning loop: the node the finding anchors on, the loop, its trailing return, an optional guard and the head. */
+/** A recovered bool-returning loop: the node the finding anchors on, its trailing return, an optional guard and the destructured head. */
 private typedef Cand = {
 	/** The loop, or the guard `if` holding it — the node the finding's span covers and the fix's region starts at. */
 	var anchor: QueryNode;
-	var forNode: QueryNode;
 	var trailing: QueryNode;
 	var guard: Null<QueryNode>;
 	var head: Head;
