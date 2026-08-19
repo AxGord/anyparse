@@ -166,6 +166,9 @@ private typedef FoldableDecl = {
 	final span: Span;
 	final dropped: Null<Span>;
 	final initSpan: Span;
+
+	/** The default expression node itself — what a caller extracting the default must classify. */
+	final initNode: QueryNode;
 	final initDrop: Span;
 };
 /**
@@ -195,6 +198,32 @@ private typedef ConditionalCtorInit = {
 	final value: Span;
 	final sole: Bool;
 	final terminator: String;
+};
+
+/**
+ * The DEFAULT a conditional-default fold is about to move into constructor position, handed to a
+ * caller that wants to name it instead of moving it verbatim
+ * (`ctorConditionalDefaultTernaryEdits`'s `extract` seam).
+ *
+ * Handed over rather than re-derived by the caller because the two must not disagree: the text a
+ * caller names is the text this fold DELETES from the declaration, and a second read of the
+ * declaration - through a different scan, against a source one edit older - is the way that
+ * invariant breaks silently.
+ */
+typedef CtorDefaultSite = {
+	/** The class-like container declaring the field — the receiving type of any emitted member. */
+	final container: QueryNode;
+
+	final fieldName: String;
+
+	/** The field's written type annotation, or null when the head states none (`declaredTypeAnnotation`). */
+	final typeAnnotation: Null<String>;
+
+	/** The default expression node — what tells a caller whether it is a bare literal. */
+	final defaultNode: QueryNode;
+
+	/** The default's verbatim source text, exactly as the fold would splice it. */
+	final defaultText: String;
 };
 /**
  * Cursor-resolution and identifier/span primitives shared by the scope-correct refactoring
@@ -4565,6 +4594,7 @@ final class RefactorSupport {
 			span: fieldSpan,
 			dropped: head.dropped,
 			initSpan: initSpan,
+			initNode: init,
 			initDrop: initDrop
 		};
 	}
@@ -4836,9 +4866,15 @@ final class RefactorSupport {
 	 *
 	 * Cross-file soundness (an external, subtype or unresolved write, an `@:access` grantee) stays
 	 * the CONSUMER's job, as for `ctorSoleAssignmentFinalizable`.
+	 *
+	 * `extract`, when supplied, is offered the default the fold is about to move and may answer
+	 * with the TEXT to write in the ternary's else arm instead of it - a reference to a constant it
+	 * emits itself. It is asked LAST, after every gate has passed, so a caller may claim a name or
+	 * stage a member insertion inside it without having to undo either. Answering null keeps the
+	 * literal, which is what every caller that passes no seam at all gets.
 	 */
 	public static function ctorConditionalDefaultTernaryEdits(
-		source: String, declSpan: Span, plugin: GrammarPlugin
+		source: String, declSpan: Span, plugin: GrammarPlugin, ?extract: (CtorDefaultSite) -> Null<String>
 	): Null<Array<{ span: Span, text: String }>> {
 		final shape: RefShape = plugin.refShape();
 		final base: Null<{
@@ -4867,7 +4903,18 @@ final class RefactorSupport {
 		final condText: String = ternaryConditionText(source, init.condition, shape);
 		final valueText: String = source.substring(init.value.from, init.value.to);
 		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
-		final folded: String = '$targetText = $condText ? $valueText : $defaultText${init.terminator}';
+		// Asked LAST, once every gate has passed: `extract` may have side effects (a name ledger, a
+		// pending member insertion), and a caller must not pay them for a fold that then refuses.
+		final elseText: String = (extract == null
+			? null
+			: extract({
+				container: base.container,
+				fieldName: decl.name,
+				typeAnnotation: declaredTypeAnnotation(source, decl.span, decl.initSpan, decl.name),
+				defaultNode: decl.initNode,
+				defaultText: defaultText
+			})) ?? defaultText;
+		final folded: String = '$targetText = $condText ? $valueText : $elseText${init.terminator}';
 		final edits: Array<{ span: Span, text: String }> = [{ span: decl.initDrop, text: '' }];
 		if (init.sole)
 			edits.push({ span: init.ifStmt, text: folded });
