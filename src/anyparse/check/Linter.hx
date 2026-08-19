@@ -117,6 +117,11 @@ final class Linter {
 			new TryCatchNullGuard(),
 			new JoinDeclarationAssignment(),
 			new JoinOverrideChain(),
+			// Reads the ONE statement shape the statement-list rules deliberately skip — a
+			// conditional-compilation region's branches. Registry order is free: no other check
+			// claims a `Conditional` node's span, and the rebuilt `return` it emits is a shape
+			// `fold-adjacent-string-literals` may fold further on a later fixed-point pass.
+			new HoistBranchStringAffix(),
 			new JoinReturn(),
 			// Registry order is free: the two claim DISJOINT shapes. `join-return` needs the next
 			// statement to BE `return <name>;`, and this check refuses exactly that shape (it would
