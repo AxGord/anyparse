@@ -2137,6 +2137,14 @@ typedef RefShape = {
 	@:optional var whileStmtKind: String;
 
 	/**
+	 * The kind of a `while` in EXPRESSION position — the header of a `while` array comprehension
+	 * (`[while (c) e]`), which the Haxe grammar projects as a different kind from the statement
+	 * form. Optional: a grammar without a while-comprehension leaves it unset, and the checks that
+	 * read it then see the statement form only.
+	 */
+	@:optional var whileExprKind: String;
+
+	/**
 	 * The strict less-than comparison node kind (Haxe `Lt`) — `prefer-range-loop`
 	 * flags only the `i < B` condition form (`<=` / reversed / `!=` are not an
 	 * `A...B` range). Optional; unset makes the check a no-op.
