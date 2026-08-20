@@ -682,6 +682,7 @@ import unit.HxCondDeclElseTrailingMetaTest;
 import unit.PreferNullCoalescingParensTest;
 import unit.PreferComprehensionFinalTest;
 import unit.FieldMutabilityMacroGateTest;
+import unit.LintLanguageVersionGateTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1124,6 +1125,7 @@ class RunTests {
 		addCase(new PreferNullCoalescingParensTest());
 		addCase(new PreferComprehensionFinalTest());
 		addCase(new FieldMutabilityMacroGateTest());
+		addCase(new LintLanguageVersionGateTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
 		addCase(new LintFailOnCliTest());

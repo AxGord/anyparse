@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -147,7 +148,7 @@ using Lambda;
  * subjects are flagged.
  */
 @:nullSafety(Strict)
-final class PreferSafeNav implements Check {
+final class PreferSafeNav implements Check implements VersionGated {
 
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
@@ -237,6 +238,11 @@ final class PreferSafeNav implements Check {
 			return { span: span, text: text };
 		})) edits.push(e);
 		return RefactorSupport.dropContainedEdits(edits);
+	}
+
+	/** `??` and `?.` are Haxe 4.3; a project declaring an older `languageVersion` does not get this rewrite. */
+	public function minLanguageVersion(): String {
+		return '4.3';
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -742,7 +748,6 @@ final class PreferSafeNav implements Check {
 			&& sameSubject(a.children[0], b.children[0], s);
 	}
 
-
 	/**
 	 * Analyse an `if` condition for a null guard on a guard subject, returning the
 	 * guarded operand and the surviving REMAINING condition (null for a sole guard):
@@ -766,7 +771,6 @@ final class PreferSafeNav implements Check {
 		final operand: Null<QueryNode> = guardOperand(c.children[1], s);
 		return operand == null ? null : { operand: operand, rest: c.children[0] };
 	}
-
 
 	/**
 	 * Whether the guard subject appears in `node`'s subtree anywhere OTHER than at the chain

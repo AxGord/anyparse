@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -129,7 +130,7 @@ using Lambda;
  * narrowing scan).
  */
 @:nullSafety(Strict)
-final class PreferSafeNavComparison implements Check {
+final class PreferSafeNavComparison implements Check implements VersionGated {
 
 	/** A binary node — a comparison or a logical operator — has exactly [left, right] children. */
 	private static inline final BINARY_CHILD_COUNT: Int = 2;
@@ -189,6 +190,11 @@ final class PreferSafeNavComparison implements Check {
 			if (edit != null) edits.push(edit);
 		}
 		return RefactorSupport.dropContainedEdits(edits);
+	}
+
+	/** `??` and `?.` are Haxe 4.3; a project declaring an older `languageVersion` does not get this rewrite. */
+	public function minLanguageVersion(): String {
+		return '4.3';
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -382,7 +388,6 @@ final class PreferSafeNavComparison implements Check {
 		};
 	}
 
-
 	/** Whether `first` is referenced anywhere at or after `runTo` inside the narrowing scan scope (see the type doc). */
 	private static function mentionedAfter(stack: Array<QueryNode>, first: QueryNode, runTo: Int, source: String, s: Seams): Bool {
 		return scanRoots(stack, s).exists(r -> mentions(r, runTo, first, source, s));
@@ -496,7 +501,6 @@ final class PreferSafeNavComparison implements Check {
 		}
 		return chain;
 	}
-
 
 	/**
 	 * The kinds that BOUND null-safety narrowing, ending the scan-scope ascent: the

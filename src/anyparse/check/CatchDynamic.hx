@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -69,7 +70,7 @@ using StringTools;
  * (`Exception`, a custom class, `String`, …) is left alone.
  */
 @:nullSafety(Strict)
-final class CatchDynamic implements Check implements ConfigAware {
+final class CatchDynamic implements Check implements ConfigAware implements VersionGated {
 
 	/** The message for a bare, untyped `catch (e)` (arm (c)) — shared by `run` and any diagnostics. */
 	private static final UNTYPED_MESSAGE: String =
@@ -161,6 +162,11 @@ final class CatchDynamic implements Check implements ConfigAware {
 		// landed and needs the short name.
 		if (rewroteNonConditional) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
 		return edits;
+	}
+
+	/** `haxe.Exception` is Haxe 4.1; a project declaring an older `languageVersion` does not get this rewrite. */
+	public function minLanguageVersion(): String {
+		return '4.1';
 	}
 
 	/** Walk `node`, flagging every catch clause whose declared type is a catch-all name, plus every bare untyped catch. */

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.check.SimplifyNegatedCompound;
@@ -377,6 +378,12 @@ final class Linter {
 		// when the file explicitly opts in (`enabled:true`) — the inverse default the
 		// per-file enablement gate below applies via `enabledFor`'s `defaultOn`.
 		final defaultOffIds: Array<String> = [for (c in active) if (c is DefaultOff) c.id()];
+		// A rule whose FIX emits syntax newer than the project's declared `languageVersion`
+		// is dropped for that file — see `Check.VersionGated`. Collected once; the per-file
+		// question is answered against each finding's own config below.
+		final minVersionById: Map<String, String> = [
+			for (c in active) if (c is VersionGated) c.id() => (cast c: VersionGated).minLanguageVersion()
+		];
 		// Parse each file once and share the trees across all checks — each check
 		// parses independently otherwise, so N checks over M files is N*M parses.
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
@@ -393,6 +400,8 @@ final class Linter {
 		for (violation in out) {
 			final config: LintConfig = resolveConfig(violation.file);
 			if (applyEnablement && !config.enabledFor(violation.rule, !defaultOffIds.contains(violation.rule))) continue;
+			final minVersion: Null<String> = minVersionById[violation.rule];
+			if (applyEnablement && minVersion != null && !config.allowsLanguageVersion(minVersion)) continue;
 			final sev: Null<Severity> = config.severityFor(violation.rule);
 			if (sev != null) violation.severity = sev;
 			kept.push(violation);

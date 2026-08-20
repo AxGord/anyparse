@@ -13026,7 +13026,13 @@ final class Cli {
 		final checks: Array<Check> = Linter.builtins();
 		var width: Int = 0;
 		for (c in checks) if (c.id().length > width) width = c.id().length;
-		for (c in checks) sysPrint('${c.id().rpad(' ', width)}  ${c.description()}\n');
+		// The minimum language version a rule's FIX needs is printed with the rule, not
+		// discovered after a run that silently dropped it: a project whose `languageVersion`
+		// is below it never sees the finding, and this is where that becomes visible.
+		for (c in checks) {
+			final requires: String = c is VersionGated ? ' [needs ${(cast c: VersionGated).minLanguageVersion()}]' : '';
+			sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires\n');
+		}
 	}
 
 	private static function printWriteLangHelp(): Void {

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -50,7 +51,7 @@ using Lambda;
  * iterates to a fixed point).
  */
 @:nullSafety(Strict)
-final class PreferNullCoalescing implements Check implements RiskyFix {
+final class PreferNullCoalescing implements Check implements RiskyFix implements VersionGated {
 
 	/** A complete ternary node has children [cond, then, else]. */
 	private static inline final TERNARY_CHILD_COUNT: Int = 3;
@@ -103,6 +104,11 @@ final class PreferNullCoalescing implements Check implements RiskyFix {
 			final fallbackText: String = needsParens(m.fallback, seams) ? '($fallbackSrc)' : fallbackSrc;
 			return { span: span, text: '$guardedSrc ?? $fallbackText' };
 		});
+	}
+
+	/** `??` and `?.` are Haxe 4.3; a project declaring an older `languageVersion` does not get this rewrite. */
+	public function minLanguageVersion(): String {
+		return '4.3';
 	}
 
 	/**

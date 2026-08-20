@@ -67,9 +67,12 @@ final class LintConfig {
 	/** Whether the auto-discovered Haxe std may join the resolution scope (`resolutionStd`); true unless the key explicitly declines it. */
 	private final _resolutionStd: Bool;
 
+	/** The language version the project targets (`languageVersion`), or null when unset — see `Check.VersionGated`. */
+	private final _languageVersion: Null<String>;
+
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracle: String, ?compilerOracleDir: String, ?resolutionRoots: Array<String>,
-		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool
+		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String
 	) {
 		_rules = rules;
 		_compilerOracle = compilerOracle;
@@ -78,6 +81,7 @@ final class LintConfig {
 		_resolutionRoots = resolutionRoots ?? [];
 		_resolutionLibs = resolutionLibs ?? [];
 		_resolutionStd = resolutionStd ?? true;
+		_languageVersion = languageVersion;
 	}
 
 	/**
@@ -226,6 +230,25 @@ final class LintConfig {
 		return out;
 	}
 
+	/**
+	 * Whether a rule requiring language version `minimum` may run for this config.
+	 *
+	 * True when the project declares no `languageVersion` — an undeclared floor constrains
+	 * nothing, which is what every existing config already means. Otherwise the declared
+	 * version must be at least `minimum`, compared component-wise on the dotted numbers so
+	 * `4.10` sorts above `4.9`. A version either side cannot parse is treated as no
+	 * constraint rather than as a refusal: a typo must not silently switch rules off.
+	 */
+	public function allowsLanguageVersion(minimum: String): Bool {
+		final declared: Null<String> = _languageVersion;
+		return declared == null || compareVersions(declared, minimum) >= 0;
+	}
+
+	/** The declared `languageVersion`, or null when the project states no floor. */
+	public function languageVersion(): Null<String> {
+		return _languageVersion;
+	}
+
 	/** The raw prop `key` of rule `id`, or null when the rule is unconfigured or lacks the key — the base for the typed option accessors. */
 	private function propOf(id: String, key: String): Null<JValue> {
 		final rc: Null<RuleConfig> = _rules[id];
@@ -326,7 +349,10 @@ final class LintConfig {
 		final oracle: Null<String> = declaredOracle == null ? null : resolveAgainstConfigDir(baseDir, declaredOracle);
 		final oracleDir: Null<String> = oracle == null || baseDir == null ? null : hxmlCompileDir(oracle, baseDir);
 		final roots: Array<String> = (config.resolutionRoots ?? []).map(resolveAgainstConfigDir.bind(baseDir));
-		return new LintConfig(rules, oracle, oracleDir, roots, config.resolutionLibs, config.resolutionStd, config.compilerOracleServer);
+		return new LintConfig(
+			rules, oracle, oracleDir, roots, config.resolutionLibs, config.resolutionStd, config.compilerOracleServer,
+			config.languageVersion
+		);
 	}
 
 	/**
@@ -427,6 +453,25 @@ final class LintConfig {
 	/** Whether `path` exists on disk — false wholesale on a non-sys target, keeping the probe a tie there. */
 	private static function pathExists(path: String): Bool {
 		return #if (sys || nodejs) sys.FileSystem.exists(path) #else false #end;
+	}
+
+	/**
+	 * `a` against `b` as dotted version numbers: negative when `a` is older, 0 when equal,
+	 * positive when newer. A missing component reads as 0 (`4` == `4.0`), and a component
+	 * that is not a number makes the whole comparison answer 0 — see `allowsLanguageVersion`
+	 * for why an unreadable version must not refuse.
+	 */
+	private static function compareVersions(a: String, b: String): Int {
+		final left: Array<String> = a.split('.');
+		final right: Array<String> = b.split('.');
+		final count: Int = left.length > right.length ? left.length : right.length;
+		for (i in 0...count) {
+			final lv: Null<Int> = i < left.length ? Std.parseInt(left[i].trim()) : 0;
+			final rv: Null<Int> = i < right.length ? Std.parseInt(right[i].trim()) : 0;
+			if (lv == null || rv == null) return 0;
+			if (lv != rv) return lv - rv;
+		}
+		return 0;
 	}
 
 }

@@ -10,8 +10,13 @@ import anyparse.grammar.json.JValue;
  * Every key is `@:optional`, so an empty `{}` config is valid and yields a
  * config with nothing declared; `LintConfig` then applies its own defaults
  * (every rule enabled, no severity override, the std in the resolution
- * scope). Keys this schema does not model are dropped by the
- * `UnknownPolicy.Skip` inherited from `JsonFormat`.
+ * scope). Keys this schema does not model are dropped by the `UnknownPolicy.Skip`
+ * inherited from `JsonFormat`.
+ *
+ * `languageVersion` is the version of the LANGUAGE the project targets, as a
+ * dotted string (`"4.0"`). A rule whose fix emits syntax newer than that is
+ * dropped — see `Check.VersionGated`. Absent means no constraint, which is the
+ * behaviour every existing config already has.
  *
  * `rules` is the one section with ARBITRARY keys — one entry per rule id —
  * so it is declared `Map<String, JValue>`: the id set is open (any
@@ -34,4 +39,6 @@ typedef ApqLintConfig = {
 	@:optional var resolutionLibs: Array<String>;
 
 	@:optional var resolutionStd: Bool;
+
+	@:optional var languageVersion: String;
 };
