@@ -1,11 +1,13 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CondBranchPath;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -37,12 +39,19 @@ final class DuplicateCase implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final caseBranchKind: Null<String> = plugin.refShape().caseBranchKind;
-		if (caseBranchKind == null) return [];
+		final shape: RefShape = plugin.refShape();
+		final declared: Null<String> = shape.caseBranchKind;
+		if (declared == null) return [];
+		final caseBranchKind: String = declared;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, caseBranchKind);
+			if (tree != null)
+				walk(
+					violations, entry.file, entry.source, tree,
+					{ caseBranchKind: caseBranchKind, conditionalKind: shape.conditionalMemberKind },
+					CondBranchPath.scan(entry.source, shape)
+				);
 		}
 		return violations;
 	}
@@ -64,25 +73,58 @@ final class DuplicateCase implements Check {
 	 * pattern source repeats an earlier sibling's. The whole tree is walked so
 	 * nested switches are reached.
 	 */
-	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, caseBranchKind: String): Void {
-		final seen: Array<String> = [];
-		for (branch in node.children) if (branch.kind == caseBranchKind) {
-			final pattern: Null<String> = patternSource(branch, source);
-			if (pattern != null) {
-				if (seen.contains(pattern)) {
-					final span: Null<Span> = branch.span;
-					if (span != null) out.push({
-						file: file,
-						span: span,
-						rule: 'duplicate-case',
-						severity: Severity.Warning,
-						message: 'duplicate case label'
-					});
-				} else
-					seen.push(pattern);
-			}
+	private static function walk(
+		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: CaseSeams, branches: CondBranchIndex
+	): Void {
+		// A `#if` region inside a case list projects as ONE child of the switch whose own
+		// children are the case branches of EVERY branch of the region, flattened. So the arms
+		// a switch really offers are its direct case children PLUS those, and comparing only
+		// direct children misses a label repeated across the boundary while comparing a
+		// region's children as neighbours invents one across its branches. `CondBranchPath`
+		// settles both: the arms are gathered together, and two of them are compared only when
+		// no region puts them in different branches.
+		if (node.kind != seams.conditionalKind) compareArms(out, file, source, gatherArms(node, seams), branches);
+		for (child in node.children) walk(out, file, source, child, seams, branches);
+	}
+
+	/**
+	 * The case arms `node` offers, in source order: its direct case-branch children, plus those
+	 * of any conditional region among them (recursively, since a region may nest another).
+	 */
+	private static function gatherArms(node: QueryNode, seams: CaseSeams): Array<QueryNode> {
+		final arms: Array<QueryNode> = [];
+		for (child in node.children) {
+			if (child.kind == seams.caseBranchKind)
+				arms.push(child)
+			else if (child.kind == seams.conditionalKind)
+				for (arm in gatherArms(child, seams)) arms.push(arm);
 		}
-		for (c in node.children) walk(out, file, source, c, caseBranchKind);
+		return arms;
+	}
+
+	/** Report every arm whose pattern repeats an EARLIER comparable one — same pattern text, no region telling them apart. */
+	private static function compareArms(
+		out: Array<Violation>, file: String, source: String, arms: Array<QueryNode>, branches: CondBranchIndex
+	): Void {
+		final seen: Array<{ pattern: String, path: Array<CondFrame> }> = [];
+		for (branch in arms) {
+			final found: Null<String> = patternSource(branch, source);
+			final at: Null<Span> = branch.span;
+			if (found == null || at == null) continue;
+			final pattern: String = found;
+			final span: Span = at;
+			final path: Array<CondFrame> = CondBranchPath.pathAt(branches, span.from);
+			if (seen.exists(s -> s.pattern == pattern && CondBranchPath.comparable(s.path, path)))
+				out.push({
+					file: file,
+					span: span,
+					rule: 'duplicate-case',
+					severity: Severity.Warning,
+					message: 'duplicate case label'
+				})
+			else
+				seen.push({ pattern: pattern, path: path });
+		}
 	}
 
 	/**
@@ -103,3 +145,9 @@ final class DuplicateCase implements Check {
 	}
 
 }
+
+/** The two kinds `duplicate-case` walks by: a case branch, and the conditional region whose branches are alternatives. */
+private typedef CaseSeams = {
+	final caseBranchKind: String;
+	final conditionalKind: Null<String>;
+};

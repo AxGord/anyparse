@@ -676,6 +676,7 @@ import unit.ApqFmtVerifyCliTest;
 import unit.LintUsingSubmoduleExtensionTest;
 import unit.MisplacedTypeDocGuardedMetaTest;
 import unit.LintFixSafePassRevertTest;
+import unit.DuplicateCaseCondBranchTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1112,6 +1113,7 @@ class RunTests {
 		addCase(new LintUsingSubmoduleExtensionTest());
 		addCase(new MisplacedTypeDocGuardedMetaTest());
 		addCase(new LintFixSafePassRevertTest());
+		addCase(new DuplicateCaseCondBranchTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
 		addCase(new LintFailOnCliTest());
