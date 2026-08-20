@@ -59,9 +59,14 @@ class HaxelibResolverTest extends Test {
 		Assert.isNull(HaxelibResolver.sourceDirFrom('/a/b', '42'));
 	}
 
-	/** A null `haxelib.json` (file missing/unreadable) yields null. */
-	public function testNullJsonIsNull(): Void {
-		Assert.isNull(HaxelibResolver.sourceDirFrom('/a/b', null));
+	/**
+	 * NO `haxelib.json` at all is a LEGACY library — `haxelib.xml` and nothing else — whose
+	 * sources are the root, which is what `haxelib path` prints as its classpath. Treating
+	 * absence as "skip the lib" dropped `continuation` out of `resolutionLibs` with a
+	 * "not installed?" note, while `haxelib libpath` had answered its root and exit 0.
+	 */
+	public function testNullJsonIsRoot(): Void {
+		Assert.equals('/a/b', HaxelibResolver.sourceDirFrom('/a/b', null));
 	}
 
 	/** Empty libpath output (lib not installed / nothing printed) yields null even with a valid json. */

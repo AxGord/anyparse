@@ -52,17 +52,25 @@ final class HaxelibResolver {
 	 * `root/classPath`, where `classPath` defaults to the empty string (the root
 	 * itself) when the key is absent or empty. `haxelibJson` is read through the
 	 * declared `HaxelibJson` schema (macro-generated `HaxelibJsonParser`) —
-	 * malformed JSON, a non-object root, or a `classPath` of the WRONG type (not
-	 * a string) all throw and are caught here, degrading to null exactly like a
-	 * null `haxelibJson`: the lib is skipped rather than indexing an unknown tree
-	 * from its root. ACCEPTED behaviour change from the pre-schema Reflect-based
+	 * malformed JSON, a non-object root, or a `classPath` of the WRONG type (not a string) all throw and are caught here and the lib is skipped rather than indexed from an unknown root. A null `haxelibJson` is NOT one of those: no manifest means a legacy library whose sources are the root, and it resolves to the root. ACCEPTED behaviour change from the pre-schema Reflect-based
 	 * reader: a non-string `classPath` used to fall back to the root; it now
 	 * yields null (see `HaxelibResolverTest.testNonStringClassPathIsNull`). No
 	 * I/O, so it is unit-testable without a real haxelib.
 	 */
 	public static function sourceDirFrom(libpathOutput: String, haxelibJson: Null<String>): Null<String> {
 		final root: Null<String> = rootFrom(libpathOutput);
-		if (root == null || haxelibJson == null) return null;
+		if (root == null) return null;
+		// No manifest at all: a LEGACY library, whose sources are the root itself — which is
+		// exactly what `haxelib path <name>` prints as its classpath. `continuation` is one:
+		// it ships `haxelib.xml` and no `haxelib.json`, so the old "no json, no lib" rule
+		// dropped it from `resolutionLibs` with a "not installed?" note, while
+		// `haxelib libpath` had answered its root and exit 0.
+		//
+		// A manifest that EXISTS and cannot be trusted stays a null below — malformed JSON, a
+		// non-object root, a `classPath` of the wrong type. The distinction is the point:
+		// absent is a fact about the library's age, present-and-broken is a fact about the
+		// library, and only the second is a reason to index nothing.
+		if (haxelibJson == null) return Path.normalize(root);
 		final parsed: Null<HaxelibJson> = try HaxelibJsonParser.parse(haxelibJson) catch (exception: Exception) null;
 		if (parsed == null) return null;
 		final classPathRaw: Null<String> = parsed.classPath;
