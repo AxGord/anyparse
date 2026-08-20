@@ -515,7 +515,7 @@ enum HxExpr {
 	 * `HxCondSpliceClosedRaw` carries the fixture that measured it.
 	 */
 	@:kw('return')
-	CondSpliceReturnExpr(inner: HxCondSpliceReturnRegion);
+	CondSpliceReturnExpr(inner: HxCondSpliceClosedRegion);
 
 	@:kw('return') @:fmt(propagateExprPosition)
 	ReturnExpr(value: HxExpr);

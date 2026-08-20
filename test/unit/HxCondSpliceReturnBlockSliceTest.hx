@@ -96,6 +96,39 @@ class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 		Assert.equals('Public', owners.join(','), 'the modifier is its own sibling slot: $owners');
 	}
 
+	/**
+	 * The metadata-prefixed twin (`Pony/pony/Logable.hx:229`): `@meta` dispatches through
+	 * `ExprStmt(MetaExpr(…))`, whose `expr` is an EXPRESSION, so the region there could only be
+	 * `CondSpliceExpr` — and its mandatory tail took the next statement. `MetaCondStmt` requires
+	 * the metadata Ref first, which is also what keeps a BARE region in a guarded `case` body out
+	 * of its reach.
+	 */
+	public function testMetaPrefixedRegionDoesNotSwallowTheNextStatement(): Void {
+		final body: Array<HxStatement> =
+			parseBody('class C { function f() { @SuppressWarnings(\'x\') #if js a = 1; #else a = 2; #end\nb = 3; } }');
+		Assert.equals(2, body.length);
+		switch body[0] {
+			case MetaCondStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected MetaCondStmt, got ${body[0]}');
+		}
+	}
+
+	/** The same pair, byte-exact through the writer. */
+	public function testMetaPrefixedRegionRoundTripsByteExact(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\t@SuppressWarnings(\'x\')\n\t\t#if js\n\t\ta = 1;\n\t\t#else\n'
+			+ '\t\ta = 2;\n\t\t#end\n\t\tb = 3;\n\t}\n}';
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+	}
+
+	/** REGRESSION GUARD: a BARE region in a case body still belongs to the case, not to a statement ctor. */
+	public function testBareRegionInCaseBodyIsUnclaimed(): Void {
+		final src: String = 'class C {\n\tfunction f(v:Int) {\n\t\tswitch v {\n\t\t\tcase 0:\n\t\t\t\t#if js\n\t\t\t\ta = 1;\n'
+			+ '\t\t\t\t#else\n\t\t\t\ta = 2;\n\t\t\t\t#end\n\t\t\tcase _:\n\t\t\t\tb = 3;\n\t\t}\n\t}\n}';
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+	}
+
 	/** The statements of the single function in `source`, parsed by the PLAIN pipeline. */
 	private function parseBody(source: String): Array<HxStatement> {
 		return fnBodyStmts(parseSingleFnDecl(source));

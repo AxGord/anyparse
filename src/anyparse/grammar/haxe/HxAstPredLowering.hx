@@ -154,6 +154,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		// BlockBody Star refused to continue and the whole file skip-parsed in PLAIN
 		// mode while the trivia parser accepted it (`CondSpliceReturnStmt`).
 		'CondSpliceReturnStmt',
+		'MetaCondStmt',
 		'CondSpliceSwitchOpen',
 		'VoidReturnStmt',
 		'ThrowStmt',

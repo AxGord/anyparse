@@ -368,7 +368,7 @@ enum HxStatement {
 	 * neither opens with `return`.
 	 */
 	@:kw('return')
-	CondSpliceReturnStmt(inner: HxCondSpliceReturnRegion);
+	CondSpliceReturnStmt(inner: HxCondSpliceClosedRegion);
 
 	@:kw('return') @:trailOpt(';')
 	@:fmt(bodyPolicy('returnBody'),
@@ -610,6 +610,15 @@ enum HxStatement {
 	 */
 	@:lit('....')
 	EllipsisStmt;
+
+	/**
+	 * Metadata-prefixed statement whose whole body is a self-terminating
+	 * `#if … ; #end` region — see `HxMetaCondStmt` for the swallow it stops
+	 * and for why the metadata is part of the shape rather than an
+	 * ordering accident. BEFORE `ExprStmt`, which is the ctor that
+	 * otherwise wins by absorbing the next statement.
+	 */
+	MetaCondStmt(inner: HxMetaCondStmt);
 
 	@:trailOpt(';') @:fmt(trailOptParseGate('stmtExprNoSemi'))
 	ExprStmt(expr: HxExpr);
