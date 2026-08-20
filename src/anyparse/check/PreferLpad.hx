@@ -285,8 +285,8 @@ final class PreferLpad implements Check implements DefaultOff {
 	 * shape this check has not enumerated refuses rather than resolves to the wrong binding.
 	 */
 	private static function rebinds(node: QueryNode, binder: String, s: LpadSeams): Bool {
-		if (node.name == binder && node.kind != s.identKind && node.kind != s.interpIdentKind) return true;
-		return node.children.exists(child -> rebinds(child, binder, s));
+		return node.name == binder && node.kind != s.identKind && node.kind != s.interpIdentKind
+			|| node.children.exists(child -> rebinds(child, binder, s));
 	}
 
 	/** The decimal integer `node` spells, or null when it is not one (a hex or float spelling included). */

@@ -49,8 +49,7 @@ class Kw implements Strategy {
 
 	public function appliesTo(node: ShapeNode): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
-		if (meta == null) return false;
-		return meta.exists(entry -> entry.name == ':kw');
+		return meta != null && meta.exists(entry -> entry.name == ':kw');
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {

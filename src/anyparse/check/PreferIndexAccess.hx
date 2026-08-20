@@ -313,12 +313,9 @@ final class PreferIndexAccess implements Check {
 				if (TypeResolver.isInferenceFragileNullGuard(fallback, site, root, cfg.shape, declaredTypes)) return true;
 			}
 		}
-		if (
-			node.kind == cfg.nullCoalKind && node.children.length == 2
+		return node.kind == cfg.nullCoalKind && node.children.length == 2
 			&& TypeResolver.isInferenceFragileNullGuard(node.children[1], site, root, cfg.shape, declaredTypes)
-		)
-			return true;
-		return node.children.exists(c -> containsFragileNullGuard(c, site, root, declaredTypes, cfg));
+			|| node.children.exists(c -> containsFragileNullGuard(c, site, root, declaredTypes, cfg));
 	}
 
 	/**

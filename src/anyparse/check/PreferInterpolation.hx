@@ -268,8 +268,8 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	 */
 	private static function deferredToFold(chain: Null<QueryNode>, foldBlind: Bool, source: String, seams: Seams, shape: RefShape): Bool {
 		final concatKind: Null<String> = seams.concatKind;
-		if (foldBlind || chain == null || concatKind == null) return false;
-		return FoldStringLiterals.ownsChain(chain, source, concatKind, shape.stringLiteralKinds ?? []);
+		return !foldBlind && chain != null && concatKind != null
+			&& FoldStringLiterals.ownsChain(chain, source, concatKind, shape.stringLiteralKinds ?? []);
 	}
 
 	/**

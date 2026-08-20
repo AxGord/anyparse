@@ -208,8 +208,8 @@ final class TryExpressionShape {
 	 * asks whether it captures a name the TERMINATOR it moves inward reads.
 	 */
 	public static function referencesName(node: QueryNode, name: String, identKind: String, stringInterpKind: Null<String>): Bool {
-		if ((node.kind == identKind || node.kind == stringInterpKind) && node.name == name) return true;
-		return node.children.exists(c -> referencesName(c, name, identKind, stringInterpKind));
+		return (node.kind == identKind || node.kind == stringInterpKind) && node.name == name
+			|| node.children.exists(c -> referencesName(c, name, identKind, stringInterpKind));
 	}
 
 	/**
@@ -262,10 +262,10 @@ final class TryExpressionShape {
 	public static function danglingLineComment(
 		source: String, span: Null<Span>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Bool {
-		if (span == null) return false;
-		return comments.exists(
-			tok -> tok.isLine && tok.from >= span.from && tok.to <= span.to && source.substring(tok.to, span.to).indexOf('\n') < 0
-		);
+		return span != null
+			&& comments.exists(
+				tok -> tok.isLine && tok.from >= span.from && tok.to <= span.to && source.substring(tok.to, span.to).indexOf('\n') < 0
+			);
 	}
 
 	/**

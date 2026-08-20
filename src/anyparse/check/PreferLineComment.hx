@@ -241,8 +241,8 @@ final class PreferLineComment implements Check implements DefaultOff {
 	 * converted. A plain `/*` block above a local function is prose and still converts.
 	 */
 	private static function documentsLocalFunction(source: String, tree: QueryNode, tok: CommentTok, localFns: Array<String>): Bool {
-		if (localFns.length == 0 || source.substring(tok.from, tok.from + 3) != '/**') return false; // noqa: magic-number
-		return startsNodeOfKind(tree, RefactorSupport.skipForwardTrivia(source, tok.to), localFns);
+		return localFns.length != 0 && source.substring(tok.from, tok.from + 3) == '/**'
+			&& startsNodeOfKind(tree, RefactorSupport.skipForwardTrivia(source, tok.to), localFns);
 	}
 
 	/** Whether any node of one of `kinds` starts exactly at `offset`. */

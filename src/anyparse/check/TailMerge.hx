@@ -449,8 +449,7 @@ final class TailMerge implements Check {
 
 	/** Whether any of `names` is read as an identifier anywhere in the `tail` subtrees. */
 	private static function referencesAny(tail: Array<QueryNode>, names: Array<String>, identKinds: Array<String>): Bool {
-		if (names.length == 0) return false;
-		return tail.exists(s -> mentionsName(s, names, identKinds));
+		return names.length != 0 && tail.exists(s -> mentionsName(s, names, identKinds));
 	}
 
 	/** Whether `node`'s subtree holds an identifier (or string-interpolation identifier) named in `names`. */

@@ -277,8 +277,7 @@ final class FieldWriteIndex {
 		if (cand == null || _builtinNames.contains(cand)) return true;
 		final ownerParams: Null<Array<String>> = _typeParams[owner];
 		if (ownerParams != null && ownerParams.contains(cand)) return true;
-		if (!uniquePlainClass(cand)) return true;
-		return importShadowed(cand, ownerFile);
+		return !uniquePlainClass(cand) || importShadowed(cand, ownerFile);
 	}
 
 	/**
@@ -743,8 +742,7 @@ final class FieldWriteIndex {
 	private static function allowedOwner(owner: String, c: ScanCtx): Bool {
 		if (c.builtinNames.contains(owner)) return true;
 		final decls: Array<TypeDeclInfo> = declsNamedIn(c.index, owner);
-		if (decls.length == 0) return false;
-		return decls.foreach(d -> !(c.aliasKinds.contains(d.kind)));
+		return decls.length != 0 && decls.foreach(d -> !(c.aliasKinds.contains(d.kind)));
 	}
 
 	/**
