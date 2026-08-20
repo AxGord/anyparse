@@ -225,6 +225,21 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
+	 * Whether `member` might implement an abstract method of a base class — a method
+	 * (`FnMember` / `FinalModifiedMember`) that is lexically inside a class carrying
+	 * an `extends` clause (`inExtendsClass`, threaded through `#if` wrappers by
+	 * `collectMembers`). A Haxe abstract-method impl carries no `override` keyword
+	 * (so `violationFor`'s override carve-out does not catch it) and the base's call
+	 * is invisible to a single-file scan, so `--fix` must NOT auto-delete it: the
+	 * finding is still reported, but the declaration is kept. Conservative — every
+	 * method of a subclass is spared, since a single file cannot see which one the
+	 * base declares abstract, whether or not the base is in the linted file set.
+	 */
+	private static inline function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
+		return (member.kind == 'FnMember' || member.kind == 'FinalModifiedMember') && inExtendsClass;
+	}
+
+	/**
 	 * The widest source scope available for the zero-occurrence proof: the host's resolution-scoped
 	 * index (report UNION the DECLARED library roots) when `plugin` is a `SymbolIndexHost` carrying a
 	 * declared scope, else the report-scoped `index` the caller passed, else null (a direct `fix` call
@@ -262,10 +277,11 @@ final class UnusedPrivate implements Check {
 	private static function referencedElsewhere(
 		name: Null<String>, file: String, span: Span, scopeIndex: Null<SymbolIndex>, source: String
 	): Bool {
-		if (name == null) return true;
-		return scopeIndex != null
-			? scopeIndex.nameOccursOutside(name, file, span)
-			: RefactorSupport.referencedInRange(source, name, 0, source.length, [span]);
+		return name == null || (
+			scopeIndex != null
+				? scopeIndex.nameOccursOutside(name, file, span)
+				: RefactorSupport.referencedInRange(source, name, 0, source.length, [span])
+		);
 	}
 
 	/**
@@ -365,22 +381,6 @@ final class UnusedPrivate implements Check {
 		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return true;
 		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
 		return init == null || RefactorSupport.isSideEffectFree(init);
-	}
-
-	/**
-	 * Whether `member` might implement an abstract method of a base class — a method
-	 * (`FnMember` / `FinalModifiedMember`) that is lexically inside a class carrying
-	 * an `extends` clause (`inExtendsClass`, threaded through `#if` wrappers by
-	 * `collectMembers`). A Haxe abstract-method impl carries no `override` keyword
-	 * (so `violationFor`'s override carve-out does not catch it) and the base's call
-	 * is invisible to a single-file scan, so `--fix` must NOT auto-delete it: the
-	 * finding is still reported, but the declaration is kept. Conservative — every
-	 * method of a subclass is spared, since a single file cannot see which one the
-	 * base declares abstract, whether or not the base is in the linted file set.
-	 */
-	private static function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
-		if (member.kind != 'FnMember' && member.kind != 'FinalModifiedMember') return false;
-		return inExtendsClass;
 	}
 
 	/**

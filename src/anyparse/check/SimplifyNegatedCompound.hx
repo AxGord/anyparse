@@ -159,9 +159,8 @@ final class SimplifyNegatedCompound implements Check {
 	 * resolver has to run before the site can be accepted or refused.
 	 */
 	private static function hasShape(node: QueryNode, s: Seams): Bool {
-		if (s.opaqueKinds.contains(node.kind)) return false;
-		if (s.support.negatedOperandOf(node) != null) return true;
-		return node.children.exists(c -> hasShape(c, s));
+		return
+			!s.opaqueKinds.contains(node.kind) && (s.support.negatedOperandOf(node) != null || node.children.exists(c -> hasShape(c, s)));
 	}
 
 	/**
@@ -207,8 +206,7 @@ final class SimplifyNegatedCompound implements Check {
 
 	/** Whether a `#if … #end` region sits anywhere in `node` — block, expression or mid-expression splice alike. */
 	private static function hasConditionalRegion(node: QueryNode): Bool {
-		if (RefactorSupport.isConditionalKind(node.kind)) return true;
-		return node.children.exists(c -> hasConditionalRegion(c));
+		return RefactorSupport.isConditionalKind(node.kind) || node.children.exists(c -> hasConditionalRegion(c));
 	}
 
 	/**

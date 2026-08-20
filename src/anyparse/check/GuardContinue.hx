@@ -374,9 +374,8 @@ final class GuardContinue implements Check {
 	 */
 	private static function mentionsName(node: QueryNode, name: String, s: Seams): Bool {
 		final h: Null<HoistSeams> = s.hoist;
-		if (h == null) return true;
-		if ((node.kind == h.identKind || node.kind == h.interpIdentKind) && node.name == name) return true;
-		return node.children.exists(c -> mentionsName(c, name, s));
+		return h == null || (node.kind == h.identKind || node.kind == h.interpIdentKind) && node.name == name
+			|| node.children.exists(c -> mentionsName(c, name, s));
 	}
 
 	/**
@@ -388,16 +387,14 @@ final class GuardContinue implements Check {
 	 */
 	private static function thenEscapesIteration(node: QueryNode, s: Seams, inInnerLoop: Bool): Bool {
 		final h: Null<HoistSeams> = s.hoist;
-		return h == null
-			? true
-			: LoopScan.escapesIteration(node, {
-				loopKinds: s.loopKinds,
-				doWhileKinds: s.doWhileKinds,
-				opaqueKinds: s.opaqueKinds,
-				nestedScopeKinds: h.nestedScopeKinds,
-				hardExitKinds: h.hardExitKinds,
-				loopJumpKinds: h.loopJumpKinds
-			}, inInnerLoop);
+		return h == null || LoopScan.escapesIteration(node, {
+			loopKinds: s.loopKinds,
+			doWhileKinds: s.doWhileKinds,
+			opaqueKinds: s.opaqueKinds,
+			nestedScopeKinds: h.nestedScopeKinds,
+			hardExitKinds: h.hardExitKinds,
+			loopJumpKinds: h.loopJumpKinds
+		}, inInnerLoop);
 	}
 
 	/**
@@ -497,8 +494,7 @@ final class GuardContinue implements Check {
 	 * a class field a renamed local could silently capture.
 	 */
 	private static function namedAnywhere(node: QueryNode, name: String): Bool {
-		if (node.name == name) return true;
-		return node.children.exists(c -> namedAnywhere(c, name));
+		return node.name == name || node.children.exists(c -> namedAnywhere(c, name));
 	}
 
 	/**
@@ -509,15 +505,14 @@ final class GuardContinue implements Check {
 	 */
 	private static function bindsName(node: QueryNode, name: String, s: Seams, ?except: QueryNode): Bool {
 		final binds: Bool = s.localDeclKinds.contains(node.kind) || s.localDeclExprKinds.contains(node.kind) || isLoop(node, s);
-		if (binds && node.name == name && node != except) return true;
-		return node.children.exists(c -> bindsName(c, name, s, except));
+		return binds && node.name == name && node != except || node.children.exists(c -> bindsName(c, name, s, except));
 	}
 
 	/** Whether a nested function / lambda subtree inside `node` mentions `name` — that inner scope may own it. */
 	private static function nestedScopeMentions(node: QueryNode, name: String, s: Seams): Bool {
 		final h: Null<HoistSeams> = s.hoist;
-		if (h == null) return true;
-		return node.children.exists(c -> h.nestedScopeKinds.contains(c.kind) ? mentionsName(c, name, s) : nestedScopeMentions(c, name, s));
+		return h == null
+			|| node.children.exists(c -> h.nestedScopeKinds.contains(c.kind) ? mentionsName(c, name, s) : nestedScopeMentions(c, name, s));
 	}
 
 	/**

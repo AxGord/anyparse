@@ -1088,10 +1088,11 @@ final class RefactorSupport {
 		recv: QueryNode, typeName: String, qualified: Array<String>, valueResolved: Array<Int>
 	): Bool {
 		final recvSpan: Null<Span> = recv.span;
-		if (recv.name != typeName || recvSpan == null) return false;
-		return recv.kind == IDENT_EXPR_KIND
-			? !valueResolved.contains(recvSpan.from)
-			: recv.kind == FIELD_ACCESS_KIND && qualified.contains(flattenPath(recv));
+		return recv.name == typeName && recvSpan != null && (
+			recv.kind == IDENT_EXPR_KIND
+				? !valueResolved.contains(recvSpan.from)
+				: recv.kind == FIELD_ACCESS_KIND && qualified.contains(flattenPath(recv))
+		);
 	}
 
 	/**
@@ -1913,8 +1914,7 @@ final class RefactorSupport {
 
 	/** Whether the subtree rooted at `node` contains any node of kind `kind`. */
 	public static function subtreeContainsKind(node: QueryNode, kind: String): Bool {
-		if (node.kind == kind) return true;
-		return node.children.exists(c -> subtreeContainsKind(c, kind));
+		return node.kind == kind || node.children.exists(c -> subtreeContainsKind(c, kind));
 	}
 
 	/**
@@ -2144,6 +2144,91 @@ final class RefactorSupport {
 	 */
 	public static function provablyBoolOperand(operand: QueryNode, boolOpKinds: Array<String>, parenKind: Null<String>): Bool {
 		return boolOpKinds.contains(unwrapParens(operand, parenKind).kind);
+	}
+
+	/**
+	 * Whether `returnTypeSource` — the verbatim source of a function's EXPLICIT return type,
+	 * as `TypeResolver.functionReturnTypeSource` returns it — is the non-nullable boolean
+	 * nominal (`RefShape.nonNullBoolTypeName`). The SECOND proof that a `return`ed expression
+	 * is a non-null `Bool`, and the one `provablyBoolOperand` structurally cannot give: it
+	 * reads the node's KIND, and a `Call` / field access / identifier has no kind that says
+	 * `Bool`. This one reads the CONTRACT the enclosing function states instead.
+	 *
+	 * ★ What it actually proves, because the obvious reading is wrong. Haxe does NOT reject
+	 * `function f():Bool return someNullBool;` — `Null<Bool>` unifies with `Bool` silently on
+	 * every target (measured: `--interp` -> `null`, `js` -> `undefined`, `--jvm` -> `false`,
+	 * all exit 0). So a declared `:Bool` is not, by itself, a runtime non-null guarantee.
+	 *
+	 * It does not need to be. The hazard the boolean-collapse gates guard is COMPILE
+	 * ACCEPTANCE under `@:nullSafety(Strict)`, not meaning: `cond ? false : <tail>` and
+	 * `!cond && <tail>` are observationally identical for a null `<tail>` too (18/18 cells on
+	 * `--interp` / `js` / `--jvm`, both guard polarities). And under Strict a `:Bool` function
+	 * CANNOT host a `return <nullable>;` ("Null safety: Cannot return nullable value of
+	 * Null<Bool> as Bool") — so if the pre-rewrite source compiles, the tail is a non-null
+	 * `Bool` and the post-rewrite source compiles too. Both readings of the world are covered,
+	 * which is why the trimmed WHOLE-type match is the right strictness: `Null<Bool>` refuses.
+	 */
+	public static function declaresNonNullBool(returnTypeSource: Null<String>, shape: RefShape): Bool {
+		final boolName: Null<String> = shape.nonNullBoolTypeName;
+		return boolName != null && returnTypeSource != null && returnTypeSource.trim() == boolName;
+	}
+
+	/**
+	 * Whether `operand` is a ternary MID-REDUCTION — one with exactly one boolean-literal
+	 * branch, i.e. exactly what `simplify-boolean-ternary` is about to flatten into `&&` /
+	 * `||`. Collapsing an outer pair onto such a tail strands it: the inner ternary stops
+	 * being the function's DIRECT returned value, loses its licence for good, and the result
+	 * is a hybrid uglier than either endpoint —
+	 *
+	 *     return isSimpleOperand(node)
+	 *         || (!CONST_OP_KINDS.contains(node.kind) ? false : node.children.foreach(…));
+	 *
+	 * measured on `anyparse/check/PreferInline.hx` and `anyparse/check/TrivialGetter.hx`
+	 * during the first apply-and-compile run of this slice. Refusing for ONE `--fix` pass
+	 * fixes it: the inner ternary flattens first, becomes a provably-`Bool` `&&` / `||`, and
+	 * the outer pair then collapses through the ORIGINAL kind-only proof. Purely structural —
+	 * it never asks whether the sibling rule will in fact reduce, so a tail that can never
+	 * reduce simply keeps its guard, which is the right answer for it too.
+	 */
+	public static function pendingBooleanTernaryTail(operand: QueryNode, shape: RefShape): Bool {
+		final ternaryKind: Null<String> = shape.ternaryKind;
+		final boolLitKind: Null<String> = shape.boolLitKind;
+		if (ternaryKind == null || boolLitKind == null) return false;
+		final n: QueryNode = unwrapParens(operand, shape.parenKind);
+		return
+			n.kind == ternaryKind && n.children.length == 3 && (n.children[1].kind == boolLitKind) != (n.children[2].kind == boolLitKind);
+	}
+
+	/**
+	 * Whether `operand` is a tail the declared-return-type proof must NOT license, even inside a
+	 * function declaring the non-null boolean nominal. `statementLikeValue` plus one more kind:
+	 * the `null` LITERAL. `!cond && null` is behaviour-preserving (the null propagates through
+	 * `&&` exactly as it did through the guard's fall-through) but degenerate, and under
+	 * `@:nullSafety(Strict)` a `return null;` in a `:Bool` function does not compile, so the site
+	 * can only exist where nothing is checking. Emitting `&& null` there trades a readable guard
+	 * for an expression that reads like a bug. Parentheses are unwrapped first.
+	 */
+	public static function statementLikeOrNullTail(operand: QueryNode, shape: RefShape): Bool {
+		return unwrapParens(operand, shape.parenKind).kind == shape.nullLiteralKind || statementLikeValue(operand, shape);
+	}
+
+	/**
+	 * Whether `operand` is a STATEMENT-LIKE expression: an `if` used as a value, a `switch`, a
+	 * `try`, a `throw`, a block. Parentheses unwrapped. The shared half of
+	 * `statementLikeOrNullTail`, and a gate in its own right on `prefer-ternary-return`'s VALUE
+	 * arm: `cond ? <a four-line if-expression chain> : x` is not more readable than the two
+	 * statements it replaced, which is the same judgement the boolean arm already makes. Measured
+	 * on anyparse's own `PurityScan.isPure`, whose collapse produced a three-level nest around an
+	 * `if` / `else if` / `else` value.
+	 */
+	public static function statementLikeValue(operand: QueryNode, shape: RefShape): Bool {
+		final kind: String = unwrapParens(operand, shape.parenKind).kind;
+		return kind == shape.blockStmtKind || [
+			shape.ifExpressionKinds,
+			shape.tryExpressionKinds,
+			shape.switchKinds,
+			shape.throwKinds
+		].exists(kinds -> kinds != null && kinds.contains(kind));
 	}
 
 	/**
@@ -2515,8 +2600,7 @@ final class RefactorSupport {
 	 */
 	public static function hasSupertypeClause(container: QueryNode, shape: RefShape): Bool {
 		final clauses: Array<String> = shape.supertypeClauseKinds ?? [];
-		if (clauses.length == 0) return false;
-		return container.children.exists(c -> clauses.contains(c.kind));
+		return clauses.length != 0 && container.children.exists(c -> clauses.contains(c.kind));
 	}
 
 	/**
@@ -4058,10 +4142,9 @@ final class RefactorSupport {
 	/** Whether `writeFrom` is reachable from `node` through `transparent` kinds only. */
 	private static function reachesThroughOperands(node: QueryNode, writeFrom: Int, transparent: Array<String>): Bool {
 		final span: Null<Span> = node.span;
-		if (span == null) return false;
-		if (span.from == writeFrom) return true;
-		if (!transparent.contains(node.kind)) return false;
-		return node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent));
+		return span != null
+			&& (span.from == writeFrom || transparent.contains(node.kind)
+				&& node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent)));
 	}
 
 	/** Recursively find the class-like container whose direct field member starts at `fieldFrom`. */
@@ -4686,8 +4769,8 @@ final class RefactorSupport {
 
 	/** Whether `node`'s subtree carries a string-interpolation hole, which reads surrounding bindings. */
 	private static function containsInterpolation(node: QueryNode, shape: RefShape): Bool {
-		if (node.kind == shape.stringInterpIdentKind || (shape.interpolationKinds ?? []).contains(node.kind)) return true;
-		return node.children.exists(child -> containsInterpolation(child, shape));
+		return node.kind == shape.stringInterpIdentKind || (shape.interpolationKinds ?? []).contains(node.kind)
+			|| node.children.exists(child -> containsInterpolation(child, shape));
 	}
 
 	/**
@@ -4836,8 +4919,7 @@ final class RefactorSupport {
 		final span: Null<Span> = node.span;
 		// Spans are monotone, so a subtree starting past the boundary holds no match.
 		if (span != null && span.from >= boundary) return false;
-		if (span != null && kinds.contains(node.kind)) return true;
-		return node.children.exists(child -> kindStartsBefore(child, kinds, boundary));
+		return span != null && kinds.contains(node.kind) || node.children.exists(child -> kindStartsBefore(child, kinds, boundary));
 	}
 
 	/**
@@ -4969,8 +5051,7 @@ final class RefactorSupport {
 
 	/** Whether `node`'s subtree holds a `#if…#end` region of any projection (`isConditionalKind`). */
 	private static function holdsConditionalRegion(node: QueryNode): Bool {
-		if (isConditionalKind(node.kind)) return true;
-		return node.children.exists(child -> holdsConditionalRegion(child));
+		return isConditionalKind(node.kind) || node.children.exists(child -> holdsConditionalRegion(child));
 	}
 
 	/**

@@ -159,9 +159,15 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
-	/** `if (c) return true; return g();` would be a stuck `c ? true : g()` (g() not provably Bool): left as a guard. */
+	/**
+	 * `if (c) return true; return g();` would be a stuck `c ? true : g()` (`g()` not provably
+	 * Bool): left as a guard. The host function is UNANNOTATED — the gate now has a second
+	 * proof (`RefactorSupport.declaresNonNullBool`) and an inferred return type supplies
+	 * none, so this pins the refusal that survives it. The declared-`:Bool` twin of this
+	 * shape is `testCallTailInBoolFunctionFlagged`, which collapses.
+	 */
 	public function testStuckBooleanCallNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool) {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length);
 	}
 
 	/** A provably-Bool other side (`x > 0`) collapses — simplify-boolean-ternary then reduces it cleanly. */
@@ -237,6 +243,128 @@ class PreferTernaryReturnCheckTest extends Test {
 			edits('class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1; /* linked */\n\t\treturn 0;\n\t}\n}');
 		Assert.equals(1, es.length);
 		Assert.equals('return a\n? 1 /* linked */\n: 0;', es[0].text);
+	}
+
+	/**
+	 * THE SLICE: a `Call` tail in a function DECLARING `:Bool` collapses. The declared
+	 * return type is the proof `provablyBoolOperand` cannot supply — under
+	 * `@:nullSafety(Strict)` the original `return g();` cannot compile unless `g()` is a
+	 * non-null `Bool`, and without Strict the guard / ternary / `&&` forms are
+	 * observationally identical anyway (measured over `{null,true,false}` x `{true,false}`
+	 * on `--interp`, `js` and `--jvm`).
+	 */
+	public function testCallTailInBoolFunctionFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('return c ? true : g();', es[0].text);
+	}
+
+	/** The motivating shape: a null guard with a `false` default and a method-call tail. */
+	public function testNullGuardCallTailInBoolFunctionFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Bool {\n\t\tif (xs == null) return false;\n\t\treturn xs.foreach(p);\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return xs == null ? false : xs.foreach(p);', es[0].text);
+	}
+
+	/** `Null<Bool>` gives no such guarantee — a nullable declared return type stays refused. */
+	public function testCallTailInNullBoolFunctionNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f(c:Bool):Null<Bool> {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length
+		);
+	}
+
+	/** `Dynamic` / `Any` are null-safety escape hatches, not the non-null `Bool` nominal — refused. */
+	public function testCallTailInDynamicFunctionNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool):Dynamic {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length);
+	}
+
+	/**
+	 * The proof is the NEAREST enclosing function's: a `:Bool` outer does not license an inner
+	 * lambda, which promises nothing. Both lambda spellings, because `FnExpr` and
+	 * `ThinParenLambdaExpr` live in `lambdaKinds` and NOT in `functionKinds` — a walk rebinding
+	 * on `functionKinds` alone leaks the method's `Bool` into every lambda inside it.
+	 */
+	public function testInnerLambdaDoesNotInheritOuterBoolReturn(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Bool {\n\t\tvar h = function(c:Bool) {\n\t\t\tif (c) return true;\n'
+				+ '\t\t\treturn g();\n\t\t};\n\t\treturn h(true);\n\t}\n}'
+			).length
+		);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Bool {\n\t\tvar k = (c:Bool) -> {\n\t\t\tif (c) return true;\n'
+				+ '\t\t\treturn g();\n\t\t};\n\t\treturn k(true);\n\t}\n}'
+			).length
+		);
+	}
+
+	/** A `null`-literal tail stays refused: `!c && null` is degenerate, and under Strict the site cannot exist. */
+	public function testNullLiteralTailInBoolFunctionNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn null;\n\t}\n}').length);
+	}
+
+	/** A statement-like tail (`switch` / `try` / `if` expression) stays refused: the flat form is uglier than the guard. */
+	public function testStatementLikeTailInBoolFunctionNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn switch (x) {\n'
+				+ '\t\t\tcase 1: true;\n\t\t\tcase _: false;\n\t\t}\n\t}\n}'
+			).length
+		);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn try g() catch (e:Dynamic) false;\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A tail that is itself a ternary MID-REDUCTION waits one `--fix` pass. Collapsing onto it
+	 * strands the inner ternary out of return-value position, where it can never regain its
+	 * licence — the hybrid `a || (b ? false : g())` measured on `PreferInline.hx` /
+	 * `TrivialGetter.hx`. Once `simplify-boolean-ternary` has flattened the inner one to `&&`,
+	 * the outer pair collapses through the original kind-only proof.
+	 */
+	public function testPendingBooleanTernaryTailNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn d ? false : g();\n\t}\n}')
+				.length
+		);
+	}
+
+	/**
+	 * The mid-reduction gate is INDEPENDENT of the stuck-boolean one: a VALUE ternary collapse
+	 * (neither value a bool literal) buries the tail just as thoroughly, and never consults the
+	 * stuck check at all. `dropContainedEdits` keeps the OUTER of two overlapping edits, so the
+	 * inner reduction is dropped rather than deferred — measured on anyparse's own
+	 * `MagicNumber.childPositionCtx`, which came out as `p ? i >= 1 : q ? c : false`.
+	 */
+	public function testValueCollapseOntoPendingTernaryNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(p:Bool, i:Int, q:Bool, c:Bool):Bool {\n\t\tif (p) return i >= 1;\n'
+				+ '\t\treturn q ? c : false;\n\t}\n}'
+			).length
+		);
+	}
+
+	/** …and once it HAS flattened, the same pair collapses. */
+	public function testFlattenedTailThenFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn !d && g();\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return c ? true : !d && g();', es[0].text);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -104,8 +104,7 @@ final class PurityScan {
 			isPureCall(node, ctx) && childrenPure()
 		else
 			false;
-		if (isSideEffectingGetter(node, ctx)) return false;
-		return childrenPure();
+		return !isSideEffectingGetter(node, ctx) && childrenPure();
 	}
 
 	/**

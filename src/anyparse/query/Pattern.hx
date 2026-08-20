@@ -474,8 +474,7 @@ final class PatternStar {
 
 	/** True when `root` contains at least one star — the gate every text-producing op consults. */
 	public static function contains(root: QueryNode): Bool {
-		if (root.kind == KIND) return true;
-		return root.children.exists(c -> contains(c));
+		return root.kind == KIND || root.children.exists(c -> contains(c));
 	}
 
 	private static inline function isSpace(c: Int): Bool {

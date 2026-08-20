@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 /**
@@ -49,7 +50,7 @@ final class SimplifyBooleanTernary implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, ternaryKind, support, shape);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, ternaryKind, support, shape, null, false);
 		}
 		return violations;
 	}
@@ -63,8 +64,10 @@ final class SimplifyBooleanTernary implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
+		final shape: RefShape = plugin.refShape();
 		final nodeBySpan: Map<String, QueryNode> = [];
-		indexTernaries(tree, ternaryKind, nodeBySpan);
+		final licenceBySpan: Map<String, Bool> = [];
+		indexTernaries(tree, source, ternaryKind, shape, null, false, nodeBySpan, licenceBySpan);
 		// The type probe licenses the ordered-comparison FLIP inside a negated condition
 		// (`(x < 0) ? false : p == true` -> `x >= 0 && p == true` for an `Int` x); without it
 		// the negation keeps the sound `!(x < 0)` wrap. `run` builds none — see `walk`.
@@ -76,7 +79,8 @@ final class SimplifyBooleanTernary implements Check {
 			if (span == null) continue;
 			final node: Null<QueryNode> = nodeBySpan['${span.from}:${span.to}'];
 			if (node == null) continue;
-			final replacement: Null<String> = support.simplifyBooleanTernary(node, source, types);
+			final key: String = '${span.from}:${span.to}';
+			final replacement: Null<String> = support.simplifyBooleanTernary(node, source, types, licenceBySpan[key] == true);
 			if (replacement == null) continue;
 			edits.push({ span: span, text: replacement });
 		}
@@ -93,9 +97,12 @@ final class SimplifyBooleanTernary implements Check {
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String, support: BooleanLogicSupport,
-		shape: RefShape
+		shape: RefShape, retType: Null<String>, isReturnValue: Bool
 	): Void {
-		if (node.kind == ternaryKind && !condGuarded(node, shape) && support.simplifyBooleanTernary(node, source) != null) {
+		if (
+			node.kind == ternaryKind && !condGuarded(node, shape)
+			&& support.simplifyBooleanTernary(node, source, null, boolReturnLicence(node, source, shape, retType, isReturnValue)) != null
+		) {
 			final span: Null<Span> = node.span;
 			if (span != null) out.push({
 				file: file,
@@ -105,7 +112,64 @@ final class SimplifyBooleanTernary implements Check {
 				message: 'this ternary can be a boolean expression'
 			});
 		}
-		for (c in node.children) walk(out, file, source, c, ternaryKind, support, shape);
+		eachChild(
+			node, source, shape, retType,
+			(kid, kidRet, kidIsReturnValue) -> walk(out, file, source, kid, ternaryKind, support, shape, kidRet, kidIsReturnValue)
+		);
+	}
+
+	/**
+	 * Visit each child of `node` with the two facts a boolean-licence decision needs about it:
+	 * the return-type source in force there (rebound whenever `node` is a function) and whether
+	 * it sits in the function's RETURN-VALUE slot — the first child of a `valueReturnKinds`
+	 * host, which covers the `return e;` statement form and the expression-bodied `return e`
+	 * form alike. The ONE copy of the threading, shared by `run`'s `walk` and `fix`'s
+	 * `indexTernaries`: the two must agree about which ternaries are licensed, and duplicating
+	 * the descent is how they would silently stop agreeing.
+	 */
+	private static function eachChild(
+		node: QueryNode, source: String, shape: RefShape, retType: Null<String>,
+		visit: (kid:QueryNode, kidRetType:Null<String>, kidIsReturnValue:Bool) -> Void
+	): Void {
+		final kids: Array<QueryNode> = node.children;
+		final childRetType: Null<String> = TypeResolver.childReturnTypeSource(
+			node, source, retType, shape.functionKinds ?? [], shape.lambdaKinds ?? [], shape.functionBodyKinds ?? [],
+			shape.paramKinds ?? []
+		);
+		final hostsReturnValue: Bool = (shape.valueReturnKinds ?? []).contains(node.kind);
+		for (i in 0...kids.length) visit(kids[i], childRetType, hostsReturnValue && i == 0);
+	}
+
+	/**
+	 * Whether the caller may tell the seam that this ternary's VALUE is a non-null boolean —
+	 * the proof `provablyBool` cannot read off a branch's kind. Three conditions, all required:
+	 *
+	 *  1. the ternary is the DIRECT value of a value-returning `return` (`valueReturnKinds`,
+	 *     which covers the statement form and the expression-bodied `return e` form alike).
+	 *     A ternary nested deeper inside the returned expression is typed by whatever encloses
+	 *     it, not by the function's signature, so it gets nothing;
+	 *  2. the enclosing function DECLARES the non-null boolean nominal
+	 *     (`RefactorSupport.declaresNonNullBool` — `Null<Bool>`, `Dynamic`, `Any` and a missing
+	 *     annotation all refuse);
+	 *  3. the non-literal branch is not a `null` literal or a statement-like expression
+	 *     (`RefactorSupport.statementLikeOrNullTail`) — those reduce soundly but read worse
+	 *     than the ternary, which is the very thing the gate exists to prevent.
+	 *
+	 * A ternary with two boolean-literal branches, or none, returns false: the seam decides
+	 * those without any type proof, and handing it a licence it does not consult would only
+	 * blur what the flag means.
+	 */
+	private static function boolReturnLicence(
+		node: QueryNode, source: String, shape: RefShape, retType: Null<String>, isReturnValue: Bool
+	): Bool {
+		if (!isReturnValue || node.children.length != 3 || !RefactorSupport.declaresNonNullBool(retType, shape)) return false;
+		final boolLitKind: Null<String> = shape.boolLitKind;
+		if (boolLitKind == null) return false;
+		final thenBool: Bool = node.children[1].kind == boolLitKind;
+		final elseBool: Bool = node.children[2].kind == boolLitKind;
+		if (thenBool == elseBool) return false;
+		final other: QueryNode = thenBool ? node.children[2] : node.children[1];
+		return !RefactorSupport.statementLikeOrNullTail(other, shape) && !RefactorSupport.pendingBooleanTernaryTail(other, shape);
 	}
 
 	/**
@@ -117,13 +181,29 @@ final class SimplifyBooleanTernary implements Check {
 		return node.children.length > 0 && RefactorSupport.hasNullNarrowingGuard(node.children[0], shape);
 	}
 
-	/** Index every ternary node by its `from:to` span key (for `fix` to re-find a flagged node). */
-	private static function indexTernaries(node: QueryNode, ternaryKind: String, out: Map<String, QueryNode>): Void {
+	/**
+	 * Index every ternary node by its `from:to` span key (for `fix` to re-find a flagged node),
+	 * and alongside it the `boolReturnLicence` that node was judged with. The licence has to be
+	 * recomputed here rather than carried on the violation: a `Violation` is a span plus a
+	 * message, and `fix` re-parses the source into a FRESH tree, so the walk that produced the
+	 * finding no longer exists. Mirroring `walk`'s threading exactly is what keeps `run` and
+	 * `fix` from disagreeing about which ternaries reduce.
+	 */
+	private static function indexTernaries(
+		node: QueryNode, source: String, ternaryKind: String, shape: RefShape, retType: Null<String>, isReturnValue: Bool,
+		out: Map<String, QueryNode>, licences: Map<String, Bool>
+	): Void {
 		if (node.kind == ternaryKind) {
 			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
+			if (span != null) {
+				out['${span.from}:${span.to}'] = node;
+				licences['${span.from}:${span.to}'] = boolReturnLicence(node, source, shape, retType, isReturnValue);
+			}
 		}
-		for (c in node.children) indexTernaries(c, ternaryKind, out);
+		eachChild(
+			node, source, shape, retType,
+			(kid, kidRet, kidIsReturnValue) -> indexTernaries(kid, source, ternaryKind, shape, kidRet, kidIsReturnValue, out, licences)
+		);
 	}
 
 }

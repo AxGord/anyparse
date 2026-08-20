@@ -343,9 +343,7 @@ final class NullFlow {
 	public static function isMultiBinding(node: QueryNode, continuationKinds: Array<String>, declTypeChildKinds: Array<String>): Bool {
 		var exprChildren: Int = 0;
 		for (c in node.children) if (!declTypeChildKinds.contains(c.kind)) exprChildren++;
-		if (exprChildren > 1) return true;
-		if (node.span == null) return true;
-		return RefactorSupport.isMultiDeclarator(node, continuationKinds);
+		return exprChildren > 1 || node.span == null || RefactorSupport.isMultiDeclarator(node, continuationKinds);
 	}
 
 	/** Whether `rhs` is the null literal — a syntactically definite-null assignment value. */
@@ -1078,11 +1076,9 @@ final class NullFlow {
 	 * state (a loop's post-state is its entry with every loop-written name cleared).
 	 */
 	private static function armExits(arm: QueryNode, ctx: FlowCtx): Bool {
-		if (ctx.controlExitKinds.contains(arm.kind)) return true;
-		if (isLoopJump(arm, ctx)) return true;
-		if (arm.kind == ctx.exprStmtKind && arm.children.length == 1 && isLoopJump(arm.children[0], ctx)) return true;
-		if (ctx.blockKinds.contains(arm.kind) && arm.children.length > 0) return armExits(arm.children[arm.children.length - 1], ctx);
-		return false;
+		return ctx.controlExitKinds.contains(arm.kind) || isLoopJump(arm, ctx) || arm.kind == ctx.exprStmtKind && arm.children.length == 1
+			&& isLoopJump(arm.children[0], ctx) || ctx.blockKinds.contains(arm.kind) && arm.children.length > 0
+			&& armExits(arm.children[arm.children.length - 1], ctx);
 	}
 
 	/** Whether `node` is a bare loop-jump identifier (`break` / `continue` — `RefShape.loopJumpNames`). */
@@ -1263,8 +1259,8 @@ final class NullFlow {
 		final key: QueryNode = init.children[1];
 		final mapName: Null<String> = recv.name;
 		final keyName: Null<String> = key.name;
-		if (recv.kind != ctx.identKind || key.kind != ctx.identKind || mapName == null || keyName == null) return false;
-		return state.present.exists(e -> e.map == mapName && e.key == keyName);
+		return recv.kind == ctx.identKind && key.kind == ctx.identKind && mapName != null && keyName != null
+			&& state.present.exists(e -> e.map == mapName && e.key == keyName);
 	}
 
 	/**
@@ -1306,8 +1302,7 @@ final class NullFlow {
 
 	/** Whether `node`'s subtree contains any logical-`||` operator — the compound-predicate refusal trigger. */
 	private static function containsOr(node: QueryNode): Bool {
-		if (node.kind == BOOL_OR_KIND) return true;
-		return node.children.exists(c -> containsOr(c));
+		return node.kind == BOOL_OR_KIND || node.children.exists(c -> containsOr(c));
 	}
 
 	/**

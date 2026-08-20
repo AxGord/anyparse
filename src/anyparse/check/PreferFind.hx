@@ -333,9 +333,8 @@ final class PreferFind implements Check {
 	 * subtree counts as a possible occurrence (conservative).
 	 */
 	private static function mentionsName(node: QueryNode, name: String, s: Seams): Bool {
-		if (s.opaqueKinds.contains(node.kind)) return true;
-		if (node.kind == s.identKind && node.name == name) return true;
-		return node.children.exists(c -> mentionsName(c, name, s));
+		return s.opaqueKinds.contains(node.kind) || node.kind == s.identKind && node.name == name
+			|| node.children.exists(c -> mentionsName(c, name, s));
 	}
 
 	/** The name of a `var`/`final` local initialized to exactly `null` — Form B's captured-value holder — or null otherwise. */
@@ -659,10 +658,8 @@ final class PreferFind implements Check {
 	 */
 	private static function condIsPure(node: QueryNode, s: Seams): Bool {
 		final k: String = node.kind;
-		if (k.endsWith('Assign') || k.indexOf('Incr') != -1 || k.indexOf('Decr') != -1) return false;
-		if (k == s.newExprKind) return false;
-		if (k == s.callKind && !calleeIsAccessor(node, s)) return false;
-		return node.children.foreach(c -> condIsPure(c, s));
+		return !k.endsWith('Assign') && k.indexOf('Incr') == -1 && k.indexOf('Decr') == -1 && k != s.newExprKind
+			&& (k != s.callKind || calleeIsAccessor(node, s)) && node.children.foreach(c -> condIsPure(c, s));
 	}
 
 	/** Whether a call's callee (`children[0]`) is a field-access chain (`a.b` / `a?.b` / `a!.b`) — a method call, not a free-function call. */

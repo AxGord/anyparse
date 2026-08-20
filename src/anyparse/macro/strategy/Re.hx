@@ -41,8 +41,7 @@ class Re implements Strategy {
 
 	public function appliesTo(node: ShapeNode): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
-		if (meta == null) return false;
-		return meta.exists(entry -> entry.name == ':re');
+		return meta != null && meta.exists(entry -> entry.name == ':re');
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {

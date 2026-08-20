@@ -780,8 +780,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * named like the property turned `if (color == _color)` into the always-true `color == color`).
 	 */
 	private static function functionBindsName(node: QueryNode, name: String): Bool {
-		if (bindsNameHere(node, name)) return true;
-		return node.children.exists(c -> functionBindsName(c, name));
+		return bindsNameHere(node, name) || node.children.exists(c -> functionBindsName(c, name));
 	}
 
 	/**
@@ -842,10 +841,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	): Bool {
 		if (!isPublic) return false;
 		final ifaces: Array<String> = implementedInterfaces(cls);
-		if (ifaces.length == 0) return false;
-		if (index == null) return true;
 		// The clause's SIMPLE names resolve against this file's own imports / package.
-		return ifaces.exists(iface -> !index.typeProvablyLacksMember(iface, propName, file));
+		return ifaces.length != 0 && (index == null || ifaces.exists(iface -> !index.typeProvablyLacksMember(iface, propName, file)));
 	}
 
 	/** The simple names of every interface in `cls`'s `implements` clauses. */
@@ -1271,8 +1268,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 
 	/** Whether `node`'s subtree references `field` (bare `IdentExpr` / `this.<field>`, read or write target). */
 	private static function mentionsField(node: QueryNode, field: String): Bool {
-		if (fieldRefName(node) == field) return true;
-		return node.children.exists(child -> mentionsField(child, field));
+		return fieldRefName(node) == field || node.children.exists(child -> mentionsField(child, field));
 	}
 
 	/** The span to delete for a plain-field collapse — ` (read, write)` after `var <name>`, leading space included. */
@@ -1386,8 +1382,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			for (i in 1...node.children.length) if (hasExternalRead(node.children[i], field, exclude)) return true;
 			return false;
 		}
-		if (fieldRefName(node) == field) return true;
-		return node.children.exists(child -> hasExternalRead(child, field, exclude));
+		return fieldRefName(node) == field || node.children.exists(child -> hasExternalRead(child, field, exclude));
 	}
 
 	/**
@@ -1445,8 +1440,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			out.push(node);
 			return node.children[0].children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
 		}
-		if (writeTargetField(node) == field) return false;
-		return node.children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
+		return writeTargetField(node) != field && node.children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
 	}
 
 	/**
@@ -1683,8 +1677,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			case _: -1;
 		}
 		return off < 0
-			? true
-			: classifyOwnerBinding(
+			|| classifyOwnerBinding(
 				off, node.kind == 'IdentExpr', owner, field, propName, index, ownerFileScan, cls, writePos, shadowsProp, renameEdits,
 				excludeSpans
 			);

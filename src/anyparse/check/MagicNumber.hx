@@ -176,9 +176,7 @@ final class MagicNumber implements Check implements ConfigAware {
 	 * under the unrelated inner call.
 	 */
 	private static function childPositionCtx(node: QueryNode, childIndex: Int, currentCtx: Bool, posCall: Bool, cfg: MagicNumberCfg): Bool {
-		if (posCall) return childIndex >= 1;
-		if (cfg.additiveKinds.contains(node.kind) || node.kind == cfg.parenKind) return currentCtx;
-		return false;
+		return posCall ? childIndex >= 1 : (cfg.additiveKinds.contains(node.kind) || node.kind == cfg.parenKind) && currentCtx;
 	}
 
 	/** Resolve the kind/name config once per run from `shape` — threads one struct into the recursion instead of a dozen scalars. */

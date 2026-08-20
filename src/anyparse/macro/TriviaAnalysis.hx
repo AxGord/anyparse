@@ -106,18 +106,16 @@ class TriviaAnalysis {
 	}
 
 	private static function hasPostfixPair(meta: Null<Metadata>): Bool {
-		if (meta == null) return false;
-		return meta.exists(e -> e.name == ':postfix' && e.params.length == 2);
+		return meta != null && meta.exists(e -> e.name == ':postfix' && e.params.length == 2);
 	}
 
 	private static function hasTrivia(meta: Null<Metadata>): Bool {
-		if (meta == null) return false;
-		return meta.exists(e -> e.name == ':trivia');
+		return meta != null && meta.exists(e -> e.name == ':trivia');
 	}
 
 	private static function hasAnyTriviaStar(node: ShapeNode): Bool {
-		if (node.kind == Star && node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true) return true;
-		return node.children.exists(child -> hasAnyTriviaStar(child));
+		return node.kind == Star && node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true
+			|| node.children.exists(child -> hasAnyTriviaStar(child));
 	}
 
 	private static function collectRefs(node: ShapeNode): Array<String> {

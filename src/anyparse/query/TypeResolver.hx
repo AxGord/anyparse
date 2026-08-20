@@ -359,6 +359,32 @@ final class TypeResolver {
 	}
 
 	/**
+	 * The explicit return-type source in force for `node`'s CHILDREN: `node`'s own, when it
+	 * introduces a function scope, and otherwise the `inherited` value passed down. The one
+	 * step of a top-down walk that threads "what does the enclosing function promise to
+	 * return" — a `null` result means "nothing is promised", never "not yet computed".
+	 *
+	 * ★ The scope set is `functionKinds` UNION `lambdaKinds`, and the union is the point. A
+	 * Haxe lambda projects as `FnExpr` / `ThinParenLambdaExpr` / `ParenLambdaExpr` /
+	 * `ThinArrow`, and NONE of those is in `functionKinds` — so a walk rebinding on
+	 * `functionKinds` alone lets an enclosing method's declared `Bool` leak into every lambda
+	 * nested in it, which is precisely a promise that method never made about the lambda's
+	 * returns. Caught by a test, not by reading (`testInnerLambdaDoesNotInheritOuterBoolReturn`).
+	 *
+	 * An arrow lambda's body (`BlockExpr`) is not a `functionBodyKinds` entry, so
+	 * `functionReturnTypeSource` yields null for one even when it is annotated `(x): Bool ->`.
+	 * That is the fail-closed direction — a missed licence, never a false one.
+	 */
+	public static function childReturnTypeSource(
+		node: QueryNode, source: String, inherited: Null<String>, functionKinds: Array<String>, lambdaKinds: Array<String>,
+		bodyKinds: Array<String>, paramKinds: Array<String>
+	): Null<String> {
+		return functionKinds.contains(node.kind) || lambdaKinds.contains(node.kind)
+			? functionReturnTypeSource(node, source, bodyKinds, paramKinds)
+			: inherited;
+	}
+
+	/**
 	 * Whether SOME `localDeclKinds` / `paramKinds` node COVERS the offset `bindingFrom` — a loose,
 	 * span-keyed answer, and named for it. The walk is pre-order, so it answers for the OUTERMOST
 	 * declaration containing the offset: a `for` binder nested in a `var`'s initializer reads as the
@@ -464,8 +490,7 @@ final class TypeResolver {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, declaration);
 		if (parent == null) return false;
 		final branchScopes: Array<String> = shape.branchScopeKinds ?? [];
-		if (!shape.scopeKinds.contains(parent.kind) && !branchScopes.contains(parent.kind)) return false;
-		return covers(parent.span, refSpan);
+		return (shape.scopeKinds.contains(parent.kind) || branchScopes.contains(parent.kind)) && covers(parent.span, refSpan);
 	}
 
 	/**
@@ -882,8 +907,7 @@ final class TypeResolver {
 
 	/** Whether `node` or any descendant carries the name `name`. */
 	private static function subtreeHasName(node: QueryNode, name: String): Bool {
-		if (node.name == name) return true;
-		return node.children.exists(c -> subtreeHasName(c, name));
+		return node.name == name || node.children.exists(c -> subtreeHasName(c, name));
 	}
 
 	/**

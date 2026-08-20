@@ -32,8 +32,18 @@ interface BooleanLogicSupport {
 	 * which is the sound form for an operand that may be a NaN or a `null`. It never
 	 * changes WHETHER a ternary reduces, only the text of the reduction, so a caller
 	 * that only needs the yes/no answer (a check's `run` pass) can skip building it.
+	 *
+	 * `resultIsNonNullBool` is the CALLER's proof that the ternary's own value is a non-null
+	 * boolean — typically because it is the returned value of a function declaring the
+	 * non-null boolean nominal. It licenses the one reduction the seam otherwise refuses: a
+	 * ternary with exactly one boolean-literal branch whose OTHER branch has no kind that
+	 * says `Bool` (a call, a field access, an identifier). Unset / false keeps the kind-only
+	 * proof. The caller owns every other gate on that branch — this flag says only "you may
+	 * treat this ternary's value as a non-null `Bool`", never "reduce regardless".
 	 */
-	public function simplifyBooleanTernary(ternary: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Null<String>;
+	public function simplifyBooleanTernary(
+		ternary: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>, ?resultIsNonNullBool: Bool
+	): Null<String>;
 
 	/**
 	 * The flat boolean expression equivalent to a boolean guard chain

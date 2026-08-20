@@ -462,8 +462,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 * a form the seam set does not list from silently inheriting the enclosing annotation.
 	 */
 	private static function ownsFunctionBody(node: QueryNode, functionKinds: Array<String>, bodyKinds: Array<String>): Bool {
-		if (functionKinds.contains(node.kind)) return true;
-		return node.children.exists(child -> bodyKinds.contains(child.kind));
+		return functionKinds.contains(node.kind) || node.children.exists(child -> bodyKinds.contains(child.kind));
 	}
 
 	/**

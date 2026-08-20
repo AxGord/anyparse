@@ -506,8 +506,7 @@ final class DeadStore implements Check {
 
 	/** Whether `node`'s subtree contains a node of `kind`. */
 	private static function containsKind(node: QueryNode, kind: String): Bool {
-		if (node.kind == kind) return true;
-		return node.children.exists(c -> containsKind(c, kind));
+		return node.kind == kind || node.children.exists(c -> containsKind(c, kind));
 	}
 
 	/** A null-safe call: fold the conditionally-evaluated arguments in isolation and union, then the callee (whose receiver read is unconditional). */
@@ -522,8 +521,7 @@ final class DeadStore implements Check {
 	/** The decl-initializer partition test: is `name` referenced in the enclosing scope outside the declaration itself (`unused-local`'s own test, inverted)? */
 	private static function referencedOutsideDecl(ctx: LiveCtx, name: String, scope: QueryNode, declSpan: Span): Bool {
 		final scopeSpan: Null<Span> = scope.span;
-		if (scopeSpan == null) return false;
-		return RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, [declSpan]);
+		return scopeSpan != null && RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, [declSpan]);
 	}
 
 	/** Make every own name live — the conservative TOP used at loop jumps and opaque subtrees. */
@@ -607,8 +605,7 @@ final class DeadStore implements Check {
 				return false;
 			return true;
 		}
-		if (index == null || rhs.kind != faKind) return false;
-		return TypeResolver.isPlainFieldRead(rhs, root, shape, declaredTypes, index);
+		return index != null && rhs.kind == faKind && TypeResolver.isPlainFieldRead(rhs, root, shape, declaredTypes, index);
 	}
 
 }

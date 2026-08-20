@@ -459,8 +459,7 @@ final class GuardReturn implements Check {
 
 	/** Whether `node`'s subtree holds a `#if … #end` region, whose raw-preserved interior the re-indenting de-nest must not move. */
 	private static function hasConditionalRegion(node: QueryNode): Bool {
-		if (RefactorSupport.isConditionalKind(node.kind)) return true;
-		return node.children.exists(c -> hasConditionalRegion(c));
+		return RefactorSupport.isConditionalKind(node.kind) || node.children.exists(c -> hasConditionalRegion(c));
 	}
 
 	/**

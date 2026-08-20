@@ -310,8 +310,7 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff imple
 	}
 
 	private static function subtreeHas(node: QueryNode, kind: String): Bool {
-		if (node.kind == kind) return true;
-		return node.children.exists(child -> subtreeHas(child, kind));
+		return node.kind == kind || node.children.exists(child -> subtreeHas(child, kind));
 	}
 
 	/** How many nodes in `node`'s subtree carry `name` — any kind, so a read through any form counts. */

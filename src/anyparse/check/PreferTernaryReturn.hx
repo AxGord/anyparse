@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -79,7 +80,7 @@ final class PreferTernaryReturn implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, seams.support, seams.shape, seams.ifKinds, seams.returnKind);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, null);
 		}
 		return violations;
 	}
@@ -98,19 +99,29 @@ final class PreferTernaryReturn implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectFixes(tree, source, seams.support, seams.shape, seams.ifKinds, seams.returnKind, flagged, edits);
+		collectFixes(tree, source, seams, null, flagged, edits);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
-	/** Walk `node`; at each block flag the direct-child `if`/`return` pairs. */
+	/** `TypeResolver.childReturnTypeSource` with this check's seams unpacked from `Seams`. */
+	private static inline function childReturnType(node: QueryNode, source: String, s: Seams, retType: Null<String>): Null<String> {
+		return TypeResolver.childReturnTypeSource(node, source, retType, s.functionKinds, s.lambdaKinds, s.bodyKinds, s.paramKinds);
+	}
+
+	/**
+	 * Walk `node`; at each block flag the direct-child `if`/`return` pairs. `retType` is the
+	 * source of the nearest enclosing function's explicit return type (null when it declares
+	 * none), rebound on entry to every function so a pair is judged against ITS OWN function —
+	 * an inner lambda never inherits the outer method's declared `Bool`.
+	 */
 	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, support: ControlFlowSupport, shape: RefShape, ifKinds: Array<String>,
-		returnKind: String
+		out: Array<Violation>, file: String, source: String, node: QueryNode, s: Seams, retType: Null<String>
 	): Void {
-		if (support.blockKinds().contains(node.kind)) {
+		final childRetType: Null<String> = childReturnType(node, source, s, retType);
+		if (s.support.blockKinds().contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
-				final match: Null<TernaryMatch> = pairAt(kids, i, support, shape, ifKinds, returnKind);
+				final match: Null<TernaryMatch> = pairAt(kids, i, s, retType);
 				if (match == null) continue;
 				final span: Null<Span> = match.ifNode.span;
 				if (span != null) out.push({
@@ -122,43 +133,57 @@ final class PreferTernaryReturn implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(out, file, c, support, shape, ifKinds, returnKind);
+		for (c in node.children) walk(out, file, source, c, s, childRetType);
 	}
 
-	/** Mirror `walk`: collect one replacement edit per flagged `if`/`return` pair. */
+	/** Mirror `walk` — including its `retType` rebinding: collect one replacement edit per flagged `if`/`return` pair. */
 	private static function collectFixes(
-		node: QueryNode, source: String, support: ControlFlowSupport, shape: RefShape, ifKinds: Array<String>, returnKind: String,
-		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+		node: QueryNode, source: String, s: Seams, retType: Null<String>, flagged: Array<String>,
+		edits: Array<{ span: Span, text: String }>
 	): Void {
-		if (support.blockKinds().contains(node.kind)) {
+		final childRetType: Null<String> = childReturnType(node, source, s, retType);
+		if (s.support.blockKinds().contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
-				final match: Null<TernaryMatch> = pairAt(kids, i, support, shape, ifKinds, returnKind);
+				final match: Null<TernaryMatch> = pairAt(kids, i, s, retType);
 				if (match == null) continue;
 				final ifSpan: Null<Span> = match.ifNode.span;
 				if (!(ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}'))) continue;
-				final edit: Null<{ span: Span, text: String }> = buildEdit(match, source, shape);
+				final edit: Null<{ span: Span, text: String }> = buildEdit(match, source, s.shape);
 				if (edit != null) edits.push(edit);
 			}
 		}
-		for (c in node.children) collectFixes(c, source, support, shape, ifKinds, returnKind, flagged, edits);
+		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits);
 	}
 
 	/**
 	 * If `kids[i]` is a no-else `if` whose then-branch value-returns and `kids[i+1]`
 	 * is a value-returning `return`, return the match parts; otherwise null.
 	 */
-	private static function pairAt(
-		kids: Array<QueryNode>, i: Int, support: ControlFlowSupport, shape: RefShape, ifKinds: Array<String>, returnKind: String
-	): Null<TernaryMatch> {
+	private static function pairAt(kids: Array<QueryNode>, i: Int, s: Seams, retType: Null<String>): Null<TernaryMatch> {
+		final shape: RefShape = s.shape;
+		final returnKind: String = s.returnKind;
 		final ifNode: QueryNode = kids[i];
-		if (!ifKinds.contains(ifNode.kind) || ifNode.children.length != 2) return null;
+		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length != 2) return null;
 		final thenValue: Null<QueryNode> = thenReturnValue(ifNode.children[1], shape, returnKind);
 		if (thenValue == null) return null;
 		if (i + 1 >= kids.length) return null;
 		final next: QueryNode = kids[i + 1];
 		if (next.kind != returnKind || next.children.length < 1) return null;
 		final elseValue: QueryNode = next.children[0];
+		// EITHER value being a ternary MID-REDUCTION blocks the pair, whatever the collapse would
+		// be. `simplify-boolean-ternary` is about to flatten such a ternary into `&&` / `||`, and
+		// this collapse would bury it one level deeper, where it stops being the function's direct
+		// returned value and loses its licence for good — `dropContainedEdits` keeps the OUTER edit
+		// of two that overlap, so the inner reduction is dropped, not deferred. The gate is
+		// deliberately OUTSIDE isStuckBooleanCollapse: a VALUE ternary collapse (neither value a
+		// bool literal) buries the tail just as thoroughly, and that arm never consults the stuck
+		// check at all. Measured on anyparse's own `MagicNumber.childPositionCtx` and
+		// `PurityScan.isPure`, which came out as nested ternary chains until this moved out.
+		// A STATEMENT-LIKE value (an `if` used as a value, a `switch`, a `try`, a `throw`, a block)
+		// blocks the pair for the same reason the boolean arm already refuses one: a ternary whose
+		// branch is a four-line `if` / `else if` / `else` chain is not more readable than the two
+		// statements it replaced. Measured on anyparse's own `PurityScan.isPure`.
 		// A bool-literal-vs-non-provably-Bool pair collapses to a "stuck" boolean ternary
 		// (`cond ? true : g()`) that simplify-boolean-ternary cannot reduce without a typer
 		// — uglier than the guard. Leave it: a fully-reducible boolean guard chain is
@@ -166,7 +191,9 @@ final class PreferTernaryReturn implements Check {
 		// The narrowing-guard refusal fires only for a bool-literal collapse (see
 		// RefactorSupport.refusesNullNarrowingBoolCollapse).
 		return RefactorSupport.refusesNullNarrowingBoolCollapse(thenValue, elseValue, ifNode.children[0], shape)
-			|| isStuckBooleanCollapse(thenValue, elseValue, shape)
+			|| RefactorSupport.pendingBooleanTernaryTail(thenValue, shape) || RefactorSupport.pendingBooleanTernaryTail(elseValue, shape)
+			|| RefactorSupport.statementLikeValue(thenValue, shape) || RefactorSupport.statementLikeValue(elseValue, shape)
+			|| isStuckBooleanCollapse(thenValue, elseValue, shape, retType)
 			? null
 			: {
 				ifNode: ifNode,
@@ -233,16 +260,26 @@ final class PreferTernaryReturn implements Check {
 	 * `cond || …` without a typer, so the ternary is uglier than the guard and is left
 	 * alone. Both-literal (`? true : false` -> `cond`) and provably-Bool other side
 	 * (reduces cleanly) and neither-literal (a value ternary) all collapse as before.
+	 *
+	 * `retType` is the SECOND proof: the source of the enclosing function's explicit
+	 * return type. `a` and `b` are BOTH returned values of that one function, so a
+	 * declared non-null boolean nominal (`RefactorSupport.declaresNonNullBool`) types
+	 * either side symmetrically and there is no stuck ternary to fear — `simplify-boolean-
+	 * ternary` reduces the pair on the next `--fix` pass, using the same proof. A missing
+	 * annotation infers nothing and refuses; `Null<Bool>` refuses; a `null`-literal or
+	 * statement-like tail refuses on its own merits (`statementLikeOrNullTail`).
 	 */
-	private static function isStuckBooleanCollapse(a: QueryNode, b: QueryNode, shape: RefShape): Bool {
+	private static function isStuckBooleanCollapse(a: QueryNode, b: QueryNode, shape: RefShape, retType: Null<String>): Bool {
 		final boolLitKind: Null<String> = shape.boolLitKind;
 		if (boolLitKind == null) return false;
 		final aBool: Bool = a.kind == boolLitKind;
 		final bBool: Bool = b.kind == boolLitKind;
 		if (aBool == bBool) return false;
+		final other: QueryNode = aBool ? b : a;
 		final notKind: Null<String> = shape.notKind;
 		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
-		return !RefactorSupport.provablyBoolOperand(aBool ? b : a, boolOpKinds, shape.parenKind);
+		return !RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)
+			&& (!RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape));
 	}
 
 	/**
@@ -292,7 +329,6 @@ final class PreferTernaryReturn implements Check {
 		return { hoisted: out.toString(), branchTrailing: branchTrailing };
 	}
 
-
 	/** Resolve the if / return seam kinds plus control-flow support, or null when any required piece is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
@@ -305,7 +341,11 @@ final class PreferTernaryReturn implements Check {
 			ifKinds: ifKinds,
 			returnKind: returnKind,
 			support: support,
-			shape: shape
+			shape: shape,
+			functionKinds: shape.functionKinds ?? [],
+			lambdaKinds: shape.lambdaKinds ?? [],
+			bodyKinds: shape.functionBodyKinds ?? [],
+			paramKinds: shape.paramKinds ?? []
 		};
 	}
 
@@ -317,6 +357,13 @@ private typedef Seams = {
 	final returnKind: String;
 	final support: ControlFlowSupport;
 	final shape: RefShape;
+
+	/** The four seams behind `TypeResolver.childReturnTypeSource`, resolved once per run. */
+	final functionKinds: Array<String>;
+
+	final lambdaKinds: Array<String>;
+	final bodyKinds: Array<String>;
+	final paramKinds: Array<String>;
 };
 
 /** `preservedComments`' position-split result: the hoisted block plus the one branch-attached comment. */
