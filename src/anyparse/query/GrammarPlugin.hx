@@ -550,6 +550,16 @@ typedef RefShape = {
 	@:optional var parenKind: String;
 
 	/**
+	 * How to SPELL a grouping node — the pair `ParenGuard` writes around a spliced
+	 * fragment whose parse the splice would otherwise change (`apq rewrite`'s captured
+	 * metavariable landing in an operator context). `parenKind` says what such a node
+	 * looks like once parsed; this says what to type to get one, which no kind name can
+	 * answer. Optional, and read only together with `parenKind`: a grammar declaring
+	 * either alone leaves the splice raw, exactly as before the guard existed.
+	 */
+	@:optional var parenDelimiters: { open: String, close: String };
+
+	/**
 	 * The boolean-literal node kind — lets the `constant-condition` check
 	 * recognise a literal `true` / `false` used as a condition. Optional; unset
 	 * makes the check a no-op.

@@ -308,6 +308,34 @@ Distinct from the read-only query commands above: these **rewrite** source. With
 
 Run `apq <op> --help` for the full per-op flag reference and safety boundary. The hxq skill (`~/.claude/skills/hxq/SKILL.md`) carries the authoritative safety-boundary table for every mutation op.
 
+### `apq rewrite`: a template is a TREE, so it is spliced as one
+
+`apq rewrite <file> <pattern> <replacement>` matches with `search` syntax and splices
+`<replacement>` over each matched span, expanding `$x` / `${x}` to the captured source.
+The template is written in AST terms — `$A * 2` reads "the capture, times two" — but text
+has no precedence, so a raw splice can hand back a different program: `$A * 2` over
+`v + 1` used to emit `v + 1 * 2`, and `f($A)` -> `$A + 1` over `q * f(1)` used to emit
+`q * 1 + 1`. Both re-parse, so nothing complained. Over the Haxe grammar, 400 of 1530
+(capture shape x template context) pairs came out that way.
+
+Every splice — each expanded metavariable, and the replacement as a whole against the
+context the PATTERN matched inside — now keeps the parse it was written to have, with the
+fewest parentheses that achieves it:
+
+- A pair appears only where its absence is observable in the tree, so `$x * 2` over `v`
+  stays `v * 2` and over `-1` stays `-1 * 2`.
+- Nested splices share one pair where one is enough: `q * (v + 2 + 1)`, not
+  `q * ((v + 2) + 1)`.
+- A metavariable in a position that cannot take parentheses — a declaration NAME, a type
+  annotation — is left alone, because the probe that would have wrapped it does not parse
+  or does not change the shape.
+- A raw splice that does not parse at all (`$A < 5` over `a is C` reads `C < 5` as a type
+  parameter) is a rewrite that used to be refused and now succeeds parenthesised.
+
+The mechanism is a differential parse, not a precedence table: a grammar declares
+`parenKind` and `parenDelimiters` and gets the whole behaviour, and one that declares
+neither keeps the raw splice.
+
 ## Pattern syntax for `search` (frozen for v1)
 
 The pattern is parsed by the active grammar plugin **with a metavariable extension**: any identifier-shaped token starting with `$` is treated as a metavariable rather than a concrete identifier.

@@ -665,6 +665,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// enum / enum abstract / Bool is deliberately absent: those ARE checked.
 			openSwitchSubjectTypes: ['Int', 'UInt', 'Float', 'Single', 'String'],
 			parenKind: 'ParenExpr',
+			parenDelimiters: { open: '(', close: ')' },
 			macroModifierKind: 'Macro',
 			boolLitKind: 'BoolLit',
 			nonNullBoolTypeName: 'Bool',

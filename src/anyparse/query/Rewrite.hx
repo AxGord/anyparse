@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.Matcher.Match;
+import anyparse.query.ParenGuard.GuardedEdit;
 import anyparse.query.Pattern.PatternStar;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
@@ -66,13 +67,19 @@ final class Rewrite {
 			lastTo = m.span.to;
 		}
 
-		final edits: Array<{ span: Span, text: String }> = [];
+		final edits: Array<GuardedEdit> = [];
 		for (m in accepted) {
-			final text: Null<String> = expandTemplate(replacementText, source, m.bindings);
-			if (text == null) return Err('replacement references an unknown or non-integer metavariable');
-			edits.push({ span: m.span, text: text });
+			final expansion: Null<Expansion> = expandTemplate(replacementText, source, m.bindings);
+			if (expansion == null) return Err('replacement references an unknown or non-integer metavariable');
+			edits.push({ span: m.span, text: expansion.text, holes: expansion.holes });
 		}
-		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
+		// A template is written in AST terms (`$A * 2` reads "the capture, times
+		// two") but expands as TEXT, and text has no precedence. `ParenGuard`
+		// puts back the fewest parentheses that make the spliced fragments parse
+		// as the nodes they were — none at all when the raw splice was already
+		// faithful, which is the common case and byte-identical to before.
+		final guarded: Array<{ span: Span, text: String }> = ParenGuard.guard(source, edits, plugin);
+		return RefactorSupport.canonicalize(source, guarded, reformat, plugin, optsJson);
 	}
 
 	private static inline function isIdentChar(c: Int): Bool {
@@ -90,20 +97,29 @@ final class Rewrite {
 	 * (integer-literal metavar shifted by N) against `bindings`. `$$` emits a
 	 * literal `$`. Returns null if a referenced metavar is unbound, or an int
 	 * shift targets a non-integer metavar.
+	 *
+	 * Every expanded metavariable also reports the range it occupies in the
+	 * result. Those are the SPLICES — text that came from the input rather than
+	 * from the template author — and `ParenGuard` decides which of them the new
+	 * context would re-read.
 	 */
-	private static function expandTemplate(template: String, source: String, bindings: Map<String, QueryNode>): Null<String> {
+	private static function expandTemplate(template: String, source: String, bindings: Map<String, QueryNode>): Null<Expansion> {
 		final buf: StringBuf = new StringBuf();
+		final holes: Array<Span> = [];
+		var written: Int = 0;
 		final n: Int = template.length;
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = template.fastCodeAt(i);
 			if (c != '$'.code) {
 				buf.addChar(c);
+				written++;
 				i++;
 				continue;
 			}
 			if (i + 1 < n && template.fastCodeAt(i + 1) == '$'.code) {
 				buf.addChar('$'.code);
+				written++;
 				i += 2;
 				continue;
 			}
@@ -113,6 +129,8 @@ final class Rewrite {
 				final braced: Null<String> = expandSpec(template.substring(i + 2, close), source, bindings);
 				if (braced == null) return null;
 				buf.add(braced);
+				holes.push(new Span(written, written + braced.length));
+				written += braced.length;
 				i = close + 1;
 				continue;
 			}
@@ -120,15 +138,18 @@ final class Rewrite {
 			while (j < n && isIdentChar(template.fastCodeAt(j))) j++;
 			if (j == i + 1) {
 				buf.addChar('$'.code);
+				written++;
 				i++;
 				continue;
 			}
 			final bare: Null<String> = metavarSource(template.substring(i + 1, j), source, bindings);
 			if (bare == null) return null;
 			buf.add(bare);
+			holes.push(new Span(written, written + bare.length));
+			written += bare.length;
 			i = j;
 		}
-		return buf.toString();
+		return { text: buf.toString(), holes: holes };
 	}
 
 	/** `name` (verbatim) | `name+N` / `name-N` (integer shift). */
@@ -159,3 +180,9 @@ final class Rewrite {
 	}
 
 }
+
+/** One expanded replacement: its text, and where in it each metavariable's source landed. */
+private typedef Expansion = {
+	text: String,
+	holes: Array<Span>
+};
