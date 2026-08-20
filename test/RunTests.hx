@@ -671,6 +671,8 @@ import unit.StructuralMembershipTest;
 import unit.HxHeritageCommentWriteTest;
 import unit.HxBeforeTrailCommentWriteTest;
 import unit.HxCondListSeparatorWriteTest;
+import unit.WhitespaceInvariantTest;
+import unit.ApqFmtVerifyCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -793,6 +795,8 @@ class RunTests {
 		addCase(new HxHeritageCommentWriteTest());
 		addCase(new HxBeforeTrailCommentWriteTest());
 		addCase(new HxCondListSeparatorWriteTest());
+		addCase(new WhitespaceInvariantTest());
+		addCase(new ApqFmtVerifyCliTest());
 		addCase(new HxAccessorSliceTest());
 		addCase(new HxAfterLeftCurlySliceTest());
 		addCase(new HxUniformStatementBlanksSliceTest());

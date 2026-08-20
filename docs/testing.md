@@ -724,12 +724,38 @@ conflict on every slice. `--snapshot` writes them, and only on green, so a red
 or half-run tree cannot move the baseline under the next comparison.
 
 **A run fails on** a build error, a red or count-diverged suite, a non-empty
-`fmt --list`, a `--jvm` probe that stops compiling, more corpus failures than
-the base, or any blast-radius change not explicitly waved through with
-`--allow-blast`. **It only reports** suite totals growing, corpus totals
+`fmt --list`, a `fmt --verify` divergence, a `--jvm` probe that stops compiling,
+more corpus failures than the base, or any blast-radius change not explicitly
+waved through with `--allow-blast`. **It only reports** suite totals growing, corpus totals
 improving, and the lint findings a slice's own new files bring with them —
 those still print through `lint-diff`, and passing `--allow-blast` after
 reading them is the intended way to accept a slice that adds code.
+
+### `fmt --verify` — the invariant the round trip cannot check
+
+A correct formatter changes only WHITESPACE. `apq fmt --verify <paths>` formats
+each file in memory, strips every whitespace character from the input and from
+the output, and reports the first place the two disagree — file, source line, and
+a window of each side. It never writes.
+
+This catches a class the writer's own round-trip gate is blind to by
+construction. That gate asks "does the output re-parse to the same tree", so a
+writer defect whose output THIS parser still accepts passes it: `apq
+self-status`, `fmt --list` and `lint` all stayed green on a tree where
+`@:forward(a, #if f b, #end, c)` no longer compiled under `haxe`. One `--verify`
+pass over an 846-file tree found four such sites.
+
+Read the count, not just the exit status. `--verify` can only speak about files
+the writer would actually REWRITE — an already-canonical tree gives it a
+denominator of zero and reports a clean audit for the wrong reason, which is why
+the battery points it at the fork tree rather than at `src test tools`. The line
+it prints carries all three numbers: divergences, reformatted files, and files it
+could not format at all.
+
+Some policies change tokens on purpose — a trailing comma, braces around a single
+statement, an optional semicolon — and those are reported too. The rule stays
+"whitespace only" rather than encoding a policy list, because the defect it exists
+to surface is by definition one nobody has classified yet.
 
 Every format-aware step is delegated to the CLI this project already builds —
 `apq lint-diff` for the blast radius, `apq sweep` for the corpus, `apq

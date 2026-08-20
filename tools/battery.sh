@@ -55,7 +55,8 @@
 # only.
 #
 # What fails the run: any build error, a red or count-diverged suite, a
-# non-empty `fmt --list`, a `--jvm` probe that stops compiling, a corpus
+# non-empty `fmt --list`, a `fmt --verify` divergence, a `--jvm` probe that
+# stops compiling, a corpus
 # regression (more failures than the base), or any blast-radius change that
 # was not explicitly allowed with --allow-blast. A blast comparison that
 # could not RUN (a snapshot missing or malformed — `lint-diff` exit 2) fails
@@ -495,6 +496,19 @@ branch_fmt() {
     if [ "$fmt_rc" -ne 0 ] || [ -s "$work/fmt.log" ]; then
         cat "$work/fmt.log" >&2
         fail "fmt --list is not empty (or exited $fmt_rc)"
+    fi
+    # The non-whitespace invariant, on the one tree here that is NOT already
+    # canonical. `--verify` can only speak about files the writer would
+    # actually rewrite, so pointing it at src/test/tools would give it a
+    # denominator of zero and report a clean audit for the wrong reason. The
+    # fork tree keeps a handful of drifted files, so the line below carries a
+    # real (if small) count — read it, do not just check the exit status.
+    local verify_rc=0
+    bin/hxq fmt --verify "$ANYPARSE_HXFORMAT_FORK/src" > "$work/fmt-verify.log" 2>&1 || verify_rc=$?
+    grep 'fmt --verify:' "$work/fmt-verify.log" >&2 || true
+    if grep -q 'formatting changed more than whitespace' "$work/fmt-verify.log"; then
+        cat "$work/fmt-verify.log" >&2
+        fail "fmt --verify found a non-whitespace divergence in $ANYPARSE_HXFORMAT_FORK/src"
     fi
     step_end "fmt"
 }

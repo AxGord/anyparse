@@ -7,6 +7,7 @@ import anyparse.check.Linter;
 import anyparse.check.OracleCache;
 import anyparse.check.Severity;
 import anyparse.core.EnvFlag;
+import anyparse.format.WhitespaceInvariant;
 import anyparse.format.comment.CommentInventory;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddElement;
@@ -1082,6 +1083,7 @@ final class Cli {
 			lang: '',
 			write: false,
 			list: false,
+			verify: false,
 			inputSpecs: [],
 			errExit: code
 		};
@@ -7316,18 +7318,29 @@ final class Cli {
 		// No --write and no -l on a single concrete file → emit the formatted
 		// source to stdout (gofmt's one-file default). Multiple files / a dir
 		// without --write → list mode (names of files that would change).
-		final listMode: Bool = o.list || (!o.write && !io.singleFile);
+		final listMode: Bool = !o.verify && (o.list || (!o.write && !io.singleFile));
 
 		var changed: Int = 0;
 		var failed: Int = 0;
+		var diverged: Int = 0;
 		for (path in paths) {
-			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write, listMode);
+			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write && !o.verify, listMode, o.verify);
 			if (r.fatalExit != null) return r.fatalExit;
 			if (r.changed) changed++;
 			if (r.failed) failed++;
+			if (r.diverged == true) diverged++;
 		}
 
-		if (o.write)
+		if (o.verify)
+			// Three numbers, because a single one reads as a clean audit for the wrong
+			// reason: `changed` is the scan's real denominator (a file the writer would
+			// not rewrite cannot diverge), and `failed - diverged` is the files it could
+			// not format at all — each already printed its own reason.
+			stderr(
+				'apq fmt --verify: $diverged of $changed reformatted file(s) changed more than whitespace'
+				+ ' (${paths.length} scanned, ${failed - diverged} could not be formatted)\n'
+			);
+		else if (o.write)
 			stderr('apq fmt: formatted $changed file(s)${failed > 0 ? ', $failed failed' : ''}\n');
 		else if (listMode && failed > 0)
 			// Not always a parse failure any more — a file whose re-emission
@@ -7350,11 +7363,13 @@ final class Cli {
 	}
 
 	private static function printFmtUsage(): Void {
-		sysPrint('Usage: apq fmt <file/dir/glob>... [--write] [--list]\n');
+		sysPrint('Usage: apq fmt <file/dir/glob>... [--write] [--list] [--verify]\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write, -w     Rewrite each file in place with its canonical form\n');
 		sysPrint('  --list, -l      Print paths whose output differs (gofmt -l); no rewrite\n');
+		sysPrint('  --verify        Audit: the output must differ from the input by WHITESPACE\n');
+		sysPrint('                  only. Reports every other divergence; never writes\n');
 		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Canonicalise Haxe source by re-emitting it through the writer, formatted\n');
@@ -7366,6 +7381,13 @@ final class Cli {
 		sysPrint('A file whose re-emission would DROP a comment (an inline comment in a seam\n');
 		sysPrint('the parser has no capture slot for, e.g. `if (/* c */ x)`) is reported with\n');
 		sysPrint('the comment and left byte-identical rather than rewritten without it.\n');
+		sysPrint('\n');
+		sysPrint('--verify catches what the writer round-trip cannot: a writer defect whose\n');
+		sysPrint('output this parser still accepts is invisible to a tree-level gate, so\n');
+		sysPrint('self-status, --list and lint all report green on a tree that no longer\n');
+		sysPrint('compiles. Note that some policies change tokens on purpose — a trailing\n');
+		sysPrint('comma, braces around a single statement, an optional semicolon — and those\n');
+		sysPrint('are reported too; read the diff rather than treating any hit as a bug.\n');
 	}
 
 	/**
@@ -10879,6 +10901,7 @@ final class Cli {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var list: Bool = false;
+		var verify: Bool = false;
 		final inputSpecs: Array<String> = [];
 
 		var i: Int = 0;
@@ -10891,6 +10914,8 @@ final class Cli {
 					write = true;
 				case '--list', '-l':
 					list = true;
+				case '--verify':
+					verify = true;
 				case '-h', '--help':
 					printFmtUsage();
 					return fmtParseExit(EXIT_OK);
@@ -10907,12 +10932,15 @@ final class Cli {
 			lang: lang,
 			write: write,
 			list: list,
+			verify: verify,
 			inputSpecs: inputSpecs,
 			errExit: null
 		};
 	}
 
-	private static function formatOneFile(plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool): FmtFileResult {
+	private static function formatOneFile(
+		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, verify: Bool = false
+	): FmtFileResult {
 		final source: String = try readFile(path) catch (exception: Exception) {
 			stderr('apq fmt: $path: ${exception.message}\n');
 			return { changed: false, failed: true, fatalExit: null };
@@ -10927,6 +10955,22 @@ final class Cli {
 			return { changed: false, failed: false, fatalExit: EXIT_RUNTIME };
 		}
 		final isCanonical: Bool = formatted == source;
+		if (verify) {
+			// A file already at its fixed point cannot diverge, so the scan is skipped
+			// for the overwhelming majority of a canonical tree.
+			if (isCanonical) return { changed: false, failed: false, fatalExit: null };
+			final divergence: Null<Divergence> = WhitespaceInvariant.firstDivergence(source, formatted);
+			if (divergence == null) return { changed: true, failed: false, fatalExit: null };
+			sysPrint('$path:${divergence.line}: formatting changed more than whitespace\n');
+			sysPrint('  source: ${divergence.expected}\n');
+			sysPrint('  writer: ${divergence.actual}\n');
+			return {
+				changed: true,
+				failed: true,
+				fatalExit: null,
+				diverged: true
+			};
+		}
 		if (write) {
 			if (!isCanonical) {
 				writeFile(path, formatted);
@@ -16584,6 +16628,13 @@ typedef FmtOpts = {
 	var lang: String;
 	var write: Bool;
 	var list: Bool;
+
+	/**
+	 * Read-only audit: format each file in memory and require the output to differ
+	 * from the input by WHITESPACE only. Never writes. See
+	 * `anyparse.format.WhitespaceInvariant` for what the rule does and does not know.
+	 */
+	var verify: Bool;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
@@ -16597,6 +16648,14 @@ typedef FmtOpts = {
 typedef FmtFileResult = {
 	var changed: Bool;
 	var failed: Bool;
+
+	/**
+	 * `--verify` only: the output differed from the input by more than whitespace.
+	 * Counted apart from `failed`, which in this mode is dominated by files that
+	 * could not be formatted at all (a parse failure, a comment-loss refusal) —
+	 * reporting those as invariant breaches would name the wrong defect.
+	 */
+	@:optional var diverged: Bool;
 	// Non-null = a fatal per-file outcome (no writer wired for the lang);
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;
