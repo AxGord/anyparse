@@ -824,3 +824,4 @@ These remain open and will be answered in the phase that needs them:
 - [architecture.md](architecture.md) — anyparse core architecture, parser pipeline, runtime.
 - [strategies.md](strategies.md) — plugin contract for grammar strategies.
 - [formats.md](formats.md) — plugin contract for formats.
+- [haxe-format-config.md](haxe-format-config.md) — the `hxformat.json` values the Haxe writer accepts (`wrapping.*` modes and `cond` spellings), and why an unknown one is silent.

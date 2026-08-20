@@ -79,7 +79,8 @@ final class HaxeFormatValues {
 			// identically for chain-config Keep fixtures.
 			case 'keep', 'Keep':
 				WrapMode.Keep;
-			// ω-cascade-emits-comments: fork's `WrappingType.Ignore`
+			// ω-cascade-emits-comments: anyparse extension with NO fork
+			// counterpart (the fork's `WrappingType` ends at `keep`) — it
 			// drops source-newline signal and lets the cascade pick a
 			// width-driven layout. Sister to Keep on the same axis.
 			// `triviaSepStarExpr` consumes it via the `_ignoreEmit`

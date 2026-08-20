@@ -63,7 +63,15 @@ enum abstract WrapMode(Int) from Int to Int {
 	 * comments and block-style trailing comments are inlined into the
 	 * cascade-emitted items so width-driven layout can still preserve
 	 * source comments. Sister to `Keep` — opposite policy on the same
-	 * source-newline axis. Fork's `WrappingType.Ignore`.
+	 * source-newline axis. anyparse EXTENSION, not a ported value:
+	 * the fork's `WrappingType` ends at `keep` and has no `ignore`, so no
+	 * corpus fixture selects this and it reaches the engine only from a JSON
+	 * config that names it. It is also the only mode that COLLAPSES a list the
+	 * source broke — every other one either preserves the source form or only
+	 * breaks a long one — which is what a project asking for a canonical
+	 * single-line layout needs (`wrapping.objectLiteral.defaultWrap: "ignore"`,
+	 * measured: a source-broken `{x: 1, y: 2}` collapses while a source-flat
+	 * three-item literal still breaks under an `itemCount >= n` rule).
 	 *
 	 * Effective only at the trivia-emit branch
 	 * (`TriviaSepLowering.triviaSepStarExpr`); the cascade engine's
