@@ -95,18 +95,28 @@ enum OperatorVerdict {
  *  - `simplify-negated-compound` and `invert-negated-if-else` ask because they REBUILD or DROP
  *    an operator spine; there the finding IS the rewrite, so anything short of `Builtin` leaves
  *    the site unreported.
+ *  - `join-string-append` asks too: the join turns N appends into ONE, so an overloaded `+=`
+ *    runs its body once instead of N times (`r += 'a'; r += 'b'` is `root/a/b`, the joined
+ *    `r += 'a' + 'b'` is `root/ab`). Its own type gate cannot catch that — a string-literal
+ *    term is exactly what makes such a run look String-typed.
  *  - `double-negation` asks for the same reason one size smaller: `!!x` is redundant only while
  *    `!` is an involution.
  *  - `comparison-to-boolean` does NOT ask, and must not be handed the gate as dead code: it
  *    already demands the compared operand be a PROVEN `Bool`, which no abstract declaring
  *    `@:op(A == B)` can be (an abstract with `to Bool` resolves under its own name). Widen that
  *    proof and this becomes reachable — add the gate then, with a fixture that fires.
- *  - `prefer-index-access` (`@:arrayAccess`) and `redundant-tostring` (`@:to`) are the same defect
- *    CLASS under a different annotation, which this class does not read: its seam is
- *    `operatorOverloadMetaName`, ONE annotation whose argument projects as an operator node.
- *    Both are open.
- *  - `join-string-append` (`+=`) is reachable in principle and unasked: no tree measured declares
- *    `@:op(A += B)`, so there is no fixture that would hold such a gate honest.
+ *  - `prefer-index-access` and `redundant-tostring` look like the same defect under a
+ *    different annotation and MEASURE clean, each for its own reason rather than by luck.
+ *    `prefer-index-access` demands POSITIVE proof that the receiver is the language `Map`
+ *    abstract, so a user type carrying `@:arrayAccess` beside a `get(k)` is never a candidate
+ *    (verified: 0 findings on exactly that fixture). `redundant-tostring` already refuses a
+ *    `+` receiver that is not a class, and in every stringifying context a declared `toString`
+ *    wins over an `@:to String` — compile-and-run on Haxe 4.3.7 `--interp` with an
+ *    `abstract Tag(String)` declaring both: interpolation, concatenation, `Std.string` and the
+ *    direct call all print the METHOD answer.
+ *  - a verdict is per simple NAME, so a name that is AMBIGUOUS in the resolution scope answers
+ *    `Unproven` — an abstract called `Path` beside `haxe.io.Path` is refused for the collision
+ *    alone. Conservative and intended; worth knowing before writing a fixture.
  *
  * ## Grammar-agnostic
  *
@@ -142,7 +152,8 @@ final class OperatorSelection {
 	/** The parenthesis kind, unwrapped before an operand is classified. */
 	private final _parenKind: Null<String>;
 
-	private var _index: Null<SymbolIndex> = null;
+	/** Every resolution scope a declaration may come from; null until first demand — see `indexes`. */
+	private var _indexes: Null<Array<SymbolIndex>> = null;
 
 	/** Operator node KIND -> the names of the types that overload it; null until first demand. */
 	private var _declarers: Null<Map<String, Array<String>>> = null;
@@ -166,6 +177,7 @@ final class OperatorSelection {
 	 */
 	public function declared(kinds: Array<String>): Bool {
 		final table: Map<String, Array<String>> = declarers();
+
 		return kinds.exists(kind -> table.exists(kind));
 	}
 
@@ -290,13 +302,15 @@ final class OperatorSelection {
 		if (decls.length == 0) return Unproven;
 		for (decl in decls) for (member in decl.members) for (overloaded in member.operatorOverloads) if (kinds.contains(overloaded))
 			return Overloaded(typeName);
-		if (index().resolvesToPlainNominal(typeName)) return Builtin;
+		if (indexes().exists(index -> index.resolvesToPlainNominal(typeName))) return Builtin;
 		return decls.foreach(decl -> _abstractKinds.contains(decl.kind) && !decl.hasBuild && !decl.hasAutoBuild) ? Builtin : Unproven;
 	}
 
 	/** Every top-level declaration named `typeName` the resolution scope carries. */
 	private function declsOf(typeName: String): Array<TypeDeclInfo> {
-		return [for (info in index().declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName) decl];
+		return [
+			for (index in indexes()) for (info in index.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName) decl
+		];
 	}
 
 	/** Operator node kind -> the names of the types that overload it, built once on first demand. */
@@ -304,25 +318,36 @@ final class OperatorSelection {
 		final built: Null<Map<String, Array<String>>> = _declarers;
 		if (built != null) return built;
 		final table: Map<String, Array<String>> = [];
-		for (info in index().allFiles()) for (decl in info.types) for (member in decl.members) for (kind in member.operatorOverloads) {
-			final names: Array<String> = table[kind] ?? [];
-			if (!names.contains(decl.name)) names.push(decl.name);
-			table[kind] = names;
-		}
+		for (index in indexes())
+			for (info in index.allFiles()) for (decl in info.types) for (member in decl.members) for (kind in member.operatorOverloads) {
+				final names: Array<String> = table[kind] ?? [];
+				if (!names.contains(decl.name)) names.push(decl.name);
+				table[kind] = names;
+			}
 		_declarers = table;
 		return table;
 	}
 
 	/**
-	 * The resolution scope, resolved once. The plugin's own index is preferred over one built
-	 * from `_files`: an overload declared in a library the report scope does not include is
-	 * exactly the declaration a narrow run would otherwise miss.
+	 * Every scope a declaration may come from, resolved once: the plugin's own resolution index
+	 * when it has one, AND an index over the files this run was handed.
+	 *
+	 * BOTH, not one or the other. An overload declared in a library the report scope does not
+	 * include is exactly what a narrow run would otherwise miss — but the reverse costs just as
+	 * much: a type declared in the SCANNED files and absent from the resolution scope (a run over
+	 * a directory outside the configured project, the common shape of a probe) resolved to
+	 * nothing, and a verdict of `Unproven` for it silenced findings that were perfectly sound.
+	 * Measured on a two-file fixture whose abstract declares NO overload: preferring the project
+	 * index alone refused the finding, asking both keeps it.
 	 */
-	private function index(): SymbolIndex {
-		final built: Null<SymbolIndex> = _index;
+	private function indexes(): Array<SymbolIndex> {
+		final built: Null<Array<SymbolIndex>> = _indexes;
 		if (built != null) return built;
-		final resolved: SymbolIndex = RefactorSupport.resolutionIndexOf(_plugin) ?? SymbolIndex.build(_files, _plugin);
-		_index = resolved;
+		final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(_plugin);
+		final resolved: Array<SymbolIndex> = resolution == null
+			? [SymbolIndex.build(_files, _plugin)]
+			: [resolution, SymbolIndex.build(_files, _plugin)];
+		_indexes = resolved;
 		return resolved;
 	}
 

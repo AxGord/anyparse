@@ -10,6 +10,7 @@ import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.check.Check;
+import anyparse.check.JoinStringAppend;
 
 using Lambda;
 
@@ -55,6 +56,31 @@ class OperatorOverloadGateTest extends Test {
 	private static final NEGATION_USE: String = 'class Use2 {\n\n\tpublic static function a(f: Flag, g: Flag): Bool {\n'
 		+ '\t\treturn !(f == g);\n\t}\n\n\tpublic static function b(f: Flag): Bool {\n\t\treturn !!f;\n\t}\n\n'
 		+ '\tpublic static function d(f: Flag, x: Int): Int {\n\t\tif (!f) return x else return -x;\n\t}\n\n}\n';
+
+	/** An abstract whose `@:op(A += B)` inserts a separator — the append twin of the `Dir` shape. */
+	private static final APPEND_OVERLOAD: String = 'abstract Route(String) from String to String {\n\n'
+		+ '\t@:op(A += B) public inline function append(s: String): Route return cast this + \'/\' + s;\n\n}\n';
+
+	private static final APPEND_PLAIN: String = 'abstract Route(String) from String to String {\n\n'
+		+ '\tpublic inline function append(s: String): Route return cast this + \'/\' + s;\n\n}\n';
+
+	/** Two appends the join would fuse into one — with string-literal terms, which is what makes the run look String-typed. */
+	private static final APPEND_USE: String = 'class UseR {\n\n\tpublic static function f(): Route {\n\t\tvar r: Route = \'root\';\n'
+		+ '\t\tr += \'a\';\n\t\tr += \'b\';\n\t\treturn r;\n\t}\n\n}\n';
+
+	/**
+	 * The join turns N appends into ONE, so an overloaded `+=` runs its body once instead of N
+	 * times: `r += 'a'; r += 'b'` is `root/a/b` where the joined `r += 'a' + 'b'` is `root/ab`.
+	 * The rule's own type gate cannot catch it — a string-literal term is exactly what makes such
+	 * a run look String-typed.
+	 */
+	public function testJoinAppendSkipsOverloadedAddAssign(): Void {
+		Assert.isFalse(reports(new JoinStringAppend(), APPEND_OVERLOAD, APPEND_USE, 'r += \'a\''));
+	}
+
+	public function testJoinAppendReportsPlainAddAssign(): Void {
+		Assert.isTrue(reports(new JoinStringAppend(), APPEND_PLAIN, APPEND_USE, 'r += \'a\''));
+	}
 
 	/** The path-join site is not reported at all — the merge would change the value, so the finding is false. */
 	public function testFoldSkipsOverloadedConcatSite(): Void {

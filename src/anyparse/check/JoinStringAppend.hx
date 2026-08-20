@@ -117,7 +117,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
+		final seams: Null<Seams> = readSeams(plugin, files);
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -127,7 +127,10 @@ final class JoinStringAppend implements Check implements DefaultOff {
 			final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
 			final matches: Array<Match> = [];
 			collectMatches(tree, tree, entry.source, comments, seams, declaredTypeSources, matches);
-			for (m in matches) violations.push({
+			// The operator gate is asked LAST, after every cheaper gate has passed: the per-file type
+			// resolver it needs is built on first demand, so a run that never gets this far never
+			// pays for one — and on a tree that overloads nothing the answer is one index lookup.
+			for (m in matches) if (builtinAppend(m, seams, entry.file, entry.source, tree)) violations.push({
 				file: entry.file,
 				span: m.anchorSpan,
 				rule: RULE_ID,
@@ -141,7 +144,8 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
+		if (violations.length == 0) return [];
+		final seams: Null<Seams> = readSeams(plugin, [{ file: violations[0].file, source: source }]);
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -158,7 +162,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	}
 
 	/** Bundle the required grammar seams, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+	private static function readSeams(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final addAssignKind: Null<String> = shape.addAssignKind;
 		if (addAssignKind == null) return null;
@@ -184,7 +188,8 @@ final class JoinStringAppend implements Check implements DefaultOff {
 			blockKinds: support.blockKinds().concat(caseKinds),
 			stringInterpKind: shape.stringInterpIdentKind,
 			stringLiteralKinds: shape.stringLiteralKinds ?? [],
-			safeOperandKinds: safeOperandKindsOf(shape)
+			safeOperandKinds: safeOperandKindsOf(shape),
+			selection: OperatorSelection.of(plugin, files)
 		};
 	}
 
@@ -214,6 +219,27 @@ final class JoinStringAppend implements Check implements DefaultOff {
 			shape.parenKind
 		]) if (k != null) out.push(k);
 		return out;
+	}
+
+	/**
+	 * Whether the `+=` the join COLLAPSES is the language's own.
+	 *
+	 * The rewrite turns N appends into one, so an overloaded `+=` runs its body once instead of N
+	 * times: measured on an `abstract Route(String)` whose `@:op(A += B)` inserts a separator,
+	 * `r += 'a'; r += 'b'` is `root/a/b` while the joined `r += 'a' + 'b'` is `root/ab`. The type
+	 * gate cannot catch it — a string-literal term is precisely what makes such a run look
+	 * String-typed — so the proof has to come from the target's DECLARATION.
+	 *
+	 * Asked about the target alone rather than the whole statement: the accumulation runs on that
+	 * one type, and the `+` the fix introduces between terms is already covered by the type gate
+	 * (a literal term, or a `String` / `Int` declared target). See `OperatorSelection`.
+	 */
+	private static function builtinAppend(m: Match, s: Seams, file: String, source: String, tree: QueryNode): Bool {
+		final selection: Null<OperatorSelection> = s.selection;
+		final kinds: Array<String> = [s.addAssignKind];
+		if (selection == null || !selection.declared(kinds)) return true;
+		final types: Null<(QueryNode) -> Null<String>> = selection.typesFor(file, source, tree);
+		return selection.verdictOfOperands([m.targetNode], kinds, types).match(Builtin);
 	}
 
 	/** Collect every joinable run reachable under `node`. */
@@ -279,6 +305,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 			editSpan: new Span(firstSpan.from, lastSpan.to),
 			replacementText: text,
 			target: name,
+			targetNode: head.target,
 			termCount: terms.length
 		};
 	}
@@ -397,6 +424,16 @@ private typedef Seams = {
 	var stringInterpKind: Null<String>;
 	var stringLiteralKinds: Array<String>;
 	var safeOperandKinds: Array<String>;
+
+	/**
+	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
+	 * The join turns N appends into ONE, so an overloaded `+=` runs its own body once instead of
+	 * N times — measured on an `abstract Route(String)` whose `@:op(A += B)` inserts a separator:
+	 * `p += 'a'; p += 'b'` is `root/a/b`, the joined `p += 'a' + 'b'` is `root/ab`. The type gate
+	 * above does not catch it, because a string-literal term is exactly what makes such a run
+	 * look String-typed.
+	 */
+	var selection: Null<OperatorSelection>;
 }
 
 /** One joinable run: the reported anchor (the first statement's span, also the finding key), the replaced region, and the built replacement text. */
@@ -405,5 +442,8 @@ private typedef Match = {
 	var editSpan: Span;
 	var replacementText: String;
 	var target: String;
+
+	/** The target's own identifier node — what the operator gate resolves to a type (`builtinAppend`). */
+	var targetNode: QueryNode;
 	var termCount: Int;
 }
