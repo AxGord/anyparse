@@ -685,6 +685,7 @@ import unit.PreferComprehensionFinalTest;
 import unit.FieldMutabilityMacroGateTest;
 import unit.LintLanguageVersionGateTest;
 import unit.MemberOrderModifierSpanSliceTest;
+import unit.OperatorOverloadGateTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1279,6 +1280,7 @@ class RunTests {
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new CollapsibleElseIfCheckTest());
 		addCase(new DoubleNegationCheckTest());
+		addCase(new OperatorOverloadGateTest());
 		addCase(new InvertNegatedIfElseCheckTest());
 		addCase(new PreferNullCoalescingCheckTest());
 		addCase(new PreferIndexAccessCheckTest());

@@ -50,12 +50,12 @@ final class DoubleNegation implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
+		final seams: Null<Seams> = resolveSeams(plugin, files);
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, seams);
+			if (tree != null) walk(violations, entry.file, tree, tree, entry.source, seams);
 		}
 		return violations;
 	}
@@ -71,7 +71,8 @@ final class DoubleNegation implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = resolveSeams(plugin);
+		if (violations.length == 0) return [];
+		final seams: Null<Seams> = resolveSeams(plugin, [{ file: violations[0].file, source: source }]);
 		return seams == null
 			? []
 			: CheckScan.applyBySpan(plugin, source, violations, [seams.notKind], (node, span) -> negationEdit(node, span, seams, source));
@@ -81,9 +82,11 @@ final class DoubleNegation implements Check {
 	 * Walk `node`; flag a not wrapping another not (parentheses transparent), then STOP
 	 * descending into it. A macro-reification subtree (`opaqueKinds`) is skipped wholesale.
 	 */
-	private static function walk(out: Array<Violation>, file: String, node: QueryNode, seams: Seams): Void {
+	private static function walk(
+		out: Array<Violation>, file: String, root: QueryNode, node: QueryNode, source: String, seams: Seams
+	): Void {
 		if (seams.opaqueKinds.contains(node.kind)) return;
-		if (innerNotOf(node, seams) != null) {
+		if (innerNotOf(node, seams) != null && builtinNot(node, file, root, source, seams)) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({
@@ -96,7 +99,7 @@ final class DoubleNegation implements Check {
 				return;
 			}
 		}
-		for (c in node.children) walk(out, file, c, seams);
+		for (c in node.children) walk(out, file, root, c, source, seams);
 	}
 
 	/**
@@ -112,6 +115,24 @@ final class DoubleNegation implements Check {
 		return inner.kind == seams.notKind ? inner : null;
 	}
 
+	/**
+	 * Whether the `!` pair this rule would strip is the language own. `!!x` is redundant because
+	 * the built-in `!` is an involution on `Bool`; an abstract declaring `@:op(!A)` need not be
+	 * one, and then stripping the pair changes the value while the program still compiles (such a
+	 * type usually carries a `to Bool` too). So an overloaded `!` makes the FINDING false, not
+	 * merely the fix unsafe, and the site is left unreported.
+	 *
+	 * The chain is judged as a whole: `verdictFor` flattens same-kind children, so `!!!x` asks
+	 * about every `!` in it at once. On a tree that overloads nothing this is one map lookup —
+	 * see `OperatorSelection`.
+	 */
+	private static function builtinNot(not: QueryNode, file: String, root: QueryNode, source: String, seams: Seams): Bool {
+		final selection: Null<OperatorSelection> = seams.selection;
+		final kinds: Array<String> = [seams.notKind];
+		if (selection == null || !selection.declared(kinds)) return true;
+		return selection.verdictFor(not, kinds, selection.typesFor(file, source, root)).match(Builtin);
+	}
+
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
 	private static function operandIsNullable(operand: QueryNode, nullableKinds: Array<String>): Bool {
 		return nullableKinds.exists(k -> RefactorSupport.subtreeContainsKind(operand, k));
@@ -119,7 +140,7 @@ final class DoubleNegation implements Check {
 
 
 	/** Resolve the not / opaque / nullable-operand seam kinds, or null when `notKind` is unset. */
-	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+	private static function resolveSeams(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final notKind: Null<String> = shape.notKind;
 		if (notKind == null) return null;
@@ -130,7 +151,8 @@ final class DoubleNegation implements Check {
 			notKind: notKind,
 			parenKind: shape.parenKind,
 			opaqueKinds: opaqueKinds,
-			nullableKinds: nullableKinds
+			nullableKinds: nullableKinds,
+			selection: OperatorSelection.of(plugin, files)
 		};
 	}
 
@@ -160,4 +182,10 @@ private typedef Seams = {
 
 	final opaqueKinds: Array<String>;
 	final nullableKinds: Array<String>;
+
+	/**
+	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation —
+	 * the proof that the stripped `!` is an involution at all (`builtinNot`).
+	 */
+	final selection: Null<OperatorSelection>;
 };

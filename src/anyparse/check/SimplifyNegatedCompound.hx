@@ -103,7 +103,7 @@ final class SimplifyNegatedCompound implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
+		final seams: Null<Seams> = readSeams(plugin, files);
 		if (seams == null) return [];
 		final s: Seams = seams;
 		final violations: Array<Violation> = [];
@@ -134,8 +134,9 @@ final class SimplifyNegatedCompound implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null || violations.length == 0) return [];
+		if (violations.length == 0) return [];
+		final seams: Null<Seams> = readSeams(plugin, [{ file: violations[0].file, source: source }]);
+		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final s: Seams = seams;
@@ -189,6 +190,11 @@ final class SimplifyNegatedCompound implements Check {
 		final operand: Null<QueryNode> = s.support.negatedOperandOf(node);
 		final span: Null<Span> = node.span;
 		if (operand == null || span == null) return null;
+		// The engine re-selects every operator on the spine it rebuilds, so the whole spine has to
+		// be the language own. `Overloaded` and `Unproven` are one answer here, unlike in a layout
+		// rule: this finding IS the rewrite, so a site it cannot licence has nothing left to say.
+		final selection: Null<OperatorSelection> = s.selection;
+		if (selection != null && !selection.verdictFor(node, s.operatorKinds, types).match(Builtin)) return null;
 		// The engine rebuilds the operator glue between operands, so a comment inside the span
 		// would be dropped; a `#if` region projects as flat siblings, so a rebuilt chain would
 		// splice both arms together. Both refuse rather than emit a lossy rewrite.
@@ -214,13 +220,19 @@ final class SimplifyNegatedCompound implements Check {
 	 * behind that seam (`negatedOperandOf`), so a missing `booleanLogicSupport` is the ONLY thing
 	 * that makes the check a no-op; the and / or kinds still come from `RefShape`, but only to word the finding.
 	 */
-	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+	private static function readSeams(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
-		return support == null ? null : {
+		if (support == null) return null;
+		final operatorKinds: Array<String> = (shape.comparisonKinds ?? []).copy();
+		final notKind: Null<String> = shape.notKind;
+		if (notKind != null && !operatorKinds.contains(notKind)) operatorKinds.push(notKind);
+		return {
 			opaqueKinds: shape.opaqueKinds ?? [],
 			negation: NegationScan.negationSeams(shape),
-			support: support
+			support: support,
+			selection: OperatorSelection.of(plugin, files),
+			operatorKinds: operatorKinds
 		};
 	}
 
@@ -238,4 +250,17 @@ private typedef Seams = {
 	final opaqueKinds: Array<String>;
 	final negation: NegationSeams;
 	final support: BooleanLogicSupport;
+
+	/**
+	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
+	 * The engine REBUILDS the condition out of its operator spine, so every operator on that
+	 * spine is re-selected by the rewrite — and an abstract that declares `@:op(A == B)` without
+	 * `@:op(A != B)` makes the flip disagree with the wrap (measured on Haxe 4.3.7 / `--interp`:
+	 * two `Point`-like values the `==` overload calls equal answer `!(a == b)` false and `a != b`
+	 * TRUE, because Haxe does not derive the second overload from the first).
+	 */
+	final selection: Null<OperatorSelection>;
+
+	/** The operator kinds the engine may flip or rebuild — what `selection` is asked about. */
+	final operatorKinds: Array<String>;
 };

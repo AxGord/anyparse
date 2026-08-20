@@ -37,6 +37,9 @@ private typedef MemberSeams = {
 	final staticKind: Null<String>;
 	final inlineKind: Null<String>;
 	final macroKind: Null<String>;
+
+	/** The operator-overload annotation NAME (`RefShape.operatorOverloadMetaName`), or null when the grammar has none. */
+	final operatorMetaName: Null<String>;
 	final conditionalKind: Null<String>;
 	final paramKinds: Array<String>;
 };
@@ -386,6 +389,7 @@ final class SymbolIndexBuilder {
 			var runStatic: Bool = false;
 			var runInline: Bool = false;
 			var runMacro: Bool = false;
+			var runOperators: Array<String> = [];
 			for (child in n.children) {
 				final sp: Null<Span> = child.span;
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -411,6 +415,7 @@ final class SymbolIndexBuilder {
 							isStatic: runStatic,
 							isInline: runInline,
 							isMacro: runMacro,
+							operatorOverloads: runOperators,
 							guarded: guarded
 						});
 					}
@@ -419,6 +424,7 @@ final class SymbolIndexBuilder {
 					runStatic = false;
 					runInline = false;
 					runMacro = false;
+					runOperators = [];
 				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
 					runVisibility = source.substring(sp.from, sp.to);
 				else if (child.kind == seams.overrideKind)
@@ -429,6 +435,10 @@ final class SymbolIndexBuilder {
 					runInline = true;
 				else if (child.kind == seams.macroKind)
 					runMacro = true;
+				else {
+					final operatorKind: Null<String> = operatorKindOf(child, seams);
+					if (operatorKind != null) runOperators.push(operatorKind);
+				}
 			}
 		});
 		return out;
@@ -455,6 +465,22 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
+	 * The node KIND the argument of the operator-overload annotation `meta` projects as —
+	 * `@:op(A + B)` gives the grammar addition kind — or null when `meta` is not that annotation
+	 * or does not carry exactly one argument.
+	 *
+	 * The KIND is what a consumer can compare against an operator node it is already holding, so
+	 * neither the index nor the check ever spells an operator symbol; the grammar decides which
+	 * form is which, including the two that share a symbol (`A - B` against `-A`).
+	 */
+	private static function operatorKindOf(meta: QueryNode, seams: MemberSeams): Null<String> {
+		final metaName: Null<String> = seams.operatorMetaName;
+		return metaName == null || meta.name != metaName || !isMetaNodeKind(meta.kind) || meta.children.length != 1
+			? null
+			: meta.children[0].kind;
+	}
+
+	/**
 	 * The `RefShape` kinds `collectMembers` reads, resolved ONCE per run rather than per
 	 * type: the modifier siblings it recognises and the conditional-compilation host kind
 	 * that marks a member `guarded`.
@@ -466,6 +492,7 @@ final class SymbolIndexBuilder {
 			staticKind: shape.staticModifierKind,
 			inlineKind: shape.inlineModifierKind,
 			macroKind: shape.macroModifierKind,
+			operatorMetaName: shape.operatorOverloadMetaName,
 			conditionalKind: shape.conditionalMemberKind,
 			paramKinds: shape.paramKinds ?? []
 		};

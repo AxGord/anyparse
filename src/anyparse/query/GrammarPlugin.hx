@@ -1077,6 +1077,21 @@ typedef RefShape = {
 	@:optional var enumAbstractMetaName: String;
 
 	/**
+	 * The ANNOTATION name a declaration carries to OVERLOAD an operator — Haxe `@:op`, whose
+	 * single argument is the overloaded form written with placeholder operands (`@:op(A + B)`,
+	 * `@:op(!A)`). `SymbolIndexBuilder` records the KIND that argument projects as, on every
+	 * member carrying the annotation (`SymbolIndex.MemberInfo.operatorOverloads`), so a check asks
+	 * the question with the very node kind it is already holding — no operator SYMBOL is spelled
+	 * anywhere, and the two forms that share one symbol (`A - B` and `-A`) are told apart by the
+	 * grammar rather than by a text rule.
+	 *
+	 * That is what lets a check ask whether the operator it is about to rewrite is the built-in
+	 * one or a type overload of it. Unset makes `OperatorSelection` inert, so every consumer keeps
+	 * the pre-seam behaviour of assuming the built-in operator.
+	 */
+	@:optional var operatorOverloadMetaName: String;
+
+	/**
 	 * How the grammar SPELLS an enum-abstract declaration — the emission seam
 	 * `prefer-enum-abstract`'s autofix writes through when it converts a constant-only
 	 * class into one. Unset (the default for every grammar that does not fill it) leaves

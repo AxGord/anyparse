@@ -125,6 +125,24 @@ typedef MemberInfo = {
 	var isMacro: Bool;
 
 	/**
+	 * The node KIND the argument of every operator-overload annotation
+	 * (`RefShape.operatorOverloadMetaName`) on this member projects as — `@:op(A + B)` records
+	 * the grammar addition kind, `@:op(!A)` its logical-not kind. Empty for a member carrying
+	 * none, which is every member of every non-abstract type: only an abstract may overload an
+	 * operator.
+	 *
+	 * The KIND rather than the annotation text, because that is the form a consumer can compare
+	 * WITHOUT spelling an operator symbol: a check holding an operator node already has its kind,
+	 * and the two forms that share one symbol — the binary `A - B` and the prefix `-A` — project
+	 * as different kinds, so the grammar tells them apart instead of a text rule here.
+	 *
+	 * This is what makes `OperatorSelection` answerable at all: whether the `+` a check is about
+	 * to rewrite is string concatenation or an operator a type declares for itself is a question
+	 * about a DECLARATION that usually lives in another file.
+	 */
+	var operatorOverloads: Array<String>;
+
+	/**
 	 * True when the member's DECLARATION sits under a `conditionalMemberKind` host — the
 	 * member is written inside a `#if` region rather than at plain type-body level.
 	 * Mirrors `ImportInfo.guarded`: the declaration genuinely exists, but its presence is

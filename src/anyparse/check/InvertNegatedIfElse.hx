@@ -58,12 +58,12 @@ final class InvertNegatedIfElse implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
+		final seams: Null<Seams> = resolveSeams(plugin, files);
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, entry.source, seams);
+			if (tree != null) walk(violations, entry.file, tree, tree, entry.source, seams);
 		}
 		return violations;
 	}
@@ -77,18 +77,21 @@ final class InvertNegatedIfElse implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = resolveSeams(plugin);
+		if (violations.length == 0) return [];
+		final file: String = violations[0].file;
+		final seams: Null<Seams> = resolveSeams(plugin, [{ file: file, source: source }]);
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
+		final root: QueryNode = tree;
 		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, seams.ifKinds, byKey);
+		RefactorSupport.indexNodesByKind(root, seams.ifKinds, byKey);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final vspan: Null<Span> = v.span;
 			if (vspan == null) continue;
 			final ifNode: Null<QueryNode> = byKey['${vspan.from}:${vspan.to}'];
-			if (ifNode != null) inversionEdits(ifNode, source, seams, edits);
+			if (ifNode != null) inversionEdits(ifNode, file, root, source, seams, edits);
 		}
 		return edits;
 	}
@@ -98,8 +101,13 @@ final class InvertNegatedIfElse implements Check {
 	 * (after unwrapping outer parens) is a logical not, then STOP descending into it — a
 	 * nested invertible `if-else` is found on a re-run, keeping per-pass edits non-overlapping.
 	 */
-	private static function walk(out: Array<Violation>, file: String, node: QueryNode, source: String, seams: Seams): Void {
-		if (seams.ifKinds.contains(node.kind) && node.children.length == IF_WITH_ELSE_CHILD_COUNT && isInvertible(node, source, seams)) {
+	private static function walk(
+		out: Array<Violation>, file: String, root: QueryNode, node: QueryNode, source: String, seams: Seams
+	): Void {
+		if (
+			seams.ifKinds.contains(node.kind) && node.children.length == IF_WITH_ELSE_CHILD_COUNT
+			&& isInvertible(node, file, root, source, seams)
+		) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({
@@ -112,7 +120,7 @@ final class InvertNegatedIfElse implements Check {
 				return;
 			}
 		}
-		for (c in node.children) walk(out, file, c, source, seams);
+		for (c in node.children) walk(out, file, root, c, source, seams);
 	}
 
 	/**
@@ -120,12 +128,33 @@ final class InvertNegatedIfElse implements Check {
 	 * unwrapped) is a not, its `else` branch is not itself an `if`, and no comment in the
 	 * condition span would be dropped by the rebuild.
 	 */
-	private static function isInvertible(ifNode: QueryNode, source: String, seams: Seams): Bool {
+	private static function isInvertible(ifNode: QueryNode, file: String, root: QueryNode, source: String, seams: Seams): Bool {
 		final cond: QueryNode = ifNode.children[0];
-		if (RefactorSupport.unwrapParens(cond, seams.parenKind).kind != seams.notKind) return false;
+		final not: QueryNode = RefactorSupport.unwrapParens(cond, seams.parenKind);
+		if (not.kind != seams.notKind) return false;
 		if (seams.ifKinds.contains(ifNode.children[2].kind)) return false;
 		final condSpan: Null<Span> = cond.span;
-		return condSpan != null && !CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to);
+		if (condSpan == null || CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to)) return false;
+		return builtinNot(not, file, root, source, seams);
+	}
+
+	/**
+	 * Whether the `!` this inversion DROPS is the language own.
+	 *
+	 * The swap is an exact complement of the negation only while `!c` and `c` are complementary,
+	 * which the built-in `!` guarantees and an overloaded one does not: an abstract may declare
+	 * both `@:op(!A)` and a `to Bool` coercion that disagree, and then `if (!f) A else B` and
+	 * `if (f) B else A` run different branches (measured on Haxe 4.3.7 / `--interp` with a
+	 * `@:op(!A)` returning the value rather than its complement — `!f` true AND `if (f)` taken).
+	 *
+	 * Nothing in the tested trees declares one, so the gate costs a map lookup and stops there:
+	 * `declared` is false and no operand type is ever resolved.
+	 */
+	private static function builtinNot(not: QueryNode, file: String, root: QueryNode, source: String, seams: Seams): Bool {
+		final selection: Null<OperatorSelection> = seams.selection;
+		if (selection == null) return true;
+		final kinds: Array<String> = [seams.notKind];
+		return !selection.declared(kinds) || selection.verdictFor(not, kinds, selection.typesFor(file, source, root)).match(Builtin);
 	}
 
 	/**
@@ -134,9 +163,9 @@ final class InvertNegatedIfElse implements Check {
 	 * else branch source swapped.
 	 */
 	private static function inversionEdits(
-		ifNode: QueryNode, source: String, seams: Seams, edits: Array<{ span: Span, text: String }>
+		ifNode: QueryNode, file: String, root: QueryNode, source: String, seams: Seams, edits: Array<{ span: Span, text: String }>
 	): Void {
-		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT || !isInvertible(ifNode, source, seams)) return;
+		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT || !isInvertible(ifNode, file, root, source, seams)) return;
 		final cond: QueryNode = ifNode.children[0];
 		final thenBranch: QueryNode = ifNode.children[1];
 		final elseBranch: QueryNode = ifNode.children[2];
@@ -168,13 +197,18 @@ final class InvertNegatedIfElse implements Check {
 
 
 	/** Resolve the if / not / paren seam kinds, or null when a required piece is unset. */
-	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+	private static function resolveSeams(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		final notKind: Null<String> = shape.notKind;
 		if (ifKinds.length == 0 || notKind == null) return null;
 		final parenKind: Null<String> = shape.parenKind;
-		return { ifKinds: ifKinds, notKind: notKind, parenKind: parenKind };
+		return {
+			ifKinds: ifKinds,
+			notKind: notKind,
+			parenKind: parenKind,
+			selection: OperatorSelection.of(plugin, files)
+		};
 	}
 
 }
@@ -184,4 +218,11 @@ private typedef Seams = {
 	final ifKinds: Array<String>;
 	final notKind: String;
 	final parenKind: Null<String>;
+
+	/**
+	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
+	 * The inversion DROPS a `!` and swaps the branches, which is an exact complement only while
+	 * that `!` is the built-in one — see `builtinNot`.
+	 */
+	final selection: Null<OperatorSelection>;
 };

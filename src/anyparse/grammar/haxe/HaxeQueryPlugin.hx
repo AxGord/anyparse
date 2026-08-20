@@ -811,6 +811,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			functionBodyKinds: ['BlockBody', 'UntypedBlockBody', 'ExprBody', 'NoBody', 'CondBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
 			enumAbstractMetaName: '@:enum',
+			operatorOverloadMetaName: '@:op',
 			enumAbstractSyntax: { head: 'enum abstract {name}({under}) to {under}', bodyOpen: '{' },
 			rawDynamicTypeName: 'Dynamic',
 			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],

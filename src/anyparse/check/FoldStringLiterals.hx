@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.check.OperatorSelection.OperatorVerdict;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -229,11 +230,16 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null || files.length == 0) return [];
 		final macros: MacroIndex = new MacroIndex(plugin, files);
+		// Resolved once per run and demanded only by a construct that actually planned: on a tree
+		// where nothing overloads the concatenation operator the gate never builds an index and
+		// never resolves an operand type, which is what keeps it free for most projects.
+		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, files);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final ctx: Null<PlanContext> = contextFor(plugin, seams, entry.source, FormatConfigDiscovery.discover(entry.file));
+			final operators: OperatorGate = new OperatorGate(selection, seams, entry.file, entry.source, tree);
+			final ctx: Null<PlanContext> = contextFor(plugin, seams, entry.source, FormatConfigDiscovery.discover(entry.file), operators);
 			if (ctx == null) continue;
 			// The whitelist is resolved PER FILE: `apqlint.json` is discovered by walking up
 			// from each file, so one run can span several configs, and reading the first
@@ -275,7 +281,9 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		// cross-file symbol index, neither of which `fix` is handed — `applyBySpan` finds
 		// a node by its span alone, and `source` is one file. `run` already decided it, so
 		// the FINDING carries the decision here rather than the resolution being redone.
-		final fixable: Array<Violation> = violations.filter(v -> v.message.indexOf(MACRO_REFUSAL) == -1);
+		final fixable: Array<Violation> = violations.filter(v ->
+			v.message.indexOf(MACRO_REFUSAL) == -1 && v.message.indexOf(OperatorGate.REFUSAL) == -1
+		);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final planned: Null<PlannedFold> = plan(planContext, node);
 			// The violation's span is the NODE's — `applyBySpan` keys on it — but the edit is the
@@ -355,14 +363,26 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		final literal: Bool = seams.stringLiteralKinds.contains(node.kind);
 		final condRun: Bool = seams.condOperandRunKinds.contains(node.kind);
 		if (literal || condRun || node.kind == seams.concatKind) {
-			final planned: Null<PlannedFold> = plan(ctx, node);
-			if (planned != null) out.push(gate.blocks(calls, planned.groups) ? {
-				span: planned.span,
-				editSpan: planned.editSpan,
-				text: planned.text,
-				groups: planned.groups,
-				message: planned.message + MACRO_REFUSAL
-			} : planned);
+			final proposed: Null<PlannedFold> = plan(ctx, node);
+			// An OVERLOADED operator is not a weaker finding, it is a DIFFERENT construct: the `+`
+			// joins its operands by a rule the type declares, so "these segments can be merged" is
+			// simply false there and the plan is discarded rather than downgraded — which also lets
+			// the walk descend, so a chain of plain literals nested inside one still folds. An
+			// UNPROVEN operand keeps the finding and drops the fix, exactly as the macro gate does.
+			final operators: Null<OperatorGate> = ctx.operators;
+			final verdict: OperatorVerdict = proposed == null || operators == null ? Builtin : operators.verdictFor(node, literal);
+			final planned: Null<PlannedFold> = verdict.match(Overloaded(_)) ? null : proposed;
+			if (planned != null) {
+				final refused: String = (gate.blocks(calls, planned.groups) ? MACRO_REFUSAL : "")
+					+ (verdict.match(Unproven) ? OperatorGate.REFUSAL : "");
+				out.push(refused == "" ? planned : {
+					span: planned.span,
+					editSpan: planned.editSpan,
+					text: planned.text,
+					groups: planned.groups,
+					message: planned.message + refused
+				});
+			}
 			// A literal is never descended into; a chain only when it did not plan as
 			// a whole, so an inner chain still gets its own chance. A conditional
 			// operand run that DID plan keeps its post-directive tail in play — the
@@ -1260,9 +1280,11 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	}
 
 	/** The per-file planning context, or null when the grammar's writer declares no layout metrics. */
-	private static function contextFor(plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>): Null<PlanContext> {
+	private static function contextFor(
+		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, ?operators: OperatorGate
+	): Null<PlanContext> {
 		final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(optsJson);
-		return metrics == null ? null : new PlanContext(plugin, seams, source, optsJson, metrics);
+		return metrics == null ? null : new PlanContext(plugin, seams, source, optsJson, metrics, operators);
 	}
 
 	/** The seam kinds both passes read, or null when the grammar declares no string-concatenation / literal shape. */
@@ -1278,6 +1300,8 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			concatKind: concatKind,
 			condOperandRunKinds: shape.condOperandRunKinds ?? [],
 			stringLiteralKinds: stringLiteralKinds,
+			stringInterpBlockKind: shape.stringInterpBlockKind,
+			stringInterpIdentKind: shape.stringInterpIdentKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			metaKinds: plugin.metaShape().metaKinds,
 			callKind: shape.callKind,
@@ -1538,6 +1562,16 @@ private typedef Seams = {
 	final condOperandRunKinds: Array<String>;
 
 	final stringLiteralKinds: Array<String>;
+
+	/**
+	 * The interpolation-BLOCK kind, or null when the grammar has no interpolation. The SPLIT
+	 * direction can turn an expression that sits inside such a block into a bare `+` operand, so
+	 * this is where the operator gate finds the operands a split would create.
+	 */
+	final stringInterpBlockKind: Null<String>;
+
+	/** The `$name` interpolation-FRAGMENT kind — the other operand a split can lift out of a literal. */
+	final stringInterpIdentKind: Null<String>;
 	final opaqueKinds: Array<String>;
 	final metaKinds: Array<String>;
 	final callKind: Null<String>;
@@ -1711,6 +1745,12 @@ private class PlanContext {
 	public final metrics: LayoutMetrics;
 
 	/**
+	 * The OPERATOR gate for this file, or null in `fix` — where the decision is not retaken: a
+	 * report-only finding carries it in its own message, exactly as the macro gate does.
+	 */
+	public final operators: Null<OperatorGate>;
+
+	/**
 	 * Member region ("<from>:<to>") -> its scope, or null when it cannot be scoped.
 	 * `Map.exists` distinguishes "not built yet" from "built, unusable". The key
 	 * carries BOTH ends because regions share a start: a declaration and each of the
@@ -1722,12 +1762,15 @@ private class PlanContext {
 	private var _originalFailed: Bool = false;
 	private var _memberSpans: Null<Array<Span>> = null;
 
-	public function new(plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, metrics: LayoutMetrics) {
+	public function new(
+		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, metrics: LayoutMetrics, operators: Null<OperatorGate>
+	) {
 		this.plugin = plugin;
 		this.seams = seams;
 		this.source = source;
 		this.optsJson = optsJson;
 		this.metrics = metrics;
+		this.operators = operators;
 	}
 
 	/** The writer's rendering of the unchanged file, split into lines; null when the writer declines, remembered so it is asked once. */
@@ -1980,6 +2023,85 @@ private class BoundaryRank {
 				break;
 		}
 		return text;
+	}
+
+}
+
+/**
+ * The OPERATOR gate for ONE file: whether the `+` a planned construct re-segments is the
+ * language string concatenation, or an operator one of its operand types declares for itself.
+ *
+ * Per file for the same reason `MacroGate` is. The expensive half — the resolution index and the
+ * overload table over it — is shared across the whole run inside `OperatorSelection`, while the
+ * type resolver is per source; and that resolver is built on FIRST DEMAND, so a file whose
+ * constructs never plan, and every file in a tree where nothing overloads the operator, never
+ * pays for it.
+ *
+ * A null `selection` — a grammar declaring no operator-overload annotation — answers `Builtin`
+ * for everything, which is exactly what this rule assumed before the gate existed.
+ */
+@:nullSafety(Strict)
+private class OperatorGate {
+
+	/**
+	 * What a finding adds when this gate turned it report-only — the reason, spelled as the
+	 * missing proof rather than as a defect, because the site is usually a perfectly ordinary
+	 * concatenation whose operand the rule simply could not type. It lives on the gate so the
+	 * rule's own member count stays under the decomposition threshold.
+	 */
+	public static inline final REFUSAL: String = ', but a type in scope overloads the concatenation operator and an '
+		+ 'operand of this construct cannot be typed, so nothing rules out the merge changing what the operator does';
+
+	private final _selection: Null<OperatorSelection>;
+	private final _seams: Seams;
+	private final _file: String;
+	private final _source: String;
+	private final _tree: QueryNode;
+
+	public function new(selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode) {
+		_selection = selection;
+		_seams = seams;
+		_file = file;
+		_source = source;
+		_tree = tree;
+	}
+
+	/**
+	 * The verdict for the construct rooted at `node`.
+	 *
+	 * `literal` marks the SPLIT direction, whose operands are not the children of a `+` at all: a
+	 * lone string literal has none, and the operands a split would CREATE are the interpolation
+	 * fragments it holds. Asking the merge question there would answer `Builtin` for every split
+	 * and leave the MIRROR of the same defect open — `${dir}pages` split back out into
+	 * `dir + pages` is the path join reappearing, with the value changing the other way.
+	 */
+	public function verdictFor(node: QueryNode, literal: Bool): OperatorVerdict {
+		final selection: Null<OperatorSelection> = _selection;
+		if (selection == null) return Builtin;
+		final kinds: Array<String> = [_seams.concatKind];
+		if (!selection.declared(kinds)) return Builtin;
+		final types: Null<(QueryNode) -> Null<String>> = selection.typesFor(_file, _source, _tree);
+		return literal ? selection.verdictOfOperands(interpolated(node), kinds, types) : selection.verdictFor(node, kinds, types);
+	}
+
+	/**
+	 * The interpolation fragments of a string LITERAL — the operands a split would lift out as
+	 * bare `+` operands. A `${ … }` block contributes the one expression it owns, or itself when
+	 * it owns none (a rescanned escape-spelled block is childless — see
+	 * `RefShape.stringInterpBlockKind`); a `$name` fragment contributes itself. Neither an
+	 * empty-handed block nor a `$name` fragment resolves to a type through the shared resolver,
+	 * so both answer `Unproven` and leave such a split reported without a fix — the conservative
+	 * direction, and the one place this gate is knowingly coarser than it could be.
+	 */
+	private function interpolated(literal: QueryNode): Array<QueryNode> {
+		final blockKind: Null<String> = _seams.stringInterpBlockKind;
+		final identKind: Null<String> = _seams.stringInterpIdentKind;
+		final out: Array<QueryNode> = [];
+		for (child in literal.children) if (blockKind != null && child.kind == blockKind)
+			out.push(child.children.length == 1 ? child.children[0] : child)
+		else if (identKind != null && child.kind == identKind)
+			out.push(child);
+		return out;
 	}
 
 }
