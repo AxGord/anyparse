@@ -1472,6 +1472,41 @@ final class SymbolIndex {
 		return false;
 	}
 
+	/**
+	 * Whether `typeName` OR anything in its transitive supertype / interface closure is built
+	 * by a macro (`@:build` / `@:autoBuild`), resolved through the index.
+	 *
+	 * A build macro may rewrite a member arbitrarily, so no rule that changes a field's
+	 * MUTABILITY or PLACEMENT can reason about the declaration it can see. The motivating
+	 * shape: an `@:autoBuild` interface whose builder strips the initializer off every
+	 * non-inline `var` field and moves the assignment into the constructor — after which
+	 * `var` -> `final` is `Static final variable must be initialized`, and a field moved to
+	 * `static` is `Cannot access static field from a class instance` raised by the builder
+	 * itself. The class carries no metadata of its own; the grant is inherited through
+	 * `implements`, which is why the closure and not the declaring file alone.
+	 *
+	 * `@:autoBuild` reaches subtypes and implementors, so the walk follows both `supertypes`
+	 * and `interfaces`. The per-file test is textual (`MemberWriteScan.carriesBuildMacro`),
+	 * so an unrelated `@:build` elsewhere in the same file counts too — the conservative
+	 * direction, which only ever keeps a field as it is. An unretained source ends the same
+	 * way, as in `transitivelyCarriesRtti`.
+	 */
+	public function transitivelyCarriesBuildMacro(typeName: String): Bool {
+		final seen: Array<String> = [typeName];
+		var i: Int = 0;
+		while (i < seen.length) {
+			final name: String = seen[i];
+			i++;
+			for (f in _files) for (t in f.types) if (t.name == name) {
+				final source: Null<String> = _sources[f.file];
+				if (source == null || MemberWriteScan.carriesBuildMacro(source)) return true;
+				for (s in t.supertypes) if (!seen.contains(s)) seen.push(s);
+				for (s in t.interfaces) if (!seen.contains(s)) seen.push(s);
+			}
+		}
+		return false;
+	}
+
 	/** The `seen`-set identity of a resolved type: its declaring file plus its name — see `markSeen`. */
 	private inline function seenKey(cur: ResolvedType): String {
 		return '${cur.file.file}#${cur.type.name}';

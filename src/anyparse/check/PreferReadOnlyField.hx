@@ -127,6 +127,9 @@ final class PreferReadOnlyField implements Check {
 		// spelling the name. A whole-project veto here silenced the rule for every file in a
 		// scope holding one unparseable file.
 		if (index.skippedMayReference(name)) return;
+		// A macro-built type's fields are not what the declaration says — see
+		// `SymbolIndex.transitivelyCarriesBuildMacro`.
+		if (index.transitivelyCarriesBuildMacro(owner)) return;
 		if (index.supertypeDeclaresMember(owner, name)) return;
 		// An implemented interface that cannot be resolved may still declare `name` as a
 		// mutable member, whose property access `(default, null)` would violate.

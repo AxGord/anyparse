@@ -165,6 +165,11 @@ final class PreferFinalField implements Check {
 		// access — `var → final` would break parity ("different property access than in
 		// <Interface>"). Applies to both the init and no-init cases below.
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
+		// A macro-built type's fields are not what the declaration says: an `@:autoBuild`
+		// builder may strip the initializer and move the assignment into the constructor,
+		// after which `var` -> `final` is `Static final variable must be initialized`. The
+		// grant is inherited through `implements`, so the class itself carries no metadata.
+		if (index.transitivelyCarriesBuildMacro(owner)) return;
 		// The conditional-default arm, checked FIRST: an initialized field whose only other
 		// write is one `if (p != null) x = p;` constructor statement folds to `final` plus
 		// `x = p ?? <default>`. It is disjoint from the initializer arm either way (that

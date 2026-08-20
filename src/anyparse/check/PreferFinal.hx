@@ -135,14 +135,17 @@ final class PreferFinal implements Check {
 		opaqueKinds: Array<String>, mutableKinds: Array<String>, index: () -> Null<SymbolIndex>, declaredTypes: Null<Map<Int, String>>,
 		abstractKinds: Array<String>
 	): Void {
-		final candidates: Array<{ name: String, span: Span, scope: Span }> = [];
-		collect(candidates, source, tree, null, scopeKinds, opaqueKinds, mutableKinds, shape.localDeclContinuationKinds ?? []);
+		final candidates: Array<Candidate> = [];
+		collect(
+			candidates, source, tree, null, scopeKinds, opaqueKinds, mutableKinds, shape.localDeclContinuationKinds ?? [],
+			shape.newExprKind
+		);
 		final writesByName: Map<String, Array<Span>> = [];
 		for (c in candidates) {
 			if (!writesByName.exists(c.name)) writesByName[c.name] = writeSpans(c.name, tree, shape);
 			final writes: Null<Array<Span>> = writesByName[c.name];
 			if (writes != null && reassignedInScope(writes, c.scope)) continue;
-			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[c.span.from];
+			final declType: Null<String> = (declaredTypes == null ? null : declaredTypes[c.span.from]) ?? c.constructed;
 			if (RefactorSupport.abstractMethodMayMutate(source, c.name, declType, c.span, index, abstractKinds)) continue;
 			out.push({
 				file: file,
@@ -160,13 +163,13 @@ final class PreferFinal implements Check {
 	 * reification subtree (`opaqueKinds`) is skipped wholesale.
 	 */
 	private static function collect(
-		out: Array<{ name: String, span: Span, scope: Span }>, source: String, node: QueryNode, enclosingScope: Null<QueryNode>,
-		scopeKinds: Array<String>, opaqueKinds: Array<String>, mutableKinds: Array<String>, continuationKinds: Array<String>
+		out: Array<Candidate>, source: String, node: QueryNode, enclosingScope: Null<QueryNode>, scopeKinds: Array<String>,
+		opaqueKinds: Array<String>, mutableKinds: Array<String>, continuationKinds: Array<String>, newExprKind: Null<String>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
-		if (mutableKinds.contains(node.kind)) consider(out, source, node, enclosingScope, continuationKinds);
+		if (mutableKinds.contains(node.kind)) consider(out, source, node, enclosingScope, continuationKinds, newExprKind);
 		final childScope: Null<QueryNode> = scopeKinds.contains(node.kind) ? node : enclosingScope;
-		for (c in node.children) collect(out, source, c, childScope, scopeKinds, opaqueKinds, mutableKinds, continuationKinds);
+		for (c in node.children) collect(out, source, c, childScope, scopeKinds, opaqueKinds, mutableKinds, continuationKinds, newExprKind);
 	}
 
 	/**
@@ -176,18 +179,26 @@ final class PreferFinal implements Check {
 	 * attributed by position. Bails on any missing coordinate.
 	 */
 	private static function consider(
-		out: Array<{ name: String, span: Span, scope: Span }>, source: String, decl: QueryNode, enclosingScope: Null<QueryNode>,
-		continuationKinds: Array<String>
+		out: Array<Candidate>, source: String, decl: QueryNode, enclosingScope: Null<QueryNode>, continuationKinds: Array<String>,
+		newExprKind: Null<String>
 	): Void {
-		final name: Null<String> = decl.name;
-		final declSpan: Null<Span> = decl.span;
-		if (name == null || declSpan == null || enclosingScope == null) return;
-		final scopeSpan: Null<Span> = enclosingScope.span;
-		if (scopeSpan == null) return;
+		final declName: Null<String> = decl.name;
+		final span: Null<Span> = decl.span;
+		if (declName == null || span == null || enclosingScope == null) return;
+		final scope: Null<Span> = enclosingScope.span;
+		if (scope == null) return;
 		if (decl.children.length != 1) return;
 		if (RefactorSupport.isMultiDeclarator(decl, continuationKinds)) return;
+		final name: String = declName;
+		final declSpan: Span = span;
+		final scopeSpan: Span = scope;
 		if (!RefactorSupport.referencedInRange(source, name, scopeSpan.from, scopeSpan.to, [declSpan])) return;
-		out.push({ name: name, span: declSpan, scope: scopeSpan });
+		out.push({
+			name: name,
+			span: declSpan,
+			scope: scopeSpan,
+			constructed: constructedTypeName(decl, newExprKind)
+		});
 	}
 
 	/**
@@ -204,4 +215,33 @@ final class PreferFinal implements Check {
 		return writes.exists(w -> w.from >= scope.from && w.from < scope.to);
 	}
 
+
+	/**
+	 * The type a `var x = new T(…)` declaration constructs, or null for any other initializer.
+	 *
+	 * The abstract-mutability gate (`RefactorSupport.abstractMethodMayMutate`) needs the local's
+	 * TYPE, and it took it from the grammar's declared-type projection alone — which an
+	 * unannotated local has none of, so the gate silently answered "no risk" for exactly the
+	 * declarations a reader is most likely to write. `var t = new ThreadTasks(); t.add(f);` was
+	 * flagged `final` and stopped compiling (`Cannot modify abstract value of final local`), while
+	 * the same code with `var t: ThreadTasks = …` was correctly kept: the annotation was doing the
+	 * work, not the analysis.
+	 *
+	 * A `new` initializer states the type outright, so recovering it costs one node read. Every
+	 * other initializer shape still answers null and the gate behaves as before.
+	 */
+	private static function constructedTypeName(decl: QueryNode, newExprKind: Null<String>): Null<String> {
+		if (newExprKind == null || decl.children.length != 1) return null;
+		final init: QueryNode = decl.children[0];
+		return init.kind == newExprKind ? init.name : null;
+	}
+
 }
+
+/** One `var` candidate: its name, its declaration span, its enclosing scope, and the type it constructs (null unless the initializer is a `new`). */
+private typedef Candidate = {
+	final name: String;
+	final span: Span;
+	final scope: Span;
+	final constructed: Null<String>;
+};

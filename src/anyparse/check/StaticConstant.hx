@@ -258,6 +258,11 @@ final class StaticConstant implements Check implements DefaultOff {
 		if (ctx.reflected.contains(name)) return;
 		if (memberAccessedInFile(ctx.source, name, span)) return;
 		if (!RefactorSupport.privateMemberScanIsSound(ctx.source, ctx.index, name)) return;
+		// A macro-built type's fields are not what the declaration says — a builder that moves
+		// a field's assignment into the constructor makes a `static` promotion
+		// `Cannot access static field <name> from a class instance`, raised from inside the
+		// builder. See `SymbolIndex.transitivelyCarriesBuildMacro`.
+		if (ctx.index.transitivelyCarriesBuildMacro(owner)) return;
 		if (MemberWriteScan.accessGrantMayReference(owner, name, ctx.index, ctx.plugin)) return;
 		if (MemberWriteScan.subtypeMayReference(owner, name, ctx.index, ctx.plugin)) return;
 		ctx.out.push({

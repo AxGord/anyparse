@@ -142,6 +142,9 @@ final class PreferFinalPublicField implements Check {
 		// spelling the name. A whole-project veto here silenced the rule for every file in a
 		// scope holding one unparseable file.
 		if (index.skippedMayReference(name)) return;
+		// A macro-built type's fields are not what the declaration says — see
+		// `SymbolIndex.transitivelyCarriesBuildMacro`.
+		if (index.transitivelyCarriesBuildMacro(owner)) return;
 		final initialized: Bool = RefactorSupport.isInitializedNonPropertyField(source, field);
 		// The conditional-default arm: an initialized field (a `(default, null)` property
 		// included) whose only other write is one `if (p != null) x = p;` constructor

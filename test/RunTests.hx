@@ -681,6 +681,7 @@ import unit.UnusedCaseBinderConstantLanguageTest;
 import unit.HxCondDeclElseTrailingMetaTest;
 import unit.PreferNullCoalescingParensTest;
 import unit.PreferComprehensionFinalTest;
+import unit.FieldMutabilityMacroGateTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1122,6 +1123,7 @@ class RunTests {
 		addCase(new HxCondDeclElseTrailingMetaTest());
 		addCase(new PreferNullCoalescingParensTest());
 		addCase(new PreferComprehensionFinalTest());
+		addCase(new FieldMutabilityMacroGateTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
 		addCase(new LintFailOnCliTest());
