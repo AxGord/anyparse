@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -189,7 +190,7 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 					anchor: runStart >= 0 ? runStart : span.from,
 					name: CheckScan.typeDeclName(child, seams.nameHosts)
 				};
-			} else if (CheckScan.isLeadingAnnotation(child, seams.modifiers)) {
+			} else if (CheckScan.isLeadingAnnotation(child, seams.modifiers) || guardedAnnotationRun(child, seams)) {
 				final span: Null<Span> = child.span;
 				if (runStart < 0 && span != null) {
 					runStart = span.from;
@@ -201,6 +202,28 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 			runIndex = -1;
 		}
 		return found;
+	}
+
+	/**
+	 * Whether `node` is a conditional-compilation region holding NOTHING but leading
+	 * annotations — `#if !macro @:keep #end` above a type.
+	 *
+	 * Such a region is part of the type's leading run, exactly like a bare `@:keep`.
+	 * Counting it as an ordinary top-level declaration instead put it in the "first
+	 * import" slot, so a doc comment written directly above it looked stranded between
+	 * the package statement and the imports; the fix then moved that doc BELOW the
+	 * region, i.e. below the metadata — where the compiler no longer attaches it. The
+	 * doc silently stopped existing, and nothing reported it: not the writer, not the
+	 * linter, not the compiler.
+	 *
+	 * An EMPTY region is not one: it guards nothing, so treating it as annotation
+	 * trivia would let the rule reach past it.
+	 */
+	private static function guardedAnnotationRun(node: QueryNode, seams: Seams): Bool {
+		return node.kind == seams.conditionalKind && node.children.length != 0
+			&& node.children.foreach(child ->
+				CheckScan.isLeadingAnnotation(child, seams.modifiers) || seams.metaKinds.contains(child.kind)
+			);
 	}
 
 	/**
@@ -252,7 +275,9 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 			typeDecls: typeDecls,
 			nameHosts: (shape.visibilityContainerKinds ?? []).concat(shape.interfaceDeclKinds ?? []),
 			modifiers: modifiers,
-			packageKind: packageKind
+			packageKind: packageKind,
+			conditionalKind: shape.conditionalMemberKind,
+			metaKinds: plugin.metaShape().metaKinds
 		};
 	}
 
@@ -281,4 +306,15 @@ private typedef Seams = {
 	final nameHosts: Array<String>;
 	final modifiers: Array<String>;
 	final packageKind: String;
+
+	/** The conditional-compilation region kind, or null when the grammar has none — see `guardedAnnotationRun`. */
+	final conditionalKind: Null<String>;
+
+	/**
+	 * The annotation node kinds (`MetaShape.metaKinds`). `isLeadingAnnotation` reads a
+	 * node's NAME, which a metadata node only carries in some of its spellings —
+	 * `@:keep` inside a conditional region projects as a nameless wrapper — so the
+	 * kind set is what makes the guarded-run test see it.
+	 */
+	final metaKinds: Array<String>;
 };

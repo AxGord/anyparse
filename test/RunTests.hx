@@ -674,6 +674,7 @@ import unit.HxCondListSeparatorWriteTest;
 import unit.WhitespaceInvariantTest;
 import unit.ApqFmtVerifyCliTest;
 import unit.LintUsingSubmoduleExtensionTest;
+import unit.MisplacedTypeDocGuardedMetaTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1108,6 +1109,7 @@ class RunTests {
 		addCase(new LintSliceTest());
 		addCase(new LintModuleSecondaryTypeSliceTest());
 		addCase(new LintUsingSubmoduleExtensionTest());
+		addCase(new MisplacedTypeDocGuardedMetaTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
 		addCase(new LintFailOnCliTest());
