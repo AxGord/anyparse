@@ -353,7 +353,8 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		final seams: Seams = ctx.seams;
 		if (skipsSubtree(seams, node)) return;
 		final literal: Bool = seams.stringLiteralKinds.contains(node.kind);
-		if (literal || node.kind == seams.concatKind) {
+		final condRun: Bool = seams.condOperandRunKinds.contains(node.kind);
+		if (literal || condRun || node.kind == seams.concatKind) {
 			final planned: Null<PlannedFold> = plan(ctx, node);
 			if (planned != null) out.push(gate.blocks(calls, planned.groups) ? {
 				span: planned.span,
@@ -363,8 +364,16 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 				message: planned.message + MACRO_REFUSAL
 			} : planned);
 			// A literal is never descended into; a chain only when it did not plan as
-			// a whole, so an inner chain still gets its own chance.
-			if (literal || planned != null) return;
+			// a whole, so an inner chain still gets its own chance. A conditional
+			// operand run that DID plan keeps its post-directive tail in play — the
+			// plan covers the branch's operands and stops at the directive, so the
+			// tail is still a construct of its own, and it is the only child the fold
+			// did not consume.
+			if (literal || (planned != null && !condRun)) return;
+			if (planned != null) {
+				walk(out, ctx, gate, calls, node.children[node.children.length - 1], constantMembers);
+				return;
+			}
 		}
 		final callee: Null<CallRef> = calleeNameOf(seams, node);
 		if (callee != null) calls.push(callee);
@@ -642,8 +651,82 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			null
 		else if (node.kind == ctx.seams.concatKind)
 			chainDecomposition(ctx, node, span)
+		else if (ctx.seams.condOperandRunKinds.contains(node.kind))
+			condRunDecomposition(ctx, node, span)
 		else
 			literalDecomposition(ctx, node, span);
+	}
+
+	/**
+	 * An operand-run conditional-compilation splice (`RefShape.condOperandRunKinds`)
+	 * decomposes over the operands INSIDE its branch and nothing else.
+	 *
+	 * The region is a TOKEN splice, not a precedence tree: `A + #if c B + C + #end D`
+	 * is `A + B + C + D` with `c` on and `A + D` with it off, because the `+` before
+	 * `#if` lives outside the region and the one before `#end` lives inside it. Its
+	 * children project as the in-branch operands followed by ONE post-directive TAIL,
+	 * and the operators between them project as no node at all. So this arm reads the
+	 * two facts the projection does not carry straight out of the source, and refuses
+	 * whatever it cannot read:
+	 *
+	 *  - the LAST child is dropped. Merging it into the run would move its text inside
+	 *    the branch, and the build that does not define the condition would silently
+	 *    lose it. The corpus cannot catch that — it compiles with one flag state.
+	 *  - every GAP between two kept operands must be exactly the concatenation
+	 *    operator. `HxCondSpliceOpLit`-style regions also spell `&&`, `||`, `?` and
+	 *    `:`, and the same production carries a ternary; a comment in a gap fails the
+	 *    same test, which is why no separate comment gate is needed for the gaps.
+	 *  - the run is entered at its first string LITERAL and the operands before it are
+	 *    left alone — where `chainDecomposition` collapses them into one verbatim
+	 *    `${ … }` head, this arm cannot, because `+` is left-associative and the
+	 *    ARITHMETIC they belong to starts on the other side of the `#if`. Measured:
+	 *    `1 + #if c 2 + 'x' + #end 3` prints `3x3`, and folding the run's own head
+	 *    gives `1 + '${2}x' + 3` — `12x3`. From the first literal ON there is no such
+	 *    question: string concatenation is associative and an `Int` head to its left
+	 *    stringifies the same either way, whatever sits before the directive.
+	 *
+	 * The edit therefore spans first-literal-operand to last-kept-operand — strictly
+	 * inside the branch, never touching `#if`, the condition, `#end` or the tail. A run
+	 * left with ONE operand is no longer a candidate, so the fold is a fixed point.
+	 */
+	private static function condRunDecomposition(ctx: PlanContext, node: QueryNode, span: Span): Null<Decomposition> {
+		final children: Array<QueryNode> = node.children;
+		// Two in-branch operands plus the tail: fewer is nothing to merge.
+		if (children.length < 3) return null;
+		final kept: Array<QueryNode> = children.slice(0, children.length - 1);
+		var firstLiteral: Int = -1;
+		for (i in 0...kept.length) if (ctx.seams.stringLiteralKinds.contains(kept[i].kind)) {
+			firstLiteral = i;
+			break;
+		}
+		if (firstLiteral == -1) return null;
+		final operands: Array<QueryNode> = kept.slice(firstLiteral, kept.length);
+		if (operands.length < 2) return null;
+		final spans: Array<Span> = [];
+		for (operand in operands) {
+			final own: Null<Span> = operand.span;
+			if (own == null || chainHasComment(ctx.source, own.from, own.to)) return null;
+			spans.push(own);
+		}
+		// Against `GROUP_JOIN` on purpose: the render puts exactly that operator back between
+		// the groups it emits, so an operator it would not re-emit is one this arm must not
+		// consume. A comment in a gap fails the same test, its bytes not being the operator.
+		for (i in 0...spans.length - 1) if (ctx.source.substring(spans[i].to, spans[i + 1].from).trim() != GROUP_JOIN.trim()) return null;
+		final segments: Array<ConcatSegment> = [];
+		final current: Array<Int> = [];
+		for (operand in operands) {
+			if (!appendOperandSegments(ctx, operand, segments)) return null;
+			current.push(segments.length);
+		}
+		return {
+			segments: segments,
+			current: current,
+			span: span,
+			editSpan: new Span(spans[0].from, spans[spans.length - 1].to),
+			locked: [],
+			glue: [],
+			startsBare: false
+		};
 	}
 
 	/**
@@ -697,9 +780,9 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		final locked: Array<Int> = [];
 		final glue: Map<Int, String> = [];
 		if (firstLitIdx == 1) {
-			final head: Null<ConcatSegment> = expressionSegmentOf(ctx, operands[0]);
-			if (head == null) return null;
-			segments.push(head);
+			// Index 0 is not a literal (that is what `firstLitIdx == 1` says), so this takes
+			// the helper's expression path — the head is ONE segment either way.
+			if (!appendOperandSegments(ctx, operands[0], segments)) return null;
 			current.push(segments.length);
 		} else if (firstLitIdx > 1) {
 			final headEnd: Null<Span> = operands[firstLitIdx - 1].span;
@@ -712,16 +795,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		}
 		if (firstLitIdx >= 1) lockGapAfter(ctx.source, operands, firstLitIdx - 1, segments.length, locked, glue);
 		for (i in firstLitIdx ... operands.length) {
-			final operand: QueryNode = operands[i];
-			if (ctx.seams.stringLiteralKinds.contains(operand.kind)) {
-				final segs: Null<Array<ConcatSegment>> = ctx.seams.support.segmentsOf(operand, ctx.source);
-				if (segs == null) return null;
-				for (s in segs) segments.push(s);
-			} else {
-				final seg: Null<ConcatSegment> = expressionSegmentOf(ctx, operand);
-				if (seg == null) return null;
-				segments.push(seg);
-			}
+			if (!appendOperandSegments(ctx, operands[i], segments)) return null;
 			current.push(segments.length);
 			lockGapAfter(ctx.source, operands, i, segments.length, locked, glue);
 		}
@@ -808,21 +882,39 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		return operands;
 	}
 
-	/** One expression operand as a segment, with a `Std.string(x)` wrapper peeled off first (interpolation already converts). */
-	private static function expressionSegmentOf(ctx: PlanContext, node: QueryNode): Null<ConcatSegment> {
-		return ctx.seams.support.expressionSegment(unwrapStdString(ctx, node), ctx.source);
-	}
-
-	/** `Std.string(arg)`'s argument, or `node` unchanged — purely structural, matched on the receiver / member NAMES. */
-	private static function unwrapStdString(ctx: PlanContext, node: QueryNode): QueryNode {
+	/**
+	 * `node`'s segments appended to `segments`, or `false` when the seam refuses it —
+	 * the one place an operand becomes segments, shared by the `+` chain and the
+	 * conditional operand run so the two cannot drift apart.
+	 *
+	 * A LITERAL operand contributes its own fragments; anything else contributes ONE
+	 * expression segment, with a `Std.string(x)` wrapper peeled off first — interpolation
+	 * already converts, so the wrapper is noise inside a group. The peel is purely
+	 * STRUCTURAL, matched on the receiver / member NAMES: resolving the call target
+	 * exactly needs the whole import / static-extension picture, and a same-named member
+	 * of some other type renders identically inside `${ … }` anyway.
+	 */
+	private static function appendOperandSegments(ctx: PlanContext, node: QueryNode, segments: Array<ConcatSegment>): Bool {
+		if (ctx.seams.stringLiteralKinds.contains(node.kind)) {
+			final segs: Null<Array<ConcatSegment>> = ctx.seams.support.segmentsOf(node, ctx.source);
+			if (segs == null) return false;
+			for (seg in segs) segments.push(seg);
+			return true;
+		}
 		final callKind: Null<String> = ctx.seams.callKind;
 		final fieldAccessKind: Null<String> = ctx.seams.fieldAccessKind;
-		if (callKind == null || fieldAccessKind == null) return node;
-		if (node.kind != callKind || node.children.length != 2) return node;
-		final callee: QueryNode = node.children[0];
-		if (callee.kind != fieldAccessKind || callee.name != 'string' || callee.children.length != 1) return node;
-		final receiver: QueryNode = callee.children[0];
-		return receiver.kind != ctx.seams.identKind || receiver.name != 'Std' ? node : node.children[1];
+		var operand: QueryNode = node;
+		if (callKind != null && fieldAccessKind != null && node.kind == callKind && node.children.length == 2) {
+			final callee: QueryNode = node.children[0];
+			if (callee.kind == fieldAccessKind && callee.name == 'string' && callee.children.length == 1) {
+				final receiver: QueryNode = callee.children[0];
+				if (receiver.kind == ctx.seams.identKind && receiver.name == 'Std') operand = node.children[1];
+			}
+		}
+		final seg: Null<ConcatSegment> = ctx.seams.support.expressionSegment(operand, ctx.source);
+		if (seg == null) return false;
+		segments.push(seg);
+		return true;
 	}
 
 	/**
@@ -1184,6 +1276,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		return {
 			support: support,
 			concatKind: concatKind,
+			condOperandRunKinds: shape.condOperandRunKinds ?? [],
 			stringLiteralKinds: stringLiteralKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			metaKinds: plugin.metaShape().metaKinds,
@@ -1198,7 +1291,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			inlineKind: shape.inlineModifierKind,
 			modifierKinds: CheckScan.modifierKinds(shape),
 			functionKinds: shape.functionKinds ?? [],
-			candidateKinds: [concatKind].concat(stringLiteralKinds)
+			candidateKinds: [concatKind].concat(stringLiteralKinds).concat(shape.condOperandRunKinds ?? [])
 		};
 	}
 
@@ -1440,6 +1533,10 @@ private typedef CallRef = {
 private typedef Seams = {
 	final support: StringFoldSupport;
 	final concatKind: String;
+
+	/** The operand-run conditional-splice kinds (`RefShape.condOperandRunKinds`). */
+	final condOperandRunKinds: Array<String>;
+
 	final stringLiteralKinds: Array<String>;
 	final opaqueKinds: Array<String>;
 	final metaKinds: Array<String>;

@@ -1353,6 +1353,25 @@ typedef RefShape = {
 	@:optional var opaqueCondRegionKinds: Array<String>;
 
 	/**
+	 * Node kinds of an OPERAND-RUN conditional-compilation splice — a region whose
+	 * fragment is a run of complete operands each followed by an operator, and whose
+	 * children project as those operands followed by ONE post-directive TAIL operand
+	 * (Haxe `CondSpliceOpExpr`: `#if <cond> (<operand> <op>)* #end <tail>`).
+	 *
+	 * The distinction the name carries is the whole reason a consumer needs it: every
+	 * child but the LAST is inside the conditional branch, the last is outside it, and
+	 * the operators BETWEEN them are not nodes at all — the region is a token splice,
+	 * not a precedence tree. A rewriter that merges two operands across that last seam
+	 * moves text into a branch that one of the two builds does not compile, and the
+	 * corpus never catches it because it is built with one flag state.
+	 *
+	 * Read by `fold-adjacent-string-literals`, which folds only among the IN-BRANCH
+	 * operands. Optional; unset leaves such a region as one opaque operand of whatever
+	 * encloses it, which is what every consumer did before the kind existed.
+	 */
+	@:optional var condOperandRunKinds: Array<String>;
+
+	/**
 	 * Type names that are provably non-nullable on static targets — Haxe value
 	 * types (`Int` / `Float` / `Bool` / `UInt`) whose `!= null` comparison is
 	 * constant regardless of null-safety. The `unnecessary-null-check` check
