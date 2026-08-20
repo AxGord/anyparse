@@ -1,10 +1,10 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import anyparse.grammar.haxe.HxStatement;
 
 /**
  * A SELF-TERMINATING `#if … ; #end` region that is the value of a `return`, spelled over SEVERAL
@@ -22,7 +22,7 @@ import anyparse.runtime.Span;
  * identifier INSIDE the function above it — a silent visibility change once a reorder moved the
  * two apart (see `MemberOrderModifierSpanSliceTest` for the one-line case).
  */
-class HxCondSpliceReturnBlockSliceTest extends Test {
+class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 
 	/** The fork fixture's input: `return` alone on its line, the region one level deeper. */
 	private static final BROKEN_SOURCE: String = 'class Main {\n\tstatic inline function get_onMobile():Bool\n\t{\n\t\treturn\n'
@@ -49,6 +49,40 @@ class HxCondSpliceReturnBlockSliceTest extends Test {
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
 	}
 
+	/**
+	 * A following STATEMENT is a sibling, not the region's tail. This is the arm that actually runs
+	 * in a block body: `HxStatement.ReturnStmt` sends the region down the atom dispatch, where
+	 * `CondSpliceExpr`'s mandatory `tail` was happy to be the next statement — measured, `trace(3);`
+	 * parsed as that tail. `CondSpliceReturnStmt` ends the region at its own `#end`.
+	 *
+	 * `parseBody` is the PLAIN parser on purpose: the first cut of this ctor parsed under trivia and
+	 * failed here, because the block Star asks `stmtNoSemi` whether the previous statement needs a
+	 * `;` before the next one and a ctor missing from that set stops the walk — a whole-file
+	 * skip-parse in plain mode while the trivia pipeline said yes.
+	 */
+	public function testFollowingStatementIsNotSwallowed(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f() { return #if js 1; #else 2; #end\ntrace(3); } }');
+		Assert.equals(2, body.length);
+		switch body[0] {
+			case CondSpliceReturnStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected CondSpliceReturnStmt, got ${body[0]}');
+		}
+	}
+
+	/** And the pair round-trips: no `;` invented after the `#end`, no statement moved. */
+	public function testRegionAndFollowingStatementRoundTripByteExact(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\treturn #if js 1; #else 2; #end\n\t\ttrace(3);\n\t}\n}';
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+	}
+
+	/** A `;` the source DID write after the `#end` survives as its own empty statement. */
+	public function testWrittenSemicolonAfterTheRegionSurvives(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\treturn #if js 1; #else 2; #end;\n\t\ttrace(3);\n\t}\n}';
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+	}
+
 	/** The member after the region is the container's own child, not a node inside the function above it. */
 	public function testNextMemberIsNotSwallowed(): Void {
 		final src: String = 'class C {\n\n\tprivate static inline function get_touchScreen(): Bool return #if ios\n\t\ttrue;\n\t#else\n\t\tfalse;\n\t#end\n\n'
@@ -60,6 +94,11 @@ class HxCondSpliceReturnBlockSliceTest extends Test {
 			for (child in container.children) if (covers(child, at)) child.kind
 		];
 		Assert.equals('Public', owners.join(','), 'the modifier is its own sibling slot: $owners');
+	}
+
+	/** The statements of the single function in `source`, parsed by the PLAIN pipeline. */
+	private function parseBody(source: String): Array<HxStatement> {
+		return fnBodyStmts(parseSingleFnDecl(source));
 	}
 
 	/** Whether `node`'s own span contains the offset `at`. */

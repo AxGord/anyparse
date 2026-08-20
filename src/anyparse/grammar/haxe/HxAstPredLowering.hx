@@ -149,6 +149,11 @@ final class HxAstPredLowering extends AstPredLowering {
 		'LocalInlineFnStmt',
 		'UntypedBlockStmt',
 		'CondSpliceBlockOpen',
+		// A self-terminating `#if … ; #end` region closes the `return` at its own
+		// `#end`, so the next statement needs no `;` between them — without this the
+		// BlockBody Star refused to continue and the whole file skip-parsed in PLAIN
+		// mode while the trivia parser accepted it (`CondSpliceReturnStmt`).
+		'CondSpliceReturnStmt',
 		'CondSpliceSwitchOpen',
 		'VoidReturnStmt',
 		'ThrowStmt',

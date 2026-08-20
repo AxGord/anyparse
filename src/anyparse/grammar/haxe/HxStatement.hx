@@ -345,6 +345,31 @@ enum HxStatement {
 		captureKwNewline)
 	FinalStmt(decl: HxVarDecl);
 
+	/**
+	 * `return` whose whole value is a SELF-TERMINATING token-splice `#if`
+	 * region, at STATEMENT level — the sibling of
+	 * `HxExpr.CondSpliceReturnExpr`, and the arm that actually runs whenever
+	 * another statement FOLLOWS the region.
+	 *
+	 * Without it the expression ctor only won when nothing followed:
+	 * `ReturnStmt(value: HxExpr)` sends the region down the atom dispatch,
+	 * where `HxExpr.CondSpliceExpr`'s MANDATORY `tail` is happy to be the
+	 * NEXT STATEMENT — measured, `return #if js 1; #else 2; #end` followed by
+	 * `trace(3);` parsed as `ReturnStmt(CondSpliceExpr(Call trace 3))`, the
+	 * following statement swallowed INTO the return. With a `}` right after
+	 * the region the tail failed, the Star backtracked and the same source
+	 * parsed correctly, which is exactly the tell this defect class shows:
+	 * "it parses right when it is the LAST thing in its scope".
+	 *
+	 * Dispatched BEFORE `ReturnStmt` for the same reason
+	 * `CondSpliceReturnExpr` precedes `ReturnExpr`. Keying on `return` keeps
+	 * it away from the two statement-position regions a general raw ctor
+	 * claimed (a guarded `case` region, a `@:meta`-prefixed statement) —
+	 * neither opens with `return`.
+	 */
+	@:kw('return')
+	CondSpliceReturnStmt(inner: HxCondSpliceReturnRegion);
+
 	@:kw('return') @:trailOpt(';')
 	@:fmt(bodyPolicy('returnBody'),
 		bodyPolicySingleLine(
