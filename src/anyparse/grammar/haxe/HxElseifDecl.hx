@@ -51,4 +51,5 @@ typedef HxElseifDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var body: Array<HxTopLevelDecl>;
+	@:trivia @:tryparse @:fmt(padTrailing) var trailingMeta: Array<HxMetadata>;
 };

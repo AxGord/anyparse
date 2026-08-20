@@ -97,9 +97,20 @@ package anyparse.grammar.haxe;
  * re-parse one: the emitted form round-trips through the parser
  * unchanged.
  *
- * `#else` / `#elseif` branches have no equivalent slot. No observed
- * source dangles metadata off an alternative branch, and each one would
- * need its own Star.
+ * `#else` and `#elseif` now carry the same slot (`elseTrailingMeta` here,
+ * `trailingMeta` on `HxElseifDecl`). The claim they did not need one — "no observed
+ * source dangles metadata off an alternative branch" — was only true until one did:
+ * `#if macro <imports> #else @:autoBuild(...) #end interface X {}` is valid Haxe that
+ * this grammar rejected outright, because the `#if` branch committed the region to
+ * this production and the alternative branch then had nowhere to put the metadata.
+ * It is also what `cond-region-merge` proposes for the two-region form, so the check
+ * had a finding it could never apply.
+ *
+ * LAYOUT WART on one shape: when the alternative branch holds ONLY metadata (an empty
+ * body Star), the close renders as `@:keep #end` on one line rather than on its own.
+ * The result is valid, re-parses, and is a fixed point, so the canonical gate holds —
+ * but `padTrailing` on the meta Star takes its newline signal from a non-empty
+ * preceding body, and there is none here.
  *
  * `@:optional @:kw('#else') @:tryparse var elseBody:Null<Array<…>>`
  * uses the kw-led optional Star path (Lowering's
@@ -153,4 +164,5 @@ typedef HxConditionalDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var elseBody: Null<Array<HxTopLevelDecl>>;
+	@:trivia @:tryparse @:fmt(padTrailing) var elseTrailingMeta: Array<HxMetadata>;
 };
