@@ -279,6 +279,7 @@ import unit.SetDocSliceTest;
 import unit.SetModifierSliceTest;
 import unit.SetCommentSliceTest;
 import unit.RewriteSliceTest;
+import unit.ParenGuardSliceTest;
 import unit.CommentRewriteSliceTest;
 import unit.ApqSourceSelectTest;
 import unit.NamingCheckTest;
@@ -1314,6 +1315,7 @@ class RunTests {
 		addCase(new SetDocSliceTest());
 		addCase(new SetCommentSliceTest());
 		addCase(new RewriteSliceTest());
+		addCase(new ParenGuardSliceTest());
 		addCase(new CommentRewriteSliceTest());
 		addCase(new SetModifierSliceTest());
 		addCase(new MoveSymbolSliceTest());

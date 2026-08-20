@@ -7863,6 +7863,11 @@ final class Cli {
 		sysPrint("metavariables; <replacement> is a template where $x / ${x} expand to the\n");
 		sysPrint("captured source and ${x+N} / ${x-N} shift an integer-literal metavar by N.\n");
 		sysPrint('\n');
+		sysPrint('A template reads as a TREE, so it is spliced as one: a capture whose new\n');
+		sysPrint('surroundings would re-read it, and a replacement the matched context would,\n');
+		sysPrint('get the parentheses that keep the parse — and only where dropping them\n');
+		sysPrint("would change it, so `$x * 2` over `v` stays `v * 2`.\n");
+		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --reformat  Canonicalise the whole file (allow a non-canonical input)\n');
 		sysPrint('  --write     Overwrite <file> in place (default: emit to stdout)\n');
