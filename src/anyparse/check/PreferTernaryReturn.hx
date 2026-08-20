@@ -103,6 +103,11 @@ final class PreferTernaryReturn implements Check {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	/** `TypeResolver.childReturnTypeSource` with this check's seams unpacked from `Seams`. */
+	private static inline function childReturnType(node: QueryNode, source: String, s: Seams, retType: Null<String>): Null<String> {
+		return TypeResolver.childReturnTypeSource(node, source, retType, s.functionKinds, s.lambdaKinds, s.bodyKinds, s.paramKinds);
+	}
+
 	/**
 	 * Walk `node`; at each block flag the direct-child `if`/`return` pairs. `retType` is the
 	 * source of the nearest enclosing function's explicit return type (null when it declares
@@ -197,11 +202,6 @@ final class PreferTernaryReturn implements Check {
 				elseValue: elseValue,
 				nextReturn: next
 			};
-	}
-
-	/** `TypeResolver.childReturnTypeSource` with this check's seams unpacked from `Seams`. */
-	private static inline function childReturnType(node: QueryNode, source: String, s: Seams, retType: Null<String>): Null<String> {
-		return TypeResolver.childReturnTypeSource(node, source, retType, s.functionKinds, s.lambdaKinds, s.bodyKinds, s.paramKinds);
 	}
 
 	/**
@@ -328,7 +328,6 @@ final class PreferTernaryReturn implements Check {
 		}
 		return { hoisted: out.toString(), branchTrailing: branchTrailing };
 	}
-
 
 	/** Resolve the if / return seam kinds plus control-flow support, or null when any required piece is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
