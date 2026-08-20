@@ -855,6 +855,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			conditionalIfKeyword: '#if',
 			conditionalElseKeywords: ['#else', '#elseif'],
 			conditionalEndKeyword: '#end',
+			condDeclPrefixKeywordKinds: ['EnumKw', 'AbstractKw', 'FinalKw'],
 			opaqueCondRegionKinds: [
 				'CondSpliceExpr',
 				'CondSpliceOpExpr',

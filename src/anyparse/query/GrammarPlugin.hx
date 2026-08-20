@@ -1350,6 +1350,26 @@ typedef RefShape = {
 	@:optional var conditionalEndKeyword: String;
 
 	/**
+	 * The DECLARATION-STARTING keyword kinds a conditional-compilation region may contribute
+	 * to the declaration that FOLLOWS its `#end` (Haxe `EnumKw` / `AbstractKw` / `FinalKw`,
+	 * the `@:kw` arms of `HxCondDeclPrefix`). They are not ordinary modifier siblings because
+	 * each can itself introduce a type — `enum E {}`, `abstract A(Int) {}`, `final class C {}`
+	 * — so the grammar captures them as bare tokens inside the region rather than letting the
+	 * parser commit to a whole declaration there.
+	 *
+	 * A consumer deciding whether a region belongs to the NEXT declaration's leading run needs
+	 * them beside the annotation and modifier kinds. `#if (haxe_ver >= 4.2) enum #else @:enum
+	 * #end` carries no metadata at all in its true branch, so an annotation-only test reads the
+	 * region as a declaration of its own: `misplaced-type-doc` then reported the type's doc as
+	 * stranded in the import gap and hoisted the region ABOVE it, inverting the accepted
+	 * doc → metadata and modifiers → type order.
+	 *
+	 * Optional; unset leaves such a region indistinguishable from a sibling declaration, which
+	 * is correct for a grammar whose conditional regions cannot carry one.
+	 */
+	@:optional var condDeclPrefixKeywordKinds: Array<String>;
+
+	/**
 	 * Node kinds that SWALLOW a conditional-compilation region as a RAW byte capture —
 	 * the fallback ctors a grammar reaches when the region is not a balanced subtree
 	 * (Haxe `CondSpliceExpr` / `CondSpliceTail` / `CondSpliceStmt` / …, each holding an

@@ -190,7 +190,7 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 					anchor: runStart >= 0 ? runStart : span.from,
 					name: CheckScan.typeDeclName(child, seams.nameHosts)
 				};
-			} else if (CheckScan.isLeadingAnnotation(child, seams.modifiers) || guardedAnnotationRun(child, seams)) {
+			} else if (CheckScan.isLeadingAnnotation(child, seams.modifiers) || guardedPrefixRun(child, seams)) {
 				final span: Null<Span> = child.span;
 				if (runStart < 0 && span != null) {
 					runStart = span.from;
@@ -205,8 +205,9 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Whether `node` is a conditional-compilation region holding NOTHING but leading
-	 * annotations — `#if !macro @:keep #end` above a type.
+	 * Whether `node` is a conditional-compilation region holding NOTHING but declaration
+	 * PREFIX material — annotations (`#if !macro @:keep #end`), modifiers, and the bare
+	 * declaration-starting keywords (`#if (haxe_ver >= 4.2) enum #else @:enum #end`).
 	 *
 	 * Such a region is part of the type's leading run, exactly like a bare `@:keep`.
 	 * Counting it as an ordinary top-level declaration instead put it in the "first
@@ -216,13 +217,26 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 	 * doc silently stopped existing, and nothing reported it: not the writer, not the
 	 * linter, not the compiler.
 	 *
+	 * The KEYWORD half is the same defect one grammar seam over. `enum` / `abstract` /
+	 * `final` can each introduce a type of their own, so the grammar captures them as bare
+	 * tokens (`seams.declPrefixKeywords`) rather than as modifier siblings — and an
+	 * annotation-only test saw a region with a `haxe_ver` gate around `enum` as a second
+	 * header declaration. The doc stayed attached there (`-D dox -xml` reports `haxe_doc`
+	 * either way), so the damage was a wrong normalisation rather than a dead doc: `--fix`
+	 * hoisted the region ABOVE the doc, inverting the tree's accepted order of doc, then
+	 * metadata and modifiers, then the type.
+	 *
 	 * An EMPTY region is not one: it guards nothing, so treating it as annotation
-	 * trivia would let the rule reach past it.
+	 * trivia would let the rule reach past it. A region holding a real declaration
+	 * (`#if x class B {} #end`) is not one either — that IS a sibling declaration, and
+	 * the whitelist is what keeps the two apart.
 	 */
-	private static function guardedAnnotationRun(node: QueryNode, seams: Seams): Bool {
+	private static function guardedPrefixRun(node: QueryNode, seams: Seams): Bool {
 		return node.kind == seams.conditionalKind && node.children.length != 0
-			&& node.children.foreach(child ->
-				CheckScan.isLeadingAnnotation(child, seams.modifiers) || seams.metaKinds.contains(child.kind)
+			&& node.children.foreach(
+				child ->
+					CheckScan.isLeadingAnnotation(child, seams.modifiers) || seams.metaKinds.contains(child.kind)
+					|| seams.declPrefixKeywords.contains(child.kind)
 			);
 	}
 
@@ -277,7 +291,8 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 			modifiers: modifiers,
 			packageKind: packageKind,
 			conditionalKind: shape.conditionalMemberKind,
-			metaKinds: plugin.metaShape().metaKinds
+			metaKinds: plugin.metaShape().metaKinds,
+			declPrefixKeywords: shape.condDeclPrefixKeywordKinds ?? []
 		};
 	}
 
@@ -307,7 +322,7 @@ private typedef Seams = {
 	final modifiers: Array<String>;
 	final packageKind: String;
 
-	/** The conditional-compilation region kind, or null when the grammar has none — see `guardedAnnotationRun`. */
+	/** The conditional-compilation region kind, or null when the grammar has none — see `guardedPrefixRun`. */
 	final conditionalKind: Null<String>;
 
 	/**
@@ -317,4 +332,13 @@ private typedef Seams = {
 	 * kind set is what makes the guarded-run test see it.
 	 */
 	final metaKinds: Array<String>;
+
+	/**
+	 * The bare declaration-starting keyword kinds a conditional region may contribute to the
+	 * declaration after it (`RefShape.condDeclPrefixKeywordKinds`: Haxe `EnumKw` / `AbstractKw`
+	 * / `FinalKw`). They carry neither a name nor a modifier kind, so `guardedPrefixRun` reads
+	 * them off this set — without it a `#if (haxe_ver >= 4.2) enum #else @:enum #end` region
+	 * reads as a second header declaration. Empty when the grammar leaves the seam unset.
+	 */
+	final declPrefixKeywords: Array<String>;
 };
