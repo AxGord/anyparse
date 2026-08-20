@@ -9236,6 +9236,18 @@ class WriterLowering {
 		trailText: Null<String>, writeCall: Expr
 	): Void {
 		final condKnobAccess: Expr = optFieldAccess(condWrapArgs[0]);
+		// ω-before-trail: a `@:fmt(condWrap)` field's close paren is emitted by
+		// `WrapList.emitCondition`, not by `emitMandatoryRefTrail`, so a comment
+		// captured just before it has to ride INSIDE the condition Doc or it
+		// lands after the `)`. Appending to `writeCall` is what keeps
+		// `if (cond /* c *\/)` where the author wrote it.
+		final condBeforeTrail: Null<Expr> = beforeTrailSlotAccess(child, macro value.$fieldName, false, trailText, typePath);
+		final writeCall: Expr = condBeforeTrail == null
+			? writeCall
+			: macro {
+				final _cbt: Null<String> = $condBeforeTrail;
+				_cbt == null ? $writeCall : _dc([$writeCall, trailingCommentDocVerbatim(_cbt, opt)]);
+			};
 		// ω-condition-parens (Stage C): `@:fmt(condParensInside(
 		// '<insideOpenKnob>', '<insideCloseKnob>'))` on the
 		// condWrap cond field pads the FLAT `( cond )` shape via
@@ -10629,8 +10641,23 @@ class WriterLowering {
 	 */
 	private function emitMandatoryRefTrail(
 		child: ShapeNode, parts: Array<Expr>, isOptional: Bool, trailText: Null<String>, trailOptText: Null<String>, hasCondWrap: Bool,
-		hasCondWrapEnd: Bool, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, fieldAccess: Expr
+		hasCondWrapEnd: Bool, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, fieldAccess: Expr, typePath: String
 	): Void {
+		// ω-before-trail: a BLOCK comment the source wrote between this field's
+		// last token and the trail literal (`switch (subject /* c *\/)`). Emitted
+		// BEFORE the trail dispatch below so it also survives the
+		// `switchSubjectParensStrip` arm, which drops the close literal entirely.
+		// A missing slot / null value contributes nothing. A `@:fmt(condWrap)`
+		// field does not emit its trail here at all — `emitCondWrapSingleRef`
+		// owns both parens, so it appends the comment to the condition Doc
+		// itself; emitting here too would print it twice.
+		final beforeTrailAccess: Null<Expr> = hasCondWrap || hasCondWrapEnd
+			? null
+			: beforeTrailSlotAccess(child, fieldAccess, isOptional, trailText, typePath);
+		if (beforeTrailAccess != null) parts.push(macro {
+			final _bt: Null<String> = $beforeTrailAccess;
+			_bt == null ? _de() : trailingCommentDocVerbatim(_bt, opt);
+		});
 		// ω-condition-parens (Stage C): `@:fmt(catchParensInsideClose)` on
 		// a mandatory-Ref `@:trail(')')` field routes the close literal
 		// through `opt.catchParensInsideClose` (`Before`/`Both` → inner
@@ -10673,6 +10700,23 @@ class WriterLowering {
 			&& !child.fmtHasFlag('dropSingleStmtBraces')
 		)
 			parts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
+	}
+
+	/**
+	 * The `value.<field>BeforeTrail` access for a mandatory Ref carrying `@:trail`
+	 * in a trivia-bearing rule, or null when the field has no such slot. Gate and
+	 * host set mirror `Lowering.hasBeforeTrailSlotField` /
+	 * `TriviaTypeSynth.isBeforeTrailRef` — the three must agree or the generated
+	 * writer reads a field the parser never pushed.
+	 */
+	private function beforeTrailSlotAccess(
+		child: ShapeNode, fieldAccess: Expr, isOptional: Bool, trailText: Null<String>, typePath: String
+	): Null<Expr> {
+		if (trailText == null || isOptional || child.kind != Ref || !_ctx.trivia || !isTriviaBearing(typePath)) return null;
+		return switch fieldAccess.expr {
+			case EField(base, name): { expr: EField(base, name + TriviaTypeSynth.BEFORE_TRAIL_SUFFIX), pos: fieldAccess.pos };
+			case _: null;
+		};
 	}
 
 	/**
@@ -11063,7 +11107,7 @@ class WriterLowering {
 	): { prevBodyField: Null<PrevBodyInfo>, prevPadTrailing: Null<Expr>, prevTrailFieldName: Null<String> } {
 		emitMandatoryRefTrail(
 			child, parts, isOptional, trailText, trailOptText, hasCondWrap, hasCondWrapEnd, hasStructFieldTrailOptSlot,
-			structTrailOptAccess, fieldAccess
+			structTrailOptAccess, fieldAccess, typePath
 		);
 		// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory Ref
 		// always fires, so push a trailing space unconditionally and set the

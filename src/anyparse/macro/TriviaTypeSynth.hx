@@ -116,6 +116,25 @@ class TriviaTypeSynth {
 	public static inline final AFTER_TRAIL_SUFFIX: String = 'AfterTrail';
 
 	/**
+	 * ω-before-trail — a BLOCK comment captured in the gap between a mandatory Ref
+	 * field's last token and its own `@:trail(LIT)` literal: the `/* c *\/` in
+	 * `switch (subject /* c *\/)`, `if (cond /* c *\/)`, `(expr /* c *\/)`.
+	 *
+	 * That gap had no slot at all, so the comment was consumed as whitespace and
+	 * the writer re-emitted the construct without it — `writeRoundTrip` then
+	 * refused the whole file, which is what blocked `apq fmt` and every
+	 * canonicalising op on it. The writer re-emits the slot immediately before the
+	 * trail literal.
+	 *
+	 * LINE comments are deliberately NOT captured here (`collectTrailingBlock`
+	 * only attempts the format's non-line-terminated patterns): a `//` runs to the
+	 * newline, so emitting one before the close literal would comment the literal
+	 * out. Such a comment stays exactly as it was — skipped, and reported by the
+	 * comment-loss guard.
+	 */
+	public static inline final BEFORE_TRAIL_SUFFIX: String = 'BeforeTrail';
+
+	/**
 	 * ω-issue-48-v2 — source-shape slot synthesised on paired Seq types
 	 * alongside bare non-first Ref fields (no `@:optional`, no `@:kw`, no
 	 * `@:lead`). Records whether the source had a newline in the gap
@@ -790,6 +809,15 @@ class TriviaTypeSynth {
 		return node.annotations[AnnotationKeys.BASE_OPTIONAL] == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
 	}
 
+	/** The `<field>BeforeTrail:Null<String>` slot — twin of `buildAfterTrailSlot`, on the other side of the trail literal. */
+	private static inline function buildBeforeTrailSlot(child: ShapeNode, pos: Position): Field {
+		return buildNullStringSlot(child, pos, BEFORE_TRAIL_SUFFIX);
+	}
+
+	private static inline function buildAfterTrailSlot(child: ShapeNode, pos: Position): Field {
+		return buildNullStringSlot(child, pos, AFTER_TRAIL_SUFFIX);
+	}
+
 	/**
 	 * ω-paired-converters (Phase A1) — emit a `Converters` class with
 	 * `pairedToRaw_<T>` static helpers for every paired type in the
@@ -1052,25 +1080,7 @@ class TriviaTypeSynth {
 				entries.push({ field: fieldName + BEFORE_KW_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
 				entries.push({ field: fieldName + BEFORE_KW_TRAILING_SUFFIX, expr: macro (null: Null<String>) });
 			}
-			if (isTriviaStarField(child)) {
-				entries.push({ field: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, expr: macro false });
-				// ω-keep-fnsig-newline: sibling default for the close-newline
-				// slot (raw→paired upcast). Mirrors TRAILING_BLANK_BEFORE_SUFFIX.
-				entries.push({ field: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro false });
-				entries.push({ field: fieldName + TRAILING_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
-				if (child.readMetaString(':trail') != null)
-					entries.push({ field: fieldName + TRAILING_CLOSE_SUFFIX, expr: macro (null: Null<String>) });
-				if (child.readMetaString(':lead') != null && !child.hasMeta(':tryparse'))
-					entries.push({ field: fieldName + TRAILING_OPEN_SUFFIX, expr: macro (null: Null<String>) });
-				if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody'))
-					entries.push({ field: fieldName + TRAILING_BLANK_AFTER_SUFFIX, expr: macro false });
-				// ω-blockended-trivia-meta-arity: hasMeta over
-				// readMetaString — gate must match `buildStarTrailingSlots`
-				// at L1002. Multi-arg `@:sep('text', tailRelax, blockEnded)`
-				// (3-arg form) lands on the same code path as 1-arg `@:sep(',')`.
-				if (child.hasMeta(':sep') && child.hasMeta(':trail'))
-					entries.push({ field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false });
-			}
+			if (isTriviaStarField(child)) pushRawToPairedStarSlots(entries, fieldName, child);
 			// ω-condcomp-body-leading-sep: trivia-independent SepBefore
 			// default for raw→paired upcasts. Sibling of the
 			// gate in `buildTypeDefinition`.
@@ -1084,6 +1094,7 @@ class TriviaTypeSynth {
 			if (isBareNonFirstRef(child, origNode))
 				entries.push({ field: fieldName + BEFORE_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
 			if (isTrailRef(child)) entries.push({ field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
+			if (isBeforeTrailRef(child)) entries.push({ field: fieldName + BEFORE_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
 			if (isPadTrailingTerminalRef(child)) entries.push({ field: fieldName + NEWLINE_AFTER_SUFFIX, expr: macro false });
 			// ω-condition-wrap-keep: raw→paired upcast default for the
 			// `<field>CondOpenNewline:Bool` slot. preWrite plugin rewrites
@@ -1105,6 +1116,32 @@ class TriviaTypeSynth {
 		}
 		final structLit: Expr = { expr: EObjectDecl([for (e in entries) { field: e.field, expr: e.expr }]), pos: pos };
 		return macro return $structLit;
+	}
+
+	/**
+	 * The raw→paired upcast defaults for ONE trivia Star field's trailing slots.
+	 * Extracted from `buildRawToPairedSeqBody` so that function stays under the
+	 * complexity gate; the gates here must keep matching `buildStarTrailingSlots`.
+	 */
+	private static function pushRawToPairedStarSlots(
+		entries: Array<{ field: String, expr: Expr }>, fieldName: String, child: ShapeNode
+	): Void {
+		entries.push({ field: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, expr: macro false });
+		// ω-keep-fnsig-newline: sibling default for the close-newline
+		// slot (raw→paired upcast). Mirrors TRAILING_BLANK_BEFORE_SUFFIX.
+		entries.push({ field: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro false });
+		entries.push({ field: fieldName + TRAILING_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
+		if (child.readMetaString(':trail') != null)
+			entries.push({ field: fieldName + TRAILING_CLOSE_SUFFIX, expr: macro (null: Null<String>) });
+		if (child.readMetaString(':lead') != null && !child.hasMeta(':tryparse'))
+			entries.push({ field: fieldName + TRAILING_OPEN_SUFFIX, expr: macro (null: Null<String>) });
+		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody'))
+			entries.push({ field: fieldName + TRAILING_BLANK_AFTER_SUFFIX, expr: macro false });
+		// ω-blockended-trivia-meta-arity: hasMeta over
+		// readMetaString — gate must match `buildStarTrailingSlots`
+		// at L1002. Multi-arg `@:sep('text', tailRelax, blockEnded)`
+		// (3-arg form) lands on the same code path as 1-arg `@:sep(',')`.
+		if (child.hasMeta(':sep') && child.hasMeta(':trail')) entries.push({ field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false });
 	}
 
 	private static function buildRawToPairedAltBody(origName: String, origNode: ShapeNode, synthPack: Array<String>, pos: Position): Expr {
@@ -1321,6 +1358,10 @@ class TriviaTypeSynth {
 					// bodyPolicy sibling synthesise the slot harmlessly and
 					// can opt in later.
 					if (isTrailRef(child)) fields.push(buildAfterTrailSlot(child, pos));
+					// ω-before-trail: the twin slot on the OTHER side of the same
+					// literal — a block comment sitting between the field's last
+					// token and its `@:trail` close. See BEFORE_TRAIL_SUFFIX.
+					if (isBeforeTrailRef(child)) fields.push(buildBeforeTrailSlot(child, pos));
 					// ω-cond-comp-expr-multiline: bare Ref fields opted in via
 					// `@:fmt(captureSourceNewlineAfter)` grow a `NewlineAfter:Bool`
 					// slot capturing whether the source had a newline AFTER
@@ -1486,12 +1527,23 @@ class TriviaTypeSynth {
 		return child.readMetaString(':trail') != null && (child.kind == Ref || child.fmtHasFlag('captureTrailComment'));
 	}
 
-	private static function buildAfterTrailSlot(child: ShapeNode, pos: Position): Field {
+	/**
+	 * Hosts of `<field>BeforeTrail`: a MANDATORY Ref carrying `@:trail`. The
+	 * optional-Ref path emits its trail from a different writer seat
+	 * (`emitOptionalRefLead`) and is left alone — the slot would be synthesised
+	 * with nothing to fill or read it.
+	 */
+	private static function isBeforeTrailRef(child: ShapeNode): Bool {
+		return child.kind == Ref && child.annotations[AnnotationKeys.BASE_OPTIONAL] != true && isTrailRef(child);
+	}
+
+	/** A `<field><suffix>:Null<String>` sidecar slot on the paired-T struct. */
+	private static function buildNullStringSlot(child: ShapeNode, pos: Position, suffix: String): Field {
 		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
 		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 		return {
-			name: fieldName + AFTER_TRAIL_SUFFIX,
+			name: fieldName + suffix,
 			kind: FVar(nullStrCT),
 			pos: pos,
 			access: []

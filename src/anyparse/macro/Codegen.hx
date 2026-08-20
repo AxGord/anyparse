@@ -59,6 +59,7 @@ class Codegen {
 			fields.push(collectTriviaField(formatInfo));
 			fields.push(collectTrailingField(formatInfo));
 			fields.push(collectTrailingFullField(formatInfo));
+			fields.push(collectTrailingBlockField(formatInfo));
 			if (formatInfo.commentPatterns.length > 0) fields.push(skipWsAndStashField(formatInfo));
 		}
 		return fields;
@@ -1120,7 +1121,33 @@ class Codegen {
 	 * close-trailing slot.
 	 */
 	private static function collectTrailingFullField(formatInfo: FormatReader.FormatInfo): Field {
-		final attempts: Array<Expr> = [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p)];
+		return trailingFullField('collectTrailingFull', [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p)]);
+	}
+
+	/**
+	 * Generate `collectTrailingBlock` — `collectTrailingFull` restricted to the
+	 * format's NON-line-terminated comment patterns.
+	 *
+	 * The one slot that needs it is `<field>BeforeTrail`: the gap between a
+	 * mandatory Ref field's last token and its `@:trail` literal (`switch (subject
+	 * /* c *\/)`). A line comment cannot live there — it runs to the newline, so
+	 * re-emitting one before the close literal would comment the literal out. This
+	 * helper never consumes one, which leaves a line comment in that gap exactly
+	 * where it was: skipped as whitespace, and reported by the comment-loss guard.
+	 *
+	 * "Which openers are line-terminated" is the FORMAT's answer
+	 * (`FormatInfo.commentPatterns`), not a `//` test in the macro — a format whose
+	 * line comment is `#` or `;` gets the same guarantee for free.
+	 */
+	private static function collectTrailingBlockField(formatInfo: FormatReader.FormatInfo): Field {
+		return
+			trailingFullField('collectTrailingBlock', [for (p in formatInfo.commentPatterns) if (!p.lineTerminated) trailingFullAttemptBlock(
+				p
+			)]);
+	}
+
+	/** The shared body of the verbatim-trailing helpers: skip horizontal ws, try each `attempts` block, rewind to null on a miss. */
+	private static function trailingFullField(name: String, attempts: Array<Expr>): Field {
 		final body: Expr = macro {
 			final _savedPos: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
@@ -1136,7 +1163,7 @@ class Codegen {
 			return (null: Null<String>);
 		};
 		return {
-			name: 'collectTrailingFull',
+			name: name,
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],

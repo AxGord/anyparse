@@ -1023,6 +1023,12 @@ class Lowering {
 			// optional-Ref step to default-null in the absent branch.
 			final hasAfterTrailSlot: Bool = hasAfterTrailSlotField(child, typePath, isStar, trailText);
 			final afterTrailLocal: String = '_afterTrail_$fieldName';
+			// ω-before-trail: twin of the above on the OTHER side of the same
+			// literal. Declared fresh by `emitFieldTrail` right before the trail
+			// consumption, so no pre-declaration is needed — the mandatory path
+			// is the only one that reaches it.
+			final hasBeforeTrailSlot: Bool = hasBeforeTrailSlotField(child, typePath, isStar, isOptional, trailText);
+			final beforeTrailLocal: String = '_beforeTrail_$fieldName';
 			// `@:trailOpt("close")` on a struct Ref field: optional
 			// trailing literal. The required-trail block above reads the
 			// `:trail` meta only (`trailText`), so a `@:trailOpt` field
@@ -1041,7 +1047,8 @@ class Lowering {
 				? child.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT)
 				: null;
 			emitFieldTrail(
-				parseSteps, isStar, isOptional, trailText, hasAfterTrailSlot, afterTrailLocal, trailOptText, captureTrailPresentExpr
+				parseSteps, isStar, isOptional, trailText, hasAfterTrailSlot, afterTrailLocal, trailOptText, captureTrailPresentExpr,
+				hasBeforeTrailSlot, beforeTrailLocal
 			);
 			// ω-cond-comp-expr-multiline: terminal-slot newline capture for
 			// bare Ref fields opted in via `@:fmt(captureSourceNewlineAfter)`.
@@ -1066,7 +1073,7 @@ class Lowering {
 				structFields, fieldName, localName, child, hasStructFieldTrailOptSlot, trailPresentLocal, hasAfterTrailSlot,
 				afterTrailLocal, hasBeforeNewlineSlot, beforeNlLocal, hasBeforeLeadingSlot, beforeLeadingLocal, hasNewlineAfterSlot,
 				newlineAfterLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal,
-				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
+				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeTrailSlot, beforeTrailLocal
 			);
 			// pushStructFieldEntries pushes the field value + every applicable
 			// trivia/source-shape sidecar slot (TrailPresent / AfterTrail /
@@ -5600,7 +5607,8 @@ class Lowering {
 		trailPresentLocal: String, hasAfterTrailSlot: Bool, afterTrailLocal: String, hasBeforeNewlineSlot: Bool, beforeNlLocal: String,
 		hasBeforeLeadingSlot: Bool, beforeLeadingLocal: String, hasNewlineAfterSlot: Bool, newlineAfterLocal: String,
 		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String, hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String,
-		beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String
+		beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String,
+		hasBeforeTrailSlot: Bool, beforeTrailLocal: String
 	): Void {
 		structFields.push({ field: fieldName, expr: macro $i{localName} });
 		// ω-struct-trailopt-source-track (Session 14 Phase 3): push the
@@ -5615,6 +5623,10 @@ class Lowering {
 			structFields.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal} });
 		if (hasAfterTrailSlot)
 			structFields.push({ field: fieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX, expr: macro $i{afterTrailLocal} });
+		// ω-before-trail: the block comment captured just before the trail
+		// literal, re-emitted there by `WriterLowering.emitMandatoryRefTrail`.
+		if (hasBeforeTrailSlot)
+			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_TRAIL_SUFFIX, expr: macro $i{beforeTrailLocal} });
 		if (hasBeforeNewlineSlot)
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, expr: macro $i{beforeNlLocal} });
 		// ω-598-member-leading-comment: push the verbatim leading-comment
@@ -5895,6 +5907,22 @@ class Lowering {
 		// the trail literal so it stays cuddled to that token.
 		return trailText != null && _ctx.trivia && isTriviaBearing(typePath)
 			&& ((child.kind == Ref && !isStar) || (isStar && child.fmtHasFlag('captureTrailComment')));
+	}
+
+	/**
+	 * ω-before-trail: whether this field grows a `<field>BeforeTrail:Null<String>`
+	 * slot — a MANDATORY Ref carrying `@:trail`, in a trivia-bearing rule. Holds a
+	 * BLOCK comment sitting between the field's last token and the trail literal
+	 * (`switch (subject /* c *\/)`), which had no slot at all and was therefore
+	 * dropped by the writer, refusing the whole round trip.
+	 *
+	 * The optional-Ref path is excluded: it emits its trail from a different writer
+	 * seat, so the slot would have no reader. Mirrors `TriviaTypeSynth.isBeforeTrailRef`.
+	 */
+	private function hasBeforeTrailSlotField(
+		child: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, trailText: Null<String>
+	): Bool {
+		return trailText != null && !isStar && !isOptional && child.kind == Ref && _ctx.trivia && isTriviaBearing(typePath);
 	}
 
 	/**
@@ -7365,7 +7393,7 @@ class Lowering {
 	 */
 	private static function emitFieldTrail(
 		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, trailText: Null<String>, hasAfterTrailSlot: Bool, afterTrailLocal: String,
-		trailOptText: Null<String>, captureTrailPresentExpr: Expr
+		trailOptText: Null<String>, captureTrailPresentExpr: Expr, hasBeforeTrailSlot: Bool, beforeTrailLocal: String
 	): Void {
 		// @:fmt(captureTrailComment) Star: the trail literal (e.g. `:`) is
 		// already consumed by `emitStarFieldSteps`, so capture the same-line
@@ -7386,6 +7414,25 @@ class Lowering {
 			});
 		}
 		if (!isStar && !isOptional && trailText != null) {
+			// ω-before-trail: capture a BLOCK comment sitting between the field's
+			// last token and the trail literal, BEFORE `skipWs` swallows it as
+			// whitespace. `collectTrailingBlock` never attempts the format's
+			// line-terminated patterns, so a `// c` in that gap is left exactly
+			// where it was — re-emitting one before the close literal would
+			// comment the literal out.
+			if (hasBeforeTrailSlot) {
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: beforeTrailLocal,
+							type: macro :Null<String>,
+							expr: macro collectTrailingBlock(ctx),
+							isFinal: true
+						}
+					]),
+					pos: Context.currentPos()
+				});
+			}
 			parseSteps.push(macro skipWs(ctx));
 			parseSteps.push(macro expectLit(ctx, $v{trailText}));
 			// ω-trivia-after-trail: in trivia-bearing rules, capture a

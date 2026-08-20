@@ -52,12 +52,25 @@ class HxInlineBlockCommentGapTest extends Test {
 			'if_else_stmt',
 			'if (c) {\n\t\t\trun();\n\t\t} else /* e */ {\n\t\t\trun();\n\t\t}'
 		],
+		// ω-before-trail: the gap between a mandatory `@:trail` Ref field's
+		// last token and its own close literal. Five constructs share that
+		// one slot, which is why they arrived together.
+		['if_cond_trail', 'if (x /* c */) {\n\t\t\trun();\n\t\t}'],
+		[
+			'switch_subj_trail',
+			'switch (v /* s */) {\n\t\t\tcase 1:\n\t\t\t\trun();\n\t\t}'
+		],
+		['while_cond_trail', 'while (c /* w */) {\n\t\t\trun();\n\t\t}'],
+		['do_while_trail', 'do {\n\t\t\trun();\n\t\t} while (c /* d */);'],
+		[
+			'catch_param_trail',
+			'try {\n\t\t\trun();\n\t\t} catch (e: Dynamic /* c */) {\n\t\t\trun();\n\t\t}'
+		],
 	];
 
 	/** Seams with no capture slot — the parser drops the comment, so the round trip refuses. */
 	private static final SLOT_LESS: Array<Array<String>> = [
 		['cond_if', 'if (/* c */ x) {\n\t\t\trun();\n\t\t}'],
-		['if_cond_trail', 'if (x /* c */) {\n\t\t\trun();\n\t\t}'],
 		['while_cond', 'while (/* w */ c) {\n\t\t\trun();\n\t\t}'],
 		['do_while', 'do {\n\t\t\trun();\n\t\t} while (/* d */ c);'],
 		['for_iter', 'for (i in /* f */ list) {\n\t\t\trun();\n\t\t}'],
