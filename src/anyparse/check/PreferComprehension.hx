@@ -236,7 +236,7 @@ final class PreferComprehension implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (m in collectMatches(tree, entry.source, seams)) violations.push({
+			for (m in collectMatches(tree, entry.source, seams, plugin.refShape())) violations.push({
 				file: entry.file,
 				span: m.span,
 				rule: 'prefer-comprehension',
@@ -269,7 +269,7 @@ final class PreferComprehension implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byKey: Map<String, Array<{ span: Span, text: String }>> = [];
-		for (m in collectMatches(tree, source, seams)) byKey['${m.span.from}:${m.span.to}'] = m.edits;
+		for (m in collectMatches(tree, source, seams, plugin.refShape())) byKey['${m.span.from}:${m.span.to}'] = m.edits;
 		final out: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -326,8 +326,14 @@ final class PreferComprehension implements Check {
 	 * replacement span and text. The file's comment tokens are lexed ONCE here and carried in the
 	 * `Ctx` — `collectCommentTokens` re-lexes the whole source on every call.
 	 */
-	private static function collectMatches(tree: QueryNode, source: String, s: Seams): Array<Match> {
-		final ctx: Ctx = { source: source, seams: s, comments: RefactorSupport.collectCommentTokens(source) };
+	private static function collectMatches(tree: QueryNode, source: String, s: Seams, shape: RefShape): Array<Match> {
+		final ctx: Ctx = {
+			source: source,
+			seams: s,
+			comments: RefactorSupport.collectCommentTokens(source),
+			tree: tree,
+			shape: shape
+		};
 		final out: Array<Match> = [];
 		walk(tree, ctx, out);
 		return out;
@@ -432,7 +438,19 @@ final class PreferComprehension implements Check {
 		if (lead == null) return null;
 		final prefix: String = source.substring(declSpan.from, initSpan.from);
 		final keyword: String = source.substring(declSpan.from, declSpan.from + VAR_KEYWORD.length);
-		final normalized: String = keyword == VAR_KEYWORD ? 'final${prefix.substring(VAR_KEYWORD.length)}' : prefix;
+		// The comprehension initialises the binding once, which is why `var` normally becomes
+		// `final` — but only when nothing REASSIGNS it later. `cmd = cmd.concat(extra)` below
+		// the loop turned into `Cannot assign to final` on a tree that compiled. The read gate
+		// above already proves the name is referenced after the loop; it does not say whether
+		// that reference is a read or a write, and only the second one matters here.
+		//
+		// The write scan is `prefer-final`'s, for the same reason it uses it: `Refs.find` is
+		// COMPLETE for writes (every write is a structural assignment / `++` / `--` node), and
+		// attributing by POSITION-in-scope rather than by the resolver's binding is immune to
+		// the same-named-sibling-branch collision. Conservative in the safe direction — a
+		// sibling scope's write of the same name keeps `var`.
+		final upgrade: Bool = keyword == VAR_KEYWORD && !RefactorSupport.reassignedInScope(declName, ctx.tree, ctx.shape, scopeSpan);
+		final normalized: String = upgrade ? 'final${prefix.substring(VAR_KEYWORD.length)}' : prefix;
 		return assemble(source, declSpan, forSpan, '$lead$normalized[$inner];', gapped);
 	}
 
@@ -1132,6 +1150,10 @@ private typedef Ctx = {
 	var source: String;
 	var seams: Seams;
 	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+
+	/** The file's tree and ref shape — the write scan that decides `var` vs `final` needs both. */
+	var tree: QueryNode;
+	var shape: RefShape;
 }
 
 /**

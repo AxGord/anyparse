@@ -3832,6 +3832,22 @@ final class RefactorSupport {
 		return edits;
 	}
 
+	/**
+	 * Whether `name` is REASSIGNED anywhere inside `scope` — the shared write test behind
+	 * `prefer-final`'s verdict and `prefer-comprehension`'s `var`-vs-`final` choice.
+	 *
+	 * `Refs.find` is COMPLETE for writes: every write is a structural assignment / `++` / `--`
+	 * node, and the only reference a source scan would miss — simple `'$x'` interpolation — can
+	 * only ever be a read. Attribution is by POSITION-in-scope rather than by the resolver's
+	 * binding, which is immune to the same-named-sibling-`case`-branch collision: a local can only
+	 * be reassigned from inside its own scope, so no real reassignment is missed, and the other
+	 * direction (a sibling branch's write of the same name) only ever keeps the mutable spelling.
+	 */
+	public static function reassignedInScope(name: String, tree: QueryNode, shape: RefShape, scope: Span): Bool {
+		return Refs.find(name, tree, shape)
+			.exists(hit -> hit.kind == RefKind.Write && hit.span.from >= scope.from && hit.span.from < scope.to);
+	}
+
 	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
 	private static inline function isHorizontalSpace(code: Int): Bool {
 		return code == ' '.code || code == '\t'.code || code == '\r'.code;
