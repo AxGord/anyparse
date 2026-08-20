@@ -686,6 +686,7 @@ import unit.FieldMutabilityMacroGateTest;
 import unit.LintLanguageVersionGateTest;
 import unit.MemberOrderModifierSpanSliceTest;
 import unit.OperatorOverloadGateTest;
+import unit.HxCondSpliceReturnBlockSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -955,6 +956,7 @@ class RunTests {
 		addCase(new HxCondSpliceFidelitySliceTest());
 		addCase(new HxExprStmtTerminatorSliceTest());
 		addCase(new HxCondSpliceOwnLineSliceTest());
+		addCase(new HxCondSpliceReturnBlockSliceTest());
 		addCase(new HxCondSpliceScopeSliceTest());
 		addCase(new HxCondUnbalancedRegionSliceTest());
 		addCase(new HxCondSpliceChainWrapSliceTest());

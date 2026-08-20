@@ -32,32 +32,36 @@ package anyparse.grammar.haxe;
  * re-emits the raw fragment plus the absorbed tail verbatim, so the
  * file round-trips byte-exactly and only a reorder reveals the damage.
  *
- * The regex is `HxCondSpliceRaw`'s two-branch alternation - same
- * nesting-aware first branch, same stop-at-first-`#end` fallback - with
- * `;` required immediately before the closing `#end` of each and NO NEWLINE
- * anywhere in the fragment. The one-line restriction is not cosmetic:
- * every real site measured is one line (Pony's `TouchableBase.hx:313`,
- * `haxe/std/Math.hx:302` and `:305`, and nothing else in either tree),
- * while a MULTI-line closed region is a construct the writer cannot yet
- * re-emit correctly - gluing `return` onto the `#if` shifts the whole
- * region one level left, which a verbatim raw capture does not do. The
- * fork's `sameline/issue_54_return_sharp_multiple_passes` fixture pins
- * exactly that dedent, and admitting the shape here turned it from
- * SKIP_PARSE into a round-trip FAIL - so a multi-line closed region keeps
- * going to `HxExpr.CondSpliceExpr` and keeps swallowing its tail, and
- * closing that needs the region REFLOWED, a slice of its own.
+ * The regex is `HxCondSpliceRaw`'s two-branch alternation — same
+ * nesting-aware first branch, same stop-at-first-`#end` fallback — with
+ * `;` required immediately before the closing `#end` of each.
+ *
+ * A MULTI-line fragment is admitted, and the writer RE-INDENTS it
+ * (`@:writeNormalize('reindentBlock')`): gluing `return` onto the `#if`
+ * shifts the whole region one level left, which a verbatim raw capture
+ * does not do. The fork's `sameline/issue_54_return_sharp_multiple_passes`
+ * fixture pins exactly that dedent — SKIP_PARSE before this terminal
+ * existed, a round-trip FAIL while the raw was emitted verbatim, PASS now.
+ *
+ * Every real site is ONE line: `Pony/pony/ui/touch/TouchableBase.hx:313`,
+ * `haxe/std/Math.hx:302` and `:305`, and a census over Pony, the Haxe
+ * std, `TM-Haxe4`, the haxe-formatter fork and this repo finds no other —
+ * multi-line or not. So the multi-line half serves the corpus fixture
+ * today and carries no drift risk for any tree measured.
  *
  * The fragment stays a RAW capture rather than becoming a structured
  * conditional: a structured reading (the `HxConditionalSemiExpr` shape
  * that already serves member initializers) reflows the region onto one
  * line, which measured as two Pony modules newly drifting under
- * `hxq fmt --list` that the formatter leaves alone today. Verbatim
- * re-emission keeps every such region byte-stable while the tail
+ * `hxq fmt --list` that the formatter leaves alone today. Re-emission
+ * line by line keeps every such region byte-stable while the tail
  * swallow stops.
  *
- * `@:rawString` - byte-exact round-trip through `_dt(value)`, no
- * unescape pass; the writer re-emits the fragment verbatim.
+ * `@:rawString` — byte-exact round-trip through `_dt(value)`, no
+ * unescape pass; the writer re-emits the fragment verbatim, one line
+ * at a time.
  */
-@:re('(?:(?:(?!#if|#end)[^\\n])*(?:#if(?:(?!#end)[^\\n])*#end(?:(?!#if|#end)[^\\n])*)*;[ \\t]*#end|(?:(?!#end)[^\\n])*;[ \\t]*#end)')
+@:re('(?:(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*;\\s*#end|(?:(?!#end)[\\s\\S])*;\\s*#end)')
 @:rawString
+@:writeNormalize('reindentBlock')
 abstract HxCondSpliceClosedRaw(String) from String to String {}

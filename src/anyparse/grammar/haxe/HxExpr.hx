@@ -509,10 +509,10 @@ enum HxExpr {
 	 * the raw region to stop being reachable from `ExprStmt`, or the
 	 * structured `HxConditionalSemiExpr` reading whose writer reflows the
 	 * region onto one line (measured: two Pony modules newly drifting).
-	 * Both are slices of their own. And this ctor reaches only a ONE-LINE
-	 * closed region: a multi-line one would have to be re-indented when the
-	 * `return` glues onto its `#if`, which a verbatim raw capture does not do
-	 * (`HxCondSpliceClosedRaw` has the fixture that measured it).
+	 * Both are slices of their own. A MULTI-LINE region is reached too: it has to
+	 * be re-indented when the `return` glues onto its `#if`, which the terminal
+	 * does through `@:writeNormalize('reindentBlock')` —
+	 * `HxCondSpliceClosedRaw` carries the fixture that measured it.
 	 */
 	@:kw('return')
 	CondSpliceReturnExpr(inner: HxCondSpliceReturnRegion);
