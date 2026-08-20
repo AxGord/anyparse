@@ -366,6 +366,16 @@ final class TriviaTryparseLowering {
 	 * breaks the overflow clause(s) at additionalIndent 2; single-clause
 	 * heritage stays byte-identical to the `lineLengthAwareSeps` path.
 	 *
+	 * Because it bypasses the shared loop it also owns COMMENT emission. It
+	 * used to read the per-clause `leadingComments` / `trailingComment` slots
+	 * only to set `_hasComments`, then build its Doc from the clause nodes
+	 * alone — so every comment in a heritage list was dropped and
+	 * `writeRoundTrip` refused the whole file: a block comment between the
+	 * type name and its first `implements`, or a commented-out `extends`
+	 * between two live ones. The comment branch now emits each clause's own
+	 * trivia — a BLOCK comment with no internal newline stays on the
+	 * declaration line, and a LINE comment takes a hardline on both sides,
+	 * since a line comment runs to the newline and has no inline spelling.
 	 */
 	private static function triviaTryparseHeritageExpr(c: WriterLowering.TryparseStarCtx): Expr {
 		final fieldAccess: Expr = c.fieldAccess;
@@ -393,14 +403,28 @@ final class TriviaTryparseLowering {
 					_hi++;
 				}
 				if (_hasComments) {
-					final _docs: Array<anyparse.core.Doc> = [_dt(' ')];
+					final _docs: Array<anyparse.core.Doc> = [];
 					var _hj: Int = 0;
 					while (_hj < _items.length) {
-						if (_hj > 0) _docs.push(_dt(' '));
+						final _ht = _arr[_hj];
+						final _hlc: Array<String> = _ht.leadingComments;
+						if (_hlc.length == 0)
+							_docs.push(_dt(' '));
+						else {
+							var _hc: Int = 0;
+							while (_hc < _hlc.length) {
+								_docs.push(StringTools.startsWith(_hlc[_hc], '/*') && _hlc[_hc].indexOf('\n') < 0 ? _dt(' ') : _dhl());
+								_docs.push(leadingCommentDocRun(_hlc, _hc, opt));
+								_hc++;
+							}
+							_docs.push(StringTools.startsWith(_hlc[_hlc.length - 1], '//') ? _dhl() : _dt(' '));
+						}
 						_docs.push(_items[_hj]);
+						final _htc: Null<String> = _ht.trailingComment;
+						if (_htc != null) _docs.push(trailingCommentDocVerbatim(_htc, opt));
 						_hj++;
 					}
-					_dc(_docs);
+					_dn(_cols, _dc(_docs));
 				} else if (_items.length <= 1) {
 					_dn(_cols, _dc([_dile(opt.lineWidth, _dhl(), _dt(' ')), _items[0]]));
 				} else {
