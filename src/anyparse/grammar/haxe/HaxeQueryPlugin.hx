@@ -865,6 +865,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'CondSpliceMember',
 				'CondSharedBodyDecl'
 			],
+			condOperandRunKinds: ['CondSpliceOpExpr'],
 			stringInterpIdentKind: 'Ident',
 			stringInterpBlockKind: 'Block',
 			reservedWords: HaxeNamingSupport.KEYWORDS,

@@ -626,6 +626,7 @@ import unit.NamingCheckMemberFixTest;
 import unit.NamingCheckCrossFileFixTest;
 import unit.FoldStringLiteralsWidthCheckTest;
 import unit.FoldStringLiteralsCandidateGateTest;
+import unit.FoldStringLiteralsCondRegionTest;
 import unit.RedundantParensTierArmsTest;
 import unit.TrivialGetterShapeCollapseTest;
 import unit.ExplicitLocalTypeReadFixTest;
@@ -1302,6 +1303,7 @@ class RunTests {
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new FoldStringLiteralsWidthCheckTest());
 		addCase(new FoldStringLiteralsCandidateGateTest());
+		addCase(new FoldStringLiteralsCondRegionTest());
 		addCase(new NamingCheckTest());
 		addCase(new NamingCheckLocalFixTest());
 		addCase(new NamingCheckMemberFixTest());
