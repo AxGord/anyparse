@@ -321,7 +321,7 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn try g() catch (e:Dynamic) false;\n' + '\t}\n}'
+				'class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn try g() catch (e:Dynamic) false;\n\t}\n}'
 			).length
 		);
 	}

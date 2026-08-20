@@ -200,7 +200,7 @@ final class PreferTernaryReturn implements Check {
 	}
 
 	/** `TypeResolver.childReturnTypeSource` with this check's seams unpacked from `Seams`. */
-	private static function childReturnType(node: QueryNode, source: String, s: Seams, retType: Null<String>): Null<String> {
+	private static inline function childReturnType(node: QueryNode, source: String, s: Seams, retType: Null<String>): Null<String> {
 		return TypeResolver.childReturnTypeSource(node, source, retType, s.functionKinds, s.lambdaKinds, s.bodyKinds, s.paramKinds);
 	}
 

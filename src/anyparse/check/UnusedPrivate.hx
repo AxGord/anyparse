@@ -379,7 +379,7 @@ final class UnusedPrivate implements Check {
 	 * method of a subclass is spared, since a single file cannot see which one the
 	 * base declares abstract, whether or not the base is in the linted file set.
 	 */
-	private static function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
+	private static inline function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
 		return (member.kind == 'FnMember' || member.kind == 'FinalModifiedMember') && inExtendsClass;
 	}
 

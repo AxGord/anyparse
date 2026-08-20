@@ -112,18 +112,32 @@ final class SimplifyBooleanTernary implements Check {
 				message: 'this ternary can be a boolean expression'
 			});
 		}
-		final kids: Array<QueryNode> = node.children;
-		final childRetType: Null<String> = childReturnType(node, source, shape, retType);
-		final hostsReturnValue: Bool = (shape.valueReturnKinds ?? []).contains(node.kind);
-		for (i in 0...kids.length) walk(out, file, source, kids[i], ternaryKind, support, shape, childRetType, hostsReturnValue && i == 0);
+		eachChild(
+			node, source, shape, retType,
+			(kid, kidRet, kidIsReturnValue) -> walk(out, file, source, kid, ternaryKind, support, shape, kidRet, kidIsReturnValue)
+		);
 	}
 
-	/** `TypeResolver.childReturnTypeSource` with this check's seams unpacked from `shape`. */
-	private static function childReturnType(node: QueryNode, source: String, shape: RefShape, retType: Null<String>): Null<String> {
-		return TypeResolver.childReturnTypeSource(
+	/**
+	 * Visit each child of `node` with the two facts a boolean-licence decision needs about it:
+	 * the return-type source in force there (rebound whenever `node` is a function) and whether
+	 * it sits in the function's RETURN-VALUE slot — the first child of a `valueReturnKinds`
+	 * host, which covers the `return e;` statement form and the expression-bodied `return e`
+	 * form alike. The ONE copy of the threading, shared by `run`'s `walk` and `fix`'s
+	 * `indexTernaries`: the two must agree about which ternaries are licensed, and duplicating
+	 * the descent is how they would silently stop agreeing.
+	 */
+	private static function eachChild(
+		node: QueryNode, source: String, shape: RefShape, retType: Null<String>,
+		visit: (kid:QueryNode, kidRetType:Null<String>, kidIsReturnValue:Bool) -> Void
+	): Void {
+		final kids: Array<QueryNode> = node.children;
+		final childRetType: Null<String> = TypeResolver.childReturnTypeSource(
 			node, source, retType, shape.functionKinds ?? [], shape.lambdaKinds ?? [], shape.functionBodyKinds ?? [],
 			shape.paramKinds ?? []
 		);
+		final hostsReturnValue: Bool = (shape.valueReturnKinds ?? []).contains(node.kind);
+		for (i in 0...kids.length) visit(kids[i], childRetType, hostsReturnValue && i == 0);
 	}
 
 	/**
@@ -186,12 +200,10 @@ final class SimplifyBooleanTernary implements Check {
 				licences['${span.from}:${span.to}'] = boolReturnLicence(node, source, shape, retType, isReturnValue);
 			}
 		}
-		final kids: Array<QueryNode> = node.children;
-		final childRetType: Null<String> = childReturnType(node, source, shape, retType);
-		final hostsReturnValue: Bool = (shape.valueReturnKinds ?? []).contains(node.kind);
-		for (i in 0...kids.length) {
-			indexTernaries(kids[i], source, ternaryKind, shape, childRetType, hostsReturnValue && i == 0, out, licences);
-		}
+		eachChild(
+			node, source, shape, retType,
+			(kid, kidRet, kidIsReturnValue) -> indexTernaries(kid, source, ternaryKind, shape, kidRet, kidIsReturnValue, out, licences)
+		);
 	}
 
 }

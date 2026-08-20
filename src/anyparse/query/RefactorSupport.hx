@@ -2170,27 +2170,9 @@ final class RefactorSupport {
 	 */
 	public static function declaresNonNullBool(returnTypeSource: Null<String>, shape: RefShape): Bool {
 		final boolName: Null<String> = shape.nonNullBoolTypeName;
-		return boolName != null && returnTypeSource != null && StringTools.trim(returnTypeSource) == boolName;
+		return boolName != null && returnTypeSource != null && returnTypeSource.trim() == boolName;
 	}
 
-	/**
-	 * Whether `operand` is a tail the declared-return-type proof must NOT license, even inside
-	 * a function declaring the non-null boolean nominal. Two families, each for its own reason:
-	 *
-	 *  - the `null` LITERAL. `!cond && null` is behaviour-preserving (the null propagates
-	 *    through `&&` exactly as it did through the guard's fall-through) but degenerate, and
-	 *    under `@:nullSafety(Strict)` a `return null;` in a `:Bool` function does not compile,
-	 *    so the site can only exist where nothing is checking. Emitting `&& null` there trades
-	 *    a readable guard for an expression that reads like a bug.
-	 *  - a STATEMENT-LIKE expression — `switch`, `try`, `throw`, an `if` used as a value, a
-	 *    block. These reduce soundly (the non-literal branch is always the RIGHT operand of the
-	 *    emitted `&&` / `||`, so nothing can swallow rightward), but the gate being relaxed
-	 *    exists to stop a collapse that is "uglier than the guard", and gluing a multi-line
-	 *    construct onto `&&` is exactly that. Refusing them keeps the relaxation to the case
-	 *    that motivated it: a compact value expression.
-	 *
-	 * Parentheses are unwrapped first, so `(switch …)` refuses like a bare one.
-	 */
 	/**
 	 * Whether `operand` is a ternary MID-REDUCTION — one with exactly one boolean-literal
 	 * branch, i.e. exactly what `simplify-boolean-ternary` is about to flatten into `&&` /
@@ -2217,6 +2199,15 @@ final class RefactorSupport {
 			n.kind == ternaryKind && n.children.length == 3 && (n.children[1].kind == boolLitKind) != (n.children[2].kind == boolLitKind);
 	}
 
+	/**
+	 * Whether `operand` is a tail the declared-return-type proof must NOT license, even inside a
+	 * function declaring the non-null boolean nominal. `statementLikeValue` plus one more kind:
+	 * the `null` LITERAL. `!cond && null` is behaviour-preserving (the null propagates through
+	 * `&&` exactly as it did through the guard's fall-through) but degenerate, and under
+	 * `@:nullSafety(Strict)` a `return null;` in a `:Bool` function does not compile, so the site
+	 * can only exist where nothing is checking. Emitting `&& null` there trades a readable guard
+	 * for an expression that reads like a bug. Parentheses are unwrapped first.
+	 */
 	public static function statementLikeOrNullTail(operand: QueryNode, shape: RefShape): Bool {
 		return unwrapParens(operand, shape.parenKind).kind == shape.nullLiteralKind || statementLikeValue(operand, shape);
 	}
