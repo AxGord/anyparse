@@ -144,6 +144,16 @@ final class TypeRefPrinter {
 	}
 
 	/**
+	 * Whether this printer has a resolution index — i.e. whether `resolvePath` can answer at all.
+	 * A printer built from an import map alone answers null for EVERY path, so a caller gating an
+	 * edit on `resolvePath` must not read that unconditional null as a refusal; it means the
+	 * question was never asked.
+	 */
+	public inline function hasResolutionIndex(): Bool {
+		return _index != null;
+	}
+
+	/**
 	 * How to spell the type path `fqn` in this file, per the three-way preference documented
 	 * on the class. `fqn` may be a simple name, a module path, a module-qualified sub-type
 	 * path, or the `pack.SubType` HYBRID a compiler prints for a secondary type — the hybrid

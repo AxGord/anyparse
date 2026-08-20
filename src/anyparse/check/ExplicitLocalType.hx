@@ -275,7 +275,10 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (node == null || node.children.length == 0) continue;
 			final init: QueryNode = node.children[0];
 			final typeSource: Null<String> = inferLocalType(init, source, shape, tree, castTargets, declaredTypeSources, index, anonCap);
-			if (typeSource == null) continue;
+			// The admissibility gate covers BOTH arms, not just the oracle's: a structural arm can
+			// copy `Dynamic` or a `Void` return out of a declared type just as the compiler can
+			// answer them, and the annotation is as bad either way (see `inadmissibleType`).
+			if (typeSource == null || inadmissibleType(typeSource)) continue;
 			final at: Int = LiteralInfer.insertPoint(node, init, source);
 			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
 		}
@@ -319,7 +322,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
 			if (raw == null) continue;
 			final owner: Null<String> = enclosingGenericFunction(tree, source, span.from, functions);
-			final norm: Null<String> = normalizeWith(raw, printer, maxAnon, { file: v.file, methodName: owner });
+			final norm: Null<String> = admissibleLocal(normalizeWith(raw, printer, maxAnon, { file: v.file, methodName: owner }), printer);
 			if (norm != null) edits.push({ span: new Span(at, at), text: ':$norm' });
 		}
 		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
@@ -352,7 +355,8 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	public static function normalizeInferredType(raw: String, importMap: Map<String, String>, maxAnonLen: Int): Null<String> {
 		// No enclosing-function context here: the class-parameter half of the qualifier strip
 		// still applies (it needs none), the method-parameter half is skipped.
-		return normalizeWith(raw, TypeRefPrinter.importsOnly(importMap), maxAnonLen, { file: null, methodName: null });
+		final printer: TypeRefPrinter = TypeRefPrinter.importsOnly(importMap);
+		return admissibleLocal(normalizeWith(raw, printer, maxAnonLen, { file: null, methodName: null }), printer);
 	}
 
 	/**
@@ -486,6 +490,80 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			return run;
 		});
 		return found;
+	}
+
+	/**
+	 * `printed` when it is an annotation a LOCAL may be given, else null — the two refusals the
+	 * shared normalizer must NOT make, because `ExplicitType` reaches the same normalizer for a
+	 * RETURN type where both answers are legitimate (`Void` above all). So they live here, on the
+	 * path only a local declaration takes: `inadmissibleType` (what no local should say) and
+	 * `spellable` (what this file cannot spell).
+	 */
+	private static function admissibleLocal(printed: Null<String>, printer: TypeRefPrinter): Null<String> {
+		return printed == null || inadmissibleType(printed) ? null : spellable(printed, printer);
+	}
+
+	/**
+	 * Whether `t` is a type no local declaration should be given.
+	 *
+	 * `Dynamic` / `Any` ANYWHERE in it: the display server answers `Dynamic` for an expression it
+	 * could not type — a file outside its hxml's compiled set resolves nothing, so every identifier
+	 * in it degrades — and writing that is WORSE than writing nothing. It compiles, and it switches
+	 * type checking off for the very binding this rule exists to strengthen, leaving no compiler
+	 * error for the verification pass to revert. `Unknown<…>`, the monomorph spelling refused just
+	 * above, is the SAME failure under a name that cannot be mistaken for a type; `Dynamic` is it
+	 * wearing one that can. (Measured on a real tree: `final f: Dynamic = Fs.createWriteStream(file);`,
+	 * whose type is `js.node.fs.WriteStream`, next to a sibling local left alone because its answer
+	 * was `Unknown<0>`.) A project running `avoid-dynamic` also gains a finding of THAT rule from
+	 * every such annotation. The cost is a correct `Class<Dynamic>` or `Map<String, Dynamic>` left
+	 * report-only, which is the trade the rule's owner asked for.
+	 *
+	 * A BARE `Void`: not merely unhelpful — `var x:Void` is not a declaration Haxe accepts at all,
+	 * so this is the compiler having answered about some enclosing statement or block rather than
+	 * the initializer, in the one situation where nothing downstream can catch it. `Void` INSIDE a
+	 * type stays admissible: `() -> Void` is an ordinary local type. (Measured on the same tree: 14
+	 * `final h: Void = config.host == null ? …` annotations survived the reply-position gate.)
+	 */
+	private static function inadmissibleType(t: String): Bool {
+		if (t == 'Void') return true;
+		var found: Bool = false;
+		mapTypeRuns(t, run -> {
+			if (run == 'Dynamic' || run == 'Any') found = true;
+			return run;
+		});
+		return found;
+	}
+
+	/**
+	 * `printed` when this file can actually SPELL every nominal in it, else null. A qualified run
+	 * the printer neither shortened nor promised an import for is one it could not place — the file
+	 * already binds that simple name to something else, or no import can be anchored — and the
+	 * fully-qualified fallback it emits instead is correct only if the path is REAL. A compiler
+	 * answer is not evidence of that: a display server resolves a file no `-cp` of its hxml covers
+	 * through the implicit process-cwd classpath, and then names every module by its REPO-relative
+	 * path. (Measured: `tests/test/magic/NinjaTest.hx`, built with `-cp tests/test` and declaring
+	 * `package magic;`, was answered `tests.test.magic.NinjaClass` — `Type not found` at that
+	 * spelling, while the declaration one line above got a correct bare `NinjaClass` from the
+	 * structural pass.)
+	 *
+	 * The proof is the resolution index, so only a printer that HAS one can be asked: without it
+	 * `resolvePath` answers null for everything and this would abstain on every qualified
+	 * annotation rather than on the unproven ones. A printer built from an import map alone
+	 * (`normalizeInferredType`) therefore keeps the older fallback — it carries no file scope to
+	 * resolve against either.
+	 */
+	private static function spellable(printed: String, printer: TypeRefPrinter): Null<String> {
+		if (!printer.hasResolutionIndex()) return printed;
+		var placed: Bool = true;
+		mapTypeRuns(printed, run -> {
+			if (
+				run.indexOf('.') != -1 && RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(run))
+				&& printer.resolvePath(run) == null
+			)
+				placed = false;
+			return run;
+		});
+		return placed ? printed : null;
 	}
 
 	/**

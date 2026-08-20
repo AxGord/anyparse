@@ -523,6 +523,7 @@ import unit.ExtractRepeatedExpressionTest;
 import unit.JoinReturnCheckTest;
 import unit.ExplicitLocalTypeOracleTest;
 import unit.ExplicitLocalTypeOracleE2ETest;
+import unit.ExplicitLocalTypeOracleAbstainTest;
 import unit.PreferInlineOracleTest;
 import unit.PreferSwitchExpressionAssignmentCheckTest;
 import unit.AvoidDynamicBagCheckTest;
@@ -1142,6 +1143,7 @@ class RunTests {
 		addCase(new ExplicitLocalTypeIndexAccessTest());
 		addCase(new ExplicitLocalTypeOracleTest());
 		addCase(new ExplicitLocalTypeOracleE2ETest());
+		addCase(new ExplicitLocalTypeOracleAbstainTest());
 		addCase(new ExplicitTypeReturnOracleTest());
 		addCase(new OracleBatchRevertReasonTest());
 		addCase(new MagicNumberCheckTest());
