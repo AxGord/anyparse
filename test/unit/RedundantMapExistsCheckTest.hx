@@ -124,18 +124,26 @@ class RedundantMapExistsCheckTest extends Test {
 	}
 
 	/**
-	 * A file the grammar cannot parse leaves the REPORT scope incomplete, so the census cannot
-	 * claim it saw every reference and the site stays unproven. This pins which index that gate
-	 * reads: handed the RESOLUTION index instead, whose skipped set is permanently non-empty on
-	 * any project with libraries configured, the gate would be false for every site — and the
-	 * check would report sites as fixable while emitting no edit at all.
+	 * A file the grammar cannot parse leaves the REPORT scope incomplete — but only for a member it
+	 * SPELLS, since that is the only way it could hold a reference. This pins both halves, and which
+	 * index the gate reads: handed the RESOLUTION index instead, whose skipped set is permanently
+	 * non-empty on any project with libraries configured, the gate would be false for every site — and
+	 * the check would report sites as fixable while emitting no edit at all.
 	 */
-	public function testAnUnparseableFileInScopeLeavesTheSiteUnproven(): Void {
-		final vs: Array<Violation> = violations(
+	public function testAnUnparseableFileMentioningTheMemberLeavesTheSiteUnproven(): Void {
+		final poisoned: Array<Violation> = violations(
+			cls('m', "'a' => 'b'", '').concat([{ file: 'Broken.hx', source: 'class Broken { this is not haxe m' }])
+		);
+		Assert.equals(1, poisoned.length);
+		if (poisoned.length == 1) Assert.isTrue(poisoned[0].message.indexOf('cannot be ruled out') != -1, poisoned[0].message);
+		// The same unparseable file NOT spelling the member proves nothing about it, and the
+		// site is decided on its own evidence again. A whole-project veto here silenced the
+		// check for every file in a scope holding one unparseable file.
+		final clean: Array<Violation> = violations(
 			cls('m', "'a' => 'b'", '').concat([{ file: 'Broken.hx', source: 'class Broken { this is not haxe' }])
 		);
-		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('cannot be ruled out') != -1, vs[0].message);
+		Assert.equals(1, clean.length);
+		if (clean.length == 1) Assert.isTrue(clean[0].message.indexOf('cannot be ruled out') == -1, clean[0].message);
 	}
 
 	/** A base class with two map fields, one of which a subtype fixture may poison. */

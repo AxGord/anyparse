@@ -97,11 +97,15 @@ final class SymbolIndexBuilder {
 		final memberSeams: MemberSeams = memberSeamsOf(shape);
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
+			// The SOURCE is retained for a skipped file too. Nothing structural can be read from
+			// it, but its raw text still answers the one question every confinement gate asks —
+			// could this file reference the member at all — and that turns a whole-project veto
+			// into a per-member one (`SymbolIndex.skippedMayReference`).
+			sources[entry.file] = entry.source;
 			if (tree == null) {
 				skipped.push(entry.file);
 				continue;
 			}
-			sources[entry.file] = entry.source;
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
 			final writeAccessors: Map<Int, Bool> = provider != null ? provider.propertyWriteAccessors(entry.source) : [];
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];

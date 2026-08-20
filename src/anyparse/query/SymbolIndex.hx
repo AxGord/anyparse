@@ -1441,6 +1441,37 @@ final class SymbolIndex {
 		return supertypeChainWalk(typeName, []);
 	}
 
+	/**
+	 * Whether any SKIP-PARSED file's raw text mentions `name` as a whole word.
+	 *
+	 * The confinement gates — `prefer-final-field`, `prefer-read-only-field`,
+	 * `prefer-final-public-field`, `unused-private` and their kin — all ask the same thing: could
+	 * a file the index cannot read hold a reference or a write the in-file proof missed? They used
+	 * to answer it with `skippedFiles().length > 0`, a whole-PROJECT veto: ONE unparseable file
+	 * anywhere in the scope silenced those rules for every other file. Measured on an 855-file
+	 * tree, adding a directory with three such files to the scope removed 1147 findings and the
+	 * `prefer-final-field` family entirely — a SUPERSET scope reporting FEWER findings, with
+	 * nothing said about it.
+	 *
+	 * The question is per-NAME, and the identifier is what answers it: a reference or a write to
+	 * `name` — through a subtype, an `@:access` grant, `@:allow`, or reflection by string — must
+	 * spell `name` in the file's text. So a skipped file that never contains the identifier cannot
+	 * be the writer, whatever it declares. Keying on the MEMBER name rather than the owning type's
+	 * dodges the alias hole (a skipped file may extend a `typedef` of the owner and never spell the
+	 * owner's name; it cannot write the member without spelling the member).
+	 *
+	 * Conservative in the same direction as before wherever it cannot see: a skipped file whose
+	 * source was not retained answers true.
+	 */
+	public function skippedMayReference(name: String): Bool {
+		if (name.length == 0) return _skipped.length > 0;
+		for (file in _skipped) {
+			final source: Null<String> = _sources[file];
+			if (source == null || mentionsWord(source, name)) return true;
+		}
+		return false;
+	}
+
 	/** The `seen`-set identity of a resolved type: its declaring file plus its name — see `markSeen`. */
 	private inline function seenKey(cur: ResolvedType): String {
 		return '${cur.file.file}#${cur.type.name}';
@@ -2276,6 +2307,11 @@ final class SymbolIndex {
 		return (dot < 0 ? raw : raw.substr(dot + 1)) == 'Dynamic';
 	}
 
+	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */
+	private static inline function isWordChar(c: Int): Bool {
+		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
+	}
+
 	/**
 	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
 	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
@@ -2323,6 +2359,20 @@ final class SymbolIndex {
 			found = true;
 		}
 		return found;
+	}
+
+	/** Whether `source` holds `name` bounded by non-identifier characters — the raw-text half of `skippedMayReference`. */
+	private static function mentionsWord(source: String, name: String): Bool {
+		var at: Int = source.indexOf(name);
+		while (at >= 0) {
+			final before: Int = at - 1;
+			final after: Int = at + name.length;
+			final leftFree: Bool = before < 0 || !isWordChar(source.fastCodeAt(before));
+			final rightFree: Bool = after >= source.length || !isWordChar(source.fastCodeAt(after));
+			if (leftFree && rightFree) return true;
+			at = source.indexOf(name, at + 1);
+		}
+		return false;
 	}
 
 }

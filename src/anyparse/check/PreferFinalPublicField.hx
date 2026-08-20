@@ -138,8 +138,10 @@ final class PreferFinalPublicField implements Check {
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
 		// A file the grammar could not read can hold any write, so no single-assignment proof
-		// survives it. The blanket subtype veto used to cover this by accident.
-		if (index.skippedFiles().length > 0) return;
+		// survives it — but only when it can reach this MEMBER, which it can only do by
+		// spelling the name. A whole-project veto here silenced the rule for every file in a
+		// scope holding one unparseable file.
+		if (index.skippedMayReference(name)) return;
 		final initialized: Bool = RefactorSupport.isInitializedNonPropertyField(source, field);
 		// The conditional-default arm: an initialized field (a `(default, null)` property
 		// included) whose only other write is one `if (p != null) x = p;` constructor

@@ -206,7 +206,8 @@ final class PreferFinalField implements Check {
 	 * would otherwise be permanently non-empty on any project with libraries configured.
 	 */
 	private static function writesConfined(owner: String, name: String, source: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
-		return RefactorSupport.privateMemberScanIsSound(source, index) && !MemberWriteScan.accessGrantMayWrite(owner, name, index, plugin)
+		return RefactorSupport.privateMemberScanIsSound(source, index, name)
+			&& !MemberWriteScan.accessGrantMayWrite(owner, name, index, plugin)
 			&& !MemberWriteScan.subtypeMayWrite(owner, name, index, plugin);
 	}
 

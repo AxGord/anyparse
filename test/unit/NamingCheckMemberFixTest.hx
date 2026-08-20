@@ -121,17 +121,13 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
-	public function testFixSkipsPrivateFieldWhenAnyFileSkipParses(): Void {
-		// A skip-parse file could hide a subtype / @:access we never see → conservatively report-only.
+	public function testFixSkipsPrivateFieldWhenASkipParsedFileMentionsIt(): Void {
+		// A skip-parse file could hide a subtype / @:access we never see — but only for a member
+		// it SPELLS. A whole-project veto here silenced the rule for every file in a scope holding
+		// one unparseable file; the reachable question is per-name.
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
-		final files: Array<{ source: String, file: String }> = [
-			{ file: 'pkg/C.hx', source: cSrc },
-			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
-		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
-		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+		Assert.equals(0, fixCount(cSrc, 'package pkg;\nclass Bad { function f() { shape = 1;'));
+		Assert.isTrue(fixCount(cSrc, 'package pkg;\nclass Bad { function f() { other = 1;') > 0);
 	}
 
 	public function testFixSkipsPrivateFieldNameCollision(): Void {
@@ -856,6 +852,18 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final src: String = 'package pkg;\n\nclass C {\n\tprivate var HEADLINE_1_FORMAT:Int = 1;\n'
 			+ '\n\tpublic function f() { return HEADLINE_1_FORMAT; }\n}';
 		assertRenamedIn('pkg/C.hx', src, '_headline1Format', 'HEADLINE_1_FORMAT');
+	}
+
+	/** The `Naming` fix edits for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */
+	private function fixCount(cSrc: String, badSrc: String): Int {
+		final files: Array<{ source: String, file: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/Bad.hx', source: badSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		return check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length;
 	}
 
 	/** The member names `src` reaches through a reflection call, via the grammar's own projection. */

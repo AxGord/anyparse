@@ -672,8 +672,8 @@ final class RefactorSupport {
 	 * instead: `prefer-final-field` asks only whether such a file WRITES the member, since
 	 * a read survives `final`.
 	 */
-	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex): Bool {
-		return index.skippedFiles().length <= 0 && source.indexOf('@:allow') < 0;
+	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex, member: String): Bool {
+		return !index.skippedMayReference(member) && source.indexOf('@:allow') < 0;
 	}
 
 	/**
@@ -1897,8 +1897,8 @@ final class RefactorSupport {
 	 * `@:access` grant names the type, or when the file carries an `@:allow` (which
 	 * can expose its privates to another type). Conservative: any doubt is false.
 	 */
-	public static function isPrivateMemberConfined(owner: String, source: String, index: SymbolIndex): Bool {
-		return privateMemberScanIsSound(source, index) && !index.hasSubtype(owner) && !index.hasAccessGrant(owner);
+	public static function isPrivateMemberConfined(owner: String, member: String, source: String, index: SymbolIndex): Bool {
+		return privateMemberScanIsSound(source, index, member) && !index.hasSubtype(owner) && !index.hasAccessGrant(owner);
 	}
 
 	/**

@@ -118,12 +118,11 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, violations(files).filter(v -> v.file == 'pkg/C.hx').length);
 	}
 
-	public function testSkipParseKeepsMember(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}' },
-			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
-		];
-		Assert.equals(0, violations(files).filter(v -> v.file == 'pkg/C.hx').length);
+	public function testSkipParseKeepsMemberOnlyWhenItMentionsIt(): Void {
+		// A file the grammar cannot read can only reference a member it SPELLS, so the veto is
+		// per-name. It used to be per-PROJECT: one unparseable file silenced the rule everywhere.
+		Assert.equals(0, skipParseViolations('package pkg;\nclass Bad { function f() { _x = 1;'));
+		Assert.equals(1, skipParseViolations('package pkg;\nclass Bad { function f() { other = 1;'));
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -557,6 +556,15 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'Impl.hx', source: 'class Impl extends Base {\n\tprivate function step():Void {\n\t\ttrace(1);\n\t}\n}' }
 		]);
 		Assert.equals(0, vs.length, 'the implementation is reachable through the base, not dead');
+	}
+
+	/** `unused-private` findings for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */
+	private function skipParseViolations(badSrc: String): Int {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}' },
+			{ file: 'pkg/Bad.hx', source: badSrc }
+		];
+		return violations(files).filter(v -> v.file == 'pkg/C.hx').length;
 	}
 
 	private function one(source: String): Array<Violation> {

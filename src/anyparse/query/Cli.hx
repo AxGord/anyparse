@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.Check;
+import anyparse.check.CheckScan;
 import anyparse.check.CompilerServer;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
@@ -1891,7 +1892,7 @@ final class Cli {
 
 		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached);
-		lintSummary(all, paths, o.includeInfo);
+		lintSummary(all, paths, o.includeInfo, unparseableFiles(files, cached));
 
 		// `--no-oracle` skips the typecheck entirely rather than faking its verdict:
 		// the note below says the compiler was not asked, so nothing downstream can
@@ -9799,7 +9800,16 @@ final class Cli {
 		}
 	}
 
-	private static function lintSummary(all: Array<Violation>, paths: Array<String>, includeInfo: Bool): Void {
+	private static function lintSummary(all: Array<Violation>, paths: Array<String>, includeInfo: Bool, ?skipped: Array<String>): Void {
+		// A file the grammar cannot read is a hole in the analysis, and one that stays SILENT
+		// otherwise: the per-member confinement gates decline for anything such a file mentions,
+		// and nothing in the report says so. Naming the files is what lets a reader tell "no
+		// findings" from "could not look".
+		if (skipped != null && skipped.length > 0) {
+			stderr('apq lint: ${skipped.length} file(s) could not be parsed and are invisible to cross-file proofs:\n');
+			for (path in skipped.slice(0, SKIP_PATHS_SHOWN)) stderr('  $path\n');
+			if (skipped.length > SKIP_PATHS_SHOWN) stderr('  ... +${skipped.length - SKIP_PATHS_SHOWN} more\n');
+		}
 		var errors: Int = 0;
 		var warnings: Int = 0;
 		var infos: Int = 0;
@@ -13752,6 +13762,14 @@ final class Cli {
 		}
 	}
 
+	/**
+	 * The files of this run the grammar could not read. Every one was parsed during the lint pass
+	 * just before, so these are cache hits rather than a second parse of the tree.
+	 */
+	private static function unparseableFiles(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
+		return [for (entry in files) if (CheckScan.parseOrNull(plugin, entry.source) == null) entry.file];
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * Pure parser over a utest OR tink_testrunner stdout transcript.
@@ -15699,6 +15717,7 @@ final class Cli {
 		}
 		return diffPath != null ? runSweepDiff(filePath, diffPath) : EXIT_OK;
 	}
+
 	/**
 		 * `apq lint-diff --old <a.json> --new <b.json>` — the blast-radius gate
 		 * `tools/battery.sh` runs once per compared tree.
@@ -15776,6 +15795,7 @@ final class Cli {
 		for (line in LintDiff.render(result, label, limit)) sysPrint('$line\n');
 		return result.addedTotal == 0 && result.removedTotal == 0 ? EXIT_OK : EXIT_RUNTIME;
 	}
+
 	/**
 	 * `apq mutation-verdict <log> [--expect <csv>]` — classify one utest
 	 * transcript for `tools/mutation-check.sh`, printing the verdict on the
@@ -15963,6 +15983,7 @@ final class Cli {
 		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
 		sysPrint('  -h, --help      Show this help\n');
 	}
+
 	private static function printLintDiffUsage(): Void {
 		sysPrint('Usage: apq lint-diff --old <a.json> --new <b.json> [--root <prefix>] [--label <name>]\n');
 		sysPrint('\n');
@@ -15982,6 +16003,7 @@ final class Cli {
 		sysPrint('  --limit <n>     Example keys shown per sign (default 20; -1 shows all)\n');
 		sysPrint('  -h, --help      Show this help\n');
 	}
+
 	private static function printMutationVerdictUsage(): Void {
 		sysPrint('Usage: apq mutation-verdict <transcript> [--expect <csv>]\n');
 		sysPrint('\n');

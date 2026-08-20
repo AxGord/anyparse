@@ -159,7 +159,7 @@ final class MapValueScan {
 		if (owner == null) return true;
 		if (decl.exported || index == null) return false;
 		final report: SymbolIndex = index;
-		if (!RefactorSupport.privateMemberScanIsSound(source, report)) return false;
+		if (!RefactorSupport.privateMemberScanIsSound(source, report, name)) return false;
 		final scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
 		return !scope.hasAccessGrant(owner) && !scope.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
 			if (redeclares || carriesBuildMacro(src)) return true;

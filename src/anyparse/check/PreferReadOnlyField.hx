@@ -123,8 +123,10 @@ final class PreferReadOnlyField implements Check {
 		final nameEnd: Int = nameEndOffset(source, span);
 		if (nameEnd < 0 || isProperty(source, nameEnd)) return;
 		// A file the grammar could not read can hold any write, so no internal-only proof
-		// survives it. The blanket subtype veto used to cover this by accident.
-		if (index.skippedFiles().length > 0) return;
+		// survives it — but only when it can reach this MEMBER, which it can only do by
+		// spelling the name. A whole-project veto here silenced the rule for every file in a
+		// scope holding one unparseable file.
+		if (index.skippedMayReference(name)) return;
 		if (index.supertypeDeclaresMember(owner, name)) return;
 		// An implemented interface that cannot be resolved may still declare `name` as a
 		// mutable member, whose property access `(default, null)` would violate.

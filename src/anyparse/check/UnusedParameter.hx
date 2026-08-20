@@ -290,7 +290,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 		final ownerName: Null<String> = parent.name;
 		final eligible: Bool = isLocal
 			|| (ownerName != null && !isPublicDecl(fn, parent, source, visibilityKinds, modifierKinds)
-				&& RefactorSupport.isPrivateMemberConfined(ownerName, source, index));
+				&& RefactorSupport.isPrivateMemberConfined(ownerName, fnName ?? '', source, index));
 		final capturedAsValue: Bool = fnName != null && captured.contains(fnName);
 		final params: Array<QueryNode> = CallSites.leadingParams(fn);
 		for (pi => p in params) {

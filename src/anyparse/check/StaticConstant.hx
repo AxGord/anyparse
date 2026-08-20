@@ -257,7 +257,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length)) return;
 		if (ctx.reflected.contains(name)) return;
 		if (memberAccessedInFile(ctx.source, name, span)) return;
-		if (!RefactorSupport.privateMemberScanIsSound(ctx.source, ctx.index)) return;
+		if (!RefactorSupport.privateMemberScanIsSound(ctx.source, ctx.index, name)) return;
 		if (MemberWriteScan.accessGrantMayReference(owner, name, ctx.index, ctx.plugin)) return;
 		if (MemberWriteScan.subtypeMayReference(owner, name, ctx.index, ctx.plugin)) return;
 		ctx.out.push({

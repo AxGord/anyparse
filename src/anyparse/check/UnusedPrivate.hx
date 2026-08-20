@@ -335,7 +335,7 @@ final class UnusedPrivate implements Check {
 		// WIDEST index, because the declaring base may live in a resolution library rather than
 		// the report scope. An unresolvable supertype leaves the member flaggable, as before.
 		if (scopeIndex.supertypeDeclaresMember(owner, decl.name)) return null;
-		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, source, index)
+		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, index)
 			? !RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span])
 			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex);
 		return unused ? {

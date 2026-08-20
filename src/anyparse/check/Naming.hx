@@ -421,10 +421,14 @@ final class Naming implements Check implements CrossFileFix {
 		// Memoize confinement per owner-type within this fix() call: a type with
 		// many flagged private constants would otherwise redo the identical
 		// project-wide subtype / access-grant / `@:allow` scan once per finding.
-		final cached: Null<Bool> = confinedMemo[owner];
+		// Keyed by owner AND member: the skipped-file half of the proof is per-NAME now (a file
+		// the grammar cannot read can only reach a member it spells), so two members of one type
+		// no longer share an answer.
+		final memoKey: String = '$owner\t${decl.name}';
+		final cached: Null<Bool> = confinedMemo[memoKey];
 		if (cached != null) return cached;
-		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, source, index);
-		confinedMemo[owner] = confined;
+		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, index);
+		confinedMemo[memoKey] = confined;
 		return confined;
 	}
 
@@ -650,7 +654,7 @@ final class Naming implements Check implements CrossFileFix {
 		// A confined PRIVATE member is the single-file path's job; only a non-confined one crosses files.
 		// A PUBLIC member is never confined in that sense - any file holding a value of the owner's type
 		// reaches it - so the proof does not apply and it always crosses.
-		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, source, index)) return null;
+		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, decl.name, source, index)) return null;
 		// No reflection guard here, deliberately. `isRenameSafe`'s exists because the single-file path
 		// never looks at another file; this path DOES - a public member's affected set is every scope file
 		// mentioning the name (`publicAffectedFiles`), and `otherFileRenameSpans` already refuses on a
