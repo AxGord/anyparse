@@ -84,19 +84,28 @@ final class HxCallArgMultilineStringCuddleTest extends Test {
 	}
 
 	/**
-	 * A token followed by a REAL hardline (a `#if … #end` splice raw inside a
-	 * wrapping operator chain) has no measurable closing line: the chain's own
-	 * break, not the token, places what comes after. The measure reports that
-	 * as `last == -1` and the standard budget walk decides, which refuses the
-	 * flat commit — committing would emit the chain's hardlines with no
-	 * indent at all. Live instance: TM `crashdumper/CrashDumper.hx`.
+	 * A `#if … #end` splice inside a wrapping operator chain keeps the
+	 * enclosing chain's continuation indent — the writer must not commit the
+	 * flat shape and emit the chain's breaks with no indent at all.
+	 *
+	 * The fixture is TM `crashdumper/CrashDumper.hx` verbatim, and it moved
+	 * with `@:fmt(fillParts)`: the region no longer replays the source's
+	 * internal line breaks, so `+ #if !flash "package:\t"` no longer trails
+	 * the first line and the whole operand run packs onto one line up to
+	 * `#end`. Both spellings reach the same bytes now — the source form
+	 * (asserted here) and the canonical form (asserted as a fixed point).
 	 */
 	public function testSpliceFollowedByChainBreakKeepsIndent(): Void {
 		final src: String = 'class C {\n\tfunction sessionStr():String {\n'
 			+ '\t\treturn \'--------------------------------------$${endl}filename:\\t$${session.fileName}$$endl\' + #if !flash '
 			+ '"package:\\t"\n\t\t\t+ session.packageName + endl + "version:\\t" + session.version + endl + #end\n'
 			+ '\t\t\t\'sess. ID:\\t$${session.id}$${endl}started:\\t$${session.startTime.toString()}\';\n\t}\n}';
-		Assert.equals(src, triviaWrite(src));
+		final canonical: String = 'class C {\n\tfunction sessionStr():String {\n'
+			+ '\t\treturn \'--------------------------------------$${endl}filename:\\t$${session.fileName}$$endl\'\n'
+			+ '\t\t\t+ #if !flash "package:\\t" + session.packageName + endl + "version:\\t" + session.version + endl + #end\n'
+			+ '\t\t\t\'sess. ID:\\t$${session.id}$${endl}started:\\t$${session.startTime.toString()}\';\n\t}\n}';
+		Assert.equals(canonical, triviaWrite(src), 'the source form reflows');
+		Assert.equals(canonical, triviaWrite(canonical), 'and the canonical form is a fixed point');
 	}
 
 	/**

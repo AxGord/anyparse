@@ -25,5 +25,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCondSpliceOpTerm = {
 	@:fmt(atomOperand) var operand: HxExpr;
-	var op: HxCondSpliceOpLit;
+	@:fmt(inlineSep) var op: HxCondSpliceOpLit;
 };

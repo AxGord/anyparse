@@ -159,7 +159,16 @@ final class TriviaTryparseLowering {
 		// (`elemBodyStarHasFlag`) to gate its sibling FORCE, so the placement and
 		// the spread turn on together. False -> byte-identical to the pre-slice
 		// call, here and in the pre-pass.
-		refuseGlueOnControlFlow: Bool = false
+		refuseGlueOnControlFlow: Bool = false,
+		// ω-splice-op-fill: the Star carries `@:fmt(fillItems)` — its elements
+		// are laid out as a Wadler `Fill` with a soft `Line(' ')` between them
+		// and NO leading pad, instead of replaying the source's inter-element
+		// newlines. The enclosing struct's `@:fmt(fillParts)` assembly then
+		// takes that fill as ONE of its own items, so the whole rule packs
+		// against one budget. A Star whose elements carry comments falls back
+		// to the ordinary source-faithful emit at write time (see
+		// `triviaTryparseFillExpr`); default false → byte-identical.
+		fillItems: Bool = false
 	): Expr {
 		// noqa: complexity
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
@@ -282,7 +291,71 @@ final class TriviaTryparseLowering {
 			elemSelfTrailsNewline: elemSelfTrailsNewline,
 			elemCondFn: elemCondFnExpr
 		};
-		return heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
+		final baseExpr: Expr = heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
+		return fillItems ? triviaTryparseFillExpr(c, baseExpr) : baseExpr;
+	}
+
+	/**
+	 * ω-splice-op-fill — the `@:fmt(fillItems)` bypass emit.
+	 *
+	 * Lays the Star's elements out as `Fill(items, Line(' '))` and nothing
+	 * else: no leading pad, no trailing pad, and — the point of the flag — no
+	 * reading of `Trivial<T>.newlineBefore`. The enclosing struct's
+	 * `@:fmt(fillParts)` assembly folds this fill in as one of its own items,
+	 * so `#if c` , the operand run, `#end` and the tail all pack against a
+	 * single budget and the same tree lays out the same way however the source
+	 * spelled it.
+	 *
+	 * The pad is dropped rather than emitted as another soft `Line`: the gap
+	 * between the condition and the first operand is a seam the STRUCT's fill
+	 * already owns (`@:fmt(fillSeam)` on the field after it), and emitting a
+	 * second one here would spend two separators on one gap.
+	 *
+	 * The run goes through `D.fillOnOverflow`, not a bare `Fill`, for the
+	 * reason that helper documents: a bare `Fill` is measured as a committed
+	 * break by every `MBreak` first-line probe, and an element run that still
+	 * fits must keep the plain space-joined shape those probes saw before.
+	 * Measured: without the gate, `openfl/geom/PerspectiveProjection.hx`'s
+	 * 89-column `if (#if neko … || #end …)` opened its parens onto three lines.
+	 * `_dwb` restores the `WrapBoundary` the ordinary emit puts around the
+	 * element run, so wrap-depth walkers (`WrapList.isTopLevelChain`) still
+	 * count this run one level in.
+	 *
+	 * COMMENTS ARE THE REFUSAL. A fill re-decides where every break lands, and
+	 * a line comment inside the run pins the break after itself; rather than
+	 * teach the fill that, an element carrying ANY captured comment (leading or
+	 * trailing) routes the whole Star back to `baseExpr` — the ordinary
+	 * source-faithful emit, which already reproduces such a region byte for
+	 * byte. The probe is a write-time scan of the element array, so a run
+	 * without comments (every region in the 1665-module census) takes the fill
+	 * and one with comments is untouched.
+	 */
+	private static function triviaTryparseFillExpr(c: WriterLowering.TryparseStarCtx, baseExpr: Expr): Expr {
+		final fieldAccess: Expr = c.fieldAccess;
+		final writerOptExpr: Expr = c.writerOptExpr;
+		final triviaElemCall: Expr = c.triviaElemCall;
+		return macro {
+			final _fillArr = $fieldAccess;
+			var _fillHasComments: Bool = false;
+			var _fci: Int = 0;
+			while (_fci < _fillArr.length) {
+				if (_fillArr[_fci].leadingComments.length > 0 || _fillArr[_fci].trailingComment != null) _fillHasComments = true;
+				_fci++;
+			}
+			if (_fillArr.length == 0 || _fillHasComments)
+				$baseExpr;
+			else {
+				final _writerOpt = $writerOptExpr;
+				final _items: Array<anyparse.core.Doc> = [];
+				var _fi: Int = 0;
+				while (_fi < _fillArr.length) {
+					final _t = _fillArr[_fi];
+					_items.push($triviaElemCall);
+					_fi++;
+				}
+				_dwb(anyparse.core.D.fillOnOverflow(_items, opt.lineWidth + 1));
+			}
+		};
 	}
 
 	/**

@@ -1203,9 +1203,28 @@ class WriterLowering {
 		// ω-multivar-wrap: `@:fmt(multiVarWrap('<knob>', '<moreField>'))` (sole
 		// consumer: HxVarDecl) folds the head binding + right-recursion links into
 		// one WrapList.emit under the `<knob>` cascade — see buildMultiVarWrapFold.
-		final dcExpr: Expr = multiVarKnob == null || multiVarMoreField == null
-			? dcCall(parts)
-			: buildMultiVarWrapFold(parts, typePath, multiVarKnob, multiVarMoreField);
+		// ω-splice-op-fill: `@:fmt(fillParts)` on the STRUCT assembles its
+		// fields as one Wadler `Fill` instead of a `Concat` — the node owns a
+		// layout policy of its own rather than replaying the source's line
+		// breaks. Every seam the fill owns is declared `@:fmt(fillSeam)` on
+		// the field after it, so those fields push no separator and the fill's
+		// `Line(' ')` is the only thing between two items: a seam that fits
+		// stays a space, one that does not becomes a break at the fill's
+		// indent, and the decision is the same for every legal spelling of the
+		// same tree. `D.fillOnOverflow` drops the `_de()` a `fillSeam` field
+		// leaves behind when the gap carried no comment, and — see its own doc
+		// — keeps the plain space-joined shape while the run still fits, so a
+		// region that never needed to break is measured exactly as before.
+		// Trivia mode only —
+		// the plain writer captures no source-newline slots, so it has nothing
+		// to normalise and stays byte-identical.
+		// Sole consumer: `HxCondSpliceOpExpr` (`#if c (operand op)* #end tail`).
+		final dcExpr: Expr = if (node.fmtHasFlag('fillParts') && _ctx.trivia)
+			macro anyparse.core.D.fillOnOverflow([$a{parts}], opt.lineWidth + 1);
+		else if (multiVarKnob == null || multiVarMoreField == null)
+			dcCall(parts);
+		else
+			buildMultiVarWrapFold(parts, typePath, multiVarKnob, multiVarMoreField);
 		return finalizeStructReturn(node, arrowValueIfReflowWrap(node, dcExpr));
 		// (empty-body detection + ctor-set dispatch live in finalizeStructReturn)
 	}
@@ -1423,7 +1442,14 @@ class WriterLowering {
 		// follows the leading-side decision because the parser does
 		// not capture a body→`#end` newline slot, but in legal source
 		// shapes the two newlines are correlated.
-		final tryparsePadLeading: Bool = starNode.fmtHasFlag('padLeading');
+		// ω-splice-op-fill: `@:fmt(fillItems)` hands the gap BEFORE the first
+		// element to the enclosing struct's `@:fmt(fillParts)` run, so the
+		// Star's own leading pad must not fire in trivia mode — including on
+		// the comment fallback, which emits the ordinary Star body and would
+		// otherwise spend a second separator on the same gap (`#if flash  'b'`,
+		// measured). The PLAIN writer keeps the pad: it has no fill to take
+		// the gap from it.
+		final tryparsePadLeading: Bool = starNode.fmtHasFlag('padLeading') && !starNode.fmtHasFlag('fillItems');
 		final tryparsePadTrailing: Bool = starNode.fmtHasFlag('padTrailing');
 		// ω-cond-indent-policy: `@:fmt(conditionalBodyIndent)` on a
 		// `@:trivia @:tryparse` cond-comp body / elseBody / elseif-body
@@ -1578,6 +1604,10 @@ class WriterLowering {
 		// (the expression-scope cond-comp `elseifs`) swaps its inter-element
 		// and trailing-pad spaces for knob-gated soft `Line(' ')` seps.
 		final tryparseCondExprFit: Bool = starNode.fmtHasFlag('condExprFitBreak');
+		// ω-splice-op-fill: `@:fmt(fillItems)` routes the Star to the fill
+		// bypass — soft `Line(' ')` between elements, no pad, source newlines
+		// ignored. Sole consumer: `HxCondSpliceOpExpr.terms`.
+		final tryparseFillItems: Bool = starNode.fmtHasFlag('fillItems');
 		parts.push(TriviaTryparseLowering.triviaTryparseStarExpr(
 			fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB, tryparseTrailLC, tryparseTrailBA,
 			firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
@@ -1586,7 +1616,8 @@ class WriterLowering {
 			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
 			tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null, tryparseBlockEnded, tryparseSepFaithful,
 			tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail,
-			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn, refuseGlueOnControlFlow
+			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn, refuseGlueOnControlFlow,
+			tryparseFillItems
 		));
 	}
 
@@ -9128,7 +9159,25 @@ class WriterLowering {
 			// `newlineBefore` could be read.
 			if (_ctx.trivia && isTriviaBearing(typePath)) {
 				final nlAccess: Expr = beforeNewlineAccess(fieldName);
-				final triviaSepExpr: Expr = if (prevAnyStarNonEmpty != null) {
+				// ω-splice-op-fill: `@:fmt(fillSeam)` hands this field's leading
+				// separator to the STRUCT's `@:fmt(fillParts)` assembly — the
+				// gap becomes a `Fill` seam, so the field itself contributes
+				// `_de()` and the source-newline slot is not consulted. The
+				// `buildBeforeLeadingSep` wrap still runs, so a comment the
+				// parser captured in the gap is still emitted (as a Fill item
+				// of its own); an empty slot leaves `_de()`, which
+				// `D.fillOnOverflow` drops rather than counting as an item.
+				// ω-splice-op-fill: `@:fmt(inlineSep)` is the same decision
+				// for a gap the enclosing fill does NOT own — a single space,
+				// never a break. Consumer: `HxCondSpliceOpTerm.op`, where the
+				// operator must stay glued to the operand it closes.
+				final fillSeam: Bool = child.fmtHasFlag('fillSeam');
+				final inlineSep: Bool = child.fmtHasFlag('inlineSep');
+				final triviaSepExpr: Expr = if (fillSeam)
+					macro _de();
+				else if (inlineSep)
+					macro _dt(' ');
+				else if (prevAnyStarNonEmpty != null) {
 					final prev: Expr = prevAnyStarNonEmpty;
 					macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de();
 				} else
