@@ -218,6 +218,20 @@ final class TypeResolver {
 	}
 
 	/**
+	 * The node that DECLARES the name read at `recvSpan`, or null when the read binds to nothing
+	 * the scope walk can see.
+	 *
+	 * The twin of `resolveBindingFrom`, which answers WHERE the declaration is. A caller that has
+	 * to tell one KIND of declaration from another needs this instead: a bare `f(x)` whose `f`
+	 * binds to a local closure is a different question from one whose `f` binds to a method of the
+	 * enclosing type, and an offset alone cannot separate them.
+	 */
+	public static function bindingNodeFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<QueryNode> {
+		final hit: Null<RefHit> = resolveBindingHit(name, recvSpan, tree, shape);
+		return hit == null ? null : hit.bindingNode;
+	}
+
+	/**
 	 * Whether `receiver` is a genuine TYPE reference — its ROOT identifier (walking down any
 	 * `pkg.Type` field-access chain) binds to NO value: a local / parameter / field of the same
 	 * name would make the access an INSTANCE access, not a static one. Shared by

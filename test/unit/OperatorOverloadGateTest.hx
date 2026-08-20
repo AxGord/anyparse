@@ -68,6 +68,12 @@ class OperatorOverloadGateTest extends Test {
 	private static final APPEND_USE: String = 'class UseR {\n\n\tpublic static function f(): Route {\n\t\tvar r: Route = \'root\';\n'
 		+ '\t\tr += \'a\';\n\t\tr += \'b\';\n\t\treturn r;\n\t}\n\n}\n';
 
+	/** The same two operand shapes as a MEMBER read with no `this` and an unqualified call. */
+	private static final CONCAT_MEMBER_USE: String = 'class UseM {\n\n\tprivate static var root: Dir;\n\n'
+		+ '\tpublic static function f(): String {\n\t\treturn root + \'pages\';\n\t}\n\n'
+		+ '\tpublic static function g(): String {\n\t\treturn base() + \'pages\';\n\t}\n\n'
+		+ '\tprivate static function base(): Dir {\n\t\treturn root;\n\t}\n\n}\n';
+
 	/**
 	 * The join turns N appends into ONE, so an overloaded `+=` runs its body once instead of N
 	 * times: `r += 'a'; r += 'b'` is `root/a/b` where the joined `r += 'a' + 'b'` is `root/ab`.
@@ -98,6 +104,26 @@ class OperatorOverloadGateTest extends Test {
 	 */
 	public function testFoldStillReportsLiteralChainNextToIt(): Void {
 		Assert.isTrue(reports(new FoldStringLiterals(), CONCAT_OVERLOAD, CONCAT_USE, '\'a\' + \'b\''));
+	}
+
+	/**
+	 * An operand that is a member of the enclosing type read WITHOUT `this` types through the
+	 * shared walk, so the gate can prove the overload rather than abstaining. Before that arm both
+	 * of these sites answered `Unproven` — a finding reported without a fix, where the truth is
+	 * that the finding is wrong.
+	 */
+	public function testFoldSkipsOverloadedImplicitMemberOperand(): Void {
+		Assert.isFalse(reports(new FoldStringLiterals(), CONCAT_OVERLOAD, CONCAT_MEMBER_USE, 'root + \''));
+	}
+
+	/** The same for an operand that is an unqualified call to a sibling method. */
+	public function testFoldSkipsOverloadedUnqualifiedCallOperand(): Void {
+		Assert.isFalse(reports(new FoldStringLiterals(), CONCAT_OVERLOAD, CONCAT_MEMBER_USE, 'base() + \''));
+	}
+
+	/** Both shapes stay reportable when the type declares no overload — the arms type them either way. */
+	public function testFoldReportsPlainImplicitMemberOperand(): Void {
+		Assert.isTrue(reports(new FoldStringLiterals(), CONCAT_PLAIN, CONCAT_MEMBER_USE, 'root + \''));
 	}
 
 	/** `!(f == g)` does not flip to `f != g`: Haxe derives no `@:op(A != B)` from the `==` overload. */

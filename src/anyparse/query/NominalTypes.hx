@@ -278,6 +278,21 @@ final class NominalTypes {
 		final identKind: Null<String> = shape.identKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		if (identKind == null || fieldKind == null) return null;
+		// A `$name` interpolation FRAGMENT is an identifier read that the grammar keeps as a leaf
+		// inside the string literal rather than as an `identKind` node, so `pathOf` cannot see it.
+		// It binds exactly like a bare ident, and resolving it is what lets a caller ask about the
+		// operands a SPLIT of the literal would create — `'${dir}pages'` becoming `dir + 'pages'`
+		// re-selects the `+` on `dir`'s type, so a `$name` that answered null left every such
+		// question unprovable (measured: 66 of the 121 report-only `fold-adjacent-string-literals`
+		// findings on `pony/src`).
+		final interpIdentKind: Null<String> = shape.stringInterpIdentKind;
+		if (interpIdentKind != null && node.kind == interpIdentKind) {
+			final interpName: Null<String> = node.name;
+			final interpSpan: Null<Span> = node.span;
+			if (interpName == null || interpSpan == null) return null;
+			final bindingFrom: Null<Int> = TypeResolver.resolveBindingFrom(interpName, interpSpan, root, shape);
+			return bindingFrom == null ? null : declaredTypes[bindingFrom];
+		}
 		final path: Null<Array<String>> = pathOf(node, identKind, fieldKind);
 		if (path == null) return null;
 		final rootType: Null<String> = pathRootTypeName(node, root, declaredTypes, shape);
@@ -457,6 +472,64 @@ final class NominalTypes {
 	 * entirely inside `forBindingElementTypeSource`, which recurses into `valueTypeSourceDeep`
 	 * directly and never comes back through here.
 	 */
+	/**
+	 * The type of an IDENT that names no value binding: a member of the ENCLOSING type, read
+	 * through an implicit `this` (`MS`, `l_usedLibs`). Null for anything else, including a name
+	 * that IS a binding — that one the path walk already answered.
+	 */
+	private static function implicitMemberNominal(
+		node: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, file: String
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		if (identKind == null || node.kind != identKind) return null;
+		final source: Null<String> = RefactorSupport.implicitThisMemberTypeSource(node, root, shape, index, file, []);
+		return source == null ? null : outerNominalOf(source);
+	}
+
+	/**
+	 * The return type of an UNQUALIFIED call — a method of the enclosing type called without a
+	 * receiver (`l_benchTime(time)`). A callee name that resolves to a value BINDING is a local
+	 * function or a stored closure instead, whose return type the index cannot name, so it stays
+	 * null.
+	 */
+	private static function unqualifiedCallNominal(
+		callee: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, method: String
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final span: Null<Span> = callee.span;
+		if (identKind == null || callee.kind != identKind || span == null) return null;
+		// A name that binds to a LOCAL — a closure or a parameter holding a function — is a
+		// different callee from a sibling METHOD, and the index cannot name a local's return type.
+		// The member declaration itself is not a refusal: the scope walk resolves a bare `f(x)` to
+		// the `FnMember f` that declares it, which is exactly the answer wanted here.
+		final binding: Null<QueryNode> = TypeResolver.bindingNodeFrom(method, span, root, shape);
+		final locals: Array<String> = (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? []);
+		if (binding != null && locals.contains(binding.kind)) return null;
+		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
+		return enclosing == null ? null : index.returnNominalOf(enclosing, method);
+	}
+
+	/**
+	 * The return type of a TYPE-qualified static call (`Tools.getBuildDate()`) — the one shape
+	 * where the receiver is not a VALUE at all, so asking it for a type answers null and the
+	 * member lookup never runs.
+	 *
+	 * Three conditions, all of them needed: the receiver is a bare identifier, it is upper-initial
+	 * (the language's own convention for a type reference — a lower-case receiver is a value whose
+	 * type simply did not resolve, and guessing there would name a package segment), and it names
+	 * no value binding in scope. Only then is the NAME itself the receiver type.
+	 */
+	private static function staticCallNominal(
+		receiver: QueryNode, root: QueryNode, shape: RefShape, index: SymbolIndex, method: String
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final name: Null<String> = receiver.name;
+		final span: Null<Span> = receiver.span;
+		if (identKind == null || receiver.kind != identKind || name == null || span == null) return null;
+		if (!RefactorSupport.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
+		return index.declaringFiles(name).length == 0 ? null : index.returnNominalOf(name, method);
+	}
+
 	private static function expressionNominalWalk(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
 		chain: Null<ChainTypeContext>, seen: Array<Int>, asReceiver: Bool = false
@@ -467,19 +540,30 @@ final class NominalTypes {
 		if (direct != null) return direct;
 		final callKind: Null<String> = shape.callKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
-		if (callKind == null || fieldKind == null || index == null || node.kind != callKind || node.children.length == 0) return null;
+		if (callKind == null || fieldKind == null || index == null) return null;
+		final resolved: SymbolIndex = index;
+		// Three shapes the path walk cannot reach, each turning a NULL into an answer rather than
+		// one answer into another — so a caller that read the null as "unknown" gains a type where
+		// it had none, and no existing answer moves. All three were measured as the reason
+		// `fold-adjacent-string-literals` could not prove its `+` on `pony/src`: an enclosing-type
+		// member read with no `this` (`MS`), an unqualified call to a sibling method
+		// (`l_benchTime(time)`), and a type-qualified static call (`Tools.getBuildDate()`).
+		if (node.kind != callKind) return implicitMemberNominal(node, root, shape, resolved, file);
+		if (node.children.length == 0) return null;
 		final callee: QueryNode = node.children[0];
 		final method: Null<String> = callee.name;
-		if (callee.kind != fieldKind || method == null || callee.children.length != 1) return null;
+		if (method == null) return null;
+		if (callee.kind == shape.identKind) return unqualifiedCallNominal(callee, root, shape, resolved, method);
+		if (callee.kind != fieldKind || callee.children.length != 1) return null;
 		// The callee's own receiver is asked in RECEIVER mode: `tmp.trim()` on a `tmp: Null<String>`
 		// looks `trim` up on `String`. A receiver that is ITSELF a call keeps today's answer — its
 		// type arrives from `returnNominalOf`, already reduced to the bare nominal `Null`, with no
 		// argument left to peel; recovering it needs a return-SOURCE lookup the index does not have.
 		final receiver: Null<String> =
 			expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen, true);
-		if (receiver == null) return null;
-		final member: Null<String> = index.returnNominalOf(receiver, method);
-		return member ?? staticExtensionNominal(receiver, method, chain, index, file);
+		if (receiver == null) return staticCallNominal(callee.children[0], root, shape, resolved, method);
+		final member: Null<String> = resolved.returnNominalOf(receiver, method);
+		return member ?? staticExtensionNominal(receiver, method, chain, resolved, file);
 	}
 
 	/**

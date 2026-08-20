@@ -148,8 +148,25 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.equals(0, editsOf(files).length);
 	}
 
-	public function testUnresolvedReceiverReportedOnly(): Void {
+	/**
+	 * An UNQUALIFIED call resolves too: a bare `make()` whose name binds to the enclosing type's own
+	 * method has that method's declared return type (`NominalTypes.unqualifiedCallNominal`).
+	 */
+	public function testUnqualifiedCallReceiverResolves(): Void {
 		final source: String = 'using Ext;\n\nclass C {\n\tfunction make():Widget\n\t\treturn null;\n\n\tfunction f():Void {\n'
+			+ '\t\tExt.deco(make(), 1);\n\t}\n}\n';
+		final vs: Array<Violation> = violationsOf(fileSet(source));
+		Assert.equals(1, vs.length);
+		Assert.equals(-1, vs[0].message.indexOf('receiver type unresolved'), vs[0].message);
+		Assert.isTrue(fixResultOf(fileSet(source)).indexOf('make().deco(1);') != -1, 'expected the rewrite');
+	}
+
+	/**
+	 * The same shape whose callee binds to a LOCAL instead — a stored closure, whose return type no
+	 * index can name, so the receiver stays unresolved and the site report-only.
+	 */
+	public function testLocalClosureReceiverReportedOnly(): Void {
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f():Void {\n\t\tfinal make = () -> new Widget();\n'
 			+ '\t\tExt.deco(make(), 1);\n\t}\n}\n';
 		assertUnresolvedReceiver(fileSet(source));
 	}
@@ -215,13 +232,17 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isTrue(out.indexOf('w.deco(w2.deco(1));') != -1, out);
 	}
 
-	public function testNestedReceiverInnerOnlyRewritten(): Void {
-		// The OUTER receiver is a call — an unresolved receiver type, so it stays report-only
-		// while the inner ident-receiver call rewrites in the same pass.
+	/**
+	 * A nested pair now rewrites WHOLE in one pass: the outer receiver is itself an `Ext.deco(…)`
+	 * call, and a type-qualified static call is a shape the resolution walk answers, so both
+	 * findings carry a fix. It used to take two passes — the outer waited for the inner rewrite to
+	 * turn its receiver into an identifier — which is the same end state one round later.
+	 */
+	public function testNestedReceiverRewritesWhole(): Void {
 		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(Ext.deco(w, 1), 2);\n\t}\n}\n';
 		Assert.equals(2, violationsOf(fileSet(source)).length);
 		final out: String = fixResultOf(fileSet(source));
-		Assert.isTrue(out.indexOf('Ext.deco(w.deco(1), 2);') != -1, out);
+		Assert.isTrue(out.indexOf('w.deco(1).deco(2);') != -1, out);
 	}
 
 	public function testCommentInDroppedRegionNotFixed(): Void {
@@ -550,13 +571,30 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.equals(-1, vs[0].message.indexOf('receiver type unresolved'), vs[0].message);
 	}
 
-	public function testStaticCallReceiverReportedOnly(): Void {
-		// A single UNBOUND identifier is not guessed to be a type name, so `Mk.make()` resolves to
-		// nothing and the site stays report-only — the conservative miss, pinned deliberately.
-		final source: String = user('using Ext;\n\n', 'Ext.deco(Mk.make(), 1);');
-		assertUnresolvedReceiver(fileSet(source, WIDGET_SOURCE, [
+	/**
+	 * A TYPE-qualified static call IS a resolvable receiver: an upper-initial identifier that binds
+	 * to no value and names a type the index declares can only be that type, so `Mk.make()` has
+	 * `make`'s declared return type and the rewrite is licensed like any other.
+	 *
+	 * This used to be pinned as the conservative MISS. It stopped being one when the shared
+	 * resolution walk learned the shape (`NominalTypes.staticCallNominal`); what still pins the
+	 * miss is `testUnknownStaticReceiverReportedOnly` below, where the receiver type is declared
+	 * nowhere at all.
+	 */
+	public function testStaticCallReceiverResolves(): Void {
+		final files: Array<{ file: String, source: String }> = fileSet(user('using Ext;\n\n', 'Ext.deco(Mk.make(), 1);'), WIDGET_SOURCE, [
 			{ file: 'Mk.hx', source: 'class Mk {\n\tpublic static function make(): Widget return null;\n}\n' }
-		]));
+		]);
+		final vs: Array<Violation> = violationsOf(files);
+		Assert.equals(1, vs.length);
+		Assert.equals(-1, vs[0].message.indexOf('receiver type unresolved'), vs[0].message);
+		final out: String = fixResultOf(files);
+		Assert.isTrue(out.indexOf('Mk.make().deco(1);') != -1, out);
+	}
+
+	/** The receiver type the index does not declare at all — nothing to verify the shadow gate against. */
+	public function testUnknownStaticReceiverReportedOnly(): Void {
+		assertUnresolvedReceiver(fileSet(user('using Ext;\n\n', 'Ext.deco(Unknown.make(), 1);')));
 	}
 
 	public function testParenthesizedReceiverUnwrapped(): Void {
