@@ -73,6 +73,14 @@ package anyparse.grammar.haxe.format;
  * (block, refusing wrap cascade, kept multi-line literal) glues to the
  * label as `same` does. See `anyparse.format.BodyFit`.
  *
+ * `Same` and `FitLine` both OVERRIDE a source break — a `case X:` whose body
+ * the author wrote on the next line is re-joined when the policy says so. Only
+ * `Keep` reads the source form. That is worth stating because the two knobs are
+ * dispatched on position rather than OR-ed: setting `caseBody` alone and testing
+ * on a `return switch …` (an EXPRESSION-position switch, so `expressionCase`
+ * governs it) leaves the source shape untouched, and reads exactly like a writer
+ * that cannot re-join at all.
+ *
  * `functionBody` (ω-functionBody-policy) is the same three-way body-
  * placement knob shape as `ifBody`, gating the separator between the
  * `()` of a function declaration's parameter list and its body when
