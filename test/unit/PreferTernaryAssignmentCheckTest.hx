@@ -139,6 +139,29 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.isTrue(ids.contains('prefer-ternary-assignment'));
 	}
 
+	/**
+	 * Two l-values differing ONLY by whitespace inside a string literal are two DIFFERENT
+	 * l-values. The equality key was whitespace-normalised source, which collapses runs inside
+	 * a literal too, so `m["a  b"]` and `m["a b"]` compared equal and `--fix` emitted
+	 * `m["a  b"] = c ? 1 : 2;` — the else branch silently started writing a different map key.
+	 * Reduced from the shipped binary; `structurallyEqual` now carries the literal content.
+	 */
+	public function testLValuesDifferingInsideAStringLiteralAreNotTheSame(): Void {
+		final differing: String = 'class C {\n\tfunction f() {\n\t\tif (c) m["a  b"] = 1;\n\t\telse m["a b"] = 2;\n\t}\n}';
+		Assert.equals(0, violations(differing).length, 'the two keys differ - collapsing them would change which entry is written');
+		final same: String = 'class C {\n\tfunction f() {\n\t\tif (c) m["a  b"] = 1;\n\t\telse m["a  b"] = 2;\n\t}\n}';
+		Assert.equals(1, violations(same).length, 'the identical key still collapses');
+	}
+
+	/**
+	 * A whitespace RUN outside a literal is still normalised away — adding the shape test
+	 * narrowed the key only where the projection differs, and layout does not reach it.
+	 */
+	public function testLValueLayoutDifferenceStillCollapses(): Void {
+		final laidOut: String = 'class C {\n\tfunction f() {\n\t\tif (c) m[k\n\t\t\t] = 1;\n\t\telse m[k ] = 2;\n\t}\n}';
+		Assert.equals(1, violations(laidOut).length, 'a newline+indent run and a single space still normalise equal');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

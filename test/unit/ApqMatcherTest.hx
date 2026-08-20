@@ -546,6 +546,65 @@ class Y {
 		);
 	}
 
+	/**
+	 * A reused metavariable is enforced by `RefactorSupport.structurallyEqual`, which compares
+	 * the PROJECTED shape — so it is only as sharp as the projection. `BoolLit` carried no
+	 * value, and `$C ? $A : $A` therefore matched `c ? true : false` and bound `$A = true`;
+	 * `apq rewrite … '$A'` then turned that ternary into a bare `true`. Reduced from the shipped
+	 * binary, not constructed.
+	 */
+	public function testBooleanLiteralsAreNotInterchangeable(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(
+			'class X {\n\tfunction f(c:Bool) {\n\t\tvar a = c ? true : false;\n\t\tvar b = c ? true : true;\n\t}\n}'
+		);
+		final reused: Array<Match> = Matcher.search(plugin.parsePattern("$C ? $A : $A"), tree);
+		Assert.equals(1, reused.length, 'only `c ? true : true` has two IDENTICAL branches - got ${reused.length}');
+		Assert.equals(
+			1,
+			Matcher.search(
+				plugin.parsePattern("$y == true"),
+				plugin.parseFile('class X {\n\tfunction f(x:Bool) {\n\t\tif (x == true) g();\n\t\tif (x == false) g();\n\t}\n}')
+			)
+				.length,
+			'a literal `true` in a pattern must not match a literal `false`'
+		);
+	}
+
+	/**
+	 * A type WRITTEN in a pattern must constrain the match. The annotation is a SLOT, not a
+	 * child, so `unifyChildren` never saw it and `Pattern`'s node rebuilds dropped it outright:
+	 * `final $x:Int = $v` matched `final b:String = 1`, and `apq rewrite` then rewrote the
+	 * String-typed declaration. A pattern that writes NO type still constrains nothing.
+	 */
+	public function testAWrittenTypeAnnotationConstrainsTheMatch(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile('class X {\n\tfunction f() {\n\t\tfinal a:Int = 1;\n\t\tfinal b:String = 1;\n\t}\n}');
+		Assert.equals(1, Matcher.search(plugin.parsePattern("final $x:Int = $v"), tree).length, 'only the Int declaration');
+		Assert.equals(2, Matcher.search(plugin.parsePattern("final $x = $v"), tree).length, 'an unannotated pattern constrains nothing');
+		Assert.equals(
+			'Int,String', boundNames(Matcher.search(plugin.parsePattern("final $x:$t = $v"), tree), 't').join(','),
+			'a metavariable in the annotation binds the type'
+		);
+	}
+
+	/**
+	 * `(e : T)` and `cast(e, T)` dropped their type from the projection entirely, so every
+	 * check-type / typed-cast compared equal to every other: `($y : String)` matched
+	 * `(o : Bytes)` and `apq rewrite` collapsed `c ? cast(o, String) : cast(o, Bytes)` onto the
+	 * String arm. The type now rides the node's type SLOT, which keeps every consumer's child
+	 * indices where they were.
+	 */
+	public function testCheckTypeAndTypedCastCarryTheirType(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(
+			'class X {\n\tfunction f(o:Dynamic) {\n\t\tvar a = (o : String);\n\t\tvar b = (o : Bytes);\n'
+			+ '\t\tvar c = cast(o, String);\n\t\tvar d = cast(o, Bytes);\n\t}\n}'
+		);
+		Assert.equals(1, Matcher.search(plugin.parsePattern("($y : String)"), tree).length, 'the Bytes check-type is a different node');
+		Assert.equals(1, Matcher.search(plugin.parsePattern("cast($y, String)"), tree).length, 'the Bytes cast is a different node');
+	}
+
 	/** The names each match bound to the given metavariable, in match order. */
 	private static function boundNames(matches: Array<Match>, metavar: String): Array<String> {
 		return [

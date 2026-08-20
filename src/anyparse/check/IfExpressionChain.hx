@@ -196,11 +196,17 @@ final class IfExpressionChain {
 			== node;
 	}
 
-	/** Whether two subtrees have identical whitespace-normalized source — the l-value equality key. */
+	/** Whether two subtrees are the SAME token-for-token — the l-value equality key. */
 	public static function sameSource(a: QueryNode, b: QueryNode, source: String): Bool {
 		final aSpan: Null<Span> = a.span;
 		final bSpan: Null<Span> = b.span;
-		return aSpan != null && bSpan != null
+		// Whitespace normalisation alone collapses runs INSIDE a string literal, so
+		// `m["a  b"]` and `m["a b"]` normalise equal — and every consumer here is a
+		// REWRITER that then keeps one l-value and drops the other. `structurallyEqual`
+		// compares literal content, so requiring both leaves exactly token identity.
+		// Same pairing as `tail-merge`'s `sameStatement` and `redundant-case-body`'s
+		// `sameBody`, for the same reason `CheckScan.normalizeSpan`'s doc gives.
+		return aSpan != null && bSpan != null && RefactorSupport.structurallyEqual(a, b)
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
 	}
 
