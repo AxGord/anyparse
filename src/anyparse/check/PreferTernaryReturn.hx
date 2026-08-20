@@ -166,6 +166,15 @@ final class PreferTernaryReturn implements Check {
 		final next: QueryNode = kids[i + 1];
 		if (next.kind != returnKind || next.children.length < 1) return null;
 		final elseValue: QueryNode = next.children[0];
+		// EITHER value being a ternary MID-REDUCTION blocks the pair, whatever the collapse would
+		// be. `simplify-boolean-ternary` is about to flatten such a ternary into `&&` / `||`, and
+		// this collapse would bury it one level deeper, where it stops being the function's direct
+		// returned value and loses its licence for good — `dropContainedEdits` keeps the OUTER edit
+		// of two that overlap, so the inner reduction is dropped, not deferred. The gate is
+		// deliberately OUTSIDE isStuckBooleanCollapse: a VALUE ternary collapse (neither value a
+		// bool literal) buries the tail just as thoroughly, and that arm never consults the stuck
+		// check at all. Measured on anyparse's own `MagicNumber.childPositionCtx` and
+		// `PurityScan.isPure`, which came out as nested ternary chains until this moved out.
 		// A bool-literal-vs-non-provably-Bool pair collapses to a "stuck" boolean ternary
 		// (`cond ? true : g()`) that simplify-boolean-ternary cannot reduce without a typer
 		// — uglier than the guard. Leave it: a fully-reducible boolean guard chain is
@@ -173,6 +182,7 @@ final class PreferTernaryReturn implements Check {
 		// The narrowing-guard refusal fires only for a bool-literal collapse (see
 		// RefactorSupport.refusesNullNarrowingBoolCollapse).
 		return RefactorSupport.refusesNullNarrowingBoolCollapse(thenValue, elseValue, ifNode.children[0], shape)
+			|| RefactorSupport.pendingBooleanTernaryTail(thenValue, shape) || RefactorSupport.pendingBooleanTernaryTail(elseValue, shape)
 			|| isStuckBooleanCollapse(thenValue, elseValue, shape, retType)
 			? null
 			: {
@@ -264,8 +274,7 @@ final class PreferTernaryReturn implements Check {
 		final notKind: Null<String> = shape.notKind;
 		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
 		if (RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)) return false;
-		return !RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape)
-			|| RefactorSupport.pendingBooleanTernaryTail(other, shape);
+		return !RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape);
 	}
 
 	/**

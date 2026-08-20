@@ -341,6 +341,23 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The mid-reduction gate is INDEPENDENT of the stuck-boolean one: a VALUE ternary collapse
+	 * (neither value a bool literal) buries the tail just as thoroughly, and never consults the
+	 * stuck check at all. `dropContainedEdits` keeps the OUTER of two overlapping edits, so the
+	 * inner reduction is dropped rather than deferred — measured on anyparse's own
+	 * `MagicNumber.childPositionCtx`, which came out as `p ? i >= 1 : q ? c : false`.
+	 */
+	public function testValueCollapseOntoPendingTernaryNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(p:Bool, i:Int, q:Bool, c:Bool):Bool {\n\t\tif (p) return i >= 1;\n'
+				+ '\t\treturn q ? c : false;\n\t}\n}'
+			).length
+		);
+	}
+
 	/** …and once it HAS flattened, the same pair collapses. */
 	public function testFlattenedTailThenFlagged(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
