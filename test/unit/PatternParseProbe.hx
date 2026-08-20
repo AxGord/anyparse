@@ -168,13 +168,18 @@ class PatternParseProbe extends Test {
 		Assert.equals('NewExpr', pattern.root.children[0].kind, 'the initializer must stay a NewExpr constraint');
 	}
 
-	public function testTypeAnnotationMetavarIsReportedAsIgnored(): Void {
-		// A declared type is not a node in the Haxe model, so `:$t` vanishes from the
-		// parsed pattern and the search is WIDER than what the user wrote. The
-		// pattern records the loss instead of hiding it.
+	public function testTypeAnnotationMetavarIsKeptInThePattern(): Void {
+		// A declared type IS in the model - it rides `QueryNode.type`, a slot rather than a
+		// child. The pattern rebuilds in `Metavar.reclassify` / `PatternStar.reclassify` used
+		// to drop the slot, so `:$t` vanished and the search answered a WIDER question than
+		// written; `ignoredMetavars` faithfully reported the loss. Both are fixed: the slot
+		// survives the rebuild, `$t` binds the annotation, and nothing is reported ignored.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final annotated: Pattern = plugin.parsePattern("final $n:$t = $v;");
-		Assert.equals('t', annotated.ignoredMetavars.join(','), 'the dropped :$$t must be reported');
+		Assert.equals('', annotated.ignoredMetavars.join(','), ':$$t is part of the pattern, not dropped');
+		final slot: Null<QueryNode> = annotated.root.type;
+		Assert.notNull(slot, 'the annotation must reach the pattern root as its type slot');
+		Assert.equals("$t", slot == null ? '<null>' : slot.name);
 		final plain: Pattern = plugin.parsePattern("final $n = $v;");
 		Assert.equals('', plain.ignoredMetavars.join(','), 'a pattern that keeps every metavar reports none');
 	}
@@ -231,7 +236,7 @@ class PatternParseProbe extends Test {
 	public function testStarIsNotReportedAsAnIgnoredMetavar(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		Assert.equals('', plugin.parsePattern('g(...)').ignoredMetavars.join(','));
-		Assert.equals('t', plugin.parsePattern("final $n:$t = g(...);").ignoredMetavars.join(','));
+		Assert.equals('', plugin.parsePattern("final $n:$t = g(...);").ignoredMetavars.join(','));
 	}
 
 	/** True when `parsePattern` refuses `source` outright. */

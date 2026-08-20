@@ -245,15 +245,21 @@ final class Metavar {
 	public static function reclassify(tree: QueryNode, identKind: String): QueryNode {
 		final n: Null<String> = tree.name;
 		final newChildren: Array<QueryNode> = [for (c in tree.children) reclassify(c, identKind)];
+		// The type SLOT is carried through and reclassified like any other subtree. Rebuilding
+		// a pattern node without it dropped every type a pattern WROTE, so `final $x:Int = $v`
+		// reached the matcher with no annotation at all and matched `final b:String = 1`;
+		// recursing into it is what lets `final $x:Array<$T> = $v` bind `$T`.
+		final slot: Null<QueryNode> = tree.type;
+		final newType: Null<QueryNode> = slot == null ? null : reclassify(slot, identKind);
 		if (n != null) {
 			final bare: Null<String> = decodePlaceholderName(n);
 			if (bare != null) {
 				return tree.kind == identKind && newChildren.length == 0
 					? new QueryNode(KIND, bare, [], tree.span)
-					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span);
+					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span, newType);
 			}
 		}
-		return new QueryNode(tree.kind, n, newChildren, tree.span);
+		return new QueryNode(tree.kind, n, newChildren, tree.span, newType);
 	}
 
 	/**
@@ -349,6 +355,11 @@ final class Metavar {
 				null;
 			if (bare != null) into[bare] = (into[bare] ?? 0) + 1;
 		}
+		// The type SLOT counts too: a metavariable written inside an annotation
+		// (`final $x:Array<$T> = $v`) IS part of the parsed pattern now that the slot
+		// survives `reclassify`, and counting only children reported it as dropped.
+		final slot: Null<QueryNode> = node.type;
+		if (slot != null) countInto(slot, into);
 		for (c in node.children) countInto(c, into);
 	}
 
@@ -448,9 +459,19 @@ final class PatternStar {
 	public static function reclassify(tree: QueryNode): QueryNode {
 		final children: Array<QueryNode> = [for (c in tree.children) reclassify(c)];
 		final span: Null<Span> = tree.span;
+		// Carried through for the same reason as in `Metavar.reclassify`: a rebuild that
+		// dropped the type slot dropped the pattern's own annotation.
+		final slot: Null<QueryNode> = tree.type;
+		// The recursion is bound to a LOCAL rather than written inline as the constructor's
+		// last argument. Inline, `-D analyzer-optimize` (set in `bin/apq-js-common.hxml`)
+		// mis-lowers this self-call as a TAIL call — it emits `tree = slot; continue;` and
+		// discards the pending `new QueryNode(...)`, so the function returns the type slot
+		// INSTEAD of the rebuilt node. Reduced to a standalone repro at
+		// `anyparse-wt/U32-probe/T2.hx`; the same source is correct without the flag.
+		final newType: Null<QueryNode> = slot == null ? null : reclassify(slot);
 		return tree.name == PLACEHOLDER && children.length == 0 && span != null && span.to - span.from == PLACEHOLDER.length
 			? new QueryNode(KIND, null, [], span)
-			: new QueryNode(tree.kind, tree.name, children, tree.span);
+			: new QueryNode(tree.kind, tree.name, children, tree.span, newType);
 	}
 
 	/**

@@ -112,7 +112,24 @@ final class Matcher {
 			}
 		} else if (pname != iname)
 			return false;
-		return unifyChildren(pattern.children, input.children, eq, bindings);
+		return unifyType(pattern.type, input.type, eq, bindings) && unifyChildren(pattern.children, input.children, eq, bindings);
+	}
+
+	/**
+	 * The type SLOT — not a child, so `unifyChildren` never sees it, and until it was
+	 * unified here a pattern that WROTE a type had it silently dropped: `final $x:Int = $v`
+	 * matched `final b:String = 1`, and `($e : String)` matched `(o : Bytes)`.
+	 *
+	 * Asymmetric on purpose. A pattern with NO type slot constrains nothing, so the
+	 * long-standing spelling `final $x = $v` keeps matching an annotated declaration; a
+	 * pattern that names a type requires the input to carry one and to unify with it. The
+	 * slot's subtree is an ordinary tree, so a metavariable inside it (`final $x:Array<$T> = $v`)
+	 * binds exactly as it does anywhere else.
+	 */
+	private static function unifyType(
+		pType: Null<QueryNode>, iType: Null<QueryNode>, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>
+	): Bool {
+		return pType == null || iType != null && unify(pType, iType, eq, bindings);
 	}
 
 	/**

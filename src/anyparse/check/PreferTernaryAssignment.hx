@@ -188,11 +188,22 @@ final class PreferTernaryAssignment implements Check {
 		return assign.kind == s.assignKind && assign.children.length == ASSIGN_CHILD_COUNT ? assign : null;
 	}
 
-	/** Whether two l-value subtrees have identical whitespace-normalized source. */
+	/**
+	 * Whether two l-value subtrees are the SAME l-value — identical whitespace-normalized
+	 * source AND identical projected shape.
+	 *
+	 * Both halves are needed, and the normalisation alone is the unsafe one: it collapses
+	 * whitespace runs INSIDE a string literal, so `m["a  b"]` and `m["a b"]` normalise
+	 * equal and the fix collapsed the two branches onto the FIRST key — a silent change of
+	 * which map entry is written. `structurallyEqual` compares literal content and closes
+	 * that; the normalized text stays because shape equality cannot see a comment sitting
+	 * inside an l-value's span. Same pairing, same reason, as `tail-merge`'s
+	 * `sameStatement` and `redundant-case-body`'s `sameBody`.
+	 */
 	private static function sameLvalue(a: QueryNode, b: QueryNode, source: String): Bool {
 		final aSpan: Null<Span> = a.span;
 		final bSpan: Null<Span> = b.span;
-		return aSpan != null && bSpan != null
+		return aSpan != null && bSpan != null && RefactorSupport.structurallyEqual(a, b)
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
 	}
 

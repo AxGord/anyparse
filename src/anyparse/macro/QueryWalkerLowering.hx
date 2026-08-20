@@ -465,15 +465,23 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private function nameOfValue(child: ShapeNode, access: Expr): Null<Expr> {
 		final ref: Null<String> = refOf(child);
-		return if (ref == null)
-			null
-		else if (isStringTerminal(ref))
+		// A `Bool` payload is the one primitive whose VALUE is the whole content of
+		// its node: `BoolLit(true)` and `BoolLit(false)` project the same kind, no
+		// children and no span text, so without a name every consumer comparing
+		// projected shape — `RefactorSupport.structurallyEqual`, and through it the
+		// pattern matcher's leaf test and its reused-metavariable check — reports
+		// `true` and `false` as the same node. Rendered as the canonical spelling
+		// rather than the source slice: a name only has to DISCRIMINATE, and the
+		// walker has the decoded value, not the tokens.
+		if (ref == null) return isBoolShape(child) ? macro ($access ? 'true' : 'false') : null;
+		return if (isStringTerminal(ref))
 			macro ($access: String)
 		else if (isTerminalRule(ref))
 			null
 		else
 			call(nameFnName(ref), [access]);
 	}
+
 
 	/** Fold candidate name expressions into `a ?? b ?? ... ?? null`, dropping the ones that can never yield a name. */
 	private function firstNonNullName(candidates: Array<Null<Expr>>): Expr {

@@ -264,6 +264,21 @@ class JoinBranchCallCheckTest extends Test {
 		Assert.equals(1, new PreferTernaryExpression().run([{ file: 'C.hx', source: joined }], new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * Arguments differing ONLY by whitespace inside a string literal are DIFFERENT arguments.
+	 * The shared-argument key was whitespace-normalised source (`IfExpressionChain.sameSource`),
+	 * which collapses runs inside a literal, so `log("a  b", 1)` / `log("a b", 2)` read as
+	 * "differ in one argument" and `--fix` emitted `log("a  b", if (c) 1 else 2);` — the else
+	 * branch silently started passing a different string. Reduced from the shipped binary.
+	 */
+	public function testArgumentsDifferingInsideAStringLiteralAreNotShared(): Void {
+		Assert.equals(
+			0, violations(wrap('if (c) {\n\t\t\tlog("a  b", 1);\n\t\t} else {\n\t\t\tlog("a b", 2);\n\t\t}')).length,
+			'two literals differing inside the quotes are two arguments, not one'
+		);
+		assertOneFinding(wrap('if (c) {\n\t\t\tlog("a  b", 1);\n\t\t} else {\n\t\t\tlog("a  b", 2);\n\t\t}'));
+	}
+
 	/** Run `fix` and re-emit through the canonical writer -- the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {

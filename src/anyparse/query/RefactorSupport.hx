@@ -1968,6 +1968,17 @@ final class RefactorSupport {
 	public static function structurallyEqual(a: QueryNode, b: QueryNode): Bool {
 		if (a.kind != b.kind) return false;
 		if (a.name != b.name) return false;
+		// The type SLOT is not a child, so a walk over `children` alone reported
+		// `(e : String)` and `(e : Bytes)` — and `final x:Int = 1` and `final x:String = 1` —
+		// as the SAME shape: the annotation is the only thing telling them apart. Both null
+		// is equal (an unannotated pair); one null is not. Inlined rather than given its own
+		// helper: this type is already an `oversized-type`, and the test is two lines.
+		final aType: Null<QueryNode> = a.type;
+		final bType: Null<QueryNode> = b.type;
+		if (aType == null || bType == null) {
+			if (aType != bType) return false;
+		} else if (!structurallyEqual(aType, bType))
+			return false;
 		if (a.children.length != b.children.length) return false;
 		for (k in 0...a.children.length) if (!structurallyEqual(a.children[k], b.children[k])) return false;
 		return true;

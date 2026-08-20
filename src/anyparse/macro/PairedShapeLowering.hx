@@ -63,6 +63,19 @@ class PairedShapeLowering {
 		};
 	}
 
+	/**
+	 * Whether an inline (unnamed) Terminal node's primitive is `Bool` — the mirror of
+	 * `isStringShape`, and the one primitive whose VALUE is the entire content of the
+	 * node it sits under (`BoolLit(true)` / `BoolLit(false)` share a kind, have no
+	 * children, and project no text).
+	 */
+	private function isBoolShape(node: ShapeNode): Bool {
+		if (node.kind != Terminal) return false;
+		if (node.annotations['base.underlying'] == 'Bool') return true;
+		final tp: Null<String> = node.annotations[AnnotationKeys.BASE_TYPE_PATH];
+		return tp != null && simpleName(tp) == 'Bool';
+	}
+
 	/** Whether an inline (unnamed) Terminal node's primitive is `String`. */
 	private function isStringShape(node: ShapeNode): Bool {
 		final under: Null<String> = node.annotations['base.underlying'];
