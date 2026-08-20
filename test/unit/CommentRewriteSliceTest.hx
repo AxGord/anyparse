@@ -25,6 +25,35 @@ class CommentRewriteSliceTest extends Test {
 		Assert.isTrue(text.contains('// the new name here'));
 	}
 
+	/**
+	 * A multi-line LITERAL find, written with the ` * ` continuation prefixes the source carries.
+	 *
+	 * Matching runs against a body whose line breaks — and those prefixes — are collapsed to one
+	 * space, and the find is normalised the same way, so both spellings of a multi-line find work.
+	 * Before that they BOTH failed and the CLI said "rewrote 0 file(s)", which reads as "the text
+	 * was already right".
+	 */
+	public function testLiteralMultilineFindWithPrefixes(): Void {
+		final src: String = '/**\n * First line.\n * Second line.\n */\nclass C {}';
+		final text: String = okText(cr(src, 'First line.\n * Second line.', 'One line.', false));
+		Assert.isTrue(text.contains('One line.'), text);
+		Assert.isFalse(text.contains('Second line.'), text);
+	}
+
+	/** The same find written WITHOUT the prefixes — a plain newline between the two lines. */
+	public function testLiteralMultilineFindWithoutPrefixes(): Void {
+		final src: String = '/**\n * First line.\n * Second line.\n */\nclass C {}';
+		final text: String = okText(cr(src, 'First line.\nSecond line.', 'One line.', false));
+		Assert.isTrue(text.contains('One line.'), text);
+	}
+
+	/** A `--regex` find still sees the RAW body, prefixes and newline included. */
+	public function testRegexSeesRawBodyAcrossLines(): Void {
+		final src: String = '/**\n * First line.\n * Second line.\n */\nclass C {}';
+		final text: String = okText(cr(src, 'First line\\.\\s+\\*\\s+Second', 'Merged', true));
+		Assert.isTrue(text.contains('Merged line.'), text);
+	}
+
 	/** Literal replace inside a block comment. */
 	public function testLiteralBlockComment(): Void {
 		final src: String = 'class C {\n\t/* the old name */\n\tvar x = 1;\n}';

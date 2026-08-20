@@ -157,19 +157,29 @@ final class CommentRewrite {
 	 * to its span in the original body via the index map — so a phrase wrapped over
 	 * two ` * ` lines is found and replaced. Consuming the continuation between the
 	 * two lines is harmless: the spliced replacement is re-wrapped by the writer.
+	 *
+	 * `find` is normalised the SAME way, which is what makes a multi-line FIND work.
+	 * Without that, a find carrying a newline could never match anything in either
+	 * spelling: written with the ` * ` prefixes it did not match the prefix-free
+	 * normalised body, and written without them it did not match either, because the
+	 * body's own break is one SPACE there. The tool then reported "rewrote 0 file(s)",
+	 * which is indistinguishable from a find that is genuinely absent — the CLI now
+	 * says so in as many words.
 	 */
 	private static function literalReplace(body: String, find: String, replace: String): String {
 		final normalized: { text: String, map: Array<Int> } = RefactorSupport.normalizeCommentBody(body);
 		final norm: String = normalized.text;
 		final map: Array<Int> = normalized.map;
+		final needle: String = RefactorSupport.normalizeCommentBody(find).text;
+		if (needle.length == 0) return body;
 		final buf: StringBuf = new StringBuf();
 		var cursor: Int = 0;
-		var hit: Int = norm.indexOf(find, 0);
+		var hit: Int = norm.indexOf(needle, 0);
 		while (hit >= 0) {
 			buf.add(body.substring(cursor, map[hit]));
 			buf.add(replace);
-			cursor = map[hit + find.length];
-			hit = norm.indexOf(find, hit + find.length);
+			cursor = map[hit + needle.length];
+			hit = norm.indexOf(needle, hit + needle.length);
 		}
 		buf.add(body.substring(cursor));
 		return buf.toString();

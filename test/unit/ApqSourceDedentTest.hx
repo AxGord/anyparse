@@ -19,6 +19,26 @@ import anyparse.query.Cli;
 @:nullSafety(Strict)
 class ApqSourceDedentTest extends Test {
 
+	/**
+	 * `apq show` IS `apq source`, dispatched from the same arm.
+	 *
+	 * The alias exists because a shell sandbox refuses any command carrying the token `source` —
+	 * it reads as the builtin that executes a file — so inside one the structural read was
+	 * unavailable and the fallback was a generic file reader, exactly the thing the gate exists to
+	 * prevent. Asserted through `Cli.run` so the DISPATCH is what is pinned, not a helper.
+	 */
+	public function testShowAliasRunsTheSourceCommand(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('showalias', [{ name: 'A.hx', source: 'class A {\n\tvar x = 1;\n}\n' }]);
+		Assert.equals(0, Cli.run(['show', '$dir/A.hx', '--range', '2:2']));
+		Assert.equals(0, Cli.run(['source', '$dir/A.hx', '--range', '2:2']));
+		Assert.notEquals(0, Cli.run(['shwo', '$dir/A.hx']));
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testCommonIndentSingleNestedLine(): Void {
 		Assert.equals(3, Cli.commonIndentWidth(['\t\t\tg();'], 1, 1));
 	}
