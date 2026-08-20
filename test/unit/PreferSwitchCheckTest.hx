@@ -15,7 +15,8 @@ import anyparse.query.SymbolIndex;
  * or more expressions against constant values is flagged `Info` and rewritten to a
  * `switch` by `--fix`. A chain over different discriminants, a non-equality or `!=`
  * condition, a non-constant or interpolated operand, an extra conjunct that is not an
- * equality, a non-uniform discriminant tuple, a call-bearing discriminant, or a lone `if`
+ * equality, a non-uniform discriminant tuple, a discriminant carrying a call / construction
+ * / write (gate 5's `CheckScan.mutationKinds` set), or a lone `if`
  * is not flagged; neither is a qualified static the `SymbolIndex` cannot prove constant (a
  * plain `static var`, a `#if`-guarded declaration).
  *
@@ -96,6 +97,27 @@ class PreferSwitchCheckTest extends Test {
 
 	public function testCallDiscriminantNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('if (get() == 1) a(); else if (get() == 2) b(); else c();')).length);
+	}
+
+	/**
+	 * Gate 5 covers every `CheckScan.mutationKinds` node, not just a call. A chain reads its
+	 * discriminant per rung and the switch reads it ONCE, so an increment there is the same
+	 * behaviour change a call is: `arr[i++]` over `[9, 2]` answers the SECOND rung as an
+	 * `if` chain and the catch-all as a `switch`. Measured on the shipped binary before the
+	 * gate was widened — it converted, and the two programs printed `two` and `other`.
+	 */
+	public function testIncrementDiscriminantNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (arr[i++] == 1) a(); else if (arr[i++] == 2) b(); else c();')).length);
+	}
+
+	/** The assignment half of the same gate — `arr[i = i + 1]` is read once by the switch. */
+	public function testAssignmentDiscriminantNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (arr[i = i + 1] == 1) a(); else if (arr[i = i + 1] == 2) b(); else c();')).length);
+	}
+
+	/** The construction half — `new B()` runs a constructor per rung, once after the rewrite. */
+	public function testNewDiscriminantNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (new B().v == 1) a(); else if (new B().v == 2) b(); else c();')).length);
 	}
 
 	public function testLoneIfNotFlagged(): Void {

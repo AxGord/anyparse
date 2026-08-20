@@ -51,12 +51,19 @@ using StringTools;
  *    sound, first-match order being preserved, but it needs a per-position padding pass
  *    this scanner does not do) and a rung whose conjuncts are written in a different ORDER
  *    is likewise skipped — both are follow-ups.
- * 5. **Call-free discriminants.** Every discriminant must be free of `callKind`: a switch
- *    evaluates its subject ONCE where the chain evaluates it per rung, so a call there is
- *    a behaviour change. Branch BODIES are deliberately unconstrained — a body is one
- *    value evaluated once either way, so a call in it is safe. A grammar that declares no
- *    `callKind` cannot prove call-freedom at all, so this gate then rejects EVERY chain
- *    rather than waving one through unchecked.
+ * 5. **Mutation-free discriminants.** Every discriminant must be free of every
+ *    `CheckScan.mutationKinds` node — a call (`callKind`), a construction (`newExprKind`)
+ *    and an assignment / increment (`writeParentKinds`): a switch evaluates its subject
+ *    ONCE where the chain evaluates it per rung, so anything observable there is a
+ *    behaviour change. The write half is not theoretical —
+ *    `if (arr[i++] == 1) 'one' else if (arr[i++] == 2) 'two' else 'other'` over
+ *    `arr = [9, 2]` answers `'two'`, and `switch (arr[i++])` answers `'other'`. Branch
+ *    BODIES are deliberately unconstrained — a body is one value evaluated once either
+ *    way, so a call in it is safe. A grammar that declares no `callKind` cannot prove
+ *    call-freedom at all, so this gate then rejects EVERY chain rather than waving one
+ *    through unchecked. The same gate and the same `CheckScan.mutationKinds` seam set
+ *    that `prefer-null-coalescing` and `prefer-safe-nav-comparison` use for their own
+ *    two-evaluations-to-one collapse.
  * 6. **Pattern-valid constants.** An operand qualifies as a `case` pattern when it is
  *    one of
  *    (a) a non-string literal kind (`litKinds`) or an interpolation-free string (via
@@ -179,7 +186,10 @@ using StringTools;
  * `enumAbstractDeclKind` unset stays on literal patterns — each of those degrades toward
  * reporting LESS. `callKind` is the one seam whose absence would degrade the other way, a
  * call-bearing discriminant sailing through, so gate 5 inverts it: no call kind means
- * call-freedom is unprovable, and the chain is skipped.
+ * call-freedom is unprovable, and the chain is skipped. `writeParentKinds` is always
+ * present, and `newExprKind` degrades toward reporting MORE only for a grammar that has
+ * constructions and does not declare them — the exposure every `mutationKinds` consumer
+ * carries.
  */
 @:nullSafety(Strict)
 final class SwitchChain {
@@ -201,7 +211,8 @@ final class SwitchChain {
 	 * `andKind` leaves only single-discriminant conditions, no `tuplePatternDelimiters`
 	 * rejects a multi-discriminant chain at scan time, no `fieldAccessKind` /
 	 * `enumAbstractDeclKind` keeps patterns literal, and no `callKind` rejects every chain
-	 * (gate 5 cannot prove call-freedom without it).
+	 * (gate 5 cannot prove call-freedom without it). `mutationKinds` is derived once here
+	 * rather than per rung — gate 5 tests it on every discriminant of every rung.
 	 */
 	public static function seamsOf(plugin: GrammarPlugin, chainKinds: Array<String>, bodyTerminator: String): Null<ChainSeams> {
 		final shape: RefShape = plugin.refShape();
@@ -217,6 +228,7 @@ final class SwitchChain {
 			andKind: shape.logicalAndKind,
 			parenKind: shape.parenKind,
 			callKind: shape.callKind,
+			mutationKinds: CheckScan.mutationKinds(shape),
 			fieldAccessKind: shape.fieldAccessKind,
 			identKind: shape.identKind,
 			enumAbstractDeclKind: shape.enumAbstractDeclKind,
@@ -395,7 +407,7 @@ final class SwitchChain {
 			if (cur.children.length < BINARY_CHILD_COUNT) return null;
 			final pairs: Null<Array<EqPair>> = conditionPairs(cur.children[0], seams, scope, source);
 			// A tuple subject cannot be spelled without the grammar's delimiters.
-			if (pairs == null || (pairs.length > 1 && seams.tuple == null) || cannotProveCallFree(pairs, seams.callKind)) return null;
+			if (pairs == null || (pairs.length > 1 && seams.tuple == null) || cannotProveEvaluationSafe(pairs, seams)) return null;
 			final nullableBody: Null<Span> = cur.children[1].span;
 			if (nullableBody == null) return null;
 			// Re-bind to a non-null local — Strict null-safety takes a struct literal's
@@ -482,13 +494,20 @@ final class SwitchChain {
 	}
 
 	/**
-	 * Whether call-freedom CANNOT be proved for the discriminants of `pairs` — gate 5, which
-	 * keeps a per-rung evaluation from collapsing into one. True when a discriminant contains
-	 * a call, and true when the grammar declares no `callKind` at all: an unprovable answer
-	 * rejects the chain rather than waving it through unchecked.
+	 * Whether evaluation-safety CANNOT be proved for the discriminants of `pairs` — gate 5,
+	 * which keeps a per-rung evaluation from collapsing into one. True when a discriminant
+	 * contains any `seams.mutationKinds` node (a call, a construction, an assignment or an
+	 * increment), and true when the grammar declares no `callKind` at all: an unprovable
+	 * answer rejects the chain rather than waving it through unchecked.
+	 *
+	 * The write half is load-bearing, not defensive. `callKind` alone let
+	 * `arr[i++] == 1 ? 'one' : arr[i++] == 2 ? 'two' : 'other'` through, and the switch it
+	 * produced reads `arr[i++]` once where the chain read it per rung — a different answer
+	 * for `arr = [9, 2]` (`'two'` before, `'other'` after), with nothing downstream able to
+	 * notice, the rewrite compiling either way.
 	 */
-	private static function cannotProveCallFree(pairs: Array<EqPair>, callKind: Null<String>): Bool {
-		return callKind == null || pairs.exists(p -> RefactorSupport.subtreeContainsKind(p.disc, callKind));
+	private static function cannotProveEvaluationSafe(pairs: Array<EqPair>, seams: ChainSeams): Bool {
+		return seams.callKind == null || pairs.exists(p -> seams.mutationKinds.exists(k -> RefactorSupport.subtreeContainsKind(p.disc, k)));
 	}
 
 	/** The verbatim source of each discriminant of `pairs`, or null when one lacks a coordinate. */
@@ -730,6 +749,13 @@ typedef ChainSeams = {
 	final andKind: Null<String>;
 	final parenKind: Null<String>;
 	final callKind: Null<String>;
+
+	/**
+	 * `CheckScan.mutationKinds(shape)` — every kind whose presence in a discriminant makes
+	 * the per-rung-to-once collapse observable. Derived once by `seamsOf`; gate 5's set.
+	 */
+	final mutationKinds: Array<String>;
+
 	final fieldAccessKind: Null<String>;
 	final identKind: String;
 	final enumAbstractDeclKind: Null<String>;
