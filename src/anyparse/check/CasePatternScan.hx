@@ -156,7 +156,9 @@ final class CasePatternScan {
 
 	/** Whether `node`'s subtree holds a node of any kind in `kinds`. */
 	public static function containsAnyKind(node: QueryNode, kinds: Array<String>): Bool {
-		return kinds.length != 0 && (kinds.contains(node.kind) || node.children.exists(child -> containsAnyKind(child, kinds)));
+		if (kinds.length == 0) return false;
+		if (kinds.contains(node.kind)) return true;
+		return node.children.exists(child -> containsAnyKind(child, kinds));
 	}
 
 	/**

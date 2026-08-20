@@ -427,8 +427,8 @@ final class ComparisonToBoolean implements Check {
 	 * one — makes that walk itself answer null.
 	 */
 	private static function memberLookupIsPinned(recvType: String, field: String, index: SymbolIndex): Bool {
-		return !index.isAnonStructType(recvType) && typeNameIsPinned(recvType, index)
-			&& index.memberDeclarationsOf(recvType, field).foreach(declaration -> !(declaration.member.guarded));
+		if (index.isAnonStructType(recvType) || !typeNameIsPinned(recvType, index)) return false;
+		return index.memberDeclarationsOf(recvType, field).foreach(declaration -> !(declaration.member.guarded));
 	}
 
 	/**
@@ -487,8 +487,9 @@ final class ComparisonToBoolean implements Check {
 		other: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, boolOpKinds: Array<String>,
 		fallbackReport: Bool
 	): Bool {
-		return RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || other.kind == shape.identKind
-			&& (declaredTypes == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes));
+		if (RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)) return true;
+		if (other.kind != shape.identKind) return false;
+		return declaredTypes == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes);
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */

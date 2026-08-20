@@ -352,11 +352,10 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 	 * A `${…}` hole is an arbitrary expression, projects as a different kind, and stays refused.
 	 */
 	private static function pureValue(node: QueryNode, s: Seams, purity: PurityCtx): Bool {
-		return node.kind == s.stringInterpIdentKind || (
-			node.kind == s.identKind || !RefactorSupport.isSafeKind(node.kind)
-				? PurityScan.isPure(node, purity)
-				: node.children.foreach(c -> pureValue(c, s, purity))
-		);
+		if (node.kind == s.stringInterpIdentKind) return true;
+		return node.kind == s.identKind || !RefactorSupport.isSafeKind(node.kind)
+			? PurityScan.isPure(node, purity)
+			: node.children.foreach(c -> pureValue(c, s, purity));
 	}
 
 	/**

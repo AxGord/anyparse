@@ -386,7 +386,7 @@ class SingleStmtBraces {
 	 * renders nothing after the token that precedes it.
 	 */
 	private static function fieldTailDanglingIf(head: Dynamic, name: String): Bool {
-		return !hasStructField(head, name) || tailDanglingIf(Reflect.field(head, name));
+		return hasStructField(head, name) ? tailDanglingIf(Reflect.field(head, name)) : true;
 	}
 
 	/**
@@ -462,7 +462,8 @@ class SingleStmtBraces {
 			final arr: Array<Dynamic> = v;
 			return arr.exists(x -> containsIf(x));
 		}
-		return Reflect.isObject(v) && Reflect.fields(v).exists(f -> containsIf(Reflect.field(v, f)));
+		if (!Reflect.isObject(v)) return false;
+		return Reflect.fields(v).exists(f -> containsIf(Reflect.field(v, f)));
 	}
 
 	/**

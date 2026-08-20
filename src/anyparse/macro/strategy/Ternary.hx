@@ -54,7 +54,8 @@ class Ternary implements Strategy {
 
 	public function appliesTo(node: ShapeNode): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
-		return meta != null && meta.exists(entry -> entry.name == ':ternary');
+		if (meta == null) return false;
+		return meta.exists(entry -> entry.name == ':ternary');
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {

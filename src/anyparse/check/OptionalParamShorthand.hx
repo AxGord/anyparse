@@ -337,15 +337,18 @@ final class OptionalParamShorthand implements Check {
 	 * constructor or a `static`. A conservative miss, not a correctness gap.
 	 */
 	private static function isUnoverridable(fn: QueryNode, fnParent: QueryNode, seams: Seams): Bool {
-		return seams.constructorName != null && fn.name == seams.constructorName || seams.localFunctionKinds.contains(fn.kind)
-			|| seams.inlineFunctionKinds.contains(fn.kind) || seams.finalModifierMemberKind != null
-			&& fn.kind == seams.finalModifierMemberKind || hasModifier(fn, fnParent, seams, seams.staticModifierKind)
-			|| hasModifier(fn, fnParent, seams, seams.inlineModifierKind);
+		if (seams.constructorName != null && fn.name == seams.constructorName) return true;
+		if (seams.localFunctionKinds.contains(fn.kind)) return true;
+		if (seams.inlineFunctionKinds.contains(fn.kind)) return true;
+		if (seams.finalModifierMemberKind != null && fn.kind == seams.finalModifierMemberKind) return true;
+		if (hasModifier(fn, fnParent, seams, seams.staticModifierKind)) return true;
+		return hasModifier(fn, fnParent, seams, seams.inlineModifierKind);
 	}
 
 	/** Whether `fn` is a body-less declaration (an interface / abstract method) — G1. */
 	private static function hasNoBody(fn: QueryNode, noBodyKind: Null<String>): Bool {
-		return noBodyKind != null && fn.children.exists(c -> c.kind == noBodyKind);
+		if (noBodyKind == null) return false;
+		return fn.children.exists(c -> c.kind == noBodyKind);
 	}
 
 	/**

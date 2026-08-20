@@ -511,7 +511,9 @@ final class TypeRefPrinter {
 		// `import q.*;` + `import p.Foo;` resolves a bare `Foo` to `p.Foo`, and a module-local
 		// `Foo` wins over both). The bulk arm may only veto what a wildcard genuinely outranks —
 		// the same-package, builtin and root-package routes below it.
-		return _importMap[simple] != canonical && !moduleLocalBinds(canonical, simple) && shadowedByBulkImport(canonical, simple);
+		if (_importMap[simple] == canonical) return false;
+		if (moduleLocalBinds(canonical, simple)) return false;
+		return shadowedByBulkImport(canonical, simple);
 	}
 
 	/**

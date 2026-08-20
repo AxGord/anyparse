@@ -490,7 +490,8 @@ final class TypeResolver {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, declaration);
 		if (parent == null) return false;
 		final branchScopes: Array<String> = shape.branchScopeKinds ?? [];
-		return (shape.scopeKinds.contains(parent.kind) || branchScopes.contains(parent.kind)) && covers(parent.span, refSpan);
+		if (!shape.scopeKinds.contains(parent.kind) && !branchScopes.contains(parent.kind)) return false;
+		return covers(parent.span, refSpan);
 	}
 
 	/**
@@ -907,7 +908,8 @@ final class TypeResolver {
 
 	/** Whether `node` or any descendant carries the name `name`. */
 	private static function subtreeHasName(node: QueryNode, name: String): Bool {
-		return node.name == name || node.children.exists(c -> subtreeHasName(c, name));
+		if (node.name == name) return true;
+		return node.children.exists(c -> subtreeHasName(c, name));
 	}
 
 	/**

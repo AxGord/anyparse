@@ -263,9 +263,9 @@ final class PreferTernaryReturn implements Check {
 		final other: QueryNode = aBool ? b : a;
 		final notKind: Null<String> = shape.notKind;
 		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
-		return !RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)
-			&& (!RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape)
-				|| RefactorSupport.pendingBooleanTernaryTail(other, shape));
+		if (RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)) return false;
+		return !RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape)
+			|| RefactorSupport.pendingBooleanTernaryTail(other, shape);
 	}
 
 	/**

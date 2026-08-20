@@ -262,11 +262,10 @@ final class UnusedPrivate implements Check {
 	private static function referencedElsewhere(
 		name: Null<String>, file: String, span: Span, scopeIndex: Null<SymbolIndex>, source: String
 	): Bool {
-		return name == null || (
-			scopeIndex != null
-				? scopeIndex.nameOccursOutside(name, file, span)
-				: RefactorSupport.referencedInRange(source, name, 0, source.length, [span])
-		);
+		if (name == null) return true;
+		return scopeIndex != null
+			? scopeIndex.nameOccursOutside(name, file, span)
+			: RefactorSupport.referencedInRange(source, name, 0, source.length, [span]);
 	}
 
 	/**
@@ -380,7 +379,8 @@ final class UnusedPrivate implements Check {
 	 * base declares abstract, whether or not the base is in the linted file set.
 	 */
 	private static function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
-		return (member.kind == 'FnMember' || member.kind == 'FinalModifiedMember') && inExtendsClass;
+		if (member.kind != 'FnMember' && member.kind != 'FinalModifiedMember') return false;
+		return inExtendsClass;
 	}
 
 	/**

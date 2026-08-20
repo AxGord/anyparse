@@ -102,7 +102,8 @@ final class EnglishComments implements Check {
 
 	/** Whether code unit `c` falls in one of the flagged non-Latin letter blocks. */
 	private static function isNonLatinLetter(c: Int): Bool {
-		return c >= FIRST_NON_LATIN && BLOCKS.exists(b -> c >= b.lo && c <= b.hi);
+		if (c < FIRST_NON_LATIN) return false;
+		return BLOCKS.exists(b -> c >= b.lo && c <= b.hi);
 	}
 
 	/** A single-line excerpt of up to `EXCERPT_LEN` code units from `at`, tabs/newlines flattened to spaces. */

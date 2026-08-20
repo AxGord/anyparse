@@ -383,7 +383,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			|| category == NamingCategory.CatchVar;
 		if (allowInheritedShadow && shadowsBinding) return false;
 		final owner: Null<String> = decl.enclosingType;
-		return owner != null && idx.supertypeDeclaresMember(owner, target);
+		return owner == null ? false : idx.supertypeDeclaresMember(owner, target);
 	}
 
 

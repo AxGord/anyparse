@@ -1503,8 +1503,8 @@ final class SymbolIndex {
 		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource);
 		if (args == null || args.length != 1) return false;
 		final element: String = args[0];
-		return RefactorSupport.isIdentifier(element) && resolveTypeRef(element, host.file) == null
-			&& (accepts == ITERABLE_TYPE_NAME ? satisfiesIterable(receiver, fromFile) : satisfiesIterator(receiver, fromFile));
+		if (!RefactorSupport.isIdentifier(element) || resolveTypeRef(element, host.file) != null) return false;
+		return accepts == ITERABLE_TYPE_NAME ? satisfiesIterable(receiver, fromFile) : satisfiesIterator(receiver, fromFile);
 	}
 
 	/**

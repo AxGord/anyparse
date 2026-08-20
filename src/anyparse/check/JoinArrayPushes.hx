@@ -613,7 +613,8 @@ final class JoinArrayPushes implements Check {
 
 	/** Whether `node`'s subtree holds a call or a construction — anything that runs code of its own. */
 	private static function runsCode(node: QueryNode, s: Seams): Bool {
-		return node.kind == s.callKind || node.kind == s.newExprKind || node.children.exists(child -> runsCode(child, s));
+		if (node.kind == s.callKind || node.kind == s.newExprKind) return true;
+		return node.children.exists(child -> runsCode(child, s));
 	}
 
 	/** The offset of the newline ending `at`'s line, or the source length when it is the last line. */
@@ -748,8 +749,9 @@ final class JoinArrayPushes implements Check {
 	 * subtree answers TRUE, since nothing about its contents can be proven.
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
-		return s.opaqueKinds.contains(node.kind) || node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)
-			|| node.children.exists(child -> referencesName(child, name, s));
+		if (s.opaqueKinds.contains(node.kind)) return true;
+		if (node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)) return true;
+		return node.children.exists(child -> referencesName(child, name, s));
 	}
 
 	/**

@@ -98,8 +98,9 @@ final class ConstantFieldScan {
 
 	/** Whether `init` is a basic scalar literal in `inlineConstantLiteralKinds`, or a negation wrapping a numeric one (`-5`). */
 	public static function isScalarLiteral(init: QueryNode, seams: ConstantFieldSeams): Bool {
-		return seams.literalKinds.contains(init.kind) || seams.negationKind != null && init.kind == seams.negationKind
-			&& init.children.length == 1 && seams.numericKinds.contains(init.children[0].kind);
+		if (seams.literalKinds.contains(init.kind)) return true;
+		if (seams.negationKind == null || init.kind != seams.negationKind || init.children.length != 1) return false;
+		return seams.numericKinds.contains(init.children[0].kind);
 	}
 
 	/** Append every plain string literal's content in `node`'s subtree to `out` (duplicates kept). */

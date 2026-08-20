@@ -384,7 +384,8 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Whether `node`'s subtree contains a node of any kind in `kinds`. */
 	private static function subtreeContainsAny(node: QueryNode, kinds: Array<String>): Bool {
-		return kinds.contains(node.kind) || node.children.exists(c -> subtreeContainsAny(c, kinds));
+		if (kinds.contains(node.kind)) return true;
+		return node.children.exists(c -> subtreeContainsAny(c, kinds));
 	}
 
 	/**

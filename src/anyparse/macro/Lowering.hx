@@ -6976,7 +6976,8 @@ class Lowering {
 
 	/** Set equality for the first-token payloads — same length, same members. */
 	private static function sameSet<T>(x: Array<T>, y: Array<T>): Bool {
-		return x.length == y.length && x.foreach(v -> y.contains(v));
+		if (x.length != y.length) return false;
+		return x.foreach(v -> y.contains(v));
 	}
 
 	/**

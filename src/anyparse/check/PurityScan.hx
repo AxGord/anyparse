@@ -97,16 +97,15 @@ final class PurityScan {
 		final kind: String = node.kind;
 		if (kind == ctx.identKind) return !readsGetterUnqualified(node, ctx);
 		function childrenPure() return node.children.foreach(c -> isPure(c, ctx));
-		return RefactorSupport.isSafeKind(kind)
-			? childrenPure()
-			: kind != ctx.fieldAccessKind
-				? if (ctx.indexAccessKind != null && kind == ctx.indexAccessKind)
-					childrenPure()
-				else if (kind == ctx.callKind)
-					isPureCall(node, ctx) && childrenPure()
-				else
-					false
-				: isSideEffectingGetter(node, ctx) ? false : childrenPure();
+		if (RefactorSupport.isSafeKind(kind)) return childrenPure();
+		if (kind != ctx.fieldAccessKind) return if (ctx.indexAccessKind != null && kind == ctx.indexAccessKind)
+			childrenPure()
+		else if (kind == ctx.callKind)
+			isPureCall(node, ctx) && childrenPure()
+		else
+			false;
+		if (isSideEffectingGetter(node, ctx)) return false;
+		return childrenPure();
 	}
 
 	/**

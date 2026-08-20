@@ -465,9 +465,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * it. The one non-expression child shape, `Is`'s type name (`Named`), is skipped.
 	 */
 	private static function isConstExpr(node: QueryNode): Bool {
-		return isSimpleOperand(node) || CONST_OP_KINDS.contains(node.kind) && node.children.foreach(c ->
-			c.kind == 'Named' || isConstExpr(c)
-		);
+		if (isSimpleOperand(node)) return true;
+		if (!CONST_OP_KINDS.contains(node.kind)) return false;
+		return node.children.foreach(c -> c.kind == 'Named' || isConstExpr(c));
 	}
 
 	/** `fn`'s body child — its `ExprBody` or `BlockBody`, else null (a bodyless declaration). */
@@ -484,7 +484,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	/** Whether `node`'s subtree references `name` as a bare `IdentExpr` or a `this.<name>` `FieldAccess` — a self / recursive reference. */
 	private static function referencesSelf(node: QueryNode, name: String): Bool {
-		return selfRefName(node) == name || node.children.exists(c -> referencesSelf(c, name));
+		if (selfRefName(node) == name) return true;
+		return node.children.exists(c -> referencesSelf(c, name));
 	}
 
 	/** The name a node references as a bare `IdentExpr <name>` or `this.<name>` `FieldAccess`, else null. */
@@ -581,7 +582,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	/** Whether `node`'s subtree contains a null literal in a value slot. */
 	private static function subtreeHasNullSafetyRisk(node: QueryNode, parentKind: String): Bool {
-		return isRiskyHere(node, parentKind) || node.children.exists(c -> subtreeHasNullSafetyRisk(c, node.kind));
+		if (isRiskyHere(node, parentKind)) return true;
+		return node.children.exists(c -> subtreeHasNullSafetyRisk(c, node.kind));
 	}
 
 }

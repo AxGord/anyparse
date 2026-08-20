@@ -169,8 +169,8 @@ final class RedundantElse implements Check {
 		final ifSpan: Null<Span> = ifNode.span;
 		final thenSpan: Null<Span> = ifNode.children[1].span;
 		final run: Null<Span> = deNestedRun(ifNode.children[2], support);
-		return ifSpan != null && thenSpan != null && run != null
-			&& comments.exists(tok -> tok.from >= thenSpan.to && tok.to <= ifSpan.to && (tok.to <= run.from || tok.from >= run.to));
+		if (ifSpan == null || thenSpan == null || run == null) return false;
+		return comments.exists(tok -> tok.from >= thenSpan.to && tok.to <= ifSpan.to && (tok.to <= run.from || tok.from >= run.to));
 	}
 
 	/**

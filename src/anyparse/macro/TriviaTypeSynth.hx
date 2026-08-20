@@ -503,7 +503,8 @@ class TriviaTypeSynth {
 		// `:postfix` from raw `base.meta` (Postfix strategy hasn't run yet)
 		// to ensure the branch is a postfix ctor.
 		final meta: Null<Metadata> = branch.annotations[AnnotationKeys.BASE_META];
-		return meta != null && meta.exists(entry -> entry.name == ':postfix' && entry.params.length == 2);
+		if (meta == null) return false;
+		return meta.exists(entry -> entry.name == ':postfix' && entry.params.length == 2);
 	}
 
 	/**

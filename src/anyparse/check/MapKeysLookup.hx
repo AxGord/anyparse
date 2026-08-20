@@ -339,8 +339,8 @@ final class MapKeysLookup implements Check {
 		if (cfg.opaqueKinds.contains(node.kind)) return false;
 		final introducesBinding: Bool = cfg.localDeclKinds.contains(node.kind) || cfg.paramKinds.contains(node.kind)
 			|| node.kind == cfg.forKind || cfg.valueBinderKinds.contains(node.kind);
-		return introducesBinding && (node.name == rootName || node.name == keyName)
-			|| node.children.exists(c -> rebinds(c, rootName, keyName, cfg));
+		if (introducesBinding && (node.name == rootName || node.name == keyName)) return true;
+		return node.children.exists(c -> rebinds(c, rootName, keyName, cfg));
 	}
 
 	/**
@@ -419,8 +419,9 @@ final class MapKeysLookup implements Check {
 
 	/** Whether `node`'s subtree contains a `<path>[key]` index access or a `<path>.get(key)` call. */
 	private static function hasLookup(node: QueryNode, path: Array<String>, keyName: String, cfg: Cfg): Bool {
-		return !cfg.opaqueKinds.contains(node.kind)
-			&& (isLookup(node, path, keyName, cfg) || node.children.exists(c -> hasLookup(c, path, keyName, cfg)));
+		if (cfg.opaqueKinds.contains(node.kind)) return false;
+		if (isLookup(node, path, keyName, cfg)) return true;
+		return node.children.exists(c -> hasLookup(c, path, keyName, cfg));
 	}
 
 	/** Whether `node` is exactly a `<path>[key]` index access or a `<path>.get(key)` call — one lookup, no descent. */
@@ -458,7 +459,9 @@ final class MapKeysLookup implements Check {
 	): Bool {
 		if (declaredTypes == null) return true;
 		final typeName: Null<String> = receiverTypeName(recv, root, declaredTypes, cfg, symbols, file);
-		return typeName == null || cfg.mapFamily.contains(typeName) || cfg.nullableWrappers.contains(typeName);
+		if (typeName == null) return true;
+		if (cfg.mapFamily.contains(typeName)) return true;
+		return cfg.nullableWrappers.contains(typeName);
 	}
 
 	/**

@@ -219,8 +219,8 @@ final class SplitVarDeclaration implements Check {
 	 * reached as a CHILD of the head, never as a statement of the list.
 	 */
 	private static function isMultiDeclaratorHead(stmt: QueryNode, s: Seams): Bool {
-		return s.localDeclKinds.contains(stmt.kind) && !s.continuationKinds.contains(stmt.kind)
-			&& RefactorSupport.isMultiDeclarator(stmt, s.continuationKinds);
+		if (!s.localDeclKinds.contains(stmt.kind) || s.continuationKinds.contains(stmt.kind)) return false;
+		return RefactorSupport.isMultiDeclarator(stmt, s.continuationKinds);
 	}
 
 	/**

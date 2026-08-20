@@ -116,13 +116,16 @@ final class LoopScan {
 
 	/** Whether `node`'s subtree re-declares a local named `name`, skipping reification subtrees. */
 	public static function declares(node: QueryNode, name: String, s: LoopSeams): Bool {
-		return !s.opaqueKinds.contains(node.kind)
-			&& (s.localDeclKinds.contains(node.kind) && node.name == name || node.children.exists(c -> declares(c, name, s)));
+		if (s.opaqueKinds.contains(node.kind)) return false;
+		if (s.localDeclKinds.contains(node.kind) && node.name == name) return true;
+		return node.children.exists(c -> declares(c, name, s));
 	}
 
 	/** Whether `node`'s subtree contains a node of `kind`, skipping reification subtrees. */
 	public static function containsKind(node: QueryNode, kind: String, s: LoopSeams): Bool {
-		return !s.opaqueKinds.contains(node.kind) && (node.kind == kind || node.children.exists(c -> containsKind(c, kind, s)));
+		if (s.opaqueKinds.contains(node.kind)) return false;
+		if (node.kind == kind) return true;
+		return node.children.exists(c -> containsKind(c, kind, s));
 	}
 
 	/**
@@ -251,9 +254,9 @@ final class LoopScan {
 	private static function stableUseScan(
 		node: QueryNode, parent: Null<QueryNode>, grandParent: Null<QueryNode>, name: String, sizeMember: String, s: LoopSeams
 	): Bool {
-		return s.opaqueKinds.contains(node.kind)
-			|| (node.kind != s.identKind || node.name != name || isStablePosition(node, parent, grandParent, sizeMember, s))
-			&& node.children.foreach(c -> stableUseScan(c, node, parent, name, sizeMember, s));
+		if (s.opaqueKinds.contains(node.kind)) return true;
+		if (node.kind == s.identKind && node.name == name && !isStablePosition(node, parent, grandParent, sizeMember, s)) return false;
+		return node.children.foreach(c -> stableUseScan(c, node, parent, name, sizeMember, s));
 	}
 
 	/**

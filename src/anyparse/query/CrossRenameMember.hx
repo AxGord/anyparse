@@ -658,7 +658,8 @@ final class CrossRenameMember {
 		// parameterised — split at its first `<` and pass as the nominal `pkg.Other`.
 		if (proof.nominals[from] == null) return false;
 		final written: Null<String> = proof.typeSources[from];
-		return written != null && resolvesToSourceType(nominalPathOf(written), proof);
+		if (written == null) return false;
+		return resolvesToSourceType(nominalPathOf(written), proof);
 	}
 
 	/**

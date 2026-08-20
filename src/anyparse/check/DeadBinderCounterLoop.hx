@@ -323,8 +323,10 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	 */
 	private static function bodyAdmitsRewrite(body: QueryNode, counter: String, collection: String, s: Seams): Bool {
 		final core: LoopSeams = s.core;
-		return LoopScan.countWrites(body, counter, core) == COUNTER_WRITES && !LoopScan.containsKind(body, s.continueKind, core)
-			&& !LoopScan.declares(body, counter, core) && LoopScan.usedOnlyAsStableCollection(body, collection, LENGTH_MEMBER, core);
+		if (LoopScan.countWrites(body, counter, core) != COUNTER_WRITES) return false;
+		if (LoopScan.containsKind(body, s.continueKind, core)) return false;
+		if (LoopScan.declares(body, counter, core)) return false;
+		return LoopScan.usedOnlyAsStableCollection(body, collection, LENGTH_MEMBER, core);
 	}
 
 	/** Whether `stmt` is exactly `<counter>++;` — an expression statement wrapping a post-increment of the counter. */

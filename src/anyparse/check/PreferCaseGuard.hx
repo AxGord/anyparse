@@ -473,7 +473,9 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 
 	private static function containsConditional(node: QueryNode, seams: Seams): Bool {
 		final kind: Null<String> = seams.conditionalKind;
-		return kind != null && (node.kind == kind || node.children.exists(child -> containsConditional(child, seams)));
+		if (kind == null) return false;
+		if (node.kind == kind) return true;
+		return node.children.exists(child -> containsConditional(child, seams));
 	}
 
 	/**

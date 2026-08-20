@@ -357,8 +357,8 @@ final class UnusedLocal implements Check {
 		if (ctx.conditionalIfKeyword == null) return false;
 		final span: Null<Span> = node.span;
 		if (span != null && (offset < span.from || offset >= span.to)) return false;
-		return CheckScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)
-			|| node.children.exists(c -> withinConditional(ctx, c, offset));
+		if (CheckScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)) return true;
+		return node.children.exists(c -> withinConditional(ctx, c, offset));
 	}
 
 	/**

@@ -67,7 +67,8 @@ class Prefix implements Strategy {
 
 	public function appliesTo(node: ShapeNode): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
-		return meta != null && meta.exists(entry -> entry.name == ':prefix');
+		if (meta == null) return false;
+		return meta.exists(entry -> entry.name == ':prefix');
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {

@@ -335,7 +335,8 @@ final class PreferForIn implements Check implements DefaultOff {
 	private static function nameIsLive(node: QueryNode, name: String, s: Seams): Bool {
 		final self: Bool = node.name == name
 			&& (node.kind == s.identKind || node.kind == s.interpIdentKind || s.localDeclKinds.contains(node.kind));
-		return self || node.children.exists(c -> nameIsLive(c, name, s));
+		if (self) return true;
+		return node.children.exists(c -> nameIsLive(c, name, s));
 	}
 
 	/**

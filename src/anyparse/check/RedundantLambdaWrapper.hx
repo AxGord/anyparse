@@ -201,7 +201,8 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 
 	/** Whether `name` occurs anywhere in `node`'s subtree, in ANY slot — the deliberately blunt reading of "used nowhere else". */
 	private static function mentions(node: QueryNode, name: String): Bool {
-		return node.name == name || node.children.exists(c -> mentions(c, name));
+		if (node.name == name) return true;
+		return node.children.exists(c -> mentions(c, name));
 	}
 
 	/** Whether the forwarded callee resolves to a declaration this rule may reduce to a method value. */

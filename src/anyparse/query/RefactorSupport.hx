@@ -1088,11 +1088,10 @@ final class RefactorSupport {
 		recv: QueryNode, typeName: String, qualified: Array<String>, valueResolved: Array<Int>
 	): Bool {
 		final recvSpan: Null<Span> = recv.span;
-		return recv.name == typeName && recvSpan != null && (
-			recv.kind == IDENT_EXPR_KIND
-				? !valueResolved.contains(recvSpan.from)
-				: recv.kind == FIELD_ACCESS_KIND && qualified.contains(flattenPath(recv))
-		);
+		if (recv.name != typeName || recvSpan == null) return false;
+		return recv.kind == IDENT_EXPR_KIND
+			? !valueResolved.contains(recvSpan.from)
+			: recv.kind == FIELD_ACCESS_KIND && qualified.contains(flattenPath(recv));
 	}
 
 	/**
@@ -1914,7 +1913,8 @@ final class RefactorSupport {
 
 	/** Whether the subtree rooted at `node` contains any node of kind `kind`. */
 	public static function subtreeContainsKind(node: QueryNode, kind: String): Bool {
-		return node.kind == kind || node.children.exists(c -> subtreeContainsKind(c, kind));
+		if (node.kind == kind) return true;
+		return node.children.exists(c -> subtreeContainsKind(c, kind));
 	}
 
 	/**
@@ -2213,8 +2213,8 @@ final class RefactorSupport {
 		final boolLitKind: Null<String> = shape.boolLitKind;
 		if (ternaryKind == null || boolLitKind == null) return false;
 		final n: QueryNode = unwrapParens(operand, shape.parenKind);
-		return
-			n.kind == ternaryKind && n.children.length == 3 && (n.children[1].kind == boolLitKind) != (n.children[2].kind == boolLitKind);
+		if (n.kind != ternaryKind || n.children.length != 3) return false;
+		return (n.children[1].kind == boolLitKind) != (n.children[2].kind == boolLitKind);
 	}
 
 	public static function statementLikeOrNullTail(operand: QueryNode, shape: RefShape): Bool {
@@ -2602,7 +2602,8 @@ final class RefactorSupport {
 	 */
 	public static function hasSupertypeClause(container: QueryNode, shape: RefShape): Bool {
 		final clauses: Array<String> = shape.supertypeClauseKinds ?? [];
-		return clauses.length != 0 && container.children.exists(c -> clauses.contains(c.kind));
+		if (clauses.length == 0) return false;
+		return container.children.exists(c -> clauses.contains(c.kind));
 	}
 
 	/**
@@ -4144,9 +4145,10 @@ final class RefactorSupport {
 	/** Whether `writeFrom` is reachable from `node` through `transparent` kinds only. */
 	private static function reachesThroughOperands(node: QueryNode, writeFrom: Int, transparent: Array<String>): Bool {
 		final span: Null<Span> = node.span;
-		return span != null
-			&& (span.from == writeFrom || transparent.contains(node.kind)
-				&& node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent)));
+		if (span == null) return false;
+		if (span.from == writeFrom) return true;
+		if (!transparent.contains(node.kind)) return false;
+		return node.children.exists(child -> reachesThroughOperands(child, writeFrom, transparent));
 	}
 
 	/** Recursively find the class-like container whose direct field member starts at `fieldFrom`. */
@@ -4771,8 +4773,8 @@ final class RefactorSupport {
 
 	/** Whether `node`'s subtree carries a string-interpolation hole, which reads surrounding bindings. */
 	private static function containsInterpolation(node: QueryNode, shape: RefShape): Bool {
-		return node.kind == shape.stringInterpIdentKind || (shape.interpolationKinds ?? []).contains(node.kind)
-			|| node.children.exists(child -> containsInterpolation(child, shape));
+		if (node.kind == shape.stringInterpIdentKind || (shape.interpolationKinds ?? []).contains(node.kind)) return true;
+		return node.children.exists(child -> containsInterpolation(child, shape));
 	}
 
 	/**
@@ -4921,7 +4923,8 @@ final class RefactorSupport {
 		final span: Null<Span> = node.span;
 		// Spans are monotone, so a subtree starting past the boundary holds no match.
 		if (span != null && span.from >= boundary) return false;
-		return span != null && kinds.contains(node.kind) || node.children.exists(child -> kindStartsBefore(child, kinds, boundary));
+		if (span != null && kinds.contains(node.kind)) return true;
+		return node.children.exists(child -> kindStartsBefore(child, kinds, boundary));
 	}
 
 	/**
@@ -5053,7 +5056,8 @@ final class RefactorSupport {
 
 	/** Whether `node`'s subtree holds a `#if…#end` region of any projection (`isConditionalKind`). */
 	private static function holdsConditionalRegion(node: QueryNode): Bool {
-		return isConditionalKind(node.kind) || node.children.exists(child -> holdsConditionalRegion(child));
+		if (isConditionalKind(node.kind)) return true;
+		return node.children.exists(child -> holdsConditionalRegion(child));
 	}
 
 	/**

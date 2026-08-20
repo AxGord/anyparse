@@ -287,7 +287,8 @@ final class ExtractVar {
 	 * of suffix-less literals.
 	 */
 	private static function isStructural(kind: String): Bool {
-		return STRUCTURAL_KINDS.contains(kind) || STRUCTURAL_SUFFIXES.exists(suffix -> kind.endsWith(suffix));
+		if (STRUCTURAL_KINDS.contains(kind)) return true;
+		return STRUCTURAL_SUFFIXES.exists(suffix -> kind.endsWith(suffix));
 	}
 
 	/** Offset of the first byte after the previous `\n` before `at` (or 0). */

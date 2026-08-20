@@ -4187,7 +4187,8 @@ class WriterLowering {
 	 */
 	private function subStructStartsWithTightLead(refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
-		return first != null && isTightLead(first.readMetaString(':lead'));
+		if (first == null) return false;
+		return isTightLead(first.readMetaString(':lead'));
 	}
 
 	// -------- trivia-mode helpers (ω₅) --------
