@@ -230,8 +230,7 @@ final class UnusedImport implements Check {
 		raw: String, bound: String, scan: FileScan, moduleTypes: Map<String, Array<String>>
 	): Bool {
 		final types: Null<Array<String>> = moduleTypes[raw];
-		if (types == null) return false;
-		return types.exists(name -> name != bound && referenced(scan, name));
+		return types != null && types.exists(name -> name != bound && referenced(scan, name));
 	}
 
 	/**
@@ -307,8 +306,7 @@ final class UnusedImport implements Check {
 	/** True when any constructor of the enum-type imported by `raw` is referenced bare in the file (outside the imports). */
 	private static function enumCtorReferenced(raw: String, scan: FileScan, enumCtorsByPath: Map<String, Array<String>>): Bool {
 		final ctors: Null<Array<String>> = enumCtorsByPath[raw];
-		if (ctors == null) return false;
-		return ctors.exists(name -> referenced(scan, name));
+		return ctors != null && ctors.exists(name -> referenced(scan, name));
 	}
 
 	/**

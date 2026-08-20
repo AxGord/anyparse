@@ -589,9 +589,8 @@ final class PreferComprehension implements Check {
 	 * nothing about its contents can be proven.
 	 */
 	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
-		if (s.opaqueKinds.contains(node.kind)) return true;
-		if (node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)) return true;
-		return node.children.exists(c -> referencesName(c, name, s));
+		return s.opaqueKinds.contains(node.kind) || node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)
+			|| node.children.exists(c -> referencesName(c, name, s));
 	}
 
 	/** `source` with every space, tab, carriage return and newline removed. */
@@ -883,9 +882,7 @@ final class PreferComprehension implements Check {
 
 	/** Whether `kind` appears anywhere in `node`'s subtree, reification aside. */
 	private static function containsKind(node: QueryNode, kind: String, s: Seams): Bool {
-		if (s.opaqueKinds.contains(node.kind)) return false;
-		if (node.kind == kind) return true;
-		return node.children.exists(c -> containsKind(c, kind, s));
+		return !s.opaqueKinds.contains(node.kind) && (node.kind == kind || node.children.exists(c -> containsKind(c, kind, s)));
 	}
 
 

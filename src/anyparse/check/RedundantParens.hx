@@ -615,9 +615,7 @@ final class RedundantParens implements Check implements ConfigAware {
 	 * uniformly false.
 	 */
 	private static function isAtom(node: QueryNode, slots: ParenSlots): Bool {
-		if (slots.atoms.contains(node.kind)) return true;
-		if (!slots.atomChains.contains(node.kind)) return false;
-		return node.children.foreach(c -> isAtom(c, slots));
+		return slots.atoms.contains(node.kind) || slots.atomChains.contains(node.kind) && node.children.foreach(c -> isAtom(c, slots));
 	}
 
 	/**

@@ -6989,9 +6989,7 @@ final class Cli {
 	 * `looksLikeTypeName` to detect the `ast <TypeName> <dir>` shape.
 	 */
 	private static function looksLikePath(s: String): Bool {
-		if (s.indexOf('/') >= 0) return true;
-		if (s.endsWith('.hx')) return true;
-		return #if (sys || nodejs) sys.FileSystem.exists(s) #else false #end;
+		return s.indexOf('/') >= 0 || s.endsWith('.hx') || #if (sys || nodejs) sys.FileSystem.exists(s) #else false #end;
 	}
 
 	/**

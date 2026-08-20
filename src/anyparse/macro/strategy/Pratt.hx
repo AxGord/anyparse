@@ -74,8 +74,7 @@ class Pratt implements Strategy {
 
 	public function appliesTo(node: ShapeNode): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
-		if (meta == null) return false;
-		return meta.exists(entry -> entry.name == ':infix');
+		return meta != null && meta.exists(entry -> entry.name == ':infix');
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {

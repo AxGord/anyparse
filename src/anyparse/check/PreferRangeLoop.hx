@@ -268,16 +268,13 @@ final class PreferRangeLoop implements Check {
 
 	/** Whether `node`'s subtree contains a node of `kind`, skipping reification subtrees. */
 	private static function containsKind(node: QueryNode, kind: String, s: Seams): Bool {
-		if (s.opaqueKinds.contains(node.kind)) return false;
-		if (node.kind == kind) return true;
-		return node.children.exists(c -> containsKind(c, kind, s));
+		return !s.opaqueKinds.contains(node.kind) && (node.kind == kind || node.children.exists(c -> containsKind(c, kind, s)));
 	}
 
 	/** Whether `node`'s subtree re-declares a local named `name`, skipping reification subtrees. */
 	private static function declaresName(node: QueryNode, name: String, s: Seams): Bool {
-		if (s.opaqueKinds.contains(node.kind)) return false;
-		if (s.localDeclKinds.contains(node.kind) && node.name == name) return true;
-		return node.children.exists(c -> declaresName(c, name, s));
+		return !s.opaqueKinds.contains(node.kind)
+			&& (s.localDeclKinds.contains(node.kind) && node.name == name || node.children.exists(c -> declaresName(c, name, s)));
 	}
 
 	/** Collapse whitespace runs to single spaces and trim, so a multi-line bound fits one message line. */

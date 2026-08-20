@@ -488,8 +488,7 @@ final class SwitchChain {
 	 * rejects the chain rather than waving it through unchecked.
 	 */
 	private static function cannotProveCallFree(pairs: Array<EqPair>, callKind: Null<String>): Bool {
-		if (callKind == null) return true;
-		return pairs.exists(p -> RefactorSupport.subtreeContainsKind(p.disc, callKind));
+		return callKind == null || pairs.exists(p -> RefactorSupport.subtreeContainsKind(p.disc, callKind));
 	}
 
 	/** The verbatim source of each discriminant of `pairs`, or null when one lacks a coordinate. */
@@ -605,8 +604,8 @@ final class SwitchChain {
 		if (accessKind == null || node.kind != accessKind || node.children.length != 1) return false;
 		final memberName: Null<String> = node.name;
 		final typeName: Null<String> = node.children[0].name;
-		if (memberName == null || typeName == null || node.children[0].kind != seams.identKind) return false;
-		return provesConstantMember(typeName, memberName, seams, scope);
+		return memberName != null && typeName != null && node.children[0].kind == seams.identKind
+			&& provesConstantMember(typeName, memberName, seams, scope);
 	}
 
 	/**
@@ -647,8 +646,7 @@ final class SwitchChain {
 		final index: Null<SymbolIndex> = scope.resolveIndex();
 		if (index == null) return false;
 		final decls: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.memberDeclarationsOf(typeName, memberName);
-		if (decls.length == 0) return false;
-		return decls.foreach(decl -> isPatternConstant(decl.type, decl.member, seams));
+		return decls.length != 0 && decls.foreach(decl -> isPatternConstant(decl.type, decl.member, seams));
 	}
 
 	/**

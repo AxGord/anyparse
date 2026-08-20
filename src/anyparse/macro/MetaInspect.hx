@@ -33,8 +33,7 @@ final class MetaInspect {
 	 */
 	public static function hasMeta(node: ShapeNode, tag: String): Bool {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
-		if (meta == null) return false;
-		return meta.exists(entry -> entry.name == tag);
+		return meta != null && meta.exists(entry -> entry.name == tag);
 	}
 
 	/**

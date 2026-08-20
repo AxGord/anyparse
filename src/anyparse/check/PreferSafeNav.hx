@@ -778,9 +778,8 @@ final class PreferSafeNav implements Check {
 	 * reification subtree counts as a possible mention (conservative).
 	 */
 	private static function mentionsOutsideRoot(node: QueryNode, root: QueryNode, subject: QueryNode, s: Seams): Bool {
-		if (s.opaqueKinds.contains(node.kind)) return true;
-		if (node != root && denotesSubject(node, subject, s)) return true;
-		return node.children.exists(c -> mentionsOutsideRoot(c, root, subject, s));
+		return s.opaqueKinds.contains(node.kind) || node != root && denotesSubject(node, subject, s)
+			|| node.children.exists(c -> mentionsOutsideRoot(c, root, subject, s));
 	}
 
 	/**

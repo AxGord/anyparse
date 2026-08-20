@@ -121,8 +121,7 @@ final class PreferBind implements Check {
 			final recv: Null<QueryNode> = arg.children[0];
 			return recv != null && stableArg(recv, shape);
 		}
-		if (arg.kind == shape.negationKind && arg.children.length == 1) return numeric.contains(arg.children[0].kind);
-		return false;
+		return arg.kind == shape.negationKind && arg.children.length == 1 && numeric.contains(arg.children[0].kind);
 	}
 
 	/** Whether a string-literal node carries no interpolation (every child, if any, is plain literal text). */

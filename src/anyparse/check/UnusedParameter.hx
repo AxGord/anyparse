@@ -258,8 +258,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 
 	/** Whether `fn` is a body-less declaration (an interface / abstract method). */
 	private static function hasNoBody(fn: QueryNode, noBodyKind: Null<String>): Bool {
-		if (noBodyKind == null) return false;
-		return fn.children.exists(c -> c.kind == noBodyKind);
+		return noBodyKind != null && fn.children.exists(c -> c.kind == noBodyKind);
 	}
 
 	/**

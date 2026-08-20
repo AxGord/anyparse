@@ -175,6 +175,10 @@ final class PreferTernaryReturn implements Check {
 		// bool literal) buries the tail just as thoroughly, and that arm never consults the stuck
 		// check at all. Measured on anyparse's own `MagicNumber.childPositionCtx` and
 		// `PurityScan.isPure`, which came out as nested ternary chains until this moved out.
+		// A STATEMENT-LIKE value (an `if` used as a value, a `switch`, a `try`, a `throw`, a block)
+		// blocks the pair for the same reason the boolean arm already refuses one: a ternary whose
+		// branch is a four-line `if` / `else if` / `else` chain is not more readable than the two
+		// statements it replaced. Measured on anyparse's own `PurityScan.isPure`.
 		// A bool-literal-vs-non-provably-Bool pair collapses to a "stuck" boolean ternary
 		// (`cond ? true : g()`) that simplify-boolean-ternary cannot reduce without a typer
 		// — uglier than the guard. Leave it: a fully-reducible boolean guard chain is
@@ -183,6 +187,7 @@ final class PreferTernaryReturn implements Check {
 		// RefactorSupport.refusesNullNarrowingBoolCollapse).
 		return RefactorSupport.refusesNullNarrowingBoolCollapse(thenValue, elseValue, ifNode.children[0], shape)
 			|| RefactorSupport.pendingBooleanTernaryTail(thenValue, shape) || RefactorSupport.pendingBooleanTernaryTail(elseValue, shape)
+			|| RefactorSupport.statementLikeValue(thenValue, shape) || RefactorSupport.statementLikeValue(elseValue, shape)
 			|| isStuckBooleanCollapse(thenValue, elseValue, shape, retType)
 			? null
 			: {
@@ -273,8 +278,8 @@ final class PreferTernaryReturn implements Check {
 		final other: QueryNode = aBool ? b : a;
 		final notKind: Null<String> = shape.notKind;
 		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
-		if (RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)) return false;
-		return !RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape);
+		return !RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)
+			&& (!RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape));
 	}
 
 	/**

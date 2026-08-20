@@ -383,8 +383,8 @@ final class IfExpressionChain {
 	 * `isElseLessConditional` to it separately, for the unrelated span reason documented there.
 	 */
 	public static function holdsElseLessConditional(node: QueryNode, conditionalKinds: Array<String>): Bool {
-		if (isElseLessConditional(node, conditionalKinds)) return true;
-		return node.children.exists(child -> holdsElseLessConditional(child, conditionalKinds));
+		return isElseLessConditional(node, conditionalKinds)
+			|| node.children.exists(child -> holdsElseLessConditional(child, conditionalKinds));
 	}
 
 	/**

@@ -256,8 +256,7 @@ final class RedundantCaseBody implements Check {
 	private static function armClean(seams: CaseSeams, arm: QueryNode): Bool {
 		final conditional: Null<String> = seams.conditionalKind;
 		if (conditional != null && CasePatternScan.containsAnyKind(arm, [conditional])) return false;
-		if (CasePatternScan.containsAnyKind(arm, seams.opaqueKinds)) return false;
-		return CasePatternScan.patternsModellable(seams, arm);
+		return !CasePatternScan.containsAnyKind(arm, seams.opaqueKinds) && CasePatternScan.patternsModellable(seams, arm);
 	}
 
 	/** How many leading children of `arm` are its label — its pattern run plus a guard, when it has one. */
