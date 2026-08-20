@@ -679,6 +679,7 @@ import unit.LintFixSafePassRevertTest;
 import unit.DuplicateCaseCondBranchTest;
 import unit.UnusedCaseBinderConstantLanguageTest;
 import unit.HxCondDeclElseTrailingMetaTest;
+import unit.PreferNullCoalescingParensTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1118,6 +1119,7 @@ class RunTests {
 		addCase(new DuplicateCaseCondBranchTest());
 		addCase(new UnusedCaseBinderConstantLanguageTest());
 		addCase(new HxCondDeclElseTrailingMetaTest());
+		addCase(new PreferNullCoalescingParensTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
 		addCase(new LintFailOnCliTest());

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -14,7 +15,16 @@ using Lambda;
 /**
  * Flags a null-guarding ternary that the null-coalescing operator `??` replaces —
  * `x != null ? x : y` / `null != x ? x : y` / `x == null ? y : x` / `null == x ? y : x`
- * all collapse to `x ?? y`. `Severity.Info` (a modernization cleanup), with an autofix.
+ * all collapse to `x ?? y`. `Severity.Info` (a modernization cleanup), with a RISKY autofix — applied only under a
+ * configured `compilerOracle`, which typechecks it and reverts what breaks.
+ *
+ * Risky because `??` is NOT a drop-in for the ternary when the two branches only agree
+ * through the EXPECTED type. A ternary types each branch against the expected type; `??`
+ * needs a common type from the branches themselves. `taskDataLength = len == null ? 0 : len`
+ * with `len:Null<Int64>` compiles and `len ?? 0` does not; an abstract with `@:from Float`
+ * and `@:from String` unifies `it.min` with `Math.NEGATIVE_INFINITY` under the ternary and
+ * has no common type without it. Neither is visible in the tree, so the oracle is the gate:
+ * measured on one library, 3 of 81 sites.
  *
  * Two safety constraints:
  *
@@ -40,7 +50,7 @@ using Lambda;
  * iterates to a fixed point).
  */
 @:nullSafety(Strict)
-final class PreferNullCoalescing implements Check {
+final class PreferNullCoalescing implements Check implements RiskyFix {
 
 	/** A complete ternary node has children [cond, then, else]. */
 	private static inline final TERNARY_CHILD_COUNT: Int = 3;
@@ -90,7 +100,7 @@ final class PreferNullCoalescing implements Check {
 			if (guardedSpan == null || fallbackSpan == null) return null;
 			final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
 			final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
-			final fallbackText: String = m.fallback.kind == seams.ternaryKind ? '($fallbackSrc)' : fallbackSrc;
+			final fallbackText: String = needsParens(m.fallback, seams) ? '($fallbackSrc)' : fallbackSrc;
 			return { span: span, text: '$guardedSrc ?? $fallbackText' };
 		});
 	}
@@ -169,6 +179,19 @@ final class PreferNullCoalescing implements Check {
 	}
 
 	/**
+	 * Whether the fallback has to be parenthesized in the rewrite: it binds LOOSER than `??`.
+	 *
+	 * Two such operands exist. A bare ternary was already handled. An ASSIGNMENT was not, and
+	 * `_webp ?? _webp = f()` parses as `(_webp ?? _webp) = f()` — `Invalid assign`, from a fix
+	 * whose input compiled. A binary write kind is the discriminator: `writeParentKinds` also
+	 * holds the increments, and those are prefix or postfix (one child) and bind tighter, so
+	 * the child count tells them apart without a new seam.
+	 */
+	private static function needsParens(fallback: QueryNode, seams: Seams): Bool {
+		return fallback.kind == seams.ternaryKind || seams.writeKinds.contains(fallback.kind) && fallback.children.length == 2;
+	}
+
+	/**
 	 * Resolve the ternary / equality / null seam kinds plus the mutation-unsafe kinds, or null when any required kind is unset.
 	 *
 	 */
@@ -188,7 +211,8 @@ final class PreferNullCoalescing implements Check {
 			eqKind: eqKind,
 			notEqKind: notEqKind,
 			nullKind: nullKind,
-			unsafeKinds: unsafeKinds
+			unsafeKinds: unsafeKinds,
+			writeKinds: shape.writeParentKinds
 		};
 	}
 
@@ -201,4 +225,7 @@ private typedef Seams = {
 	final notEqKind: String;
 	final nullKind: String;
 	final unsafeKinds: Array<String>;
+
+	/** `RefShape.writeParentKinds` — the binary members of it are the operands that bind looser than `??`. */
+	final writeKinds: Array<String>;
 };
