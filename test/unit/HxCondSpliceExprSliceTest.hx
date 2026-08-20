@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxCondSpliceOpExpr;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxStatement;
@@ -12,43 +13,51 @@ import anyparse.grammar.haxe.HxVarSemiCondInitDecl;
  * Expression-position `#if`: which regions carry NODES and which stay a
  * raw byte span.
  *
- * A census over 1649 real modules (TM `src/`, `lime/src`, `openfl/src`)
+ * A census over 1646 real modules (TM `src/`, `lime/src`, `openfl/src`)
  * found ELEVEN `HxExpr.CondSpliceExpr` regions in nine files — the
  * production whose `raw` is a verbatim byte capture with no nodes inside
  * it. Three shapes, and this class pins the verdict for each:
  *
  *  - **Balanced value per branch, `;` inside the guard** (2 sites,
  *    `openfl/ui/Mouse.hx:61,66`) — `var supportsCursor(default,
- *    null):Bool = #if !mobile true; #else false; #end`. MODELLED. The
- *    accessor-less spelling already reached `HxVarSemiCondInitDecl`; the
- *    property-accessor clause was the only thing pushing it out.
+ *    null):Bool = #if !mobile true; #else false; #end`. MODELLED
+ *    (`HxVarSemiCondInitDecl` binds the property-accessor clause that
+ *    was pushing the member out).
  *  - **Dangling infix operator** (8 sites: `+` in TM `SystemData.hx:137`
  *    and `CrashDumper.hx:307`, `||` in `openfl/geom/PerspectiveProjection
  *    .hx:116`, `openfl/display/BitmapData.hx:2229,2239`,
  *    `openfl/display3D/textures/TextureBase.hx:289`, `&&` in
  *    `lime/utils/Preloader.hx:233`, `lime/system/System.hx:590`) —
- *    REFUSED, see `testDanglingInfixOperatorRegionStaysRaw`.
+ *    MODELLED, `HxCondSpliceOpExpr`, see
+ *    `testDanglingInfixOperatorRegionIsModelled`.
  *  - **Half ternary** (1 site, TM `popups/fileDialog/FileDialog.hx:91`) —
- *    REFUSED, see `testHalfTernaryRegionStaysRaw`.
+ *    RAW, and the reason is fidelity rather than parsing; see
+ *    `testHalfTernaryRegionStaysRaw`.
  *
- * The refusals are a decision with a measurement behind it, not an
- * accident. Modelling the dangling-operator shape means a production
- * `{cond, expr:HxExpr, op, tail:HxExpr}`, which needs the Pratt loop to
- * REWIND an operator whose right operand fails to parse — and
- * `Lowering.lowerPrattLoop` emits no such path: every branch is
- * `left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1))` with zero `try`
- * and zero `catch` in the whole generated loop, and 41 of its 42
- * `ctx.pos = _savedPos` writes are the min-precedence gate rather than a
- * failure rewind. Adding one is a core-codegen change touching every
- * infix operator of every grammar, and it would make `a + ;` parse as
- * `a` instead of erroring at the `+`. The half-ternary has the same
- * missing-operand problem. Full reasoning on `HxCondSpliceExpr`.
+ * The dangling-operator shape was refused once, on a measurement that is
+ * still true: modelling it as `{cond, expr:HxExpr, op, tail:HxExpr}`
+ * needs the Pratt loop to REWIND an operator whose right operand fails to
+ * parse, and `Lowering.lowerPrattLoop` emits no such path — every branch
+ * is `left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1))` with zero
+ * `try` and zero `catch` in the whole generated loop, and 41 of its 42
+ * `ctx.pos = _savedPos` writes are the min-precedence gate. What does not
+ * follow is the refusal. `expr` does not have to be a full-precedence
+ * expression: prefix and the whole postfix loop live in
+ * `parseHxExprAtom`, so an ATOM-level operand covers everything the eight
+ * sites put between their operators and stops at the operator. The
+ * fragment is then a Star of `(operand, operator)` pairs, and a Star's
+ * element rewind — `@:tryparse` — has shipped since
+ * `HxConditionalExpr.elseifs`. The operator loop is never entered, so it
+ * never needs to unwind, and `a + ;` still errors at the `+` because
+ * nothing outside a `#if` region reaches the ctor. Full reasoning on
+ * `HxCondSpliceOpExpr`.
  *
- * So `HxCondSpliceRaw`'s verbatim capture stays what keeps those nine
- * files parsing and byte-round-tripping, and `RefactorSupport`'s
- * unparsed-region guard reads exactly those raw spans — a rename
- * touching a name spelled inside one still refuses loudly instead of
- * rewriting some of its occurrences.
+ * `HxCondSpliceRaw`'s verbatim capture is still what keeps the remaining
+ * shapes parsing and byte-round-tripping, and `RefactorSupport`'s
+ * unparsed-region guard still reads exactly those raw spans — it walks
+ * the parts of an opaque node's span NO CHILD covers, so it narrowed to
+ * the directive keywords and the operator slices by itself when the
+ * operands became nodes.
  */
 @:nullSafety(Strict)
 class HxCondSpliceExprSliceTest extends HxTestHelpers {
@@ -124,22 +133,24 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	/**
 	 * TM `src/crashdumper/SystemData.hx:137`, reduced and canonicalised.
 	 * The fragment ends on a DANGLING `+` whose right operand lives after
-	 * `#end`, so neither branch of the region is an expression.
+	 * `#end`.
 	 *
-	 * REFUSED on purpose. The region keeps `HxCondSpliceRaw`'s verbatim
-	 * capture, `refs` / `mentions` keep under-reporting a name spelled
-	 * inside it, and `rename` keeps refusing loudly rather than rewriting
-	 * three of four occurrences.
+	 * MODELLED as a run of `(atom, operator)` terms: every operand is a
+	 * real node, so `refs` / `rename` / lint / `fmt` see inside the region.
 	 */
-	public function testDanglingInfixOperatorRegionStaysRaw(): Void {
+	public function testDanglingInfixOperatorRegionIsModelled(): Void {
 		final src: String = 'class C {\n\tpublic function toString():String {\n\t\treturn "os: "\n\t\t\t+ os\n'
 			+ '\t\t\t+ #if flash "  playerType: " + playerType + "\\n" + "  playerVersion: " + playerVersion\n'
 			+ '\t\t\t+ "\\n" + #end\n\t\t\t"  totalMemory: " + totalMemory;\n\t}\n}';
 		switch soleReturnExpr(src) {
-			case Add(_, right):
-				assertCondSplice(right, 'dangling +');
+			case Add(_, CondSpliceOpExpr(inner)):
+				Assert.equals('flash', (inner.cond: String));
+				Assert.equals('+ + + + + +', spliceOps(inner), 'six dangling-`+` terms');
+				assertStringLeaf(inner.terms[0].operand, '"  playerType: "', 'first operand');
+				assertIdent(inner.terms[1].operand, 'playerType', 'second operand');
+				assertIdent(inner.terms[4].operand, 'playerVersion', 'the name refs used to miss');
 			case other:
-				Assert.fail('expected Add(_, CondSpliceExpr), got $other');
+				Assert.fail('expected Add(_, CondSpliceOpExpr), got $other');
 		}
 		triviaEquals(src, 'SystemData.toString');
 	}
@@ -147,7 +158,13 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	/**
 	 * TM `src/popups/fileDialog/FileDialog.hx:91`, reduced: `#if c cond ?
 	 * a : #end b` — the region carries the head of a ternary whose
-	 * else-operand is the tail. Same refusal, same reason.
+	 * else-operand is the tail. STAYS RAW, and the refusal is a fidelity
+	 * decision rather than a parsing one: adding `?` and `:` to
+	 * `HxCondSpliceOpLit` makes this region parse as two terms and every
+	 * operand a node, but a FLAT term run has one indent level to give and
+	 * the site is hand-indented on the ternary's two-level convention, so
+	 * `hxq fmt` starts rewriting a file it left alone. Measured, recorded
+	 * on `HxCondSpliceOpLit`, and reversible in one token.
 	 */
 	public function testHalfTernaryRegionStaysRaw(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\t_p = #if FEATURE_SHARE\n\t\t\tshare\n\t\t\t\t? new A(1)\n'
@@ -164,28 +181,74 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	/**
 	 * The remaining census shape: a dangling BOOLEAN operator, once inside
 	 * an `if` condition (`openfl/geom/PerspectiveProjection.hx:116`) and
-	 * once in a local initializer (`lime/utils/Preloader.hx:233`). Refused
-	 * for the same reason, pinned so a later slice notices when it moves.
+	 * once in a local initializer (`lime/utils/Preloader.hx:233`).
 	 */
-	public function testDanglingBoolOperatorRegionStaysRaw(): Void {
+	public function testDanglingBoolOperatorRegionIsModelled(): Void {
 		final ifSrc: String =
 			'class C {\n\tfunction f():Void {\n\t\tif (#if neko __f == null || #end center == null)\n\t\t\treturn;\n\t}\n}';
 		switch soleStatement(ifSrc) {
 			case IfStmt(stmt):
-				assertCondSplice(stmt.cond, 'dangling || in an if condition');
+				final inner: HxCondSpliceOpExpr = expectCondSpliceOp(stmt.cond, 'dangling || in an if condition');
+				Assert.equals('== ||', spliceOps(inner), 'the comparison and the dangling ||');
+				assertIdent(inner.terms[0].operand, '__f', 'the compared name');
 			case other:
-				Assert.fail('expected IfStmt whose cond is a CondSpliceExpr, got $other');
+				Assert.fail('expected IfStmt whose cond is a CondSpliceOpExpr, got $other');
 		}
 		triviaEquals(ifSrc, 'PerspectiveProjection.toMatrix3D');
 
 		final varSrc: String = 'class C {\n\tfunction f():Void {\n\t\tvar b = #if flash loadedStage && #end ready;\n\t}\n}';
 		switch soleStatement(varSrc) {
 			case VarStmt(decl):
-				assertCondSplice(decl.init, 'dangling && in a local initializer');
+				final inner: HxCondSpliceOpExpr = expectCondSpliceOp(decl.init, 'dangling && in a local initializer');
+				Assert.equals('&&', spliceOps(inner));
+				assertIdent(inner.terms[0].operand, 'loadedStage', 'the guarded operand');
 			case other:
 				Assert.fail('expected VarStmt, got $other');
 		}
 		triviaEquals(varSrc, 'Preloader.update');
+	}
+
+	/**
+	 * A prefix-operator operand (`openfl/display/BitmapData.hx:2239`) and a
+	 * postfix chain one (TM `CrashDumper.hx:307`) both bind INSIDE a term,
+	 * which is the whole reason no Pratt rewind is needed: prefix and
+	 * postfix live in `parseHxExprAtom`, the function a term's operand
+	 * references.
+	 */
+	public function testTermOperandsCarryPrefixAndPostfix(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (#if two !img.powerOfTwo || #end (w != h))\n\t\t\treturn;\n\t}\n}';
+		switch soleStatement(src) {
+			case IfStmt(stmt):
+				final inner: HxCondSpliceOpExpr = expectCondSpliceOp(stmt.cond, 'prefix ! over a field access');
+				Assert.equals('||', spliceOps(inner));
+				switch inner.terms[0].operand {
+					case Not(FieldAccess(IdentExpr(recv), field)):
+						Assert.equals('img', (recv: String));
+						Assert.equals('powerOfTwo', (field: String));
+					case other:
+						Assert.fail('expected Not(FieldAccess(img, powerOfTwo)), got $other');
+				}
+			case other:
+				Assert.fail('expected IfStmt, got $other');
+		}
+		triviaEquals(src, 'BitmapData.__fromImage');
+	}
+
+	/**
+	 * The fallback is still there and still reached. A fragment that is NOT
+	 * a run of `(atom, operator)` pairs — here one carrying its own `#else`
+	 * — keeps `HxCondSpliceRaw`'s verbatim capture, so the ordered choice
+	 * degrades exactly where the new production does not apply.
+	 */
+	public function testNonPairFragmentStillRaw(): Void {
+		final src: String = 'class C {\n\tfunction f():String {\n\t\treturn "a" + #if flash "b" + #else "c" + #end "d";\n\t}\n}';
+		switch soleReturnExpr(src) {
+			case Add(_, right):
+				assertCondSplice(right, '#else inside the fragment');
+			case other:
+				Assert.fail('expected Add(_, CondSpliceExpr), got $other');
+		}
+		triviaEquals(src, 'raw fallback');
 	}
 
 	/**
@@ -210,6 +273,26 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 				Assert.fail('expected Add(Add(_, ConditionalExpr), _), got $other');
 		}
 		triviaEquals(src, 'balanced ConditionalExpr');
+	}
+
+	private function expectCondSpliceOp(expr: Null<HxExpr>, label: String): HxCondSpliceOpExpr {
+		return switch expr {
+			case CondSpliceOpExpr(inner): inner;
+			case null, _: throw 'expected CondSpliceOpExpr for $label, got $expr';
+		};
+	}
+
+	private function spliceOps(inner: HxCondSpliceOpExpr): String {
+		return inner.terms.map(t -> (t.op: String)).join(' ');
+	}
+
+	private function assertIdent(expr: HxExpr, expected: String, label: String): Void {
+		switch expr {
+			case IdentExpr(v):
+				Assert.equals(expected, (v: String), label);
+			case _:
+				Assert.fail('expected IdentExpr in $label, got $expr');
+		}
 	}
 
 	private function assertCondSplice(expr: Null<HxExpr>, label: String): Void {

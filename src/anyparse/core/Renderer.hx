@@ -30,6 +30,21 @@ private typedef RenderCtx = {
 };
 
 /**
+	The three widths `Renderer.embeddedLineWidths` reports for one Doc: the
+	first and last physical line of a VERBATIM multi-line token (`first` /
+	`last`, both `-1` when the shape does not apply), and `condSpliceFirstLine`
+	— the same first-line measurement for a conditional-compilation splice
+	operand whose break is a real hardline rather than a `Text`-embedded
+	newline. Named because three signatures carry it; see the function's own
+	doc for what each `-1` means and which caller reads which field.
+**/
+private typedef EmbeddedLineWidths = {
+	final first: Int;
+	final last: Int;
+	final condSpliceFirstLine: Int;
+};
+
+/**
 	Layout mode for a `Doc` frame: flat (line breaks become their flat
 	replacement) or broken (line breaks become real newlines).
 **/
@@ -458,9 +473,22 @@ class Renderer {
 	 * token-splice operand onto the packed chain line) instead of breaking the
 	 * whole operand onto its own line for its full flat width. A packed item's
 	 * tail is the fill's own business, so the `last` half is not consulted.
+	 *
+	 * Falls back to `condSpliceFirstLine` — the same measurement over a REAL
+	 * hardline rather than a `Text`-embedded newline — when the item is a
+	 * conditional-compilation splice operand that carries no embedded newline.
+	 * That population used to be empty: a `#if … #end` operand was reachable
+	 * only as `HxCondSpliceRaw`'s verbatim capture, whose newline lives inside
+	 * a `Text`. `HxCondSpliceOpExpr` models the same region as real nodes, so
+	 * its newline is a genuine hardline and `first` reads `-1` there, which
+	 * would send the fill to the full flat width and break an operand the fork
+	 * packs. Widening the fallback to EVERY fill item was measured first and
+	 * declined: five writer tests move, and the shapes they cover are ordinary
+	 * multi-line arguments a fill is supposed to refuse.
 	 */
 	private static inline function embeddedFirstLineWidth(d: Doc): Int {
-		return embeddedLineWidths(d).first;
+		final w: EmbeddedLineWidths = embeddedLineWidths(d);
+		return w.first >= 0 ? w.first : w.condSpliceFirstLine;
 	}
 
 	/**
@@ -708,7 +736,7 @@ class Renderer {
 		// token -- content this measure cannot place, and content the walk
 		// refuses outright (`fitsFlatStep` reports a hardline as `broke`).
 		// Committing such a doc to flat would emit its hardlines unindented.
-		final embedded: { first: Int, last: Int } = embeddedLineWidths(d);
+		final embedded: EmbeddedLineWidths = embeddedLineWidths(d);
 		if (embedded.first >= 0 && embedded.last >= 0) return embedded.first <= remaining && embedded.last <= remaining;
 		final local: Array<Frame> = [new Frame(indent, MFlat, d)];
 		var budget: Int = remaining;
@@ -3187,6 +3215,18 @@ class Renderer {
 	 * out by that break rather than by the token, so this walk does not claim to
 	 * know it and a caller reading `last` falls back to its standard probe.
 	 *
+	 * `condSpliceFirstLine` is the third measurement and answers the SAME
+	 * question as `first` — how wide is the first physical line — for a doc
+	 * whose break is a real hardline instead of a `Text`-embedded newline, and
+	 * ONLY when a `#if` directive was emitted before that break. That gate is
+	 * what keeps it a statement about conditional-compilation splice operands:
+	 * `HxCondSpliceOpExpr` models a region `HxCondSpliceRaw` used to swallow
+	 * verbatim, so the same operand now reaches a `Fill` with a hardline where
+	 * it used to carry embedded bytes, and the packing probe has to recognise
+	 * it as the same shape. `-1` when no such break was reached. `fitsFlat`
+	 * does NOT read it: committing a hardline-bearing doc to flat would emit
+	 * those hardlines unindented, which is exactly why `first`/`last` refuse.
+	 *
 	 * Interior lines are deliberately NOT measured: they are emitted byte for
 	 * byte whatever the enclosing layout decides, so no wrap can shorten them.
 	 *
@@ -3209,19 +3249,23 @@ class Renderer {
 	 * flat when the line it opens and the line it closes both fit) and
 	 * `embeddedFirstLineWidth` (the `Fill` packing probe, `first` alone).
 	 */
-	private static function embeddedLineWidths(d: Doc): { first: Int, last: Int } {
+	private static function embeddedLineWidths(d: Doc): EmbeddedLineWidths {
 		final stack: Array<Doc> = [d];
 		var total: Int = 0;
 		var first: Int = -1;
+		var condSpliceFirstLine: Int = -1;
+		var sawCondDirective: Bool = false;
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			switch (node) {
 				case Text(s):
+					if (!sawCondDirective && s.ltrim().startsWith('#if')) sawCondDirective = true;
 					final nl: Int = s.indexOf('\n');
 					if (nl < 0) {
 						total += s.length;
 					} else {
 						if (first < 0) first = total + nl;
+						if (condSpliceFirstLine < 0 && sawCondDirective) condSpliceFirstLine = total + nl;
 						// Restart the running width at the token's LAST verbatim
 						// line: what follows rides that line, not a fresh indent.
 						total = s.length - (s.lastIndexOf('\n') + 1);
@@ -3231,10 +3275,14 @@ class Renderer {
 				case OptSpaceSkipAfterHardline:
 					total += 1;
 				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { first: first, last: -1 };
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+						if (condSpliceFirstLine < 0 && sawCondDirective) condSpliceFirstLine = total;
+						return { first: first, last: -1, condSpliceFirstLine: condSpliceFirstLine };
+					}
 					total += flat.length;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
-					return { first: first, last: -1 };
+					if (condSpliceFirstLine < 0 && sawCondDirective) condSpliceFirstLine = total;
+					return { first: first, last: -1, condSpliceFirstLine: condSpliceFirstLine };
 				case Empty, BodyGroup(_):
 					// Empty adds nothing; BodyGroup defers its own layout decision.
 				case Concat(items):
@@ -3258,7 +3306,7 @@ class Renderer {
 					stack.push(inner);
 			}
 		}
-		return { first: first, last: total };
+		return { first: first, last: total, condSpliceFirstLine: condSpliceFirstLine };
 	}
 
 	/**

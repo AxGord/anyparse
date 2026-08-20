@@ -16,43 +16,52 @@ package anyparse.grammar.haxe;
  *  - `#if share cond ? new A(...) : #end new B(...)` — `raw` carries
  *    the half-ternary head, `tail` the shared else-operand.
  *
- * Dispatch order: AFTER `ConditionalExpr` (balanced single-expr) and
- * `ConditionalArgs` (list-element groups) — both fail-rewind on
- * splice shapes, so every structurally-parseable conditional keeps
- * its structured representation.
+ * Dispatch order: LAST — after `ConditionalExpr` (balanced
+ * single-expr), `ConditionalArgs` (list-element groups) and
+ * `CondSpliceOpExpr` (operand-run fragments); all three fail-rewind
+ * onto this one, so every structurally-parseable conditional keeps its
+ * structured representation and only the genuinely unmodellable
+ * fragment reaches the raw capture.
  *
- * WHY THE FRAGMENT CANNOT BE MODELLED AS `<HxExpr> <dangling op>`.
- * A census over 1649 real modules (TM `src/`, `lime/src`, `openfl/src`)
- * finds eleven regions reaching this ctor, and EIGHT are one shape:
- * an ordinary expression followed by a dangling infix operator whose
- * right operand is the `tail` (`+` in `crashdumper/SystemData.hx:137`
- * and `crashdumper/CrashDumper.hx:307`, `||` in
- * `openfl/geom/PerspectiveProjection.hx:116`,
+ * WHAT THIS PRODUCTION IS STILL FOR, after `HxCondSpliceOpExpr`.
+ * A census over 1646 real modules (TM `src/`, `lime/src`,
+ * `openfl/src`) found nine regions reaching this ctor, and EIGHT were
+ * one shape: an ordinary operand run ending on a dangling infix
+ * operator whose right operand is the `tail` (`+` in
+ * `crashdumper/SystemData.hx:137` and `crashdumper/CrashDumper.hx:307`,
+ * `||` in `openfl/geom/PerspectiveProjection.hx:116`,
  * `openfl/display/BitmapData.hx:2229` and `:2239`,
  * `openfl/display3D/textures/TextureBase.hx:289`, `&&` in
- * `lime/utils/Preloader.hx:233`, `lime/system/System.hx:590`). A
- * production `{cond, expr:HxExpr, op, tail:HxExpr}` would give all
- * eight real nodes — and it is not expressible, because it needs the
- * Pratt loop to REWIND an operator whose right operand fails to parse.
- * `Lowering.lowerPrattLoop` has no such path: every branch reads
+ * `lime/utils/Preloader.hx:233`, `lime/system/System.hx:590`). All
+ * eight are now `HxCondSpliceOpExpr`, dispatched one branch earlier,
+ * with every operand a real node.
  *
- * ```js
- * left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1));
- * ```
+ * An earlier reading held that they COULD not be: the obvious
+ * production `{cond, expr:HxExpr, op, tail:HxExpr}` needs the Pratt
+ * loop to REWIND an operator whose right operand fails to parse, and
+ * `Lowering.lowerPrattLoop` has no such path — every branch reads
+ * `left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1))` with zero
+ * `try` and zero `catch` across its 14.5 KB, and 41 of its 42
+ * `ctx.pos = _savedPos` writes are the MIN-PRECEDENCE gate. That
+ * measurement is correct and still holds. What it missed is that
+ * `expr` does not have to be a full-precedence expression: prefix and
+ * postfix live in `parseHxExprAtom`, so an ATOM-level operand covers
+ * every operand those eight sites actually write and stops at the
+ * operator, turning the fragment into a Star of `(operand, operator)`
+ * pairs whose rewind is `@:tryparse`. The operator loop is never
+ * entered, so it never needs to unwind, and `a + ;` still errors at
+ * the `+`.
  *
- * with no `try`/`catch` anywhere in the generated loop (measured: zero
- * of each across its 14.5 KB, and 41 of the 42 `ctx.pos = _savedPos`
- * writes are the MIN-PRECEDENCE gate, not a failure rewind). A failing
- * right operand therefore throws out of the whole `parseHxExpr`, so
- * `expr` can never stop one operator short of where the fragment ends.
- *
- * Adding the rewind is a core-codegen change affecting every infix
- * operator of every grammar, and it would also silently accept genuine
- * typos: `a + ;` would parse as `a` with `+ ;` left for the next field
- * instead of erroring at the `+`. So the eight sites stay RAW, by
- * decision — as does the ninth shape, `#if c cond ? a : #end b` (TM
- * `popups/fileDialog/FileDialog.hx:91`), whose fragment is half a
- * ternary and has the same missing-operand problem.
+ * What is left here is everything that is NOT such a run: a fragment
+ * carrying its own `#else`, an unbalanced nested `#if`, a
+ * `;`-terminated branch, a `@meta`-prefixed statement region — and one
+ * census site kept here deliberately, `#if c cond ? a : #end b` (TM
+ * `popups/fileDialog/FileDialog.hx:91`). That one PARSES as two terms
+ * the moment `?` and `:` join `HxCondSpliceOpLit`; it stays raw
+ * because a flat term run cannot reproduce its two-level hand indent
+ * and `hxq fmt` would start rewriting a file it leaves alone today.
+ * The measurement and the one-token reversal are on
+ * `HxCondSpliceOpLit`.
  *
  * The consequence is owned rather than hidden: `HaxeQueryPlugin.
  * opaqueCondRegionKinds` lists this ctor, so `RefactorSupport.

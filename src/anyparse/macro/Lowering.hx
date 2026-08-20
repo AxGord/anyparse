@@ -82,6 +82,20 @@ class Lowering {
 	private static inline final BY_NAME_KEY: String = 'lowering.byName';
 
 	/**
+	 * `@:fmt` flag that retargets a Ref's parse call to the `${parseFn}Atom`
+	 * variant of the sub-rule: the operand binds at ATOM level (prefix and the
+	 * whole postfix loop included, infix Pratt excluded), so a trailing binary
+	 * operator is left for whatever follows instead of being swallowed.
+	 *
+	 * Read from THREE places that must not drift: the single-Ref enum-branch
+	 * arm (`lowerKwRefBranch`, `HxExpr.CastExpr`), the bare struct-field arm
+	 * (`HxCondSpliceOpTerm.operand`), and `refBranchFirstToken`, which answers
+	 * `Unknown` for such a branch because `ruleFirstToken` models the ENTRY
+	 * function and this flag bypasses it.
+	 */
+	private static inline final ATOM_OPERAND_FLAG: String = 'atomOperand';
+
+	/**
 	 * How many guardable branches an Alt rule needs before the dispatch
 	 * prologue repays itself. Read by `lowerEnum` (which acts on it) and
 	 * by `dumpDispatch` (which reports it), so the dump can never claim a
@@ -4803,7 +4817,7 @@ class Lowering {
 		// `${baseFn}Atom` matches all three pipeline-mode fn-name
 		// conventions (`parseHxExpr` / `parseHxExprS` / `parseHxExprT`
 		// → `parseHxExprAtom` / `parseHxExprSAtom` / `parseHxExprTAtom`).
-		final atomOperand: Bool = branch.fmtHasFlag('atomOperand');
+		final atomOperand: Bool = branch.fmtHasFlag(ATOM_OPERAND_FLAG);
 		final subFnName: String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
 		final callSub: Expr = {
 			expr: ECall(macro $i{subFnName}, [macro ctx]),
@@ -5745,8 +5759,19 @@ class Lowering {
 				);
 			case Ref:
 				final refName: String = child.annotations[AnnotationKeys.BASE_REF];
+				// ω-splice-operand-run: `@:fmt(atomOperand)` on a bare struct Ref
+				// retargets the call to the `${parseFn}Atom` variant of the
+				// sub-rule, exactly as the single-Ref ENUM BRANCH arm already does
+				// (`lowerKwRefBranch`, shipped for `HxExpr.CastExpr`). The operand
+				// then binds at ATOM level — prefix and the whole postfix loop
+				// included, infix Pratt excluded — so a trailing binary operator is
+				// left for the NEXT field of the same struct instead of being
+				// swallowed into the operand. That is what lets a struct model
+				// `<operand> <operator>` as a pair without the Pratt loop ever
+				// needing to rewind a failed right operand (`HxCondSpliceOpTerm`).
+				final subFnName: String = child.fmtHasFlag(ATOM_OPERAND_FLAG) ? '${parseFnName(refName)}Atom' : parseFnName(refName);
 				final callExpr: Expr = {
-					expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
+					expr: ECall(macro $i{subFnName}, [macro ctx]),
 					pos: Context.currentPos()
 				};
 				parseSteps.push({
@@ -6479,7 +6504,7 @@ class Lowering {
 	 */
 	private static function refBranchFirstToken(rules: Map<String, ShapeNode>, seen: Array<String>, branch: ShapeNode): BranchFirstToken {
 		return switch branchShape(branch) {
-			case KwRef(kw, lead) if (kw == null && lead == null && !branch.fmtHasFlag('atomOperand')):
+			case KwRef(kw, lead) if (kw == null && lead == null && !branch.fmtHasFlag(ATOM_OPERAND_FLAG)):
 				ruleFirstToken(rules, branch.children[0].annotations[AnnotationKeys.BASE_REF], seen);
 			case _: Unknown;
 		};

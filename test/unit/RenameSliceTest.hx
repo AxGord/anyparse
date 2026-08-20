@@ -578,15 +578,46 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
-	 * A `#if … #end` region in EXPRESSION position that no structural conditional can
-	 * represent is swallowed as a RAW byte span (`CondSpliceExpr`): its interior projects no
-	 * nodes at all, so `Refs` never sees the `tag` read inside it and the splice would rewrite
-	 * only the two occurrences outside. That is a silent miscompile in the build that defines
-	 * the condition - refuse instead, naming the region.
+	 * A `#if … #end` region in EXPRESSION position whose fragment ends on a DANGLING infix
+	 * operator - the eight-site census shape. It used to be swallowed as a RAW byte span
+	 * (`CondSpliceExpr`) whose interior projected no nodes at all, so `Refs` never saw the
+	 * `tag` read inside it and the rename REFUSED, naming the region, rather than rewriting
+	 * two of three occurrences and miscompiling the build that defines the condition.
+	 *
+	 * The fragment is a run of `(atom, operator)` terms, so it is modelled now
+	 * (`CondSpliceOpExpr`) and all three occurrences move - including the one inside the guard.
 	 */
-	public function testExpressionSpliceOccurrenceRefused(): Void {
+	public function testExpressionSpliceOccurrenceRenames(): Void {
 		final src: String = 'class B {\n\tstatic function f():String {\n\t\tvar tag:String = "a";\n'
 			+ "\t\treturn 'x' + #if flash tag + #end 'y' + tag;\n\t}\n}";
+		final expected: String = 'class B {\n\tstatic function f():String {\n\t\tvar label:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash label + #end 'y' + label;\n\t}\n}";
+		assertRename(src, 3, 7, 'label', expected);
+	}
+
+	/**
+	 * The guard did not get switched off with the operands - it NARROWED. `CondSpliceOpExpr`
+	 * is in `opaqueCondRegionKinds` like its raw sibling, and
+	 * `RefactorSupport.opaqueCondRegionMentioning` walks the parts of an opaque node's span no
+	 * CHILD covers. The operands are children now; the `#if <cond>` head is not. So a binding
+	 * whose name is spelled by the CONDITION is still refused, from the same modelled region
+	 * whose operand rename the test above performs.
+	 */
+	public function testModelledSpliceConditionOccurrenceStillRefused(): Void {
+		final src: String = 'class B {\n\tstatic function f():String {\n\t\tvar flash:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash tag + #end 'y' + flash;\n\t}\n}";
+		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region at 4:16');
+	}
+
+	/**
+	 * A fragment the operand-run production cannot represent - here one carrying its own
+	 * `#else` - still lands in the RAW `CondSpliceExpr`, and still refuses. The ordered choice
+	 * degrades where the new production does not apply, so the fallback is narrowed rather
+	 * than removed.
+	 */
+	public function testNonOperandRunExpressionSpliceStillRefused(): Void {
+		final src: String = 'class B {\n\tstatic function f():String {\n\t\tvar tag:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash tag + #else 'z' + #end 'y' + tag;\n\t}\n}";
 		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region at 4:16');
 	}
 
