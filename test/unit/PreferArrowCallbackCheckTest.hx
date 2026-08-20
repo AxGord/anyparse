@@ -309,6 +309,27 @@ class PreferArrowCallbackCheckTest extends Test {
 		Assert.equals('() -> 1', fixText(hostClass('cb(function():Int { return 1; });')));
 	}
 
+	// ---- the body carried whole ----
+
+	/** An ASSIGNMENT expression body converts WHOLE — the arrow drops the `function` syntax, never the operand. */
+	public function testAssignmentExprBodyFixed(): Void {
+		final src: String = 'class C {\n\tfunction m():Void {\n\t\tvar v:String;\n\t\tsink(function(r) v = r);\n\t}\n'
+			+ '\tfunction sink(f:String->Void):Void {}\n}';
+		Assert.equals('r -> v = r', fixText(src));
+	}
+
+	/** A call body carrying arguments the literal never declared converts WHOLE — this rule never eta-reduces. */
+	public function testExtraArgumentCallBodyFixed(): Void {
+		final src: String = 'class C {\n\tfunction m():Void {\n\t\tvar v:String;\n\t\tsink(function(s) other(s, v));\n\t}\n'
+			+ '\tfunction sink(f:String->Void):Void {}\n\tfunction other(a:String, b:String):Void {}\n}';
+		Assert.equals('s -> other(s, v)', fixText(src));
+	}
+
+	/** A `throw` EXPRESSION body keeps its keyword — the block-bodied twin is `testThrowTailResolvedFixed`. */
+	public function testThrowExprBodyResolvedFixed(): Void {
+		Assert.equals("() -> throw 'boom'", fixText(hostClass("cb(function() throw 'boom');")));
+	}
+
 	// ---- the generic hazard ----
 
 	/** A parameter whose function-type RETURN is a callee type parameter is proven generic — not even reported. */

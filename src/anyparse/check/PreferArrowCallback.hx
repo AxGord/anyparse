@@ -51,6 +51,24 @@ using StringTools;
  * A comment stranded between the dropped `function` syntax and the kept body span
  * blocks the fix (the rewrite would silently move or lose it).
  *
+ * ## What the arrow body carries — everything but one keyword
+ *
+ * The arrow form makes a `return` implicit and NOTHING else, so the rewrite drops
+ * exactly one token: a value `return` heading an expression body (`function(x) return
+ * e` -> `x -> e`). Every other body is carried WHOLE — an assignment, a `throw`, an
+ * `if`, a call. A block body is kept verbatim unless it holds a single expression
+ * statement or a single `return expr;`, which collapse to that expression.
+ *
+ * The rule is a SYNTAX conversion and never eta-reduces: `function(s) f(s, x)` becomes
+ * `s -> f(s, x)`, arguments and all. Nothing about the argument list gates it, because
+ * the only semantic axis a `function` -> arrow conversion moves is the RETURN TYPE, and
+ * the tail / expected-type gates above already decide that: a call body with arguments
+ * the literal did not declare is an ordinary OPEN tail, converted only where the callee
+ * parameter proves a `Void` return. Collapsing a wrapper to its callee is
+ * `redundant-lambda-wrapper`, whose own gates require the call arguments to BE the
+ * parameter list one for one — so it refuses the extra-argument shape this check
+ * converts, and the two can never claim the same literal.
+ *
  * ## Grammar-agnostic
  *
  * The function-literal kind comes from `RefShape.fnExprKind`, argument hosts from
@@ -309,9 +327,8 @@ final class PreferArrowCallback implements Check {
 		final bodySpan: Null<Span> = body.span;
 		if (bodySpan == null) return null;
 		if (body.kind != ctx.shape.blockBodyKind) {
-			final ret: Null<QueryNode> = body.children[0];
-			final expr: Null<QueryNode> = ret?.children[0];
-			final es: Null<Span> = expr?.span;
+			final carried: Null<QueryNode> = expressionBodyPayload(ctx, body);
+			final es: Null<Span> = carried?.span;
 			if (es == null) return null;
 			kept.push(bodySpan);
 			final gap: String = ctx.source.substring(bodySpan.from, es.from) + ctx.source.substring(es.to, bodySpan.to);
@@ -329,6 +346,23 @@ final class PreferArrowCallback implements Check {
 			}
 		}
 		return ctx.source.substring(bodySpan.from, bodySpan.to);
+	}
+
+	/**
+	 * What an expression body hands to the arrow: a value `return`'s operand, since the arrow
+	 * form makes that ONE keyword implicit — every other body is carried WHOLE. Unwrapping a
+	 * child unconditionally is what truncated `function(r) result = r` to `r -> result`,
+	 * `function(s) f(s, x)` to `s -> f` and `function() throw e` to `() -> e`; all three still
+	 * compiled, so no gate downstream could see the loss.
+	 */
+	private static function expressionBodyPayload(ctx: Ctx, body: QueryNode): Null<QueryNode> {
+		final expr: Null<QueryNode> = body.children[0];
+		return if (expr == null)
+			null
+		else if ((ctx.shape.valueReturnKinds ?? []).contains(expr.kind))
+			expr.children[0]
+		else
+			expr;
 	}
 
 	/** Whether the parts of `outer` NOT covered by the `kept` spans contain a comment marker. */
