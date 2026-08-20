@@ -1,7 +1,6 @@
 package unit;
 
 import utest.Assert;
-import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
