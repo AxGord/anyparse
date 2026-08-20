@@ -30,6 +30,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.Inline;
 import anyparse.query.InlineMethod;
+import anyparse.query.LintFixSafePass;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
@@ -2064,6 +2065,11 @@ final class Cli {
 		final optsByFile: Map<String, Null<String>> = [];
 		for (entry in files) optsByFile[entry.file] = discoverFormatConfig(entry.file);
 
+		// The pre-fix bytes of every file, kept so a safe pass that breaks a build which
+		// was GREEN can be undone. The passes mutate `entry.source` in place and only the
+		// single write loop below touches disk, so this one snapshot covers the whole run.
+		final originalOf: Map<String, String> = [];
+		for (entry in files) originalOf[entry.file] = entry.source;
 		// Files eligible next pass: pass 1 = all; later passes = only the ones a
 		// prior pass changed (a same-file fix exposes findings only where it edited; a cross-file fix would need a re-run).
 		var active: Array<{ file: String, source: String }> = files.copy();
@@ -2088,7 +2094,29 @@ final class Cli {
 			active = pass.nextActive;
 		}
 
+		// The safe pass is applied under a NET when an oracle is configured: typecheck the
+		// tree BEFORE writing, write, then typecheck again. A green-then-red transition is
+		// the safe fixes' own doing, and the whole pass is rolled back.
+		//
+		// Without this the run reported `risky-fix skipped (oracle baseline does not
+		// typecheck)` — a message about the wrong thing entirely. `FixVerifier`'s baseline
+		// is measured AFTER the safe writes, so it was reporting damage the safe pass had
+		// just done as a pre-existing condition, and left the tree un-typecheckable with no
+		// hint that `--fix` was the cause. The insurance was disabled at exactly the moment
+		// it was needed.
+		final preBaseline: Null<OracleOutcome> = oracleHxml != null && changedFiles.length > 0
+			? CompilerOracle.typecheck(oracleHxml, oracleDir)
+			: null;
 		for (entry in files) if (changedFiles.contains(entry.file)) writeFile(entry.file, entry.source);
+		final safePass: SafePassOutcome = reconcileSafePass(files, changedFiles, originalOf, preBaseline, oracleHxml, oracleDir);
+		if (safePass.reverted) {
+			stderr(
+				'apq lint --fix: the safe fixes broke a build that was green — REVERTED ${changedFiles.length} file(s),'
+				+ ' nothing was written\n'
+			);
+			stderr('apq lint --fix: ${safePass.errors}\n');
+			return EXIT_RUNTIME;
+		}
 
 		// RiskyFix checks: applied ONLY when a compiler oracle is configured — each
 		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
@@ -2113,6 +2141,7 @@ final class Cli {
 		fixedCount += oa.appliedCount;
 		final oracleTail: String = oa.tail;
 
+		final baselineTail: String = safePass.tail;
 		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
 		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
 		// `fixed 0 issue(s)` cannot be told apart from "there was nothing to fix", and that one
@@ -2122,7 +2151,7 @@ final class Cli {
 		final declinedTail: String = fixedCount == 0 ? declinedFixNudge(reportedByRule) : '';
 		stderr(
 			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
-			+ '$riskyTail$oracleTail$declinedTail\n'
+			+ '$baselineTail$riskyTail$oracleTail$declinedTail\n'
 		);
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
@@ -13073,6 +13102,38 @@ final class Cli {
 	}
 
 	/**
+	 * Reconcile the safe pass against the compiler, given the verdict taken BEFORE its
+	 * writes landed. `LintFixSafePass.classify` owns the judgement; this seat owns the
+	 * IO — a `Revert` restores every changed file from `originalOf`, on disk and in
+	 * `files`, and the caller then aborts.
+	 *
+	 * Split out of `applyLintFixes` to keep that function under the complexity budget.
+	 */
+	private static function reconcileSafePass(
+		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, originalOf: Map<String, String>,
+		pre: Null<OracleOutcome>, oracleHxml: Null<String>, oracleDir: Null<String>
+	): SafePassOutcome {
+		if (pre == null || oracleHxml == null) return { reverted: false, tail: '', errors: '' };
+		final resolved: OracleOutcome = pre;
+		final decision: SafePassDecision = LintFixSafePass.classify(
+			resolved, LintFixSafePass.isConfirmed(resolved) ? CompilerOracle.typecheck(oracleHxml, oracleDir) : null
+		);
+		switch decision {
+			case Proceed:
+				return { reverted: false, tail: '', errors: '' };
+			case NoNet(tail):
+				return { reverted: false, tail: tail, errors: '' };
+			case Revert(errors):
+				for (entry in files) if (changedFiles.contains(entry.file)) {
+					final original: String = originalOf[entry.file] ?? entry.source;
+					entry.source = original;
+					writeFile(entry.file, original);
+				}
+				return { reverted: true, tail: '', errors: errors };
+		}
+	}
+
+	/**
 	 * Verify and apply the RiskyFix checks' fixes: a no-op with no risky check,
 	 * report-only (no compile) with no oracle, else `FixVerifier`-gated — files
 	 * whose risky fix survives fold into `changedFiles`. Returns the summary tail
@@ -13102,7 +13163,15 @@ final class Cli {
 			case Unavailable(reason):
 				return { tail: ', risky-fix skipped (oracle unavailable: $reason)', appliedCount: 0, reverts: [] };
 			case Rejected(_):
-				return { tail: ', risky-fix skipped (oracle baseline does not typecheck)', appliedCount: 0, reverts: [] };
+				// NOT "the baseline is red": `FixVerifier` measures its baseline AFTER the safe
+				// writes, so this arm is reached both by a tree that was already broken and by
+				// one the safe pass broke. `reconcileSafePass` has already told the two apart
+				// and reverted the second, so by here it can only be the first — say that.
+				return {
+					tail: ', risky-fix skipped (the tree does not typecheck — see the note above)',
+					appliedCount: 0,
+					reverts: []
+				};
 		}
 	}
 
@@ -13537,7 +13606,11 @@ final class Cli {
 			case Unavailable(reason):
 				return { tail: ', oracle-assisted skipped (oracle unavailable: $reason)', appliedCount: 0 };
 			case Rejected(_):
-				return { tail: ', oracle-assisted skipped (oracle baseline does not typecheck)', appliedCount: 0 };
+				// Same wording caveat as `verifyRiskyFixes`: this verdict is taken AFTER the
+				// safe writes, so "baseline" would name the wrong thing. `reconcileSafePass`
+				// has already reverted a tree the safe pass broke, so a rejection here is a
+				// pre-existing one.
+				return { tail: ', oracle-assisted skipped (the tree does not typecheck — see the note above)', appliedCount: 0 };
 		}
 		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(oracleHxml, oracleDir);
 		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0 };
@@ -16660,6 +16733,7 @@ typedef FmtFileResult = {
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;
 };
+
 /**
  * Parsed options for `apq move` — `lang`, `write`, the `scope` to search, the source address (`posSpec` / `selectExpr` / `matchExpr` / `nth`), and the `destFile`. `errExit` non-null means arg parsing hit a terminal case (incl. missing --scope / address) the caller returns immediately.
  */
