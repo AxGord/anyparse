@@ -677,6 +677,7 @@ import unit.LintUsingSubmoduleExtensionTest;
 import unit.MisplacedTypeDocGuardedMetaTest;
 import unit.LintFixSafePassRevertTest;
 import unit.DuplicateCaseCondBranchTest;
+import unit.UnusedCaseBinderConstantLanguageTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1114,6 +1115,7 @@ class RunTests {
 		addCase(new MisplacedTypeDocGuardedMetaTest());
 		addCase(new LintFixSafePassRevertTest());
 		addCase(new DuplicateCaseCondBranchTest());
+		addCase(new UnusedCaseBinderConstantLanguageTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
 		addCase(new LintFailOnCliTest());

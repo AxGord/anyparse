@@ -52,7 +52,7 @@ using Lambda;
  * `case one:` may therefore denote a constant, and widening a constant to `_` would
  * change what the arm matches while still COMPILING — the one failure mode a
  * compiler oracle could not catch, which is why the gates below ARE the rule's
- * safety rather than a verifier. Both apply only to BARE identifiers (a `var x`
+ * safety rather than a verifier. Three gates now; all apply only to BARE identifiers (a `var x`
  * capture and an `=`-capture head are binders by syntax, so neither gate touches
  * them):
  *
@@ -78,6 +78,16 @@ using Lambda;
  *    so it is refused; a subject the compiler does NOT check for exhaustiveness (a
  *    `String` switch) has no such agreement either, and that is precisely the
  *    residual gate 1 has to carry.
+ *
+ * 3. NO SIBLING ARM IS A BARE LOWERCASE WHOLE PATTERN. A run of them is a switch
+ *    listing CONSTANTS the run cannot see — a lowercase enum from a library outside
+ *    the lint scope, which is exactly what gate 1 misses. Gate 2 proves such an arm
+ *    still behaves like `_` TODAY, and that is all it proves: the rewrite quietly
+ *    ends the exhaustiveness check, so a constructor added later lands in that arm
+ *    instead of raising `Unmatched patterns`. The evidence is the SIBLINGS rather
+ *    than the subject's type, because a real binder catch-all never follows a run of
+ *    bare lowercase identifiers — everything after such an arm is unreachable, and
+ *    the compiler warns `WUnusedPattern` on every one (checked on 4.3.7).
  *
  * A NESTED bare identifier (a constructor argument, an array element, a structure
  * field's value) rests on the spelling assumption plus gate 1 alone; that is the
@@ -187,10 +197,21 @@ final class UnusedCaseBinder implements Check {
 		if (groups == null) return;
 		final last: Bool = at == switchNode.children.length - 1;
 		final single: Bool = CasePatternScan.patternRun(seams, arm).length == 1;
+		// A switch whose OTHER arms are bare lowercase whole patterns is not writing binders,
+		// it is listing CONSTANTS the run cannot see — an enum from a library outside the lint
+		// scope, which gate 1's declared-constant scan therefore misses. Widening the last one
+		// to `_` keeps today's behaviour and quietly ends the exhaustiveness check: add a
+		// constructor later and it lands in that arm instead of raising `Unmatched patterns`.
+		//
+		// The signal is the SIBLINGS, not the type: a real binder catch-all follows constructor
+		// names or literals, never a run of bare lowercase identifiers. (A switch that really
+		// did bind in an earlier arm compiles, but only with `WUnusedPattern` on every arm after
+		// it — checked on 4.3.7 — so refusing there costs nothing that exists in real code.)
+		final constantLanguage: Bool = siblingBareWholePattern(seams, switchNode, at);
 		for (group in groups) {
 			final name: String = group[0].name;
 			if (CasePatternScan.mentionCount(seams, arm, name) != group.length) continue;
-			if (!admissible(group, constants, last, single) || !commentFree(group, source)) continue;
+			if (!admissible(group, constants, last, single, constantLanguage) || !commentFree(group, source)) continue;
 			// A WHOLE-pattern binder naming something already in scope, read nowhere — almost always an
 			// intended comparison Haxe silently turned into a catch-all. Spelling it `_` preserves
 			// behaviour and deletes the only evidence, so it stays for `shadowing-case-binder` to report
@@ -212,12 +233,35 @@ final class UnusedCaseBinder implements Check {
 	 * spelling assumption needs, stated on the whole group so an or-pattern cannot pass on
 	 * the strength of its least constrained alternative.
 	 */
-	private static function admissible(group: Array<PatternBinder>, constants: Array<String>, last: Bool, single: Bool): Bool {
+	private static function admissible(
+		group: Array<PatternBinder>, constants: Array<String>, last: Bool, single: Bool, constantLanguage: Bool
+	): Bool {
 		for (binder in group) if (binder.bare) {
 			if (constants.contains(binder.name)) return false;
 			if (binder.whole && !(last && single)) return false;
+			if (binder.whole && constantLanguage) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Whether any arm of `switchNode` OTHER than the one at `at` is a bare lowercase
+	 * identifier standing for the whole pattern.
+	 *
+	 * Such an arm cannot be a binder in real code — everything after it is unreachable, and
+	 * the compiler says so — so its presence is evidence that this switch's bare identifiers
+	 * denote CONSTANTS whose declaring type the run cannot see. See `armCandidates`.
+	 */
+	private static function siblingBareWholePattern(seams: CaseSeams, switchNode: QueryNode, at: Int): Bool {
+		for (i in 0...switchNode.children.length) if (i != at) {
+			final groups: Null<Array<Array<PatternBinder>>> = CasePatternScan.binderGroups(seams, switchNode.children[i]);
+			if (groups == null) continue;
+			for (group in groups) if (
+				group[0].bare && group[0].whole && CasePatternScan.patternRun(seams, switchNode.children[i]).length == 1
+			)
+				return true;
+		}
+		return false;
 	}
 
 	/**
