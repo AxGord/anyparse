@@ -272,17 +272,13 @@ class PreferTernaryReturnCheckTest extends Test {
 	/** `Null<Bool>` gives no such guarantee — a nullable declared return type stays refused. */
 	public function testCallTailInNullBoolFunctionNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations('class C {\n\tfunction f(c:Bool):Null<Bool> {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length
+			0, violations('class C {\n\tfunction f(c:Bool):Null<Bool> {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length
 		);
 	}
 
 	/** `Dynamic` / `Any` are null-safety escape hatches, not the non-null `Bool` nominal — refused. */
 	public function testCallTailInDynamicFunctionNotFlagged(): Void {
-		Assert.equals(
-			0,
-			violations('class C {\n\tfunction f(c:Bool):Dynamic {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length
-		);
+		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool):Dynamic {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length);
 	}
 
 	/**
@@ -310,9 +306,7 @@ class PreferTernaryReturnCheckTest extends Test {
 
 	/** A `null`-literal tail stays refused: `!c && null` is degenerate, and under Strict the site cannot exist. */
 	public function testNullLiteralTailInBoolFunctionNotFlagged(): Void {
-		Assert.equals(
-			0, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn null;\n\t}\n}').length
-		);
+		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn null;\n\t}\n}').length);
 	}
 
 	/** A statement-like tail (`switch` / `try` / `if` expression) stays refused: the flat form is uglier than the guard. */
@@ -327,8 +321,7 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn try g() catch (e:Dynamic) false;\n'
-				+ '\t}\n}'
+				'class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn try g() catch (e:Dynamic) false;\n' + '\t}\n}'
 			).length
 		);
 	}
@@ -343,16 +336,16 @@ class PreferTernaryReturnCheckTest extends Test {
 	public function testPendingBooleanTernaryTailNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(
-				'class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn d ? false : g();\n\t}\n}'
-			).length
+			violations('class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn d ? false : g();\n\t}\n}')
+				.length
 		);
 	}
 
 	/** …and once it HAS flattened, the same pair collapses. */
 	public function testFlattenedTailThenFlagged(): Void {
-		final es: Array<{ span: Span, text: String }> =
-			edits('class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn !d && g();\n\t}\n}');
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn !d && g();\n\t}\n}'
+		);
 		Assert.equals(1, es.length);
 		Assert.equals('return c ? true : !d && g();', es[0].text);
 	}

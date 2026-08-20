@@ -99,10 +99,10 @@ final class SimplifyBooleanTernary implements Check {
 		out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String, support: BooleanLogicSupport,
 		shape: RefShape, retType: Null<String>, isReturnValue: Bool
 	): Void {
-		if (node.kind == ternaryKind
-			&& !condGuarded(node, shape)
-			&& support.simplifyBooleanTernary(node, source, null, boolReturnLicence(node, source, shape, retType, isReturnValue))
-				!= null) {
+		if (
+			node.kind == ternaryKind && !condGuarded(node, shape)
+			&& support.simplifyBooleanTernary(node, source, null, boolReturnLicence(node, source, shape, retType, isReturnValue)) != null
+		) {
 			final span: Null<Span> = node.span;
 			if (span != null) out.push({
 				file: file,

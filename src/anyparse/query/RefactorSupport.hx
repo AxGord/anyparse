@@ -2222,7 +2222,12 @@ final class RefactorSupport {
 		if (kind == shape.nullLiteralKind) return true;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		if (blockStmtKind != null && kind == blockStmtKind) return true;
-		for (kinds in [shape.ifExpressionKinds, shape.tryExpressionKinds, shape.switchKinds, shape.throwKinds]) {
+		for (kinds in [
+			shape.ifExpressionKinds,
+			shape.tryExpressionKinds,
+			shape.switchKinds,
+			shape.throwKinds
+		]) {
 			if (kinds != null && kinds.contains(kind)) return true;
 		}
 		return false;
