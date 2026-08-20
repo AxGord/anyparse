@@ -79,6 +79,43 @@ package anyparse.grammar.haxe;
  * rewind), and both change a ctor 26 live regions depend on. A
  * separate slice, with its own fidelity surface — not this one.
  *
+ * LAYOUT IS THIS RULE'S OWN, not the source's — `@:fmt(fillParts)`.
+ * The default writer for a trivia-bearing rule replays the gaps: every
+ * inter-element separator of a `@:trivia` Star reads
+ * `Trivial<T>.newlineBefore`, and every bare-Ref field reads its own
+ * `<field>BeforeNewline` slot, so each gap is a hardline exactly where
+ * the source had one. For a member list that is right; for a run of
+ * operands it means the SAME tree lays out as many ways as the source
+ * can spell it. Measured on TM `crashdumper/SystemData.hx:135-140`
+ * with 42 legal whitespace spellings of one expression: 39 distinct
+ * outputs, one of them a 238-column line from a source written flat —
+ * the width limit had no break point to act on. The two TM sites of
+ * this shape disagreed with each other for the same reason.
+ *
+ * So the rule assembles its four fields as ONE run instead:
+ * `@:fmt(fillParts)` on the typedef joins them with a single space
+ * while the line holds them and packs them (Wadler fill) when it does
+ * not; `@:fmt(fillSeam)` on `endKw` and `tail` hands those two gaps to
+ * that run; `@:fmt(fillItems)` does the same for the operand terms;
+ * and `@:fmt(inlineSep)` on `HxCondSpliceOpTerm.op` keeps an operator
+ * glued to the operand it closes. No source-newline slot is read
+ * anywhere inside the region. A run carrying a captured COMMENT falls
+ * back to the source-faithful emit — a fill re-decides every break and
+ * a line comment pins the one after itself.
+ *
+ * THE OPERATOR IS BOUND TO A COMPILATION BRANCH, so this had to be
+ * proved and not argued: `A + #if c B + #end D` is `A + B + D` with
+ * `c` on and `A + D` with it off, because the `+` before `#if` lives
+ * OUTSIDE the region and the one before `#end` lives INSIDE it. Move
+ * either across its directive and one of the two builds breaks
+ * silently, since the corpus only ever compiles with one flag state.
+ * The layout policy changes WHITESPACE only — the token order is this
+ * typedef's field order and no fill decision can reorder it — and that
+ * was checked mechanically: a projection net expands every conditional
+ * in a file both ways and compares the token streams before and after
+ * `fmt`. Zero movement over 1665 real modules, and it catches an
+ * injected seam move in either direction.
+ *
  * `HaxeQueryPlugin.opaqueCondRegionKinds` still lists this ctor. That
  * is not a leftover: `RefactorSupport.opaqueCondRegionMentioning`
  * walks the parts of an opaque node's span NO CHILD covers, so listing
@@ -88,9 +125,10 @@ package anyparse.grammar.haxe;
  * exactly what stayed unmodelled.
  */
 @:peg
+@:fmt(fillParts)
 typedef HxCondSpliceOpExpr = {
 	var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading) var terms: Array<HxCondSpliceOpTerm>;
-	var endKw: HxCondEndLit;
-	@:fmt(chainNestSuppress) var tail: HxExpr;
+	@:trivia @:tryparse @:fmt(padLeading, fillItems) var terms: Array<HxCondSpliceOpTerm>;
+	@:fmt(fillSeam) var endKw: HxCondEndLit;
+	@:fmt(chainNestSuppress, fillSeam) var tail: HxExpr;
 };

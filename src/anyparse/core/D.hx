@@ -68,6 +68,48 @@ class D {
 	}
 
 	/**
+	 * A run of items that packs when the line cannot hold it and stays a
+	 * plain space-joined `Concat` when it can — `IfLineExceeds(threshold,
+	 * Fill(items, Line(' ')), Concat(items joined by ' '))`, over the items
+	 * that carry output. An `Empty` item is dropped rather than kept: a fill
+	 * puts its separator between EVERY adjacent pair, so an `Empty` left in
+	 * the list spends one on nothing and doubles the space (or the break) at
+	 * that seam.
+	 *
+	 * WHY THE GLUED SIDE EXISTS AT ALL, given that a `Fill` whose items fit
+	 * renders exactly the same bytes. Because a `Fill` does not MEASURE the
+	 * same. Several probes walk a doc with the frame in `MBreak` and read a
+	 * `Line` as a committed break — `Renderer.naturalFirstLineGluable` is the
+	 * one that bites: it aborts the natural first line at the fill's first
+	 * separator, so `WrapList.emitCondition` concludes the condition breaks
+	 * and opens `if (` / `)` onto their own lines around a condition that fit
+	 * on one. Measured, on `lime/system/System.hx:590`,
+	 * `openfl/filesystem/File.hx:2244` and both
+	 * `openfl/geom/PerspectiveProjection.hx` sites: four regions of 89-120
+	 * columns against a 140 limit, all four opened. Those walkers descend the
+	 * FLAT side of an `If*` probe, so gating the fill behind one hands every
+	 * measurement the glued shape it saw before and keeps the fill for the
+	 * case it was built for.
+	 *
+	 * `threshold` is the caller's line budget in the `>= n` convention the
+	 * `If*Exceeds` family uses (pass `lineWidth + 1` to break on a strict
+	 * overflow, so a run landing exactly on the limit stays glued).
+	 */
+	public static function fillOnOverflow(items: Array<Doc>, threshold: Int): Doc {
+		final kept: Array<Doc> = [];
+		for (item in items) switch item {
+			case Empty:
+			case _:
+				kept.push(item);
+		}
+		return switch kept.length {
+			case 0: Empty;
+			case 1: kept[0];
+			case _: IfLineExceeds(threshold, Fill(kept, Line(' ')), Concat(intersperse(kept, Text(' '))));
+		};
+	}
+
+	/**
 	 * Wadler-style `flatten`: structurally rewrites `d` into a Doc that
 	 * renders as if the renderer were forced into MFlat mode for every
 	 * Group / IfBreak / threshold-conditional. Unconditional hardlines

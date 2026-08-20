@@ -142,6 +142,9 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 		final src: String = 'class C {\n\tpublic function toString():String {\n\t\treturn "os: "\n\t\t\t+ os\n'
 			+ '\t\t\t+ #if flash "  playerType: " + playerType + "\\n" + "  playerVersion: " + playerVersion\n'
 			+ '\t\t\t+ "\\n" + #end\n\t\t\t"  totalMemory: " + totalMemory;\n\t}\n}';
+		final canonical: String = 'class C {\n\tpublic function toString():String {\n\t\treturn "os: " + os + #if flash '
+			+ '"  playerType: " + playerType + "\\n" + "  playerVersion: " + playerVersion + "\\n" + #end '
+			+ '"  totalMemory: " + totalMemory;\n\t}\n}';
 		switch soleReturnExpr(src) {
 			case Add(_, CondSpliceOpExpr(inner)):
 				Assert.equals('flash', (inner.cond: String));
@@ -152,7 +155,13 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 			case other:
 				Assert.fail('expected Add(_, CondSpliceOpExpr), got $other');
 		}
-		triviaEquals(src, 'SystemData.toString');
+		// NOT a byte fixed point any more, and that is the point of
+		// `@:fmt(fillParts)`: the source's internal line breaks no longer
+		// reach the output, so this spelling and the canonical one below both
+		// land on the same bytes. Under the default config the whole chain
+		// fits on one line, so that is where it goes.
+		Assert.equals(canonical, HxWriteFixture.triviaWrite(src, '{}'), 'SystemData.toString reflows');
+		Assert.equals(canonical, HxWriteFixture.triviaWrite(canonical, '{}'), 'SystemData.toString canonical is a fixed point');
 	}
 
 	/**
