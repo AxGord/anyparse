@@ -673,6 +673,7 @@ import unit.HxBeforeTrailCommentWriteTest;
 import unit.HxCondListSeparatorWriteTest;
 import unit.WhitespaceInvariantTest;
 import unit.ApqFmtVerifyCliTest;
+import unit.LintUsingSubmoduleExtensionTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1106,6 +1107,7 @@ class RunTests {
 		addCase(new LintConfigTest());
 		addCase(new LintSliceTest());
 		addCase(new LintModuleSecondaryTypeSliceTest());
+		addCase(new LintUsingSubmoduleExtensionTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
 		addCase(new LintFailOnCliTest());

@@ -133,6 +133,11 @@ final class UnusedImport implements Check {
 		// library, so on an out-of-report type both stay unverifiable Infos. Reuse
 		// the resolution map when no scope.
 		final reportMembersByPath: Map<String, Array<String>> = resolveIndex == index ? membersByPath : membersByImportPath(index);
+		// The `using` arm's own set: every top-level type of the module contributes
+		// static extensions, so a per-PATH map (which names one type) under-reports
+		// it. Report-scoped for the same reason as `reportMembersByPath` — a verdict
+		// that may DELETE the statement must not rest on a partially-indexed library.
+		final reportMembersByModule: Map<String, Array<String>> = membersByModule(index);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
@@ -143,7 +148,10 @@ final class UnusedImport implements Check {
 			};
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
-				addViolation(violations, info.file, imp, scan, plugin, moduleTypes, enumCtorsByPath, membersByPath, reportMembersByPath);
+				addViolation(
+					violations, info.file, imp, scan, plugin, moduleTypes, enumCtorsByPath, membersByPath, reportMembersByPath,
+					reportMembersByModule
+				);
 		}
 		return violations;
 	}
@@ -191,13 +199,13 @@ final class UnusedImport implements Check {
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,
 		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>,
-		reportMembersByPath: Map<String, Array<String>>
+		reportMembersByPath: Map<String, Array<String>>, reportMembersByModule: Map<String, Array<String>>
 	): Void {
 		switch imp.kind {
 			case ImportKind.Wild:
 				addWildViolation(out, file, imp, scan, reportMembersByPath);
 			case ImportKind.Using:
-				addUsingViolation(out, file, imp, scan, plugin, reportMembersByPath);
+				addUsingViolation(out, file, imp, scan, plugin, reportMembersByModule);
 			case _:
 				final bound: String = imp.alias ?? RefactorSupport.lastSegment(imp.raw);
 				if (referenced(scan, bound)) return;
@@ -290,11 +298,11 @@ final class UnusedImport implements Check {
 	 */
 	private static function addUsingViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,
-		reportMembersByPath: Map<String, Array<String>>
+		reportMembersByModule: Map<String, Array<String>>
 	): Void {
 		final bound: String = RefactorSupport.lastSegment(imp.raw);
 		if (referenced(scan, bound)) return;
-		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? reportMembersByPath[imp.raw];
+		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? reportMembersByModule[imp.raw];
 		if (methods == null) {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': extension use not tracked'));
 			return;
@@ -342,6 +350,24 @@ final class UnusedImport implements Check {
 			final memberPath: String = t.isMain ? info.module : '${info.module}.${t.name}';
 			map[memberPath] = [for (m in t.members) m.name];
 		}
+		return map;
+	}
+
+	/**
+	 * Member names keyed by MODULE — the union over EVERY top-level type the module
+	 * declares, main and sub-module alike.
+	 *
+	 * This is the set `using pkg.Mod;` actually brings into scope: a static extension
+	 * is contributed by every type in the module, not only by the one that shares its
+	 * name. `membersByImportPath` answers a different question (what does THIS path
+	 * name), and reading it in the `using` arm made the check assert that
+	 * `Math.abs(ms).toFixed('000')` was not an extension call, because `toFixed` lives
+	 * in the sub-module type `pony.Tools.FloatTools`. That produced a verified-unused
+	 * Warning, and `--fix` deleted the `using` and broke the build.
+	 */
+	private static function membersByModule(index: SymbolIndex): Map<String, Array<String>> {
+		final map: Map<String, Array<String>> = [];
+		for (info in index.allFiles()) map[info.module] = [for (t in info.types) for (m in t.members) m.name];
 		return map;
 	}
 
