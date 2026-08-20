@@ -38,13 +38,11 @@ final class HxCondSpliceChainWrapSliceTest extends Test {
 		+ '"wrapping":{"maxLineLength":140,"opAddSubChain":{"defaultWrap":"noWrap",'
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
 		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
-
-	private static final CANONICAL: String = 'class C {\n\tpublic function render():String {\n\t\treturn "AlphaObject" + "nl" '
-		+ '+ "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + "nl"\n'
-		+ '\t\t\t+ "  ddddddddd: " + ddddddddd + "nl"\n'
-		+ '\t\t\t+ #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " + ffffffffffffff + "nl" + #end\n'
-		+ '\t\t\t"  gggggggggggg: " + wrapp(gggggggggggg) + "nl" + "  hhhhhhh: " + hhhhhhh + "nl" + "  iiiiiiii: " + iiiiiiii + "nl" '
-		+ '+ "  jjjjjjjjjjjjjjjjjj: " + jjjjjjjjjjjjjjjjjj + "nl" + "}";\n\t}\n}';
+	private static final CANONICAL: String = 'class C {\n\tpublic function render():String {\n'
+		+ '\t\treturn "AlphaObject" + "nl" + "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + '
+		+ '"nl"\n\t\t\t+ "  ddddddddd: " + ddddddddd + "nl"\n\t\t\t+ #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " '
+		+ '+ ffffffffffffff + "nl" + #end\n\t\t\t"  gggggggggggg: " + wrapp(gggggggggggg) + "nl" + "  hhhhhhh: " + hhhhhhh + "nl" + "  '
+		+ 'iiiiiiii: " + iiiiiiii + "nl" + "  jjjjjjjjjjjjjjjjjj: " + jjjjjjjjjjjjjjjjjj + "nl" + "}";\n\t}\n}';
 
 	public function new(): Void {
 		super();

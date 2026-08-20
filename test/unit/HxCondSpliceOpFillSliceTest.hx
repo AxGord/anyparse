@@ -50,11 +50,10 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
 
 	/** TM `src/crashdumper/SystemData.hx:135-140`, canonical. */
-	private static final SYSTEM_DATA: String = 'class C {\n\tpublic function toString():String {\n'
-		+ '\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\'\n'
-		+ '\t\t\t+ #if flash \'  playerType: \' + playerType + \'\\n\' + \'  playerVersion: \' + playerVersion + \'\\n\' + #end\n'
-		+ '\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  gpuName: $$gpuName\\n'
-		+ '  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}';
+	private static final SYSTEM_DATA: String = 'class C {\n\tpublic function toString():String {\n\t\treturn \'SystemData\\n{$${endl()}  '
+		+ 'os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\'\n\t\t\t+ #if flash \'  playerType: \' + '
+		+ 'playerType + \'\\n\' + \'  playerVersion: \' + playerVersion + \'\\n\' + #end\n\t\t\t\'  totalMemory: '
+		+ '$${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -71,28 +70,24 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 		final spellings: Array<String> = [
 			SYSTEM_DATA,
 			// TM's source form: the run split mid-term at `+ '\n' + #end`.
-			'class C {\n\tpublic function toString():String {\n'
-				+ '\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\'\n'
-				+ '\t\t\t+ #if flash \'  playerType: \' + playerType + \'\\n\' + \'  playerVersion: \' + playerVersion\n'
-				+ '\t\t\t+ \'\\n\' + #end\n'
-				+ '\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  gpuName: $$gpuName\\n'
-				+ '  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}',
+			'class C {\n\tpublic function toString():String {\n\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  '
+				+ 'osName: $$osName\\n  osVersion: $$osVersion\\n\'\n\t\t\t+ #if flash \'  playerType: \' + playerType + \'\\n\' + \'  '
+				+ 'playerVersion: \' + playerVersion\n\t\t\t+ \'\\n\' + #end\n\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: '
+				+ '$$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}',
 			// The operator on its own line, the condition alone on the next,
 			// and the run's trailing operator left dangling before `#end`.
 			'class C {\n\tpublic function toString():String {\n'
-				+ '\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\'\n'
-				+ '\t\t\t+\n\t\t\t#if flash\n'
-				+ '\t\t\t\'  playerType: \' + playerType + \'\\n\' + \'  playerVersion: \' + playerVersion + \'\\n\' +\n\t\t\t#end\n'
-				+ '\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  gpuName: $$gpuName\\n'
-				+ '  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}',
+				+ '\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: '
+				+ '$$osVersion\\n\'\n\t\t\t+\n\t\t\t#if flash\n\t\t\t\'  playerType: \' + playerType + \'\\n\' + \'  playerVersion: \' + '
+				+ 'playerVersion + \'\\n\' +\n\t\t\t#end\n\t\t\t\'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  '
+				+ 'gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}',
 			// The whole statement on ONE source line. Pre-slice this produced
 			// a 238-column output line: no break point existed inside the
 			// region, so the width limit had nothing to act on.
-			'class C {\n\tpublic function toString():String {\n'
-				+ '\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: $$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\''
-				+ ' + #if flash \'  playerType: \' + playerType + \'\\n\' + \'  playerVersion: \' + playerVersion + \'\\n\' + #end'
-				+ ' \'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: $$cpuName\\n  gpuName: $$gpuName\\n'
-				+ '  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}'
+			'class C {\n\tpublic function toString():String {\n\t\treturn \'SystemData\\n{$${endl()}  os: $$os\\n  osRaw: '
+				+ '$$osRaw\\n  osName: $$osName\\n  osVersion: $$osVersion\\n\' + #if flash \'  playerType: \' + playerType + \'\\n\' + '
+				+ '\'  playerVersion: \' + playerVersion + \'\\n\' + #end \'  totalMemory: $${toGBStr(totalMemory)}\\n  cpuName: '
+				+ '$$cpuName\\n  gpuName: $$gpuName\\n  gpuDriverVersion: $$gpuDriverVersion\\n}\';\n\t}\n}'
 		];
 		for (i in 0...spellings.length) Assert.equals(SYSTEM_DATA, triviaWrite(spellings[i]), 'spelling $i');
 	}
@@ -105,7 +100,7 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 	public function testCanonicalOutputRespectsTheLineWidth(): Void {
 		for (line in triviaWrite(SYSTEM_DATA).split('\n')) {
 			var width: Int = 0;
-			for (i in 0...line.length) width += StringTools.fastCodeAt(line, i) == '\t'.code ? 4 : 1;
+			for (i in 0...line.length) width += line.charAt(i) == '\t' ? 4 : 1;
 			Assert.isTrue(width <= 140, 'line of $width columns: $line');
 		}
 	}
@@ -122,10 +117,9 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 	 * the plain space-joined shape.
 	 */
 	public function testFittingRegionKeepsItsBytesAndItsParens(): Void {
-		final src: String = 'class C {\n\tfunction f():Bool {\n'
-			+ '\t\tif (#if neko __fieldOfView == null || #end projectionCenter == null)\n\t\t\treturn null;\n'
-			+ '\t\tif (#if openfl_power_of_two !image.powerOfTwo || #end (!image.premultiplied && image.transparent))\n'
-			+ '\t\t\treturn null;\n' + '\t\treturn true;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Bool {\n\t\tif (#if neko __fieldOfView == null || #end projectionCenter == null)\n'
+			+ '\t\t\treturn null;\n\t\tif (#if openfl_power_of_two !image.powerOfTwo || #end (!image.premultiplied && image.transparent))\n'
+			+ '\t\t\treturn null;\n\t\treturn true;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -137,8 +131,8 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 	 * fill cannot place.
 	 */
 	public function testCommentInsideTheRunKeepsTheSourceFaithfulEmit(): Void {
-		final src: String = 'class C {\n\tfunction f():String {\n'
-			+ '\t\treturn \'a\' + #if flash \'b\' + // why\n\t\t\tc + #end \'d\';\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f():String {\n\t\treturn \'a\' + #if flash \'b\' + // why\n\t\t\tc + #end \'d\';\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

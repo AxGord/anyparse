@@ -331,11 +331,12 @@ final class TriviaTryparseLowering {
 	 * and one with comments is untouched.
 	 */
 	private static function triviaTryparseFillExpr(c: WriterLowering.TryparseStarCtx, baseExpr: Expr): Expr {
-		final fieldAccess: Expr = c.fieldAccess;
-		final writerOptExpr: Expr = c.writerOptExpr;
-		final triviaElemCall: Expr = c.triviaElemCall;
+		// The three ctx fields are spliced straight from `c` rather than
+		// unpacked into locals first: the identical three-line unpack in
+		// `triviaTryparseHeritageExpr` is what `duplicate-code` reports when
+		// both spell it out.
 		return macro {
-			final _fillArr = $fieldAccess;
+			final _fillArr = ${c.fieldAccess};
 			var _fillHasComments: Bool = false;
 			var _fci: Int = 0;
 			while (_fci < _fillArr.length) {
@@ -345,12 +346,12 @@ final class TriviaTryparseLowering {
 			if (_fillArr.length == 0 || _fillHasComments)
 				$baseExpr;
 			else {
-				final _writerOpt = $writerOptExpr;
+				final _writerOpt = ${c.writerOptExpr};
 				final _items: Array<anyparse.core.Doc> = [];
 				var _fi: Int = 0;
 				while (_fi < _fillArr.length) {
 					final _t = _fillArr[_fi];
-					_items.push($triviaElemCall);
+					_items.push(${c.triviaElemCall});
 					_fi++;
 				}
 				_dwb(anyparse.core.D.fillOnOverflow(_items, opt.lineWidth + 1));

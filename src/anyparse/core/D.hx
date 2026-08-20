@@ -43,6 +43,31 @@ class D {
 	public static inline function fill(items: Array<Doc>, sep: Doc): Doc return Fill(items, sep);
 
 	/**
+	 * Optional inline whitespace, dropped when immediately followed by a
+	 * break-mode `Line`. Used for lead trailing spaces that must vanish
+	 * before a hardline (e.g. `leftCurly=Next`).
+	 */
+	public static inline function optSpace(s: String): Doc return OptSpace(s);
+
+	/**
+	 * Inline single space that drops when the last emitted output
+	 * was a hardline. See `Doc.OptSpaceSkipAfterHardline` for the
+	 * trade-off vs `OptSpace`.
+	 */
+	public static inline function optSpaceSkipAfterHardline(): Doc return OptSpaceSkipAfterHardline;
+
+	/** Places `sep` between each item of `items`. Returns a fresh array. */
+	public static function intersperse(items: Array<Doc>, sep: Doc): Array<Doc> {
+		if (items.length <= 1) return items.copy();
+		final result = [];
+		for (i in 0...items.length) {
+			if (i > 0) result.push(sep);
+			result.push(items[i]);
+		}
+		return result;
+	}
+
+	/**
 	 * A run of items that packs when the line cannot hold it and stays a
 	 * plain space-joined `Concat` when it can — `IfLineExceeds(threshold,
 	 * Fill(items, Line(' ')), Concat(items joined by ' '))`, over the items
@@ -77,34 +102,11 @@ class D {
 			case _:
 				kept.push(item);
 		}
-		if (kept.length == 0) return Empty;
-		if (kept.length == 1) return kept[0];
-		return IfLineExceeds(threshold, Fill(kept, Line(' ')), Concat(intersperse(kept, Text(' '))));
-	}
-
-	/**
-	 * Optional inline whitespace, dropped when immediately followed by a
-	 * break-mode `Line`. Used for lead trailing spaces that must vanish
-	 * before a hardline (e.g. `leftCurly=Next`).
-	 */
-	public static inline function optSpace(s: String): Doc return OptSpace(s);
-
-	/**
-	 * Inline single space that drops when the last emitted output
-	 * was a hardline. See `Doc.OptSpaceSkipAfterHardline` for the
-	 * trade-off vs `OptSpace`.
-	 */
-	public static inline function optSpaceSkipAfterHardline(): Doc return OptSpaceSkipAfterHardline;
-
-	/** Places `sep` between each item of `items`. Returns a fresh array. */
-	public static function intersperse(items: Array<Doc>, sep: Doc): Array<Doc> {
-		if (items.length <= 1) return items.copy();
-		final result = [];
-		for (i in 0...items.length) {
-			if (i > 0) result.push(sep);
-			result.push(items[i]);
-		}
-		return result;
+		return switch kept.length {
+			case 0: Empty;
+			case 1: kept[0];
+			case _: IfLineExceeds(threshold, Fill(kept, Line(' ')), Concat(intersperse(kept, Text(' '))));
+		};
 	}
 
 	/**
