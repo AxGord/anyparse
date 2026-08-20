@@ -36,5 +36,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxMetaCallArgs = {
 	var name: HxMetaNameTight;
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(wrapRules('metadataCallParameterWrap')) var args: Array<HxExpr>;
+	@:trivia @:lead('(') @:trail(')') @:sep(',')
+	@:fmt(wrapRules('metadataCallParameterWrap'), ignoreSourceNewlinesForWrap) var args: Array<HxExpr>;
 }

@@ -22,6 +22,9 @@ using StringTools;
  */
 class HxInlineBlockCommentGapTest extends Test {
 
+	/** Captured seams outside a function body — same contract, other hosts. */
+	private static final CAPTURED_DECLS: Array<Array<String>> = [['meta_arg', 'class Foo {\n\t@:meta(/* m */ 1) var x: Int;\n}\n'],];
+
 	/** Seams the Trivia parser captures — the round trip keeps the comment. */
 	private static final CAPTURED: Array<Array<String>> = [
 		['assign_trail', 'x = 2 /* t */;'],
@@ -35,6 +38,10 @@ class HxInlineBlockCommentGapTest extends Test {
 		['callarg_trail', 'f(x /* a */);'],
 		['call_noargs', 'f(/* none */);'],
 		['nested_call', 'f(g(/* n */ x));'],
+		// ω-metacall-trivia: `@:meta(args)` joined the trivia Star path so its
+		// elements could carry the `sepAfter` a conditional group needs; the
+		// per-element comment slots came with it. Hosted at member level, not
+		// inside a body, so it lives in SLOT_LESS_DECLS' sibling table below.
 		['new_arg', 'var v = new Foo(/* n */ 1);'],
 		['binop_rhs_lead', 'var v = a + /* m */ b;'],
 		['string_concat', "var s = 'a' + /* c */ 'b';"],
@@ -107,7 +114,6 @@ class HxInlineBlockCommentGapTest extends Test {
 	private static final SLOT_LESS_DECLS: Array<Array<String>> = [
 		['field_init', 'class Foo {\n\tvar x: Int = /* f */ 1;\n}\n'],
 		['typeparam', 'class Foo {\n\tvar x: Array</* t */ Int>;\n}\n'],
-		['meta_arg', 'class Foo {\n\t@:meta(/* m */ 1) var x: Int;\n}\n'],
 		['return_type', 'class Foo {\n\tfunction bar(): /* r */ Void {}\n}\n'],
 		['extends_lead', 'class Foo extends /* e */ Bar {}\n'],
 		['enum_ctor_arg', 'enum Foo {\n\tA(/* c */ x: Int);\n}\n'],
@@ -129,20 +135,11 @@ class HxInlineBlockCommentGapTest extends Test {
 	}
 
 	public function testCapturedSeamsRoundTripWithTheirComment(): Void {
-		for (entry in CAPTURED) {
-			final source: String = inBody(entry[1]);
-			final written: Null<String> = try new HaxeQueryPlugin().writeRoundTrip(source) catch (exception: CommentLossException) {
-				Assert.fail('${entry[0]}: writer lost a captured comment (${exception.comment})');
-				continue;
-			}
-			Assert.isNull(CommentInventory.firstMissing(source, written ?? ''), '${entry[0]}: comment missing from output');
-			// Second, INDEPENDENT oracle: the comment's own text has to be in
-			// the emitted bytes. `firstMissing` is the guard's own check, so on
-			// its own this loop would pass if that check ever regressed to
-			// always-null. Body text (not the delimiters) because one seam
-			// legally re-emits its block comment as a line comment.
-			Assert.stringContains(commentBody(entry[1]), written ?? '', '${entry[0]}: comment text missing from output');
-		}
+		for (entry in CAPTURED) assertCapturedRoundTrip(entry[0], inBody(entry[1]), entry[1]);
+	}
+
+	public function testCapturedDeclSeamsRoundTripWithTheirComment(): Void {
+		for (entry in CAPTURED_DECLS) assertCapturedRoundTrip(entry[0], entry[1], entry[1]);
 	}
 
 	public function testSlotLessSeamsRefuseRatherThanDropTheComment(): Void {
@@ -151,6 +148,20 @@ class HxInlineBlockCommentGapTest extends Test {
 
 	public function testSlotLessDeclSeamsRefuseRatherThanDropTheComment(): Void {
 		for (entry in SLOT_LESS_DECLS) assertRefused(entry[0], entry[1]);
+	}
+
+	private function assertCapturedRoundTrip(name: String, source: String, fixture: String): Void {
+		final written: Null<String> = try new HaxeQueryPlugin().writeRoundTrip(source) catch (exception: CommentLossException) {
+			Assert.fail('$name: writer lost a captured comment (${exception.comment})');
+			return;
+		}
+		Assert.isNull(CommentInventory.firstMissing(source, written ?? ''), '$name: comment missing from output');
+		// Second, INDEPENDENT oracle: the comment's own text has to be in
+		// the emitted bytes. `firstMissing` is the guard's own check, so on
+		// its own this assertion would pass if that check ever regressed to
+		// always-null. Body text (not the delimiters) because one seam
+		// legally re-emits its block comment as a line comment.
+		Assert.stringContains(commentBody(fixture), written ?? '', '$name: comment text missing from output');
 	}
 
 	private function assertRefused(name: String, source: String): Void {

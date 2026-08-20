@@ -57,14 +57,18 @@ package anyparse.grammar.haxe;
  * grouping analogue at this scope, and inter-element trivia is the outer
  * `HxFnDecl.params` Star's job (`@:trivia` there).
  *
- * Trivia note: this body Star deliberately does NOT carry `@:trivia`.
- * Lowering rejects `@:trivia + @:sep + @:tryparse` (no current grammar
- * combines them; the semantics of "trivia around a sep-separated
- * tryparse list" are undecided). Practical consequence: comments INSIDE
- * a `#if … #end` param-list body parse but do not round-trip
- * byte-identical. Comments around the WHOLE `Conditional` element
- * (above `#if`, below `#end`) are preserved by the outer
- * `HxFnDecl.params` Star.
+ * `body` carries `@:trivia @:sep(',', sepFaithful)` — the same trio
+ * `HxConditionalArgs.body` uses. `sepFaithful` is what makes a separator INSIDE
+ * the region round-trip: `#if js ?parentDom:String, #end` writes the trailing
+ * comma back where the source put it. Without it the tryparse rewind swallowed
+ * that comma and the outer Star emitted none either (its own `sepAfter` is
+ * false — the source has no comma after `#end`), so under `-D js` the output
+ * read `?parentDom:String sizeUpdate:Bool` — two parameters with no separator.
+ * That output PARSES here, so the writer round-trip gate never saw it; only the
+ * Haxe compiler did, on a target most builds never compile.
+ *
+ * `@:trivia` is what supplies the per-element `sepAfter` capture `sepFaithful`
+ * keys on; it also makes comments inside the region round-trip.
  *
  * `elseBody` is `@:optional @:kw('#else') @:sep(',', sepFaithful)
  * @:tryparse`. The `sepFaithful` flag is what makes the sep legal on the
@@ -82,14 +86,12 @@ package anyparse.grammar.haxe;
  * LEFT_TO_RIGHT, script:TextScript = COMMON, language:String = "en" #end`)
  * and `Stage.new` (`#else window:Window, color:Null<Int> = null #end`).
  *
- * `body` keeps its plain `@:sep(',')`: it is not kw-led, so it lowers
- * through the ordinary sep-tryparse branch where a bare separator is
- * already well-defined.
+ * Both bodies carry it now, for the two different reasons above.
  */
 @:peg
 typedef HxConditionalParam = {
 	var cond: HxPpCondLit;
-	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing, sepBeforeOpt, softFill) var body: Array<HxParam>;
+	@:trivia @:sep(',', sepFaithful) @:tryparse @:fmt(padLeading, padTrailing, sepBeforeOpt, softFill) var body: Array<HxParam>;
 	@:tryparse var elseifs: Array<HxElseifParam>;
 	@:optional @:kw('#else') @:sep(',', sepFaithful) @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxParam>>;
 };
