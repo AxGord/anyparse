@@ -468,6 +468,55 @@ enum HxExpr {
 	@:kw('cast') @:fmt(atomOperand, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))
 	CastExpr(operand: HxExpr);
 
+	/**
+	 * `return` whose whole value is a SELF-TERMINATING token-splice `#if`
+	 * region - a raw fragment whose last token before `#end` is a `;`, so
+	 * nothing after the `#end` belongs to it:
+	 * `function get_touchScreen():Bool return #if ios true; #else false; #end`
+	 * (`Pony/pony/ui/touch/TouchableBase.hx:313`). See
+	 * `HxCondSpliceClosedRaw` for the `;` discriminator.
+	 *
+	 * WHY THIS EXISTS AS ITS OWN CTOR rather than as a general
+	 * expression-scope one. `ReturnExpr(value: HxExpr)` sends such a region
+	 * down the ordinary atom dispatch, where the last `#if` ctor is
+	 * `HxExpr.CondSpliceExpr` - a `{raw, tail}` swallow whose `tail` is a
+	 * MANDATORY expression parse starting after `#end`. At a member
+	 * boundary that tail is the NEXT MEMBER's leading `public` / `static`
+	 * word read as an `IdentExpr`, so the member carried a modifier it does
+	 * not own and `member-order --fix` moved the two together - silently
+	 * turning a public field private while the file still compiled. This is
+	 * the `HxFnBody.CondBody`-before-`ExprBody` fix one level down: there
+	 * the region IS the body, here it is the VALUE of a `return`.
+	 *
+	 * A general `HxExpr` ctor for the same raw shape was built and MEASURED
+	 * before this narrower one, and it is why the `return` keyword rides
+	 * the ctor. A raw terminal matches ANY bytes, so at expression-STATEMENT
+	 * position it claimed two constructs that only parse today because
+	 * nothing in the statement Star matches them: a switch's guarded
+	 * `case` region (`HxConditionalCase` relies on the case-body statement
+	 * Star failing - `Pony/pony/Tools.hx:128` re-indented one level), and a
+	 * `@:meta`-prefixed statement region, which then gained a written `;`
+	 * after its `#end` (`Pony/pony/Logable.hx:233`). Both are `hxq fmt`
+	 * drift on files the formatter leaves alone today. Keying the ctor on
+	 * `return` keeps it out of statement position entirely.
+	 *
+	 * Cost, stated plainly: the swallow SURVIVES everywhere this ctor does
+	 * not reach - a statement-position `@:meta`-prefixed region still
+	 * absorbs the next statement (`Logable.hx:234`, where
+	 * `l_origTrace = Log.trace;` projects as a child of the region above
+	 * it), and so does a block-scope `return` region, which goes through
+	 * `HxStatement.ReturnStmt` and not through here. Closing those needs
+	 * the raw region to stop being reachable from `ExprStmt`, or the
+	 * structured `HxConditionalSemiExpr` reading whose writer reflows the
+	 * region onto one line (measured: two Pony modules newly drifting).
+	 * Both are slices of their own. And this ctor reaches only a ONE-LINE
+	 * closed region: a multi-line one would have to be re-indented when the
+	 * `return` glues onto its `#if`, which a verbatim raw capture does not do
+	 * (`HxCondSpliceClosedRaw` has the fixture that measured it).
+	 */
+	@:kw('return')
+	CondSpliceReturnExpr(inner: HxCondSpliceReturnRegion);
+
 	@:kw('return') @:fmt(propagateExprPosition)
 	ReturnExpr(value: HxExpr);
 

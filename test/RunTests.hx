@@ -683,6 +683,7 @@ import unit.PreferNullCoalescingParensTest;
 import unit.PreferComprehensionFinalTest;
 import unit.FieldMutabilityMacroGateTest;
 import unit.LintLanguageVersionGateTest;
+import unit.MemberOrderModifierSpanSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1196,6 +1197,7 @@ class RunTests {
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
 		addCase(new MemberOrderCheckTest());
+		addCase(new MemberOrderModifierSpanSliceTest());
 		addCase(new FragmentedDocCommentCheckTest());
 		addCase(new PreferLineCommentCheckTest());
 		addCase(new PreferLpadCheckTest());

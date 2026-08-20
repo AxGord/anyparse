@@ -143,7 +143,12 @@ final class MemberSlots {
 				final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
 				final firstIdx: Int = out.length;
 				collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span, accessors);
-				if (span != null && out.length > firstIdx) {
+				// A region that declared nothing is a conditional MODIFIER prefix of the member
+				// that follows it (`#if !flash inline #end public function f`), already folded into
+				// that member's slot by `declGroupSpan`; the modifier flags read before the guard
+				// belong to that same member, so they must survive it.
+				if (out.length == firstIdx) continue;
+				if (span != null) {
 					absorbLeadDoc(out, firstIdx, source, comments, span.from);
 					assignBranches(out, firstIdx, span, source, shape);
 				}

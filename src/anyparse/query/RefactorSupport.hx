@@ -378,6 +378,9 @@ final class RefactorSupport {
 		'Abstract'
 	]);
 
+	/** The grammar kind a block-level `#if … #end` region projects as - the host of a conditional-modifier prefix (`isConditionalModifierRegion`). */
+	private static final CONDITIONAL_REGION_KIND: String = 'Conditional';
+
 	/**
 	 * Node kinds an expression subtree may contain and still be
 	 * SIDE-EFFECT-FREE: literals, bare identifiers, parenthesised groups, and
@@ -1419,6 +1422,12 @@ final class RefactorSupport {
 	 * modifier-decl group (a statement, an array / call element, a package
 	 * decl) keeps its own span.
 	 *
+	 * A modifier may also be spelled inside a `#if … #end` region, which projects
+	 * as a `Conditional` sibling rather than a modifier one; `isDeclPrefixSibling`
+	 * folds such a region into the run so the group still starts at the FIRST
+	 * token of the declaration - see `isConditionalModifierRegion` for the
+	 * corruption that stopping there produced.
+	 *
 	 * Shared by `add-element` (insert OUTSIDE the group) and `replace-node`
 	 * (replace the WHOLE declaration, modifiers included).
 	 */
@@ -1431,12 +1440,12 @@ final class RefactorSupport {
 		// The decl is the cursor node, or — when the cursor is on a modifier /
 		// meta sibling — the first following sibling that is not one.
 		var declIndex: Int = i;
-		while (declIndex < siblings.length && MODIFIER_META_KINDS.contains(siblings[declIndex].kind)) declIndex++;
+		while (declIndex < siblings.length && isDeclPrefixSibling(siblings[declIndex])) declIndex++;
 		if (declIndex >= siblings.length) return nodeSpan;
 
 		// Walk back over the modifier / meta run that precedes the decl.
 		var startIndex: Int = declIndex;
-		while (startIndex > 0 && MODIFIER_META_KINDS.contains(siblings[startIndex - 1].kind)) startIndex--;
+		while (startIndex > 0 && isDeclPrefixSibling(siblings[startIndex - 1])) startIndex--;
 
 		// No modifier / meta run AND the cursor is the decl itself → not a
 		// group; leave the span untouched (statements, list elements).
@@ -5184,6 +5193,43 @@ final class RefactorSupport {
 			match = found;
 		}
 		return match;
+	}
+
+	/**
+	 * Whether `sibling` belongs to the prefix run a declaration carries BEFORE
+	 * itself - a plain modifier / `@:meta` sibling, or a conditional-modifier
+	 * region (`isConditionalModifierRegion`). The walk-back test `declGroupSpan`
+	 * runs in both directions.
+	 */
+	private static function isDeclPrefixSibling(sibling: QueryNode): Bool {
+		return MODIFIER_META_KINDS.contains(sibling.kind) || isConditionalModifierRegion(sibling);
+	}
+
+	/**
+	 * Whether `node` is a `#if ... #end` region that declares NOTHING and guards
+	 * only modifiers / metadata - `#if !flash inline #end` or
+	 * `#if (haxe_ver >= 4.2) extern #else @:extern #end` sitting in front of the
+	 * member they qualify. The grammar projects such a region as an ordinary
+	 * `Conditional` SIBLING of the decl, exactly like the plain `(Public)(Static)`
+	 * modifier siblings around it, so without this test `declGroupSpan` stopped its
+	 * walk-back at the region and the decl group began AFTER it.
+	 *
+	 * That truncation is silent and it changes MEANING: a reorder (`member-order
+	 * --fix`) moved the declaration out from under its own guard and left the guard
+	 * in place for whichever member slid up into that slot - measured on
+	 * `Pony/pony/TypedPool.hx`, where `#if (!flash && !debug) inline #end` stayed
+	 * put and the `public inline function get_isDestroy` that moved under it became
+	 * `inline inline` (`Duplicate access modifier inline`), and on
+	 * `Pony/pony/events/Listener0.hx`, where four `@:from #if ... extern #else
+	 * @:extern #end` prefixes were left behind and re-attached to unrelated
+	 * properties (`@:from cast functions must be static`). A region that declares a
+	 * MEMBER is a different construct entirely - it owns that member rather than
+	 * qualifying the next one - so a region with any non-modifier child is
+	 * deliberately not folded here.
+	 */
+	private static function isConditionalModifierRegion(node: QueryNode): Bool {
+		return node.kind == CONDITIONAL_REGION_KIND && node.children.length > 0
+			&& node.children.foreach(c -> MODIFIER_META_KINDS.contains(c.kind));
 	}
 
 }
