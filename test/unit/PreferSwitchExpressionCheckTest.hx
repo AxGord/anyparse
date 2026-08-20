@@ -17,7 +17,8 @@ import anyparse.runtime.Span;
  *
  * The negative cases pin one gate each — a non-whitelisted host, a missing trailing
  * else, a `!=` / `||` / extra-conjunct rung, a non-uniform discriminant tuple, a
- * call-bearing discriminant, and each way a qualified static constant fails to be
+ * discriminant carrying a call / construction / write (gate 5's
+ * `CheckScan.mutationKinds` set), and each way a qualified static constant fails to be
  * provably constant (a plain `static var`, a non-inline `static final`, a
  * `#if`-guarded declaration, an unresolvable receiver). The cross-file fixture is
  * derived from a real project site with every identifier and string anonymized.
@@ -178,6 +179,25 @@ class PreferSwitchExpressionCheckTest extends Test {
 
 	public function testCallDiscriminantNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('return get() == 1 ? p : get() == 2 ? q : r;')).length);
+	}
+
+	/**
+	 * Gate 5's write half, in value position: the chain evaluates `arr[i++]` per rung and the
+	 * switch subject once. The shipped binary converted this one, and the before / after pair
+	 * printed `two` and `other` for `arr = [9, 2]`.
+	 */
+	public function testIncrementDiscriminantNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('return arr[i++] == 1 ? p : arr[i++] == 2 ? q : r;')).length);
+	}
+
+	/** The assignment half of the same gate. */
+	public function testAssignmentDiscriminantNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('return arr[i = i + 1] == 1 ? p : arr[i = i + 1] == 2 ? q : r;')).length);
+	}
+
+	/** The construction half — one constructor call after the rewrite, one per rung before it. */
+	public function testNewDiscriminantNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('return new B().v == 1 ? p : new B().v == 2 ? q : r;')).length);
 	}
 
 	public function testInterpolatedStringNotFlagged(): Void {
