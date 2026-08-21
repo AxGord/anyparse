@@ -130,17 +130,11 @@ final class UnusedPrivate implements Check {
 			// project as unmodified — so PRIVATE — fields of a plain abstract, while every one of them
 			// is public API. Left in, the check deleted 15 of one real file's 17 colour constants.
 			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
-			// A member whose annotation sits BEHIND a `#if` region reads as unannotated to the
-			// grammar's own `implicitlyReachable`, whose run walk stops at the region. Nothing names
-			// an `@:op` overload or an `@:from` conversion, so the reference scan cannot save one.
-			final annotated: Array<Int> = AnnotatedMemberScan.starts(plugin, tree);
-			for (decl in support.project(tree)) if (
-				!EnumAbstractForms.isValue(decl.span, guarded) && !AnnotatedMemberScan.covers(decl.span, annotated)
-			) {
+			for (decl in support.project(tree)) if (!EnumAbstractForms.isValue(decl.span, guarded)) {
 				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, scopeIndex, support, externTypes);
 				if (v != null) violations.push(v);
 			}
-			collectCtorCandidates(tree, entry.file, ctorCandidates);
+			collectCtorCandidates(plugin, tree, entry.file, ctorCandidates);
 		}
 		_reflectedContents = reflected;
 		if (index.skippedFiles().length == 0) for (c in ctorCandidates) if (
@@ -195,7 +189,7 @@ final class UnusedPrivate implements Check {
 		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }> = [];
 		collectMembers(tree, false, memberByFrom);
 		final classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }> = [];
-		collectClassMeta(tree, classMeta);
+		collectClassMeta(plugin, tree, classMeta);
 		final reflected: Array<String> = _reflectedContents ?? inFileStringContents(source, plugin);
 
 		final deleting: Array<QueryNode> = [];
@@ -523,33 +517,22 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * Whether a `@:meta` sibling named `metaName` precedes the class-decl child at
-	 * `index`, scanning back over the class's leading meta / visibility run
-	 * (`@:meta` / `Private` / `Extern`) and stopping at the first other sibling.
+	 * Index each class by name with its `@:build` / `@:keep` presence, asked through the one
+	 * seam-aware leading-run walk `AnnotatedDeclScan` owns rather than a private copy of it: a copy
+	 * with no region seam dropped the whole class's protection whenever a member-free `#if` sat
+	 * between the annotation and the class, and `--fix` then deleted its privates. Keyed on the OUTER
+	 * child (`siblings[index]`) so a `final class`'s leading meta - a sibling of the `FinalDecl`
+	 * wrapper, not of the inner form - is read once at the right level.
 	 */
-	private static function metaPrecedesClass(siblings: Array<QueryNode>, index: Int, metaName: String): Bool {
-		var i: Int = index - 1;
-		while (i >= 0) {
-			final kind: String = siblings[i].kind;
-			if ((kind == 'Meta' || kind == 'MetaCall') && siblings[i].name == metaName) return true;
-			if (kind != 'Meta' && kind != 'MetaCall' && kind != 'Private' && kind != 'Extern') return false;
-			i--;
-		}
-		return false;
-	}
-
-	/**
-	 * Index each class by name with its `@:build` / `@:keep` presence. Recurses into a
-	 * class BODY (never the `FinalDecl` wrapper) so a `final class`'s leading meta —
-	 * a sibling of the wrapper, not of the inner form — is read once at the right level.
-	 */
-	private static function collectClassMeta(tree: QueryNode, out: Map<String, { hasBuild: Bool, hasKeep: Bool }>): Void {
-		forEachClassDecl(
-			tree, (classNode, name, siblings, index) -> out[name] = {
-				hasBuild: metaPrecedesClass(siblings, index, '@:build'),
-				hasKeep: metaPrecedesClass(siblings, index, '@:keep')
-			}
-		);
+	private static function collectClassMeta(
+		plugin: GrammarPlugin, tree: QueryNode, out: Map<String, { hasBuild: Bool, hasKeep: Bool }>
+	): Void {
+		final build: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, '@:build');
+		final keep: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, '@:keep');
+		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
+			final span: Null<Span> = siblings[index].span;
+			out[name] = { hasBuild: AnnotatedDeclScan.covers(span, build), hasKeep: AnnotatedDeclScan.covers(span, keep) };
+		});
 	}
 
 	/**
@@ -560,13 +543,14 @@ final class UnusedPrivate implements Check {
 	 * file set).
 	 */
 	private static function collectCtorCandidates(
-		tree: QueryNode, file: String, out: Array<{ file: String, className: String, span: Span }>
+		plugin: GrammarPlugin, tree: QueryNode, file: String, out: Array<{ file: String, className: String, span: Span }>
 	): Void {
+		final build: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, '@:build');
 		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
 			// An abstract class is never instantiated by definition and its private
 			// empty ctor is the subclass-only idiom — `new` stays for `super()`.
 			if (classNode.kind == 'AbstractClassDecl') return;
-			if (metaPrecedesClass(siblings, index, '@:build')) return;
+			if (AnnotatedDeclScan.covers(siblings[index].span, build)) return;
 			final ctor: Null<QueryNode> = privateEmptyCtorOf(classNode);
 			final cspan: Null<Span> = ctor?.span;
 			if (ctor != null && cspan != null && hasStaticMember(classNode)) out.push({ file: file, className: name, span: cspan });

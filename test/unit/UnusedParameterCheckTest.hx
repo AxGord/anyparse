@@ -43,6 +43,11 @@ class UnusedParameterCheckTest extends Test {
 		Assert.equals(0, violations('abstract A(Float) {\n\t@:op(A == B) $body\n}').length);
 		final guard: String = '#if (haxe_ver >= 4.2) extern #else @:extern #end';
 		Assert.equals(0, violations('abstract A(Float) {\n\t@:op(A == B) $guard\n\t$body\n}').length);
+		// Every BRANCH of the region is covered, not just the first: the projection flattens `#if` /
+		// `#else` into one child list with no branch marker, so the annotation's run must not expire on
+		// the first declaration it reaches inside the region.
+		final elseBody: String = 'private static inline function ne(a:A, b:Null<Float>):Bool return (a:Float) != 0;';
+		Assert.equals(0, violations('abstract A(Float) {\n\t@:op(A == B) #if js\n\t$body\n\t#else\n\t$elseBody\n\t#end\n}').length);
 		// The gate is the operator annotation, not the abstract: an unannotated twin stays reported.
 		Assert.equals(1, violations('abstract A(Float) {\n\t$body\n}').length);
 	}

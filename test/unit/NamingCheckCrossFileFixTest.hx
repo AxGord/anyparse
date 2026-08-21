@@ -578,6 +578,18 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	}
 
 	/**
+	 * The same refusal when a conditional-compilation region sits between the annotation and the
+	 * member — the cross-version `extern` idiom. The projection's run walk crosses that seam, so the
+	 * CROSS-FILE arm reads the member as `implicitlyReachable` exactly like its region-free twin
+	 * above; before it did, this rename committed.
+	 */
+	public function testCrossFileFixRefusesImplicitlyReachableMethodBehindConditional(): Void {
+		final src: String = 'package pkg;\nclass K {\n\t@:keep #if (haxe_ver >= 4.2) extern #else @:extern #end '
+			+ 'public function __draw():Int { return 1; }\n}';
+		assertCrossFileRefused([{ file: 'pkg/K.hx', source: src }]);
+	}
+
+	/**
 	 * A reflection call naming the member in ANOTHER file would break silently after a rename. No
 	 * dedicated guard handles it: a public member's affected set is every scope file MENTIONING the name,
 	 * so the reflection string's file is scanned and its name-shaped string literal refuses the whole
