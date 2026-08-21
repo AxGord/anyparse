@@ -119,6 +119,16 @@ final class TypeRefPrinter {
 	/** Value names this file's imports bring in with an enum-like type, computed on FIRST use — see `importedMemberNames`. */
 	private var _importedMemberNames: Null<Array<String>> = null;
 
+	/**
+	 * The byte offset the reference being printed will be WRITTEN at, or -1 when the caller states
+	 * none — set for the length of one `printTypeExpr` call and read by `importReachesSite`.
+	 *
+	 * A caller that states no site gets the whole-file reading, where every import is anchorable.
+	 * That is the honest default for a caller printing a reference it cannot place (a synthesised
+	 * annotation with no home yet), and it is what every pre-existing caller of `print` gets.
+	 */
+	private var _site: Int = -1;
+
 	private function new(
 		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>, plugin: Null<GrammarPlugin>
 	) {
@@ -222,13 +232,20 @@ final class TypeRefPrinter {
 	 * verbatim — `Array<pkg.Mod.Sub>` shortens (or qualifies) only its component. The
 	 * whole-annotation entry point; `print` is the single-nominal one.
 	 *
+	 * `at` is the byte offset the annotation will be WRITTEN at, and it decides exactly one thing:
+	 * whether a nominal may buy a fresh import or has to be spelled fully qualified — see
+	 * `importReachesSite`. Omitting it keeps the whole-file reading, which is right for a caller
+	 * that has no home for the text yet and is what every caller had before the seam existed.
+	 *
 	 * A caller holding a PARSED type reference should address `print` directly instead: the
 	 * grammar's `parseFileTypeRefs` projection carries one node per nominal with an exact span,
 	 * so nothing has to be re-lexed out of an annotation's text. This entry point is for a type
 	 * expression the caller only has as a STRING — a compiler oracle's answer, a synthesised
 	 * annotation.
 	 */
-	public function printTypeExpr(t: String): String {
+	public function printTypeExpr(t: String, ?at: Int): String {
+		final was: Int = _site;
+		_site = at ?? -1;
 		final buf: StringBuf = new StringBuf();
 		final n: Int = t.length;
 		var i: Int = 0;
@@ -247,6 +264,7 @@ final class TypeRefPrinter {
 			}
 			buf.add(print(t.substring(start, i)).text);
 		}
+		_site = was;
 		return buf.toString();
 	}
 
@@ -485,6 +503,7 @@ final class TypeRefPrinter {
 	private function canAddImport(canonical: String, simple: String, owned: Null<Array<Span>>): Bool {
 		final source: Null<String> = _source;
 		if (source == null || _root == null || !_canAnchorImports) return false;
+		if (!importReachesSite()) return false;
 		if (shadowedLocally(canonical, simple)) return false;
 		if (_pendingImports.exists(p -> p != canonical && RefactorSupport.lastSegment(p) == simple)) return false;
 		// A mention in INERT text — a comment, or the literal text of a string / regex — is masked
@@ -495,6 +514,41 @@ final class TypeRefPrinter {
 		// vetoes (`inertRegions`).
 		final exempt: Array<Span> = (owned ?? []).concat(inertRegions(source));
 		return !RefactorSupport.referencedInRange(source, simple, 0, source.length, exempt);
+	}
+
+	/**
+	 * Whether an import promised for the reference being printed REACHES it — whether the import
+	 * LINE would be compiled in every build the reference itself is.
+	 *
+	 * A fresh import goes where `ImportOrder.insertionFor` puts it, and that is MODULE level unless
+	 * this module's whole body sits inside ONE `#if … #end` region, where the seat is inside that
+	 * region instead (`ModuleScan.guardedBodyRegion`, whose three gates are what make it sound: every
+	 * build that compiles any of this file's code has the guard's condition true). So a reference
+	 * written inside a conditional region has exactly one safe case — the region IS that whole-body
+	 * guard. Under any OTHER region the import would exist in builds the reference does not: dead
+	 * there at best, and `unused-import` then flags the fixer's own output; a hard `Type not found`
+	 * when the module it names is target-restricted, which is how a `#if neko` local bought a
+	 * module-level `import neko.vm.Module;` and broke the js half of a two-target oracle.
+	 *
+	 * Refusing costs no rewrite. `print` falls back to the fully-qualified path, which needs no
+	 * import and resolves wherever the reference is — the same answer `catch-dynamic` and
+	 * `prefer-typed-throw` write by hand for their own conditional sites, here derived once from
+	 * where the import would actually land.
+	 *
+	 * A caller that states no site (`_site` < 0) is answered YES: it is printing a reference it has
+	 * not placed, and the whole-file reading is what every caller had before the seam existed.
+	 */
+	private function importReachesSite(): Bool {
+		final offset: Int = _site;
+		final source: Null<String> = _source;
+		final root: Null<QueryNode> = _root;
+		final plugin: Null<GrammarPlugin> = _plugin;
+		if (offset < 0 || source == null || root == null || plugin == null) return true;
+		final region: Null<Span> = ModuleScan.conditionalRegionAt(root, source, plugin.refShape().conditionalIfKeyword, offset);
+		if (region == null) return true;
+		final guard: Null<QueryNode> = ModuleScan.guardedBodyRegion(root, source, plugin);
+		final span: Null<Span> = guard?.span;
+		return span != null && span.from == region.from && span.to == region.to;
 	}
 
 	/**

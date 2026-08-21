@@ -6,6 +6,7 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -495,7 +496,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		node: QueryNode, context: ScanContext, conditional: Bool, underUpperField: Bool, macroBody: Bool, out: Array<Occurrence>
 	): Void {
 		if (context.opaqueKinds.contains(node.kind) || context.metaKinds.contains(node.kind)) return;
-		final region: Bool = conditional || CheckScan.opensConditionalRegion(node, context.source, context.shape.conditionalIfKeyword);
+		final region: Bool = conditional || ModuleScan.opensConditionalRegion(node, context.source, context.shape.conditionalIfKeyword);
 		final found: Null<Occurrence> = occurrenceOf(node, context, region, underUpperField, macroBody);
 		if (found != null) out.push(found);
 		final upperReceiver: Bool = node.kind == context.shape.fieldAccessKind && RefactorSupport.isUpperInitial(node.name ?? '');

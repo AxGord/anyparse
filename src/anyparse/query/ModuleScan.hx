@@ -101,6 +101,55 @@ final class ModuleScan {
 		return newline < 0 ? -1 : newline + 1;
 	}
 
+	/**
+	 * Whether `node`'s source STARTS with the grammar's `#if` directive — i.e. it is a
+	 * conditional-compilation region, whatever kind the grammar happens to project it as.
+	 *
+	 * A kind test cannot do this job. The Haxe grammar carries a dozen conditional ctors, one per
+	 * host position (`Conditional` for members and statements, `ConditionalExpr` in expression
+	 * position, `ConditionalArgs` in an argument list, five `CondSplice*` forms for a region that
+	 * straddles a block or switch boundary, ...), and `RefShape` names only the member one. An
+	 * enumerated list would go stale the next time a position is added; the DIRECTIVE cannot,
+	 * because every region opens with it by definition. The `#` first-char test keeps it to one
+	 * comparison per node before any substring is taken.
+	 *
+	 * It lives on the QUERY side of the check/query line because `TypeRefPrinter` asks it too, through
+	 * `conditionalRegionAt`. It used to be `CheckScan.opensConditionalRegion`; that copy is gone rather
+	 * than left as a forwarder, so there is one name for one question.
+	 */
+	public static function opensConditionalRegion(node: QueryNode, source: String, condIf: Null<String>): Bool {
+		final span: Null<Span> = node.span;
+		if (condIf == null || span == null) return false;
+		// The null checks stay in their own guard: strict null-safety carries a narrowing fact into
+		// a later `||` operand only from the chain's FIRST operand.
+		final from: Int = span.from;
+		return from < source.length && source.fastCodeAt(from) == '#'.code && source.substring(from, from + condIf.length) == condIf;
+	}
+
+	/**
+	 * The INNERMOST conditional-compilation region of `root` whose span covers `offset`, or null when
+	 * nothing conditional does — i.e. when the byte is compiled in every build of the module.
+	 *
+	 * INNERMOST is the fail-closed reading, and the one an import decision needs: a site nested two
+	 * regions deep is compiled only under the conjunction of both conditions, so answering with the
+	 * outer one would over-state where it is live. A node the grammar recorded no span for decides
+	 * nothing and is descended THROUGH rather than treated as a boundary.
+	 */
+	public static function conditionalRegionAt(root: QueryNode, source: String, condIf: Null<String>, offset: Int): Null<Span> {
+		if (condIf == null) return null;
+		var found: Null<Span> = null;
+		function walk(node: QueryNode): Void {
+			for (child in node.children) {
+				final span: Null<Span> = child.span;
+				if (span != null && (offset < span.from || offset >= span.to)) continue;
+				if (span != null && opensConditionalRegion(child, source, condIf)) found = span;
+				walk(child);
+			}
+		}
+		walk(root);
+		return found;
+	}
+
 	/** The file's `package` payload (`''` for the root package, and for a file with no declaration at all). */
 	public static function packageOf(root: QueryNode): String {
 		for (c in root.children) if (c.kind == 'PackageDecl') return c.name ?? '';

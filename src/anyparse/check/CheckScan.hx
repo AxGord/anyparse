@@ -491,27 +491,6 @@ final class CheckScan {
 	}
 
 	/**
-	 * Whether `node`'s source STARTS with the grammar's `#if` directive — i.e. it is a
-	 * conditional-compilation region, whatever kind the grammar happens to project it as.
-	 *
-	 * A kind test cannot do this job. The Haxe grammar carries a dozen conditional ctors, one per
-	 * host position (`Conditional` for members and statements, `ConditionalExpr` in expression
-	 * position, `ConditionalArgs` in an argument list, five `CondSplice*` forms for a region that
-	 * straddles a block or switch boundary, ...), and `RefShape` names only the member one. An
-	 * enumerated list would go stale the next time a position is added; the DIRECTIVE cannot,
-	 * because every region opens with it by definition. The `#` first-char test keeps it to one
-	 * comparison per node before any substring is taken.
-	 */
-	public static function opensConditionalRegion(node: QueryNode, source: String, condIf: Null<String>): Bool {
-		final span: Null<Span> = node.span;
-		if (condIf == null || span == null) return false;
-		// The null checks stay in their own guard: strict null-safety carries a narrowing fact into
-		// a later `||` operand only from the chain's FIRST operand.
-		final from: Int = span.from;
-		return from < source.length && source.fastCodeAt(from) == '#'.code && source.substring(from, from + condIf.length) == condIf;
-	}
-
-	/**
 	 * A function's declared RETURN annotation as written, or null when it declares none — the SOLE `typeAnnotationKinds`
 	 * direct child that starts AFTER the parameter list's closing `)`. Position is the whole gate:
 	 * a type-parameter CONSTRAINT (`function f<T:Foo>()`) projects the very same `Named` node in
