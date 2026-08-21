@@ -196,7 +196,7 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	}
 
 	public function testConcatParenSubChain(): Void {
-		Assert.equals("'a${(b + 'c')}'", foldOf(wrap("'a' + (b + 'c')")));
+		Assert.equals("'a${(b + c)}'", foldOf(wrap("'a' + (b + c)")));
 	}
 
 	public function testConcatStdStringOperand(): Void {
@@ -324,16 +324,58 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	 * A `$` INSIDE a nested string literal is no hazard: the real compiler's block
 	 * scanner counts braces without lexing nested strings and never re-scans block
 	 * content for `$`, and the block's re-parse reads the nested literal exactly as
-	 * the bare operand read it — `'$id'` interpolates either way, `"$lit"` stays
-	 * plain either way, and a `${ … }` block inside the nested string balances the
-	 * naive count. All three merge (compile-and-run verified on Haxe 4.3.7); the
-	 * bare-`$` spellings that still refuse are pinned in
+	 * the bare operand read it — `"$lit"` stays plain either way (compile-and-run
+	 * verified on Haxe 4.3.7). The bare-`$` spellings that still refuse are pinned in
 	 * `testBareDollarOperandsNotMerged`.
+	 *
+	  * The nested quote here is a DOUBLE one, and that is the whole fixture: the
+	 * single-quoted twin of this shape is refused by a different gate for a different
+	 * reason (`testNestedSingleQuotedOperandStaysBare`), so a fixture written with one
+	 * would attribute that refusal to the `$` scanner.
 	 */
-	public function testDollarInsideNestedStringOperandMerges(): Void {
-		Assert.equals("'a,${(f ? '$id' : 'NULL')},b'", foldOf(wrap("'a,' + (f ? '$id' : 'NULL') + ',b'")));
+	public function testDollarInsideNestedDoubleQuotedOperandMerges(): Void {
 		Assert.equals("'a,${(f ? \"$lit\" : \"n\")},b'", foldOf(wrap("'a,' + (f ? \"$lit\" : \"n\") + ',b'")));
-		Assert.equals("'L,${(x ? '${a.b}!' : 'n')},R'", foldOf(wrap("'L,' + (x ? '${a.b}!' : 'n') + ',R'")));
+	}
+
+	/**
+	 * The SAME shapes with the nested string spelled in the interpolation's OWN quote stay
+	 * a bare `+` operand. Not a safety refusal — all three compile and are value-identical
+	 * merged (4.3.7), and the `$`-scanner twin one fixture up proves the gate above this one
+	 * lets them through — but a legibility one: `'a${f('b')}'` puts a `'` two levels inside a
+	 * `'`-delimited literal, and every editor whose highlighter does not implement the
+	 * `${ … }` re-entry paints the rest of the line as string.
+	 *
+	 * Each assertion is paired with the DOUBLE-quoted twin of the same shape, so the fixture
+	 * discriminates on the one variable that moved. Refusal here is a demotion, not a veto:
+	 * the operand is still emitted, as the `+` operand the source already had, which is why
+	 * these plan back to the source's own boundaries and report nothing at all.
+	 */
+	public function testNestedSingleQuotedOperandStaysBare(): Void {
+		Assert.equals(0, violations(wrap("'a,' + (f ? '$id' : 'NULL') + ',b'")).length);
+		Assert.equals(0, violations(wrap("'L,' + (x ? '${a.b}!' : 'n') + ',R'")).length);
+		Assert.equals(0, violations(wrap("'a' + f('b')")).length);
+		Assert.equals(1, violations(wrap("'a,' + (f ? \"$lit\" : \"n\") + ',b'")).length);
+		Assert.equals("'a${f(\"b\")}'", foldOf(wrap("'a' + f(\"b\")")));
+	}
+
+	/**
+	 * The three shapes the haxe 4.3.7 std actually held, which is where the precondition was
+	 * measured: 8 of the 175 hunks a full `--fix` produced over that tree put a `'` inside a
+	 * `${ … }`, and every one of them is one of these. The last is the sharpest — the operand is
+	 * ITSELF an interpolated literal, so merging nests an interpolation inside an interpolation,
+	 * the very thing the walk already refuses to do from the other direction.
+	 *
+	 * The first two now report nothing at all (the plan reproduces the source's own boundaries),
+	 * while the third still merges the half that carries no quote — the refusal demotes ONE
+	 * operand, it does not abandon the construct.
+	 */
+	public function testStdCorpusNestedQuoteShapesStayBare(): Void {
+		Assert.equals(0, violations(wrap("'[' + Global.implode(', ', strings) + ']'")).length);
+		Assert.equals(0, violations(wrap("\"'\" + s.split(\"'\").join(\"''\") + \"'\"")).length);
+		Assert.equals(
+			"'${StringTools.urlEncode(p.name)}=' + StringTools.urlEncode('${p.value}')",
+			foldOf(wrap("StringTools.urlEncode(p.name) + \"=\" + StringTools.urlEncode('${p.value}')"))
+		);
 	}
 
 	/**
