@@ -45,6 +45,17 @@ class NamingCheckTest extends NamingCheckTestBase {
 		Assert.isTrue(vs[0].message.contains('public field'));
 	}
 
+	public function testUnprojectedEnumAbstractValuesNotFlagged(): Void {
+		// Projected under a plain abstract, an enum-abstract value is governed by the FIELD rule and
+		// its conventional PascalCase reads as a violation. The exemption lives in `run`, which holds
+		// the tree the marker is recovered from — `violationsFor` alone cannot see it.
+		final check: Naming = new Naming();
+		final plain: String = '@:enum abstract E(Int) { final Red = 0; final Green = 1; }';
+		final guarded: String = '#if (haxe_ver >= 4.2) enum #else @:enum #end abstract E(Int) { final Red = 0; final Green = 1; }';
+		Assert.equals(0, check.run([{ file: 'C.hx', source: plain }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.run([{ file: 'C.hx', source: guarded }], new HaxeQueryPlugin()).length);
+	}
+
 	public function testLowercaseTypeFlagged(): Void {
 		final vs: Array<Violation> = violations('class foo {}');
 		Assert.equals(1, vs.length);

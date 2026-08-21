@@ -264,6 +264,21 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, new UnusedPrivate().fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
+	public function testUnprojectedEnumAbstractValuesNotFlagged(): Void {
+		// A value of an enum abstract written `@:enum` — or through the `#if` version guard — projects
+		// as an unmodified, so private, field of a plain abstract, while it is in fact public API.
+		// Read as private, `--fix` deleted 15 of one real file's 17 colour constants.
+		Assert.equals(0, one('@:enum abstract E(Int) {\n\tfinal X = 0;\n\tfinal Y = 1;\n}').length);
+		final guarded: String = '#if (haxe_ver >= 4.2) enum #else @:enum #end abstract E(Int) {\n\tfinal X = 0;\n\tfinal Y = 1;\n}';
+		Assert.equals(0, one(guarded).length);
+	}
+
+	public function testMetaOnlyCondRegionLeavesAbstractMemberFlagged(): Void {
+		// The exemption is the declaration-prefix KEYWORD the region contributes, not the region
+		// itself: a leading region carrying only metadata leaves a plain abstract's member reported.
+		Assert.equals(1, one('#if js @:native("F") #end abstract F(Int) {\n\tfunction g():Void {}\n}').length);
+	}
+
 	public function testOpAnnotatedMemberNotFlagged(): Void {
 		// An `@:op(A < B)` operator overload is invoked via the operator, never by name,
 		// and projects as a `MetaCall` (argumented meta) sibling — the annotated-member skip

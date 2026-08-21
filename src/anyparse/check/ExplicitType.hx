@@ -163,7 +163,11 @@ final class ExplicitType implements Check implements OracleAssisted {
 			// checkstyle `Type.ignoreEnumAbstractValues` (default true) toggles the enum-abstract-value exemption.
 			final ignoreEA: Bool = plugin.checkOverrides(entry.file)?.explicitTypeIgnoreEnumAbstract ?? true;
 			final ea: Null<String> = ignoreEA ? enumAbstract : null;
-			walk(violations, entry.file, entry.source, tree, null, fields, functions, params, bodies, ea);
+			// The same exemption for the values of an enum abstract written `@:enum` (or through the
+			// `#if` version guard): they project under a plain abstract, and annotating one with its
+			// literal's type is a compile error (`Int should be <the abstract>`).
+			final guarded: Array<Int> = ignoreEA ? EnumAbstractForms.valueStarts(plugin, tree) : [];
+			walk(violations, entry.file, entry.source, tree, null, fields, functions, params, bodies, ea, guarded);
 		}
 		return violations;
 	}
@@ -270,18 +274,20 @@ final class ExplicitType implements Check implements OracleAssisted {
 	 * Walk `node` carrying its `parentKind` (for the enum-abstract exemption). A
 	 * field with no type annotation is flagged unless its container is an enum
 	 * abstract; a function has each untyped parameter and its missing return type
-	 * flagged.
+	 * flagged. `guarded` holds the span starts of the values of an enum abstract the grammar does
+	 * not project as one (`EnumAbstractForms`), which carries the same exemption.
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, parentKind: Null<String>, fields: Array<String>,
-		functions: Array<String>, params: Array<String>, bodies: Array<String>, enumAbstract: Null<String>
+		functions: Array<String>, params: Array<String>, bodies: Array<String>, enumAbstract: Null<String>, guarded: Array<Int>
 	): Void {
 		if (fields.contains(node.kind)) {
-			if (parentKind != enumAbstract && !LiteralInfer.hasTypeBeforeInit(node, source))
+			final exempt: Bool = parentKind == enumAbstract || EnumAbstractForms.isValue(node.span, guarded);
+			if (!exempt && !LiteralInfer.hasTypeBeforeInit(node, source))
 				push(out, file, node.span, 'field declared without an explicit type');
 		} else if (functions.contains(node.kind))
 			checkFunction(out, file, source, node, params, bodies);
-		for (c in node.children) walk(out, file, source, c, node.kind, fields, functions, params, bodies, enumAbstract);
+		for (c in node.children) walk(out, file, source, c, node.kind, fields, functions, params, bodies, enumAbstract, guarded);
 	}
 
 	/**

@@ -72,6 +72,19 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.equals(1, violations('enum abstract E(Int) { final X = 0; public function f() {} }').length);
 	}
 
+	public function testUnprojectedEnumAbstractValuesExempt(): Void {
+		// The same exemption for the two spellings that project under a plain abstract — `@:enum` and
+		// the `#if` version guard. Annotating such a value with its literal's type is `Int should be E`.
+		Assert.equals(0, violations('@:enum abstract E(Int) { final X = 0; final Y = 1; }').length);
+		Assert.equals(0, violations('#if (haxe_ver >= 4.2) enum #else @:enum #end abstract E(Int) { final X = 0; final Y = 1; }').length);
+	}
+
+	public function testMetaOnlyCondRegionLeavesAbstractFieldChecked(): Void {
+		// A leading region carrying only metadata contributes no declaration-prefix keyword, so the
+		// abstract stays a plain one and its untyped field is still flagged.
+		Assert.equals(1, violations('#if js @:native("E") #end abstract F(Int) { final a = 0; }').length);
+	}
+
 	public function testInterfaceTypedMembersNotFlagged(): Void {
 		Assert.equals(0, violations('interface I { var a:Int; function f():Void; }').length);
 	}

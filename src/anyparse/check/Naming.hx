@@ -85,7 +85,12 @@ final class Naming implements Check implements CrossFileFix {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (v in violationsFor(entry.file, support.project(tree), support.policyFor(entry.file))) violations.push(v);
+			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
+			// project as fields of a plain abstract, where the FIELD naming rule governs them — and an
+			// enum value is PascalCase by convention, so each one reads as a violation.
+			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
+			final decls: Array<NamedDecl> = [for (d in support.project(tree)) if (!EnumAbstractForms.isValue(d.span, guarded)) d];
+			for (v in violationsFor(entry.file, decls, support.policyFor(entry.file))) violations.push(v);
 		}
 		return violations;
 	}

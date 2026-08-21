@@ -51,6 +51,20 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(0, violations('enum abstract E(Int) { final X = 0; final Y = 1; }').length);
 	}
 
+	public function testUnprojectedEnumAbstractValuesNotFlagged(): Void {
+		// `@:enum abstract` and the `#if (haxe_ver >= 4.2) enum #else @:enum #end` idiom are enum
+		// abstracts in every build, but project as a plain abstract preceded by the marker. `private`
+		// on a value turns every read of it into `Cannot access private field`.
+		Assert.equals(0, violations('@:enum abstract E(Int) { final X = 0; final Y = 1; }').length);
+		Assert.equals(0, violations('#if (haxe_ver >= 4.2) enum #else @:enum #end abstract E(Int) { final X = 0; final Y = 1; }').length);
+	}
+
+	public function testMetaOnlyCondRegionLeavesAbstractMembersFlagged(): Void {
+		// The exemption is the declaration-prefix KEYWORD the region contributes, not the region
+		// itself: a leading region carrying only metadata leaves a plain abstract's members reported.
+		Assert.equals(1, violations('#if js @:native("E") #end abstract F(Int) { function g():Void {} }').length);
+	}
+
 	public function testMetaBeforeVisibilityNotFlagged(): Void {
 		Assert.equals(0, violations('class C { @:keep public function f():Void {} }').length);
 	}

@@ -126,7 +126,11 @@ final class UnusedPrivate implements Check {
 			if (stringFold != null) collectStringContents(tree, entry.source, stringFold, reflected);
 			final externTypes: Array<String> = [];
 			collectExternTypes(tree, externTypes);
-			for (decl in support.project(tree)) {
+			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
+			// project as unmodified — so PRIVATE — fields of a plain abstract, while every one of them
+			// is public API. Left in, the check deleted 15 of one real file's 17 colour constants.
+			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
+			for (decl in support.project(tree)) if (!EnumAbstractForms.isValue(decl.span, guarded)) {
 				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, scopeIndex, support, externTypes);
 				if (v != null) violations.push(v);
 			}

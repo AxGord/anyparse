@@ -123,7 +123,8 @@ final class MissingVisibility implements Check {
 				file: entry.file,
 				seams: seams,
 				source: entry.source,
-				comments: commentTokens(entry.source, seams)
+				comments: commentTokens(entry.source, seams),
+				guarded: EnumAbstractForms.valueStarts(plugin, tree)
 			}, tree, false);
 		}
 		return violations;
@@ -179,7 +180,8 @@ final class MissingVisibility implements Check {
 			visRank: visRank,
 			keyword: keyword,
 			flagged: flagged,
-			index: index
+			index: index,
+			guarded: EnumAbstractForms.valueStarts(plugin, tree)
 		}, tree, false);
 		return edits;
 	}
@@ -236,7 +238,7 @@ final class MissingVisibility implements Check {
 				sawVisibility = true;
 			else if (ctx.seams.members.contains(child.kind)) {
 				final span: Null<Span> = child.span;
-				if (!sawVisibility && span != null) ctx.out.push({
+				if (!sawVisibility && span != null && !EnumAbstractForms.isValue(span, ctx.guarded)) ctx.out.push({
 					file: ctx.file,
 					span: span,
 					rule: 'missing-visibility',
@@ -378,7 +380,7 @@ final class MissingVisibility implements Check {
 	 */
 	private static function insertMember(ctx: FixCtx, member: QueryNode, typeName: Null<String>, state: RunState): Void {
 		final span: Null<Span> = member.span;
-		if (span == null || !ctx.flagged.contains(span.from)) return;
+		if (span == null || !ctx.flagged.contains(span.from) || EnumAbstractForms.isValue(span, ctx.guarded)) return;
 		final memberName: Null<String> = member.name;
 		final index: Null<SymbolIndex> = ctx.index;
 		final insert: Null<String> = if (!state.sawOverride)
@@ -469,6 +471,14 @@ private typedef ScanCtx = {
 	final seams: Seams;
 	final source: String;
 	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+
+	/**
+	 * The span starts of the values of an enum abstract the grammar does not project as one
+	 * (`EnumAbstractForms.valueStarts`). They arrive as members of a plain abstract, and an
+	 * enum-abstract value is implicitly public — writing `private` on one turns every read of it
+	 * into `Cannot access private field`.
+	 */
+	final guarded: Array<Int>;
 };
 
 /** What `MissingVisibility.fix`'s walk threads through every frame — resolved once per call. */
@@ -481,6 +491,9 @@ private typedef FixCtx = {
 	final keyword: String;
 	final flagged: Array<Int>;
 	final index: Null<SymbolIndex>;
+
+	/** The same unprojected enum-abstract values `ScanCtx.guarded` holds, re-derived here. */
+	final guarded: Array<Int>;
 };
 
 /**
