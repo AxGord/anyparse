@@ -150,7 +150,7 @@ final class PreferFinalPublicField implements Check {
 		if (index.skippedMayReference(name)) return;
 		// A macro-built type's fields are not what the declaration says — see
 		// `SymbolIndex.transitivelyCarriesBuildMacro`.
-		if (index.transitivelyCarriesBuildMacro(owner)) return;
+		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
 		final initialized: Bool = RefactorSupport.isInitializedNonPropertyField(source, field);
 		// The conditional-default arm: an initialized field (a `(default, null)` property
 		// included) whose only other write is one `if (p != null) x = p;` constructor

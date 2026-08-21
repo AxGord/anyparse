@@ -1559,36 +1559,60 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Whether `typeName` OR anything in its transitive supertype / interface closure is built
-	 * by a macro (`@:build` / `@:autoBuild`), resolved through the index.
+	 * Whether `typeName` OR anything in its transitive supertype / interface closure is built by a
+	 * macro (`@:build` / `@:autoBuild` / `@:genericBuild`), resolved through the index.
 	 *
-	 * A build macro may rewrite a member arbitrarily, so no rule that changes a field's
-	 * MUTABILITY or PLACEMENT can reason about the declaration it can see. The motivating
-	 * shape: an `@:autoBuild` interface whose builder strips the initializer off every
-	 * non-inline `var` field and moves the assignment into the constructor — after which
-	 * `var` -> `final` is `Static final variable must be initialized`, and a field moved to
-	 * `static` is `Cannot access static field from a class instance` raised by the builder
-	 * itself. The class carries no metadata of its own; the grant is inherited through
-	 * `implements`, which is why the closure and not the declaring file alone.
+	 * A build macro may rewrite a member arbitrarily, so no rule that changes a field's MUTABILITY or
+	 * PLACEMENT can reason about the declaration it can see. The motivating shape: an `@:autoBuild`
+	 * interface whose builder strips the initializer off every non-inline `var` field and moves the
+	 * assignment into the constructor — after which `var` -> `final` is `Static final variable must be
+	 * initialized`, and a field moved to `static` is `Cannot access static field from a class instance`
+	 * raised by the builder itself. The class carries no metadata of its own; the grant is inherited
+	 * through `implements`, which is why the closure and not the declaring file alone.
 	 *
-	 * `@:autoBuild` reaches subtypes and implementors, so the walk follows both `supertypes`
-	 * and `interfaces`. The per-file test is textual (`MemberWriteScan.carriesBuildMacro`),
-	 * so an unrelated `@:build` elsewhere in the same file counts too — the conservative
-	 * direction, which only ever keeps a field as it is. An unretained source ends the same
-	 * way, as in `transitivelyCarriesRtti`.
+	 * `fromFile` is the file of the container the caller is looking at, and naming it is what keeps the
+	 * answer about THAT type. Hop zero is not a written type reference at all — the consumer holds the
+	 * declaration — so resolving it by simple name across the whole index conflated every homonym:
+	 * measured on `~/dev/haxelib` (16182 files, ~100 libraries in ONE index, the eight consumer rules,
+	 * `--all`), the gate removed 16339 findings, of which 14426 were same-simple-name collisions and
+	 * 1913 genuine. ONE `private typedef GL = js.html.webgl.GL2` in heaps' `h3d/impl/GlDriver.hx` — a
+	 * file carrying a `@:build` of its own — silenced every `GL` in lime, hlsdl, hashlink/sdl and
+	 * hashlink/mesa, 9800 findings from one line. Every consumer passes its file; a caller that has
+	 * none keeps the whole-index answer it always got.
+	 *
+	 * Every hop ABOVE zero IS a written reference, and a Haxe supertype is a simple name most of the
+	 * time, so those resolve through the referring file's own import scope (`buildMacroSupertypes`) and
+	 * widen back to the union whenever that settles nothing. The widening is what is left of the
+	 * conservatism, and it is cheap: of the 1913 the gate still removes, 205 are a token in the type's
+	 * own file, 1375 a grant reached through a fully resolved chain, and 333 reached ONLY through a
+	 * widened hop — a qualified path naming a type outside the scope, `haxe.io.Output` being the whole
+	 * of that class. Deciding those would need the compiler's own std path in the resolution scope;
+	 * nothing the index holds settles them, so do not narrow the widening without adding it.
+	 *
+	 * The narrowing can only ever turn a "yes" into a "no", so the consumers that pay for a wrong one
+	 * are the DELETING ones (`trivial-getter`, `inline-constant`, `static-constant`), not only the
+	 * rewriting ones. It is applied to all eight anyway because it is not a heuristic tightening: a
+	 * `@:build` on a type in another package is not a fact about this type. What stays heuristic — the
+	 * file-scoped text scan below, the widening above — stays conservative for all of them.
+	 *
+	 * `@:autoBuild` reaches subtypes and implementors, so the walk follows `supertypes`, which carries
+	 * `implements` targets as well as `extends`. The per-file test is textual
+	 * (`MemberWriteScan.carriesBuildMacro`), so an unrelated `@:build` elsewhere in the same file counts
+	 * too — the conservative direction, which only ever keeps a field as it is (`ansi`'s `ANSI.hx`,
+	 * whose second type carries the tag, is 6 of the 205). An unretained source ends the same way, as in
+	 * `transitivelyCarriesRtti`.
 	 */
-	public function transitivelyCarriesBuildMacro(typeName: String): Bool {
-		final seen: Array<String> = [typeName];
+	public function transitivelyCarriesBuildMacro(typeName: String, ?fromFile: String): Bool {
+		final queue: Array<ResolvedType> = buildMacroRoots(typeName, fromFile);
+		final seen: Array<String> = [];
 		var i: Int = 0;
-		while (i < seen.length) {
-			final name: String = seen[i];
+		while (i < queue.length) {
+			final cur: ResolvedType = queue[i];
 			i++;
-			for (f in _files) for (t in f.types) if (t.name == name) {
-				final source: Null<String> = _sources[f.file];
-				if (source == null || MemberWriteScan.carriesBuildMacro(source)) return true;
-				for (s in t.supertypes) if (!seen.contains(s)) seen.push(s);
-				for (s in t.interfaces) if (!seen.contains(s)) seen.push(s);
-			}
+			if (!markSeen(cur, seen)) continue;
+			final source: Null<String> = _sources[cur.file.file];
+			if (source == null || MemberWriteScan.carriesBuildMacro(source)) return true;
+			for (hop in buildMacroSupertypes(cur)) queue.push(hop);
 		}
 		return false;
 	}
@@ -1613,6 +1637,50 @@ final class SymbolIndex {
 	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
 	private inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
 		return t.isMain ? fi.module : '${fi.module}.${t.name}';
+	}
+
+	/**
+	 * The declarations `transitivelyCarriesBuildMacro` starts its closure walk from: the ONE
+	 * `typeName` declares in `fromFile` when the caller named the file it is linting, else every
+	 * same-simple-name declaration in the index.
+	 *
+	 * The starting type is not a written type REFERENCE — it is the container the consumer is
+	 * looking at, whose declaring file it already holds — so `fromFile` makes hop zero exact
+	 * rather than a guess. Falling back to the whole-index union keeps the answer a caller with no
+	 * file (or a name the named file does not declare) used to get.
+	 */
+	private function buildMacroRoots(typeName: String, fromFile: Null<String>): Array<ResolvedType> {
+		if (fromFile != null) {
+			final own: Null<ResolvedType> = findDeclaredType(fromFile, typeName);
+			if (own != null) return [own];
+		}
+		return resolvedDeclsNamed(typeName);
+	}
+
+	/**
+	 * `cur`'s direct supertypes and interfaces as RESOLVED declarations — the hop
+	 * `transitivelyCarriesBuildMacro` takes upward.
+	 *
+	 * Unlike hop zero these ARE written type references, and a Haxe one is a simple name most of
+	 * the time, so they are resolved against the REFERRING file's import scope (`supertypesRaw`
+	 * keeps the verbatim path a simple-name reduction throws away). When that settles nothing — an
+	 * alias import, a qualified path naming a type outside the scope (`haxe.io.Output`), a scope
+	 * form the index does not model — the hop widens back to the same-simple-name union the walk
+	 * always used, so a failure to resolve can only ever keep the conservative answer.
+	 * `interfaces` is a subset of `supertypes` (`collectImplementsRaw` reads the `ImplementsClause`
+	 * that `collectSupertypesRaw` also reads), so walking `supertypes` alone reaches every
+	 * `@:autoBuild` grant the old two-list walk did.
+	 */
+	private function buildMacroSupertypes(cur: ResolvedType): Array<ResolvedType> {
+		final out: Array<ResolvedType> = [];
+		final raws: Array<String> = cur.type.supertypesRaw;
+		final simples: Array<String> = cur.type.supertypes;
+		for (i in 0...simples.length) {
+			final resolved: Array<ResolvedType> = resolveTypeRefAll(i < raws.length ? raws[i] : simples[i], cur.file);
+			final hops: Array<ResolvedType> = resolved.length > 0 ? resolved : resolvedDeclsNamed(simples[i]);
+			for (r in hops) out.push(r);
+		}
+		return out;
 	}
 
 	/**

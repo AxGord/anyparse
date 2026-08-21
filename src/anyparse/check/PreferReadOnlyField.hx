@@ -137,7 +137,7 @@ final class PreferReadOnlyField implements Check {
 		if (index.skippedMayReference(name)) return;
 		// A macro-built type's fields are not what the declaration says — see
 		// `SymbolIndex.transitivelyCarriesBuildMacro`.
-		if (index.transitivelyCarriesBuildMacro(owner)) return;
+		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
 		if (index.supertypeDeclaresMember(owner, name)) return;
 		// An implemented interface that cannot be resolved may still declare `name` as a
 		// mutable member, whose property access `(default, null)` would violate.

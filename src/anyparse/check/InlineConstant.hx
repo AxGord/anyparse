@@ -276,9 +276,9 @@ final class InlineConstant implements Check {
 	}
 
 	/** Whether `container`'s type — or anything in its supertype / interface closure — is built by a macro. */
-	private static inline function ownerIsMacroBuilt(container: QueryNode, index: SymbolIndex): Bool {
+	private static inline function ownerIsMacroBuilt(container: QueryNode, file: String, index: SymbolIndex): Bool {
 		final owner: Null<String> = container.name;
-		return owner != null && index.transitivelyCarriesBuildMacro(owner);
+		return owner != null && index.transitivelyCarriesBuildMacro(owner, file);
 	}
 
 	/**
@@ -328,7 +328,7 @@ final class InlineConstant implements Check {
 		// `implements` / `extends` (`@:autoBuild`), where the class carries no metadata of its own,
 		// so the FILE-scoped text scan beside the `@:coreApi` bail above would miss it — the same
 		// per-owner question the four field rules, `member-order` and `prefer-inline` all ask.
-		if (ownerIsMacroBuilt(container, index)) return;
+		if (ownerIsMacroBuilt(container, file, index)) return;
 		MemberBranchScan.eachMember(branch, container, child -> seams.members.contains(child.kind), (member, run, certain) -> {
 			// A modifier run only SOME builds see cannot answer `static` / `inline`, both of which
 			// this rule reads as enabling — see `MemberBranchScan.joinRuns`.
