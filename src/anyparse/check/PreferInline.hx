@@ -6,6 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -41,6 +42,17 @@ using Lambda;
  *   implementation).
  * - A method an implemented interface declares (`SymbolIndex.typeProvablyLacksMember`, which
  *   also refuses when the interface is unresolvable) — the interface requires a real method.
+ * - EVERY method of a class whose own TYPE-level metadata is not `inlineNeutralMeta`
+ *   (`metaBlockedClasses`). The whitelist is the gate, so `@:hlNative` /
+ *   `@:nativeGen` / `@:cppFileCode` / `@:build` are examples and not the set. Such an annotation
+ *   sits on a module-level sibling BEFORE the declaration, so no member-level modifier run can
+ *   carry it, and what it binds is the whole type: a placeholder body the backend discards, or a
+ *   member the host runtime calls BY NAME.
+ * - EVERY method of a class under a build macro — its own, or one granted through a supertype /
+ *   interface (`SymbolIndex.transitivelyCarriesBuildMacro`). The builder writes an `override` of the
+ *   method into subclasses with no `override` keyword for the modifier gate to read and no declared
+ *   member for the subtype lookup to find, and Haxe reports it at the GENERATED override site, in
+ *   another file and possibly another project.
  * - A `dynamic` method (re-bindable at runtime), a constructor (`new`), a `macro` method, a
  *   `@:keep` method, and any method whose name is passed to `Reflect.*` as a string literal
  *   anywhere in scope (reflection-accessed) — all skipped conservatively.
@@ -114,6 +126,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	/** The class-body member kinds that END a modifier run — a method and the three field forms. */
 	private static final MEMBER_KINDS: Array<String> = ['FnMember', 'VarMember', 'FinalMember', 'FinalModifiedMember'];
 
+
 	/**
 	 * Metadata that provably does not change what a method's BODY means, so `inline` stays
 	 * behaviour-preserving under it. Any OTHER metadata refuses the candidate.
@@ -176,7 +189,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return 'a method whose inlining buys something — empty body, accessor / thin forward / trivial mutator, or a foldable '
 			+ 'constant/arithmetic expression (<=32 AST nodes); Info, --fix inserts inline. Allocations, builders, loops, switches, '
 			+ 'lambda/computed args are never candidates. Skips methods referenced as a value, override / subtype-overridden, '
-			+ 'interface-declared, dynamic / macro / constructor / @:keep / Reflect-accessed methods';
+			+ 'interface-declared, dynamic / macro / constructor / @:keep / Reflect-accessed methods, and every method of a '
+			+ 'class whose own type metadata is not provably inline-neutral (e.g. @:hlNative / @:nativeGen / @:cppFileCode) '
+			+ 'or that is under a build macro, its own or inherited';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -202,10 +217,14 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			collectValueRefs(t.tree, false, candidateNames, valueBlocked);
 			collectReflectNames(t.tree, candidateNames, reflectBlocked);
 		}
-		// Pass C: emit a finding for each candidate the cross-file gates leave standing.
+		// Pass C: emit a finding for each candidate the cross-file gates leave standing. A class whose
+		// own TYPE-level annotation is not inline-neutral is skipped whole (see `metaBlockedClasses`).
 		final out: Array<Violation> = [];
-		for (t in trees) for (cls in CheckScan.classBodies(t.tree))
-			considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed, t.branch);
+		for (t in trees) {
+			final metaBlocked: Array<QueryNode> = metaBlockedClasses(t.tree, t.branch);
+			for (cls in CheckScan.classBodies(t.tree)) if (!metaBlocked.contains(cls))
+				considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed, t.branch);
+		}
 		return out;
 	}
 
@@ -310,6 +329,44 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/**
+	 * The class nodes of `tree` whose own TYPE-level annotation is not `inlineNeutralMeta` — every
+	 * member of such a class is untouchable.
+	 *
+	 * A type annotation is a module-level sibling BEFORE the declaration, never a child of it, so the
+	 * member modifier run `forEachMethod` reads can never carry one: a `@:hlNative` / `@:nativeGen` /
+	 * `@:cppFileCode` class passed every metadata gate the rule had. What those bind is the whole
+	 * type — under `@:hlNative` each member's body is a placeholder the backend discards, and under
+	 * `@:nativeGen` the host runtime calls members BY NAME, which under `-dce full` is a name an
+	 * inlined method no longer has. `@:build` / `@:autoBuild` land here too, the same verdict
+	 * `transitivelyCarriesBuildMacro` reaches for a grant INHERITED from a supertype.
+	 *
+	 * The run is carried by `RefactorSupport.isModifierOrMetaKind` — metadata AND the modifier
+	 * keywords, because `private` / `extern` project as SIBLING nodes BETWEEN the annotation and the
+	 * declaration, and ending the run on them attributed the annotation to the keyword (which owns no
+	 * class body) and handed the class out bare. Every other child ends the run, so an annotation
+	 * cannot leak past its own declaration to the next type — verified for a typedef / enum /
+	 * interface in between. `MemberBranchScan` descends into a `#if` region and folds each branch
+	 * separately, so `#if A class X #else @:nativeGen class Y #end` blocks only `Y`, and an annotation
+	 * wrapped in a region projects as a name-less `Meta` whose child carries the real name.
+	 */
+	private static function metaBlockedClasses(tree: QueryNode, branch: MemberBranchSeams): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		MemberBranchScan.eachMember(branch, tree, child -> !RefactorSupport.isModifierOrMetaKind(child.kind), (decl, run, _) -> {
+			if (run.exists(carriesNonNeutralMeta)) for (cls in CheckScan.classBodies(decl)) out.push(cls);
+		});
+		return out;
+	}
+
+	/** Whether `node` is — or holds anywhere below it — a metadata node whose name is not `inlineNeutralMeta`. */
+	private static function carriesNonNeutralMeta(node: QueryNode): Bool {
+		final metaName: Null<String> = RefactorSupport.META_KINDS.contains(node.kind) ? node.name : null;
+		// A NAMED annotation's own verdict is final — descending into its ARGUMENTS would let a
+		// `@:privateAccess` inside a whitelisted `@:value(...)` refuse the class. Only the name-less
+		// wrappers a `#if` region projects are worth recursing through.
+		return metaName != null ? !inlineNeutralMeta(metaName) : node.children.exists(carriesNonNeutralMeta);
+	}
+
+	/**
 	 * Flag each candidate method of `cls` (a benefit-class body) that passes every soundness gate: not value-referenced / reflection-named anywhere, not overridden by a subtype, not implementing an abstract-superclass slot, not required by an implemented interface, and (per `isCandidateMethod`) not a constructor / override / dynamic / macro / @:keep / already-inline / self-recursive method, body in a benefit class.
 	 */
 	private static function considerClass(
@@ -320,6 +377,13 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		if (className == null) return;
 		// Re-bound to a non-null local: the narrowing does not reach into the nested callback below.
 		final owner: String = className;
+		// A build macro on the owner — or granted by a supertype / interface through `@:autoBuild` —
+		// writes members no scan of this source can see, an `override` of this very method in every
+		// subclass included, with no `override` keyword anywhere for the modifier gate to read and no
+		// declared member for `subtypeMemberNames` to find. Haxe accepts `inline` on the declaration
+		// silently and rejects it at the GENERATED override site ("Field <m> is inlined and cannot be
+		// overridden") — another file, possibly another project.
+		if (index.transitivelyCarriesBuildMacro(owner)) return;
 		final subtypeMembers: Array<String> = index.hasSubtype(owner) ? index.subtypeMemberNames(owner) : [];
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
@@ -364,7 +428,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (name == null) return;
 			final mods: Array<String> = [];
 			final metas: Array<String> = [];
-			for (mod in run) if (mod.kind == 'Meta' || mod.kind == 'MetaCall') {
+			for (mod in run) if (RefactorSupport.META_KINDS.contains(mod.kind)) {
 				final nm: Null<String> = mod.name;
 				if (nm != null) metas.push(nm);
 			} else

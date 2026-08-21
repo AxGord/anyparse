@@ -486,8 +486,128 @@ class PreferInlineCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * `@:nativeGen` puts the class into the generated output under its own name and the host runtime
+	 * calls its methods BY NAME (Unity's `Update()`) — an inlined method has no name there. The
+	 * annotation is a module-level sibling BEFORE the class, which the member modifier run never
+	 * reaches, so every metadata gate the rule had missed it.
+	 */
+	public function testNativeGenClassSkips(): Void {
+		assertOnlyControlFlagged('@:nativeGen class C extends M {\n\tprivate function Update():Void tick();\n}');
+	}
+
+	/**
+	 * `@:hlNative` binds every member of the class to a foreign symbol, so the written body is a
+	 * placeholder HL discards — inlining substitutes the placeholder at the call site and the binding
+	 * never happens. The `@:native` member gate one level up.
+	 */
+	public function testHlNativeClassSkips(): Void {
+		assertOnlyControlFlagged('@:hlNative(\'uv\')\nclass C {\n\tprivate static function stop(h:Int):Bool return false;\n}');
+	}
+
+	/**
+	 * The class annotation sits inside a `#if` region, so it projects as a `Conditional` sibling and
+	 * not as a bare `MetaCall`. The build that defines the flag gets the native binding, so the gate
+	 * must refuse on the possibility rather than on the flat reading.
+	 */
+	public function testConditionalClassMetaSkips(): Void {
+		assertOnlyControlFlagged(
+			'#if mobile @:hlNative(\'pony\') #end final class C {\n\tprivate static function get_asset(n:Int):Int return 0;\n}'
+		);
+	}
+
+	/** `@:cppFileCode` injects code the generated class depends on by name — the members stay physical. */
+	public function testCppFileCodeClassSkips(): Void {
+		assertOnlyControlFlagged('@:cppFileCode(\'int x;\')\nclass C {\n\tprivate static function h():Int return 1;\n}');
+	}
+
+	/**
+	 * The discriminator for the four gates above: a whitelisted class annotation describes typing, not
+	 * code generation, and must not cost the finding. It passes both before and after the change - its
+	 * job is to fail if the gate ever over-blocks.
+	 */
+	public function testNeutralClassMetaStillFlagged(): Void {
+		Assert.equals(1, violations('@:nullSafety(Strict)\nfinal class C {\n\tpublic function stop():Void _other.stop();\n}').length);
+	}
+
+	/**
+	 * A module-level modifier keyword sits BETWEEN the annotation and the declaration as a sibling
+	 * node of its own (`(Meta @:nativeGen) (Private) (ClassDecl Inner)`), so a run-ender rule of
+	 * "every non-metadata child" attributes the annotation to the keyword — which owns no class body
+	 * — and hands the class out bare. Found by probing the gate, not by the report.
+	 */
+	public function testClassMetaSurvivesModifierKeyword(): Void {
+		assertOnlyControlFlagged('@:nativeGen\nprivate class C extends M {\n\tprivate function Update():Void tick();\n}');
+	}
+
+	/**
+	 * `MemberBranchScan` folds each `#if` branch separately, so an annotation on ONE branch is not a
+	 * verdict on the other: the plain branch keeps its finding. The invariant a run-carrier refactor
+	 * is most likely to break, since it rests on per-branch state rather than on the flat run.
+	 */
+	public function testConditionalBranchMetaBlocksOnlyItsOwnBranch(): Void {
+		final vs: Array<Violation> = violations(
+			'#if cpp\nclass C {\n\tpublic function stop():Void _other.stop();\n}\n#else\n'
+			+ '@:nativeGen class D extends M {\n\tprivate function Update():Void tick();\n}\n#end'
+		);
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue(hasMethod(vs, 'stop'), vs[0].message);
+	}
+
+	/** The metadata run resets at each type declaration — a plain class after an annotated one keeps its findings. */
+	public function testClassMetaDoesNotLeakToNextType(): Void {
+		final vs: Array<Violation> = violations(
+			'@:nativeGen class N extends M {\n\tprivate function Update():Void tick();\n}\n\n'
+			+ 'class C {\n\tpublic function stop():Void _other.stop();\n}'
+		);
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue(hasMethod(vs, 'stop'), vs[0].message);
+	}
+
+	/**
+	 * `@:autoBuild` on the owner means a builder writes an `override` of this method into every
+	 * subclass, with no `override` keyword anywhere in the subclass file for the modifier gate to
+	 * read. Haxe accepts `inline` on the declaration silently and rejects it at the GENERATED
+	 * override site — another file, possibly another project (`Field runCommand is inlined and
+	 * cannot be overridden`, the shape found on a real tree).
+	 *
+	 * The annotation is the owner's OWN, so this fixture is refused by the type-metadata gate and by
+	 * the transitive build-macro gate alike — reverting either one leaves it green. The test below is
+	 * the one that isolates the transitive gate.
+	 */
+	public function testBuildMacroOwnerSkips(): Void {
+		Assert.equals(0, violations('@:autoBuild(b.B.build())\nclass C {\n\tpublic function runCommand(cmd:String):Void {}\n}').length);
+	}
+
+	/**
+	 * The build-macro grant is inherited through `extends`: the subclass carries no annotation of its
+	 * own, so only `SymbolIndex.transitivelyCarriesBuildMacro` can see it. Reverting that gate is the
+	 * one mutation this fixture flips.
+	 */
+	public function testBuildMacroSupertypeSkips(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'B.hx', source: '@:autoBuild(b.B.build())\nclass B {}' },
+			{ file: 'S.hx', source: 'class S extends B {\n\tpublic function runCommand(cmd:String):Void {}\n}' }
+		];
+		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length);
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t$members\n}';
+	}
+
+	/**
+	 * Assert that `blockedSource` yields no finding — with a plain control class appended to the same
+	 * module, asserted to STILL be flagged. A bare `Assert.equals(0, …)` cannot tell "the gate
+	 * blocked it" from "nothing parsed": `CheckScan.parseOrNull` returns null on a parse failure and
+	 * `run` then yields `[]`, so a future grammar regression on `#if`-prefixed or argument-carrying
+	 * metadata would silently turn every skip fixture into a no-op asserting nothing.
+	 */
+	private function assertOnlyControlFlagged(blockedSource: String): Void {
+		final vs: Array<Violation> =
+			violations('$blockedSource\n\nclass Control {\n\tpublic function stillFlagged():Void _other.stop();\n}');
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue(hasMethod(vs, 'stillFlagged'), vs[0].message);
 	}
 
 	private function violations(source: String): Array<Violation> {
