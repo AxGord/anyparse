@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -19,7 +20,7 @@ using StringTools;
  * six positional arguments.
  *
  * `conditionalIfKeyword` is `RefShape.conditionalIfKeyword`, and the conditional gates
- * test the DIRECTIVE that opens a region (`CheckScan.opensConditionalRegion`) rather
+ * test the DIRECTIVE that opens a region (`ModuleScan.opensConditionalRegion`) rather
  * than a node kind: the grammar projects a statement-position `#if` and an
  * expression-position one under different kinds, so a kind test covers only whichever
  * position it happens to name.
@@ -89,7 +90,7 @@ private typedef ScanCtx = {
  * declaration inside a `#if` region, or a shadowing construct inside one —
  * since the region's branches project as flat siblings and no state of that
  * tree is the source a single compile sees. Both gates test the opening
- * DIRECTIVE (`CheckScan.opensConditionalRegion`), not a node kind:
+ * DIRECTIVE (`ModuleScan.opensConditionalRegion`), not a node kind:
  * statement- and expression-position regions project under different kinds,
  * and a refusal naming one of them silently covers only that position.
  *
@@ -278,7 +279,7 @@ final class UnusedLocal implements Check {
 	 */
 	private static function collectShadowedRegions(ctx: ScanCtx, node: QueryNode, name: String, out: Array<Span>): Void {
 		final kind: String = node.kind;
-		if (ctx.opaqueKinds.contains(kind) || CheckScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)) return;
+		if (ctx.opaqueKinds.contains(kind) || ModuleScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)) return;
 		if (ctx.selfScopeDeclKinds.contains(kind) && bindsShadowingName(ctx, node, name)) appendShadowedRegion(ctx, node, name, out);
 		for (c in node.children) collectShadowedRegions(ctx, c, name, out);
 	}
@@ -357,7 +358,7 @@ final class UnusedLocal implements Check {
 		if (ctx.conditionalIfKeyword == null) return false;
 		final span: Null<Span> = node.span;
 		if (span != null && (offset < span.from || offset >= span.to)) return false;
-		return CheckScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)
+		return ModuleScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)
 			|| node.children.exists(c -> withinConditional(ctx, c, offset));
 	}
 

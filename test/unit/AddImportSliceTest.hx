@@ -151,6 +151,44 @@ class AddImportSliceTest extends Test {
 		assertAdd(source, 'c.Cee', false, expected);
 	}
 
+	/**
+	 * The macro-builder shape — every import behind `#if macro`, the TYPE outside it — anchors at
+	 * MODULE level, above the region. It is not a near-miss of the case above: a region declaring no
+	 * type guards no code, so `ModuleScan.guardedBodyRegion` refuses it, and rightly. A line spliced
+	 * inside would be in scope only where the condition holds, while the class it serves resolves in
+	 * every build; module level is the only position that covers the class.
+	 */
+	public function testGuardedImportsWithAnUnguardedTypeAnchorAtModuleLevel(): Void {
+		final source: String = 'package foo;\n\n#if macro\nimport a.Al;\nimport m.Mid;\n#end\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport c.Cee;\n#if macro\nimport a.Al;\nimport m.Mid;\n#end\n\nclass C {}\n';
+		assertAdd(source, 'c.Cee', false, expected);
+	}
+
+	/**
+	 * A header with BOTH kinds sorts the fresh line into the UNGUARDED run and leaves the guarded one
+	 * untouched. The guarded run is not a candidate — `runsOf` ends a run at a `#if` region — and
+	 * that is the sound reading: what an unguarded run binds, every build sees.
+	 */
+	public function testAMixedHeaderSortsIntoTheUnguardedRun(): Void {
+		final source: String = 'package foo;\n\nimport a.Al;\nimport m.Mid;\n#if macro\nimport z.Zed;\n#end\n\nclass C {}\n';
+		final expected: String =
+			'package foo;\n\nimport a.Al;\nimport c.Cee;\nimport m.Mid;\n#if macro\nimport z.Zed;\n#end\n\nclass C {}\n';
+		assertAdd(source, 'c.Cee', false, expected);
+	}
+
+	/**
+	 * TWO disjoint guarded regions are no header at all: neither guards the whole body (the first
+	 * gate is ONE region at the top level), so there is no region whose condition every build of this
+	 * module's code satisfies, and picking either would put the line in scope for a strict subset of
+	 * the file. Module level again.
+	 */
+	public function testTwoDisjointGuardedRegionsAnchorAtModuleLevel(): Void {
+		final source: String = 'package foo;\n\n#if macro\nimport a.Al;\n#end\n#if js\nimport z.Zed;\n#end\n\nclass C {}\n';
+		final expected: String =
+			'package foo;\n\nimport c.Cee;\n#if macro\nimport a.Al;\n#end\n#if js\nimport z.Zed;\n#end\n\nclass C {}\n';
+		assertAdd(source, 'c.Cee', false, expected);
+	}
+
 	/** A ROOT-package `package;` still anchors the import BELOW it — an import above `package` does not compile. */
 	public function testEmptyPackageStillAnchorsBelowIt(): Void {
 		final source: String = 'package;\n\nclass C {}\n';

@@ -5,6 +5,7 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -154,7 +155,7 @@ private typedef Site = {
  *    key — found by running this rule over a real tree, not by any fixture).
  *  - **Conditional compilation.** A `#if … #end` region is skipped wholesale — what a name means
  *    inside one depends on the build, which the import map does not model. The test is the
- *    DIRECTIVE, not a node kind (`CheckScan.opensConditionalRegion`), because the grammar
+ *    DIRECTIVE, not a node kind (`ModuleScan.opensConditionalRegion`), because the grammar
  *    projects a conditional region through a dozen position-specific kinds. A type region whose
  *    own text carries a `#` is skipped too.
  *  - **Non-empty constructor arguments.** `new IntMap(x)` is never touched — the `NewLiteral`
@@ -391,7 +392,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 * skipped wholesale.
 	 */
 	private static function walk(node: QueryNode, parent: Null<QueryNode>, accepted: Bool, seams: Seams, out: Array<Candidate>): Void {
-		if (seams.opaqueKinds.contains(node.kind) || CheckScan.opensConditionalRegion(node, seams.source, seams.conditionalIf)) return;
+		if (seams.opaqueKinds.contains(node.kind) || ModuleScan.opensConditionalRegion(node, seams.source, seams.conditionalIf)) return;
 		if (node.kind == seams.newExprKind)
 			newExprCandidate(node, parent, seams, out);
 		else if (accepted && seams.typeRefKinds.contains(node.kind))

@@ -266,7 +266,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final norm: Null<String> = ExplicitLocalType.normalizeWith(ret, s.printer, MAX_ANON_LEN, {
 			file: s.file,
 			methodName: generic ? name : null
-		});
+		}, at);
 		return norm == null ? null : { span: new Span(at, at), text: ':$norm' };
 	}
 

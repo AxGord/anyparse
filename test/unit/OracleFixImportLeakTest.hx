@@ -2,8 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.check.Check.TypeOracle;
-import anyparse.check.Check.Violation;
+import anyparse.check.Check;
 import anyparse.check.ExplicitLocalType;
 import anyparse.check.ExplicitType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -36,6 +35,22 @@ final class OracleFixImportLeakTest extends Test {
 	/** Two return types with no annotation, same role as `LOCALS` for the `explicit-type` arm. */
 	private static final RETURNS: String =
 		'class C {\n\n\tpublic function bad() {\n\t\treturn mk();\n\t}\n\n\tpublic function good() {\n\t\treturn n();\n\t}\n\n}\n';
+
+	/**
+	 * `LOCALS` with both locals inside a `#if` region the class sits OUTSIDE of — the shape a
+	 * macro builder has, where the whole import block is guarded and the type declaration is not.
+	 * A fresh import here can only land at MODULE level, which is a build the region is not in.
+	 */
+	private static final GUARDED_LOCALS: String = 'class C {\n\n\tfunction f():Void {\n\t\t#if neko\n\t\tvar leak = mk();\n'
+		+ '\t\tvar kept = n();\n\t\ttrace(leak, kept);\n\t\t#end\n\t}\n\n}\n';
+
+	/** `LOCALS` with the module's WHOLE body inside one `#if` region — the one guarded shape whose import seat is inside the guard. */
+	private static final BODY_GUARDED_LOCALS: String =
+		'#if neko\nclass C {\n\n\tfunction f():Void {\n\t\tvar leak = mk();\n\t\tvar kept = n();\n\t\ttrace(leak, kept);\n\t}\n\n}\n#end\n';
+
+	/** `RETURNS` with both methods inside a member-position `#if` region the class sits outside of. */
+	private static final GUARDED_RETURNS: String = 'class C {\n\n\t#if neko\n\tpublic function bad() {\n\t\treturn mk();\n\t}\n\n'
+		+ '\tpublic function good() {\n\t\treturn n();\n\t}\n\t#end\n\n}\n';
 
 	// --- explicit-local-type: rejection AFTER the print ---
 
@@ -70,6 +85,40 @@ final class OracleFixImportLeakTest extends Test {
 		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') != -1, 'its import is emitted, got: $texts');
 	}
 
+	// --- the conditional-region gate: an import must reach the site that buys it ---
+
+	/**
+	 * A local inside a `#if` region the class sits outside of gets the FULLY-QUALIFIED path and
+	 * no import. The import line would go to module level — `ImportOrder.insertionFor` has no
+	 * guarded seat to offer unless the guard holds the whole body — so it would exist in every
+	 * build while the reference exists in one: dead there when the module resolves, a hard
+	 * `Type not found` when it does not.
+	 */
+	public function testAGuardedLocalTakesTheQualifiedPathAndNoImport(): Void {
+		final texts: Array<String> = localEditTexts(['leak' => 'pkg.deep.Foo', 'kept' => 'Int'], GUARDED_LOCALS);
+		Assert.isTrue(texts.indexOf(':pkg.deep.Foo') != -1, 'the guarded local keeps the qualified path, got: $texts');
+		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') == -1, 'it buys no import, got: $texts');
+	}
+
+	/**
+	 * The COMPLEMENT, and the reason the gate asks where the import LANDS rather than whether the
+	 * site is conditional at all: a module whose whole body is one `#if` region is served INSIDE
+	 * that region, so every build compiling the reference compiles the import too. Answering
+	 * "conditional ⇒ never import" would cost a debug- or platform-only module every short name.
+	 */
+	public function testABodyGuardedLocalStillEarnsItsImport(): Void {
+		final texts: Array<String> = localEditTexts(['leak' => 'pkg.deep.Foo', 'kept' => 'Int'], BODY_GUARDED_LOCALS);
+		Assert.isTrue(texts.indexOf(':Foo') != -1, 'the guarded-body local is shortened, got: $texts');
+		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') != -1, 'its import is emitted, got: $texts');
+	}
+
+	/** The `explicit-type` twin: a return type inside a member-position `#if` region buys no module-level import either. */
+	public function testAGuardedReturnTypeTakesTheQualifiedPathAndNoImport(): Void {
+		final texts: Array<String> = returnEditTexts(['bad' => '() -> Int', 'good' => '() -> pkg.deep.Foo'], GUARDED_RETURNS);
+		Assert.isTrue(texts.indexOf(':pkg.deep.Foo') != -1, 'the guarded return type keeps the qualified path, got: $texts');
+		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') == -1, 'it buys no import, got: $texts');
+	}
+
 	// --- explicit-type: rejection BEFORE the print ---
 
 	/**
@@ -86,24 +135,28 @@ final class OracleFixImportLeakTest extends Test {
 
 	// --- helpers -------------------------------------------------------------------
 
-	/** The edit texts `ExplicitLocalType.fixWithOracle` produces for `LOCALS` under the canned answers. */
-	private function localEditTexts(byName: Map<String, String>): Array<String> {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final check: ExplicitLocalType = new ExplicitLocalType();
-		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: LOCALS }], plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fixWithOracle(
-			LOCALS, violations, plugin, new IdentTypeOracle(LOCALS, byName)
-		);
-		return [for (edit in edits) edit.text];
+	/** The edit texts `ExplicitLocalType.fixWithOracle` produces for `source` (default `LOCALS`) under the canned answers. */
+	private function localEditTexts(byName: Map<String, String>, ?source: String): Array<String> {
+		return editTexts(new ExplicitLocalType(), source ?? LOCALS, byName);
 	}
 
-	/** The edit texts `ExplicitType.fixWithOracle` produces for `RETURNS` under the canned answers. */
-	private function returnEditTexts(byName: Map<String, String>): Array<String> {
+	/** The edit texts `ExplicitType.fixWithOracle` produces for `source` (default `RETURNS`) under the canned answers. */
+	private function returnEditTexts(byName: Map<String, String>, ?source: String): Array<String> {
+		return editTexts(new ExplicitType(), source ?? RETURNS, byName);
+	}
+
+	/**
+	 * The edit texts the oracle-assisted `check` produces for `source` under the canned answers —
+	 * the shared body of the two above, which differ only in the check they run and the fixture
+	 * they default to. `check` arrives as a `Check` and is re-typed for the fix call because Haxe
+	 * cannot say "implements both" in a parameter; every caller here is an `OracleAssisted`.
+	 */
+	private function editTexts(check: Check, source: String, byName: Map<String, String>): Array<String> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final check: ExplicitType = new ExplicitType();
-		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: RETURNS }], plugin);
-		final edits: Array<{ span: Span, text: String }> = check.fixWithOracle(
-			RETURNS, violations, plugin, new IdentTypeOracle(RETURNS, byName)
+		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: source }], plugin);
+		final fixer: OracleAssisted = cast check;
+		final edits: Array<{ span: Span, text: String }> = fixer.fixWithOracle(
+			source, violations, plugin, new IdentTypeOracle(source, byName)
 		);
 		return [for (edit in edits) edit.text];
 	}

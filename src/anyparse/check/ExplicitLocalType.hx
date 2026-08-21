@@ -327,7 +327,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			// the promise back, or it rides into the file on the next admissible candidate's edit
 			// (the import block is materialised on `edits.length > 0`, not per candidate).
 			final mark: Int = printer.pendingImportMark();
-			final norm: Null<String> = admissibleLocal(normalizeWith(raw, printer, maxAnon, { file: v.file, methodName: owner }), printer);
+			final norm: Null<String> = admissibleLocal(
+				normalizeWith(raw, printer, maxAnon, { file: v.file, methodName: owner }, at), printer
+			);
 			if (norm == null)
 				printer.rollbackPendingImports(mark);
 			else
@@ -364,7 +366,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// No enclosing-function context here: the class-parameter half of the qualifier strip
 		// still applies (it needs none), the method-parameter half is skipped.
 		final printer: TypeRefPrinter = TypeRefPrinter.importsOnly(importMap);
-		return admissibleLocal(normalizeWith(raw, printer, maxAnonLen, { file: null, methodName: null }), printer);
+		// No annotation POSITION either: an imports-only printer can anchor no import at all, so the
+		// conditional-region gate has nothing to decide and -1 (the whole-file reading) is exact.
+		return admissibleLocal(normalizeWith(raw, printer, maxAnonLen, { file: null, methodName: null }, -1), printer);
 	}
 
 	/**
@@ -376,8 +380,20 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * spelled by `printer` — short where already visible, short WITH a recorded import where
 	 * the name is free, else the correct fully-qualified (module-qualified for a sub-type)
 	 * form, which always resolves.
+	 *
+	 * `at` is the byte offset the annotation lands at, threaded to the printer for exactly one
+	 * decision: a site inside a conditional-compilation region may not buy an import whose line
+	 * would land outside that region — see `TypeRefPrinter.importReachesSite`, which owns the rule
+	 * and the argument for it. Pass -1 when the caller has no position; that is the whole-file
+	 * reading, and it costs at most a qualified spelling.
+	 *
+	 * It is a PARAMETER rather than an `AnnotationSite` field on purpose: the site describes which of
+	 * the compiler's qualifiers are strippable, which is a question about the enclosing declaration,
+	 * while this is a question about the file position — and the callers that hold one hold the other.
 	 */
-	public static function normalizeWith(raw: String, printer: TypeRefPrinter, maxAnonLen: Int, site: AnnotationSite): Null<String> {
+	public static function normalizeWith(
+		raw: String, printer: TypeRefPrinter, maxAnonLen: Int, site: AnnotationSite, at: Int
+	): Null<String> {
 		final t: String = stripTypeParamQualifiers(raw.trim(), site);
 		return if (t == '')
 			null
@@ -390,7 +406,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		else if (hasBareUnderscore(t))
 			null
 		else
-			printer.printTypeExpr(t);
+			printer.printTypeExpr(t, at);
 	}
 
 	/**
