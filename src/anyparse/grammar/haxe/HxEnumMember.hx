@@ -11,9 +11,13 @@ package anyparse.grammar.haxe;
  * constructor-kind dispatch — no redundant re-parsing on failed
  * branches. The sister of `HxAnonMember` at the anon-struct level.
  *
- * Unlike `HxMemberDecl` there is no `modifiers` Star: enum constructors
- * take no `public` / `static` access modifiers, so only the metadata
- * gap needs closing.
+ * Unlike `HxMemberDecl` there is no `modifiers` Star: enum constructors take no
+ * `public` / `static` access modifiers, so only the metadata gap needs closing.
+ *
+ * ω-orphan-prefix-decl: `ctor` is `@:optional @:absentOn('}')` for the same
+ * reason `HxMemberDecl.member` is — `enum E { #if sys #end }` puts the whole
+ * region in `meta` and leaves the constructor facing the body `}`. Enum scope
+ * needed no new mechanism, only the existing one applied here.
  *
  * `meta` carries no `@:lead` / `@:trail` / `@:sep`; it uses the
  * try-parse termination mode (loop attempts an element each iteration,
@@ -35,5 +39,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxEnumMember = {
 	@:trivia @:tryparse var meta: Array<HxMetadata>;
-	var ctor: HxEnumCtor;
+	@:optional @:absentOn('}') @:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional')) var ctor: Null<HxEnumCtor>;
 }

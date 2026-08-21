@@ -117,6 +117,29 @@ class ApqDxTier5CliTest extends Test {
 		CliFixture.removeDir(dir);
 	}
 
+	/**
+	 * `self-status` was the one multi-file walker that refused a second
+	 * positional (`only one positional <dir> supported`), so `src test` had to
+	 * be two runs. It now goes through `resolveInputPaths` like `fmt` and the
+	 * rest: several specs, each a file / dir / glob, deduped and unioned. The
+	 * `--strict` exit is the proof BOTH dirs were walked — the skip-parse
+	 * fixture lives in the second one, and a run that stopped at the first
+	 * would exit 0.
+	 */
+	public function testSelfStatusAcceptsSeveralPositionals(): Void {
+		final good: String = CliFixture.writeDir('self_status_multi_a', [{ name: 'Good.hx', source: 'class Good {}\n' }]);
+		final bad: String = CliFixture.writeDir('self_status_multi_b', [{ name: 'Broken.hx', source: 'class Broken { var x: }\n' }]);
+		Assert.equals(0, Cli.run(['self-status', good, bad]), 'self-status accepts two positional paths');
+		Assert.equals(1, Cli.run(['self-status', good, bad, '--strict']), 'the second path really was walked');
+		Assert.equals(0, Cli.run(['self-status', good, '--strict']), 'the first path alone is clean');
+		// A single concrete FILE is a legal spec too — the old walker required a
+		// directory and answered `"<path>" is not a directory.`
+		Assert.equals(0, Cli.run(['self-status', '$good/Good.hx', '--strict']), 'a single .hx file is a legal spec');
+		Assert.equals(1, Cli.run(['self-status', 'no_such_dir_for_self_status']), 'a spec matching no .hx is a runtime error');
+		CliFixture.removeDir(good);
+		CliFixture.removeDir(bad);
+	}
+
 	// --- 3. probe staging ---
 
 	public function testProbeStagesSourceToTmp(): Void {

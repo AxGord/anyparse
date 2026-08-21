@@ -1148,7 +1148,10 @@ class WriterLowering {
 						);
 					final optBareSep: Null<Expr> = bareSepOptIn && kwLead == null && leadText == null
 						&& (!isFirstField || child.fmtHasFlag(BEFORE_NEWLINE_SLOT_FIRST))
-						? buildBareRefLeadingSep(child, fieldName, typePath, prevAnyStarNonEmpty, prevPadTrailing)
+						? buildBareRefLeadingSep(
+							child, fieldName, typePath, prevAnyStarNonEmpty, prevPadTrailing,
+							buildKeepBlankAfterCtorGate(child, node, typePath)
+						)
 						: null;
 					thisPadTrailing = emitOptionalRefField(
 						child, parts, node, typePath, fieldName, fieldAccess, kwLead, leadText, trailText, trailOptText, bodyPolicyFlag,
@@ -4186,6 +4189,68 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-region-prefix-blank — the runtime test behind
+	 * `@:fmt(keepBlankAfterStarCtor(starField, ctorName))`: the named sibling
+	 * Star's LAST element is `ctorName`, AND every Star declared between it and
+	 * this field is empty. The second half is what keeps the rule honest — with a
+	 * non-empty `modifiers` run in between, the blank the source held sits after
+	 * the MODIFIERS, and a blank there is collapsed like any other.
+	 *
+	 * The gate exists because the fork's two answers for this gap disagree: the
+	 * blank after an ordinary metadata prefix is DELETED
+	 * (`emptylines/issue_384_macro_classes_with_metadata`), while a `#if … #end`
+	 * region is its own entity and keeps a blank on its far side
+	 * (`emptylines/after_vars_before_conditionals` moves one there). The parser
+	 * folds a member-prefix region into the metadata Star, so only the ctor tells
+	 * the two apart. Null when the field did not opt in — every existing field.
+	 */
+	private function buildKeepBlankAfterCtorGate(child: ShapeNode, node: ShapeNode, typePath: String): Null<Expr> {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('keepBlankAfterStarCtor');
+		if (args == null) return null;
+		if (args.length != 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(keepBlankAfterStarCtor) expects 2 string args (starField, ctorName), got ${args.length}',
+				Context.currentPos()
+			);
+		final starField: String = args[0];
+		final ctorName: String = args[1];
+		final pos: Position = Context.currentPos();
+		var starChild: Null<ShapeNode> = null;
+		final betweenStars: Array<String> = [];
+		for (c in node.children) {
+			if (c == child) break;
+			final fn: Null<String> = c.annotations[AnnotationKeys.BASE_FIELD_NAME];
+			if (fn == starField) {
+				starChild = c;
+				continue;
+			}
+			if (starChild != null && c.kind == Star) betweenStars.push(fn);
+		}
+		if (starChild == null || starChild.kind != Star || starChild.children.length == 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(keepBlankAfterStarCtor) needs "$starField" to be a Star field declared BEFORE "'
+				+ '${child.annotations[AnnotationKeys.BASE_FIELD_NAME]}" of $typePath',
+				Context.currentPos()
+			);
+		final elemRefName: String = starChild.children[0].annotations[AnnotationKeys.BASE_REF];
+		final pattern: Null<Expr> = findCtorPattern(elemRefName, ctorName);
+		if (pattern == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(keepBlankAfterStarCtor) ctor "$ctorName" not found in enum $elemRefName', Context.currentPos()
+			);
+		final starAccess: Expr = { expr: EField(macro value, starField), pos: pos };
+		final lastElem: Expr = _ctx.trivia && isTriviaBearing(typePath)
+			? macro $starAccess[$starAccess.length - 1].node
+			: macro $starAccess[$starAccess.length - 1];
+		var gate: Expr = macro $starAccess.length > 0 && $lastElem.match($pattern);
+		for (fn in betweenStars) {
+			final acc: Expr = { expr: EField(macro value, fn), pos: pos };
+			gate = macro $gate && $acc.length == 0;
+		}
+		return gate;
+	}
+
+	/**
 	 * Build a wildcard `case` pattern for the named ctor of a polymorphic
 	 * enum type. Returns `null` when the type is not an enum in the shape
 	 * map or has no branch with the requested name — the caller then
@@ -4806,6 +4871,10 @@ class WriterLowering {
 				cases.push({ values: [pattern], guard: null, expr: macro 0 });
 			}
 		}
+		// ω-orphan-prefix-decl: the null arm, kind `0` — see
+		// `resolveCtorBlankArgs`. `emitAfterCompute` rewrites every non-`1` case
+		// into the zero body, so this arm needs no shape of its own.
+		cases.push({ values: [macro null], guard: null, expr: macro 0 });
 		if (!matched)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesAfterCtorIfTailLeafNull) ctor "$ctorName" not found in enum $enumRuleName',
@@ -5218,6 +5287,15 @@ class WriterLowering {
 				pattern;
 			cases.push({ values: [patternFinal], guard: null, expr: kindExpr });
 		}
+		// ω-orphan-prefix-decl: a classifier field declared `@:optional` —
+		// `HxTopLevelDecl.decl`, absent for a module-scope declaration that is
+		// nothing but its own `#if X #end` prefix — reaches this switch as null.
+		// The case list above is exhaustive over the enum's CTORS only, so
+		// without an explicit arm strict null-safety rejects the subject. Kind
+		// `0` is the same answer every unmatched ctor gets, so a declaration
+		// that is only a prefix takes part in no blank-line cascade. Mirrors
+		// `buildInterMemberClassifyCases`'s member-scope arm.
+		cases.push({ values: [macro null], guard: null, expr: macro 0 });
 		for (name in ctorNames) if (matched.indexOf(name) < 0)
 			Context.fatalError('WriterLowering: @:fmt($metaName) ctor "$name" not found in enum $enumRuleName', Context.currentPos());
 		return {
@@ -9265,7 +9343,8 @@ class WriterLowering {
 	 * absent field contributes nothing at all.
 	 */
 	private function buildBareRefLeadingSep(
-		child: ShapeNode, fieldName: String, typePath: String, prevAnyStarNonEmpty: Null<Expr>, prevPadTrailing: Null<Expr>
+		child: ShapeNode, fieldName: String, typePath: String, prevAnyStarNonEmpty: Null<Expr>, prevPadTrailing: Null<Expr>,
+		?keepBlankGate: Null<Expr>
 	): Expr {
 		// ω-issue-48-v2: in trivia mode the bare Ref field grew a
 		// `<field>BeforeNewline:Bool` slot (see `TriviaTypeSynth.isBareNonFirstRef`).
@@ -9289,15 +9368,25 @@ class WriterLowering {
 			// operator must stay glued to the operand it closes.
 			final fillSeam: Bool = child.fmtHasFlag('fillSeam');
 			final inlineSep: Bool = child.fmtHasFlag('inlineSep');
+			// ω-region-prefix-blank: `@:fmt(keepBlankAfterStarCtor(...))` adds one
+			// state to this gap — a source BLANK, which `BeforeNewline` alone
+			// cannot distinguish from a single break — and only when the gate says
+			// the whole prefix is a `#if … #end` region.
+			final blankBreak: Expr = dcCall([macro _dhl(), macro _dhl()]);
+			final nlSep: Expr = keepBlankGate == null ? macro $nlAccess ? _dhl() : _dt(' ') : {
+				final gate: Expr = keepBlankGate;
+				final blankAccess: Expr = beforeBlankAccess(fieldName);
+				macro $blankAccess && $gate ? $blankBreak : ($nlAccess ? _dhl() : _dt(' '));
+			};
 			final triviaSepExpr: Expr = if (fillSeam)
 				macro _de();
 			else if (inlineSep)
 				macro _dt(' ');
 			else if (prevAnyStarNonEmpty != null) {
 				final prev: Expr = prevAnyStarNonEmpty;
-				macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de();
+				macro $prev ? $nlSep : _de();
 			} else
-				macro $nlAccess ? _dhl() : _dt(' ');
+				nlSep;
 			// ω-598-member-leading-comment: own-line gap comments — see buildBeforeLeadingSep.
 			final sepWithLeading: Expr = buildBeforeLeadingSep(child, fieldName, triviaSepExpr);
 			return withPadTrailingDrop(prevPadTrailing, sepWithLeading);
@@ -9627,6 +9716,26 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-orphan-prefix-decl: read + validate `@:fmt(setBoolFlagFromStarCtor(optField,
+	 * starField, ctorName))` off one field. Shared by the mandatory-Ref and the
+	 * optional-Ref writer seats — the flag is a property of the FIELD, not of its
+	 * optionality, and reading it in only one seat is how `HxTopLevelDecl.decl`
+	 * going `@:optional @:absentOnEof` silently stopped suppressing extern-class
+	 * blank lines.
+	 */
+	private function readBoolFlagStarCtorArgs(child: ShapeNode): Null<Array<String>> {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('setBoolFlagFromStarCtor');
+		if (args != null && args.length != 3) {
+			final n: Int = args.length;
+			Context.fatalError(
+				'WriterLowering: @:fmt(setBoolFlagFromStarCtor) expects 3 string args (optField, starField, ctorName), got $n',
+				Context.currentPos()
+			);
+		}
+		return args;
+	}
+
+	/**
 	 * ω-extern-class-no-blanks: build the mandatory-Ref writeCall when
 	 * `@:fmt(setBoolFlagFromStarCtor(optField, starField, ctorName))` is present —
 	 * a block that allocates a fresh opt copy, probes the sibling Star for the
@@ -9912,8 +10021,17 @@ class WriterLowering {
 	 * before a leading doc-comment), plain mode emits a space. Wrapped via
 	 * `withPadTrailingDrop`.
 	 */
-	private function buildInterStarSep(prevAnyStarNonEmpty: Expr, fieldAccess: Expr, prevPadTrailing: Null<Expr>): Expr {
+	private function buildInterStarSep(
+		prevAnyStarNonEmpty: Expr, fieldAccess: Expr, prevPadTrailing: Null<Expr>, ?keepBlankGate: Null<Expr>
+	): Expr {
 		final prev: Expr = prevAnyStarNonEmpty;
+		// ω-region-prefix-blank: this seam already READS `_next[0].blankBefore` to
+		// decide the leading-comment suppression, so keeping the blank needs no
+		// new slot here — only the ctor gate that tells a `#if … #end` prefix from
+		// an ordinary metadata one. Off (`false`) for every field that did not opt
+		// in, which collapses the arm to the pre-slice `_dhl()`.
+		final blankGate: Expr = keepBlankGate ?? macro false;
+		final blankBreak: Expr = dcCall([macro _dhl(), macro _dhl()]);
 		final baseExpr: Expr = _ctx.trivia
 			? macro {
 				final _next = $fieldAccess;
@@ -9932,7 +10050,12 @@ class WriterLowering {
 						// (`blankBefore`) keeps the separator so the blank
 						// round-trips. No leading comment → unchanged
 						// `_dhl()` (the common meta→modifiers newline path).
-						_next[0].leadingComments.length > 0 && !_next[0].blankBefore ? _de() : _dhl();
+						if (_next[0].leadingComments.length > 0 && !_next[0].blankBefore)
+							_de();
+						else if (_next[0].blankBefore && $blankGate)
+							$blankBreak;
+						else
+							_dhl();
 					} else
 						_dt(' ');
 				} else
@@ -10664,13 +10787,7 @@ class WriterLowering {
 		// starField, ctorName))` allocates a fresh opt copy and sets
 		// `_wo.<optField> = true` iff the sibling `<starField>` Star contains
 		// `<ctorName>`. Consumer: `HxTopLevelDecl.decl` (`_classExtern`).
-		final boolFlagArgs: Null<Array<String>> = child.fmtReadStringArgs('setBoolFlagFromStarCtor');
-		if (boolFlagArgs != null && boolFlagArgs.length != 3)
-			Context.fatalError(
-				'WriterLowering: @:fmt(setBoolFlagFromStarCtor) expects 3 string args (optField, starField, ctorName), got '
-				+ boolFlagArgs.length,
-				Context.currentPos()
-			);
+		final boolFlagArgs: Null<Array<String>> = readBoolFlagStarCtorArgs(child);
 		// ω-switch-subject-nowrap: the fork never wraps a switch subject —
 		// thread `_setChainModeOverride(opt, NoWrap)` so a top-level chain in
 		// the subject stays flat. Carried by `HxSwitchStmt(Bare).expr`.
@@ -10971,7 +11088,9 @@ class WriterLowering {
 		// separator double-gated on prev non-empty AND this non-empty (drops
 		// the next field's leading sep when prev fired padTrailing).
 		if (isBareTryparseStar(child) && !isFirstField && prevAnyStarNonEmpty != null)
-			parts.push(buildInterStarSep(prevAnyStarNonEmpty, fieldAccess, prevPadTrailing));
+			parts.push(
+				buildInterStarSep(prevAnyStarNonEmpty, fieldAccess, prevPadTrailing, buildKeepBlankAfterCtorGate(child, node, typePath))
+			);
 		// ω-multivar-wrap: gate the `<moreField>` Star emit on the runtime
 		// `_suppressMore` entry flag (a head-only recursive self-call drops it
 		// to `_de()`).
@@ -11036,11 +11155,18 @@ class WriterLowering {
 				false
 			)
 			: null;
-		final optArgExpr: Expr = optionalRefOptArgExpr(child, refName, elseChainSuppressExpr);
-		final rawWriteCall: Expr = {
+		// ω-orphan-prefix-decl: same opt-fanout seat the mandatory-Ref path has —
+		// `@:fmt(setBoolFlagFromStarCtor(...))` hands the descendant a `_wo` copy
+		// carrying the flag the sibling Star's ctor set decides. Without it,
+		// `HxTopLevelDecl.decl` going optional dropped `_classExtern` and two
+		// corpus fixtures (`emptylines/issue_65_extern_class`,
+		// `issue_147_between_fields_with_comments`) went byte-fail.
+		final boolFlagArgs: Null<Array<String>> = readBoolFlagStarCtorArgs(child);
+		final optArgExpr: Expr = boolFlagArgs != null ? (macro _wo) : optionalRefOptArgExpr(child, refName, elseChainSuppressExpr);
+		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(boolFlagArgs, {
 			expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
 			pos: Context.currentPos()
-		};
+		}, typePath, child.fmtHasFlag('propagateExprPosition'));
 		// ω-indent-objectliteral / ω-expr-body-indent-objectliteral: the additive
 		// `maybeIndentValueIfCtor` Nest is SKIPPED when a same-field
 		// `@:fmt(bodyPolicy)` routes `indentValueIfCtor` through the subtractive
@@ -11910,6 +12036,14 @@ class WriterLowering {
 	private static inline function beforeNewlineAccess(fieldName: String): Expr {
 		return {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
+			pos: Context.currentPos()
+		};
+	}
+
+	/** ω-region-prefix-blank — `value.<field>BeforeBlank`, sibling of `beforeNewlineAccess`. */
+	private static inline function beforeBlankAccess(fieldName: String): Expr {
+		return {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX),
 			pos: Context.currentPos()
 		};
 	}
@@ -13792,6 +13926,15 @@ class WriterLowering {
 				$tailBody;
 				$headBody;
 			};
+			// ω-orphan-prefix-decl: the null arm — same zero body an unmatched
+			// ctor gets. See `resolveCtorBlankArgs` for why it is mandatory once
+			// the classifier field can be absent.
+			final noMatchBody: Expr = macro {
+				$tailKindIdent = 0;
+				$tailPathIdent = '';
+				$headKindIdent = 0;
+				$headPathIdent = '';
+			};
 			final cases: Array<Case> = [
 				for (cp in info.ctorPatterns)
 					{
@@ -13816,16 +13959,10 @@ class WriterLowering {
 								$headKindIdent = 1;
 								$headPathIdent = _v0Path;
 							}
-							: cp.isTransparent
-								? transparentBody
-								: macro {
-									$tailKindIdent = 0;
-									$tailPathIdent = '';
-									$headKindIdent = 0;
-									$headPathIdent = '';
-								}
+							: cp.isTransparent ? transparentBody : noMatchBody
 					}
 			];
+			cases.push({ values: [macro null], guard: null, expr: noMatchBody });
 			acc.currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
 
 			final pkLhs: Expr = { expr: EConst(CIdent('_prevTailKindBetween$i')), pos: pos };
@@ -13935,6 +14072,15 @@ class WriterLowering {
 						$hkbIdent = $headMatchB;
 					}
 				};
+			// ω-orphan-prefix-decl: the null arm — same zero body an unmatched
+			// ctor gets. See `resolveCtorBlankArgs` for why it is mandatory once
+			// the classifier field can be absent.
+			final noMatchBody: Expr = macro {
+				$tkaIdent = 0;
+				$tkbIdent = 0;
+				$hkaIdent = 0;
+				$hkbIdent = 0;
+			};
 			final cases: Array<Case> = [
 				for (cp in info.ctorPatterns)
 					{
@@ -13954,15 +14100,11 @@ class WriterLowering {
 								$hkbIdent = 1;
 							};
 							case 3: transparentBody; // noqa: magic-number
-							case _: macro {
-								$tkaIdent = 0;
-								$tkbIdent = 0;
-								$hkaIdent = 0;
-								$hkbIdent = 0;
-							};
+							case _: noMatchBody;
 						}
 					}
 			];
+			cases.push({ values: [macro null], guard: null, expr: noMatchBody });
 			acc.currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
 
 			final pkaLhs: Expr = { expr: EConst(CIdent('_prevTailKindAcrossA$i')), pos: pos };

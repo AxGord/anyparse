@@ -43,10 +43,21 @@ package anyparse.grammar.haxe;
  * two trivia Stars on one Seq by prefixing every slot with the field
  * name (`metaTrailingLeading`, `modifiersTrailingLeading`, …), so the
  * two Stars compose without name collision.
+ *
+ * ω-region-prefix-blank: `@:fmt(keepBlankAfterStarCtor('meta', 'Conditional'))`
+ * sits on BOTH `modifiers` and `member` because the blank after a prefix-only
+ * `#if X #end` region lands in whichever of them comes next — the modifier
+ * run's first element when there is one, the member's own leading gap when
+ * there is not. Either way it is kept only when the `meta` run ENDS in a
+ * region: the fork deletes the blank after an ordinary metadata prefix
+ * (`emptylines/issue_384_macro_classes_with_metadata`) and keeps it after a
+ * region (`emptylines/after_vars_before_conditionals` moves one to that side
+ * of `#end`), and the parser folds both into the same `meta` Star, so the
+ * run's last ctor is the only thing that tells them apart.
  */
 @:peg
 typedef HxMemberDecl = {
 	@:trivia @:tryparse @:fmt(metaLineEndPolicy('metadataFunctionLineEnd')) var meta: Array<HxMetadata>;
-	@:trivia @:tryparse @:fmt(forceInlineSep) var modifiers: Array<HxMemberModifier>;
-	@:optional @:absentOn('}') @:fmt(bareRefSepWhenPresent) var member: Null<HxClassMember>;
+	@:trivia @:tryparse @:fmt(forceInlineSep, keepBlankAfterStarCtor('meta', 'Conditional')) var modifiers: Array<HxMemberModifier>;
+	@:optional @:absentOn('}') @:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional')) var member: Null<HxClassMember>;
 }
