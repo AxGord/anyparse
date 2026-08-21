@@ -325,9 +325,15 @@ class UnusedPrivateCheckTest extends Test {
 	 * declared inside a `#if … #end` region with zero scope occurrences is deleted — the
 	 * raw scan proves it unreferenced in every branch, so removing it is safe in every
 	 * configuration (a PlayerBase field may itself sit inside a platform `#if`).
+	 *
+	 * The region carries a SECOND member on purpose: with `_dead` as its only one the deletion
+	 * would empty the region, and `MemberBranchScan.survivingDeletions` declines that set — a
+	 * different rule, covered by `testFixKeepsRegionWhoseEveryMemberIsDead`. Shrinking the
+	 * fixture back to one member turns this into a test of that gate instead of this one.
 	 */
 	public function testFixDeletesDeadMemberDeclaredInsideConditional(): Void {
-		final src: String = 'class C {\n\tpublic function keep() {}\n\t#if debug\n\tprivate var _dead:Int = 5;\n\t#end\n}';
+		final src: String = 'class C {\n\tpublic function keep() {}\n\t#if debug\n\tprivate var _dead:Int = 5;\n\n'
+			+ '\tpublic function dbg():Void {\n\t\ttrace(1);\n\t}\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
@@ -556,6 +562,54 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'Impl.hx', source: 'class Impl extends Base {\n\tprivate function step():Void {\n\t\ttrace(1);\n\t}\n}' }
 		]);
 		Assert.equals(0, vs.length, 'the implementation is reachable through the base, not dead');
+	}
+
+	/**
+	 * A member-position `#if … #end` region whose EVERY member is dead is left alone: deleting
+	 * the set would leave `#if swc` standing over nothing, which is not a class body this
+	 * grammar parses. The findings stay reported.
+	 */
+	public function testFixKeepsRegionWhoseEveryMemberIsDead(): Void {
+		final src: String = 'class C {\n\tpublic function live():Void {\n\t\ttrace(1);\n\t}\n\n\t#if swc\n'
+			+ '\tprivate function a():Void {}\n\n\tprivate function b():Void {}\n\t#end\n}';
+		Assert.equals(2, new UnusedPrivate().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, fixEdits(src).length);
+	}
+
+	/**
+	 * Both arms of a two-branch region are dead: the branches project as FLAT siblings of one
+	 * region node, so the set accounts for the whole region and is declined. An `#else` whose
+	 * members survive would keep the region populated instead — the emptiness is the region's
+	 * property, never a branch's.
+	 */
+	public function testFixKeepsRegionWhoseEveryBranchMemberIsDead(): Void {
+		final src: String = 'class C {\n\tpublic function live():Void {\n\t\ttrace(1);\n\t}\n\n\t#if swc\n'
+			+ '\tprivate function a():Void {}\n\t#else\n\tprivate function b():Void {}\n\t#end\n}';
+		Assert.equals(2, new UnusedPrivate().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, fixEdits(src).length);
+	}
+
+	/**
+	 * A member of a NESTED region counts toward its outer region too, so both dead members go back
+	 * together: the guard reads the outer region as losing everything it holds, not just its own
+	 * direct child. Both `dead` and `alsoDead` are flagged and neither is deleted.
+	 */
+	public function testFixKeepsOuterRegionWhenNestedRegionEmptiesToo(): Void {
+		final src: String = 'class C {\n\tpublic function live():Void {\n\t\ttrace(1);\n\t}\n\n\t#if swc\n'
+			+ '\tprivate function dead():Void {}\n\n\t#if debug\n\tprivate function alsoDead():Void {}\n\t#end\n\t#end\n}';
+		Assert.equals(2, new UnusedPrivate().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, fixEdits(src).length);
+	}
+
+	/**
+	 * A MODULE-position region is stepped through, not treated as a member region: emptying a class
+	 * declared inside `#if flash … #end` of its members leaves `#if flash class C {} #end`, which
+	 * parses. Handing that region to the guard as a container would read the class's members as the
+	 * region's own and decline a deletion that is fine.
+	 */
+	public function testFixDeletesInsideModuleLevelConditional(): Void {
+		final src: String = '#if flash\nclass C {\n\tprivate function dead():Void {}\n}\n#end';
+		Assert.equals(1, fixEdits(src).length);
 	}
 
 	/** `unused-private` findings for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */

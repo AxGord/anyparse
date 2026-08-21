@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
@@ -164,6 +165,13 @@ final class UnusedPrivate implements Check {
 	 * `#if` veto (deleted only under no-`#if` / no-`@:build`). Each removal folds in the
 	 * member's modifier / meta group and whole line; the caller batches them into one
 	 * canonicalize per file.
+	 *
+	 * The deletable set then passes `MemberBranchScan.survivingDeletions`, the region guard
+	 * `unused-public-member`, `orphan-accessor` and `trivial-getter` already run and this check
+	 * alone was missing: a member-position `#if` region whose EVERY member is flagged keeps them
+	 * all. Emptying one leaves a shape the grammar does not model, and the re-parse gate then drops
+	 * every edit the pass had for the file — including the other checks'. The per-member gates
+	 * above cannot see it, since each is decided alone; the question is per EDIT SET.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -180,6 +188,7 @@ final class UnusedPrivate implements Check {
 		collectClassMeta(tree, classMeta);
 		final reflected: Array<String> = _reflectedContents ?? inFileStringContents(source, plugin);
 
+		final deleting: Array<QueryNode> = [];
 		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
@@ -190,12 +199,17 @@ final class UnusedPrivate implements Check {
 			if (isPrivateEmptyCtor(node)) {
 				if (hasConditional) continue;
 				final ctorMeta: Null<{ hasBuild: Bool, hasKeep: Bool }> = owner == null ? null : classMeta[owner];
-				if (ctorMeta == null || !ctorMeta.hasBuild) edits.push(CheckScan.deletionEdit(source, node, hit.parent, span));
+				if (ctorMeta == null || !ctorMeta.hasBuild) deleting.push(node);
 				continue;
 			}
 			if (hasConditional && referencedElsewhere(node.name, v.file, span, scopeIndex, source)) continue;
-			if (memberDeletable(node, owner, hit.inExtends, index, classMeta, reflected))
-				edits.push(CheckScan.deletionEdit(source, node, hit.parent, span));
+			if (memberDeletable(node, owner, hit.inExtends, index, classMeta, reflected)) deleting.push(node);
+		}
+		final shape: RefShape = plugin.refShape();
+		for (member in survivingPerType(tree, MemberBranchScan.seamsOf(shape, source), shape.conditionalMemberKind, deleting)) {
+			final span: Null<Span> = member.span;
+			final hit: Null<{ node: QueryNode, parent: QueryNode, inExtends: Bool }> = span == null ? null : memberByFrom[span.from];
+			if (span != null && hit != null) edits.push(CheckScan.deletionEdit(source, member, hit.parent, span));
 		}
 		return edits;
 	}
@@ -660,6 +674,30 @@ final class UnusedPrivate implements Check {
 				forEachClassDecl(child, visit);
 			}
 		}
+	}
+
+
+	/**
+	 * `deleting` minus every member whose removal would leave a conditional region with no member
+	 * declaration at all — `MemberBranchScan.survivingDeletions`, the guard `unused-public-member`,
+	 * `orphan-accessor` and `trivial-getter` already run, folded over one TYPE declaration at a
+	 * time so their refusals accumulate.
+	 *
+	 * The fold is what keeps a MODULE-position region out of the guard's hands: `#if flash class C
+	 * { … } #end` may lose every member of `C` (`#if flash class C {} #end` parses), while a region
+	 * inside a type body may not, and the guard sees only the container it is handed. A module
+	 * region is therefore stepped THROUGH to the types it declares, never passed as a container —
+	 * the class-body callers above never meet this because they hand it one class.
+	 */
+	private static function survivingPerType(
+		node: QueryNode, seams: MemberBranchSeams, condKind: Null<String>, deleting: Array<QueryNode>
+	): Array<QueryNode> {
+		var out: Array<QueryNode> = deleting;
+		for (child in node.children)
+			out = condKind != null && child.kind == condKind
+				? survivingPerType(child, seams, condKind, out)
+				: MemberBranchScan.survivingDeletions(seams, child, out, c -> RefactorSupport.isMemberDeclKind(c.kind));
+		return out;
 	}
 
 }
