@@ -1883,10 +1883,8 @@ final class Cli {
 		final oracleHxml: Null<String> = oracleConfig?.compilerOracle();
 		final oracleDir: Null<String> = oracleConfig?.compilerOracleDir();
 
-		if (o.fix) {
-			warnCommentGuardDeclined();
-			return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
-		}
+		if (o.fix)
+			return runLintFix(files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir, o.noOracle);
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
 		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report
@@ -2081,6 +2079,9 @@ final class Cli {
 		var active: Array<{ file: String, source: String }> = files.copy();
 		final noted: Array<String> = [];
 		final changedFiles: Array<String> = [];
+		// File sets a cross-file fix committed as ONE unit — the safe-pass revert reverts them
+		// whole or not at all (`LintFixSafePass.implicated`).
+		final coupled: Array<Array<String>> = [];
 		var fixedCount: Int = 0;
 		var passes: Int = 0;
 		var hitCap: Bool = false;
@@ -2094,7 +2095,7 @@ final class Cli {
 			passes++;
 			final pass: LintPassResult = applyLintPass(
 				active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile, passes,
-				noted, changedFiles, reportedByRule
+				noted, changedFiles, reportedByRule, coupled
 			);
 			fixedCount += pass.fixedDelta;
 			active = pass.nextActive;
@@ -2114,13 +2115,9 @@ final class Cli {
 			? CompilerOracle.typecheck(oracleHxml, oracleDir)
 			: null;
 		for (entry in files) if (changedFiles.contains(entry.file)) writeFile(entry.file, entry.source);
-		final safePass: SafePassOutcome = reconcileSafePass(files, changedFiles, originalOf, preBaseline, oracleHxml, oracleDir);
+		final safePass: SafePassOutcome = reconcileSafePass(files, changedFiles, originalOf, coupled, preBaseline, oracleHxml, oracleDir);
 		if (safePass.reverted) {
-			stderr(
-				'apq lint --fix: the safe fixes broke a build that was green — REVERTED ${changedFiles.length} file(s),'
-				+ ' nothing was written\n'
-			);
-			stderr('apq lint --fix: ${safePass.errors}\n');
+			stderr(safePass.notice);
 			return EXIT_RUNTIME;
 		}
 
@@ -6099,11 +6096,16 @@ final class Cli {
 		sysPrint('  --list-rules      List every registered check and exit\n');
 		sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
 		sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
+		sysPrint('                    (error|warning|info)\n');
 		sysPrint('  --no-oracle       Skip the compiler-oracle typecheck (a PROJECT-WIDE build\n');
 		sysPrint('                    regardless of scope: 16s of an 18.7s single-file run).\n');
-		sysPrint('                    Findings are unchanged; the run just cannot claim\n');
-		sysPrint('                    compiler-confirmed nullSafety trust\n');
-		sysPrint('                    (error|warning|info)\n');
+		sysPrint('                    Report mode: findings are unchanged, the run just cannot\n');
+		sysPrint('                    claim compiler-confirmed nullSafety trust. With --fix it\n');
+		sysPrint('                    ALSO turns off every oracle-backed net, as if no\n');
+		sysPrint('                    compilerOracle were configured: a fix that breaks the build\n');
+		sysPrint('                    is NOT reverted, RiskyFix rules stay report-only and\n');
+		sysPrint('                    OracleAssisted rules are inert. Use it in an iteration loop\n');
+		sysPrint('                    (the only way to see the fixer raw), NEVER in a gate\n');
 		sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle\n');
 		sysPrint('  --all, -a        Include Info-severity advisories in the report\n');
 		sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
@@ -10096,7 +10098,7 @@ final class Cli {
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>,
-		reportedByRule: Map<String, Int>
+		reportedByRule: Map<String, Int>, coupled: Array<Array<String>>
 	): LintPassResult {
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
@@ -10127,7 +10129,7 @@ final class Cli {
 			final own: Array<Violation> = violations.filter(v -> v.rule == check.id());
 			for (rename in (cast check: CrossFileFix).crossFileFix(files, own, cached, index)) crossRenames.push(rename);
 		}
-		fixedDelta += applyCrossFileRenames(crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive);
+		fixedDelta += applyCrossFileRenames(crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive, coupled);
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
 			if (fileViolations.length == 0) continue;
@@ -10163,7 +10165,7 @@ final class Cli {
 	private static function applyCrossFileRenames(
 		renames: Array<Array<CrossFileEdits>>, files: Array<{ file: String, source: String }>, optsByFile: Map<String, Null<String>>,
 		cached: GrammarPlugin, touchedThisPass: Array<String>, changedFiles: Array<String>,
-		nextActive: Array<{ file: String, source: String }>
+		nextActive: Array<{ file: String, source: String }>, coupled: Array<Array<String>>
 	): Int {
 		var total: Int = 0;
 		for (component in crossFileComponents(renames)) {
@@ -10190,6 +10192,9 @@ final class Cli {
 				if (!containsFile(nextActive, s.file)) nextActive.push(entry);
 				break;
 			}
+			// A component is committed whole, so the safe-pass revert must roll it back whole:
+			// reverting half a rename leaves the tree worse off than reverting all of it.
+			if (staged.length > 1) coupled.push([for (s in staged) s.file]);
 			for (slice in slices) total += slice.edits.length;
 		}
 		return total;
@@ -13147,34 +13152,50 @@ final class Cli {
 
 	/**
 	 * Reconcile the safe pass against the compiler, given the verdict taken BEFORE its
-	 * writes landed. `LintFixSafePass.classify` owns the judgement; this seat owns the
-	 * IO — a `Revert` restores every changed file from `originalOf`, on disk and in
-	 * `files`, and the caller then aborts.
+	 * writes landed. `LintFixSafePass` owns every judgement; this seat owns the IO — the
+	 * file sink that restores a file from `originalOf` (on disk and in `files`) and the
+	 * oracle spawns the narrowing drives.
+	 *
+	 * A failing pass no longer costs the whole wave: `LintFixSafePass.narrow` reverts the
+	 * files the compiler blames and keeps the rest, falling back to the whole-wave
+	 * rollback only when nothing the run wrote can be implicated. Either way the caller
+	 * aborts, with a notice that NAMES what went back.
 	 *
 	 * Split out of `applyLintFixes` to keep that function under the complexity budget.
 	 */
 	private static function reconcileSafePass(
 		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, originalOf: Map<String, String>,
-		pre: Null<OracleOutcome>, oracleHxml: Null<String>, oracleDir: Null<String>
+		coupled: Array<Array<String>>, pre: Null<OracleOutcome>, oracleHxml: Null<String>, oracleDir: Null<String>
 	): SafePassOutcome {
-		if (pre == null || oracleHxml == null) return { reverted: false, tail: '', errors: '' };
+		if (pre == null || oracleHxml == null) return { reverted: false, tail: '', notice: '' };
 		final resolved: OracleOutcome = pre;
+		// Both re-bound as non-null locals: a PARAMETER's narrowing does not survive into the
+		// closures below, and both are read from inside one.
+		final hxml: String = oracleHxml;
 		final decision: SafePassDecision = LintFixSafePass.classify(
-			resolved, LintFixSafePass.isConfirmed(resolved) ? CompilerOracle.typecheck(oracleHxml, oracleDir) : null
+			resolved, LintFixSafePass.isConfirmed(resolved) ? CompilerOracle.typecheck(hxml, oracleDir) : null
 		);
-		switch decision {
-			case Proceed:
-				return { reverted: false, tail: '', errors: '' };
-			case NoNet(tail):
-				return { reverted: false, tail: tail, errors: '' };
-			case Revert(errors):
-				for (entry in files) if (changedFiles.contains(entry.file)) {
-					final original: String = originalOf[entry.file] ?? entry.source;
-					entry.source = original;
-					writeFile(entry.file, original);
-				}
-				return { reverted: true, tail: '', errors: errors };
+		final errors: String = switch decision {
+			case Proceed: return { reverted: false, tail: '', notice: '' };
+			case NoNet(tail): return { reverted: false, tail: tail, notice: '' };
+			case Revert(text): text;
+		};
+		function restore(list: Array<String>): Void for (entry in files) if (list.contains(entry.file)) {
+			final original: String = originalOf[entry.file] ?? entry.source;
+			entry.source = original;
+			writeFile(entry.file, original);
 		}
+		final narrowing: SafePassNarrowing = LintFixSafePass.narrow(
+			errors, changedFiles, coupled, restore, CompilerOracle.typecheck.bind(hxml, oracleDir), LintFixSafePass.NARROW_ROUNDS
+		);
+		// `narrow` reverted whatever it could attribute; an un-narrowable wave still owes the
+		// caller's own whole-wave rollback, which is the behaviour this net had before.
+		switch narrowing {
+			case Narrowed(_, _):
+			case WholeWave(_):
+				restore(changedFiles);
+		}
+		return { reverted: true, tail: '', notice: LintFixSafePass.revertNotice(narrowing, changedFiles.length, errors) };
 	}
 
 	/**
@@ -13190,7 +13211,7 @@ final class Cli {
 	): { tail: String, appliedCount: Int, reverts: Array<FixVerifyRevert> } {
 		if (riskyChecks.length == 0) return { tail: '', appliedCount: 0, reverts: [] };
 		if (oracleHxml == null) return {
-			tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only (no compilerOracle configured)',
+			tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only (no compiler oracle for this run)',
 			appliedCount: 0,
 			reverts: []
 		};
@@ -13246,6 +13267,34 @@ final class Cli {
 	private static function oracleSkippedNote(oracleHxml: Null<String>): Null<Int> {
 		if (oracleHxml != null) stderr('apq lint: compiler oracle SKIPPED (--no-oracle) — nullSafety trust unproved for this run\n');
 		return null;
+	}
+
+	/**
+	 * The `--fix` half of `runLint`, split out so the fix path's own `--no-oracle` branch does not
+	 * cost `runLint` complexity budget it has none of.
+	 *
+	 * `--no-oracle` means the compiler is not asked ANYTHING this run, in fix mode as much as in
+	 * report mode. The flag used to be read only by the report path, so `--fix --no-oracle` still
+	 * spawned the project-wide typecheck AND still silently reverted whole waves — an iteration
+	 * loop could not see its own fixer's raw output, and the flag's own stderr note (report mode
+	 * only) never appeared to contradict it. Handing `applyLintFixes` a null hxml is exactly
+	 * "behave as if the project configured no compilerOracle": no safe-pass revert net, risky
+	 * fixes stay report-only, oracle-assisted checks stay inert. That makes the flag strictly
+	 * more dangerous in fix mode than in report mode, which is what the usage text now says.
+	 */
+	private static function runLintFix(
+		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
+		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracleHxml: Null<String>, oracleDir: Null<String>, noOracle: Bool
+	): Int {
+		warnCommentGuardDeclined();
+		if (!noOracle) return applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
+		// Only a project that configured an oracle loses anything by the flag, so only that run is told.
+		if (oracleHxml != null)
+			stderr(
+				'apq lint --fix: compiler oracle SKIPPED (--no-oracle) — no safe-pass revert net, risky fixes stay report-only,'
+				+ ' oracle-assisted fixes are inert\n'
+			);
+		return applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution);
 	}
 
 	/**
@@ -13642,7 +13691,7 @@ final class Cli {
 	): { tail: String, appliedCount: Int } {
 		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0 };
 		if (oracleHxml == null) return {
-			tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compilerOracle configured)',
+			tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compiler oracle for this run)',
 			appliedCount: 0
 		};
 		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {

@@ -647,6 +647,108 @@ verdict. **Do not use it for a gate** — the battery, a pre-commit lint, or
 anything whose output is a verdict runs the oracle, because declining a gate can
 only ever weaken one.
 
+**With `--fix` the flag means MORE than it does in report mode.** It used to
+mean less: the fix path read the configured `compilerOracle` regardless, so
+`--fix --no-oracle` still spawned the project-wide typecheck and still reverted
+its own wave — reported twice as "the output is byte-identical with and without
+the flag", which it was, because the flag reached nothing. It now means what its
+name says, in both modes: the compiler is not asked anything, so the safe-pass
+revert net is OFF (a fix that breaks the build STAYS on disk, which is the only
+way an iteration loop can see the fixer raw), `RiskyFix` rules stay report-only
+and `OracleAssisted` rules are inert. The run says so on a dedicated stderr line
+of its own (`compiler oracle SKIPPED (--no-oracle)`), which is also why the
+report-only tails now read "no compiler oracle for this run" rather than "no
+compilerOracle configured" — with the flag the project HAS one. That is strictly
+more dangerous than the report-mode flag, and the same rule applies with more
+force: never in a gate.
+
+### The safe pass reverts the file the compiler blames, not the wave
+
+`lint --fix`'s safe pass is applied under a net (`LintFixSafePass`): typecheck
+before the writes, write, typecheck again, and a green-then-red transition is
+the fixes' own doing. The rollback used to be ALL-OR-NOTHING, and the message
+
+```
+apq lint --fix: the safe fixes broke a build that was green — REVERTED N file(s), nothing was written
+```
+
+did not name which file did it. On the campaign that motivated this, one bad
+edit hid 227 good files, and each bad edit MASKED the next — a queue of defects
+could only be found one round-trip at a time, which is how that wave came to be
+bisected by hand across six root causes.
+
+The net now ATTRIBUTES before it reverts. A compiler diagnostic carries its
+position as `<path>:<line>: `, so the files it blames are one parse away
+(`LintFixSafePass.errorFiles`); matched against the files this run wrote by
+segment-aligned path suffix (the compiler spells positions relative to the
+hxml's directory, the lint knows them by whatever path the caller passed), that
+is the implicated set. Those files revert, the oracle is asked again, and a
+green answer keeps everything else.
+
+**Which diagnostic shapes the parser claims** — each one has a test, and each
+was measured on Haxe 4.3.7 rather than assumed:
+
+- the classic one-line form, `src/A.hx:20: characters 3-8 : Type not found : Foo`;
+- `-D message.reporting=pretty`, which Pony's own `tools/build.hxml` sets: the
+  header is `<ESC>[30;41m ERROR <ESC>[0m src/A.hx:3: characters 3-31` and the
+  block continues over an excerpt and a caret line. The badge means the path is
+  NOT the line's first token, which is why the parser anchors on the
+  `:<digits>:` shape and strips ANSI CSI sequences instead of reading column 0.
+  A project's `lint-oracle.hxml` need not set pretty (Pony's does not), so a
+  parser tested only against the oracle looks correct and then fails on the
+  project that does;
+- warnings in BOTH spellings (` : Warning :` and the pretty `WARNING` badge) are
+  skipped — a deprecation notice in an untouched library is not why a build
+  failed, and treating it as one would implicate a file this run wrote;
+- a colon-digit run with no second colon is a message, not a position
+  (`Could not process argument foo:1`), and a candidate with no extension is not
+  a file.
+
+Anything the parser does not recognise yields NO implicated file, and that
+degrades to the old whole-wave revert **with the reason printed** — never to
+"nothing to revert". The three fallback reasons a run can print are
+`the compiler blames no file this run wrote`, `every file this run wrote is
+implicated`, and `the errors still blamed new files after 4 narrowing round(s)`.
+
+Two shapes the attribution has to respect:
+
+- **A cross-file fix is one unit.** `applyCrossFileRenames` commits a rename's
+  whole component together; reverting half of it is worse than reverting all of
+  it. Each committed component is recorded, and an implicated file pulls its
+  whole component back with it — transitively, since two passes can couple
+  overlapping sets.
+- **The error can name a file the wave never wrote** — the broken thing is the
+  CALLER of an edited declaration. There is nothing to narrow to, so the run
+  falls back to the whole-wave revert, says that is what happened, and names the
+  files the compiler blamed instead of leaving the reader to guess. When that
+  surrender comes AFTER a round has already run, the notice reports the errors
+  from the round that gave up, not the ones the wave started with: the round-1
+  text would name files the narrowing had already rolled back and hide the one
+  that actually blocked it.
+
+Either way the run still exits `EXIT_RUNTIME` and still skips the risky-fix and
+oracle-assisted passes — a partially-kept wave is a failure that wrote files,
+not a success, and the notice says how many stayed on disk.
+
+Cost is why this attributes rather than bisects: ONE oracle spawn per round, and
+a round only happens when the previous round's errors blamed new files —
+`LintFixSafePass.NARROW_ROUNDS` (4) caps it, so the granular path costs 1 extra
+project-wide typecheck in the common single-culprit case and at most 4. A
+per-file bisect over the same wave is O(log n) spawns at best and O(n) when the
+failures are scattered, on a typecheck that costs seconds each. Measured on the
+853-file Pony tree with one deliberately-broken file, against the pre-change
+binary on the same tree:
+
+| | result | wall clock |
+|---|---|---|
+| all-or-nothing | `REVERTED 192 file(s), nothing was written`, culprit unnamed | 40.5 s |
+| attribute-first | `REVERTED 1 of 192 file(s), KEPT the other 191 on disk`, culprit named | 44.9 s |
+
+The 4.4 s difference is accounted for by the one extra project-wide typecheck
+the narrowing spent (3.6 s cold on that tree). On a wave that does NOT break the
+build the path is not entered at all: the same tree with no broken file gives
+`fixed 658 issue(s) in 228 file(s)` on both binaries.
+
 ### The verdict cache: one tree, one typecheck
 
 What the gates cannot decline they can at least stop paying twice. Before it
