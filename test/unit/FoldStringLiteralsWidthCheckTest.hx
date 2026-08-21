@@ -448,6 +448,37 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	}
 
 	/**
+	 * The same ladder read one step further: the bracket has to open a LIST for the tier to
+	 * apply. Here it closes immediately — an empty `[]`, the shape a serialized structure is
+	 * full of — so the boundary after it splits one token and the fill falls back to the plain
+	 * space run further right. Sibling fixture of the one above with the ONE character that
+	 * changes the verdict, so a ladder that ignores what follows the bracket fails exactly here.
+	 */
+	public function testSplitSkipsBracketThatOpensAToken(): Void {
+		final src: String = separatorSource('MATCH []' + ''.rpad('a', 60) + ' ' + ''.rpad('b', 60)); // noqa: fold-adjacent-string-literals
+		Assert.equals(1, violations(src).length);
+		Assert.equals("'MATCH []" + ''.rpad('a', 60) + " ' + '" + ''.rpad('b', 60) + "$v'", foldOf(src)); // noqa
+	}
+
+	/**
+	 * A blank line is not two cut points. The greedy end lands BETWEEN the two `\n` escapes of
+	 * a `\n\n` run — the widest boundary that still fits — and emits a group opening with the
+	 * newline that terminates the line the group before it just ended: `'…\t}\n' + '\n}\n'`,
+	 * the split that reads as noise rather than as a seam. The run is one boundary, so the fill
+	 * takes the seam before it and the trailing lines stay together.
+	 *
+	 * Geometry (budget `FIXTURE_BUDGET`): the A and B lines together render at exactly the
+	 * budget, so the greedy end is past the blank line's first escape and the alternative is
+	 * the seam between them — the fixture has no verdict to give if either changes.
+	 */
+	public function testSplitDoesNotCutInsideABlankLineRun(): Void {
+		final text: String = ''.rpad('A', 62) + '\\n' + ''.rpad('B', 60) + '\\n\\n}\\n'; // noqa: fold-adjacent-string-literals
+		final src: String = rawSource('\'$text\'');
+		Assert.equals(1, violations(src).length);
+		Assert.equals("'" + ''.rpad('A', 62) + "\\n' + '" + ''.rpad('B', 60) + "\\n\\n}\\n'", foldOf(src)); // noqa
+	}
+
+	/**
 	 * The preserved fallback: an over-long token carrying NO separator keeps its own
 	 * over-wide group and is accepted as is. Paired with the fixtures above, this is what
 	 * says the new tier cuts at separators rather than at any character that fits.

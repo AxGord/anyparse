@@ -153,11 +153,14 @@ using StringTools;
  *   by CLASS — a seam the decomposition already had (an operand edge, a `${ … }`
  *   fragment, a `\n` escape) first; then an opening bracket a space introduced, or a
  *   space run a closing bracket ended; then those same two with a comma in place of the
- *   space; then a plain space run; and last a plain comma. An opening bracket with
- *   NEITHER of those before it is no cut point at all — a regex spells its groups and
- *   classes that way, and breaking one there splits a token for no gain. Equal class
- *   keeps the WIDEST end, which is the greedy answer this rule gave before there were
- *   text cuts at all.
+ *   space; then a plain space run; and last a plain comma. An opening bracket with NEITHER
+ *   of those before it is no cut point at all — a regex spells its groups and classes that
+ *   way, and breaking one there splits a token for no gain. Read FORWARDS, the same reading
+ *   demotes a bracket to LAST: one whose matching close arrives before any space or comma
+ *   opened a WORD rather than a list (`(PS3)`, an empty `[]`). So does a boundary with a
+ *   line-break escape on EACH side, which cuts a blank line in half. Both are legal cuts the
+ *   fill takes only when nothing else keeps the group count. Equal class keeps the WIDEST
+ *   end, which is the greedy answer this rule gave before there were text cuts at all.
  * - A single segment wider than the budget still forms its own group and is accepted as
  *   is. That is what a text carrying NO separator — a URL, a base64 blob — still does:
  *   no legal cut exists in it, so nothing is reported and the over-wide line stands.
@@ -1927,6 +1930,29 @@ private enum abstract BoundaryClass(Int) {
 	/** A plain comma. */
 	final PlainComma = 4;
 
+	/**
+	 * WORST, and the only class that is not a preference but a REFUSAL to read the boundary as
+	 * a cut at all: the two shapes a reader never breaks at, because breaking there splits one
+	 * TOKEN rather than separating two pieces of text.
+	 *
+	 * One is a bracket that opens a token: `(PS3)` in a gamepad mapping, an EMPTY `[]` or `{}`
+	 * in a serialized structure. The ladder ranks a bracket a space or comma introduced ABOVE a
+	 * plain space or comma precisely because a bracket usually opens a LIST — but when its
+	 * matching close arrives before any space or comma does, it opened a word instead, and the
+	 * cut lands inside it. The existing "an opening bracket with NEITHER of those before it is
+	 * no cut point at all" reads the character BEFORE the bracket; this reads what follows it.
+	 *
+	 * The other is a boundary with a line-break escape on EACH side of it — a cut INSIDE a blank
+	 * line. The blank line belongs to the paragraph it terminates, so the reader's cut is after
+	 * the run, not in the middle of it; the split `'…\t}\n' + '\n}\n'` is what the middle looks
+	 * like.
+	 *
+	 * It is a demotion rather than a veto because `fill` still needs SOME end when nothing else
+	 * keeps the group count: a cut that reads as noise is worse than one that does not, and
+	 * better than a line the writer cannot wrap at all.
+	 */
+	final TokenSplit = 5;
+
 	/** Ordered comparison, which an `enum abstract` does not forward on its own. */
 	@:op(A < B) private static function lt(a: BoundaryClass, b: BoundaryClass): Bool;
 
@@ -1962,12 +1988,26 @@ private class BoundaryRank {
 		final tail: Int = left.length - 1;
 		if (tail < 0) return Seam;
 		final last: Int = left.fastCodeAt(tail);
-		if (isOpen(last)) return bracketClass(charBefore(left, tail));
+		if (splitsBlankLine(left, segments, j)) return TokenSplit;
+		if (isOpen(last)) {
+			final bracket: BoundaryClass = bracketClass(charBefore(left, tail));
+			return bracket != Seam && opensAToken(segments, j, last) ? TokenSplit : bracket;
+		}
 		if (last == ','.code) return isClose(charBefore(left, tail)) ? BracketByComma : PlainComma;
 		if (last != ' '.code) return Seam;
 		var run: Int = tail;
 		while (run > 0 && left.fastCodeAt(run - 1) == ' '.code) run--;
 		return isClose(charBefore(left, run)) ? BracketBySpace : PlainSpace;
+	}
+
+	/** The bracket that closes `open`; `open` is one of the three `isOpen` answers. */
+	private static inline function closerFor(open: Int): Int {
+		return if (open == '('.code)
+			')'.code
+		else if (open == '['.code)
+			']'.code
+		else
+			'}'.code;
 	}
 
 	/**
@@ -1997,6 +2037,61 @@ private class BoundaryRank {
 	/** Whether `c` CLOSES a bracket pair — what makes the separator after it a structural boundary. */
 	private static inline function isClose(c: Int): Bool {
 		return c == ')'.code || c == ']'.code || c == '}'.code;
+	}
+
+	/**
+	 * Whether the bracket the boundary sits behind opens a TOKEN rather than a list: its matching
+	 * close arrives before any space or comma does. `(PS3)` in a gamepad mapping and an empty
+	 * `[]` in a serialized structure both answer yes, and a cut there splits a word for no gain;
+	 * `[{ name : …` and `(typeof x === …` both answer no.
+	 *
+	 * Only the piece the boundary OPENS is scanned. That is deliberate rather than a bound: the
+	 * grammar cuts a piece at every space, comma and line break, so a bracket whose close is not
+	 * in that one piece has a separator between the two, which is the answer either way. The scan
+	 * does count nesting, though — `if (` in `if (text.trim()\n` would otherwise read the inner
+	 * call's `)` as its own and call a whole condition a token.
+	 */
+	private static function opensAToken(segments: Array<ConcatSegment>, j: Int, open: Int): Bool {
+		final close: Int = closerFor(open);
+		switch segments[j] {
+			case SegText(_, raw):
+				var depth: Int = 0;
+				var i: Int = 0;
+				while (i < raw.length) {
+					final c: Int = raw.fastCodeAt(i);
+					if (c == ' '.code || c == ','.code) return false;
+					if (isOpen(c)) {
+						depth++;
+					} else if (isClose(c)) {
+						if (depth == 0) return c == close;
+						depth--;
+					}
+					i++;
+				}
+				return false;
+			case _:
+				return false;
+		}
+	}
+
+	/**
+	 * Whether the boundary falls INSIDE a blank line: a line-break escape on each side of it, so
+	 * the group it opens would begin with the newline that terminates the empty line the group
+	 * before it just started.
+	 *
+	 * This is the one reading that spells an ESCAPE rather than a plain character, and it spells
+	 * the C-family `\n` the same way `HaxeStringFoldSupport` cuts at. A grammar whose line break
+	 * is spelled otherwise simply never matches and keeps the old ranking, which is the
+	 * conservative direction: the boundary is legal either way, only the preference is lost.
+	 */
+	private static function splitsBlankLine(left: String, segments: Array<ConcatSegment>, j: Int): Bool {
+		final tail: Int = left.length - 1;
+		if (tail < 1 || left.fastCodeAt(tail) != 'n'.code || left.fastCodeAt(tail - 1) != '\\'.code) return false;
+		return switch segments[j] {
+			case SegText(_, raw):
+				raw.length >= 2 && raw.fastCodeAt(0) == '\\'.code && raw.fastCodeAt(1) == 'n'.code;
+			case _: false;
+		}
 	}
 
 	/**
