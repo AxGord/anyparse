@@ -19,6 +19,16 @@ class AddressCliTest extends Test {
 
 	#if (sys || nodejs)
 	private static final FIXTURE: String = 'class C {\n\tfunction f():Int {\n\t\tvar x:Int = 1;\n\t\ttrace(x);\n\t\treturn x;\n\t}\n}\n';
+
+	/**
+	 * A MEMBER fixture for the `remove-member` address tests: one plain method, a
+	 * second the removal must not touch, and a name declared once per
+	 * conditional-compilation branch — the shape that proves an address SPELLS the
+	 * (type, member) pair rather than narrowing the removal to one branch.
+	 */
+	private static final MEMBER_FIXTURE: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n\n'
+		+ '\tfunction g():Int\n' + '\t\treturn 2;\n\n\t#if js\n\tfunction h():Int\n\t\treturn 3;\n\t#else\n\tfunction h():Int\n'
+		+ '\t\treturn 4;\n\t#end\n}\n';
 	#end
 
 	public function testAddElementAfterSelect(): Void {
@@ -210,6 +220,99 @@ class AddressCliTest extends Test {
 		final out: String = File.getContent(path);
 		Assert.isTrue(out.indexOf('final doubled = a * 2;') >= 0);
 		Assert.isTrue(out.indexOf('return doubled + 1;') >= 0);
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+
+	public function testRemoveMemberSelect(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_rm', MEMBER_FIXTURE);
+		final rc: Int = Cli.run(['remove-member', path, '--select', 'ClassDecl:C >> FnMember:f', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('function f(') < 0);
+		// The by-name form's other members are untouched — the address named ONE pair.
+		Assert.isTrue(out.indexOf('function g(') >= 0);
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+
+	public function testRemoveMemberMatchLiftsToItsMember(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_rmm', MEMBER_FIXTURE);
+		// The pattern hits a STATEMENT inside f — the lift names the member holding it.
+		final rc: Int = Cli.run(['remove-member', path, '--match', 'trace(1)', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('function f(') < 0);
+		Assert.isTrue(out.indexOf('function g(') >= 0);
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+
+	public function testRemoveMemberSelectTakesEveryConditionalTwin(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_rmc', MEMBER_FIXTURE);
+		// An address resolves ONE node; the removal is still by NAME, so the `#else` twin
+		// goes too and the region that held both takes its directives with it.
+		final rc: Int = Cli.run(['remove-member', path, '--select', 'FnMember:h', '--nth', '1', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('function h(') < 0);
+		Assert.isTrue(out.indexOf('#if js') < 0);
+		Assert.isTrue(out.indexOf('function g(') >= 0);
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+
+	public function testRemoveMemberSelectRefusesANonMember(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_rmn', MEMBER_FIXTURE);
+		// A type is not a member: the refusal names the resolved kind and points at
+		// remove-element rather than removing something else.
+		final rc: Int = Cli.run(['remove-member', path, '--select', 'ClassDecl:C', '--write']);
+		Assert.notEquals(0, rc);
+		Assert.equals(MEMBER_FIXTURE, File.getContent(path));
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+
+	public function testRemoveMemberRefusesBothAddressForms(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_rmb', MEMBER_FIXTURE);
+		final rc: Int = Cli.run(['remove-member', path, '--select', 'FnMember:f', '--type', 'C', 'g', '--write']);
+		Assert.notEquals(0, rc);
+		Assert.equals(MEMBER_FIXTURE, File.getContent(path));
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+
+	public function testRemoveMemberByNameStillWorks(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_rmt', MEMBER_FIXTURE);
+		final rc: Int = Cli.run(['remove-member', path, '--type', 'C', 'g', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('function g(') < 0);
+		Assert.isTrue(out.indexOf('function f(') >= 0);
 		FileSystem.deleteFile(path);
 		#else
 		Assert.pass('non-sys target');

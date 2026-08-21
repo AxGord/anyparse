@@ -65,6 +65,43 @@ import anyparse.runtime.Span;
  * Both thresholds are read per-file from a discovered `apqlint.json`:
  * `string-literal-dup.minOccurrences` and `string-literal-dup.minLength`
  * (integer options). An absent or malformed value falls back to the default.
+ *
+ * ## Why there is no autofix — declined on evidence, 2026-08-21
+ *
+ * The hoist needs a NAME, and the name IS the change: `PNG8`, `TRIM_MODE`,
+ * `WORKSPACE_FOLDER` are decisions about what a value MEANS, and a mechanical
+ * `LITERAL_PNG8` reads worse than the repetition it replaces. That is the same
+ * argument `magic-number` makes. Three more came out of driving the report over the
+ * 851-file Pony tree (105 groups in 52 files) and READING every site; each is a
+ * PRECONDITION a future fixer must clear, not a caveat it may document.
+ *
+ *  - **3 of the 105 anchors are already a constant declaration.** `VSCode.hx` opens
+ *    with `private static inline final PRELAUNCH_TASK: String = 'default';`, and the
+ *    other 13 occurrences in that group are unrelated uses of the same word in the
+ *    JSON the file emits — so the advisory fires ON the extraction that already
+ *    happened, and a fixer would hoist a constant's own initialiser into a second
+ *    constant.
+ *  - **14 of them sit in a module that declares no type at all.** `docgen/DocInclude.hx`
+ *    is module-level fields and functions (`apq symbols` reports nothing there), so
+ *    there is no host for a `static final` — and the literals are the KEYS of the
+ *    table immediately below where a module-level one would go.
+ *  - **17 are map-literal keys, and most of the remainder are wire tokens** — a MIME
+ *    table, a VS Code `tasks.json` / `launch.json` emitter, `:asset` / `:puper`
+ *    metadata names a build macro reads back. The literal IS the format, and naming
+ *    it hides the correspondence with the file or annotation it has to match.
+ *
+ * The mechanism a caller is likeliest to have heard of — a literal feeding a MACRO
+ * cannot be hoisted, because a macro parameter is `Expr` and a macro wanting a
+ * literal rejects an identifier (`haxe.macro.Expr should be String … For function
+ * argument 'inModule'`) — is real, and did NOT fire here: no Pony group feeds one of
+ * the 38 macro functions that tree declares. It is a precondition to gate on when the
+ * fixer is written, not the reason the rule stays report-only.
+ *
+ * One shape that is NOT a blocker, checked on 4.3.7 rather than assumed: a hoisted
+ * `static final` is legal in a `case` pattern (10 of the groups have an occurrence in
+ * one) — Haxe resolves it as a constant there, and a `static var` in that position is
+ * a compile ERROR (`pattern variables must be lower-case or with 'var ' prefix`), not
+ * a silent capture. Only a lower-case name would capture.
  */
 @:nullSafety(Strict)
 final class StringLiteralDup implements Check implements ConfigAware {
