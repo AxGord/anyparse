@@ -138,7 +138,7 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	public function project(tree: QueryNode): Array<NamedDecl> {
 		final out: Array<NamedDecl> = [];
-		walk(tree, null, null, false, null, out);
+		walk(tree, [], null, false, null, out);
 		return out;
 	}
 
@@ -286,13 +286,16 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * (a compile-time constant - a write to it is a compile error).
 	 */
 	private static function walk(
-		node: QueryNode, parent: Null<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, host: Null<VarHost>,
+		node: QueryNode, ancestors: Array<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, host: Null<VarHost>,
 		out: Array<NamedDecl>
 	): Void {
 		// Macro reification (`macro { … }`) is opaque: its identifiers are splice
 		// templates (`$name`), not real declarations — skip the whole subtree, as
 		// `unused-local` does with the plugin's `opaqueKinds`.
 		if (node.kind == 'MacroExpr') return;
+		// The chain the leading-run walk needs: a member declared inside a conditional-compilation
+		// region continues its run in the region's OWN run, one level out.
+		final parent: Null<QueryNode> = ancestors.length > 0 ? ancestors[ancestors.length - 1] : null;
 		// A `VarMore` is a binding after the comma in `var a = 1, b = 2;` — the same kind whatever
 		// declaration it continues, so it has no category of its own and inherits the head binding's
 		// whole context: category, the modifier run that precedes the HEAD (`static var a = 1, b = 2`
@@ -305,19 +308,23 @@ final class HaxeNamingSupport implements NamingSupport {
 			category = NamingCategory.EnumValue;
 		final name: Null<String> = node.name;
 		if (category != null && name != null)
-			out.push(namedDeclOf(node, parent, category, name, mods, structural, enclosingType, enclosingRtti));
+			out.push(namedDeclOf(node, parent, ancestors, category, name, mods, structural, enclosingType, enclosingRtti));
 		// A type decl becomes the enclosing type of its descendants — its name is
 		// on the node carrying category Type (the inner ClassForm for a final
 		// class, the flattened AbstractClassDecl for an abstract class).
 		final childEnclosing: Null<String> = category == NamingCategory.Type && name != null ? name : enclosingType;
 		// A `@:rtti` type serializes by reflecting on its field NAMES, so its member
 		// fields are rename-unsafe. Once true it stays true for every descendant.
-		final childEnclosingRtti: Bool = category == NamingCategory.Type ? enclosingRtti || carriesRtti(node, parent) : enclosingRtti;
+		final childEnclosingRtti: Bool = category == NamingCategory.Type
+			? enclosingRtti || metaInRun(node, ancestors, NamingCategory.Type, '@:rtti')
+			: enclosingRtti;
 		// The head binding's context, handed to the `VarMore` chain hanging off it. A `VarMore` passes
 		// its own inherited context straight on, since the chain is right-recursive (`a{more:[b{more:[c]}]}`).
 		final resolved: Null<NamingCategory> = category;
 		final childHost: Null<VarHost> = resolved == null ? null : { category: resolved, mods: mods, structural: structural };
-		for (child in node.children) walk(child, node, childEnclosing, childEnclosingRtti, childHost, out);
+		ancestors.push(node);
+		for (child in node.children) walk(child, ancestors, childEnclosing, childEnclosingRtti, childHost, out);
+		ancestors.pop();
 	}
 
 	/**
@@ -408,11 +415,12 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * type reference (a `Class<T>` registry entry) all qualify.
 	 */
 	private static function isImplicitlyReachable(
-		category: NamingCategory, name: String, node: QueryNode, parent: Null<QueryNode>, mods: Array<String>
+		category: NamingCategory, name: String, node: QueryNode, ancestors: Array<QueryNode>, mods: Array<String>
 	): Bool {
 		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant)
 			&& (name == 'new' || DUNDER_NAME_PATTERN.match(name) || name.startsWith('get_') || name.startsWith('set_')
-				|| metaPrecedes(node, parent) || node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node));
+				|| metaInRun(node, ancestors, category) || node.kind == 'FinalMember' && mods.contains('static')
+				&& isTypeReferenceInit(node));
 	}
 
 	/**
@@ -430,21 +438,85 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * Does a `Meta` (`@:tag`) sibling precede `node` in its modifier / meta run?
-	 * Scans the preceding siblings, skipping modifier kinds; a `Meta` reached
-	 * before any non-modifier sibling means the declaration carries an annotation.
+	 * Does an annotation - `metaName` when given, any `Meta` / `MetaCall` otherwise - precede `node`
+	 * in its leading modifier / meta run? Scans the preceding siblings, skipping modifier kinds and
+	 * annotations that are not the requested one; anything else ends the run, so an annotation
+	 * written for one declaration cannot reach the next.
+	 *
+	 * A conditional-compilation region is a SEAM in that run, not its end, and the run crosses it in
+	 * BOTH directions. Forward: `@:op(A << B) #if (haxe_ver >= 4.2) extern #else @:extern #end
+	 * private inline function add_op` projects `MetaCall`, `Conditional`, `Private`, `Inline`,
+	 * `FnMember` as five siblings, and stopping at the region read every member of the cross-version
+	 * `extern` idiom as unannotated - `unused-private --fix` then deleted six `@:op` overloads and a
+	 * `@:from` from one real file, after which `signal << listener` was the builtin integer shift.
+	 * Outward: a member declared INSIDE a region continues its run in the region's own leading run,
+	 * so `@:keep #if js private function f() {} #end` is annotated too - without that step the same
+	 * `--fix` deleted it and `naming --fix` renamed it.
+	 *
+	 * A region grants NOTHING of its own: an annotation in one of its branches says nothing about
+	 * the member that FOLLOWS it, and counting one would exempt every `extern inline` private in the
+	 * tree. What ends the run is a region holding a declaration THE RUN COULD HAVE BEEN WRITTEN FOR,
+	 * and which declaration that is depends on `target`, the category whose run is being walked:
+	 * `@:rtti` before a region holding a type belongs to that type, exactly as `@:keep` before a
+	 * region holding a member belongs to that member. Asking only about members let `@:rtti` step
+	 * over `#if js class Holder {} #end` and mark the NEXT type's fields rename-unsafe.
+	 *
+	 * INSIDE a region nothing ends the run at all. The projection flattens `#if` / `#elseif` /
+	 * `#else` into ONE child list with no branch marker, so a declaration preceding this one there
+	 * may be its `#else` twin rather than a sibling that took the annotation - reading it as an end
+	 * deleted the `#else` member of an `@:keep`-ed region. The run instead runs out and continues one
+	 * level out, which at worst hands a SECOND member of the same branch an annotation written for
+	 * the first: a forfeited rewrite, never a wrong one.
 	 */
-	private static function metaPrecedes(node: QueryNode, parent: Null<QueryNode>): Bool {
-		if (parent == null) return false;
-		final siblings: Array<QueryNode> = parent.children;
-		var i: Int = siblings.indexOf(node) - 1;
-		while (i >= 0) {
-			final kind: String = siblings[i].kind;
-			if (isMetaKind(kind)) return true;
-			if (!MOD_KIND_TO_NAME.exists(kind)) break;
-			i--;
+	private static function metaInRun(node: QueryNode, ancestors: Array<QueryNode>, target: NamingCategory, ?metaName: String): Bool {
+		var subject: QueryNode = node;
+		var depth: Int = ancestors.length - 1;
+		while (depth >= 0) {
+			final parent: QueryNode = ancestors[depth];
+			final inRegion: Bool = parent.kind == 'Conditional';
+			final siblings: Array<QueryNode> = parent.children;
+			var i: Int = siblings.indexOf(subject) - 1;
+			while (i >= 0) {
+				final sibling: QueryNode = siblings[i];
+				i--;
+				final kind: String = sibling.kind;
+				if (isMetaKind(kind)) {
+					if (metaName == null || sibling.name == metaName) return true;
+					continue;
+				}
+				final crossable: Bool = kind == 'Conditional' ? !holdsRunTarget(sibling, target) : MOD_KIND_TO_NAME.exists(kind);
+				if (crossable) continue;
+				if (!inRegion) return false;
+				break;
+			}
+			if (!inRegion) return false;
+			subject = parent;
+			depth--;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether `region` declares, in any branch at any nesting depth, something the leading run being
+	 * walked could have been written for - the test that makes a conditional-compilation region a
+	 * SEAM in that run rather than its end. Asked through `categoryOf`, the one place this projection
+	 * decides what each kind IS, so there is no second list of kinds to drift out of step with it.
+	 */
+	private static function holdsRunTarget(region: QueryNode, target: NamingCategory): Bool {
+		return region.children.exists(child -> {
+			final category: Null<NamingCategory> = categoryOf(child, []);
+			return category != null && sameRunScope(category, target) || holdsRunTarget(child, target);
+		});
+	}
+
+	/**
+	 * Whether a declaration of `category` sits in the same run scope as one of `target` - the scope a
+	 * leading modifier / meta run spans. Member scope holds the three member categories
+	 * interchangeably (a `@:keep` run reaches whichever of field / constant / method follows it);
+	 * every other scope is its own, so a type's run is ended by a type and by nothing else.
+	 */
+	private static inline function sameRunScope(category: NamingCategory, target: NamingCategory): Bool {
+		return isMemberCategory(target) ? isMemberCategory(category) : category == target;
 	}
 
 	/** A method name utest's `@:autoBuild` collects: a `test*` / `spec*` test or a `setup*` / `teardown*` fixture. */
@@ -571,25 +643,6 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * Whether a `@:rtti` metadata sibling precedes `node` in its modifier / meta run
-	 * - the type carries `@:rtti` directly. The same preceding-sibling scan as
-	 * `metaPrecedes`, narrowed to the `@:rtti` tag.
-	 */
-	private static function carriesRtti(node: QueryNode, parent: Null<QueryNode>): Bool {
-		if (parent == null) return false;
-		final siblings: Array<QueryNode> = parent.children;
-		var i: Int = siblings.indexOf(node) - 1;
-		while (i >= 0) {
-			if (isMetaKind(siblings[i].kind)) {
-				if (siblings[i].name == '@:rtti') return true;
-			} else if (!MOD_KIND_TO_NAME.exists(siblings[i].kind))
-				break;
-			i--;
-		}
-		return false;
-	}
-
-	/**
 	 * Is `name` a Haxe idiom no naming policy governs? A discard binding
 	 * (`_`, `__` - `for (_ in items)`, a placeholder param) carries no meaning to
 	 * spell correctly, and a dunder name (`__init__` - the static module
@@ -632,8 +685,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * stays a plain context-threading recursion.
 	 */
 	private static function namedDeclOf(
-		node: QueryNode, parent: Null<QueryNode>, category: NamingCategory, name: String, mods: Array<String>, structural: Bool,
-		enclosingType: Null<String>, enclosingRtti: Bool
+		node: QueryNode, parent: Null<QueryNode>, ancestors: Array<QueryNode>, category: NamingCategory, name: String, mods: Array<String>,
+		structural: Bool, enclosingType: Null<String>, enclosingRtti: Bool
 	): NamedDecl {
 		// Interface members carry no visibility modifier but are public.
 		final inInterface: Bool = parent != null && parent.kind == 'InterfaceDecl';
@@ -644,7 +697,7 @@ final class HaxeNamingSupport implements NamingSupport {
 			category: category,
 			mods: declMods,
 			enclosingType: enclosingType,
-			implicitlyReachable: isImplicitlyReachable(category, name, node, parent, mods),
+			implicitlyReachable: isImplicitlyReachable(category, name, node, ancestors, mods),
 			renameUnsafe: structural || hasPhysicalAccessors(node, parent, name) || (enclosingRtti && isMemberCategory(category)),
 			contractName: structural,
 			reservedName: isReservedName(name)

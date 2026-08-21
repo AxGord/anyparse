@@ -159,8 +159,8 @@ final class UnusedParameter implements Check implements ConfigAware {
 			// proof completes on zero call sites and hands the removal a `Warning`. `--fix` then took
 			// `@:op(A == B) function srNull(a: DT, b: Null<Float>)` down to one argument and the build
 			// failed with `Static @:op functions must accept exactly two arguments`.
-			final operators: Array<Int> = AnnotatedMemberScan.starts(plugin, tree, shape.operatorOverloadMetaName);
-			for (c in candidates) if (!AnnotatedMemberScan.covers(c.fn.span, operators))
+			final operators: Array<Int> = AnnotatedDeclScan.memberStarts(plugin, tree, shape.operatorOverloadMetaName);
+			for (c in candidates) if (!AnnotatedDeclScan.covers(c.fn.span, operators))
 				checkFunction(
 					violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape, index,
 					captured

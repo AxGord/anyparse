@@ -659,6 +659,31 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	}
 
 	/**
+	 * The SAME annotation, one seam further away: the cross-version `extern` idiom puts a
+	 * conditional-compilation region between `@:keep` and the member, and the projection walk that
+	 * answers "does an annotation precede this member" used to stop at the region. The member then
+	 * read as unannotated and the autofix RENAMED it, while its region-free twin above was refused —
+	 * one gate, two answers, decided by where the `#if` sits. Report-only, like the twin.
+	 */
+	public function testFixSkipsAnnotatedPrivateMethodBehindConditional(): Void {
+		final src: String = 'package pkg;\nclass C {\n\t@:keep #if (haxe_ver >= 4.2) extern #else @:extern #end private function '
+			+ '__boot():Void {}\n\tpublic function f() { __boot(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
+	 * A region the run steps over grants NOTHING of its own: `#if js @:keep #end` says nothing about
+	 * the member that FOLLOWS it, and counting an annotation written inside a branch would exempt
+	 * every `extern inline` private in the tree from every unused / rename gate. So this member is
+	 * NOT `implicitlyReachable` and the confined-private rename still commits.
+	 */
+	public function testFixRenamesMethodWhoseOnlyAnnotationIsInsideTheRegion(): Void {
+		final src: String =
+			'package pkg;\nclass C {\n\t#if js @:keep #end private function __boot():Void {}\n\tpublic function f() { __boot(); }\n}';
+		assertRenamedIn('pkg/C.hx', src, 'function boot', '__boot');
+	}
+
+	/**
 	 * `_new` de-prefixes to `new` - the CONSTRUCTOR name, not a usable method identifier. The
 	 * de-prefix normalizer must refuse a keyword result, as the local / param one already does.
 	 */
@@ -962,5 +987,30 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		cleanupNamingDir(dir, ['C.hx', 'E.hx']);
 	}
 	#end
+
+
+	/**
+	 * `@:rtti` before a conditional-compilation region belongs to the TYPE the region holds, not to
+	 * the type that follows it. The run-ender test asked only about MEMBERS, so a region holding a
+	 * member-free type was transparent and the annotation reached one type too far - marking a class
+	 * nothing annotates rename-unsafe and forfeiting every legitimate rename in it. Which declaration
+	 * ends the run is the category whose run is walked: a type run is ended by a type.
+	 */
+	public function testFixRenamesFieldOfClassAfterRttiRegionHoldingAType(): Void {
+		final src: String = 'package pkg;\n@:rtti #if js class Holder {} #end\nclass C {\n\tprivate var shape:Int;\n'
+			+ '\tpublic function f() { return this.shape; }\n}';
+		assertRenamedIn('pkg/C.hx', src, 'var _shape', 'var shape');
+	}
+
+
+	/**
+	 * The twin the seam is FOR: a region holding no declaration at all is transparent, so `@:rtti`
+	 * still reaches the class behind the cross-version idiom and its field stays report-only.
+	 */
+	public function testFixSkipsFieldOfRttiClassBehindMemberFreeRegion(): Void {
+		final src: String = 'package pkg;\n@:rtti #if js @:native("C") #end\nclass C {\n\tprivate var shape:Int;\n'
+			+ '\tpublic function f() { return this.shape; }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
 
 }
