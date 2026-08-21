@@ -153,7 +153,12 @@ final class MemberOrder implements Check implements ConfigAware {
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		fixWalk(edits, source, tree, shape, flagged, accessors, movableArglessNew, index);
+		// The file this pass is rewriting, for the build-macro gate: every violation a fix pass is
+		// handed belongs to ONE file, the same source the per-file config option above is read from.
+		// Null when the pass carries no violation — nothing to reorder anyway — which the gate reads
+		// as "no file named" and answers from the whole index, as it did before it could be told.
+		final file: Null<String> = violations.length > 0 ? violations[0].file : null;
+		fixWalk(edits, source, tree, shape, flagged, accessors, movableArglessNew, index, file);
 		return edits;
 	}
 
@@ -237,11 +242,11 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static function fixWalk(
 		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Array<Int>,
-		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>
+		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>, file: Null<String>
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind))
-			emitReorder(edits, source, node, shape, flagged, accessors, movableArglessNew, index);
-		for (c in node.children) fixWalk(edits, source, c, shape, flagged, accessors, movableArglessNew, index);
+			emitReorder(edits, source, node, shape, flagged, accessors, movableArglessNew, index, file);
+		for (c in node.children) fixWalk(edits, source, c, shape, flagged, accessors, movableArglessNew, index, file);
 	}
 
 	/**
@@ -257,7 +262,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static function emitReorder(
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>,
-		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>
+		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>, file: Null<String>
 	): Void {
 		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, accessors);
 		if (members.length < 2) return;
@@ -267,7 +272,8 @@ final class MemberOrder implements Check implements ConfigAware {
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> compareOrder(a, b, plan));
 		if (
-			!reorderSafe(members, sorted, source, shape, movableArglessNew) || !macroBuiltMetaOrderKept(members, sorted, container, index)
+			!reorderSafe(members, sorted, source, shape, movableArglessNew)
+			|| !macroBuiltMetaOrderKept(members, sorted, container, index, file)
 		) {
 			MemberSpacing.emitSpacingOnly(edits, members, source);
 			return;
@@ -893,25 +899,28 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether the sort keeps the relative order of every ANNOTATED member of a container whose
-	 * type transitively carries a build macro. A build macro reads `getBuildFields()` in
-	 * DECLARATION order and dispatches on metadata, so the annotated members are exactly the ones
-	 * whose order it can turn into generated output - Pony's `DeclaratorBuilder` turns `@:arg`
-	 * fields into constructor PARAMETERS in that order, so swapping two of them rewrites the
-	 * signature for every caller with no local error (measured on `DTimer` / `Timeline` /
-	 * `ParseBoy`: the callers fail, four files away). Which tag matters is unknowable from here -
-	 * and inventing a per-tag meaning in the core would violate the declarative-format invariant -
-	 * so the relative order of ALL annotated members is preserved and only unannotated ones move.
-	 * Without an `index` (a check invoked directly, no lint scope) there is nothing to ask, and
-	 * without the type in scope the answer is no: same narrow-scope limitation the four other
-	 * consumers of `transitivelyCarriesBuildMacro` carry.
+	 * Whether the sort keeps the relative order of every ANNOTATED member of a container whose type
+	 * transitively carries a build macro. A build macro reads `getBuildFields()` in DECLARATION order
+	 * and dispatches on metadata, so the annotated members are exactly the ones whose order it can turn
+	 * into generated output - Pony's `DeclaratorBuilder` turns `@:arg` fields into constructor
+	 * PARAMETERS in that order, so swapping two of them rewrites the signature for every caller with no
+	 * local error (measured on `DTimer` / `Timeline` / `ParseBoy`: the callers fail, four files away).
+	 * Which tag matters is unknowable from here - and inventing a per-tag meaning in the core would
+	 * violate the declarative-format invariant - so the relative order of ALL annotated members is
+	 * preserved and only unannotated ones move.
+	 *
+	 * Without an `index` (a check invoked directly, no lint scope) there is nothing to ask, and without
+	 * the type in scope the answer is no: same narrow-scope limitation the seven other consumers of
+	 * `transitivelyCarriesBuildMacro` carry. `file` is the source this fix pass is rewriting, and it is
+	 * what makes the gate answer about THIS container rather than about a same-named type in another
+	 * package - see the predicate's own doc for the measured cost of not naming it.
 	 */
 	private static function macroBuiltMetaOrderKept(
-		members: Array<OrderedMember>, sorted: Array<OrderedMember>, container: QueryNode, index: Null<SymbolIndex>
+		members: Array<OrderedMember>, sorted: Array<OrderedMember>, container: QueryNode, index: Null<SymbolIndex>, file: Null<String>
 	): Bool {
 		if (index == null) return true;
 		final owner: Null<String> = container.name;
-		if (owner == null || !index.transitivelyCarriesBuildMacro(owner)) return true;
+		if (owner == null || !index.transitivelyCarriesBuildMacro(owner, file)) return true;
 		final before: Array<Int> = [for (m in members) if (m.hasMeta) m.index];
 		final after: Array<Int> = [for (m in sorted) if (m.hasMeta) m.index];
 		return before.join(',') == after.join(',');

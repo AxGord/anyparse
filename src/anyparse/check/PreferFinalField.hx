@@ -193,7 +193,7 @@ final class PreferFinalField implements Check {
 		// builder may strip the initializer and move the assignment into the constructor,
 		// after which `var` -> `final` is `Static final variable must be initialized`. The
 		// grant is inherited through `implements`, so the class itself carries no metadata.
-		if (index.transitivelyCarriesBuildMacro(owner)) return;
+		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
 		// The conditional-default arm, checked FIRST: an initialized field whose only other
 		// write is one `if (p != null) x = p;` constructor statement folds to `final` plus
 		// `x = p ?? <default>`. It is disjoint from the initializer arm either way (that

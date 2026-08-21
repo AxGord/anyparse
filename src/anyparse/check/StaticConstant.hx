@@ -266,7 +266,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		// a field's assignment into the constructor makes a `static` promotion
 		// `Cannot access static field <name> from a class instance`, raised from inside the
 		// builder. See `SymbolIndex.transitivelyCarriesBuildMacro`.
-		if (ctx.index.transitivelyCarriesBuildMacro(owner)) return;
+		if (ctx.index.transitivelyCarriesBuildMacro(owner, ctx.file)) return;
 		if (MemberWriteScan.accessGrantMayReference(owner, name, ctx.index, ctx.plugin)) return;
 		if (MemberWriteScan.subtypeMayReference(owner, name, ctx.index, ctx.plugin)) return;
 		ctx.out.push({

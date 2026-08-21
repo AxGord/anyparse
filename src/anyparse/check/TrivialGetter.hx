@@ -211,7 +211,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				// own, which is why the per-owner index question and not the file-scoped text scan
 				// beside the `@:coreApi` bail above.
 				final owner: Null<String> = cls.name;
-				if (owner != null && index.transitivelyCarriesBuildMacro(owner)) continue;
+				if (owner != null && index.transitivelyCarriesBuildMacro(owner, entry.file)) continue;
 				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin, branch);
 			}
 		}

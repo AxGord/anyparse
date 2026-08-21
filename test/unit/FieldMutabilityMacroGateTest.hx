@@ -49,6 +49,18 @@ class FieldMutabilityMacroGateTest extends Test {
 	 */
 	private static final PLAIN_IFACE: String = 'package p;\n\ninterface Plain {}\n';
 
+	/** A same-simple-name declaration in ANOTHER package, carrying a build macro of its own. */
+	private static final BUILT_HOMONYM: String = 'package p;\n\n@:build(p.B.build())\nclass W {\n\n\tpublic function new() {}\n\n}\n';
+
+	/** The same homonym without the tag — the one line the collision arms above differ from it by. */
+	private static final PLAIN_HOMONYM: String = 'package p;\n\nclass W {\n\n\tpublic function new() {}\n\n}\n';
+
+	/** An `@:autoBuild` marker interface in package `p` — the grant a supertype hop may reach. */
+	private static final BUILT_MARKER: String = 'package p;\n\n@:autoBuild(p.B.build())\ninterface Marker {}\n';
+
+	/** A marker of the SAME simple name in package `q`, granting nothing. */
+	private static final PLAIN_MARKER: String = 'package q;\n\ninterface Marker {}\n';
+
 	public function testAFieldOfAMacroBuiltTypeIsNotFinalized(): Void {
 		final owner: String = 'package p;\n\nclass W implements Declarator {\n\n\tprivate static var counter: Int = 0;\n\n'
 			+ '\tpublic function new() {}\n\n\tpublic function bump(): Int return counter;\n\n}\n';
@@ -137,12 +149,85 @@ class FieldMutabilityMacroGateTest extends Test {
 		Assert.equals(1, localViolations('var b = new StringBuf();\n\t\tb.add(\'x\');\n\t\treturn b.length;').length);
 	}
 
-	/** `prefer-final-field` findings for `owner`, linted alongside the `@:autoBuild` interface. */
+	/**
+	 * The gate's OWN type is not a written type reference — it is the container the rule is looking
+	 * at, and the rule already holds the file that declares it — so answering it by simple name
+	 * across the whole index conflates every homonym. `@:build` on an unrelated `p.W` silenced
+	 * `q.W`, and at library scale one tag reaches a hundred strangers.
+	 */
+	public function testAHomonymOfTheOwnerDoesNotGateTheField(): Void {
+		Assert.equals(1, homonymFieldViolations(PLAIN_HOMONYM).length, 'the control still fires');
+		Assert.equals(1, homonymFieldViolations(BUILT_HOMONYM).length);
+	}
+
+	/** The same collision on a rule that DELETES the members it acts on, where a false "no" is the costly direction. */
+	public function testAHomonymOfTheOwnerDoesNotGateTheTrivialGetter(): Void {
+		Assert.equals(1, homonymPropertyViolations(PLAIN_HOMONYM).length, 'the control still fires');
+		Assert.equals(1, homonymPropertyViolations(BUILT_HOMONYM).length);
+	}
+
+	/**
+	 * One hop up the chain the names ARE written references, so they resolve against the referring
+	 * file's import scope: a `q.W implements Marker` in a package that declares its own `Marker`
+	 * takes THAT one, not the `@:autoBuild` homonym in `p`.
+	 */
+	public function testASupertypeHomonymOutsideTheOwnersScopeDoesNotGateTheField(): Void {
+		Assert.equals(1, markerFieldViolations('q').length);
+	}
+
+	/**
+	 * …and the fallback when that resolution settles nothing: an owner in a package holding no
+	 * `Marker` of its own and importing none names a type the index cannot place, so the hop widens
+	 * back to the same-simple-name union and the `@:autoBuild` grant still gates. Failing to resolve
+	 * may only ever keep the conservative answer — this arm passes on the old engine too, and pins
+	 * that it must keep passing.
+	 */
+	public function testAnUnplaceableSupertypeStillGatesTheField(): Void {
+		Assert.equals(0, markerFieldViolations('r').length);
+	}
+
+	/**
+	 * `prefer-final-field` findings for `owner`, linted alongside the `@:autoBuild` interface.
+	 */
 	private function fieldViolations(owner: String): Array<Violation> {
 		return new PreferFinalField().run([
 			{ file: 'p/Declarator.hx', source: DECLARATOR },
 			{ file: 'p/W.hx', source: owner }
 		], new HaxeQueryPlugin()).filter(v -> v.file == 'p/W.hx');
+	}
+
+	/** `prefer-final-field` findings for a `q.W`, linted alongside a same-simple-name `p.W`. */
+	private function homonymFieldViolations(homonym: String): Array<Violation> {
+		final owner: String = 'package q;\n\nclass W {\n\n\tprivate static var counter: Int = 0;\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function bump(): Int return counter;\n\n}\n';
+		return new PreferFinalField().run([
+			{ file: 'p/W.hx', source: homonym },
+			{ file: 'q/W.hx', source: owner }
+		], new HaxeQueryPlugin()).filter(v -> v.file == 'q/W.hx');
+	}
+
+	/** `trivial-getter` findings for the same `q.W` / `p.W` pair. */
+	private function homonymPropertyViolations(homonym: String): Array<Violation> {
+		final owner: String = 'package q;\n\nclass W {\n\n\tpublic var active(get, never): Bool;\n\n\tprivate var _active: Bool = '
+			+ 'false;\n\n\tpublic function new() {}\n\n\tprivate function get_active(): Bool return _active;\n\n}\n';
+		return new TrivialGetter().run([
+			{ file: 'p/W.hx', source: homonym },
+			{ file: 'q/W.hx', source: owner }
+		], new HaxeQueryPlugin()).filter(v -> v.file == 'q/W.hx');
+	}
+
+	/**
+	 * `prefer-final-field` findings for a `W` in `pkg` implementing the bare name `Marker`, with both
+	 * markers in the index: `q` declares its own, `r` declares none and imports none.
+	 */
+	private function markerFieldViolations(pkg: String): Array<Violation> {
+		final owner: String = 'package $pkg;\n\nclass W implements Marker {\n\n\tprivate static var counter: Int = 0;\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function bump(): Int return counter;\n\n}\n';
+		return new PreferFinalField().run([
+			{ file: 'p/Marker.hx', source: BUILT_MARKER },
+			{ file: 'q/Marker.hx', source: PLAIN_MARKER },
+			{ file: '$pkg/W.hx', source: owner }
+		], new HaxeQueryPlugin()).filter(v -> v.file == '$pkg/W.hx');
 	}
 
 	/** `inline-constant` findings for a class `head` carrying one private static scalar constant. */

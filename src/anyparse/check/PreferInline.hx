@@ -417,7 +417,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// declared member for `subtypeMemberNames` to find. Haxe accepts `inline` on the declaration
 		// silently and rejects it at the GENERATED override site ("Field <m> is inlined and cannot be
 		// overridden") — another file, possibly another project.
-		if (index.transitivelyCarriesBuildMacro(owner)) return;
+		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
 		final subtypeMembers: Array<String> = index.hasSubtype(owner) ? index.subtypeMemberNames(owner) : [];
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
