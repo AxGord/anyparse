@@ -55,9 +55,25 @@ class SuppressionSliceTest extends Test {
 		Assert.equals(0, applyAt(src, 5, 3, 5, 11).length);
 	}
 
-	private function applyAt(src: String, fromLine: Int, fromCol: Int, toLine: Int, toCol: Int): Array<Violation> {
+	/**
+	 * A finding whose file is absent from `files` is kept: there is no source to scan
+	 * for directives, and the per-file scan is lazy, so the miss must not throw either.
+	 */
+	public function testFindingWithNoSuppliedSourceKept(): Void {
+		final src: String = 'package p;\nclass C {\n\tvar a = 1; // noqa\n}';
+		Assert.equals(1, applyAt(src, 3, 2, 3, 11, 'p/Absent.hx').length);
+	}
+
+	/**
+	 * Suppress `p/C.hx`'s only supplied source against a finding at the given line span.
+	 * `violationFile` defaults to that same file; naming another one models a finding whose
+	 * source `apply` was never handed.
+	 */
+	private function applyAt(
+		src: String, fromLine: Int, fromCol: Int, toLine: Int, toCol: Int, violationFile: String = 'p/C.hx'
+	): Array<Violation> {
 		final v: Violation = {
-			file: 'p/C.hx',
+			file: violationFile,
 			span: new Span(Span.offsetOf(src, fromLine, fromCol), Span.offsetOf(src, toLine, toCol)),
 			rule: 'demo-rule',
 			severity: Severity.Warning,

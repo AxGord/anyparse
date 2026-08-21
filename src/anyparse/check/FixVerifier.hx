@@ -145,8 +145,9 @@ final class FixVerifier {
 		// same-file insertions.
 		for (check in riskyChecks) {
 			// Through `Linter.collect`, never `check.run` directly: that is what applies the central
-			// reification gate here. The oracle below cannot stand in for it — a risky rewrite inside
-			// a `macro …` quotation still typechecks, so verification would pass it untouched.
+			// reification and inline-suppression gates here. The oracle below cannot stand in for
+			// either — a risky rewrite inside a `macro …` quotation still typechecks, and so does one
+			// on a line whose `// noqa` says the rule is wrong there.
 			final all: Array<Violation> = Linter.collect(files, plugin, [check]).filter(v -> v.rule == check.id());
 			for (entry in files) {
 				final own: Array<Violation> = all.filter(v -> v.file == entry.file);

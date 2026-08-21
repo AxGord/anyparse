@@ -329,8 +329,9 @@ final class Linter {
 	}
 
 	/**
-	 * Every finding `checks` produce over `files`, with the central REIFICATION gate applied — the
-	 * ONE entry point through which a `Check.run` result reaches the rest of the tool.
+	 * Every finding `checks` produce over `files`, with the central REIFICATION and inline-SUPPRESSION
+	 * gates applied — the ONE entry point through which a `Check.run` result reaches the rest of the
+	 * tool.
 	 *
 	 * That it is one entry point is the whole design. A finding inside a `macro …` quotation must be
 	 * dropped for every check (see `ReificationScan`), and a gate written once per consumer is a rule
@@ -339,14 +340,19 @@ final class Linter {
 	 * by measuring rather than by reading. Both now come through here, as does `run` itself, so the
 	 * filter cannot disagree between them and a new consumer inherits it by using the obvious call.
 	 *
-	 * `run` is what a CONFIGURED lint wants (enablement, severity overrides, inline suppression on
-	 * top); `collect` is the raw gated set, for the fix paths that apply their own policy.
+	 * A `// noqa` / `CHECKSTYLE:OFF` directive (see `Suppression`) is the same kind of gate and lives
+	 * here for the same reason. It used to sit in `run` alone, so the report honoured it and every
+	 * `--fix` path ignored it: a `noqa`-carrying line was reported clean and rewritten anyway, which
+	 * is the exact failure the suppression mechanism exists to prevent — the user writes it BECAUSE
+	 * the rule is wrong there. `run` still adds what is genuinely configuration (enablement, severity
+	 * overrides) on top; a directive written in the source is not configuration.
 	 */
 	public static function collect(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>
 	): Array<Violation> {
 		final raw: Array<Violation> = [for (check in checks) for (violation in check.run(files, plugin)) violation];
-		return ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
+		final unquoted: Array<Violation> = ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
+		return Suppression.apply(unquoted, files);
 	}
 
 	/**
@@ -391,8 +397,9 @@ final class Linter {
 		// checks so they don't re-walk ancestor dirs + re-parse the JSON per file; a null
 		// resolver resets them to their own `LintConfig.discover` fallback.
 		for (check in active) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
+		// `collect` has already applied the reification and inline-suppression gates.
 		final out: Array<Violation> = collect(files, cached, active);
-		if (resolveConfig == null) return Suppression.apply(out, files);
+		if (resolveConfig == null) return out;
 		// Per-file config: resolve the apqlint.json for each finding's OWN file, drop
 		// it when its rule is disabled there (unless an explicit --rule selection
 		// bypasses enablement), then apply that file's severity override.
@@ -406,7 +413,7 @@ final class Linter {
 			if (sev != null) violation.severity = sev;
 			kept.push(violation);
 		}
-		return Suppression.apply(kept, files);
+		return kept;
 	}
 
 }

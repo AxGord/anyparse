@@ -24,6 +24,13 @@ private typedef Entry = {
 	var rules: Null<Array<String>>;
 	var region: Bool;
 }
+
+/** One file's suppression directives plus the line index they were resolved against. */
+private typedef FileDirectives = {
+	var index: LineIndex;
+	var entries: Array<Entry>;
+}
+
 /**
  * Applies inline suppression directives (`noqa` lines and `CHECKSTYLE:OFF`/`ON` regions) to a finding set: `apply` returns the violations minus every one silenced by a directive in its own file. A finding whose file source is unavailable, or whose span is null, is kept.
  */
@@ -39,25 +46,35 @@ final class Suppression {
 	public static function apply(violations: Array<Violation>, files: Array<{ file: String, source: String }>): Array<Violation> {
 		if (violations.length == 0) return violations;
 
-		final indexByFile: Map<String, LineIndex> = [];
-		final entriesByFile: Map<String, Array<Entry>> = [];
-		for (f in files) {
-			final index: LineIndex = new LineIndex(f.source);
-			indexByFile[f.file] = index;
-			entriesByFile[f.file] = collectEntries(f.source, index);
-		}
+		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
+		// Scanned LAZILY, per file that actually carries a finding. `Linter.collect` applies
+		// this gate once PER CHECK, and the fix paths hand it the whole tree — scanning every
+		// source's comments up front there costs one full-tree comment pass per risky rule.
+		final scanned: Map<String, FileDirectives> = [];
 
 		return violations.filter(v -> {
 			final span: Null<Span> = v.span;
 			if (span == null) return true;
-			final index: Null<LineIndex> = indexByFile[v.file];
-			if (index == null) return true;
-			final entries: Null<Array<Entry>> = entriesByFile[v.file];
-			if (entries == null || entries.length == 0) return true;
+			final cached: Null<FileDirectives> = scanned[v.file];
+			final directives: FileDirectives = cached ?? directivesOf(sourceByFile[v.file]);
+			if (cached == null) scanned[v.file] = directives;
+			if (directives.entries.length == 0) return true;
+			final index: LineIndex = directives.index;
 			final fromLine: Int = index.lineColAt(span.from).line;
 			final toLine: Int = index.lineColAt(span.to).line;
-			return !suppressedInRange(entries, fromLine, toLine, v.rule);
+			return !suppressedInRange(directives.entries, fromLine, toLine, v.rule);
 		});
+	}
+
+	/**
+	 * The directives of one file, or an empty set when its source was not supplied —
+	 * a finding whose file is absent from `files` is kept, which an empty entry list
+	 * already expresses.
+	 */
+	private static function directivesOf(source: Null<String>): FileDirectives {
+		if (source == null) return { index: new LineIndex(''), entries: [] };
+		final index: LineIndex = new LineIndex(source);
+		return { index: index, entries: collectEntries(source, index) };
 	}
 
 	/**

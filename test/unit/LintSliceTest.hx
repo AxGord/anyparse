@@ -396,6 +396,26 @@ class LintSliceTest extends Test {
 	}
 
 	/**
+	 * `Linter.collect` — the entry the `--fix` paths use (`FixVerifier.verify`, the
+	 * oracle-assisted batch) — applies inline suppression too. It used to apply only
+	 * the reification gate, so a `noqa` line was reported clean and rewritten anyway.
+	 */
+	public function testNoqaSuppressesThroughCollect(): Void {
+		final src: String = 'package pkg;\nimport a.b.Kept; // noqa: unused-import\nimport a.b.Gone;\nclass C {}';
+		final vs: Array<Violation> = Linter.collect([{ file: 'pkg/C.hx', source: src }], plugin(), [new UnusedImport()]);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('a.b.Gone'));
+	}
+
+	/** A `CHECKSTYLE:OFF`/`ON` region is honoured through `collect` for the same reason. */
+	public function testCheckstyleRegionThroughCollect(): Void {
+		final src: String = 'package pkg;\n// CHECKSTYLE:OFF\nimport a.b.Unused1;\n// CHECKSTYLE:ON\nimport a.b.Unused2;\nclass C {}';
+		final vs: Array<Violation> = Linter.collect([{ file: 'pkg/C.hx', source: src }], plugin(), [new UnusedImport()]);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('a.b.Unused2'));
+	}
+
+	/**
 	 * A `noqa` occurring inside a string literal is not a comment and does not
 	 * suppress — the string-aware comment scan ignores it.
 	 */
