@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -42,8 +43,9 @@ private typedef LiveCtx = {
 }
 
 /**
- * Per-`fix` context: the grammar seams plus the type index and declared types the purity check
- * needs, and the flagged spans `run` produced. Built once, threaded through the edit walk.
+ * Per-`fix` context: the grammar seams — including the block kinds `empty-block` flags, which bound where a
+ * deletion may empty a block — plus the type index and declared types the purity check needs, and the flagged
+ * spans `run` produced. Built once, threaded through the edit walk.
  */
 private typedef FixCtx = {
 	var source: String;
@@ -53,6 +55,7 @@ private typedef FixCtx = {
 	var mutableDeclKinds: Array<String>;
 	var declTypeChildKinds: Array<String>;
 	var fieldAccessKind: Null<String>;
+	var emptyFlagKinds: Array<String>;
 	var declaredTypes: Map<Int, String>;
 	var index: Null<SymbolIndex>;
 	var flagged: Array<String>;
@@ -123,6 +126,24 @@ private typedef FixCtx = {
  * no reassignment possible, a dead final init means zero reads, which is
  * `unused-local`'s case by construction.
  *
+ * ## Partition with `empty-block`
+ *
+ * `fix` never leaves a construct standing over nothing. Deleting the deletable
+ * assignments of a statement block is declined outright when NO statement would
+ * survive them and the block is one `empty-block` flags
+ * (`ControlFlowSupport.emptyFlagKinds()` — for Haxe the nested `{ … }` block,
+ * which is what a branch or loop body is): `if (c) { x = 1; y = 2; }` keeps both
+ * stores rather than becoming `if (c) {}`. The alternative — dropping the whole
+ * `if` — is refused on three counts: it needs the condition proven pure, which
+ * duplicates a judgement `empty-block` already owns; it has no answer for a
+ * branch whose `else` is live code, where the residue is instead the unfixable
+ * `if (c) {} else { … }`; and it would delete the leading comment that usually
+ * explains what the branch was for, which is the only surviving record of the
+ * logic slip the finding is reporting. Declining keeps the finding visible and
+ * keeps `empty-block` from acting as the janitor for this check. A function body
+ * is deliberately NOT covered — `emptyFlagKinds` excludes it, and an emptied
+ * body leaves no dangling construct.
+ *
  * `Severity.Info`: `fix` deletes a store whose right-hand side is provably
  * side-effect-free (a literal / identifier / operator tree, or a type-proven
  * plain field read) — a dead initializer stripped to `var x:T;`, a standalone
@@ -175,9 +196,11 @@ final class DeadStore implements Check {
 	 * or a single field read the type index proves is a plain field, never a getter. Two forms mirror
 	 * `run`'s two reports: a standalone `x = e;` statement is deleted whole, but only when it is a
 	 * direct child of a block (a bare unbraced branch body is left — deleting it would corrupt control
-	 * flow); a dead `var x:T = e;` initializer is stripped to `var x:T;`, keeping the name and type
-	 * verbatim. An impure right-hand side (a call, `new`, an assignment / `++` / `--`) is left as a
-	 * finding. `fix` never re-derives liveness — it acts on `run`'s spans, filtered by deletion-safety.
+	 * flow) and not when every statement of that block would go with it (an emptied branch body is
+	 * worse than the store — see the class doc); a dead `var x:T = e;` initializer is stripped to
+	 * `var x:T;`, keeping the name and type verbatim. An impure right-hand side (a call, `new`, an
+	 * assignment / `++` / `--`) is left as a finding. `fix` never re-derives liveness — it acts on
+	 * `run`'s spans, filtered by deletion-safety.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -190,6 +213,7 @@ final class DeadStore implements Check {
 		if (tree == null) return [];
 		final root: QueryNode = tree;
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		final ctx: FixCtx = {
 			source: source,
 			root: root,
@@ -197,6 +221,7 @@ final class DeadStore implements Check {
 			assignKind: assignKind,
 			mutableDeclKinds: mutableDeclKinds,
 			declTypeChildKinds: shape.declTypeChildKinds ?? [],
+			emptyFlagKinds: flow != null ? flow.emptyFlagKinds() : [],
 			fieldAccessKind: shape.fieldAccessKind,
 			declaredTypes: provider != null ? provider.declaredTypes(source) : [],
 			index: index,
@@ -226,7 +251,10 @@ final class DeadStore implements Check {
 	/**
 	 * Walk `node`, appending a deletion edit for each dead store `run` flagged whose right-hand side is
 	 * safe to drop. A dead `var` initializer is stripped in place; a standalone assignment statement (a
-	 * single-expression direct child of a block) is deleted whole — anything else is left untouched.
+	 * single-expression direct child of a block) is deleted whole — anything else is left untouched. The
+	 * per-block deletions are collected first and dropped as a set when they would account for EVERY
+	 * statement of a block `empty-block` would then flag: no fix of this check ever manufactures an
+	 * empty branch or loop body.
 	 */
 	private static function walkFix(node: QueryNode, ctx: FixCtx, edits: Array<{ span: Span, text: String }>): Void {
 		final kind: String = node.kind;
@@ -241,14 +269,18 @@ final class DeadStore implements Check {
 				if (strip != null) edits.push({ span: strip, text: '' });
 			}
 		}
-		if (ctx.assignKind != null && DELETABLE_BLOCK_KINDS.contains(kind)) for (stmt in node.children) if (stmt.children.length == 1) {
-			final expr: QueryNode = stmt.children[0];
-			final stmtSpan: Null<Span> = stmt.span;
-			if (
-				expr.kind == ctx.assignKind && isFlagged(ctx, expr) && expr.children.length >= 2 && stmtSpan != null
-				&& rhsSafeToDelete(expr.children[1], ctx.root, ctx.shape, ctx.declaredTypes, ctx.index, ctx.fieldAccessKind)
-			)
-				edits.push({ span: RefactorSupport.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
+		if (ctx.assignKind != null && DELETABLE_BLOCK_KINDS.contains(kind)) {
+			final deletions: Array<{ span: Span, text: String }> = [];
+			for (stmt in node.children) if (stmt.children.length == 1) {
+				final expr: QueryNode = stmt.children[0];
+				final stmtSpan: Null<Span> = stmt.span;
+				if (
+					expr.kind == ctx.assignKind && isFlagged(ctx, expr) && expr.children.length >= 2 && stmtSpan != null
+					&& rhsSafeToDelete(expr.children[1], ctx.root, ctx.shape, ctx.declaredTypes, ctx.index, ctx.fieldAccessKind)
+				)
+					deletions.push({ span: RefactorSupport.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
+			}
+			if (deletions.length < node.children.length || !ctx.emptyFlagKinds.contains(kind)) for (edit in deletions) edits.push(edit);
 		}
 		for (c in node.children) walkFix(c, ctx, edits);
 	}

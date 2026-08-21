@@ -67,6 +67,29 @@ class DeadStoreTest extends Test {
 		assertNoFix('class C { function f(a:Int):Void { var z = a; trace(z); if (a > 0) z = 5; } }');
 	}
 
+	public inline function testFixRefusesEmptyingBranchBody(): Void {
+		// Every statement of the `if` body is a deletable dead store; deleting them all would leave
+		// `if (a > 0) {}`, so the whole block's deletions are dropped and the finding stays.
+		assertNoFix('class C { function f(a:Int, s1:Int, s2:Int):Void { if (a > 0) { s1 = 1; s2 = 2; } } }');
+	}
+
+	public inline function testFixRefusesEmptyingBranchWithLiveElse(): Void {
+		// The then-branch would empty while the `else` stays live, so dropping the whole `if` is not
+		// available as a repair — the store is left rather than producing `if (…) {} else { … }`.
+		assertNoFix('class C { function f(a:Int, s1:Int):Int { var r = 0; if (a > 0) { s1 = 1; } else { r = 2; } return r; } }');
+	}
+
+	public inline function testFixDeletesStoreWhenBlockKeepsAStatement(): Void {
+		// A surviving statement means the block cannot empty — the dead store is deleted as usual.
+		assertFix('class C { function f(a:Int, s1:Int):Void { if (a > 0) { s1 = 1; trace(a); } } }', 'trace(a)', 's1 = 1');
+	}
+
+	public inline function testFixEmptiesFunctionBodyBlock(): Void {
+		// A function body is not a block `empty-block` flags and an emptied one strands no construct,
+		// so the sole dead store still goes.
+		assertFix('class C { function f(s1:Int):Void { s1 = 1; } }', 'function f(s1:Int):Void {}', 's1 = 1');
+	}
+
 	public inline function testFixRefusesCallInitializer(): Void {
 		// An impure initializer is not stripped even when reassigned before a read.
 		assertNoFix('class C { function f(a:Int):Int { var w = compute(); w = a; return w; } }');
