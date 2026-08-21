@@ -74,6 +74,17 @@ using StringTools;
  * the whole rule. The edge the exclusion knowingly buys is a project callback handed INTO std
  * and invoked inside a std `try`; a rule that can never act is the worse trade.
  *
+ * ## What a closed gate looks like from the outside — measured, 2026-08-21
+ *
+ * On Pony (851 files, `prefer-typed-throw` enabled in its own `apqlint.json`) the run reports
+ * 161 findings, ALL of them degraded, and `--fix` writes nothing. The project half of that
+ * scope carries 86 clauses the gate blocks on — 84 `Dynamic` / `Any` and two
+ * `catch (_: String)` in `src/pony/heaps/HeapsAssets.hx` — so a single tree is enough to close
+ * the gate permanently, and a caller who reads only `fixed 0 issue(s)` beside a count of 161
+ * concludes the rule has NO autofix. It has one; the DEGRADED message is where the run says
+ * why, and that message is visible only in report mode. A tree that wants the rewrite has to
+ * stop catching raw Strings first, which is the rule's own argument turned around.
+ *
  * The scan is TEXTUAL (a `catch` token, its parenthesised parameter, the nominal after the
  * `:`), not a parse: it must visit every indexed project source, a parse of each would dominate
  * the run, and for the shapes that matter (`catch (e:String)`, `catch(e : Dynamic)`, a

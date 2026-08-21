@@ -113,6 +113,32 @@ private typedef UsingWedge = {
  * one, so the Haxe std is always readable and a project unlocks its own libraries by declaring
  * them in `resolutionLibs`.
  *
+ * ## The rule reports far more often than it rewrites — measured, 2026-08-21
+ *
+ * A caller who runs `--fix`, reads `fixed 0 issue(s)` beside a nonzero `import-order` count and
+ * concludes the rule has NO autofix is reading the refusals above. Three did. On Pony (851 files,
+ * `import-order` enabled in its own `apqlint.json`) all FOUR findings stayed report-only, and
+ * every one of the four was a correct refusal:
+ *
+ *  - `TouchableMouse.hx` — `import flash.events.MouseEvent;` beside `import pony.ui.touch.Mouse;`,
+ *    whose module declares a SECONDARY `typedef MouseEvent`. Two imports, one simple name, and
+ *    nothing in the two paths says so: precisely the collision the index lookup exists to see.
+ *  - `StarlingTouchInput.hx` — the same shape one library over, `TouchManager`'s secondary
+ *    `class Touch` against `starling.events.Touch`.
+ *  - `Tooltip.hx` — three spellings of `Rect` in one block (`pony.geom.Rect`,
+ *    `pony.geom.Rect.Rect`, `unityengine.Rect`).
+ *  - `StaticAccess.hx` — the run's first import carries two commented-out imports above it: the
+ *    absorbed-leading-comment refusal.
+ *
+ * So a zero fix count here is the guard working, not a missing fixer. What the run does NOT do is
+ * SAY which refusal fired — the finding message reads the same whether the reorder is available
+ * or refused. The `prefer-typed-throw` treatment (a second, report-only message once its
+ * whole-scope gate closes) is the shape to copy, and the reason it has not been copied is a
+ * LENS mismatch, not effort: `run` has no `index` parameter, and answering the refusal from the
+ * resolution-scoped index would predict MORE collisions than the report-scoped one `fix` is
+ * handed, so the report would claim report-only on findings the fixer then rewrites. Give the two
+ * seats one index before giving the message two spellings.
+ *
  * ## Options
  *
  *  - `order` — the order a block must carry: `any` (default) accepts EITHER recognised order

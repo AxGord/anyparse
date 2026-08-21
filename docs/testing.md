@@ -660,7 +660,10 @@ of its own (`compiler oracle SKIPPED (--no-oracle)`), which is also why the
 report-only tails now read "no compiler oracle for this run" rather than "no
 compilerOracle configured" — with the flag the project HAS one. That is strictly
 more dangerous than the report-mode flag, and the same rule applies with more
-force: never in a gate.
+force: never in a gate. The workaround the old behaviour forced — temporarily
+deleting `compilerOracle` from the project's own `apqlint.json` — is unnecessary now,
+and was always the worse spelling of the same thing: it edits a TRACKED file, so it
+outlives the one run that wanted it and shows up in the next `git status`.
 
 ### The safe pass reverts the file the compiler blames, not the wave
 

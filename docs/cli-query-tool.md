@@ -488,6 +488,17 @@ Rules and properties:
   of `<Kind>` at the cursor.)
 - `lint --format json` records carry an `address` field — the finding's
   canonical selector, directly usable as an op's `--select` argument.
+- `remove-member` takes the same three forms and REDUCES the resolved node to
+  the `(enclosing type, member)` NAME pair its by-name form takes, lifting an
+  address that lands inside a body to the member holding it. The removal itself
+  stays BY NAME, so every conditional-compilation twin of that name goes,
+  whichever branch's declaration the address happened to resolve — an address
+  SPELLS the pair, it never narrows the removal to one branch. Giving both an
+  address and `--type <T> <memberName>` is a usage error, and an address that
+  resolves to something that is not a member is refused with a pointer at
+  `remove-element`. (The ops that accept no address form are the ones whose
+  target is not a node: `add-member` appends by `--type`, `add-import` /
+  `remove-import` take a module path, `new` / `fmt` are whole-file.)
 
 ## Output formats
 
