@@ -112,31 +112,33 @@ class HxTestHelpers extends Test {
 	private function singleMember(source: String): HxClassMember {
 		final ast: HxClassDecl = HaxeParser.parse(source);
 		Assert.equals(1, ast.members.length);
-		return ast.members[0].member;
+		final member: Null<HxClassMember> = ast.members[0].member;
+		if (member == null) throw 'expected a member declaration, got a prefix-only member';
+		return member;
 	}
 
-	private function expectVarSemiCondInitMember(member: HxClassMember): HxVarSemiCondInitDecl {
+	private function expectVarSemiCondInitMember(member: Null<HxClassMember>): HxVarSemiCondInitDecl {
 		return switch member {
 			case VarSemiCondInitMember(decl): decl;
 			case _: throw 'expected VarSemiCondInitMember, got $member';
 		};
 	}
 
-	private function expectVarMember(member: HxClassMember): HxVarDecl {
+	private function expectVarMember(member: Null<HxClassMember>): HxVarDecl {
 		return switch member {
 			case VarMember(decl): decl;
 			case _: throw 'expected VarMember, got $member';
 		};
 	}
 
-	private function expectFnMember(member: HxClassMember): HxFnDecl {
+	private function expectFnMember(member: Null<HxClassMember>): HxFnDecl {
 		return switch member {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember, got $member';
 		};
 	}
 
-	private function expectConditionalMember(member: HxClassMember): HxConditionalMember {
+	private function expectConditionalMember(member: Null<HxClassMember>): HxConditionalMember {
 		return switch member {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $member';
@@ -178,7 +180,7 @@ class HxTestHelpers extends Test {
 		};
 	}
 
-	private function expectErrorMember(member: HxClassMember): HxErrorMsg {
+	private function expectErrorMember(member: Null<HxClassMember>): HxErrorMsg {
 		return switch member {
 			case ErrorMember(message): message;
 			case _: throw 'expected ErrorMember, got $member';

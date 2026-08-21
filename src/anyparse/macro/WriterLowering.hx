@@ -48,6 +48,15 @@ class WriterLowering {
 	private static inline final FIT_KNOB_ARG_COUNT: Int = 4;
 
 	/**
+	 * ω-orphan-prefix-member — the first-field escape read at three sites that
+	 * must agree on ONE answer: it also gates `TriviaTypeSynth.isBareNonFirstRef`
+	 * (synthesise the slot) and `Lowering.computeBeforeSlots` (capture it), so a
+	 * site spelling it differently would emit a read of a slot that does not
+	 * exist, or drop a separator whose signal was captured.
+	 */
+	private static inline final BEFORE_NEWLINE_SLOT_FIRST: String = 'beforeNewlineSlotFirst';
+
+	/**
 	 * Build-scoped mirrors of `_shape.root` / `_formatInfo.astPreds` for
 	 * the STATIC trivia emit helpers (the tryparse/block builder web),
 	 * which have no instance in reach. Set at `generate()` entry; one
@@ -1116,10 +1125,35 @@ class WriterLowering {
 			var justWrappedBody: Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
+					// ω-orphan-prefix-member: an `@:optional @:absentOn` bare Ref that opts
+					// into `@:fmt(bareRefSepWhenPresent)` keeps the MANDATORY bare-Ref
+					// leading separator for the present case — built here, where the
+					// per-field trackers live, and spliced inside the field's own null
+					// check so absence stays byte-silent.
+					//
+					// The first-field escape mirrors `TriviaTypeSynth.isBareNonFirstRef` and
+					// `Lowering.computeBeforeSlots` exactly, because those three decide
+					// synthesise / capture / consume for the SAME slot and a field the first two
+					// admit but this one refuses would be captured and then silently dropped.
+					// `bodyPolicy` is the one shape that reaches a different emit branch
+					// (`emitOptionalBodyPolicyOnly`, which takes no separator), so a field
+					// combining it with this flag would lose the gap with no diagnostic —
+					// refused loudly instead of shipped silently.
+					final bareSepOptIn: Bool = child.fmtHasFlag('bareRefSepWhenPresent');
+					if (bareSepOptIn && bodyPolicyFlag != null)
+						Context.fatalError(
+							'WriterLowering: @:fmt(bareRefSepWhenPresent) cannot combine with @:fmt(bodyPolicy)'
+							+ ' — the body-policy emit path owns the separator (field "$fieldName" of $typePath)',
+							Context.currentPos()
+						);
+					final optBareSep: Null<Expr> = bareSepOptIn && kwLead == null && leadText == null
+						&& (!isFirstField || child.fmtHasFlag(BEFORE_NEWLINE_SLOT_FIRST))
+						? buildBareRefLeadingSep(child, fieldName, typePath, prevAnyStarNonEmpty, prevPadTrailing)
+						: null;
 					thisPadTrailing = emitOptionalRefField(
 						child, parts, node, typePath, fieldName, fieldAccess, kwLead, leadText, trailText, trailOptText, bodyPolicyFlag,
 						bodyPolicyExprFlag, hasElseIf, elseFieldName, prevBodyField, prevPadTrailing, hasStructFieldTrailOptSlot,
-						structTrailOptAccess, prevTrailFieldName
+						structTrailOptAccess, prevTrailFieldName, optBareSep
 					);
 
 				case Ref:
@@ -2204,7 +2238,7 @@ class WriterLowering {
 		// Mirrors the bare-Ref first-field channel (`HxTryCatchStmt.body`
 		// / `bodyPolicyWrap` Next branch `_dn(_cols, [_dhl, body])`).
 		final firstStarNlKeep: Bool = isFirstField && _ctx.trivia && isTriviaBearing(typePath)
-			&& starNode.fmtHasFlag('beforeNewlineSlotFirst');
+			&& starNode.fmtHasFlag(BEFORE_NEWLINE_SLOT_FIRST);
 		final patternListExpr: Expr = if (firstStarNlKeep) {
 			final nlFieldName: String = starNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
 			final beforeNlAccess: Expr = {
@@ -9213,41 +9247,64 @@ class WriterLowering {
 			// Star (e.g. `HxMemberDecl.modifiers`) is empty,
 			// since that Star has no first element whose
 			// `newlineBefore` could be read.
-			if (_ctx.trivia && isTriviaBearing(typePath)) {
-				final nlAccess: Expr = beforeNewlineAccess(fieldName);
-				// ω-splice-op-fill: `@:fmt(fillSeam)` hands this field's leading
-				// separator to the STRUCT's `@:fmt(fillParts)` assembly — the
-				// gap becomes a `Fill` seam, so the field itself contributes
-				// `_de()` and the source-newline slot is not consulted. The
-				// `buildBeforeLeadingSep` wrap still runs, so a comment the
-				// parser captured in the gap is still emitted (as a Fill item
-				// of its own); an empty slot leaves `_de()`, which
-				// `D.fillOnOverflow` drops rather than counting as an item.
-				// ω-splice-op-fill: `@:fmt(inlineSep)` is the same decision
-				// for a gap the enclosing fill does NOT own — a single space,
-				// never a break. Consumer: `HxCondSpliceOpTerm.op`, where the
-				// operator must stay glued to the operand it closes.
-				final fillSeam: Bool = child.fmtHasFlag('fillSeam');
-				final inlineSep: Bool = child.fmtHasFlag('inlineSep');
-				final triviaSepExpr: Expr = if (fillSeam)
-					macro _de();
-				else if (inlineSep)
-					macro _dt(' ');
-				else if (prevAnyStarNonEmpty != null) {
-					final prev: Expr = prevAnyStarNonEmpty;
-					macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de();
-				} else
-					macro $nlAccess ? _dhl() : _dt(' ');
-				// ω-598-member-leading-comment: own-line gap comments — see buildBeforeLeadingSep.
-				final sepWithLeading: Expr = buildBeforeLeadingSep(child, fieldName, triviaSepExpr);
-				parts.push(withPadTrailingDrop(prevPadTrailing, sepWithLeading));
-			} else if (prevAnyStarNonEmpty != null) {
-				final prev: Expr = prevAnyStarNonEmpty;
-				parts.push(withPadTrailingDrop(prevPadTrailing, macro $prev ? _dt(' ') : _de()));
-			} else
-				parts.push(withPadTrailingDrop(prevPadTrailing, macro _dt(' ')));
+			parts.push(buildBareRefLeadingSep(child, fieldName, typePath, prevAnyStarNonEmpty, prevPadTrailing));
 			parts.push(writeCall);
 		}
+	}
+
+	/**
+	 * Leading separator for a bare (kw-less, lead-less) non-first Ref field.
+	 *
+	 * Shared by the mandatory path (`emitBareRefNonFirstBody`) and by the
+	 * `@:optional @:absentOn` path opted in via `@:fmt(bareRefSepWhenPresent)`
+	 * — a field that MAY be absent still needs the mandatory field's exact
+	 * separator whenever it IS present, otherwise the gap between the
+	 * preceding Star and the field's first token vanishes (`static inline`
+	 * plus a `final x` member writing out as `static inlinefinal x`). The
+	 * optional caller splices the result INSIDE its own null check, so an
+	 * absent field contributes nothing at all.
+	 */
+	private function buildBareRefLeadingSep(
+		child: ShapeNode, fieldName: String, typePath: String, prevAnyStarNonEmpty: Null<Expr>, prevPadTrailing: Null<Expr>
+	): Expr {
+		// ω-issue-48-v2: in trivia mode the bare Ref field grew a
+		// `<field>BeforeNewline:Bool` slot (see `TriviaTypeSynth.isBareNonFirstRef`).
+		// Consult it to emit a hardline when the parser captured a source newline
+		// in the gap — this is the only signal available when a preceding
+		// bare-tryparse Star (e.g. `HxMemberDecl.modifiers`) is empty, since that
+		// Star has no first element whose `newlineBefore` could be read.
+		if (_ctx.trivia && isTriviaBearing(typePath)) {
+			final nlAccess: Expr = beforeNewlineAccess(fieldName);
+			// ω-splice-op-fill: `@:fmt(fillSeam)` hands this field's leading
+			// separator to the STRUCT's `@:fmt(fillParts)` assembly — the
+			// gap becomes a `Fill` seam, so the field itself contributes
+			// `_de()` and the source-newline slot is not consulted. The
+			// `buildBeforeLeadingSep` wrap still runs, so a comment the
+			// parser captured in the gap is still emitted (as a Fill item
+			// of its own); an empty slot leaves `_de()`, which
+			// `D.fillOnOverflow` drops rather than counting as an item.
+			// ω-splice-op-fill: `@:fmt(inlineSep)` is the same decision
+			// for a gap the enclosing fill does NOT own — a single space,
+			// never a break. Consumer: `HxCondSpliceOpTerm.op`, where the
+			// operator must stay glued to the operand it closes.
+			final fillSeam: Bool = child.fmtHasFlag('fillSeam');
+			final inlineSep: Bool = child.fmtHasFlag('inlineSep');
+			final triviaSepExpr: Expr = if (fillSeam)
+				macro _de();
+			else if (inlineSep)
+				macro _dt(' ');
+			else if (prevAnyStarNonEmpty != null) {
+				final prev: Expr = prevAnyStarNonEmpty;
+				macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de();
+			} else
+				macro $nlAccess ? _dhl() : _dt(' ');
+			// ω-598-member-leading-comment: own-line gap comments — see buildBeforeLeadingSep.
+			final sepWithLeading: Expr = buildBeforeLeadingSep(child, fieldName, triviaSepExpr);
+			return withPadTrailingDrop(prevPadTrailing, sepWithLeading);
+		}
+		if (prevAnyStarNonEmpty == null) return withPadTrailingDrop(prevPadTrailing, macro _dt(' '));
+		final prev: Expr = prevAnyStarNonEmpty;
+		return withPadTrailingDrop(prevPadTrailing, macro $prev ? _dt(' ') : _de());
 	}
 
 	/**
@@ -9494,7 +9551,7 @@ class WriterLowering {
 		// `Lowering.hasBeforeNewlineSlot` first-field allowances.
 		// Currently consumed by `HxTryCatchStmt.body` for
 		// `untypedBody=Keep` source-shape preservation.
-		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
+		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag(BEFORE_NEWLINE_SLOT_FIRST);
 		final bodyOnSameLineExpr: Null<Expr> = _ctx.trivia && (!isFirstField || firstFieldNlOptIn)
 			? beforeNewlineNotAccess(fieldName)
 			: null;
@@ -10190,7 +10247,18 @@ class WriterLowering {
 	 * `@:fmt(bodyPolicyForCtor(...))` pairs through `buildBodyPolicyForCtorChain`.
 	 * Pushes into `optParts`.
 	 */
-	private function emitOptionalAbsentOnBody(child: ShapeNode, optParts: Array<Expr>, refName: String, writeCall: Expr): Void {
+	private function emitOptionalAbsentOnBody(
+		child: ShapeNode, optParts: Array<Expr>, refName: String, writeCall: Expr, bareSep: Null<Expr>
+	): Void {
+		// ω-orphan-prefix-member: `@:fmt(bareRefSepWhenPresent)` opt-in — the
+		// mandatory bare-Ref leading separator, emitted only on the present
+		// branch (this whole body sits inside the field's `_optVal != null`
+		// check). Absent by default, so the OTHER two `@:absentOn` consumers are
+		// byte-unchanged: `HxFnExpr.body` reaches this function without the flag,
+		// and `HxCatchClause.body` never reaches it at all (its
+		// `@:fmt(bodyPolicy('catchBody'))` routes it to `emitOptionalBodyPolicyOnly`
+		// — which is also why the caller refuses the flag on that path).
+		if (bareSep != null) optParts.push(bareSep);
 		final lcSep: Null<Expr> = child.fmtHasFlag('leftCurly') ? leftCurlySeparator(child) : null;
 		final lcCtors: Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
 		// ω-anonfnbody-keep: optional-Ref mirror of the
@@ -10946,7 +11014,8 @@ class WriterLowering {
 		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, fieldName: String, fieldAccess: Expr,
 		kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, trailOptText: Null<String>, bodyPolicyFlag: Null<String>,
 		bodyPolicyExprFlag: Null<String>, hasElseIf: Bool, elseFieldName: Null<String>, prevBodyField: Null<PrevBodyInfo>,
-		prevPadTrailing: Null<Expr>, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, prevTrailFieldName: Null<String>
+		prevPadTrailing: Null<Expr>, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, prevTrailFieldName: Null<String>,
+		bareSep: Null<Expr>
 	): Null<Expr> {
 		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 		final writeFn: String = writeFnFor(refName);
@@ -11004,7 +11073,7 @@ class WriterLowering {
 				prevTrailFieldName
 			);
 		else
-			emitOptionalAbsentOnBody(child, optParts, refName, writeCall);
+			emitOptionalAbsentOnBody(child, optParts, refName, writeCall, bareSep);
 		// ω-pad-trailing-ref: optional-Ref `@:fmt(padTrailing)` pushes a trailing
 		// space INSIDE optParts so the pad is emitted only when `_optVal != null`;
 		// the tracker expr `$fieldAccess != null` matches that runtime presence
@@ -12974,6 +13043,14 @@ class WriterLowering {
 				{ values: [patternFor(branch, ctorName, false)], guard: null, expr: fnCtors.contains(ctorName) ? macro 2 : macro 0 };
 			}
 		];
+		// A classifier field declared `@:optional` (Haxe `HxMemberDecl.member`,
+		// absent for a prefix-only member such as a member-position `#if X #end`
+		// region with nothing after it) reaches the switch as null. Without an
+		// explicit arm the emitted switch is exhaustive over the ctors only and
+		// strict null-safety rejects the subject. Kind `0` is the same answer
+		// every non-var / non-fn ctor gets, so a member with no declaration
+		// takes part in no blank-line cascade.
+		if (condCtor != null) innerCases.push({ values: [macro null], guard: null, expr: macro 0 });
 		final cases: Array<Case> = [];
 		for (branch in enumRule.children) {
 			final ctorName: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
@@ -12997,6 +13074,7 @@ class WriterLowering {
 			}
 			cases.push({ values: [pattern], guard: null, expr: kindExpr });
 		}
+		cases.push({ values: [macro null], guard: null, expr: macro 0 });
 		return cases;
 	}
 

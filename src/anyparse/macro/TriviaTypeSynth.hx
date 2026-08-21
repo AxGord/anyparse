@@ -1456,7 +1456,17 @@ class TriviaTypeSynth {
 	}
 
 	private static function isBareNonFirstRef(child: ShapeNode, parent: ShapeNode): Bool {
-		return child.kind == Ref && (child.annotations[AnnotationKeys.BASE_OPTIONAL] != true && (child.readMetaString(':kw') == null && (
+		// ω-orphan-prefix-member: `@:fmt(bareRefSepWhenPresent)` puts an
+		// `@:optional @:absentOn` Ref back on the bare-Ref footing — when
+		// PRESENT it needs the same `<field>BeforeNewline` /
+		// `<field>BeforeLeading` signals the mandatory field had, or the
+		// writer has nothing to reproduce the gap from. Spelled the same way as
+		// `Lowering.computeBeforeSlots` and `WriterLowering`'s `optBareSep` gate on
+		// purpose — three places decide synthesise / capture / consume for one slot,
+		// and only an identical spelling makes the agreement checkable by eye.
+		return child.kind == Ref && ((
+			child.annotations[AnnotationKeys.BASE_OPTIONAL] != true || child.fmtHasFlag('bareRefSepWhenPresent')
+		) && (child.readMetaString(':kw') == null && (
 			child.readMetaString(':lead') == null && (child != parent.children[0] || child.fmtHasFlag('beforeNewlineSlotFirst'))
 		)));
 	}

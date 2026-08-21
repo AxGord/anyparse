@@ -91,27 +91,28 @@ final class RemoveMember {
 		final targets: Array<{ node: QueryNode, parent: Null<QueryNode> }> = [];
 		final regionsTaken: Array<QueryNode> = [];
 		for (hit in members) {
-			// A region left with NO member takes its directives with it: cutting only the members
-			// leaves the bare `#if` / `#else` / `#end` behind — syntax that compiles, that the writer
-			// re-emits verbatim, and that no check reports. Counting what the region still HOLDS after
-			// this call — not whether this member is its only one — is what covers the branch pair,
-			// where the region holds two members and loses both.
+			// A region left with NO member takes its directives with it. The leftover
+			// `#if` / `#else` / `#end` is syntax the Haxe compiler accepts, that this parser now
+			// accepts too (the member-position empty-region slice) and that the writer re-emits
+			// verbatim — so the husk no longer breaks the re-parse gate; it is simply a directive
+			// pair that guards nothing, which nothing else would ever clean up. Counting what the
+			// region still HOLDS after this call — not whether this member is its only one — is what
+			// covers the branch pair, where the region holds two members and loses both.
+			//
+			// `MemberBranchScan.regionMembers` is what "holds" means, shared with the deletion
+			// checks' `survivingDeletions` so the two cannot drift: it reaches through every branch
+			// AND through a nested region, because a member of an inner region is a member of the
+			// outer one too. That is why the walk climbs — emptying `#if a #if b f #end #end` of `f`
+			// empties both regions, and stopping at the inner one leaves the outer husk behind.
 			final region: QueryNode = hit.parent;
-			final held: Array<QueryNode> = region.children.filter(n -> RefactorSupport.isFieldMemberKind(n.kind));
-			final losing: Int = members.count(m -> m.parent == region);
-			if (condKind == null || region.kind != condKind || held.length != losing) {
+			final taken: Null<{ node: QueryNode, parent: QueryNode }> = emptiedRegionTarget(typeNode, region, members, condKind);
+			if (taken == null) {
 				targets.push({ node: hit.node, parent: region });
 				continue;
 			}
-			if (regionsTaken.contains(region)) continue;
-			var regionHost: Null<QueryNode> = null;
-			RefactorSupport.eachMemberHost(typeNode, host -> if (host.children.contains(region)) regionHost = host);
-			if (regionHost == null)
-				targets.push({ node: hit.node, parent: region });
-			else {
-				regionsTaken.push(region);
-				targets.push({ node: region, parent: regionHost });
-			}
+			if (regionsTaken.contains(taken.node)) continue;
+			regionsTaken.push(taken.node);
+			targets.push({ node: taken.node, parent: taken.parent });
 		}
 		// Nested regions (`#if a f #if b f #end #end`) put a target inside a target; `deleteNodes`
 		// keeps the outer one, which removes the inner anyway.
@@ -147,6 +148,37 @@ final class RemoveMember {
 			RefactorSupport.isFieldMemberKind(child.kind) && child.name == memberName
 		)
 			out.push({ node: child, parent: host }));
+	}
+
+	/**
+	 * The OUTERMOST conditional region that removing every member in `deleting` would leave with
+	 * no member declaration at all, paired with the member host that holds it — or null when
+	 * `region` keeps a member, or is not a conditional region, in which case only the member goes.
+	 *
+	 * The walk climbs because regions nest: a member of an inner region is a member of the outer
+	 * one too, so emptying `#if a #if b f #end #end` of `f` empties both, and stopping at the
+	 * inner one leaves the outer directives behind guarding nothing.
+	 * `MemberBranchScan.regionMembers` is what "holds" means here — the same count the deletion
+	 * checks' `survivingDeletions` uses, so the two answers cannot drift.
+	 */
+	private static function emptiedRegionTarget(
+		typeNode: QueryNode, region: QueryNode, deleting: Array<{ node: QueryNode, parent: QueryNode }>, condKind: Null<String>
+	): Null<{ node: QueryNode, parent: QueryNode }> {
+		if (condKind == null || region.kind != condKind) return null;
+		var result: Null<{ node: QueryNode, parent: QueryNode }> = null;
+		var cur: Null<QueryNode> = region;
+		while (cur != null) {
+			final scope: QueryNode = cur;
+			final held: Array<QueryNode> = MemberBranchScan.regionMembers(scope, n -> RefactorSupport.isFieldMemberKind(n.kind));
+			if (held.length == 0 || held.exists(n -> !deleting.exists(m -> m.node == n))) break;
+			var host: Null<QueryNode> = null;
+			RefactorSupport.eachMemberHost(typeNode, h -> if (h.children.contains(scope)) host = h);
+			if (host == null) break;
+			final owner: QueryNode = host;
+			result = { node: scope, parent: owner };
+			cur = owner.kind == condKind ? owner : null;
+		}
+		return result;
 	}
 
 }

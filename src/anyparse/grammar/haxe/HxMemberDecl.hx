@@ -48,5 +48,5 @@ package anyparse.grammar.haxe;
 typedef HxMemberDecl = {
 	@:trivia @:tryparse @:fmt(metaLineEndPolicy('metadataFunctionLineEnd')) var meta: Array<HxMetadata>;
 	@:trivia @:tryparse @:fmt(forceInlineSep) var modifiers: Array<HxMemberModifier>;
-	var member: HxClassMember;
+	@:optional @:absentOn('}') @:fmt(bareRefSepWhenPresent) var member: Null<HxClassMember>;
 }

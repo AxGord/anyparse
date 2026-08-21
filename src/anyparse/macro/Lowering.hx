@@ -927,8 +927,8 @@ class Lowering {
 			// ω-cond-comp-engine optional-kw Star, ω-issue-48-v2 / ω-untyped-keep-trybody
 			// / ω-casepattern-keep BeforeNewline slot, ω-598-member-leading-comment
 			// BeforeLeading slot).
-			final beforeNlLocal: String = '_beforeNl_$fieldName';
-			final beforeLeadingLocal: String = '_beforeLeadCm_$fieldName';
+			final beforeNlLocal: String = beforeNewlineLocalName(fieldName);
+			final beforeLeadingLocal: String = beforeLeadingLocalName(fieldName);
 			// ω-optional-star-rewind: when the field is `@:optional Star`
 			// with `@:lead` (e.g. `HxTypeRef.params:Array<HxType>` —
 			// `<...>`), defer the pre-field `skipWs` into the emit so the
@@ -1009,7 +1009,7 @@ class Lowering {
 			emitFieldValueByKind(
 				child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits,
 				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
-				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix
+				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix, hasBeforeNewlineSlot
 			);
 			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
 			// already emitted the close literal as part of the loop wrappers.
@@ -3054,76 +3054,54 @@ class Lowering {
 				break;
 			};
 		final gate: Expr = starGateStep(elemFirst, exitArm);
-		return nestBody
-			? macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					final _lead = collectTrivia(ctx);
-					final _afterTriviaPos: Int = ctx.pos;
-					$gate;
-					try {
-						final _node: $elemCT = $elemCall;
-						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
-						var _sepAfter: Bool = false;
-						while (ctx.pos < ctx.input.length) {
-							final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-								ctx.pos++;
-							else
-								break;
-						}
-						_sepAfter = matchLit(ctx, $v{sepText});
-						final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
-						$i{trailPresentLocal} = _sepAfter;
-						$accumRef.push({
-							blankBefore: _lead.blankBefore,
-							blankBefore2: _lead.blankBefore2,
-							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-							newlineBefore: _lead.newlineBefore,
-							leadingComments: _lead.leadingComments,
-							trailingComment: _trailing,
-							trailingBeforeSep: _trailingBeforeSep != null,
-							sepAfter: _sepAfter,
-							node: _node,
-						});
-					} catch (_e: anyparse.runtime.ParseError)
-						$exitArm;
-				}
+		// ω-orphan-prefix-member: the sep twin of the no-sep loops' zero-width
+		// guard. Here "no progress" means neither the element NOR the separator
+		// consumed anything — a successful `matchLit` would have moved `ctx.pos`
+		// past `_afterTriviaPos`, so reaching the push still parked there is the
+		// whole test, and it also proves `_sepAfter` is false. Latent for every
+		// grammar today (no element rule can match zero-width once `HxMemberDecl`
+		// is excluded), placed because this loop family's only exit is a parse
+		// failure and the module-scope twin of the member fix would arrive here.
+		//
+		// nestBody used to fork the whole loop, but the ONLY thing it varied was the
+		// `_afterTriviaPos` declaration the guard now needs on both sides — every
+		// other difference already travels through the spliced `$exitArm`. One body.
+		return macro {
+			while (true) {
+				final _savedPos: Int = ctx.pos;
+				final _lead = collectTrivia(ctx);
+				final _afterTriviaPos: Int = ctx.pos;
+				$gate;
+				try {
+					final _node: $elemCT = $elemCall;
+					final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
+					var _sepAfter: Bool = false;
+					while (ctx.pos < ctx.input.length) {
+						final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
+						if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
+							ctx.pos++;
+						else
+							break;
+					}
+					_sepAfter = matchLit(ctx, $v{sepText});
+					final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+					$i{trailPresentLocal} = _sepAfter;
+					if (ctx.pos == _afterTriviaPos) throw anyparse.runtime.ParseError.backtrack;
+					$accumRef.push({
+						blankBefore: _lead.blankBefore,
+						blankBefore2: _lead.blankBefore2,
+						blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+						newlineBefore: _lead.newlineBefore,
+						leadingComments: _lead.leadingComments,
+						trailingComment: _trailing,
+						trailingBeforeSep: _trailingBeforeSep != null,
+						sepAfter: _sepAfter,
+						node: _node,
+					});
+				} catch (_e: anyparse.runtime.ParseError)
+					$exitArm;
 			}
-			: macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					final _lead = collectTrivia(ctx);
-					$gate;
-					try {
-						final _node: $elemCT = $elemCall;
-						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
-						var _sepAfter: Bool = false;
-						while (ctx.pos < ctx.input.length) {
-							final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-								ctx.pos++;
-							else
-								break;
-						}
-						_sepAfter = matchLit(ctx, $v{sepText});
-						final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
-						$i{trailPresentLocal} = _sepAfter;
-						$accumRef.push({
-							blankBefore: _lead.blankBefore,
-							blankBefore2: _lead.blankBefore2,
-							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-							newlineBefore: _lead.newlineBefore,
-							leadingComments: _lead.leadingComments,
-							trailingComment: _trailing,
-							trailingBeforeSep: _trailingBeforeSep != null,
-							sepAfter: _sepAfter,
-							node: _node,
-						});
-					} catch (_e: anyparse.runtime.ParseError)
-						$exitArm;
-				}
-			};
+		};
 	}
 
 	private function buildTriviaTryparseNoSepBody(
@@ -3150,6 +3128,14 @@ class Lowering {
 					$nestGate;
 					try {
 						final _node: $elemCT = $elemCall;
+						// ω-orphan-prefix-member: an element rule every one of whose
+						// fields can be absent (a Seq of empty Stars plus an
+						// `@:absentOn` Ref) parses successfully having consumed
+						// NOTHING — and this loop's only exit is a parse failure, so
+						// a zero-width success spins forever. Rethrowing the
+						// backtrack sentinel routes it through the loop's own
+						// termination path.
+						if (ctx.pos == _afterTriviaPos) throw anyparse.runtime.ParseError.backtrack;
 						final _trailing: Null<String> = collectTrailingFull(ctx);
 						$accumRef.push({
 							blankBefore: _lead.blankBefore,
@@ -3221,6 +3207,9 @@ class Lowering {
 				$nonNestGate;
 				try {
 					final _node: $elemCT = $elemCall;
+					// ω-orphan-prefix-member: zero-width success guard — see the
+					// nestBody arm above.
+					if (ctx.pos == _leadStart) throw anyparse.runtime.ParseError.backtrack;
 					final _trailing: Null<String> = collectTrailingFull(ctx);
 					var _nlAfterSep: Bool = false;
 					$nlAfterSepScan;
@@ -4233,13 +4222,20 @@ class Lowering {
 			// throw (its body is a bounded scan plus `matchLit` comment
 			// probes, none of which raise), so the two shapes are
 			// observationally identical.
+			// ω-orphan-prefix-member: plain-mode twin of the trivia loop's
+			// zero-width success guard — an element rule whose every field can
+			// be absent consumes nothing and this loop's only exit is a parse
+			// failure, so the backtrack sentinel is rethrown to reach it.
 			parseSteps.push(gate == null
 				? macro {
 					while (true) {
 						final _savedPos: Int = ctx.pos;
 						try {
 							skipWs(ctx);
-							$accumRef.push($elemCall);
+							final _elemStart: Int = ctx.pos;
+							final _elem = $elemCall;
+							if (ctx.pos == _elemStart) throw anyparse.runtime.ParseError.backtrack;
+							$accumRef.push(_elem);
 						} catch (_e: anyparse.runtime.ParseError)
 							$exitArm;
 					}
@@ -4249,8 +4245,11 @@ class Lowering {
 						final _savedPos: Int = ctx.pos;
 						skipWs(ctx);
 						$gate;
+						final _elemStart: Int = ctx.pos;
 						try {
-							$accumRef.push($elemCall);
+							final _elem = $elemCall;
+							if (ctx.pos == _elemStart) throw anyparse.runtime.ParseError.backtrack;
+							$accumRef.push(_elem);
 						} catch (_e: anyparse.runtime.ParseError)
 							$exitArm;
 					}
@@ -5319,7 +5318,7 @@ class Lowering {
 		child: ShapeNode, fieldName: String, localName: String, parseSteps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>,
 		trailText: Null<String>, absentOnLits: Null<Array<String>>, hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr,
 		hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String,
-		beforeKwLeadingLocal: String, beforeKwTrailingLocal: String
+		beforeKwLeadingLocal: String, beforeKwTrailingLocal: String, hasBeforeSlots: Bool
 	): Void {
 		if (kwLead == null && leadText == null && absentOnLits == null) {
 			Context.fatalError('Lowering: @:optional struct field "$fieldName" requires @:lead, @:kw or @:absentOn', Context.currentPos());
@@ -5385,34 +5384,72 @@ class Lowering {
 			? TPath({ pack: [], name: 'Null', params: [TPType(ruleReturnCT(refName))] })
 			: child.annotations[AnnotationKeys.BASE_FIELD_TYPE];
 		if (absentOnLits != null) {
-			// `@:absentOn(lit1, lit2, ...)` — peek-ahead absence
-			// dispatch. The listed terminators are NOT consumed
-			// (they belong to the enclosing context); the parser
-			// just decides whether to call `parseRef` or set the
-			// field to `null`. On absence the pre-ws position is
-			// restored so any leading whitespace stays visible to
-			// the parent's next `skipWs`. On presence the call
-			// runs from the post-ws position; `parseRef` does not
-			// double-skip. Trivia mode applies the same
-			// `pendingTrivia` stash as the lead-led branch so
-			// leading comments captured before an absent body
-			// flow to the next sibling's `collectTrivia`.
-			final peekChain: Expr = {
-				var acc: Expr = macro peekLit(ctx, $v{absentOnLits[0]});
-				for (i in 1...absentOnLits.length) {
-					final lit: String = absentOnLits[i];
-					acc = macro $acc || peekLit(ctx, $v{lit});
+			emitAbsentOnRefField(fieldName, localName, parseSteps, absentOnLits, subCall, fieldCT, hasBeforeSlots);
+		} else {
+			emitOptionalRefLeadCommit(
+				parseSteps, localName, fieldCT, subCall, kwLead, leadText, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
+				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
+			);
+		}
+	}
+
+	/**
+	 * `@:absentOn(lit1, lit2, ...)` — peek-ahead absence dispatch for an optional Ref field.
+	 *
+	 * The listed terminators are NOT consumed (they belong to the enclosing context); the parser
+	 * just decides whether to call `parseRef` or set the field to `null`. On absence the pre-ws
+	 * position is restored so any leading whitespace stays visible to the parent's next `skipWs`.
+	 * On presence the call runs from the post-ws position; `parseRef` does not double-skip. Trivia
+	 * mode applies the same `pendingTrivia` stash as the lead-led branch so leading comments
+	 * captured before an absent body flow to the next sibling's `collectTrivia`.
+	 *
+	 * ω-orphan-prefix-member: with `@:fmt(bareRefSepWhenPresent)` the field ALSO carries the
+	 * bare-Ref `<field>BeforeNewline` / `<field>BeforeLeading` slots, so the pre-peek
+	 * `collectTrivia` result is captured into the two locals the struct literal reads instead of
+	 * being handed straight to `pendingTrivia` — the writer needs those signals to reproduce the
+	 * gap before a PRESENT field. The absent branch still stashes and rewinds, so trivia before
+	 * the terminator stays visible to the enclosing Star.
+	 */
+	private function emitAbsentOnRefField(
+		fieldName: String, localName: String, parseSteps: Array<Expr>, absentOnLits: Array<String>, subCall: Expr, fieldCT: ComplexType,
+		hasBeforeSlots: Bool
+	): Void {
+		final peekChain: Expr = {
+			var acc: Expr = macro peekLit(ctx, $v{absentOnLits[0]});
+			for (i in 1...absentOnLits.length) {
+				final lit: String = absentOnLits[i];
+				acc = macro $acc || peekLit(ctx, $v{lit});
+			}
+			acc;
+		};
+		final captureBeforeSlots: Bool = hasBeforeSlots && _ctx.trivia;
+		if (captureBeforeSlots) emitAbsentOnBeforeSlots(fieldName, parseSteps);
+		final wsAction: Expr = _ctx.trivia
+			? macro {
+				final _t = collectTrivia(ctx);
+				if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
+					ctx.pendingTrivia = _t;
+			}
+			: macro skipWs(ctx);
+		// The absent branch REWINDS to `_absentWsPos`, which puts every byte
+		// `collectTrivia` just read back in front of the cursor — so the enclosing
+		// Star re-scans them, and must NOT ALSO be handed them through the stash, or
+		// the same comment is emitted twice and doubles again on every further pass
+		// (`#if a #end` with an own-line `// c` before the class `}` went 1 -> 2 -> 4).
+		// Restoring the INCOMING stash instead keeps both halves right: bytes after
+		// `_absentWsPos` come back through the re-scan, bytes before it — a preceding
+		// empty Star's stash, which no rewind can reach — come back through here.
+		final absentOnValueExpr: Expr = captureBeforeSlots
+			? macro {
+				if ($peekChain) {
+					ctx.pendingTrivia = _absentPending;
+					ctx.pos = _absentWsPos;
+					null;
+				} else {
+					$subCall;
 				}
-				acc;
-			};
-			final wsAction: Expr = _ctx.trivia
-				? macro {
-					final _t = collectTrivia(ctx);
-					if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
-						ctx.pendingTrivia = _t;
-				}
-				: macro skipWs(ctx);
-			final absentOnValueExpr: Expr = macro {
+			}
+			: macro {
 				final _wsPos: Int = ctx.pos;
 				$wsAction;
 				if ($peekChain) {
@@ -5422,23 +5459,60 @@ class Lowering {
 					$subCall;
 				}
 			};
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: localName,
-						type: fieldCT,
-						expr: absentOnValueExpr,
-						isFinal: true
-					}
-				]),
-				pos: Context.currentPos()
-			});
-		} else {
-			emitOptionalRefLeadCommit(
-				parseSteps, localName, fieldCT, subCall, kwLead, leadText, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
-				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
-			);
-		}
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: localName,
+					type: fieldCT,
+					expr: absentOnValueExpr,
+					isFinal: true
+				}
+			]),
+			pos: Context.currentPos()
+		});
+	}
+
+	/**
+	 * The `collectTrivia` run an `@:absentOn` field opted into `@:fmt(bareRefSepWhenPresent)`
+	 * performs BEFORE its absence peek, split into the two locals the struct literal writes onto
+	 * the `<field>BeforeNewline` / `<field>BeforeLeading` synth slots. Same split as
+	 * `emitPreFieldWs`'s mandatory bare-Ref arm, which this field bypasses.
+	 */
+	private function emitAbsentOnBeforeSlots(fieldName: String, parseSteps: Array<Expr>): Void {
+		final arrayStrCT: ComplexType = TPath({
+			pack: [],
+			name: 'Array',
+			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
+		});
+		parseSteps.push(macro final _absentWsPos: Int = ctx.pos);
+		// The stash a PRECEDING empty bare-tryparse Star left behind lives in bytes
+		// BEFORE `_absentWsPos`, so rewinding cannot make it re-scannable — it has to
+		// be handed back verbatim on the absent branch. Snapshotted before
+		// `collectTrivia` drains it. Same shape as the try-parse loop's `_savedPending`.
+		parseSteps.push(macro final _absentPending = ctx.pendingTrivia);
+		parseSteps.push(macro final _absentTrivia = collectTrivia(ctx));
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: beforeNewlineLocalName(fieldName),
+					type: macro :Bool,
+					expr: macro _absentTrivia.newlineBefore,
+					isFinal: true
+				}
+			]),
+			pos: Context.currentPos()
+		});
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: beforeLeadingLocalName(fieldName),
+					type: arrayStrCT,
+					expr: macro _absentTrivia.leadingComments,
+					isFinal: true
+				}
+			]),
+			pos: Context.currentPos()
+		});
 	}
 
 	/**
@@ -5760,14 +5834,14 @@ class Lowering {
 		kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, absentOnLits: Null<Array<String>>,
 		hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr, hasKwTriviaSlots: Bool, afterKwLocal: String,
 		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
-		beforeKwTrailingLocal: String, lenPrefix: Null<{ width: Int, encoding: String }>
+		beforeKwTrailingLocal: String, lenPrefix: Null<{ width: Int, encoding: String }>, hasBeforeSlots: Bool
 	): Void {
 		switch child.kind {
 			case Ref if (isOptional):
 				emitOptionalRefField(
 					child, fieldName, localName, parseSteps, kwLead, leadText, trailText, absentOnLits, hasOptionalRefAfterTrailSlot,
 					captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal,
-					beforeKwLeadingLocal, beforeKwTrailingLocal
+					beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeSlots
 				);
 			case Ref:
 				final refName: String = child.annotations[AnnotationKeys.BASE_REF];
@@ -5936,16 +6010,19 @@ class Lowering {
 	private function computeBeforeSlots(
 		child: ShapeNode, node: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>
 	): { hasBeforeNewlineSlot: Bool, hasBeforeLeadingSlot: Bool } {
-		final isBareTriviaRefNoLead: Bool = child.kind == Ref && !isOptional && kwLead == null && leadText == null && _ctx.trivia
-			&& isTriviaBearing(typePath);
-		final isFirstField: Bool = child == node.children[0];
-		final isFirstFieldNlOptIn: Bool = isBareTriviaRefNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-		final isBareTriviaStarNoLead: Bool = isStar && !isOptional && kwLead == null && leadText == null && _ctx.trivia
-			&& isTriviaBearing(typePath);
-		final isFirstFieldStarNlOptIn: Bool = isBareTriviaStarNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-		final hasBeforeNewlineSlot: Bool = (isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn)) || isFirstFieldStarNlOptIn;
-		final hasBeforeLeadingSlot: Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
-		return { hasBeforeNewlineSlot: hasBeforeNewlineSlot, hasBeforeLeadingSlot: hasBeforeLeadingSlot };
+		// ω-orphan-prefix-member: an `@:optional @:absentOn` Ref owns its own
+		// pre-field ws handling and normally grows no before-slots. The
+		// `@:fmt(bareRefSepWhenPresent)` opt-in puts it back on the bare-Ref
+		// footing for the PRESENT case: it needs the same source-newline and
+		// gap-comment signals the mandatory field had, or the writer cannot
+		// reproduce the gap between the preceding Star and the field's first
+		// token. Mirrored by `TriviaTypeSynth.isBareNonFirstRef`.
+		final bareTriviaNoLead: Bool = kwLead == null && leadText == null && _ctx.trivia && isTriviaBearing(typePath);
+		final bareRef: Bool = child.kind == Ref && bareTriviaNoLead && (!isOptional || child.fmtHasFlag('bareRefSepWhenPresent'));
+		final bareStar: Bool = isStar && !isOptional && bareTriviaNoLead;
+		final firstFieldOptIn: Bool = child == node.children[0] && child.fmtHasFlag('beforeNewlineSlotFirst');
+		final refSlot: Bool = bareRef && (child != node.children[0] || firstFieldOptIn);
+		return { hasBeforeNewlineSlot: refSlot || (bareStar && firstFieldOptIn), hasBeforeLeadingSlot: refSlot };
 	}
 
 	/**
@@ -6133,6 +6210,23 @@ class Lowering {
 	 * (i.e. `openText != null`).
 	 */
 	public static inline function trailingOpenLocalName(localName: String): String return '${localName}_trailOpen';
+
+	/**
+	 * Name of the `Bool` local carrying a bare non-first Ref's `<field>BeforeNewline`
+	 * slot value (ω-issue-48-v2), and of the `Array<String>` local carrying its
+	 * `<field>BeforeLeading` gap comments (ω-598-member-leading-comment).
+	 *
+	 * Two emitters declare them — `emitPreFieldWs` for the mandatory field and
+	 * `emitAbsentOnBeforeSlots` for the `@:fmt(bareRefSepWhenPresent)` optional one —
+	 * and `lowerStruct`'s struct-literal build reads them back by name. Spelling the
+	 * name in one place is what keeps those three from drifting apart silently: a
+	 * mismatch is not a compile error in the macro, only an undefined local in the
+	 * GENERATED parser.
+	 */
+	public static inline function beforeNewlineLocalName(fieldName: String): String return '_beforeNl_$fieldName';
+
+	/** Sibling of `beforeNewlineLocalName` for the `<field>BeforeLeading` slot. */
+	public static inline function beforeLeadingLocalName(fieldName: String): String return '_beforeLeadCm_$fieldName';
 
 	/**
 	 * Name of the `Bool` local that records whether a tryparse+nestBody

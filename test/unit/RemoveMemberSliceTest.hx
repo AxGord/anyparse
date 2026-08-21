@@ -211,6 +211,24 @@ class RemoveMemberSliceTest extends Test {
 	}
 
 	/**
+	 * A member of an INNER region is a member of the outer one too, so emptying the inner empties
+	 * both. Counting only the region's DIRECT children stopped at the inner one and left the outer
+	 * `#if a … #end` behind as a husk guarding nothing — visible only once the parser learned to
+	 * accept an emptied member-position region, which it now does. `MemberBranchScan.regionMembers`
+	 * is the shared count that reaches through the nesting; the walk climbs while it stays empty.
+	 */
+	public function testNestedSoleMemberTakesTheOuterRegionToo(): Void {
+		final source: String = 'class C {\n\t#if a\n\t#if b\n\tvar drop:Int;\n\t#end\n\t#end\n\tvar keep:Int;\n}\n';
+		Assert.equals('class C {\n\tvar keep:Int;\n}\n', okText(source, 'C', 'drop'));
+	}
+
+	/** The same nesting in LAST position, where the husk would have had no member after it. */
+	public function testNestedSoleMemberInLastPositionTakesTheOuterRegionToo(): Void {
+		final source: String = 'class C {\n\tvar keep:Int;\n\t#if a\n\t#if b\n\tvar drop:Int;\n\t#end\n\t#end\n}\n';
+		Assert.equals('class C {\n\tvar keep:Int;\n}\n', okText(source, 'C', 'drop'));
+	}
+
+	/**
 	 * Repeating a name OUTSIDE a conditional region is not legal Haxe, so the source is already
 	 * rejected by the compiler — removing both would launder that, and the refusal names it.
 	 */

@@ -197,14 +197,34 @@ final class MemberBranchScan {
 	}
 
 	/**
+	 * Every member declaration a conditional REGION holds, across all of its branches and through any
+	 * region nested inside it — the one answer to "what would emptying this region take with it".
+	 *
+	 * Nesting is why this is not `region.children.filter(isMember)`: a member of an inner region is a
+	 * member of the outer one too, so removing it empties BOTH. `eachMemberHost` walks exactly the
+	 * hosts a member may sit in, which is the same set the fold and the deletion ops address.
+	 *
+	 * Shared so the two callers that ask the question cannot drift: `survivingDeletions` uses it to
+	 * WITHHOLD deletions that would empty a region, `RemoveMember` to WIDEN a deletion until it takes
+	 * the emptied region with it. Opposite actions, one predicate.
+	 */
+	public static function regionMembers(region: QueryNode, isMember: QueryNode -> Bool): Array<QueryNode> {
+		final members: Array<QueryNode> = [];
+		RefactorSupport.eachMemberHost(region, host -> for (c in host.children) if (isMember(c)) members.push(c));
+		return members;
+	}
+
+	/**
 	 * The subset of `deleting` a fix may actually remove: every member whose deletion would leave a
 	 * conditional REGION with no member declaration at all is dropped, together with the rest of that
 	 * region's members.
 	 *
-	 * The grammar models an empty BRANCH (`#if cpp #else var b; #end` parses) but not a region emptied
-	 * of members, so such a splice is rejected by the re-parse gate — and with it EVERY other edit the
-	 * same `--fix` pass had for that file. Withholding these edits keeps the findings and lets the rest
-	 * of the file's fixes land.
+	 * The reason is NOT that the parser rejects the result — since the member-position empty-region
+	 * slice it parses and round-trips verbatim, exactly as the Haxe compiler has always accepted it.
+	 * The reason is that a region exists for a configuration this run cannot see: a scan that found no
+	 * occurrence of its members proves nothing about the build where the branch is live, so the honest
+	 * answer is to keep the finding and withhold the edit. Withholding also lets the rest of the same
+	 * `--fix` pass land on that file.
 	 *
 	 * The question is per EDIT SET, not per member: two orphan members that are together all of a
 	 * region's members each look non-sole on their own. A member of a NESTED region counts toward its
@@ -215,8 +235,7 @@ final class MemberBranchScan {
 	): Array<QueryNode> {
 		final refused: Array<QueryNode> = [];
 		eachRegion(seams, container, region -> {
-			final members: Array<QueryNode> = [];
-			RefactorSupport.eachMemberHost(region, host -> for (c in host.children) if (isMember(c)) members.push(c));
+			final members: Array<QueryNode> = regionMembers(region, isMember);
 			if (members.length == 0 || members.exists(m -> !deleting.contains(m))) return;
 			for (m in members) if (!refused.contains(m))
 				refused.push(m);

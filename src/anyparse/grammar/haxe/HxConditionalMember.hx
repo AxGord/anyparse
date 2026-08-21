@@ -28,18 +28,21 @@ package anyparse.grammar.haxe;
  * `#else`, and `#end` fail every meta + modifier + member-keyword
  * dispatch path, so the loop stops there.
  *
- * Known limitation, shared verbatim with the decl-scope precedent: an
- * EMPTY body (`#if cond #end` with zero members) is rejected, not
- * accepted as a zero-element Star. `HxMemberDecl`'s empty meta +
- * modifier prefix Stars consume nothing, then the mandatory
- * `member:HxClassMember` field throws on the terminator before the
- * tryparse Star can roll back to zero elements. `HxConditionalDecl`
- * behaves identically (`#if sys\n#end` at module scope throws
- * `expected HxDecl`); member scope mirrors it rather than diverging.
- * No real-world source has an empty conditional member body. Lifting
- * this is a core Lowering tryparse-Star-of-struct rollback change
- * spanning decl + stmt + member scopes, out of scope for the
- * member-scope twin slice.
+ * An EMPTY body parses, and this Star was never what stood in its way: it
+ * DOES roll back to zero elements, which `#if a #else var x; #end` — an
+ * empty then-body, parsed since the slice shipped — has always proved. What
+ * rejected `#if cond #end` sat one level up. `HxMemberDecl.meta` claims the
+ * whole region (`HxMetadata.Conditional` takes an empty body), so the region
+ * becomes a member PREFIX exactly as in `#if a #end var b:Int;`, and the
+ * mandatory `member` field was then left facing the class-body `}`. `member`
+ * is now `@:optional @:absentOn` on that `}`, so a member declaration that is
+ * nothing but its own prefix is legal — and the empty-region shape therefore
+ * lands in `meta`, not in this typedef.
+ *
+ * Module scope is NOT fixed and is not the same fix: `HxTopLevelDecl.decl`
+ * has the identical mandatory-field shape, but its terminator is EOF, which
+ * `@:absentOn` has no literal to peek — `class C {}` followed by a trailing
+ * `#if sys` / `#end` still throws.
  *
  * Nested `#if` is supported transitively because the body re-enters
  * `HxClassMember.Conditional` through `HxMemberDecl`.
