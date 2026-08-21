@@ -539,6 +539,38 @@ class UnusedPrivateCheckTest extends Test {
 	}
 
 	/**
+	 * The build-macro question had TWO answers: this check's leading-run walk, which knew only
+	 * `@:build`, and `MemberWriteScan.carriesBuildMacro`, which knows all three spellings. The walk
+	 * now reads `RefShape.typeBuildMacroMetaNames` instead of a Haxe tag written into the check, so
+	 * a type built per instantiation is protected exactly like a `@:build` one.
+	 */
+	public function testFixKeepsGenericBuildClassMember(): Void {
+		assertReportedButNotDeleted('@:genericBuild(M.build()) class C {\n\tprivate function dead() {}\n}');
+	}
+
+	/** The third spelling, and the one that reaches a class through `implements` in the wild. */
+	public function testFixKeepsAutoBuildClassMember(): Void {
+		assertReportedButNotDeleted('@:autoBuild(M.build()) class C {\n\tprivate function dead() {}\n}');
+	}
+
+	/** The empty-constructor arm reads the same seam, through its own `typeStartsAny` call. */
+	public function testEmptyCtorNotFlaggedWhenClassHasGenericBuild(): Void {
+		final src: String = '@:genericBuild(M.b()) class U {\n\tpublic static function draw() {}\n\tprivate function new() {}\n}';
+		Assert.equals(
+			0,
+			new UnusedPrivate().run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin()).filter(v -> v.message.contains("'new'")).length
+		);
+	}
+
+	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
+	private function assertReportedButNotDeleted(src: String): Void {
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length, 'the member is still reported');
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'and not deleted');
+	}
+
+	/**
 	 * Gate 3 (@:keep on the class): all members are retained for reflection / DCE — a
 	 * private member is reported but never deleted.
 	 */

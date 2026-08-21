@@ -824,6 +824,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			enumAbstractDeclKind: 'EnumAbstractDecl',
 			enumAbstractMetaName: '@:enum',
 			operatorOverloadMetaName: '@:op',
+			// The same three tokens `MemberWriteScan.carriesBuildMacro` matches, published so the
+			// STRUCTURAL leading-run walk `unused-private` uses asks the grammar rather than spelling
+			// them itself. `BuildMacroMetaSeamTest` fails if the two lists ever disagree.
+			typeBuildMacroMetaNames: ['@:build', '@:autoBuild', '@:genericBuild'],
+			retainedDeclMetaName: '@:keep',
 			enumAbstractSyntax: { head: 'enum abstract {name}({under}) to {under}', bodyOpen: '{' },
 			rawDynamicTypeName: 'Dynamic',
 			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],

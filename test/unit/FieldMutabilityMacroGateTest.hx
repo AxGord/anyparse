@@ -2,21 +2,31 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.check.Check.Violation;
+import anyparse.check.Check;
+import anyparse.check.InlineConstant;
 import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
+import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
- * Two rules that change a declaration's MUTABILITY, and the two ways the declaration they read
- * is not the declaration the compiler sees.
+ * Rules that act on a declaration the compiler does NOT see, and the two ways it differs from the
+ * one they read.
  *
  * A build macro rewrites members arbitrarily. `pony.magic.DeclaratorBuilder` — reached through
  * `implements Declarator`, so the class itself carries no metadata — strips the initializer off
  * every non-inline `var` field and moves the assignment into the constructor. `var` -> `final`
  * then gives `Static final variable must be initialized`, and a field promoted to `static` gives
- * `Cannot access static field from a class instance`, raised from inside the builder. Ten fields
- * in one file of the reporting tree, 25 types overall.
+ * `Cannot access static field from a class instance`, raised from inside the builder. Ten fields in one file of the reporting tree, 25 types overall.
+ *
+ * Which rules take the gate was itself a gap. `inline-constant` and `trivial-getter` consulted NO
+ * build-macro predicate — not `@:build`, not `@:autoBuild`, not `@:genericBuild` — while the four
+ * field rules, `member-order` and `prefer-inline` all did; the residue was visible in the
+ * `@:genericBuild` fixture of `43ce9697` and left alone there. Both were measured on Haxe 4.3.7
+ * before being gated: a builder that rewrites a `static final`'s initializer makes `inline-constant`'s
+ * rewrite "Inline variable initialization must be a constant value", and a builder that reads the
+ * backing field makes `trivial-getter`'s collapse `Unknown identifier`. Both compile before the fix
+ * and fail after it, under `@:build` on the type and under `@:autoBuild` through `implements` alike.
  *
  * An ABSTRACT whose member rebinds `this` needs a mutable local, and the gate for that already
  * existed — but it read the local's DECLARED type, which an unannotated local has none of. So
@@ -31,6 +41,13 @@ class FieldMutabilityMacroGateTest extends Test {
 	/** An abstract whose non-constructor member rebinds `this`, so a binding of its type must stay mutable. */
 	private static final THREAD_TASKS: String = 'package p;\n\nabstract ThreadTasks(UInt) {\n\n'
 		+ '\tpublic inline function new() this = 0;\n\n\tpublic inline function add(f: Int): Void this = this + f;\n\n}\n';
+
+	/**
+	 * The same interface WITHOUT the grant. The `@:autoBuild` arms below differ from their control by
+	 * this one tag and nothing else — an `implements` of its own would otherwise move two gates at once
+	 * (`trivial-getter` asks every implemented interface whether it declares the property).
+	 */
+	private static final PLAIN_IFACE: String = 'package p;\n\ninterface Plain {}\n';
 
 	public function testAFieldOfAMacroBuiltTypeIsNotFinalized(): Void {
 		final owner: String = 'package p;\n\nclass W implements Declarator {\n\n\tprivate static var counter: Int = 0;\n\n'
@@ -82,6 +99,32 @@ class FieldMutabilityMacroGateTest extends Test {
 		Assert.equals(0, fieldViolations(owner).length);
 	}
 
+	/**
+	 * `inline-constant` adds `inline` to a `static final` scalar, and a builder that REWRITES that
+	 * field's initializer makes the result "Inline variable initialization must be a constant value"
+	 * — measured on Haxe 4.3.7 with `@:build` on the class and with `@:autoBuild` reached through
+	 * `implements`, which is the shape the file itself carries no metadata for. The rule consulted no
+	 * build-macro predicate at all until then; `@:coreApi`'s gate landed beside it and left this one.
+	 */
+	public function testAConstantOfAMacroBuiltTypeIsNotInlined(): Void {
+		Assert.equals(1, constantViolations('class W implements Plain').length, 'the control still fires');
+		Assert.equals(0, constantViolations('class W implements Declarator').length);
+		Assert.equals(0, constantViolations('@:build(p.B.build())\nclass W').length);
+		Assert.equals(0, constantViolations('@:genericBuild(p.B.build())\nclass W').length);
+	}
+
+	/**
+	 * `trivial-getter` DELETES the getter and the backing field, so a member the builder generates
+	 * around them loses its referent — measured, `Unknown identifier : _active` from inside the macro.
+	 * Same three spellings, same control.
+	 */
+	public function testATrivialGetterOfAMacroBuiltTypeIsNotCollapsed(): Void {
+		Assert.equals(1, propertyViolations('class W implements Plain').length, 'the control still fires');
+		Assert.equals(0, propertyViolations('class W implements Declarator').length);
+		Assert.equals(0, propertyViolations('@:build(p.B.build())\nclass W').length);
+		Assert.equals(0, propertyViolations('@:genericBuild(p.B.build())\nclass W').length);
+	}
+
 	public function testAnUnannotatedLocalOfAThisRebindingAbstractIsNotFinalized(): Void {
 		Assert.equals(0, localViolations('var t = new ThreadTasks();\n\t\tt.add(1);\n\t\treturn 0;').length);
 	}
@@ -98,6 +141,33 @@ class FieldMutabilityMacroGateTest extends Test {
 	private function fieldViolations(owner: String): Array<Violation> {
 		return new PreferFinalField().run([
 			{ file: 'p/Declarator.hx', source: DECLARATOR },
+			{ file: 'p/W.hx', source: owner }
+		], new HaxeQueryPlugin()).filter(v -> v.file == 'p/W.hx');
+	}
+
+	/** `inline-constant` findings for a class `head` carrying one private static scalar constant. */
+	private function constantViolations(head: String): Array<Violation> {
+		return ownerViolations(
+			new InlineConstant(),
+			'package p;\n\n${head} {\n\n\tprivate static final LIMIT: Int = 5;\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function read(): Int return LIMIT;\n\n}\n'
+		);
+	}
+
+	/** `trivial-getter` findings for a class `head` carrying one `(get, never)` property over a backing field. */
+	private function propertyViolations(head: String): Array<Violation> {
+		return ownerViolations(
+			new TrivialGetter(),
+			'package p;\n\n$head {\n\n\tpublic var active(get, never): Bool;\n\n\tprivate var _active: Bool = false;\n\n'
+			+ '\tpublic function new() {}\n\n\tprivate function get_active(): Bool return _active;\n\n}\n'
+		);
+	}
+
+	/** Run `check` over `owner` with both interfaces in scope, keeping only the owner's own findings. */
+	private function ownerViolations(check: Check, owner: String): Array<Violation> {
+		return check.run([
+			{ file: 'p/Declarator.hx', source: DECLARATOR },
+			{ file: 'p/Plain.hx', source: PLAIN_IFACE },
 			{ file: 'p/W.hx', source: owner }
 		], new HaxeQueryPlugin()).filter(v -> v.file == 'p/W.hx');
 	}

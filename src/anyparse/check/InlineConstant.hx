@@ -136,7 +136,15 @@ using StringTools;
  * 5. NO `@:keep` / `@:rtti`. A `@:keep`- or `@:rtti`-annotated field, or any member of a class
  *    carrying class-level `@:keep` / `@:rtti`, is explicitly retained for reflection / external
  *    tooling; inlining would erase its reflective value.
- * 6. ENUM ABSTRACT values are structurally excluded — they live under `EnumAbstractDecl`, not a
+ * 6. NO macro-built OWNER. A `@:build` / `@:autoBuild` / `@:genericBuild` type's fields are not the
+ *    fields the declaration holds, so neither arm can reason about them:
+ *    `SymbolIndex.transitivelyCarriesBuildMacro` declines the whole container. Measured on Haxe
+ *    4.3.7 — a builder that rewrites the flagged field's initializer makes the added `inline`
+ *    "Inline variable initialization must be a constant value", for a `@:build` on the class and
+ *    for an `@:autoBuild` reached through `implements` alike, and in the second shape the class
+ *    carries no metadata of its own. This rule consulted no build-macro predicate at all until it
+ *    was measured, while the four field rules, `member-order` and `prefer-inline` all took one.
+ * 7. ENUM ABSTRACT values are structurally excluded — they live under `EnumAbstractDecl`, not a
  *    `visibilityContainerKinds` host, and are handled by `prefer-enum-abstract`. A `#if`-guarded
  *    member IS scanned: the container walk descends into the region branch by branch, so a
  *    guarded `static final` is judged exactly like its plain sibling (adding `inline` to a scalar
@@ -183,6 +191,10 @@ final class InlineConstant implements Check {
 		final reflected: Array<String> = ConstantFieldScan.reflectedNames(files, plugin, seams.stringFold);
 		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
 		final proof: InitProof = (container, init) -> isInlinableInitializer(container, init, seams);
+		// Built for ONE question — `transitivelyCarriesBuildMacro` in `scanContainer`. This rule
+		// asked no index before; the four field rules, `member-order` and `prefer-inline` all did,
+		// and the gap was measured rather than argued (see the class doc).
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -194,7 +206,7 @@ final class InlineConstant implements Check {
 			if (tree != null && !MemberWriteScan.coreApiPinsMemberShape(entry.source))
 				walk(
 					violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, proof,
-					MemberBranchScan.seamsOf(plugin.refShape(), entry.source)
+					MemberBranchScan.seamsOf(plugin.refShape(), entry.source), index
 				);
 		}
 		return violations;
@@ -263,6 +275,12 @@ final class InlineConstant implements Check {
 		return c >= 'A'.code && c <= 'Z'.code;
 	}
 
+	/** Whether `container`'s type — or anything in its supertype / interface closure — is built by a macro. */
+	private static inline function ownerIsMacroBuilt(container: QueryNode, index: SymbolIndex): Bool {
+		final owner: Null<String> = container.name;
+		return owner != null && index.transitivelyCarriesBuildMacro(owner);
+	}
+
 	/**
 	 * Walk `node`; scan every visibility-bearing container's direct children for inlinable static
 	 * final constants. Class-level `@:keep` / `@:rtti` meta projects as `Meta` siblings PRECEDING the
@@ -274,7 +292,7 @@ final class InlineConstant implements Check {
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
-		macroConsumed: Array<String>, inheritedPin: Bool, proof: InitProof, branch: MemberBranchSeams
+		macroConsumed: Array<String>, inheritedPin: Bool, proof: InitProof, branch: MemberBranchSeams, index: SymbolIndex
 	): Void {
 		var classPinned: Bool = inheritedPin;
 		for (child in node.children) {
@@ -282,8 +300,8 @@ final class InlineConstant implements Check {
 				classPinned = classPinned || isPinMeta(child.name);
 			else {
 				if (seams.containers.contains(child.kind))
-					scanContainer(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof, branch);
-				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof, branch);
+					scanContainer(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof, branch, index);
+				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof, branch, index);
 				classPinned = false;
 			}
 		}
@@ -301,8 +319,16 @@ final class InlineConstant implements Check {
 	 */
 	private static function scanContainer(
 		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
-		macroConsumed: Array<String>, classPinned: Bool, proof: InitProof, branch: MemberBranchSeams
+		macroConsumed: Array<String>, classPinned: Bool, proof: InitProof, branch: MemberBranchSeams, index: SymbolIndex
 	): Void {
+		// Build-macro bail. A macro-built type's fields are not the fields the declaration holds, and
+		// BOTH arms of this rule act on the declaration alone: measured on Haxe 4.3.7, a `@:build`
+		// builder that rewrites this field's initializer turns the added `inline` into "Inline
+		// variable initialization must be a constant value". The grant is inherited through
+		// `implements` / `extends` (`@:autoBuild`), where the class carries no metadata of its own,
+		// so the FILE-scoped text scan beside the `@:coreApi` bail above would miss it — the same
+		// per-owner question the four field rules, `member-order` and `prefer-inline` all ask.
+		if (ownerIsMacroBuilt(container, index)) return;
 		MemberBranchScan.eachMember(branch, container, child -> seams.members.contains(child.kind), (member, run, certain) -> {
 			// A modifier run only SOME builds see cannot answer `static` / `inline`, both of which
 			// this rule reads as enabling — see `MemberBranchScan.joinRuns`.

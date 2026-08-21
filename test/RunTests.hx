@@ -293,6 +293,7 @@ import unit.ResolutionScopeCliTest;
 import unit.DeadCodeCheckTest;
 import unit.EmptyBlockCheckTest;
 import unit.MissingVisibilityCheckTest;
+import unit.BuildMacroMetaSeamTest;
 import unit.ModifierKindSeamTest;
 import unit.ModifierOrderCheckTest;
 import unit.ExplicitTypeCheckTest;
@@ -1210,6 +1211,7 @@ class RunTests {
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
 		addCase(new ModifierKindSeamTest());
+		addCase(new BuildMacroMetaSeamTest());
 		addCase(new MemberOrderCheckTest());
 		addCase(new MemberOrderModifierSpanSliceTest());
 		addCase(new FragmentedDocCommentCheckTest());
