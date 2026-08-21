@@ -339,6 +339,7 @@ import unit.SimplifyBooleanReturnChainCheckTest;
 import unit.RedundantThisCheckTest;
 import unit.TypeResolverSliceTest;
 import unit.PreferFinalPublicFieldCheckTest;
+import unit.PreferFinalPublicFieldStructuralTest;
 import unit.PreferReadOnlyFieldCheckTest;
 import unit.MemberOrderCheckTest;
 import unit.FragmentedDocCommentCheckTest;
@@ -1217,6 +1218,7 @@ class RunTests {
 		addCase(new FieldInitInConstructorCheckTest());
 		addCase(new PreferFinalAbstractMethodCheckTest());
 		addCase(new PreferFinalPublicFieldCheckTest());
+		addCase(new PreferFinalPublicFieldStructuralTest());
 		addCase(new PreferReadOnlyFieldCheckTest());
 		addCase(new IdenticalOperandsCheckTest());
 		addCase(new UncheckedNullableTest());

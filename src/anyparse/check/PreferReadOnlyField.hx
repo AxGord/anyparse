@@ -42,6 +42,15 @@ using StringTools;
  *    ambiguous simple name cannot pin the decl range, so it bails.
  * 4. No resolved write to the field lies outside that decl range
  *    (`FieldWriteIndex.writtenExternally`).
+ * 5. No STRUCTURAL type pins the field mutable —
+ *    `SymbolIndex.structuralConformanceForbidsWriteRestriction`. A `(default, null)` field does not
+ *    satisfy a structural `var x:T` the type may be unified with ("Inconsistent setter for
+ *    field x : null should be default"). Narrower by one kind than the finalizing rules'
+ *    gate: a `(default, null)` field of function type DOES satisfy a structural `function x():T`,
+ *    so a structural METHOD member is no obstacle here (both measured). A structural `final
+ *    x:T` is not an arm either, but for a different reason than the finalizing gate's: it
+ *    rejects a plain `var` just as it rejects `(default, null)`, so the rewrite leaves an
+ *    already-broken program equally broken.
  *
  * ## Disjoint from `prefer-final-public-field`
  *
@@ -55,8 +64,7 @@ using StringTools;
  * field whose only other write is one `if (p != null) x = p;` constructor statement
  * is that check's as well — its conditional-default arm folds the default into the
  * constructor — and is ceded through `RefactorSupport.ctorConditionalDefaultFinalEdits`
- * for the same reason. The two checks therefore never emit conflicting fixes for the
- * same field. NOTE: the cession is
+ * for the same reason. The two checks therefore never emit conflicting fixes for the same field — and both cessions are conditional on that check actually claiming the candidate, since the two chains no longer agree on the structural gate. NOTE: the cession is
  * unconditional — it does not check whether `prefer-final-public-field` is enabled,
  * so a config that disables that rule silently drops these findings instead of
  * reporting `(default, null)` for them.
@@ -134,20 +142,29 @@ final class PreferReadOnlyField implements Check {
 		// An implemented interface that cannot be resolved may still declare `name` as a
 		// mutable member, whose property access `(default, null)` would violate.
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
+		// Structural-conformance gate: a `(default, null)` field does not satisfy a structural
+		// `var name:T` the type may be unified with. A structural METHOD member is fine here —
+		// that is the one kind this gate is narrower than `prefer-final-public-field`'s.
+		if (index.structuralConformanceForbidsWriteRestriction(owner, name)) return;
 		if (writeIndex.hasUnresolvedWrite(name)) return;
-		// Cheap gates first: the subtype walk is the only one that scans other files.
 		if (!writeIndex.writtenAnywhere(owner, name)) return;
 		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
 		if (writeIndex.writtenOutsideDeclaration(owner, name)) return;
-		// A no-init field whose sole write is one unconditional top-level constructor
-		// statement is `final`-izable — `prefer-final-public-field`'s constructor arm
-		// claims it (same shared predicate), so it is ceded to keep the fixes disjoint.
-		if (RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
-		// Same cession for the conditional-default fold: an initialized field whose only
-		// other write is one `if (p != null) x = p;` constructor statement becomes `final`
-		// there, so claiming it here would produce two conflicting fixes. The gate chain
-		// above stays a SUPERSET of that check's, so a ceded candidate is always claimed.
-		if (RefactorSupport.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
+		// A no-init field whose sole write is one unconditional top-level constructor statement is
+		// `final`-izable — `prefer-final-public-field`'s constructor arm claims it (same shared
+		// predicate), so it is ceded to keep the fixes disjoint. Same cession for the
+		// conditional-default fold: an initialized field whose only other write is one
+		// `if (p != null) x = p;` constructor statement becomes `final` there.
+		//
+		// Both cessions are conditional on that check actually CLAIMING the candidate. The two
+		// chains are otherwise the same gates, but their structural-conformance gates are not: a
+		// structural METHOD member forbids `final` and tolerates `(default, null)`, so an
+		// unconditional cession there drops the finding on the floor — neither rule reports it.
+		// That is exactly the `Iterator`-shaped field this gate was added for, whose correct
+		// answer is this rule's `(default, null)`, not silence.
+		final finalizable: Bool = !index.structuralConformanceForbidsFinal(owner, name);
+		if (finalizable && RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
+		if (finalizable && RefactorSupport.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
 		out.push({
 			file: file,
 			span: span,

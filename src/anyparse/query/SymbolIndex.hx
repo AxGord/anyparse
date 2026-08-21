@@ -377,6 +377,38 @@ final class SymbolIndex {
 	/** The second of the two members whose declaration IS `Iterator` membership. */
 	private static final NEXT_MEMBER_NAME: String = 'next';
 
+	/** The member whose declaration IS `KeyValueIterable` membership. */
+	private static final KEY_VALUE_ITERATOR_MEMBER_NAME: String = 'keyValueIterator';
+
+	/**
+	 * The member NAME SETS of the language's builtin structural types — the ones no project file
+	 * declares, so the anon-structure walk over the index can never see them. A type declaring
+	 * every name in a set is a value the compiler will unify with that structure, and every one
+	 * of these declares its members as METHODS, which is why they pin only FINALIZATION (a
+	 * `(default, null)` field of function type satisfies a structural method — measured).
+	 *
+	 * `Iterator` and `KeyValueIterator` share one set: the latter is an alias of the former.
+	 */
+	private static final BUILTIN_STRUCTURAL_MEMBER_SETS: Array<Array<String>> = [
+		[HAS_NEXT_MEMBER_NAME, NEXT_MEMBER_NAME],
+		[ITERATOR_MEMBER_NAME],
+		[KEY_VALUE_ITERATOR_MEMBER_NAME]
+	];
+
+	/**
+	 * The anon-structure member kinds that declare a MUTABLE field: the explicit `var x:T;` and
+	 * the two shorthand forms `x:T` / `?x:T`. A value whose own member is `final` — or whose
+	 * write access is restricted to `(default, null)` — cannot unify with one of these.
+	 */
+	private static final MUTABLE_ANON_FIELD_KINDS: Array<String> = ['VarField', 'Required', 'Optional'];
+
+	/**
+	 * The anon-structure member kind that declares a METHOD (`function x():T;`). A `final` field
+	 * cannot unify with it (`Cannot unify final and non-final fields`); a `(default, null)` one
+	 * can, so this kind pins only finalization.
+	 */
+	private static final METHOD_ANON_FIELD_KIND: String = 'FnField';
+
 	/**
 	 * The owner decl kinds whose member a subtype may implement WITHOUT the override modifier — an
 	 * interface method, and an `abstract` method on an abstract class. Under any other kind Haxe
@@ -1031,6 +1063,42 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether making `field` of `typeName` FINAL may break a STRUCTURAL unification. Haxe
+	 * unifies a class instance with an anonymous structure by member set, and a `final` field
+	 * satisfies neither a structural `var x:T` (`Inconsistent setter for field x : ctor should
+	 * be default`) nor a structural `function x():T` (`Cannot unify final and non-final
+	 * fields`) — both measured. The unification is a READ position, so no write-based
+	 * single-assignment proof can see it; this is the gate that does.
+	 *
+	 * CONSERVATIVE — it answers CONFORMANCE, not use: true when SOME structure that names `field`
+	 * mutably could accept the type or a SUBtype of it at all (it declares every member that
+	 * structure names, its own or inherited), whether or not any call site passes one. For a
+	 * ONE-member structure that degenerates to a name test, since the candidate field is that
+	 * member: a field named `iterator` or `keyValueIterator` is therefore never flagged, whatever
+	 * its type. A full proof would have to follow every value of the type into every annotated
+	 * position; this asks the question that bounds it from above, and over-declines exactly on a
+	 * type that coincidentally has the right member set.
+	 *
+	 * Residual blind spots, all under-declining: an anonymous structure written INLINE in an
+	 * annotation (`function f(): { x:Int }`) is no indexed type, nor is one NESTED inside another
+	 * typedef's field type (only top-level declarations enter the walk), and a structure declared in
+	 * a configured library root is outside the report-scoped file set.
+	 */
+	public function structuralConformanceForbidsFinal(typeName: String, field: String): Bool {
+		return structuralConformancePins(typeName, field, true);
+	}
+
+	/**
+	 * The write-restriction counterpart of `structuralConformanceForbidsFinal`: whether rewriting
+	 * `field` of `typeName` to a read-only property may break a structural unification. Narrower
+	 * by exactly one kind — a `(default, null)` field of function type DOES satisfy a structural
+	 * `function x():T` (measured), so only a structural `var x:T` pins it.
+	 */
+	public function structuralConformanceForbidsWriteRestriction(typeName: String, field: String): Bool {
+		return structuralConformancePins(typeName, field, false);
+	}
+
+	/**
 	 * Whether `sub` is provably NOT a (transitive) subtype of `sup` — the POSITIVE proof of the
 	 * negative, which a false `isSubtype` does NOT supply: `isSubtype` ends a branch on any
 	 * unresolvable supertype link, so its `false` unions "provably unrelated" with "unprovable". True
@@ -1629,6 +1697,63 @@ final class SymbolIndex {
 			if (up != null) return up;
 		}
 		return null;
+	}
+
+	/**
+	 * The shared core of `structuralConformanceForbidsFinal` / `structuralConformanceForbidsWriteRestriction`:
+	 * whether some structure declares `field` in a way `typeName` could no longer satisfy after
+	 * the rewrite. `methodMemberPins` is the one axis the two callers differ on — a structural
+	 * METHOD member forbids `final` but tolerates `(default, null)`.
+	 *
+	 * Two arms, both requiring `typeName` OR A SUBTYPE of it to declare the structure's WHOLE
+	 * member set (that is what makes the unification possible in the first place): the language's
+	 * builtin structural aliases, which no project file declares, and every anonymous-structure
+	 * typedef the index holds. A structure declaring `field` as `final` is not an arm — a mutable
+	 * field already fails to unify with it, so finalizing can only repair that, never break it.
+	 */
+	private function structuralConformancePins(typeName: String, field: String, methodMemberPins: Bool): Bool {
+		if (methodMemberPins) for (members in BUILTIN_STRUCTURAL_MEMBER_SETS) if (
+			members.contains(field) && familyDeclaresEveryMember(typeName, members, [])
+		)
+			return true;
+		for (fi in _files) for (t in fi.types) if (t.isAnonStruct) {
+			final declared: Null<MemberInfo> = t.members.find(m -> m.name == field);
+			if (declared == null) continue;
+			final pins: Bool = MUTABLE_ANON_FIELD_KINDS.contains(declared.kind)
+				|| (methodMemberPins && declared.kind == METHOD_ANON_FIELD_KIND);
+			if (pins && familyDeclaresEveryMember(typeName, [for (m in t.members) m.name], [])) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether `typeName` or any type BELOW it declares every member named in `members`. The
+	 * subtype arm is not optional: a subtype INHERITS the field under rewrite, so its own
+	 * conformance pins the declaration exactly as the owner's does — a `final` on a superclass
+	 * field is `Inconsistent setter for field x : ctor should be default` at the SUBTYPE's
+	 * unification site, where the same field as a `var` unifies (measured). `seen` stops a cycle
+	 * in the adjacency, which is built from simple names and can therefore hold one.
+	 */
+	private function familyDeclaresEveryMember(typeName: String, members: Array<String>, seen: Array<String>): Bool {
+		if (seen.contains(typeName)) return false;
+		seen.push(typeName);
+		return declaresEveryMember(typeName, members)
+			|| subtypesOf(typeName).exists(sub -> familyDeclaresEveryMember(sub.type.name, members, seen));
+	}
+
+	/**
+	 * Whether some declaration named `typeName` declares — itself or through a supertype — every
+	 * member named in `members`.
+	 *
+	 * Each candidate declaration is asked from its OWN file rather than package-blind, because a
+	 * simple name two packages both declare resolves to NOTHING package-blind, and "declares
+	 * nothing" is the UNSAFE answer here: it un-gates the rewrite that this whole predicate
+	 * exists to refuse. Any one declaration conforming is enough — the consumers address an owner
+	 * by simple name too, so they cannot tell which declaration their candidate belongs to either,
+	 * and the union is the only reading that cannot under-fire.
+	 */
+	private function declaresEveryMember(typeName: String, members: Array<String>): Bool {
+		return resolvedDeclsNamed(typeName).exists(r -> members.foreach(m -> !lacksMemberClosure(r, m, [])));
 	}
 
 	/** The SIMPLE-name lookup of a type's declaration kind, or null when the scope declares it zero or ambiguously many times. */

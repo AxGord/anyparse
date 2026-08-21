@@ -89,6 +89,17 @@ final class MakeFinal {
 
 		if (keywordAt(src.source, fieldSpanNN.from) != VAR)
 			return Err('field "$fieldName" does not start with the `var` keyword — cannot make it final');
+
+		// Structural-conformance gate — the same `SymbolIndex` predicate the `prefer-final-*`
+		// checks consult, placed after every cheaper one because it is the only gate here that
+		// builds an index. A field the compiler unifies against an anonymous structure declaring
+		// it mutably cannot become `final` ("Cannot unify final and non-final fields"), and no
+		// write scan can see that: the unification is a READ position. The answer is only as
+		// strong as `scopeFiles` — without a `--scope` the index holds this file alone, so a
+		// structure declared elsewhere is invisible and only what THIS file states is decided.
+		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		if (index.structuralConformanceForbidsFinal(typeName, fieldName))
+			return Err('"$fieldName" is a member a structural type may require to stay mutable — cannot make it final');
 		final rewritten: String = '${src.source.substring(0, fieldSpanNN.from)}final${src.source.substring(fieldSpanNN.from + VAR.length)}';
 
 		try

@@ -65,12 +65,18 @@ import anyparse.runtime.Span;
  *    `writtenOutsideDeclaration` (see 1). Receiver resolution covers `this`,
  *    typed identifiers, field-access chains, index accesses, inherited-field and
  *    static roots — see `FieldWriteIndex`'s receiver-resolution doc.
+ * 5. No STRUCTURAL type pins the field mutable — `SymbolIndex.structuralConformanceForbidsFinal`.
+ *    Haxe unifies a class with an anonymous structure by member set, and a `final` field
+ *    satisfies neither a structural `var x:T` nor a structural `function x():T` (both
+ *    measured). That unification is a READ position, so every write gate above is blind to
+ *    it. The gate is conservative by construction: it answers CONFORMANCE — does the type
+ *    declare the whole member set some structure naming this field requires? — not use.
  *
  * Together these prove the single assignment is the sole one. Residual blind spots —
  * the library-side subtype write in item 2, a `@:build` macro injecting a writer,
- * and a structural typedef / anonymous structure that requires the field to stay a
- * mutable `var` (a READ position no write gate sees) — surface as loud compile
- * errors, never silent corruption.
+ * and the two shapes item 5 cannot see — an anonymous structure written INLINE in an
+ * annotation, and a structural type declared in a configured library root — surface as loud
+ * compile errors, never silent corruption.
  *
  * ## Whole-project scope required
  *
@@ -161,6 +167,11 @@ final class PreferFinalPublicField implements Check {
 		// implemented interface that cannot be resolved may still declare a mutable
 		// `name`, so `var → final` is unsafe and skipped conservatively.
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
+		// Structural-conformance gate: the type may be passed where an anonymous structure
+		// declaring `name` mutably is expected — a READ position, so every write gate below is
+		// blind to it — and a `final` field satisfies neither a structural `var` nor a
+		// structural method.
+		if (index.structuralConformanceForbidsFinal(owner, name)) return;
 		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
 		if (initialized && !folded) {
 			if (writeIndex.writtenAnywhere(owner, name)) return;
@@ -171,7 +182,6 @@ final class PreferFinalPublicField implements Check {
 			// constructor statement is the only write there. Same for the folded arm.
 			if (writeIndex.writtenOutsideDeclaration(owner, name)) return;
 		}
-		// Cheapest gates first: the subtype walk is the only one that scans other files.
 		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
 		out.push({
 			file: file,

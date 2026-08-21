@@ -250,6 +250,59 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A structural typedef declaring the same member as a MUTABLE field pins its write
+	 * access too: `(default, null)` against a structural `var` is `Inconsistent setter for
+	 * field x : null should be default`.
+	 */
+	public function testStructuralTypedefMemberNotFlagged(): Void {
+		Assert.equals(
+			0, ownerViolations([
+				{ file: 'S.hx', source: 'typedef S = { var x:Int; }' },
+				{ file: 'C.hx', source: 'class C { public var x:Int = 0; public function bump():Void { x = 5; } }' }
+			]).length
+		);
+	}
+
+	/**
+	 * A structural typedef declaring the member as a METHOD does NOT pin write access — a
+	 * `(default, null)` field of function type satisfies it — so the field stays flagged.
+	 */
+	public function testStructuralMethodMemberStillFlagged(): Void {
+		Assert.equals(
+			1, ownerViolations([
+				{ file: 'S.hx', source: 'typedef S = { function x():Bool; }' },
+				{ file: 'C.hx', source: 'class C { public var x:Void->Bool = null; public function bump():Void { x = null; } }' }
+			]).length
+		);
+	}
+
+	/**
+	 * The cession seam: a no-init field whose sole write is one constructor assignment is
+	 * normally ceded to `prefer-final-public-field`, but a structural METHOD member forbids
+	 * `final` there while tolerating `(default, null)` here. An unconditional cession would drop
+	 * the finding entirely — this is the `Iterator`-shaped field the structural gate was added
+	 * for, and `(default, null)` is its correct answer.
+	 */
+	public function testCededCandidateReclaimedWhenFinalIsPinned(): Void {
+		Assert.equals(
+			1, ownerViolations([
+				{ file: 'S.hx', source: 'typedef S = { function x():Bool; }' },
+				{ file: 'C.hx', source: 'class C { public var x:Void->Bool; public function new(p:Void->Bool) { x = p; } }' }
+			]).length
+		);
+	}
+
+	/** With no structure in scope the same candidate is ceded as before — `final` is available. */
+	public function testCtorSoleAssignmentStillCededWithoutStructure(): Void {
+		Assert.equals(
+			0,
+			ownerViolations([
+				{ file: 'C.hx', source: 'class C { public var x:Void->Bool; public function new(p:Void->Bool) { x = p; } }' }
+			]).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferReadOnlyField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

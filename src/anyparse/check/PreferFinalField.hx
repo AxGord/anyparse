@@ -41,6 +41,16 @@ import anyparse.runtime.Span;
  *
  * Together these prove the assignment is the sole one, so `var → final` is always sound. An interface-mutability gate additionally skips a field an implemented interface declares — or that ANY unresolvable implemented interface might declare — since the interface pins its property access and finalizing would break parity.
  *
+ * A structural-conformance gate (`SymbolIndex.structuralConformanceForbidsFinal`, shared with `prefer-final-public-field` and the `make-final` op, whose write-restriction twin `prefer-read-only-field` takes) applies too. It looks unnecessary here and is not: a PRIVATE member
+ * takes no part in structural unification, and NO access grant changes that — `@:allow` on the
+ * type and `@:access` on the reader both leave `var` failing with "The field x is not public",
+ * with `final` only changing which error prints first. What DOES expose the field is
+ * `@:publicFields`, which publishes an unmarked member: there `var` unifies and `final` is
+ * "Inconsistent setter for field x : ctor should be default" (all four measured). That meta is
+ * not modelled by `RefactorSupport.eachFieldMember`, so such a field is routed to this rule as
+ * non-exported — hence the gate runs unconditionally, at the cost of over-declining an
+ * ordinary private field whose owner happens to declare a conforming member set.
+ *
  * ## Whole-project scope required
  *
  * Confinement is only sound when the lint scope contains EVERY file that can
@@ -165,6 +175,13 @@ final class PreferFinalField implements Check {
 		// access — `var → final` would break parity ("different property access than in
 		// <Interface>"). Applies to both the init and no-init cases below.
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
+		// Structural-conformance gate, the same shared predicate `prefer-final-public-field` and
+		// `make-final` use.
+		// Unconditional, though a PRIVATE member normally takes no part in structural unification
+		// at all: `@:publicFields` publishes an unmarked field, and `eachFieldMember` does not
+		// model that meta, so such a field arrives HERE as non-exported and `final` on it is a
+		// hard error the write gates cannot see. See the class doc for the measured matrix.
+		if (index.structuralConformanceForbidsFinal(owner, name)) return;
 		// A macro-built type's fields are not what the declaration says: an `@:autoBuild`
 		// builder may strip the initializer and move the assignment into the constructor,
 		// after which `var` -> `final` is `Static final variable must be initialized`. The

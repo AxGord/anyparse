@@ -467,6 +467,31 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('sink([_a = new Foo()]);') >= 0);
 	}
 
+	/**
+	 * `@:publicFields` publishes an unmarked member, and `eachFieldMember` does not model that
+	 * meta — so the field arrives at this PRIVATE-field rule while the compiler treats it as
+	 * public: `var` unifies with the structure, `final` is "Inconsistent setter for field x :
+	 * ctor should be default". The shared structural-conformance gate is what covers it.
+	 */
+	public function testPublicFieldsMetaStructuralTypedefMemberNotFlagged(): Void {
+		Assert.equals(
+			0, ownerViolations([
+				{ file: 'C.hx', source: '@:publicFields\nclass C { var x:Int = 0; }' },
+				{ file: 'S.hx', source: 'typedef S = { var x:Int; }' }
+			]).length
+		);
+	}
+
+	/** A structure the class does NOT satisfy (it lacks `y`) leaves the field flagged. */
+	public function testUnsatisfiedStructuralTypedefStillFlagged(): Void {
+		Assert.equals(
+			1, ownerViolations([
+				{ file: 'C.hx', source: '@:publicFields\nclass C { var x:Int = 0; }' },
+				{ file: 'S.hx', source: 'typedef S = { var x:Int; var y:Int; }' }
+			]).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
