@@ -26,21 +26,32 @@ using Lambda;
  * `fold-adjacent-string-literals` grouping runs on, and `renderGroup` / `renderBare`
  * are their inverse. A text fragment is cut twice more: at each `\n` ESCAPE it carries
  * (`splitAtNewlines`), then at each SEPARATOR boundary (`splitAtSeparators`) — together
- * the only seams a literal with no interpolation has. Three Haxe facts live here and
- * nowhere else: `PRIMARY_KINDS`,
+ * the only seams a literal with no interpolation has. Four Haxe facts live here and nowhere else: `PRIMARY_KINDS`,
  * the expression kinds that bind at least as tightly as `+` (so a bare operand needs
  * no parentheses); the single-quoted escaping rules — a lone `$` normalises to `$$`,
  * a double-quoted literal re-escapes `\"` to `"`, `$` to `$$` and `'` to `\'`, and a
  * double-quoted raw whose escapes DECODE to a `$` (`"\x24a"`) may not be re-emitted
  * into a single-quoted literal at all, because the compiler decodes before it scans
  * for `$`, so the text `$a` would become the VALUE of `a` (`HxStringEscape`); and
- * `interpolationBlockSafe`, what a `${ … }` block may contain.
+ * `interpolationBlockSafe`, what a `${ … }` block may LEX, beside `nestsHostQuote`,
+ * what one may readably HOLD; and `INTRINSIC_MARK`, the affix a target intrinsic's name
+ * carries at BOTH ends.
  */
 @:nullSafety(Strict)
 final class HaxeStringFoldSupport implements StringFoldSupport {
 
 	/** The escaped form of one literal dollar inside a single-quoted literal (a two-character string). */
 	private static inline final ESCAPED_DOLLAR: String = "$$";
+
+	/**
+	 * The affix Haxe reserves on BOTH ends of a target intrinsic's name — `__lua__`, `__js__`,
+	 * `__cpp__`, `__python__`, `__feature__`, `__define_feature__`. Enumerated off the 4.3.7 std:
+	 * every dunder-affixed call there taking a string-literal argument is a generator intrinsic,
+	 * and every intrinsic is spelled that way. A prim wrapper carries the leading `__` WITHOUT the
+	 * trailing one (`__hxcpp_cast_get_proc_address`) and takes runtime strings, which is why both
+	 * ends are required rather than the prefix alone.
+	 */
+	private static inline final INTRINSIC_MARK: String = '__';
 
 	/**
 	 * Expression kinds that bind at least as tightly as `+`, so a lone segment of
@@ -185,6 +196,10 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		return plainQuote != null ? renderPlain(plainQuote, segments) : renderInterpolated(segments);
 	}
 
+	public function readsArgumentsAsSyntax(name: String): Bool {
+		return name.length > INTRINSIC_MARK.length * 2 && name.startsWith(INTRINSIC_MARK) && name.endsWith(INTRINSIC_MARK);
+	}
+
 	public function renderBare(segment: ConcatSegment): Null<String> {
 		return switch segment {
 			case SegText(_, _): null;
@@ -281,7 +296,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 			case SegText(_, _):
 				buf.add(escaped[i]);
 			case SegExpr(src, _):
-				if (!interpolationBlockSafe(src)) return null;
+				if (!interpolationBlockSafe(src) || nestsHostQuote(src)) return null;
 				buf.add('$${$src}');
 			case SegIdent(name):
 				final nc: Int = nextOutputChar(segments, escaped, i + 1);
@@ -496,6 +511,34 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 			}
 		}
 		return depth == 0 && quote == 0;
+	}
+
+	/**
+	 * Whether `src` carries the SINGLE QUOTE that `renderInterpolated` delimits the group it
+	 * would be spliced into. Distinct from `interpolationBlockSafe`, which answers what the
+	 * compiler can LEX: this one is legal Haxe in every case it refuses — `'a${f('b')}'` is
+	 * value-identical to `'a' + f('b')` and compiles on 4.3.7 — and refuses it anyway.
+	 *
+	 * A quote of the host's own kind nested two levels down is where a `+` chain stops reading
+	 * as text with holes in it and starts reading as a puzzle: `'[' + join(', ', xs) + ']'`
+	 * becomes `'[${join(', ', xs)}]'`, and `"'" + s.split("'").join("''") + "'"` becomes
+	 * `'\'${s.split("'").join("''")}\''`. Both are shorter and neither is clearer, and every
+	 * editor whose highlighter does not implement the `${ … }` re-entry paints the rest of the
+	 * line as string. The rule buys `+` operators with characters the reader has to
+	 * disambiguate, which is not the trade the width budget was measuring.
+	 *
+	 * ANY `'` counts, not only a delimiting one: inside an expression a single quote is either
+	 * a string's delimiter or a character inside a string, and the second is exactly the
+	 * `s.split("'")` case above — the nesting a reader sees is the same either way.
+	 *
+	 * The refusal is a DEMOTION, not a veto on the construct: a segment no group can hold ends
+	 * the group it would have joined (`FoldStringLiterals.fill`) and renders BARE, which is the
+	 * `+` operand the source already had. So the merge simply stops at that operand, and the
+	 * SPLIT direction gains a seam rather than losing one — an existing `'a${f('b')}'` whose
+	 * line is over-long now has somewhere to break.
+	 */
+	private static function nestsHostQuote(src: String): Bool {
+		return src.indexOf("'") != -1;
 	}
 
 	/**

@@ -30,6 +30,9 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 	/** The rule id, which every finding here is asserted to carry. */
 	private static inline final RULE: String = 'fold-adjacent-string-literals';
 
+	/** The words the INTRINSIC refusal names itself by — distinct from the macro one, which names the whitelist option. */
+	private static inline final INTRINSIC_MARKER: String = 'compiler intrinsic';
+
 	/** A string literal in an ANNOTATION argument is parsed as an expression — moving a `$` into it changes the annotation. */
 	public function testMetadataStringArgumentNotTouched(): Void {
 		Assert.equals(0, violations("@:native('a' + 'b') class C { function f() {} }").length);
@@ -227,6 +230,69 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		Assert.equals(0, check.fix(other.source, vs.filter(v -> v.file == other.file), new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * The gate's THIRD refusal, and the one the other two are structurally blind to. Both of
+	 * them are questions about RESOLUTION — "does a `macro` member declare this name", "could an
+	 * import route it out of scope" — and a target INTRINSIC answers no to both because it has no
+	 * declaration anywhere: the fall-through then reads the call as local, inherited or global and
+	 * lets it through. Fail-OPEN, on exactly the family that never resolves.
+	 *
+	 * Measured on Haxe 4.3.7: `untyped __lua__("{x=" + "1}")` compiles with NO diagnostic and emits
+	 * `__lua__(Std.string("{x=") .. Std.string("1}"))` — a call to a Lua function no runtime
+	 * declares; `js.Syntax.code` rejects the same shape with "must be a string constant".
+	 */
+	public function testIntrinsicArgumentIsReportedButNotFixed(): Void {
+		final src: String = intrinsicCallSource('__lua__', overLongLiteral());
+		Assert.isTrue(refusedIn(src));
+		Assert.isTrue(violations(src)[0].message.indexOf(INTRINSIC_MARKER) != -1);
+	}
+
+	/**
+	 * `$WHITELIST_OPTION` does not lift it, unlike every macro refusal above. Listing a macro is a
+	 * claim a project can make about code it owns; listing `__lua__` would be a claim about the
+	 * COMPILER's own generator, and the claim is the one the measurement refutes.
+	 */
+	public function testIntrinsicRefusalIsNotWhitelistable(): Void {
+		Assert.isTrue(refusedWhitelisting(intrinsicCallSource('__lua__', overLongLiteral()), '__lua__'));
+		Assert.isFalse(refusedWhitelisting(outOfScopeCallSource('import m.Lang.t;', 't'), 'm.Lang.t'));
+	}
+
+	/**
+	 * What the refusal reads, spelled as a one-variable matrix so it discriminates rather than
+	 * merely agreeing. The affix is required at BOTH ends: `__hxcpp_cast_get_proc_address` carries
+	 * the leading `__` and is an ordinary prim taking runtime strings, and the std passes it a `+`
+	 * chain today. A RECEIVER also clears it — an intrinsic is never written with one, while
+	 * `x.__next__(…)` is an ordinary member call to a target-magic method name.
+	 */
+	public function testOnlyABareDunderAffixedCalleeIsAnIntrinsic(): Void {
+		Assert.isFalse(refusedIn(intrinsicCallSource('__hxcpp_cast_get_proc_address', overLongLiteral())));
+		Assert.isFalse(refusedIn(intrinsicCallSource('x.__next__', overLongLiteral())));
+		Assert.isTrue(refusedIn(intrinsicCallSource('__lua__', overLongLiteral())));
+	}
+
+	/**
+	 * The exemption is a CONSTANT plan, not a one-group one — the distinction the macro gate's own
+	 * `groups < 2` misses. Merging to a single PLAIN literal is what the target wants and is applied;
+	 * merging to a single INTERPOLATED literal is not a constant at all, since Haxe desugars `'a$k'`
+	 * back into a `+` chain before anything reads the argument as syntax, and both spellings emit the
+	 * identical broken `__lua__(Std.string(…) .. Std.string(…))` (4.3.7).
+	 */
+	public function testIntrinsicKeepsTheConstantMergeAndRefusesTheInterpolatedOne(): Void {
+		Assert.equals('"ab"', foldOf(intrinsicCallSource('__lua__', '"a" + "b"')));
+		Assert.equals('', foldOf(intrinsicCallSource('__lua__', '"a" + k')));
+		Assert.equals("'a$k'", foldOf(intrinsicCallSource('g', '"a" + k')));
+	}
+
+	/** A statement passing `<arg>` to `untyped <call>(…)` — the spelling every resolution gate reads as unresolvable. */
+	private function intrinsicCallSource(call: String, arg: String): String {
+		return 'class C {\n\tfunction f(k:String, x:Dynamic) {\n\t\tuntyped $call($arg);\n\t}\n}';
+	}
+
+	/** The over-long literal the split-direction fixtures share — one `\n` seam, both halves past the budget. */
+	private function overLongLiteral(): String {
+		return '\'${''.rpad('A', 100)}\\n${''.rpad('B', 60)}\'';
+	}
+
 	/** The same over-long literal in `case` PATTERN position, where a concatenation is not legal syntax. */
 	private function casePatternSource(aLen: Int, bLen: Int): String {
 		final literal: String = '\'${''.rpad('A', aLen)}\\n${''.rpad('B', bLen)}\'';
@@ -289,9 +355,20 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 		return '$head\nclass C {\n\tfunction f() {\n\t\th($call($literal));\n\t}\n}';
 	}
 
-	/** Whether `src`'s single finding is report-only — the macro gate refused it — as opposed to fixable. */
-	private function refusedIn(src: String): Bool {
+	/** `refusedIn` asked with `entry` listed in `$WHITELIST_OPTION` — the lever that lifts a macro refusal and no other. */
+	private function refusedWhitelisting(src: String, entry: String): Bool {
 		final check: FoldStringLiterals = new FoldStringLiterals();
+		check.setConfigResolver(_ -> LintConfig.parse('{"rules":{"$RULE":{"$WHITELIST_OPTION":["$entry"]}}}'));
+		return refusedBy(check, src);
+	}
+
+	/** Whether `src`'s single finding is report-only — a gate refused it — as opposed to fixable. */
+	private function refusedIn(src: String): Bool {
+		return refusedBy(new FoldStringLiterals(), src);
+	}
+
+	/** The shared half of the two above: `src` must report EXACTLY one finding, and the answer is whether `fix` declined it. */
+	private function refusedBy(check: FoldStringLiterals, src: String): Bool {
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		return check.fix(src, vs, new HaxeQueryPlugin()).length == 0;

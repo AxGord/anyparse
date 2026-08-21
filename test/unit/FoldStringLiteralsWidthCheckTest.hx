@@ -96,6 +96,28 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\tg(\'${''.rpad('x', 130)}$seams\');\n\t}\n}').length);
 	}
 
+	/**
+	 * The MERGE arm reads no layout at all, which is what makes `hxq fmt` unable to CREATE one of
+	 * its findings. The report was that the writer joins `'literal'\n+ intExpr` onto one line when
+	 * it fits and the rule then fires on the joined form; the same chain wrapped and joined is
+	 * asserted here to yield the same finding COUNT and the same fold text, so a future arm that
+	 * starts consulting the source's own line breaks fails this instead of shipping.
+	 *
+	 * Only the merge direction is layout-free. The SPLIT arm is gated on `overLong`, which reads
+	 * SOURCE lines on purpose — a writer-canonical file already IS the writer's layout for that
+	 * construct — so on a file the writer would re-indent, formatting legitimately changes what is
+	 * reported. That is the arm's contract, not a defect, and it is pinned by
+	 * `testLiteralSplitOnlyWhenOverLong`.
+	 */
+	public function testMergeIsIndependentOfSourceWrapping(): Void {
+		final joined: String = 'class C {\n\tfunction f(count:Int) {\n\t\tvar s = \'total: \' + count;\n\t}\n}';
+		final wrapped: String = 'class C {\n\tfunction f(count:Int) {\n\t\tvar s = \'total: \'\n\t\t\t+ count;\n\t}\n}';
+		Assert.equals(1, violations(joined).length);
+		Assert.equals(1, violations(wrapped).length);
+		Assert.equals("'total: $count'", foldOf(joined));
+		Assert.equals(foldOf(joined), foldOf(wrapped));
+	}
+
 	/** An over-long literal is cut at a `${ … }` seam until the lines fit. */
 	public function testOverLongLiteralSplitAtSeam(): Void {
 		final head: String = ''.rpad('h', 100);
@@ -135,7 +157,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 			'}'
 		].join('\n');
 		Assert.equals(
-			"'SELECT rowpath FROM records WHERE grouped = ${(grouped ? '1 AND group_key_id = $keyId' : '0 AND key_id = $keyId')}'"
+			"'SELECT rowpath FROM records WHERE grouped = ' + (grouped ? '1 AND group_key_id = $keyId' : '0 AND key_id = $keyId')"
 			+ " + ' AND status = ${_linkChannel.quote(statusLabelOfRecord(STATUS_REMOTE_UPDATED_LOCAL_SYNCED_FETCHED))} LIMIT 1'",
 			foldOf(src)
 		);
@@ -156,7 +178,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		].join('\n');
 		Assert.equals(
 			"'SELECT rowpath FROM records WHERE grouped = '"
-			+ " + '${(grouped ? '1 AND rowpath_movedfromroot = ' : '0 AND rowpath_movedfromroot = ')}${_linkChannel.quote(rowPath)}'",
+			+ " + (grouped ? '1 AND rowpath_movedfromroot = ' : '0 AND rowpath_movedfromroot = ') + _linkChannel.quote(rowPath)",
 			foldOf(src)
 		);
 	}

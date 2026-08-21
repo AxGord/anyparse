@@ -41,7 +41,9 @@ typedef StringLiteral = {
  * worse parser. A source carrying a bare `$` outside a nested string
  * literal, a line break, a backslash, an unbalanced brace or an unbalanced QUOTE (a regex literal can carry one) cannot go inside a `${ … }` block, so `renderGroup` refuses a group containing one and the
  * segment can only ever be emitted bare; a `$` INSIDE a nested string is
- * harmless — the block's re-parse reads it exactly as the bare operand did.
+ * harmless — the block's re-parse reads it exactly as the bare operand did. A source
+ * carrying the interpolation host's OWN quote is kept out by the same mechanism for a
+ * different reason: it lexes fine and reads badly.
  */
 enum ConcatSegment {
 	SegText(quote: String, raw: String);
@@ -137,5 +139,27 @@ interface StringFoldSupport {
 	 * bare operand).
 	 */
 	public function renderBare(segment: ConcatSegment): Null<String>;
+
+	/**
+	 * Whether a call written as the bare, unqualified name `name` reads its ARGUMENTS AS
+	 * SYNTAX rather than as values — the question the fold asks about a callee NOTHING in
+	 * the resolution scope declares.
+	 *
+	 * It belongs to the grammar because the answer is a naming CONVENTION, not a fact any
+	 * index carries: a compiler intrinsic has no declaration anywhere to resolve to, which
+	 * is exactly why the fold's macro gate — which refuses a name some `macro` member
+	 * declares, and a name an import could route out of scope — clears it. A gate that
+	 * passes on an unresolvable callee is fail-OPEN, and the target intrinsics are the one
+	 * family that never resolves by construction.
+	 *
+	 * Measured on Haxe 4.3.7, `untyped __lua__("{x=" + "1}")` compiles CLEAN and emits
+	 * `__lua__(Std.string("{x=") .. Std.string("1}"))` — a call to a Lua function no runtime
+	 * declares; `__python__` does the same; `js.Syntax.code` rejects it with "must be a
+	 * string constant". So the concatenation is refused whether the target errors or not.
+	 *
+	 * A grammar with no such convention answers `false` for every name and the gate stays
+	 * exactly as wide as it was.
+	 */
+	public function readsArgumentsAsSyntax(name: String): Bool;
 
 }

@@ -109,8 +109,11 @@ using StringTools;
  *   inside a nested same-quote string nor lexes strings while it counts braces,
  *   so both mis-lex there even though anyparse's own interp scanner accepts
  *   them; a `$` INSIDE a nested string is fine — the block's re-parse reads it
- *   exactly as the bare operand did. It does not reject the construct — it
- *   only forces that segment into a group of its own, rendered bare.
+ *   exactly as the bare operand did. A segment carrying the interpolation's OWN
+ *   quote is refused too, and that one is LEGIBILITY, not lexing: `'a${f('b')}'` compiles and
+ *   is value-identical to `'a' + f('b')`, and still puts a `'` two levels inside a
+ *   `'`-delimited literal. Neither refusal rejects the construct — each only forces that
+ *   segment into a group of its own, rendered bare.
  * - A DOUBLE-quoted text segment whose escapes DECODE to a `$` may not be re-emitted
  *   into a SINGLE-quoted literal: Haxe decodes before it scans for `$`, so
  *   `"a\x24b" + 'c'` folded to `'a\x24bc'` would silently print the value of the
@@ -136,7 +139,12 @@ using StringTools;
  *   declares and for one NOTHING in the resolution scope declares, since that scope is
  *   bounded by the invocation and the narrow answer is the dangerous one. A project
  *   clears a target through the `concatFoldingMacros` option, which is a claim about
- *   that target's implementation.
+ *   that target's implementation. A TARGET INTRINSIC is refused by the same gate and by NO
+ *   option: it is spelled with `__` at BOTH ends and declared NOWHERE, so both refusals above —
+ *   each a question about resolution — read it as an ordinary local call. Measured, 4.3.7:
+ *   `untyped __lua__("{x=" + "1}")` compiles with no diagnostic and emits a call to a function no
+ *   runtime declares. Its exemption is a plan that renders as a CONSTANT, narrower than the macro
+ *   gate's one-group test — `'a$k'` is a `+` chain the parser desugared, not a constant.
  * - RE-SEGMENT ONLY WHEN OVER-LONG: only a STRICT merge — a plan with FEWER groups
  *   than the source has — runs unconditionally. A split, and equally a same-count
  *   RE-CUT at different boundaries, needs the construct's source lines to be
@@ -200,6 +208,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		+ 'concatenation, and rewriting one a macro pattern-matches breaks it silently — list the target in the '
 		+ '`$MACRO_WHITELIST_OPTION` option to allow it';
 
+
 	/**
 	 * Writer-verification passes per candidate. Each pass costs one `writeRoundTrip`
 	 * — of the enclosing MEMBER normally, of the whole file when the member cannot be
@@ -249,7 +258,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			// file's would apply one project's claim about its macros to another's.
 			final whitelist: Null<Array<String>> = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.stringListOption(RULE_ID, MACRO_WHITELIST_OPTION);
-			final gate: MacroGate = new MacroGate(macros, whitelist ?? [], entry.file);
+			final gate: MacroGate = new MacroGate(macros, whitelist ?? [], entry.file, seams.support);
 			for (planned in collectPlans(ctx, gate, tree)) violations.push({
 				file: entry.file,
 				span: planned.span,
@@ -284,8 +293,10 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		// cross-file symbol index, neither of which `fix` is handed — `applyBySpan` finds
 		// a node by its span alone, and `source` is one file. `run` already decided it, so
 		// the FINDING carries the decision here rather than the resolution being redone.
-		final fixable: Array<Violation> = violations.filter(v ->
-			v.message.indexOf(MACRO_REFUSAL) == -1 && v.message.indexOf(OperatorGate.REFUSAL) == -1
+		final fixable: Array<Violation> = violations.filter(
+			v ->
+				v.message.indexOf(MACRO_REFUSAL) == -1 && v.message.indexOf(MacroGate.INTRINSIC_REFUSAL) == -1
+				&& v.message.indexOf(OperatorGate.REFUSAL) == -1
 		);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final planned: Null<PlannedFold> = plan(planContext, node);
@@ -376,13 +387,15 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			final verdict: OperatorVerdict = proposed == null || operators == null ? Builtin : operators.verdictFor(node, literal);
 			final planned: Null<PlannedFold> = verdict.match(Overloaded(_)) ? null : proposed;
 			if (planned != null) {
-				final refused: String = (gate.blocks(calls, planned.groups) ? MACRO_REFUSAL : "")
+				final gated: String = (gate.blocks(calls, planned.groups) ? MACRO_REFUSAL : "")
 					+ (verdict.match(Unproven) ? OperatorGate.REFUSAL : "");
+				final refused: String = gate.intrinsic(calls, planned.constant) ? MacroGate.INTRINSIC_REFUSAL + gated : gated;
 				out.push(refused == "" ? planned : {
 					span: planned.span,
 					editSpan: planned.editSpan,
 					text: planned.text,
 					groups: planned.groups,
+					constant: planned.constant,
 					message: planned.message + refused
 				});
 			}
@@ -565,6 +578,10 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		final groups: Int = settled.groups.length;
 		if (groups >= current && !overLong(ctx, decomposition.editSpan)) return null;
 		final width: Null<WidthPair> = settled.width;
+		// ONE group of nothing but TEXT is the only plan that renders as a compile-time constant —
+		// a lone group holding an expression renders INTERPOLATED, which is a `+` chain the parser
+		// desugared. `MacroGate.intrinsic` is the one gate that can tell those apart.
+		final constant: Bool = settled.groups.length == 1 && decomposition.segments.foreach(segment -> segment.match(SegText(_, _)));
 		// Strict LOCAL monotonicity — the fixpoint guard. Comparing against the whole
 		// edit region's max width is vacuous when the region carries an IRREDUCIBLE
 		// over-wide segment (no seam to split at): every candidate measures under that
@@ -597,6 +614,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 				editSpan: decomposition.editSpan,
 				text: settled.text,
 				groups: groups,
+				constant: constant,
 				message: messageFor(groups, current)
 			};
 	}
@@ -1371,14 +1389,58 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 @:nullSafety(Strict)
 private class MacroGate {
 
+	/**
+	 * What a finding adds when the callee is a TARGET INTRINSIC — a refusal
+	 * `concatFoldingMacros` deliberately does NOT lift, because listing one would be a claim
+	 * about the COMPILER's implementation rather than about a target this project owns, and the
+	 * claim is false: measured on 4.3.7, `untyped __lua__("{x=" + "1}")` compiles with no
+	 * diagnostic at all and emits `__lua__(Std.string("{x=") .. Std.string("1}"))`.
+	 *
+	 * It lives here rather than beside `MACRO_REFUSAL` for the reason `OperatorGate.REFUSAL`
+	 * does: the gate that DECIDES a refusal owns the sentence that explains it.
+	 */
+	public static inline final INTRINSIC_REFUSAL: String = ', but it is an argument of a compiler intrinsic, which matches a '
+		+ 'string CONSTANT and stops matching a concatenation — the generator then emits a call to a function no runtime '
+		+ 'declares, or rejects the argument outright';
+
 	private final _macros: MacroIndex;
 	private final _whitelist: Array<String>;
 	private final _file: String;
 
-	public function new(macros: MacroIndex, whitelist: Array<String>, file: String) {
+	/** The grammar's own reading of which bare call NAMES take their arguments as syntax. */
+	private final _support: StringFoldSupport;
+
+	public function new(macros: MacroIndex, whitelist: Array<String>, file: String, support: StringFoldSupport) {
 		_macros = macros;
 		_whitelist = whitelist;
 		_file = file;
+		_support = support;
+	}
+
+	/**
+	 * Whether a plan that is not a compile-time `constant` sits inside a call to a TARGET
+	 * INTRINSIC — the hole the two refusals below cannot see, because both are questions about
+	 * RESOLUTION and an intrinsic
+	 * resolves to nothing anywhere: no `macro` member declares it, no import binds it, and the
+	 * last line's fall-through then reads "local, inherited or global, and no import can make it
+	 * a macro" — true, and beside the point. A gate that passes on an unresolvable callee is
+	 * fail-OPEN, and this family never resolves BY CONSTRUCTION.
+	 *
+	 * Only the BARE spelling is asked about. A written receiver already refuses on its own
+	 * evidence (`js.Syntax.code(…)` is `call.qualified`), and requiring the bare form keeps an
+	 * ordinary member that happens to carry the affix — a `python`/`lua` magic method called as
+	 * `x.__next__(…)` — out of it.
+	 *
+	 * A plan that is a compile-time CONSTANT is exempt, and the exemption is worth stating exactly
+	 * because the sibling `blocks` states a WIDER one: reaching a single PLAIN literal only removes
+	 * `+` operators the argument already had, and is the very shape the target wants — but a single
+	 * INTERPOLATED literal is no such thing. Haxe desugars `'a$k'` back into a `+` chain before
+	 * anything reads the argument as syntax, so `__lua__('local q = $k;')` and
+	 * `__lua__("local q = " + k + ";")` emit the identical broken code (measured, 4.3.7). Hence
+	 * `constant`, which is `PlannedFold`'s answer to that, and not the group COUNT.
+	 */
+	public function intrinsic(calls: Array<CallRef>, constant: Bool): Bool {
+		return !constant && calls.exists(call -> call.receiver == null && !call.qualified && _support.readsArgumentsAsSyntax(call.name));
 	}
 
 	/**
@@ -1654,8 +1716,19 @@ private typedef PlannedFold = {
 
 	final text: String;
 
-	/** How many `+` operands the plan renders as — 1 means a single literal, the shape no gate refuses. */
+	/** How many `+` operands the plan renders as. */
 	final groups: Int;
+
+	/**
+	 * Whether the plan renders as a COMPILE-TIME CONSTANT — one group, every segment TEXT.
+	 * That is a strictly narrower question than `groups == 1`, and the difference is the whole
+	 * reason this field exists: a lone group holding an expression renders as an INTERPOLATED
+	 * literal, which Haxe desugars back into a `+` chain before anything reads it as syntax.
+	 * Measured on 4.3.7, `untyped __lua__('local q = $k;')` and `untyped __lua__("local q = " + k
+	 * + ";")` emit the SAME broken `__lua__(Std.string(…) .. Std.string(…))`, and `js.Syntax.code`
+	 * rejects both with "must be a string constant".
+	 */
+	final constant: Bool;
 	final message: String;
 };
 
