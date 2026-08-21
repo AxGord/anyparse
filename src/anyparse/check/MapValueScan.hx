@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -88,9 +89,6 @@ final class MapValueScan {
 		'copy'
 	];
 
-	/** The build-macro metadata whose generated members no source scan can see. */
-	private static final BUILD_MACRO_METAS: Array<String> = ['@:build', '@:autoBuild'];
-
 	/**
 	 * The seams the census reads, or null when the grammar leaves a required one unset — in
 	 * which case no proof is available and the check reports without fixing.
@@ -149,7 +147,7 @@ final class MapValueScan {
 	public static function proven(
 		name: String, bindingFrom: Int, source: String, root: QueryNode, index: Null<SymbolIndex>, plugin: GrammarPlugin, seams: ValueSeams
 	): Bool {
-		if (carriesBuildMacro(source)) return false;
+		if (MemberWriteScan.carriesBuildMacro(source)) return false;
 		final decl: Null<Decl> = locate(root, null, -1, null, bindingFrom, seams);
 		if (decl == null) return false;
 		if (!subtreeSafe(root, null, -1, null, -1, name, 0, source.length, seams)) return false;
@@ -162,15 +160,10 @@ final class MapValueScan {
 		if (!RefactorSupport.privateMemberScanIsSound(source, report, name)) return false;
 		final scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
 		return !scope.hasAccessGrant(owner) && !scope.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
-			if (redeclares || carriesBuildMacro(src)) return true;
+			if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
 			return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams);
 		});
-	}
-
-	/** Whether `source` carries a build macro, whose generated members no source scan can see. */
-	private static function carriesBuildMacro(source: String): Bool {
-		return BUILD_MACRO_METAS.exists(meta -> source.indexOf(meta) >= 0);
 	}
 
 	/**

@@ -329,6 +329,35 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/**
+	 * Whether `name` is reserved rather than chosen — the constructor, or a member the COMPILER
+	 * or the target runtime invokes by name. For the second kind there is no call site to
+	 * compile away, so the rule's benefit model and its message both describe something that
+	 * does not exist; the constructor is excluded for its own unrelated reasons, and was the
+	 * whole of this test before.
+	 *
+	 * The reserved spelling is the dunder convention every such hook in the Haxe std is written
+	 * in — `__init__` (58 declarations, e.g. `hl.UI`, whose body IS the class's static-init side
+	 * effect), plus `__iter__`, `__add__`, `__call__`, `__str__`, `__next__`, `__setitem__`,
+	 * `__import__`, `__unprotect__`, `__alloc__`. Gating on the CONVENTION rather than on a list
+	 * keeps the next target's hook out by construction; the two-character over-reach costs one
+	 * `Info` finding on a method somebody chose to name that way. `length > 4` is what stops the
+	 * two affixes OVERLAPPING — without it `__`, `___` and `____` all read as hooks.
+	 *
+	 * `HaxeNamingSupport.isReservedName` asks the same question for the naming rules and reaches
+	 * it the right way, through the grammar. It is not reused here: it surfaces only as
+	 * `NamingPolicy.reservedName`, a field on a per-declaration record the naming PROJECTION
+	 * produces, and `isBaseCandidateMethod` holds no plugin handle to run that projection with.
+	 * Keep the two in step, or thread the projection in and delete this copy.
+	 *
+	 * `inline __init__` was probed on js, with and without `-dce full`: it is a silent no-op, not
+	 * a miscompile. So this gate removes NOISE, unlike the `@:hlNative` / `@:nativeGen` type gate,
+	 * which removes a real breakage.
+	 */
+	private static inline function isReservedMemberName(name: String): Bool {
+		return name == 'new' || (name.length > 4 && name.startsWith('__') && name.endsWith('__'));
+	}
+
+	/**
 	 * The class nodes of `tree` whose own TYPE-level annotation is not `inlineNeutralMeta` — every
 	 * member of such a class is untouchable.
 	 *
@@ -367,7 +396,12 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/**
-	 * Flag each candidate method of `cls` (a benefit-class body) that passes every soundness gate: not value-referenced / reflection-named anywhere, not overridden by a subtype, not implementing an abstract-superclass slot, not required by an implemented interface, and (per `isCandidateMethod`) not a constructor / override / dynamic / macro / @:keep / already-inline / self-recursive method, body in a benefit class.
+	 * Flag each candidate method of `cls` (a benefit-class body) that passes every soundness gate:
+	 * not value-referenced / reflection-named anywhere, not overridden by a subtype, not implementing
+	 * an abstract-superclass slot, not required by an implemented interface, and — per
+	 * `isCandidateMethod` — not a reserved name (a constructor or a compiler-invoked hook), an
+	 * override, dynamic, macro, `@:keep`, already inline, or self-recursive, with its body in a
+	 * benefit class.
 	 */
 	private static function considerClass(
 		out: Array<Violation>, cls: QueryNode, file: String, index: SymbolIndex, valueBlocked: Array<String>,
@@ -455,7 +489,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * `relaxed` (the oracle path) drops it.
 	 */
 	private static function isBaseCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>): Bool {
-		if (name == 'new') return false;
+		if (isReservedMemberName(name)) return false;
 		if (
 			mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')
 			|| mods.contains('Extern')

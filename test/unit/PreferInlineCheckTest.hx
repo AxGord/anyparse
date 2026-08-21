@@ -592,6 +592,24 @@ class PreferInlineCheckTest extends Test {
 		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * `__init__` is a static-init hook the compiler emits for the class; nothing in source ever
+	 * calls it, so "mark it inline — the call compiles away" names a call that does not exist.
+	 * Found on `hl.UI` in the Haxe std, whose `__init__` forwards to one `@:hlNative` binding —
+	 * the class carries no type-level annotation, so the `@:hlNative` / `@:nativeGen` gate above
+	 * cannot see it.
+	 */
+	public function testCompilerInvokedInitHookSkips(): Void {
+		assertOnlyControlFlagged('class Boot {\n\tstatic function __init__():Void _other.stop();\n}');
+	}
+
+	/** The gate reads the reserved `__…__` convention, not a leading underscore run. */
+	public function testAnUnderscorePrefixedOrdinaryMethodIsStillFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tpublic function __helper():Void _other.stop();\n}');
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue(hasMethod(vs, '__helper'), vs[0].message);
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t$members\n}';
 	}

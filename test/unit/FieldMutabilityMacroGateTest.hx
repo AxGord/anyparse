@@ -44,6 +44,29 @@ class FieldMutabilityMacroGateTest extends Test {
 		Assert.equals(1, fieldViolations(owner).length);
 	}
 
+	/**
+	 * `@:buildXml` is an hxcpp build-file tag, not a build macro — it generates no member. The gate
+	 * used to test the metadata with a plain substring search, so `@:build` matched its PREFIX and
+	 * every consumer of `carriesBuildMacro` bailed out on the type. 17 declarations in the Haxe std
+	 * alone carry it.
+	 */
+	public function testABuildXmlTagDoesNotGateTheField(): Void {
+		final owner: String = 'package p;\n\n@:buildXml(\'<files id="haxe"/>\')\nclass W {\n\n\tprivate static var counter: Int = 0;\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function bump(): Int return counter;\n\n}\n';
+		Assert.equals(1, fieldViolations(owner).length);
+	}
+
+	/**
+	 * The token match must still see the two REAL spellings. `@:autoBuild` is pinned above through
+	 * the `implements` grant, which is how it reaches a class in practice; this pins `@:build` on
+	 * the type itself.
+	 */
+	public function testABuildMacroOnTheTypeItselfStillGatesTheField(): Void {
+		final owner: String = 'package p;\n\n@:build(p.B.build())\nclass W {\n\n\tprivate static var counter: Int = 0;\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function bump(): Int return counter;\n\n}\n';
+		Assert.equals(0, fieldViolations(owner).length);
+	}
+
 	public function testAnUnannotatedLocalOfAThisRebindingAbstractIsNotFinalized(): Void {
 		Assert.equals(0, localViolations('var t = new ThreadTasks();\n\t\tt.add(1);\n\t\treturn 0;').length);
 	}

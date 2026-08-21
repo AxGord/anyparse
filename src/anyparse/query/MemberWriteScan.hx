@@ -114,13 +114,16 @@ final class MemberWriteScan {
 
 	/**
 	 * Whether `source` carries a `@:build` / `@:autoBuild` — a macro can add a member the
-	 * text scan cannot see, so a file with one counts as a possible writer. A mention inside
-	 * a comment or string over-counts, which only ever keeps the looser access. The one shape
-	 * this cannot see is metadata injected by the BUILD (`--macro addMetadata(...)` in an
-	 * hxml); that is outside any source scan, and the compiler oracle is the net for it.
+	 * text scan cannot see, so a file with one counts as a possible writer. Matched as a whole
+	 * metadata TOKEN, never as a substring: `@:buildXml` is an unrelated cpp build-file tag (17
+	 * declarations in the Haxe std alone), and reading it as a build macro made every consumer
+	 * bail out on a type it had no reason to decline. A mention inside a comment or string still
+	 * over-counts, which only ever keeps the looser access. The one shape this cannot see is
+	 * metadata injected by the BUILD (`--macro addMetadata(...)` in an hxml); that is outside any
+	 * source scan, and the compiler oracle is the net for it.
 	 */
 	public static inline function carriesBuildMacro(source: String): Bool {
-		return source.indexOf('@:build') >= 0 || source.indexOf('@:autoBuild') >= 0;
+		return carriesMetaToken(source, '@:build') || carriesMetaToken(source, '@:autoBuild');
 	}
 
 	/**
@@ -187,6 +190,24 @@ final class MemberWriteScan {
 				'~'.code, '!'.code: true;
 			case _: false;
 		};
+	}
+
+	/**
+	 * Whether `source` mentions `meta` as a WHOLE metadata token — the character after it must
+	 * not continue the name. `@:build` is a PREFIX of `@:buildXml`, so a plain `indexOf` reads a
+	 * cpp build-file tag as a build macro; the dot is excluded as well, since a metadata
+	 * name may be a DOT PATH, and `@:build.gen` is a different tag from `@:build`.
+	 */
+	private static function carriesMetaToken(source: String, meta: String): Bool {
+		var at: Int = 0;
+		while (true) {
+			final idx: Int = source.indexOf(meta, at);
+			if (idx < 0) return false;
+			at = idx + meta.length;
+			if (at >= source.length) return true;
+			final next: Int = source.fastCodeAt(at);
+			if (!RefactorSupport.isIdentChar(next) && next != '.'.code) return true;
+		}
 	}
 
 	/**
