@@ -465,11 +465,20 @@ final class CheckScan {
 	 * the set `isLeadingAnnotation` tests a decl's preceding run against, so a check can
 	 * find where a declaration's doc anchor starts.
 	 *
-	 * Assembled from `modifierOrderKinds` (the ordered core) plus the seams that sit
-	 * outside it: the visibility pair and the four standalone modifier kinds. Deduped, so
-	 * a grammar that already lists one in `modifierOrderKinds` contributes it once.
+	 * `RefShape.modifierKinds` is the grammar's OWN answer and wins whenever it is set —
+	 * one list, so a keyword the grammar admits as a modifier cannot be known to one run
+	 * walk and unknown to the next. Copied, because callers extend what they get back.
+	 *
+	 * A grammar declaring none falls back to the assembly this used to be:
+	 * `modifierOrderKinds` (the ordered core) plus the seams that sit outside it — the
+	 * visibility pair and the four standalone modifier kinds, deduped. That assembly can
+	 * only ever see a modifier some OTHER seam already needed, so it misses precisely the
+	 * ones no check singles out: Haxe's `overload` and `abstract` are ranked by nothing
+	 * and named by nothing, and both were absent from every consumer of this set.
 	 */
 	public static function modifierKinds(shape: RefShape): Array<String> {
+		final declared: Null<Array<String>> = shape.modifierKinds;
+		if (declared != null) return declared.copy();
 		final out: Array<String> = [for (m in shape.modifierOrderKinds ?? []) m];
 		for (m in shape.visibilityModifierKinds ?? []) if (!out.contains(m)) out.push(m);
 		for (kind in [

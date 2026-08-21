@@ -95,6 +95,18 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * Modifier node kinds the Haxe projection surfaces as separate siblings
 	 * preceding a declaration, mapped to neutral modifier strings. `Meta` (an
 	 * `@:tag`) is part of the modifier run but contributes no modifier.
+	 *
+	 * The ONE place the Haxe modifier set is written down: `MODIFIER_KINDS` is this map's
+	 * key set and `RefShape.modifierKinds` publishes it, so a keyword the grammar admits
+	 * as a modifier cannot be known to this walk and unknown to a check's. `overload` was
+	 * exactly that — declared by all three modifier enums, carried by neither this map nor
+	 * any `RefShape` seam, so `@:keep overload function f` read as UN-annotated and
+	 * `unused-private --fix` deleted the member.
+	 *
+	 * `Final` is absent because no node ever carries that kind: at both scopes the grammar
+	 * folds `final` into a DECLARATION (`FinalDecl` / `FinalMember` / `FinalModifiedMember`)
+	 * rather than emitting a modifier sibling. Its `modifierOrderKinds` entry is the RANK
+	 * slot a folded method `final` is scored in (`finalModifierRankKind`), not a kind.
 	 */
 	private static final MOD_KIND_TO_NAME: Map<String, String> = [
 		'Public' => 'public',
@@ -105,8 +117,19 @@ final class HaxeNamingSupport implements NamingSupport {
 		'Macro' => 'macro',
 		'Extern' => 'extern',
 		'Dynamic' => 'dynamic',
-		'Abstract' => 'abstract'
+		'Abstract' => 'abstract',
+		'Overload' => 'overload'
 	];
+
+	/**
+	 * `MOD_KIND_TO_NAME`'s key set, published as `RefShape.modifierKinds` — the kinds a
+	 * leading-run walk crosses without ending the run. A membership SET: every consumer
+	 * asks `contains`, so the key order it inherits from the map carries no meaning. The
+	 * ORDER a run is judged against is `modifierOrderKinds`, a different question with a
+	 * different answer: a modifier the language documents no position for is unranked
+	 * there and still precedes the declaration it modifies.
+	 */
+	public static final MODIFIER_KINDS: Array<String> = [for (kind in MOD_KIND_TO_NAME.keys()) kind];
 
 	/**
 	 * The `Reflect` statics that address a member BY NAME through a string argument — the
