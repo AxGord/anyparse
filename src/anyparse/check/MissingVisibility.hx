@@ -423,17 +423,18 @@ final class MissingVisibility implements Check {
 
 	/**
 	 * The kinds that may PRECEDE a declaration without ending its modifier run — every modifier
-	 * (`modifierOrderKinds` plus the visibility keywords and `externModifierKind`) and every
-	 * annotation kind. Deliberately a positive criterion: anything else a walk meets IS the
-	 * declaration the run modified, so the run ends there whether or not this check scans it.
+	 * and every annotation kind. Deliberately a positive criterion: anything else a walk meets
+	 * IS the declaration the run modified, so the run ends there whether or not this check
+	 * scans it.
+	 *
+	 * The modifier half is ASKED (`CheckScan.modifierKinds`), not re-derived. It used to
+	 * assemble its own narrower union — `modifierOrderKinds` plus the visibility pair plus
+	 * `externModifierKind` — which ended a run at `dynamic`, `macro`, `abstract` and
+	 * `overload`, four keywords the shared answer covers. One question, one answer.
 	 */
 	private static function modifierRunKinds(shape: RefShape, meta: MetaShape): Array<String> {
-		final externKind: Null<String> = shape.externModifierKind;
-		final all: Array<String> = (
-			shape.modifierOrderKinds ?? []
-		).concat(shape.visibilityModifierKinds ?? []).concat(meta.metaKinds).concat(externKind == null ? [] : [externKind]);
-		final out: Array<String> = [];
-		for (k in all) if (!out.contains(k)) out.push(k);
+		final out: Array<String> = CheckScan.modifierKinds(shape);
+		for (k in meta.metaKinds) if (!out.contains(k)) out.push(k);
 		return out;
 	}
 

@@ -48,6 +48,10 @@ class UnusedParameterCheckTest extends Test {
 		// the first declaration it reaches inside the region.
 		final elseBody: String = 'private static inline function ne(a:A, b:Null<Float>):Bool return (a:Float) != 0;';
 		Assert.equals(0, violations('abstract A(Float) {\n\t@:op(A == B) #if js\n\t$body\n\t#else\n\t$elseBody\n\t#end\n}').length);
+		// `overload` is the 4.2 spelling of the same idiom, and the leading-run walk knew every
+		// modifier the grammar RANKS or NAMES — which is not every modifier it ADMITS. It stopped at
+		// `overload`, the `@:op` never reached the member, and both mandated operands read as dead.
+		Assert.equals(0, violations('abstract A(Float) {\n\t@:op(A == B) overload $body\n}').length);
 		// The gate is the operator annotation, not the abstract: an unannotated twin stays reported.
 		Assert.equals(1, violations('abstract A(Float) {\n\t$body\n}').length);
 	}

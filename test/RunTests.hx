@@ -293,6 +293,7 @@ import unit.ResolutionScopeCliTest;
 import unit.DeadCodeCheckTest;
 import unit.EmptyBlockCheckTest;
 import unit.MissingVisibilityCheckTest;
+import unit.ModifierKindSeamTest;
 import unit.ModifierOrderCheckTest;
 import unit.ExplicitTypeCheckTest;
 import unit.IdenticalOperandsCheckTest;
@@ -1208,6 +1209,7 @@ class RunTests {
 		addCase(new PreferSwitchExpressionCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
+		addCase(new ModifierKindSeamTest());
 		addCase(new MemberOrderCheckTest());
 		addCase(new MemberOrderModifierSpanSliceTest());
 		addCase(new FragmentedDocCommentCheckTest());

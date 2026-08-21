@@ -301,6 +301,19 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('\'dead\'') >= 0);
 	}
 
+	/**
+	 * A modifier the language documents no canonical position for is ranked by nothing and named by
+	 * no single-modifier seam — and the leading-run walk derived "is this sibling a modifier?" from
+	 * exactly those, so it stopped at `overload` and every member of the Haxe 4.2 overload idiom read
+	 * as UNANNOTATED. `--fix` deleted the `@:keep`-ed member and left the bare `@:keep overload`
+	 * prefix behind, a file that no longer parses. Only `dead`, the unannotated sibling, is reported.
+	 */
+	public function testAnnotationBeforeOverloadModifierExemptsTheMember(): Void {
+		final vs: Array<Violation> = one('class C {\n\t@:keep overload private function a():Void {}\n\tprivate function dead():Void {}\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('\'dead\'') >= 0);
+	}
+
 	public function testCondRegionAloneDoesNotExemptAndDoesNotCarryOver(): Void {
 		// The region only stops ENDING the run; it grants nothing of its own, so an unannotated member
 		// written in the same idiom stays reported. And a region that HOLDS a member ends the run: the

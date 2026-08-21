@@ -809,6 +809,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			memberDeclKinds: ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'],
 			visibilityModifierKinds: ['Public', 'Private'],
 			modifierOrderKinds: ['Override', 'Public', 'Private', 'Static', 'Inline', 'Final'],
+			// EVERY modifier the grammar projects as a sibling, `abstract` and `overload` included.
+			// `modifierOrderKinds` ranks six of them and is NOT this set: `overload` has no canonical
+			// position, so ranking it would invent an order, while leaving it out of the membership set
+			// ended every leading run it stood in. One list, written down in `HaxeNamingSupport`.
+			modifierKinds: HaxeNamingSupport.MODIFIER_KINDS,
 			finalModifierMemberKind: 'FinalModifiedMember',
 			finalModifierRankKind: 'Final',
 			fieldDeclKinds: ['VarMember', 'FinalMember'],

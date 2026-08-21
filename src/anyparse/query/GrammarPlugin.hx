@@ -1040,6 +1040,22 @@ typedef RefShape = {
 	@:optional var modifierOrderKinds: Array<String>;
 
 	/**
+	 * EVERY node kind the grammar projects as a leading modifier sibling before a
+	 * declaration — a membership SET, and a DIFFERENT question from `modifierOrderKinds`,
+	 * which is a ranking. A modifier the language documents no canonical position for is
+	 * absent from the ranking by design and still precedes the declaration it modifies, so
+	 * a walk that derives "is this sibling a modifier?" from the ranking plus the named
+	 * single-modifier seams stops at it and reads the declaration as un-modified and
+	 * un-annotated. Haxe's `overload` and `abstract` were exactly that: `@:keep overload
+	 * function f` read as carrying no annotation and `unused-private --fix` deleted it.
+	 *
+	 * `CheckScan.modifierKinds` returns this when set. Unset, it falls back to assembling
+	 * the ranked and named seams — the historical answer, and a SUBSET of this one.
+	 * Optional.
+	 */
+	@:optional var modifierKinds: Array<String>;
+
+	/**
 	 * The field member-host kinds (Haxe `VarMember` / `FinalMember`) — the subset of
 	 * `memberDeclKinds` that declare a value, checked by `explicit-type` for a type
 	 * annotation. The remaining `memberDeclKinds` are the function hosts whose
