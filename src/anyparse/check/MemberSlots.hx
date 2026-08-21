@@ -131,40 +131,56 @@ final class MemberSlots {
 		var isStatic: Bool = false;
 		var isPublic: Bool = false;
 		var isInline: Bool = false;
+		var hasMeta: Bool = false;
 		inline function resetModifiers(): Void {
 			isStatic = false;
 			isPublic = false;
 			isInline = false;
+			hasMeta = false;
 		}
 		for (child in parent.children) {
 			if (condKind != null && child.kind == condKind) {
-				final span: Null<Span> = child.span;
-				final cond: Null<String> = extractConditionText(child, source, shape);
-				final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
-				final firstIdx: Int = out.length;
-				collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span, accessors);
-				// A region that declared nothing is a conditional MODIFIER prefix of the member
-				// that follows it (`#if !flash inline #end public function f`), already folded into
-				// that member's slot by `declGroupSpan`; the modifier flags read before the guard
-				// belong to that same member, so they must survive it.
-				if (out.length == firstIdx) continue;
-				if (span != null) {
-					absorbLeadDoc(out, firstIdx, source, comments, span.from);
-					assignBranches(out, firstIdx, span, source, shape);
-				}
-				resetModifiers();
+				if (collectConditional(out, child, source, shape, comments, condStack, outerCond, accessors)) resetModifiers();
 			} else if (members.contains(child.kind)) {
-				pushMember(out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, isInline, accessors);
+				pushMember(
+					out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, isInline, hasMeta, accessors
+				);
 				resetModifiers();
 			} else {
 				if (staticKind != null && child.kind == staticKind) isStatic = true;
 				if (inlineKind != null && child.kind == inlineKind) isInline = true;
+				if (RefactorSupport.META_KINDS.contains(child.kind)) hasMeta = true;
 				if (visibility.contains(child.kind)) {
 					final s: Null<Span> = child.span;
 					if (s != null && source.substring(s.from, s.to).trim() != defaultVis) isPublic = true;
 				}
 			}
 		}
+	}
+
+	/**
+	 * Collect one conditional (`#if`) region's members into `out`, conjoining its condition onto
+	 * `condStack` (an identical conjunct is deduped, collapsing a redundant `#if X` nested in
+	 * `#if X`), then recover each member's branch. Answers whether the region declared anything: a
+	 * region that declared NOTHING is a conditional MODIFIER prefix of the member that follows it
+	 * (`#if !flash inline #end public function f`), already folded into that member's slot by
+	 * `declGroupSpan` - so the caller's modifier flags, read before the guard, must survive it.
+	 */
+	private static function collectConditional(
+		out: Array<OrderedMember>, child: QueryNode, source: String, shape: RefShape,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, accessors: Map<Int, Bool>
+	): Bool {
+		final span: Null<Span> = child.span;
+		final cond: Null<String> = extractConditionText(child, source, shape);
+		final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
+		final firstIdx: Int = out.length;
+		collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span, accessors);
+		if (out.length == firstIdx) return false;
+		if (span != null) {
+			absorbLeadDoc(out, firstIdx, source, comments, span.from);
+			assignBranches(out, firstIdx, span, source, shape);
+		}
+		return true;
 	}
 
 	/**
@@ -224,16 +240,21 @@ final class MemberSlots {
 		if (leadFrom < out[firstIdx].regionFrom) out[firstIdx].regionFrom = leadFrom;
 	}
 
-	/** Build and push the `OrderedMember` for member `child` of `parent`, ranked under the running modifier flags and the `condStack` condition. */
+	/**
+	 * Build and push the `OrderedMember` for member `child` of `parent`, ranked under the running
+	 * modifier flags and the `condStack` condition. The slot ends at the member's OWN last code byte
+	 * (`ownSourceEnd`), never at wherever the parser left the node span.
+	 */
 	private static function pushMember(
 		out: Array<OrderedMember>, child: QueryNode, parent: QueryNode, source: String, shape: RefShape,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, isStatic: Bool,
-		isPublic: Bool, isInline: Bool, accessors: Map<Int, Bool>
+		isPublic: Bool, isInline: Bool, hasMeta: Bool, accessors: Map<Int, Bool>
 	): Void {
 		final span: Null<Span> = child.span;
 		if (span == null) return;
 		final group: Span = RefactorSupport.declGroupSpan(child, parent, span);
-		final full: Span = RefactorSupport.memberTriviaSpan(source, group, comments);
+		final own: Span = new Span(group.from, ownSourceEnd(source, comments, group.from, group.to));
+		final full: Span = RefactorSupport.memberTriviaSpan(source, own, comments);
 		final isField: Bool = (shape.fieldDeclKinds ?? []).contains(child.kind);
 		final region: Span = outerCond ?? full;
 		out.push({
@@ -244,6 +265,7 @@ final class MemberSlots {
 			isField: isField,
 			isStatic: isStatic,
 			isInline: isInline,
+			hasMeta: hasMeta,
 			initNode: isField && child.children.length > 0 ? child.children[0] : null,
 			condition: condStack.length == 0 ? null : joinConds(condStack),
 			branch: null,
@@ -321,6 +343,47 @@ final class MemberSlots {
 	private static function isFlatBranchSet(out: Array<OrderedMember>, firstIdx: Int, condition: Null<String>): Bool {
 		for (i in firstIdx ... out.length) if (out[i].branch != null || out[i].condition != condition) return false;
 		return true;
+	}
+
+	/**
+	 * The end of a member's OWN source, with any trailing trivia the PARSER folded into its node
+	 * span cut back off. Two expression-body shapes carry a span that reaches the NEXT member's
+	 * first token - measured on this grammar, a body that is an `if` or a `for` (`function f():Void
+	 * if (c) g();`), where the optional-tail lookahead scans past the trivia - so the slot swallows
+	 * that member's leading doc comment and the two slots OVERLAP. An overlap is silent and
+	 * catastrophic downstream: `MemberSpacing.hasNonWhitespaceGap` reads the gap through
+	 * `String.substring`, which SWAPS reversed bounds and so reports the swallowed comment as a
+	 * non-whitespace gap, routing the container to the in-place swap path, where two overlapping
+	 * edits splice into text that does not parse.
+	 *
+	 * Trailing whitespace and any comment block that starts on its OWN line are cut; a comment on
+	 * the declaration's LAST line stays, which is the trailing `// note` `memberTriviaSpan`
+	 * deliberately absorbs. `from` is only a floor - a slot is never trimmed away entirely.
+	 */
+	private static function ownSourceEnd(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, from: Int, to: Int): Int {
+		var end: Int = to;
+		while (true) {
+			var code: Int = end;
+			while (code > from && source.isSpace(code - 1)) code--;
+			if (code <= from) return end;
+			final block: Null<{ from: Int, to: Int, isLine: Bool }> = commentEndingAt(comments, code);
+			if (block == null || block.from <= from || !startsOwnLine(source, block.from)) return code;
+			end = block.from;
+		}
+	}
+
+	/** The comment token ending exactly at `at`, or null. */
+	private static function commentEndingAt(
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int
+	): Null<{ from: Int, to: Int, isLine: Bool }> {
+		return comments.find(c -> c.to == at);
+	}
+
+	/** Whether only indentation precedes `at` on its line - the comment starting there is the line's own, not a trailing note. */
+	private static function startsOwnLine(source: String, at: Int): Bool {
+		var i: Int = at;
+		while (i > 0 && (source.charAt(i - 1) == ' ' || source.charAt(i - 1) == '\t')) i--;
+		return i == 0 || source.charAt(i - 1) == '\n';
 	}
 
 }

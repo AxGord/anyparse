@@ -11,6 +11,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
 import anyparse.check.MemberSpacing;
+import anyparse.query.SymbolIndex;
 
 using Lambda;
 using StringTools;
@@ -659,6 +660,80 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
+	 * An expression-bodied member whose node span the parser stretches over the trailing trivia
+	 * (a body that is an `if`, measured on this grammar) must not swallow the NEXT member's doc
+	 * comment. Two slots would then OVERLAP, and every consumer reads that wrong: the gap scan
+	 * reports the swallowed comment as a non-whitespace gap (`String.substring` swaps reversed
+	 * bounds), which routes the container to the in-place swap path, where two overlapping edits
+	 * splice into text that does not parse - `src/pony/db/mysql/haxe/MySQL.hx` on the Pony tree.
+	 */
+	public function testAbsorbedTrailingDocKeepsSlotsDisjoint(): Void {
+		final src: String = 'class C {\n\tprivate function init(r: Bool): Void if (r) trace(1);\n\n\t/**\n\t * Close.\n\t */\n'
+			+ '\tpublic function destroy(): Void {\n\t\ttrace(2);\n\t}\n\n}';
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(parses(fixed), 'the rebuilt region parses: $fixed');
+		Assert.isTrue(fixed.indexOf('function destroy') < fixed.indexOf('function init'), 'the public method leads: $fixed');
+		Assert.isTrue(fixed.indexOf('Close.') < fixed.indexOf('function destroy'), 'the doc travelled WITH destroy: $fixed');
+		Assert.equals(1, fixed.split('Close.').length - 1, 'the doc was not duplicated into the moved slot: $fixed');
+	}
+
+	/**
+	 * A type whose interface carries `@:autoBuild` keeps the relative order of its ANNOTATED
+	 * members. Pony's `DeclaratorBuilder` turns `@:arg` fields into constructor PARAMETERS in
+	 * declaration order, so swapping two of them rewrites the signature for every caller with no
+	 * error at the declaration - the container degrades to spacing-only and the finding stays
+	 * report-only. The gate needs the lint SCOPE: with no `index` the sort still runs, which the
+	 * second half asserts so the two paths cannot be confused.
+	 */
+	public function testMacroBuiltTypeKeepsAnnotatedOrder(): Void {
+		final src: String =
+			'class C implements Declarator {\n\n\t@:arg private var updateSignal: Int;\n\n\t@:arg public var time: Int = 0;\n\n}';
+		Assert.isTrue(violations(src).length > 0, 'the container is flagged either way');
+		final gated: String = fixedWithBuildMacroIndex(src);
+		Assert.isTrue(gated.indexOf('updateSignal') < gated.indexOf('time'), 'the two `@:arg` fields kept their order: $gated');
+		final ungated: String = fixedSource(src);
+		Assert.isTrue(ungated.indexOf('time') < ungated.indexOf('updateSignal'), 'without the index the sort still flips them: $ungated');
+	}
+
+	/**
+	 * A NESTED `#if` whose members span two sections keeps its container's order. `groupKey` carries
+	 * the section, so such a construct becomes two blocks: the guarded fields lift out of the region
+	 * their author wrote, away from the method that uses them, and the nested condition is re-derived
+	 * as a conjunct at the new site (`#if !openfl` inside `#if !macro` re-emitted as
+	 * `#if ((!macro) && (!openfl))` - `src/pony/flash/FLTools.hx` on the Pony tree). Members in
+	 * different BRANCHES of one construct are mutually exclusive and keep splitting, which
+	 * `testElseSpanningTwoSectionsSplits` pins.
+	 */
+	public function testCoexistingRegionSpanningSectionsKeepsOrder(): Void {
+		final src: String = 'class C {\n\tpublic function m(): Void {}\n\n\t#if A\n\tpublic function a(): Void {}\n\n'
+			+ '\t#if B\n\tprivate static var t: Int;\n\n\tpublic static function u(): Void t = 1;\n\t#end\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'the container is still flagged - the finding is report-only');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('#if ((A) && (B))') < 0, 'the nested condition was not re-derived: $fixed');
+		Assert.isTrue(
+			fixed.indexOf('function m') < fixed.indexOf('var t'), 'the guarded field was not lifted into the field section: $fixed'
+		);
+		Assert.isTrue(fixed.indexOf('var t') < fixed.indexOf('function u'), 'the field stayed next to its user: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
+	}
+
+	/**
+	 * An `@:meta` run written on the line before a member-level `#if` belongs to NO member slot -
+	 * `collectInto` reads the modifier flags before the guard and resets them across it, and
+	 * `absorbLeadDoc` absorbs comments only - so a rebuild regenerating the region from slots plus
+	 * directives drops the annotation outright, silently (two `@SuppressWarnings` lines deleted from
+	 * Pony's `tools/src/module/Module.hx`, one from `src/pony/ui/xml/HeapsXmlUi.hx`, both still
+	 * parsing). The container degrades to spacing-only instead.
+	 */
+	public function testMetaAboveConditionalSurvives(): Void {
+		final src: String = 'class C {\n\tpublic function m(): Void {}\n\n\t@:noCompletion\n\t#if A\n\tpublic var a: Int = 0;\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'the container is still flagged - the finding is report-only');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('@:noCompletion') >= 0, 'the annotation survives the pass: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
+	}
+
+	/**
 	 * A member's OWN body may hold `#if` / `#else`; those lines sit inside the enclosing
 	 * construct's span but are not branch boundaries. Counting them shifts every later member
 	 * into a branch that does not exist and the rebuild emits source that no longer parses.
@@ -953,6 +1028,25 @@ class MemberOrderCheckTest extends Test {
 
 	private function fixedSource(src: String, ?resolve: (String) -> LintConfig): String {
 		return CheckFixture.applyEdits(src, edits(src, resolve));
+	}
+
+	/**
+	 * `fixedSource` with a `SymbolIndex` whose scope also holds an interface carrying
+	 * `@:autoBuild` and implemented by `src`'s type - the shape `transitivelyCarriesBuildMacro`
+	 * answers true for, and the only way the build-macro gate can fire (the CLI's fix driver
+	 * always passes an index; a direct `check.fix` never does).
+	 */
+	private function fixedWithBuildMacroIndex(src: String): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'Declarator.hx', source: 'package;\n\n@:autoBuild(B.build())\ninterface Declarator {}\n' },
+			{ file: 'C.hx', source: src }
+		];
+		final check: MemberOrder = new MemberOrder();
+		check.setConfigResolver(emptyConfigResolver());
+		return CheckFixture.applyEdits(
+			src, check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin, SymbolIndex.build(files, plugin))
+		);
 	}
 
 	/** A config resolver that enables the opt-in `movableArglessNew` member-order option for every file. */
