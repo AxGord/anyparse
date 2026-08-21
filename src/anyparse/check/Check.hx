@@ -63,6 +63,14 @@ interface Check {
 	 * `[span.from, span.to)`; empty = a deletion). A check with no autofix,
 	 * or none applicable to these violations, returns an empty array — that
 	 * is the default for any non-fixable check.
+	 *
+	 * JUSTIFICATION CONTRACT: every emitted edit must be justified by a
+	 * violation in THIS call. `violations` is always a SUBSET of what `run`
+	 * reported — `Linter.collect` drops the quoted and the suppressed before
+	 * any fix path sees a finding — so an edit derived from the SOURCE rather
+	 * than from `violations` can outlive the finding that motivated it. The
+	 * worked example is on `GroupedFix`, whose grouping seam says which edits
+	 * are inseparable, never that one is deserved.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -300,6 +308,13 @@ typedef GroupedEdit = {
  * one path that genuinely cannot break a group: `verifyOracleBatch` restores a whole
  * file's `before`. A check that does not implement this interface is bisected per edit
  * exactly as before, byte for byte.
+ *
+ * CONTRACT: the justification rule on `Check.fix` binds here too, and grouping is where it is
+ * easiest to lose. `shorten-type-ref` shipped the worked example: its `import` insert was
+ * planned per source path and pushed whenever ANY rewrite survived, so a path whose every
+ * occurrence carried a `noqa` left an orphan import behind — an edit no surviving violation
+ * asked for, riding in a group with rewrites it had nothing to do with. Deriving an edit from
+ * the SOURCE is what invites it; a group id does not make an edit deserved.
  *
  * CONTRACT: a `GroupedFix`'s `Check.fix` MUST be the pure projection of `fixGrouped`
  * (`[for (e in fixGrouped(...)) { span: e.span, text: e.text }]`), so the flat and the

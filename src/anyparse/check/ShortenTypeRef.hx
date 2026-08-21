@@ -14,6 +14,7 @@ import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -240,7 +241,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final index: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final plan: Null<FilePlan> = planFor(entry.source, plugin, index);
+			final plan: Null<FilePlan> = planFor(entry.source, plugin, index, null);
 			if (plan == null) continue;
 			for (path in plan.plans) for (target in path.targets) violations.push({
 				file: entry.file,
@@ -287,12 +288,13 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 * Splitting a bucket is not available: `RefactorSupport.applyEdits` gives no defined relative order
 	 * to several zero-width edits at one offset, which is exactly why the printer merges them.
 	 *
-	 * The residual is a caller that hands in a strict SUBSET of the file's findings. The plan — and
-	 * with it the promised imports — is re-derived from the whole file, so an import can still be
-	 * promised for a path whose rewrites this call was not asked for. It is then applied either alone
-	 * in a bucket of its own, or, when it merged with a bucket a wanted path also uses, INSIDE that
-	 * path's group, riding along with rewrites it has nothing to do with. No caller does that today
-	 * (`FixVerifier` passes the whole rule-filtered set for the file), and nothing here can detect it.
+	 * What a fix path is handed is always a strict SUBSET of what `run` reported — `Linter.collect`
+	 * drops the quoted and the `noqa`-suppressed before either `FixVerifier` or the oracle batch
+	 * ever sees a finding. The plan is still re-derived from the WHOLE file, so the surviving set
+	 * has to reach it: `planFor` takes it and refuses the freeness exemption to a path with no
+	 * surviving target, which is what keeps a promised import from outliving the rewrites that
+	 * justify it (`Check.GroupedFix`, the justification contract). Before that gate existed, two
+	 * `noqa` lines on the only two occurrences of a path left the import behind on its own.
 	 */
 	public function fixGrouped(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -308,7 +310,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		// the empty `wanted` has already returned above — it exists for a caller that hands in
 		// violations it built itself.
 		final scope: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final plan: Null<FilePlan> = planFor(source, plugin, scope);
+		final plan: Null<FilePlan> = planFor(source, plugin, scope, wanted);
 		if (plan == null) return [];
 		// One bucket can serve SEVERAL paths (the printer merges imports landing on one anchor), so
 		// the group is the bucket and every path in it binds its own rewrites to that same unit.
@@ -319,11 +321,10 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			for (path in plan.plans) if (path.proven) for (target in path.targets) if (wanted.contains(spanKey(target)))
 				{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
 		];
-		if (edits.length == 0) return edits;
-		// The PLANNING printer's pending set is already exactly right: `print` is handed the
-		// freeness exemption only for a path that cleared both the threshold and the index proof,
-		// and such a path always comes back with a changed spelling, so every promised import
-		// belongs to a plan that contributed edits above.
+		// Every promised import belongs to a path that contributed a rewrite above: `planFor` was
+		// handed `wanted`, so it only promised one for a path with a surviving target, and such a
+		// path always comes back with a changed spelling. With no rewrites there are no imports
+		// either, which is why the empty case needs no early-out of its own.
 		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
 		return edits;
 	}
@@ -350,6 +351,17 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		return '${span.from}:${span.to}';
 	}
 
+	/**
+	 * Whether ANY of `targets` is still in the caller's surviving finding set — deliberately ANY,
+	 * not ALL: one suppressed occurrence must not cost the path the import its other occurrences
+	 * earn. It is the same test the rewrite comprehension in `fixGrouped` applies per target, and
+	 * the two must stay in lockstep — that they agree is what makes an empty rewrite set imply an
+	 * empty pending-import set.
+	 */
+	private static function survives(targets: Array<Span>, wanted: Array<String>): Bool {
+		return targets.exists(target -> wanted.contains(spanKey(target)));
+	}
+
 	/** Which of the three messages `plan` earns — unproven first, then the import-free arm, then the add-import one. */
 	private static function messageFor(plan: PathPlan): String {
 		return if (!plan.proven)
@@ -361,16 +373,23 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	/**
-	 * One file's verdicts: every qualified type path it writes, grouped, each carrying the
-	 * printer's answer for it. Null when the file does not parse.
+		 * One file's verdicts: every qualified type path it writes, grouped, each carrying the
+		 * printer's answer for it. Null when the file does not parse.
+		 *
+		 * ONE printer serves the whole file (its per-file state is the resolution input, so a second
+		 * instance would answer the same), and its pending-import set is authoritative for the plan:
+		  * `print` is handed the freeness exemption ONLY for a path that has already cleared the
+	 * threshold, the index proof, and — when `wanted` is non-null — the surviving-finding set, so a
+	 * promised import always belongs to a plan this rule will act on.
 	 *
-	 * ONE printer serves the whole file (its per-file state is the resolution input, so a second
-	 * instance would answer the same), and its pending-import set is authoritative for the plan:
-	 * `print` is handed the freeness exemption ONLY for a path that has already cleared the
-	 * threshold and the index proof, so a promised import always belongs to a plan this rule will
-	 * act on.
+	 * `wanted` is the caller's surviving findings as `spanKey`s, or null for "every occurrence
+	 * counts". `run` reports the whole file and passes null; a fix path was handed a SUBSET
+	 * (`Linter.collect` drops the quoted and the suppressed) and passes it, because an import
+	 * promised to the printer here can no longer be taken back at the emit site.
 	 */
-	private static function planFor(source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>): Null<FilePlan> {
+	private static function planFor(
+		source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>, wanted: Null<Array<String>>
+	): Null<FilePlan> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		// The type-refs projection is the same tree PLUS one `TypeRef` node per nominal in a
 		// declaration's `:Type` annotation — the positions the default projection drops. It is what
@@ -407,7 +426,13 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			}
 			if (targets.length == 0) continue;
 			final proven: Bool = printer.resolvePath(path) != null;
-			final importable: Bool = proven && runtimeUses > 0 && targets.length >= IMPORT_THRESHOLD;
+			// An import is promised to the PRINTER here, and the printer is source-driven: it cannot
+			// know that a caller dropped this path's findings on the way in. `wanted` is that
+			// knowledge — a path with no surviving target must not claim an import (it would land
+			// with nothing to justify it) and must not claim the simple name either (that would
+			// keep a path whose findings DID survive qualified for a collision nobody will write).
+			final importable: Bool = proven && runtimeUses > 0 && targets.length >= IMPORT_THRESHOLD
+				&& (wanted == null || survives(targets, wanted));
 			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (o.path == path) o.span] : null;
 			final printed: PrintedTypeRef = printer.print(path, owned);
 			if (printed.text == path) continue;

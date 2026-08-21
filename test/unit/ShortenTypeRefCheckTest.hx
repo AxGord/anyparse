@@ -9,6 +9,7 @@ import anyparse.check.ShortenTypeRef;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.check.Check.GroupedEdit;
 
 /**
  * The `shorten-type-ref` check: a DOTTED type reference the file itself spells differently.
@@ -16,7 +17,8 @@ import anyparse.query.CachingGrammarPlugin;
  * module-qualified path without it), plain over-qualification across every type position the
  * grammar projects, the add-import arm and its threshold, the `#if` counting / rewriting /
  * freeness split, the five conflict gates, the metadata-argument and value-receiver refusals,
- * the index proof degrading a run to report-only, and idempotency.
+ * the index proof degrading a run to report-only, the surviving-set gate that keeps a suppressed
+ * path from leaving its import behind, and idempotency.
  */
 class ShortenTypeRefCheckTest extends Test {
 
@@ -213,6 +215,61 @@ class ShortenTypeRefCheckTest extends Test {
 		);
 		Assert.equals('package app;\nimport pkg.deep.Bar;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
 		Assert.isTrue(out.indexOf('g(Foo.a(), Bar.a());') != -1, 'both shortened, got: $out');
+	}
+
+	// --- ARM 3b: the import is only earned by a finding the caller still wants ---
+
+	/**
+	 * The orphan the justification contract exists for (`Check.GroupedFix`): the path's every
+	 * occurrence carries a `noqa`, so nothing is rewritten and the import it would have needed
+	 * must not be written either — while a second, unsuppressed finding in the same file keeps
+	 * the fix from returning empty and hiding the question.
+	 */
+	public function testASuppressedPathEarnsNoOrphanImport(): Void {
+		final src: String = inClass(
+			'import pkg.deep.Mod.Sub;\n\n',
+			'\t\tg(pkg.deep.Foo.a()); // noqa: shorten-type-ref\n\t\tg(pkg.deep.Foo.b()); // noqa: shorten-type-ref\n'
+			+ '\t\tfinal v:pkg.deep.Sub = h();\n'
+		);
+		final out: String = suppressedFix(src);
+		Assert.isTrue(out.indexOf('final v:Sub') != -1, 'the unsuppressed finding is still fixed, got: $out');
+		Assert.equals(-1, out.indexOf('import pkg.deep.Foo;'), 'no orphan import, got: $out');
+	}
+
+	/** Two paths anchor on the same offset, so the printer merges them: only the wanted one is written. */
+	public function testASuppressedPathIsDroppedFromASharedImportBucket(): Void {
+		final src: String = inClass(
+			'',
+			'\t\tg(pkg.deep.Foo.a()); // noqa: shorten-type-ref\n\t\tg(pkg.deep.Foo.b()); // noqa: shorten-type-ref\n'
+			+ '\t\tg(pkg.deep.Bar.a());\n\t\tg(pkg.deep.Bar.b());\n'
+		);
+		final out: String = suppressedFix(src);
+		Assert.equals('package app;\nimport pkg.deep.Bar;\n\n', out.substring(0, out.indexOf('class C')));
+		Assert.isTrue(out.indexOf('g(Bar.a());') != -1, 'the unsuppressed path still shortens, got: $out');
+		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.a());') != -1, 'the suppressed path is untouched, got: $out');
+	}
+
+	/** The quantifier is ANY, not ALL: one suppressed occurrence must not cost the path its import. */
+	public function testAPartlySuppressedPathStillEarnsItsImport(): Void {
+		final src: String = inClass('', '\t\tg(pkg.deep.Foo.a()); // noqa: shorten-type-ref\n\t\tg(pkg.deep.Foo.b());\n');
+		final out: String = suppressedFix(src);
+		Assert.equals('package app;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
+		Assert.isTrue(out.indexOf('g(Foo.b());') != -1, 'the surviving occurrence shortens, got: $out');
+		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.a());') != -1, 'the suppressed occurrence is untouched, got: $out');
+	}
+
+	/** At the grouped seam: no import edit may carry a group id no rewrite edit shares. */
+	public function testEveryImportGroupCarriesARewrite(): Void {
+		final src: String = inClass(
+			'',
+			'\t\tg(pkg.deep.Foo.a()); // noqa: shorten-type-ref\n\t\tg(pkg.deep.Foo.b()); // noqa: shorten-type-ref\n'
+			+ '\t\tg(pkg.deep.Bar.a());\n\t\tg(pkg.deep.Bar.b());\n'
+		);
+		final edits: Array<GroupedEdit> = suppressedEdits(src);
+		final rewriteGroups: Array<Null<Int>> = [for (e in edits) if (e.span.from != e.span.to) e.group];
+		for (e in edits) if (e.span.from == e.span.to)
+			Assert.isTrue(rewriteGroups.contains(e.group), 'import group ${e.group} has no rewrite, edits: $edits');
+		Assert.isTrue(rewriteGroups.length > 0, 'the fixture still produces rewrites, edits: $edits');
 	}
 
 	public function testImportArmIsIdempotent(): Void {
@@ -726,6 +783,20 @@ class ShortenTypeRefCheckTest extends Test {
 	private function applyFix(src: String): String {
 		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
 		return applyFixWith(src, scopedPlugin(report), report);
+	}
+
+	/** The grouped edits for `src`, routed through `Linter.collect` the way every fix path is, so
+	* the reification and inline-suppression gates apply before the check sees its own findings. */
+	private function suppressedEdits(src: String): Array<GroupedEdit> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'app/C.hx', source: src }];
+		final plugin: CachingGrammarPlugin = scopedPlugin(report);
+		final check: ShortenTypeRef = new ShortenTypeRef();
+		return check.fixGrouped(src, Linter.collect(report, plugin, [check]), plugin);
+	}
+
+	/** `suppressedEdits` applied — the flat projection `Check.fix` owes `fixGrouped`. */
+	private function suppressedFix(src: String): String {
+		return CheckFixture.applyEdits(src, [for (e in suppressedEdits(src)) { span: e.span, text: e.text }]);
 	}
 
 	private function applyFixWith(src: String, plugin: CachingGrammarPlugin, report: Array<{ file: String, source: String }>): String {
