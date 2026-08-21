@@ -17,8 +17,9 @@ import anyparse.check.Check.GroupedEdit;
  * module-qualified path without it), plain over-qualification across every type position the
  * grammar projects, the add-import arm and its threshold, the `#if` counting / rewriting /
  * freeness split, the five conflict gates, the metadata-argument and value-receiver refusals,
- * the index proof degrading a run to report-only, the surviving-set gate that keeps a suppressed
- * path from leaving its import behind, and idempotency.
+ * the index proof degrading a run to report-only, the survivor-counted import
+ * gates — which keep a suppressed path from leaving its import behind and refuse a line bought
+ * for a single rewrite — and idempotency.
  */
 class ShortenTypeRefCheckTest extends Test {
 
@@ -249,13 +250,72 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.a());') != -1, 'the suppressed path is untouched, got: $out');
 	}
 
-	/** The quantifier is ANY, not ALL: one suppressed occurrence must not cost the path its import. */
+	/**
+	 * A suppression does not VETO an import its other occurrences still earn. This one holds
+	 * under either counting rule — the sibling below is where the survivor count discriminates.
+	 */
 	public function testAPartlySuppressedPathStillEarnsItsImport(): Void {
-		final src: String = inClass('', '\t\tg(pkg.deep.Foo.a()); // noqa: shorten-type-ref\n\t\tg(pkg.deep.Foo.b());\n');
+		final src: String = inClass(
+			'', '\t\tg(pkg.deep.Foo.a()); // noqa: shorten-type-ref\n\t\tg(pkg.deep.Foo.b());\n\t\tg(pkg.deep.Foo.c());\n'
+		);
 		final out: String = suppressedFix(src);
 		Assert.equals('package app;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
-		Assert.isTrue(out.indexOf('g(Foo.b());') != -1, 'the surviving occurrence shortens, got: $out');
+		Assert.isTrue(out.indexOf('g(Foo.b());') != -1 && out.indexOf('g(Foo.c());') != -1, 'both survivors shorten, got: $out');
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.a());') != -1, 'the suppressed occurrence is untouched, got: $out');
+	}
+
+	/**
+	 * The threshold is a cost/benefit call about the EDIT, so it counts the occurrences the fix
+	 * SHORTENS, not the ones the file holds. Two written and one suppressed leaves one rewrite —
+	 * exactly the wash `IMPORT_THRESHOLD` exists to refuse, so the survivor stays qualified.
+	 *
+	 * `Bar` is the positive control: every assertion about `Foo` here is one the UNTRANSFORMED
+	 * input already satisfies, so without a path that must be imported in the same call the test
+	 * would pass just as well on a dead fix path.
+	 */
+	public function testASingleSurvivingOccurrenceEarnsNoImport(): Void {
+		final src: String = inClass(
+			'',
+			'\t\tg(pkg.deep.Foo.a()); // noqa: shorten-type-ref\n\t\tg(pkg.deep.Foo.b());\n'
+			+ '\t\tg(pkg.deep.Bar.a());\n\t\tg(pkg.deep.Bar.b());\n'
+		);
+		final out: String = suppressedFix(src);
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') == -1, 'one rewrite buys no import line, got: $out');
+		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.b());') != -1, 'the lone survivor stays qualified, got: $out');
+		Assert.isTrue(
+			out.indexOf('import pkg.deep.Bar;') != -1 && out.indexOf('g(Bar.a());') != -1,
+			'the two-survivor path in the same call still earns its import, got: $out'
+		);
+	}
+
+	/**
+	 * The macro-body gate reads the SHORTENED occurrences too. `Foo` clears the THRESHOLD on its
+	 * two surviving macro-body occurrences, so this fixture reaches the macro gate instead of
+	 * being refused before it — the one-survivor shape would be rejected by the threshold first
+	 * and would say nothing about this gate. The suppressed runtime occurrence used to lift it,
+	 * leaving a module-level import behind macro-time uses only.
+	 *
+	 * Measured on a js target, that import did not introduce the breakage — the unguarded
+	 * `sys.io.File.b()` the suppression leaves in place fails on js by itself, with or without the
+	 * import — so this is the fail-closed reading of the gate rather than a compile repair.
+	 *
+	 * `Bar` is the positive control, as in the sibling above.
+	 */
+	public function testASuppressedRuntimeUseDoesNotBuyAMacroBodyImport(): Void {
+		final src: String = 'package app;\n\nclass C {\n\n\tmacro static function m() {\n'
+			+ '\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.c());\n\t}\n\n'
+			+ '\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.b()); // noqa: shorten-type-ref\n'
+			+ '\t\tg(pkg.deep.Bar.a());\n\t\tg(pkg.deep.Bar.b());\n\t}\n\n}\n';
+		final out: String = suppressedFix(src);
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') == -1, 'no module-level import for macro-only rewrites, got: $out');
+		Assert.isTrue(
+			out.indexOf('g(pkg.deep.Foo.a());') != -1 && out.indexOf('g(pkg.deep.Foo.c());') != -1,
+			'the macro-time occurrences stay qualified, got: $out'
+		);
+		Assert.isTrue(
+			out.indexOf('import pkg.deep.Bar;') != -1 && out.indexOf('g(Bar.a());') != -1,
+			'a runtime path in the same call still earns its import, got: $out'
+		);
 	}
 
 	/** At the grouped seam: no import edit may carry a group id no rewrite edit shares. */

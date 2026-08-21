@@ -14,7 +14,6 @@ import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
-using Lambda;
 using StringTools;
 
 /**
@@ -100,10 +99,10 @@ private typedef ScanContext = {
  *
  * ## ARM 3 — add the import (the printer's route 2)
  *
- * A path with NO short form in scope, written out at least `IMPORT_THRESHOLD` times OUTSIDE
- * `#if`, whose simple name nothing else in the file binds: the fix adds
- * `import <path>;` — placed by `ImportOrder`, so an already-sorted block keeps its sort — and
- * shortens those occurrences.
+ * A path with NO short form in scope that this call SHORTENS at least `IMPORT_THRESHOLD` times —
+ * outside `#if`, and surviving suppression on a fix path — whose simple name nothing else in the
+ * file binds: the fix adds `import <path>;`, placed by `ImportOrder` so an already-sorted block
+ * keeps its sort, and shortens those occurrences.
  *
  * The arm exists because the printer's freeness gate would otherwise close route 2 by
  * construction HERE and only here: the gate refuses an import whose simple name occurs anywhere
@@ -157,13 +156,18 @@ private typedef ScanContext = {
  *    reification, a `macro class { … }` — is skipped, both here and centrally by
  *    `ReificationScan`: its spliced code is not literal source but a template the surrounding
  *    program hands to ANOTHER module, where an import added to THIS file does not apply.
- *  - **Macro-time bodies.** A path whose every unguarded occurrence sits in the body of a `macro`
- *    function earns no MODULE-LEVEL import. Such a body typechecks only in the macro context,
- *    where `sys.io.File` is legal on every target; a module-level import resolves in EVERY
- *    context, so hoisting the path breaks the module on js / flash with `You cannot access the
- *    sys package while targeting js`. One occurrence outside a macro body lifts the gate — the
- *    module already requires the type at runtime — and shortening against an import the file
- *    ALREADY carries is unaffected, since that import is not this rule's to justify.
+ *  - **Macro-time bodies.** A path whose every SHORTENED occurrence sits in the body of a
+ *    `macro` function earns no MODULE-LEVEL import. Such a body typechecks only in the macro
+ *    context, where `sys.io.File` is legal on every target; a module-level import resolves in
+ *    EVERY context, so hoisting the path breaks the module on js / flash with `You cannot
+ *    access the sys package while targeting js`. One shortened occurrence outside a macro body
+ *    lifts the gate — the module already requires the type at runtime — and shortening against
+ *    an import the file ALREADY carries is unaffected, since that import is not this rule's to
+ *    justify. Counting SHORTENED occurrences rather than written ones is what keeps a
+ *    SUPPRESSED runtime occurrence from lifting the gate for a fix that only reaches
+ *    macro-time ones; measured, that is fail-closed policy and not a compile repair, since an
+ *    unguarded runtime occurrence makes the module fail on the restricted target with or
+ *    without the import.
  *
  * ## Locating a path the grammar gives no span for
  *
@@ -202,9 +206,11 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	private static inline final RULE_ID: String = 'shorten-type-ref';
 
 	/**
-	 * How many occurrences OUTSIDE `#if` one path needs before ADDING an import for it is worth
-	 * the line. One occurrence is a wash — the import trades a qualified use for an import line
-	 * plus a bare name — so the add-import arm starts at the second.
+	 * How many occurrences a path must be SHORTENED at before ADDING an import for it is worth
+	 * the line. One is a wash — the import trades a qualified use for an import line plus a bare
+	 * name — so the add-import arm starts at the second. Counted over the occurrences the CALL
+	 * rewrites, never over the ones the file merely holds: outside `#if`, and, on a fix path,
+	 * surviving suppression. An occurrence left qualified buys nothing towards the line.
 	 */
 	private static inline final IMPORT_THRESHOLD: Int = 2;
 
@@ -291,10 +297,11 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 * What a fix path is handed is always a strict SUBSET of what `run` reported — `Linter.collect`
 	 * drops the quoted and the `noqa`-suppressed before either `FixVerifier` or the oracle batch
 	 * ever sees a finding. The plan is still re-derived from the WHOLE file, so the surviving set
-	 * has to reach it: `planFor` takes it and refuses the freeness exemption to a path with no
-	 * surviving target, which is what keeps a promised import from outliving the rewrites that
-	 * justify it (`Check.GroupedFix`, the justification contract). Before that gate existed, two
-	 * `noqa` lines on the only two occurrences of a path left the import behind on its own.
+	 * has to reach it: `planFor` takes it and counts BOTH import gates over the survivors, which is
+	 * what keeps a promised import from outliving the rewrites that justify it (`Check.GroupedFix`,
+	 * the justification contract). Before those gates counted survivors, two `noqa` lines on the
+	 * only two occurrences of a path left the import behind on its own, and ONE of them still
+	 * bought an import for a single rewrite.
 	 */
 	public function fixGrouped(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -321,9 +328,10 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			for (path in plan.plans) if (path.proven) for (target in path.targets) if (wanted.contains(spanKey(target)))
 				{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
 		];
-		// Every promised import belongs to a path that contributed a rewrite above: `planFor` was
-		// handed `wanted`, so it only promised one for a path with a surviving target, and such a
-		// path always comes back with a changed spelling. With no rewrites there are no imports
+		// Every promised import belongs to a path that contributed rewrites above: `planFor` was
+		// handed `wanted`, so it only promised one for a path with at least `IMPORT_THRESHOLD`
+		// SURVIVING targets, and such a path always comes back with a changed spelling — so each of
+		// those targets is one of the edits just built. With no rewrites there are no imports
 		// either, which is why the empty case needs no early-out of its own.
 		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
 		return edits;
@@ -351,17 +359,6 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		return '${span.from}:${span.to}';
 	}
 
-	/**
-	 * Whether ANY of `targets` is still in the caller's surviving finding set — deliberately ANY,
-	 * not ALL: one suppressed occurrence must not cost the path the import its other occurrences
-	 * earn. It is the same test the rewrite comprehension in `fixGrouped` applies per target, and
-	 * the two must stay in lockstep — that they agree is what makes an empty rewrite set imply an
-	 * empty pending-import set.
-	 */
-	private static function survives(targets: Array<Span>, wanted: Array<String>): Bool {
-		return targets.exists(target -> wanted.contains(spanKey(target)));
-	}
-
 	/** Which of the three messages `plan` earns — unproven first, then the import-free arm, then the add-import one. */
 	private static function messageFor(plan: PathPlan): String {
 		return if (!plan.proven)
@@ -373,13 +370,13 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	/**
-		 * One file's verdicts: every qualified type path it writes, grouped, each carrying the
-		 * printer's answer for it. Null when the file does not parse.
-		 *
-		 * ONE printer serves the whole file (its per-file state is the resolution input, so a second
-		 * instance would answer the same), and its pending-import set is authoritative for the plan:
-		  * `print` is handed the freeness exemption ONLY for a path that has already cleared the
-	 * threshold, the index proof, and — when `wanted` is non-null — the surviving-finding set, so a
+	 * One file's verdicts: every qualified type path it writes, grouped, each carrying the
+	 * printer's answer for it. Null when the file does not parse.
+	 *
+	 * ONE printer serves the whole file (its per-file state is the resolution input, so a second
+	 * instance would answer the same), and its pending-import set is authoritative for the plan:
+	 * `print` is handed the freeness exemption ONLY for a path that has cleared the index proof and
+	 * both import gates, and those gates count the occurrences THIS call will rewrite — so a
 	 * promised import always belongs to a plan this rule will act on.
 	 *
 	 * `wanted` is the caller's surviving findings as `spanKey`s, or null for "every occurrence
@@ -417,22 +414,31 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final plans: Array<PathPlan> = [];
 		for (path in distinctPaths(occurrences)) {
 			final targets: Array<Span> = [];
-			// Occurrences OUTSIDE a macro-time body, which is what an import must be legal for —
-			// see the `Macro-time bodies` gate.
+			// The two counts both import gates read, each over the SURVIVING occurrences — the ones
+			// THIS call will rewrite: how many there are (the threshold), and how many of those sit
+			// outside a macro-time body (the `Macro-time bodies` gate). Two things deliberately stay
+			// WHOLE-file: `targets`, which is the finding set the fix path filters against `wanted`
+			// itself, and `owned` below — the freeness exemption has to cover every byte range the
+			// file still spells as this path, suppressed ones included, or a suppressed occurrence's
+			// own last segment would veto the import by construction.
+			var survivingUses: Int = 0;
 			var runtimeUses: Int = 0;
 			for (o in occurrences) if (o.path == path && !o.conditional) {
 				targets.push(o.span);
-				if (!o.macroBody) runtimeUses++;
+				if (wanted == null || wanted.contains(spanKey(o.span))) {
+					survivingUses++;
+					if (!o.macroBody) runtimeUses++;
+				}
 			}
 			if (targets.length == 0) continue;
 			final proven: Bool = printer.resolvePath(path) != null;
 			// An import is promised to the PRINTER here, and the printer is source-driven: it cannot
 			// know that a caller dropped this path's findings on the way in. `wanted` is that
-			// knowledge — a path with no surviving target must not claim an import (it would land
-			// with nothing to justify it) and must not claim the simple name either (that would
-			// keep a path whose findings DID survive qualified for a collision nobody will write).
-			final importable: Bool = proven && runtimeUses > 0 && targets.length >= IMPORT_THRESHOLD
-				&& (wanted == null || survives(targets, wanted));
+			// knowledge, and both counts above are taken over it, so the promise is measured against
+			// the rewrites that will actually pay for it — a path with no surviving target claims
+			// neither the import nor the simple name (claiming the name would keep a path whose
+			// findings DID survive qualified for a collision nobody will write).
+			final importable: Bool = proven && runtimeUses > 0 && survivingUses >= IMPORT_THRESHOLD;
 			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (o.path == path) o.span] : null;
 			final printed: PrintedTypeRef = printer.print(path, owned);
 			if (printed.text == path) continue;

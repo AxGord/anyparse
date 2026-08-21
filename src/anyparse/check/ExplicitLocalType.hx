@@ -322,8 +322,16 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
 			if (raw == null) continue;
 			final owner: Null<String> = enclosingGenericFunction(tree, source, span.from, functions);
+			// `normalizeWith` ENDS in a print, and printing is what promises the printer an import —
+			// `admissibleLocal` only gets to reject the candidate afterwards. Abstaining has to take
+			// the promise back, or it rides into the file on the next admissible candidate's edit
+			// (the import block is materialised on `edits.length > 0`, not per candidate).
+			final mark: Int = printer.pendingImportMark();
 			final norm: Null<String> = admissibleLocal(normalizeWith(raw, printer, maxAnon, { file: v.file, methodName: owner }), printer);
-			if (norm != null) edits.push({ span: new Span(at, at), text: ':$norm' });
+			if (norm == null)
+				printer.rollbackPendingImports(mark);
+			else
+				edits.push({ span: new Span(at, at), text: ':$norm' });
 		}
 		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
 		return edits;

@@ -143,7 +143,28 @@ final class TypeRefPrinter {
 
 	/** Whether `print` has promised at least one import that `pendingImportEdits` will materialise. */
 	public inline function hasPendingImports(): Bool {
-		return _pendingImports.length > 0;
+		return pendingImportMark() > 0;
+	}
+
+	/** How many imports `print` has promised so far — the mark `rollbackPendingImports` restores to. */
+	public inline function pendingImportMark(): Int {
+		return _pendingImports.length;
+	}
+
+	/**
+	 * Drop every import promised since `mark`. The seam a caller needs when it PRINTS a candidate
+	 * and only then decides to abstain from it: printing is what promises the import, so without
+	 * this the promise outlives the candidate — `pendingImportEdits` materialises it on the
+	 * strength of an unrelated edit, and until then it also vetoes a later import of the same
+	 * simple name (`canAddImport`, `moduleImportBinds`).
+	 *
+	 * The length guard is not decoration: on js `Array.resize` is `this.length = len`, so a mark
+	 * ABOVE the current length would pad an `Array<String>` with nulls rather than do nothing —
+	 * measured, `length = 3` on a one-element array yields `["x", null, null]` — and the next
+	 * `pendingImportEdits` would then call `lastIndexOf` on one of them.
+	 */
+	public inline function rollbackPendingImports(mark: Int): Void {
+		if (mark < _pendingImports.length) _pendingImports.resize(mark);
 	}
 
 	/**
@@ -162,6 +183,12 @@ final class TypeRefPrinter {
 	 * path, or the `pack.SubType` HYBRID a compiler prints for a secondary type — the hybrid
 	 * is canonicalised first, so the result is never one. A returned non-null `importPath` is
 	 * also RECORDED for `pendingImportEdits`.
+	 *
+	 * THE PRINTER DOES NOT HANDLE ABSTENTION. Recording is unconditional, so a caller that may
+	 * still REJECT the candidate after printing it owns taking the promise back — bracket the
+	 * call with `pendingImportMark` / `rollbackPendingImports`. Leaving it promised is not inert:
+	 * `pendingImportEdits` materialises it on the strength of any other edit, and meanwhile it
+	 * vetoes a later import of the same simple name (`canAddImport`, `moduleImportBinds`).
 	 *
 	 * `owned` is passed through to `canAddImport`: the byte ranges that are written occurrences
 	 * of `fqn` itself, which the caller is rewriting. Only a caller that SHORTENS existing
