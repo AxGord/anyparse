@@ -1108,6 +1108,32 @@ typedef RefShape = {
 	@:optional var operatorOverloadMetaName: String;
 
 	/**
+	 * The metadata tags whose presence on a TYPE declaration means a MACRO generates that type's
+	 * member set (Haxe `@:build`, `@:autoBuild`, `@:genericBuild`) — the question a rule must ask
+	 * before it acts on the members the declaration happens to hold, since the builder's are not
+	 * in the text. `unused-private --fix` asks it through the leading-run walk
+	 * (`AnnotatedDeclScan.typeStartsAny`) before deleting a private member: a generated member may
+	 * be that private's only reference.
+	 *
+	 * The SAME list `MemberWriteScan.carriesBuildMacro` matches as whole metadata tokens, published
+	 * here so a STRUCTURAL walk asks the grammar instead of spelling a Haxe tag inside a check —
+	 * two answers to one question is how `@:genericBuild` stayed missing from one of them.
+	 * `@:autoBuild` is in the list for the conservative reason the text scan keeps it: it builds
+	 * SUBTYPES rather than the declaration carrying it, so counting it here at worst keeps a dead
+	 * private. Optional; unset → no declaration reads as macro-built, which is the right default
+	 * for a grammar that has no build macros.
+	 */
+	@:optional var typeBuildMacroMetaNames: Array<String>;
+
+	/**
+	 * The metadata tag that PINS a declaration and its members against removal (Haxe `@:keep`, which
+	 * exempts the type from dead-code elimination and keeps every member reachable by name through
+	 * reflection). `unused-private --fix` refuses to delete a private member of a type carrying it —
+	 * the finding is still reported. Optional; unset → no declaration is pinned.
+	 */
+	@:optional var retainedDeclMetaName: String;
+
+	/**
 	 * How the grammar SPELLS an enum-abstract declaration — the emission seam
 	 * `prefer-enum-abstract`'s autofix writes through when it converts a constant-only
 	 * class into one. Unset (the default for every grammar that does not fill it) leaves

@@ -517,18 +517,25 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * Index each class by name with its `@:build` / `@:keep` presence, asked through the one
-	 * seam-aware leading-run walk `AnnotatedDeclScan` owns rather than a private copy of it: a copy
-	 * with no region seam dropped the whole class's protection whenever a member-free `#if` sat
+	 * Index each class by name with its build-macro / retained-declaration annotations, asked through
+	 * the one seam-aware leading-run walk `AnnotatedDeclScan` owns rather than a private copy of it: a
+	 * copy with no region seam dropped the whole class's protection whenever a member-free `#if` sat
 	 * between the annotation and the class, and `--fix` then deleted its privates. Keyed on the OUTER
 	 * child (`siblings[index]`) so a `final class`'s leading meta - a sibling of the `FinalDecl`
 	 * wrapper, not of the inner form - is read once at the right level.
+	 *
+	 * WHICH annotations those are is the GRAMMAR's answer, not this file's: `RefShape`'s
+	 * `typeBuildMacroMetaNames` and `retainedDeclMetaName`. Spelling `'@:build'` / `'@:keep'` here was
+	 * the last Haxe tag written into a check, and it made the build-macro question have two answers -
+	 * this one, which knew only `@:build`, and `MemberWriteScan.carriesBuildMacro`, which knows all
+	 * three. A grammar declaring neither seam gets the empty answer its own projection already gives.
 	 */
 	private static function collectClassMeta(
 		plugin: GrammarPlugin, tree: QueryNode, out: Map<String, { hasBuild: Bool, hasKeep: Bool }>
 	): Void {
-		final build: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, '@:build');
-		final keep: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, '@:keep');
+		final shape: RefShape = plugin.refShape();
+		final build: Array<Int> = AnnotatedDeclScan.typeStartsAny(plugin, tree, shape.typeBuildMacroMetaNames);
+		final keep: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, shape.retainedDeclMetaName);
 		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
 			final span: Null<Span> = siblings[index].span;
 			out[name] = { hasBuild: AnnotatedDeclScan.covers(span, build), hasKeep: AnnotatedDeclScan.covers(span, keep) };
@@ -545,7 +552,7 @@ final class UnusedPrivate implements Check {
 	private static function collectCtorCandidates(
 		plugin: GrammarPlugin, tree: QueryNode, file: String, out: Array<{ file: String, className: String, span: Span }>
 	): Void {
-		final build: Array<Int> = AnnotatedDeclScan.typeStarts(plugin, tree, '@:build');
+		final build: Array<Int> = AnnotatedDeclScan.typeStartsAny(plugin, tree, plugin.refShape().typeBuildMacroMetaNames);
 		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
 			// An abstract class is never instantiated by definition and its private
 			// empty ctor is the subclass-only idiom — `new` stays for `super()`.

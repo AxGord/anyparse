@@ -60,7 +60,7 @@ final class AnnotatedDeclScan {
 	 * INDEPENDENTLY in `run` and in `fix`, so a node from one walk is never the node from the other.
 	 */
 	public static function memberStarts(plugin: GrammarPlugin, tree: QueryNode, metaName: Null<String>): Array<Int> {
-		return startsOf(plugin, tree, metaName, plugin.refShape().memberDeclKinds ?? []);
+		return startsOf(plugin, tree, oneOf(metaName), plugin.refShape().memberDeclKinds ?? []);
 	}
 
 	/**
@@ -69,23 +69,37 @@ final class AnnotatedDeclScan {
 	 * one walk, told which declarations it is walking between.
 	 */
 	public static function typeStarts(plugin: GrammarPlugin, tree: QueryNode, metaName: Null<String>): Array<Int> {
-		return startsOf(plugin, tree, metaName, plugin.refShape().typeDeclKinds ?? []);
+		return startsOf(plugin, tree, oneOf(metaName), plugin.refShape().typeDeclKinds ?? []);
+	}
+
+	/**
+	 * `typeStarts` for a SEAM that names several annotations at once — the span starts of every TYPE
+	 * declaration whose leading run carries ANY of `metaNames` (`RefShape.typeBuildMacroMetaNames`
+	 * is the one such seam: three spellings of "a macro generates this type's members"). One walk
+	 * over the tree, not one per name, and the same empty answer for a grammar that declares none.
+	 */
+	public static function typeStartsAny(plugin: GrammarPlugin, tree: QueryNode, metaNames: Null<Array<String>>): Array<Int> {
+		return startsOf(plugin, tree, metaNames ?? [], plugin.refShape().typeDeclKinds ?? []);
+	}
+
+	/** A single seam name as the name SET the walk reads; an unset seam is the empty set. */
+	private static inline function oneOf(metaName: Null<String>): Array<String> {
+		return metaName == null ? [] : [metaName];
 	}
 
 	/** The shared resolution: `decls` names the declarations whose leading runs this walk reads. */
-	private static function startsOf(plugin: GrammarPlugin, tree: QueryNode, metaName: Null<String>, decls: Array<String>): Array<Int> {
+	private static function startsOf(plugin: GrammarPlugin, tree: QueryNode, metaNames: Array<String>, decls: Array<String>): Array<Int> {
 		final shape: RefShape = plugin.refShape();
 		final condKind: Null<String> = shape.conditionalMemberKind;
 		final metas: Array<String> = plugin.metaShape().metaKinds;
 		final out: Array<Int> = [];
-		if (decls.length == 0 || condKind == null || metas.length == 0 || metaName == null) return out;
+		if (decls.length == 0 || condKind == null || metas.length == 0 || metaNames.length == 0) return out;
 		final cond: String = condKind;
-		final meta: String = metaName;
 		collect(tree, {
 			decls: decls,
 			condKind: cond,
 			metas: metas,
-			metaName: meta,
+			metaNames: metaNames,
 			modifiers: CheckScan.modifierKinds(shape)
 		}, out, false);
 		return out;
@@ -93,7 +107,7 @@ final class AnnotatedDeclScan {
 
 	/**
 	 * Walk `node`'s children in source order, pushing every `seams.decls` declaration whose contiguous
-	 * leading run carries `seams.metaName`. `seams.modifiers` and the annotations themselves do NOT
+	 * leading run carries one of `seams.metaNames`. `seams.modifiers` and the annotations themselves do NOT
 	 * end that run, and any other kind ends it — so an annotation written for one declaration cannot
 	 * reach the next. A conditional region is the exception: one holding none of `seams.decls` is
 	 * transparent and the run continues past it, one HOLDING one takes the run with it (`seed`) and
@@ -114,7 +128,8 @@ final class AnnotatedDeclScan {
 		for (child in node.children) {
 			final kind: String = child.kind;
 			if (seams.metas.contains(kind)) {
-				if (child.name == seams.metaName) annotated = true;
+				final name: Null<String> = child.name;
+				if (name != null && seams.metaNames.contains(name)) annotated = true;
 				continue;
 			}
 			if (kind == seams.condKind) {
@@ -154,8 +169,8 @@ private typedef Seams = {
 	/** The annotation kinds (`MetaShape.metaKinds`). */
 	final metas: Array<String>;
 
-	/** The one annotation name that counts. */
-	final metaName: String;
+	/** The annotation names that count — one for a single-name seam, several for `typeStartsAny`. */
+	final metaNames: Array<String>;
 
 	/** The modifier kinds a declaration's leading run may hold; any other kind ENDS the run. */
 	final modifiers: Array<String>;

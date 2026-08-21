@@ -59,6 +59,13 @@ using Lambda;
  *    implemented interface is resolvable in the index and provably lacks it
  *    (`SymbolIndex.typeProvablyLacksMember`). The inline arm (below) keeps `get_x`, so this gate
  *    never applies to it.
+ * 6. The owner type is not MACRO-BUILT (`SymbolIndex.transitivelyCarriesBuildMacro`). This rule
+ *    DELETES the getter and the backing field, and a member a `@:build` / `@:autoBuild` /
+ *    `@:genericBuild` builder generates around them is in no text this scan reads — measured on
+ *    Haxe 4.3.7, a builder adding `function readBacking() return _active` compiles before the
+ *    collapse and is `Unknown identifier : _active` after it. Asked per OWNER, not per file: the
+ *    `@:autoBuild` grant arrives through `implements` and the class then carries no metadata of
+ *    its own. The rule consulted no build-macro predicate at all until it was measured.
  *
  * ## The `(default, set)` shape-A write decision (three-way)
  *
@@ -195,8 +202,18 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
 			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), entry.source);
-			for (cls in CheckScan.classBodies(tree))
+			for (cls in CheckScan.classBodies(tree)) {
+				// Build-macro bail. This rule DELETES the getter and the backing field, so a member a
+				// builder generates around them loses its referent: measured on Haxe 4.3.7, a `@:build`
+				// macro adding `function readBacking() return _active` compiles before the collapse and
+				// is `Unknown identifier : _active` after it. The grant is inherited through
+				// `implements` / `extends` (`@:autoBuild`), where the class carries no metadata of its
+				// own, which is why the per-owner index question and not the file-scoped text scan
+				// beside the `@:coreApi` bail above.
+				final owner: Null<String> = cls.name;
+				if (owner != null && index.transitivelyCarriesBuildMacro(owner)) continue;
 				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin, branch);
+			}
 		}
 		return out;
 	}
