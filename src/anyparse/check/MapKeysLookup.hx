@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -137,17 +138,25 @@ final class MapKeysLookup implements Check {
 	}
 
 	/**
-	 * Rewrite each flagged `for (k in m.keys())` into `for (k => value in m)` — dropping
+		  * Rewrite each flagged `for (k in m.keys())` into `for (k => value in m)` — dropping
 	 * `.keys()` from the iterable, binding a fresh value variable in the header, and
 	 * replacing every `m[k]` / `m.get(k)` lookup in the body with that variable. The value
 	 * name is `value`, or `value1`, `value2`… when `value` is already used in the body.
+	 *
+	 * A file carrying a build macro (`MemberWriteScan.carriesBuildMacro`) gets NO edit. The
+	 * key-value `for` is legal Haxe, but the body of such a member is consumed by a macro that
+	 * may model only the forms it was written for: `pony/text/tpl/TplPut.hx` is built by
+	 * `Continuation.cpsByMeta(':async')`, whose loop transformer matches `EBinop(OpIn, e1, e2)`
+	 * and nothing else, so the rewrite turned a compiling file into `Expect "e1 in e2"`. The
+	 * REPORT is unchanged — the suggestion is right, only the automatic application is not
+	 * something this check can prove safe.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final cfg: Null<Cfg> = readCfg(plugin);
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (cfg == null || tree == null) return [];
+		if (cfg == null || tree == null || MemberWriteScan.carriesBuildMacro(source)) return [];
 		final c: Cfg = cfg;
 		final wanted: Array<String> = [];
 		for (v in violations) {

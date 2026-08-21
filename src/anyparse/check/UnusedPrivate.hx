@@ -46,9 +46,9 @@ using StringTools;
  *
  * Constructors, property accessors (`get_` / `set_`, reached via `(get, set)`,
  * not by name), and annotation-bearing members (`@:keep`, abstract `@:from` /
- * `@:op`, ...) can be used without an in-source identifier reference. The
- * grammar marks these via `NamedDecl.implicitlyReachable`; the check never flags
- * them — a missed dead member, never a deleted live one. Members reachable only through a framework or macro across files are skipped too: a `static final` macro-force field (`= SomeType`, via `implicitlyReachable`), and a utest `test*` method whose class transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
+ * `@:op`, ...) can be used without an in-source identifier reference. The grammar marks these via `NamedDecl.implicitlyReachable` — except when a
+ * conditional-compilation region sits between the annotation and the declaration,
+ * which `AnnotatedMemberScan` recovers; the check never flags them — a missed dead member, never a deleted live one. Members reachable only through a framework or macro across files are skipped too: a `static final` macro-force field (`= SomeType`, via `implicitlyReachable`), and a utest `test*` method whose class transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
  *
  * ## Members that are public despite no `public` keyword
  *
@@ -130,7 +130,13 @@ final class UnusedPrivate implements Check {
 			// project as unmodified — so PRIVATE — fields of a plain abstract, while every one of them
 			// is public API. Left in, the check deleted 15 of one real file's 17 colour constants.
 			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
-			for (decl in support.project(tree)) if (!EnumAbstractForms.isValue(decl.span, guarded)) {
+			// A member whose annotation sits BEHIND a `#if` region reads as unannotated to the
+			// grammar's own `implicitlyReachable`, whose run walk stops at the region. Nothing names
+			// an `@:op` overload or an `@:from` conversion, so the reference scan cannot save one.
+			final annotated: Array<Int> = AnnotatedMemberScan.starts(plugin, tree);
+			for (decl in support.project(tree)) if (
+				!EnumAbstractForms.isValue(decl.span, guarded) && !AnnotatedMemberScan.covers(decl.span, annotated)
+			) {
 				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, scopeIndex, support, externTypes);
 				if (v != null) violations.push(v);
 			}

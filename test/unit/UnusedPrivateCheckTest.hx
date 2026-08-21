@@ -279,6 +279,26 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(1, one('#if js @:native("F") #end abstract F(Int) {\n\tfunction g():Void {}\n}').length);
 	}
 
+	public function testAnnotationBehindCondRegionStillExempts(): Void {
+		// `@:op(A << B) #if (haxe_ver >= 4.2) extern #else @:extern #end private inline function` puts a
+		// REGION between the annotation and the declaration, and the grammar's run walk stops there — so
+		// every member of the cross-version `extern` idiom read as unannotated. Nothing NAMES an operator
+		// overload or a `@:from` conversion, so the reference scan cannot save one: `--fix` deleted six of
+		// `pony/events/Signal0.hx`'s and `signal << listener` became the builtin integer shift.
+		final guard: String = '#if (haxe_ver >= 4.2) extern #else @:extern #end';
+		Assert.equals(0, one('abstract S(Int) {\n\t@:op(A << B) $guard\n\tprivate inline function shl(b:Int):S return this;\n}').length);
+		Assert.equals(0, one('abstract S(Int) {\n\t@:from $guard\n\tprivate static inline function of(b:Bool):S return 0;\n}').length);
+	}
+
+	public function testCondRegionAloneDoesNotExemptAndDoesNotCarryOver(): Void {
+		// The region only stops ENDING the run; it grants nothing of its own, so an unannotated member
+		// written in the same idiom stays reported. And a region that HOLDS a member ends the run: the
+		// annotation above it belongs to that member, never to the next one.
+		final guard: String = '#if (haxe_ver >= 4.2) extern #else @:extern #end';
+		Assert.equals(1, one('class C {\n\t$guard\n\tprivate inline function dead():Void {}\n}').length);
+		Assert.equals(1, one('class C {\n\t@:keep #if js private function a():Void {} #end\n\tprivate function dead():Void {}\n}').length);
+	}
+
 	public function testOpAnnotatedMemberNotFlagged(): Void {
 		// An `@:op(A < B)` operator overload is invoked via the operator, never by name,
 		// and projects as a `MetaCall` (argumented meta) sibling — the annotated-member skip

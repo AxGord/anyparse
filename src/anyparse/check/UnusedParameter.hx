@@ -76,6 +76,11 @@ using StringTools;
  *    An unreferenced parameter there is by design (the default body may
  *    legitimately ignore it while a reassigned closure elsewhere uses it), so
  *    the whole function is skipped — not merely downgraded to `Info`.
+ *  - An OPERATOR OVERLOAD (`RefShape.operatorOverloadMetaName`, read across a
+ *    conditional region by `AnnotatedMemberScan`) — the operator dictates the
+ *    arity, so an ignored operand is mandated, not dead. It needs its own gate
+ *    because nothing NAMES such a method: the in-file call-set proof completes
+ *    on ZERO call sites and would otherwise hand the removal a `Warning`.
  *  - A function CAPTURED AS A VALUE in the same file (`valueCapturedNames`) —
  *    its name referenced outside callee position: passed as an argument
  *    (`addEventListener(E, onFoo)`), assigned to a var / field, returned, or
@@ -149,7 +154,13 @@ final class UnusedParameter implements Check implements ConfigAware {
 			final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
 			walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
 			final captured: Array<String> = valueCapturedNames(tree);
-			for (c in candidates)
+			// An operator overload's arity is dictated by the OPERATOR, so an ignored operand is
+			// mandated rather than dead — and nothing NAMES such a method, so the in-file call-set
+			// proof completes on zero call sites and hands the removal a `Warning`. `--fix` then took
+			// `@:op(A == B) function srNull(a: DT, b: Null<Float>)` down to one argument and the build
+			// failed with `Static @:op functions must accept exactly two arguments`.
+			final operators: Array<Int> = AnnotatedMemberScan.starts(plugin, tree, shape.operatorOverloadMetaName);
+			for (c in candidates) if (!AnnotatedMemberScan.covers(c.fn.span, operators))
 				checkFunction(
 					violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape, index,
 					captured

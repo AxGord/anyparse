@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -148,6 +149,13 @@ private typedef FixCtx = {
  * side-effect-free (a literal / identifier / operator tree, or a type-proven
  * plain field read) — a dead initializer stripped to `var x:T;`, a standalone
  * assignment removed; an impure store is left as a report-only finding.
+ *
+ * A file carrying a build macro (`MemberWriteScan.carriesBuildMacro`) gets NO
+ * edit at all. Both shapes are legal Haxe, but such a body is consumed by a
+ * macro that may model only the forms it was written for: `TplPut.hx` is built
+ * by `Continuation.cpsByMeta(':async')`, which turns each declaration into a
+ * continuation whose arity comes from the initializer, so stripping one made
+ * `(name : String) -> Void should be () -> Unknown<0>` out of a compiling file.
  */
 @:nullSafety(Strict)
 final class DeadStore implements Check {
@@ -208,7 +216,7 @@ final class DeadStore implements Check {
 		final shape: RefShape = plugin.refShape();
 		final assignKind: Null<String> = shape.assignKind;
 		final mutableDeclKinds: Array<String> = shape.mutableLocalDeclKinds ?? [];
-		if (assignKind == null && mutableDeclKinds.length == 0) return [];
+		if (assignKind == null && mutableDeclKinds.length == 0 || MemberWriteScan.carriesBuildMacro(source)) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;

@@ -33,6 +33,20 @@ class UnusedParameterCheckTest extends Test {
 		Assert.equals('unused parameter \'value\'', vs[0].message);
 	}
 
+	public function testOperatorOverloadOperandNotFlagged(): Void {
+		// An `@:op` method's arity is dictated by the operator, so an ignored operand is mandated
+		// rather than dead — and nothing NAMES such a method, so the in-file call-set proof completes
+		// on ZERO call sites and handed the removal a `Warning`. `--fix` then took
+		// `@:op(A == B) function srNull(a:DT, b:Null<Float>)` down to one argument and the build failed
+		// with `Static @:op functions must accept exactly two arguments`.
+		final body: String = 'private static inline function eq(a:A, b:Null<Float>):Bool return (a:Float) == 0;';
+		Assert.equals(0, violations('abstract A(Float) {\n\t@:op(A == B) $body\n}').length);
+		final guard: String = '#if (haxe_ver >= 4.2) extern #else @:extern #end';
+		Assert.equals(0, violations('abstract A(Float) {\n\t@:op(A == B) $guard\n\t$body\n}').length);
+		// The gate is the operator annotation, not the abstract: an unannotated twin stays reported.
+		Assert.equals(1, violations('abstract A(Float) {\n\t$body\n}').length);
+	}
+
 	public function testUsedParameterNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tpublic function f(value:Int):Void {\n\t\tg(value);\n\t}\n}').length);
 	}

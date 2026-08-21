@@ -26,6 +26,29 @@ class RedundantElseCheckTest extends Test {
 		Assert.equals('this else is redundant — the if branch always exits', vs[0].message);
 	}
 
+	public function testNarrowingLapseWithholdsTheDeNest(): Void {
+		// An `if / else` chain evaluates the else branch in the state the CONDITION left; a de-nested
+		// statement runs after the whole `if`, and Haxe drops a FIELD's non-null narrowing at the first
+		// call it cannot see through. `if (p != null) { if (a) { g(); return; } else p.length; }`
+		// compiles and its de-nested form does not — the two `Cannot access "length" of a nullable
+		// value` errors that rolled a 190-file `--fix` wave back over one file.
+		final lapse: String = 'class C {\n\tfunction f(a:Bool):Void {\n\t\tif (p != null) {\n\t\t\tif (a) {\n\t\t\t\tg();\n'
+			+ '\t\t\t\treturn;\n\t\t\t} else trace(p.length);\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(lapse).length);
+		Assert.equals(0, edits(lapse).length);
+		// With nothing in the kept then-branch that can reset it, the narrowing survives the gap and
+		// the de-nest goes ahead — verified against the compiler, not assumed.
+		final safe: String = 'class C {\n\tfunction f(a:Bool):Void {\n\t\tif (p != null) {\n\t\t\tif (a) return;\n'
+			+ '\t\t\telse trace(p.length);\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(safe).length);
+		Assert.equals(1, edits(safe).length);
+		// And an else body that never touches the guarded subject is unaffected by any of it.
+		final other: String = 'class C {\n\tfunction f(a:Bool):Void {\n\t\tif (p != null) {\n\t\t\tif (a) {\n\t\t\t\tg();\n'
+			+ '\t\t\t\treturn;\n\t\t\t} else trace(q.length);\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(other).length);
+		Assert.equals(1, edits(other).length);
+	}
+
 	public function testElseAfterThrowFlagged(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\tif (a) throw "e";\n\t\telse b();\n\t}\n}').length);
 	}

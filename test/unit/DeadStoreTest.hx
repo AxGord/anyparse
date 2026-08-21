@@ -24,6 +24,15 @@ class DeadStoreTest extends Test {
 		assertFix('class C { function f():Int { var x = 1; x = 2; return x; } }', 'var x;', 'x = 1');
 	}
 
+	public inline function testFixRefusesBuildMacroFile(): Void {
+		// Both shapes are legal Haxe, but a body under a build macro is consumed by something that may
+		// model only the forms it was written for: `TplPut.hx` is built by
+		// `Continuation.cpsByMeta(':async')`, which turns each declaration into a continuation whose
+		// arity comes from the initializer, so stripping one produced
+		// `(name : String) -> Void should be () -> Unknown<0>` out of a compiling file.
+		assertNoFix('@:build(B.b()) class C { function f():Int { var x = 1; x = 2; return x; } }');
+	}
+
 	public inline function testFixDeletesDeadStoreBetweenReads(): Void {
 		// `x = 99` dies between two live reads — deleting it must keep `trace(x)` and the return.
 		assertFix('class C { function f(a:Int):Int { var x = a; trace(x); x = 99; x = a + 1; return x; } }', 'trace(x)', '99');

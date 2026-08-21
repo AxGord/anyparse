@@ -57,6 +57,19 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 	}
 
+	public function testExternInlineCalleeNotFlagged(): Void {
+		// `extern inline` has no runtime function to close over — Haxe answers `Can't create closure on
+		// an extern inline member method` — so the reduction turns a compiling call into a build
+		// failure. Both spellings count: the bare modifier, and the cross-version region that
+		// contributes it, which the member walk did not read at all.
+		final head: String = 'class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> ok(p));\n\t}\n';
+		Assert.equals(0, violations('${head}\textern public inline function ok(v:Int):Bool return true;\n}').length);
+		final guard: String = '#if (haxe_ver >= 4.2) extern #else @:extern #end';
+		Assert.equals(0, violations('$head\t$guard\n\tpublic inline function ok(v:Int):Bool return true;\n}').length);
+		// Plain `inline` closes over fine — only the `extern` pairing removes the callable.
+		Assert.equals(1, violations('${head}\tpublic inline function ok(v:Int):Bool return true;\n}').length);
+	}
+
 	public function testReorderedParamsNotFlagged(): Void {
 		Assert.equals(
 			0, violations('${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach((a, b) -> Helper.pair(b, a));\n\t}\n}').length

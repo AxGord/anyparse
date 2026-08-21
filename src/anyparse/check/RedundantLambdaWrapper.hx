@@ -263,7 +263,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	}
 
 	private static function collectMembers(host: QueryNode, out: Map<String, Signature>, seams: Seams): Void {
-		var isStatic: Bool = false;
+		final run: Array<String> = [];
 		var blocked: Bool = false;
 		for (child in host.children) {
 			if (seams.metaKinds.contains(child.kind)) {
@@ -271,29 +271,71 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 				continue;
 			}
 			if (seams.modifierKinds.contains(child.kind)) {
-				if (child.kind == seams.staticModifierKind) isStatic = true;
+				run.push(child.kind);
 				if (child.kind == seams.dynamicModifierKind || child.kind == seams.macroModifierKind) blocked = true;
 				continue;
 			}
 			if (child.kind == seams.conditionalMemberKind) {
 				collectMembers(child, out, seams);
-				isStatic = false;
-				blocked = false;
+				// A region that HOLDS a declaration ends the run — what precedes it belongs to that
+				// declaration. A member-free one CONTINUES it: `#if (haxe_ver >= 4.2) extern #else
+				// @:extern #end public inline function f()` is an `extern inline` method in EVERY
+				// build, and the run's own walk would otherwise never see either spelling.
+				if (holdsMember(child, seams)) {
+					run.resize(0);
+					blocked = false;
+				} else if (collectRegionPrefix(child, seams, run))
+					blocked = true;
 				continue;
 			}
 			final name: Null<String> = child.name;
 			if (seams.memberDeclKinds.contains(child.kind) && name != null) {
+				final staticKind: Null<String> = seams.staticModifierKind;
 				final signature: Signature = {
 					arity: countParams(child, seams),
-					isStatic: isStatic,
-					safe: !blocked && !out.exists(name) && seams.functionKinds.contains(child.kind) && name != seams.constructorName
-						&& plainParams(child, seams)
+					isStatic: staticKind != null && run.contains(staticKind),
+					safe: !blocked && !closureless(run, seams) && !out.exists(name) && seams.functionKinds.contains(child.kind)
+						&& name != seams.constructorName && plainParams(child, seams)
 				};
 				out[name] = signature;
 			}
-			isStatic = false;
+			run.resize(0);
 			blocked = false;
 		}
+	}
+
+	/** Whether `region` declares a member in any branch, at any nesting depth. */
+	private static function holdsMember(region: QueryNode, seams: Seams): Bool {
+		return region.children.exists(child -> seams.memberDeclKinds.contains(child.kind) || holdsMember(child, seams));
+	}
+
+	/**
+	 * Append to `run` every modifier kind a member-free `region` contributes to the declaration that
+	 * follows it, and report whether it also carries an annotation — which blocks the reduction exactly
+	 * as one written outside the region does.
+	 */
+	private static function collectRegionPrefix(region: QueryNode, seams: Seams, run: Array<String>): Bool {
+		var meta: Bool = false;
+		for (child in region.children) {
+			if (seams.metaKinds.contains(child.kind))
+				meta = true;
+			else if (seams.modifierKinds.contains(child.kind))
+				run.push(child.kind);
+			if (collectRegionPrefix(child, seams, run)) meta = true;
+		}
+		return meta;
+	}
+
+	/**
+	 * Whether a member carrying this modifier run can never be referenced as a VALUE. `extern inline`
+	 * has no runtime function to close over — Haxe answers `Can't create closure on an extern inline
+	 * member method` — so replacing `e -> exists(e)` with `exists` turns a compiling call into a build
+	 * failure. Plain `inline` is fine: only the `extern` pairing removes the callable.
+	 */
+	private static function closureless(run: Array<String>, seams: Seams): Bool {
+		final externKind: Null<String> = seams.externModifierKind;
+		final inlineKind: Null<String> = seams.inlineModifierKind;
+		return externKind != null && inlineKind != null && run.contains(externKind) && run.contains(inlineKind);
 	}
 
 	/** The file's shadowing value binders and its local function declarations. */
@@ -380,6 +422,8 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 			modifierKinds: modifiers,
 			metaKinds: plugin.metaShape().metaKinds,
 			staticModifierKind: shape.staticModifierKind,
+			externModifierKind: shape.externModifierKind,
+			inlineModifierKind: shape.inlineModifierKind,
 			dynamicModifierKind: shape.dynamicModifierKind,
 			macroModifierKind: shape.macroModifierKind,
 			conditionalMemberKind: shape.conditionalMemberKind,
@@ -436,6 +480,8 @@ private typedef Seams = {
 	final modifierKinds: Array<String>;
 	final metaKinds: Array<String>;
 	final staticModifierKind: Null<String>;
+	final externModifierKind: Null<String>;
+	final inlineModifierKind: Null<String>;
 	final dynamicModifierKind: Null<String>;
 	final macroModifierKind: Null<String>;
 	final conditionalMemberKind: Null<String>;

@@ -40,6 +40,23 @@ class MapKeysLookupCheckTest extends Test {
 		Assert.equals('iterate key-value instead of keys()-then-lookup — for (k => value in m)', vs[0].message);
 	}
 
+	public function testBuildMacroFileReportedButNotFixed(): Void {
+		// The key-value `for` is legal Haxe, but a body under a build macro is consumed by something
+		// that may model only the forms it was written for: `TplPut.hx` is built by
+		// `Continuation.cpsByMeta(':async')`, whose loop transformer matches `EBinop(OpIn, e1, e2)` and
+		// nothing else, so the rewrite produced `Expect "e1 in e2"` out of a compiling file. The REPORT
+		// stays — only the automatic application is withheld.
+		final src: String = '@:build(B.b())\n' + wrapMap('for (k in m.keys()) trace(m[k]);');
+		final check: MapKeysLookup = new MapKeysLookup();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		// The same loop without the annotation still gets its edit.
+		final plain: String = wrapMap('for (k in m.keys()) trace(m[k]);');
+		final pv: Array<Violation> = check.run([{ file: 'C.hx', source: plain }], new HaxeQueryPlugin());
+		Assert.isTrue(check.fix(plain, pv, new HaxeQueryPlugin()).length > 0);
+	}
+
 	public function testGetLookupFlagged(): Void {
 		Assert.equals(1, violations(wrapMap('for (k in m.keys()) trace(m.get(k));')).length);
 	}

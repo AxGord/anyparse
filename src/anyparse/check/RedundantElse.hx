@@ -118,7 +118,7 @@ final class RedundantElse implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectDeNests(tree, source, seams, [], RefactorSupport.collectCommentTokens(source), flagged, edits);
+		collectDeNests(tree, source, seams, [], RefactorSupport.collectCommentTokens(source), flagged, edits, []);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -198,16 +198,51 @@ final class RedundantElse implements Check {
 	 */
 	private static function collectDeNests(
 		node: QueryNode, source: String, seams: Seams, inherited: Array<String>, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, narrowed: Array<String>
 	): Void {
 		final scopeNames: Array<String> = ScopeFrames.ownScopeNames(node, seams, inherited);
 		if (seams.blockKinds.contains(node.kind)) for (stmt in node.children) if (seams.ifKinds.contains(stmt.kind))
-			deNest(stmt, source, seams, scopeNames, comments, flagged, edits);
+			deNest(stmt, source, seams, scopeNames, comments, flagged, edits, narrowed);
 		final ownParams: Null<Array<String>> = ScopeFrames.ownParamNames(node, seams);
-		for (c in node.children)
+		for (index => c in node.children)
 			collectDeNests(
-				c, source, seams, ScopeFrames.childScopeNames(node, c, seams, inherited, scopeNames, ownParams), comments, flagged, edits
+				c, source, seams, ScopeFrames.childScopeNames(node, c, seams, inherited, scopeNames, ownParams), comments, flagged, edits,
+				narrowedIn(node, index, seams, narrowed)
 			);
+	}
+
+	/**
+	 * The null-guard subjects holding inside `node`'s child `index`. Entering the THEN branch of an
+	 * `if (<subject> != null)` adds that subject; a function boundary drops the whole set, a guard
+	 * being unable to reach into a nested body.
+	 */
+	private static function narrowedIn(node: QueryNode, index: Int, seams: Seams, narrowed: Array<String>): Array<String> {
+		if (seams.functionKinds.contains(node.kind)) return [];
+		if (index != 1 || !seams.ifKinds.contains(node.kind) || node.children.length == 0) return narrowed;
+		final subject: Null<String> = guardSubject(node.children[0], seams);
+		return subject == null || narrowed.contains(subject) ? narrowed : narrowed.concat([subject]);
+	}
+
+	/** The self-normalised name an `<x> != null` / `null != <x>` condition narrows, or null for any other shape. */
+	private static function guardSubject(cond: QueryNode, seams: Seams): Null<String> {
+		final node: QueryNode = seams.parenKind != null && cond.kind == seams.parenKind && cond.children.length > 0
+			? cond.children[0]
+			: cond;
+		if (node.kind != seams.notEqKind || node.children.length < 2) return null;
+		final left: QueryNode = node.children[0];
+		final right: QueryNode = node.children[1];
+		if (left.kind == seams.nullLitKind) return receiverName(right, seams);
+		return right.kind == seams.nullLitKind ? receiverName(left, seams) : null;
+	}
+
+	/** `node` read as a narrowable subject: a bare identifier, or a `this.<name>` field read — both spelling one member. */
+	private static function receiverName(node: QueryNode, seams: Seams): Null<String> {
+		if (node.kind == seams.identKind) return node.name;
+		final self: Null<String> = seams.selfRef;
+		return node.kind == seams.fieldAccessKind && self != null && node.children.length > 0 && node.children[0].kind == seams.identKind
+			&& node.children[0].name == self
+			? node.name
+			: null;
 	}
 
 
@@ -218,13 +253,14 @@ final class RedundantElse implements Check {
 	 */
 	private static function deNest(
 		ifNode: QueryNode, source: String, seams: Seams, scopeNames: Array<String>, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, narrowed: Array<String>
 	): Void {
 		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
 		final elseNode: QueryNode = ifNode.children[2];
 		final elseSpan: Null<Span> = elseNode.span;
 		if (elseSpan == null || !flagged.contains('${elseSpan.from}:${elseSpan.to}')) return;
 		if (deNestDropsComment(ifNode, seams.support, comments)) return;
+		if (narrowingLapses(ifNode, elseNode, seams, narrowed)) return;
 		final ifSpan: Null<Span> = ifNode.span;
 		final thenSpan: Null<Span> = ifNode.children[1].span;
 		if (ifSpan == null || thenSpan == null) return;
@@ -250,6 +286,43 @@ final class RedundantElse implements Check {
 	}
 
 
+	/**
+	 * Whether de-nesting would move a dereference out from under the narrowing that makes it legal.
+	 * An `if / else` chain evaluates its else branch in the state the CONDITION left, but a de-nested
+	 * statement runs after the whole `if`, and Haxe drops a FIELD's non-null narrowing at the first
+	 * call or assignment it cannot see through. So `if (p != null) { if (a) { f(); return; } else
+	 * p.length; }` compiles and its de-nested form does not — `Cannot access "length" of a nullable
+	 * value`, the two errors that rolled a 190-file `--fix` wave back over one file.
+	 *
+	 * Three conditions, all structural: a `!= null` guard on `subject` encloses this `if`
+	 * (`narrowed`), the KEPT then-branch performs a call / write (with none, the narrowing survives
+	 * and the de-nest is fine — measured), and the else body dereferences `subject`. A LOCAL narrows
+	 * across the same gap, so this withholds a few fixes it need not; telling a field from a local
+	 * needs resolution this check does not have, and the wrong direction here is a build failure.
+	 */
+	private static function narrowingLapses(ifNode: QueryNode, elseNode: QueryNode, seams: Seams, narrowed: Array<String>): Bool {
+		if (narrowed.length == 0 || !subtreeHasKind(ifNode.children[1], seams.resetKinds)) return false;
+		return narrowed.exists(subject -> dereferences(elseNode, subject, seams));
+	}
+
+	/** Whether `node`'s subtree holds a node of one of `kinds`. */
+	private static function subtreeHasKind(node: QueryNode, kinds: Array<String>): Bool {
+		return kinds.contains(node.kind) || node.children.exists(child -> subtreeHasKind(child, kinds));
+	}
+
+	/** Whether `node`'s subtree reads a member off `subject` — a field access whose receiver is that subject. */
+	private static function dereferences(node: QueryNode, subject: String, seams: Seams): Bool {
+		if (node.kind == seams.fieldAccessKind && node.children.length > 0 && receiverName(node.children[0], seams) == subject) return true;
+		return node.children.exists(child -> dereferences(child, subject, seams));
+	}
+
+	/** The node kinds that drop a field's non-null narrowing where the compiler cannot see through them: a call or a write. */
+	private static function resetKindsOf(shape: RefShape): Array<String> {
+		final out: Array<String> = (shape.writeParentKinds ?? []).copy();
+		for (kind in [shape.callKind, shape.assignKind]) if (kind != null && !out.contains(kind)) out.push(kind);
+		return out;
+	}
+
 	/** Resolve the if seam kinds plus control-flow support and the local-decl / function kinds, or null when a required piece is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
@@ -263,7 +336,14 @@ final class RedundantElse implements Check {
 			localDeclKinds: shape.localDeclKinds ?? [],
 			functionKinds: shape.functionKinds ?? [],
 			scopeKinds: shape.scopeKinds,
-			condKind: shape.conditionalMemberKind
+			condKind: shape.conditionalMemberKind,
+			identKind: shape.identKind,
+			fieldAccessKind: shape.fieldAccessKind,
+			notEqKind: shape.notEqKind,
+			nullLitKind: shape.nullLiteralKind,
+			parenKind: shape.parenKind,
+			selfRef: shape.selfReferenceText,
+			resetKinds: resetKindsOf(shape)
 		};
 	}
 
@@ -281,4 +361,16 @@ private typedef Seams = {
 	final functionKinds: Array<String>;
 	final scopeKinds: Array<String>;
 	final condKind: Null<String>;
+
+	/** The `fix` narrowing gate's kinds: the guard shape it recognises and the receivers it compares. */
+	final identKind: String;
+
+	final fieldAccessKind: Null<String>;
+	final notEqKind: Null<String>;
+	final nullLitKind: Null<String>;
+	final parenKind: Null<String>;
+	final selfRef: Null<String>;
+
+	/** Kinds that drop a field's non-null narrowing when the kept then-branch holds one. */
+	final resetKinds: Array<String>;
 };
