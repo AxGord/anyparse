@@ -37,6 +37,12 @@ class ShortenTypeRefCheckTest extends Test {
 	/** A type one package deep, for the `pkg.Holder` chain whose receiver a parameter can shadow. */
 	private static inline final HOLDER_SOURCE: String = 'package pkg;\n\nclass Holder {}\n';
 
+	/** An enum whose `Hash` CONSTRUCTOR takes the bare name in every file that imports the enum. */
+	private static inline final BASECTION_SOURCE: String = 'package types;\n\nenum BASection {\n\tHash;\n\tPrepare;\n}\n';
+
+	/** The class whose simple name that constructor collides with, in the consumer's OWN package. */
+	private static inline final MODULE_HASH_SOURCE: String = 'package module;\n\nclass Hash {}\n';
+
 	// --- ARM 1: the pack.SubType hybrid ---
 
 	public function testHybridRepairedToTheImportedShortName(): Void {
@@ -414,6 +420,87 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	/**
+	 * The TYPE reification `macro : T` is a quotation exactly as `macro { … }` is — it builds a
+	 * `ComplexType` the surrounding macro splices into ANOTHER module, where an import this file
+	 * carries does not apply. The path is shortenable here on paper (`import pkg.deep.Foo;` is
+	 * right there), which is precisely what made the miss silent: the edit compiles in this file
+	 * and breaks at the macro's call site with `Type not found`.
+	 */
+	public function testMacroTypeReificationIsSkipped(): Void {
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tmacro static function m() {\n'
+			+ '\t\treturn macro :pkg.deep.Foo;\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** Same for the third quotation spelling, `macro class { … }`, in both a member type and a `new`. */
+	public function testMacroClassReificationIsSkipped(): Void {
+		final src: String = 'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tmacro static function m() {\n'
+			+ '\t\treturn macro class D {\n\t\t\tpublic var v:pkg.deep.Foo = new pkg.deep.Foo();\n\t\t};\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	// --- macro-time bodies earn no module-level import ---
+
+	/**
+	 * A `macro` function's body typechecks ONLY in the macro context, so a `sys.*` path is legal
+	 * there on every target. A module-level import resolves in EVERY context, so hoisting the path
+	 * out of the body breaks the module on js / flash — measured on Pony's `pony.text.TextTools`,
+	 * whose neko + nodejs oracle is blind to it by construction.
+	 */
+	public function testMacroOnlyBodyEarnsNoImport(): Void {
+		final src: String =
+			'package app;\n\nclass C {\n\n\tmacro static function m() {\n\t\tg(pkg.deep.Foo.a());\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** The gate is the IMPORT, not the rewrite: an import the file already carries is not this rule's to justify. */
+	public function testMacroBodyStillShortensAgainstAnExistingImport(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tmacro static function m() {\n\t\tg(pkg.deep.Foo.a());\n\t}\n\n}\n';
+		Assert.equals(1, violations(src).length);
+		Assert.isTrue(applyFix(src).indexOf('g(Foo.a());') != -1, 'shortened, got: ${applyFix(src)}');
+	}
+
+	/**
+	 * ONE occurrence outside a macro body lifts the gate: the module already needs the type at
+	 * runtime, so the import adds no constraint the file did not already carry — and both
+	 * occurrences then shorten, the macro-time one included.
+	 */
+	public function testOneRuntimeUseLiftsTheMacroBodyGate(): Void {
+		final src: String = 'package app;\n\nclass C {\n\n\tmacro static function m() {\n\t\tg(pkg.deep.Foo.a());\n\t}\n\n'
+			+ '\tpublic function f():Void {\n\t\tg(pkg.deep.Foo.b());\n\t}\n\n}\n';
+		Assert.equals(2, violations(src).length);
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $out');
+		Assert.isTrue(out.indexOf('g(Foo.a());') != -1 && out.indexOf('g(Foo.b());') != -1, 'both shortened, got: $out');
+	}
+
+	// --- an imported enum takes its CONSTRUCTOR names too ---
+
+	/**
+	 * `import types.BASection;` binds every constructor of that enum as a bare identifier, so the
+	 * simple name `Hash` is TAKEN in this file even though the type `module.Hash` sits in its own
+	 * package. Verified against the compiler: the constructor wins in expression position over a
+	 * same-package class AND over an explicit `import module.Hash;`, in either import order —
+	 * `types.BASection should be Class<… module.Module>`.
+	 */
+	public function testImportedEnumConstructorShadowsTheSamePackageType(): Void {
+		final src: String = enumConsumer('import types.BASection;\n\n');
+		Assert.equals(0, enumViolations(src).length);
+		Assert.equals(src, enumApplyFix(src));
+	}
+
+	/** The gate is the IMPORT: an enum in the resolution scope that this file does NOT import binds nothing here. */
+	public function testUnimportedEnumConstructorDoesNotShadow(): Void {
+		final src: String = enumConsumer('');
+		Assert.equals(2, enumViolations(src).length);
+		Assert.isTrue(enumApplyFix(src).indexOf('g(Hash);') != -1, 'shortened, got: ${enumApplyFix(src)}');
+	}
+
 	// --- the index proof ---
 
 	public function testWithoutAResolutionIndexTheRunIsReportOnly(): Void {
@@ -597,6 +684,38 @@ class ShortenTypeRefCheckTest extends Test {
 			}
 		});
 		return scoped;
+	}
+
+	/** A `module.Clean` consumer carrying `imports` verbatim and two `module.Hash` references. */
+	private function enumConsumer(imports: String): String {
+		return 'package module;\n\n${imports}class Clean {\n\n\tpublic function f():Void {\n'
+			+ '\t\tg(module.Hash);\n\t\tg(module.Hash);\n\t}\n\n}\n';
+	}
+
+	/** The enum-shadow scope: the consumer itself, the enum that binds `Hash`, and the class of the same name. */
+	private function enumPlugin(report: Array<{ file: String, source: String }>): CachingGrammarPlugin {
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({
+			declared: true,
+			sources: () -> {
+				report: report,
+				library: new LibrarySources([
+					{ file: 'types/BASection.hx', source: BASECTION_SOURCE },
+					{ file: 'module/Hash.hx', source: MODULE_HASH_SOURCE }
+				])
+			}
+		});
+		return scoped;
+	}
+
+	private function enumViolations(src: String): Array<Violation> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'module/Clean.hx', source: src }];
+		return new ShortenTypeRef().run(report, enumPlugin(report));
+	}
+
+	private function enumApplyFix(src: String): String {
+		final report: Array<{ file: String, source: String }> = [{ file: 'module/Clean.hx', source: src }];
+		return applyFixWith(src, enumPlugin(report), report);
 	}
 
 	private function violations(src: String): Array<Violation> {

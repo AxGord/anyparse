@@ -18,13 +18,21 @@ using StringTools;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
- * (never the construct around it), the path as written, and whether it sits inside a
- * `#if … #end` region.
+ * (never the construct around it), the path as written, and the two contexts a
+ * rewrite of it has to answer for: whether it sits inside a `#if … #end` region, and whether it
+ * sits in the body of a `macro` function.
  */
 private typedef Occurrence = {
 	var path: String;
 	var span: Span;
 	var conditional: Bool;
+
+	/**
+	 * Whether the occurrence sits in the body of a MACRO function — code the compiler types only
+	 * in its own macro context, where a `sys.*` path is legal on every target. See the
+	 * `Macro-time bodies` gate.
+	 */
+	var macroBody: Bool;
 }
 
 /**
@@ -56,6 +64,8 @@ private typedef ScanContext = {
 	var typeKinds: Array<String>;
 	var metaKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+	var functionKinds: Array<String>;
+	var macroKind: Null<String>;
 	var comments: Array<Span>;
 	var tree: QueryNode;
 }
@@ -142,8 +152,17 @@ private typedef ScanContext = {
  *  - **Sub-module access.** A static chain under an upper-initial field access
  *    (`a.b.Module.SubType`) is refused: shortening the module half has resolution semantics this
  *    rule does not model.
- *  - **Reification.** An `opaqueKinds` subtree (a `macro { … }` quotation) is skipped — its
- *    spliced code is not literal source.
+ *  - **Reification.** An `opaqueKinds` subtree — a `macro { … }` quotation, a `macro : T` type
+ *    reification, a `macro class { … }` — is skipped, both here and centrally by
+ *    `ReificationScan`: its spliced code is not literal source but a template the surrounding
+ *    program hands to ANOTHER module, where an import added to THIS file does not apply.
+ *  - **Macro-time bodies.** A path whose every unguarded occurrence sits in the body of a `macro`
+ *    function earns no MODULE-LEVEL import. Such a body typechecks only in the macro context,
+ *    where `sys.io.File` is legal on every target; a module-level import resolves in EVERY
+ *    context, so hoisting the path breaks the module on js / flash with `You cannot access the
+ *    sys package while targeting js`. One occurrence outside a macro body lifts the gate — the
+ *    module already requires the type at runtime — and shortening against an import the file
+ *    ALREADY carries is unaffected, since that import is not this rule's to justify.
  *
  * ## Locating a path the grammar gives no span for
  *
@@ -198,6 +217,14 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	/** The finding message when the index could not prove a changed reference names the same declaration. */
 	private static inline final MSG_UNPROVEN: String =
 		'an over-qualified type reference (report-only: the resolution index does not prove the shorter spelling names the same declaration)';
+
+	/**
+	 * Where the backward scan for a `macro` modifier stops: the first preceding sibling that is not
+	 * a bare modifier node. A modifier projects as a childless, nameless sibling, so anything with a
+	 * child or a name is the previous DECLARATION (or its annotation) and ends the run. Same reading
+	 * `CallGraph` uses for the same question.
+	 */
+	private static final MODIFIER_RUN_BOUNDARY: QueryNode -> Bool = c -> c.children.length > 0 || c.name != null;
 
 	public function new() {}
 
@@ -360,18 +387,27 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			typeKinds: plugin.typeRefShape().typeRefKinds,
 			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
+			functionKinds: shape.functionKinds ?? [],
+			macroKind: shape.macroModifierKind,
 			comments: RefactorSupport.collectCommentRegions(source),
 			tree: scoped
 		};
 		final occurrences: Array<Occurrence> = [];
-		scan(refsTree, context, false, false, occurrences);
+		scan(refsTree, context, false, false, false, occurrences);
 		final printer: TypeRefPrinter = printerFor(source, scoped, plugin, index);
 		final plans: Array<PathPlan> = [];
 		for (path in distinctPaths(occurrences)) {
-			final targets: Array<Span> = [for (o in occurrences) if (o.path == path && !o.conditional) o.span];
+			final targets: Array<Span> = [];
+			// Occurrences OUTSIDE a macro-time body, which is what an import must be legal for —
+			// see the `Macro-time bodies` gate.
+			var runtimeUses: Int = 0;
+			for (o in occurrences) if (o.path == path && !o.conditional) {
+				targets.push(o.span);
+				if (!o.macroBody) runtimeUses++;
+			}
 			if (targets.length == 0) continue;
 			final proven: Bool = printer.resolvePath(path) != null;
-			final importable: Bool = proven && targets.length >= IMPORT_THRESHOLD;
+			final importable: Bool = proven && runtimeUses > 0 && targets.length >= IMPORT_THRESHOLD;
 			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (o.path == path) o.span] : null;
 			final printed: PrintedTypeRef = printer.print(path, owned);
 			if (printed.text == path) continue;
@@ -400,10 +436,11 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	/**
-	 * Visit every node of `node`'s subtree, collecting each qualified type-path occurrence. Three
-	 * subtrees are skipped WHOLESALE:
+	 * Visit every node of `node`'s subtree, collecting each qualified type-path occurrence. Two
+	 * subtree kinds are skipped WHOLESALE:
 	 *
-	 *  - a reification (`opaqueKinds`), whose spliced code is not literal source;
+	 *  - a reification (`opaqueKinds`) — `macro { … }`, `macro : T`, `macro class { … }` — whose
+	 *    spliced code is not literal source but a template for another module;
 	 *  - a metadata annotation's arguments (`metaShape().metaKinds` — `MetaCall` carries them as
 	 *    its children). `@:access(pkg.Type)` and its siblings are dot-paths the compiler resolves
 	 *    WITHOUT the file's imports: verified against the compiler, `@:access(Type)` beside an
@@ -416,16 +453,31 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 * printer's short-name freeness scan (they are still the path's own text) but never rewritten
 	 * and never counted toward the import threshold, since what is in scope inside a region
 	 * depends on the build, which neither the import map nor the index models.
+	 *
+	 * A `macro` FUNCTION body is flagged the same way, and for one narrower purpose: its occurrences
+	 * are still rewritable, but they do not entitle the path to a module-level import (see the
+	 * `Macro-time bodies` gate). The `macro` keyword projects as a childless modifier SIBLING ahead
+	 * of the declaration, so the flag is set while descending into the function and inherited by its
+	 * whole subtree.
 	 */
 	private static function scan(
-		node: QueryNode, context: ScanContext, conditional: Bool, underUpperField: Bool, out: Array<Occurrence>
+		node: QueryNode, context: ScanContext, conditional: Bool, underUpperField: Bool, macroBody: Bool, out: Array<Occurrence>
 	): Void {
 		if (context.opaqueKinds.contains(node.kind) || context.metaKinds.contains(node.kind)) return;
 		final region: Bool = conditional || CheckScan.opensConditionalRegion(node, context.source, context.shape.conditionalIfKeyword);
-		final found: Null<Occurrence> = occurrenceOf(node, context, region, underUpperField);
+		final found: Null<Occurrence> = occurrenceOf(node, context, region, underUpperField, macroBody);
 		if (found != null) out.push(found);
 		final upperReceiver: Bool = node.kind == context.shape.fieldAccessKind && RefactorSupport.isUpperInitial(node.name ?? '');
-		for (c in node.children) scan(c, context, region, upperReceiver, out);
+		final kids: Array<QueryNode> = node.children;
+		for (i in 0...kids.length) {
+			final child: QueryNode = kids[i];
+			// The modifier is a SIBLING that precedes the declaration, so the flag is set on the way
+			// DOWN into the function and inherited by its whole subtree.
+			final inMacro: Bool = macroBody
+				|| (context.functionKinds.contains(child.kind)
+					&& RefactorSupport.macroModifierPrecedes(kids, i, context.macroKind, MODIFIER_RUN_BOUNDARY));
+			scan(child, context, region, upperReceiver, inMacro, out);
+		}
 	}
 
 	/**
@@ -442,14 +494,19 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 * does not model.
 	 */
 	private static function occurrenceOf(
-		node: QueryNode, context: ScanContext, conditional: Bool, underUpperField: Bool
+		node: QueryNode, context: ScanContext, conditional: Bool, underUpperField: Bool, macroBody: Bool
 	): Null<Occurrence> {
 		final name: Null<String> = node.name;
 		if (name == null) return null;
 		if (context.typeKinds.contains(node.kind)) {
 			if (name.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(name))) return null;
 			final span: Null<Span> = pathSpanOf(node, name, context);
-			return span == null ? null : { path: name, span: span, conditional: conditional };
+			return span == null ? null : {
+				path: name,
+				span: span,
+				conditional: conditional,
+				macroBody: macroBody
+			};
 		}
 		if (node.kind != context.shape.fieldAccessKind || underUpperField || !RefactorSupport.isUpperInitial(name)) return null;
 		final path: Null<String> = staticChainPath(node, context);
@@ -459,7 +516,12 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		return if (path == null || span == null)
 			null
 		else if (context.source.substring(span.from, span.to) == path)
-			{ path: path, span: span, conditional: conditional }
+			{
+				path: path,
+				span: span,
+				conditional: conditional,
+				macroBody: macroBody
+			}
 		else
 			null;
 	}

@@ -629,7 +629,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// an `enum abstract` a static field with no modifier to read.
 			implicitStaticFieldHostKinds: ['AbstractDecl', 'EnumAbstractDecl'],
 			upperInitialNeverCaptures: true,
-			opaqueKinds: ['MacroExpr'],
+			// All THREE `macro` quotation spellings, not just the expression one: `macro : T`
+			// (`MacroTypeExpr`) and `macro class { … }` (`MacroClassExpr`) reify a type and a type
+			// declaration exactly as `macro { … }` reifies an expression. Leaving the two out made every
+			// central reification gate — `ReificationScan.withoutQuoted` and each check's own descent stop
+			// — blind to them, and `shorten-type-ref` then rewrote `macro :pony.events.Signal2<…>` to a
+			// short name whose import it added to THIS file, while the reified type is spliced into
+			// another module where that import does not apply.
+			opaqueKinds: ['MacroExpr', 'MacroTypeExpr', 'MacroClassExpr'],
 			interpolationKinds: ['DollarBlockExpr', 'DollarReifExpr'],
 			branchKinds: [
 				'IfStmt',

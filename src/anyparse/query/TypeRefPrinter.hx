@@ -116,6 +116,9 @@ final class TypeRefPrinter {
 	/** The file's inert (comment + literal-text) regions, computed on FIRST use and cached — see `inertRegions`. */
 	private var _inertRegions: Null<Array<Span>> = null;
 
+	/** Value names this file's imports bring in with an enum-like type, computed on FIRST use — see `importedMemberNames`. */
+	private var _importedMemberNames: Null<Array<String>> = null;
+
 	private function new(
 		source: Null<String>, root: Null<QueryNode>, importMap: Map<String, String>, index: Null<SymbolIndex>, plugin: Null<GrammarPlugin>
 	) {
@@ -321,6 +324,51 @@ final class TypeRefPrinter {
 	}
 
 	/**
+	 * Every VALUE name this file's imports bring in ALONGSIDE a type — an imported `enum`'s
+	 * constructors and an imported `enum abstract`'s values (`RefShape.bareConstructorTypeKinds`),
+	 * computed on FIRST ask and cached for the rest of this printer's life.
+	 *
+	 * Importing such a type TAKES those names, and it takes them harder than an import of a type
+	 * takes its own: measured on 4.3.7, `import types.BASection;` (an `enum` declaring `Hash`) makes
+	 * a bare `Hash` in expression position mean the CONSTRUCTOR in a file whose own package declares
+	 * `class Hash`, and it keeps meaning the constructor beside an explicit `import module.Hash;` —
+	 * in either import order. That is why `shadowedLocally` consults this ABOVE its
+	 * explicit-import short-circuit rather than down with the bulk imports.
+	 *
+	 * Three neighbours do NOT bind a name here, each verified the same way: a plain class's statics
+	 * (only a `pkg.Type.*` wildcard imports those), a same-package enum the file does not import,
+	 * and — the reason this predicate is CONSERVATIVE rather than exact — a TYPE position, where
+	 * `final h: Null<Hash>` still resolves to the class. The printer answers one question per path
+	 * with no position to key on, so it answers the expression one; the cost is a type annotation
+	 * left fully qualified in a file that imports an enum whose constructor happens to share the
+	 * type's simple name, which always resolves.
+	 *
+	 * A module import binds every top-level type of that module, secondary enums included, so the
+	 * scan matches on the module path as well as on an explicitly imported type path; a `using`
+	 * binds them on the same terms. Empty without a resolution index — only it knows what a module
+	 * declares.
+	 */
+	private function importedMemberNames(): Array<String> {
+		final cached: Null<Array<String>> = _importedMemberNames;
+		if (cached != null) return cached;
+		final out: Array<String> = [];
+		final index: Null<SymbolIndex> = _index;
+		final plugin: Null<GrammarPlugin> = _plugin;
+		final kinds: Array<String> = plugin == null ? [] : plugin.refShape().bareConstructorTypeKinds ?? [];
+		if (index != null && kinds.length > 0) {
+			final imported: Array<String> = _usingModules.copy();
+			for (path in _importMap) if (!imported.contains(path)) imported.push(path);
+			if (imported.length > 0) for (f in index.allFiles()) {
+				final byModule: Bool = imported.contains(f.module);
+				for (t in f.types) if (kinds.contains(t.kind) && (byModule || imported.contains(ModuleScan.pathOfTypeIn(f, t.name))))
+					for (m in t.members) if (!out.contains(m.name)) out.push(m.name);
+			}
+		}
+		_importedMemberNames = out;
+		return out;
+	}
+
+	/**
 	 * The name to write when `canonical` is ALREADY visible in this file, else null. Covers, in
 	 * order: an always-in-scope builtin / root-package type, an exact plain import, an alias
 	 * whose target is this path, a type declared in this module, and the main type of a module
@@ -492,11 +540,11 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * Whether something IN THIS FILE'S SCOPE binds `simple` to a type other than `canonical` —
-	 * an import or alias, a module-local declaration, a same-package type, a BULK import
-	 * (`import pkg.*;` / `using pkg.Module;`, via `shadowedByBulkImport`), or (globally) a
-	 * root-package one. Such a binding shadows the bare name, so neither the builtin
-	 * short-circuit nor a fresh import may use it.
+	 * Whether something IN THIS FILE'S SCOPE binds `simple` to something other than `canonical` —
+	 * an import or alias, an imported enum's CONSTRUCTOR (`importedMemberNames`), a module-local
+	 * declaration, a same-package type, a BULK import (`import pkg.*;` / `using pkg.Module;`, via
+	 * `shadowedByBulkImport`), or (globally) a root-package one. Such a binding shadows the bare
+	 * name, so neither the builtin short-circuit nor a fresh import may use it.
 	 *
 	 * The gate covers the WHOLE route set for the reason `visibleNameFor` documents, and its
 	 * internal ORDER is Haxe's own: the bulk arm runs last and is short-circuited by an explicit
@@ -508,6 +556,7 @@ final class TypeRefPrinter {
 		if (bound != null && bound != canonical) return true;
 		final aliased: Null<String> = _aliasTargets[simple];
 		if (aliased != null && aliased != canonical) return true;
+		if (importedMemberNames().contains(simple)) return true;
 		if (shadowedByGuardedImport(canonical, simple)) return true;
 		if (shadowedByModuleImport(canonical, simple)) return true;
 		final root: Null<QueryNode> = _root;
