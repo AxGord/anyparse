@@ -39,10 +39,13 @@ package anyparse.grammar.haxe;
  * nothing but its own prefix is legal — and the empty-region shape therefore
  * lands in `meta`, not in this typedef.
  *
- * Module scope is NOT fixed and is not the same fix: `HxTopLevelDecl.decl`
- * has the identical mandatory-field shape, but its terminator is EOF, which
- * `@:absentOn` has no literal to peek — `class C {}` followed by a trailing
- * `#if sys` / `#end` still throws.
+ * The same shape reached three more Seqs, and only ONE of them needed a new
+ * mechanism. `HxEnumMember.ctor` and `HxAnonMember.field` face the body `}`
+ * exactly as `member` does, so the existing `@:absentOn('}')` closed both with
+ * no macro-layer change at all. `HxTopLevelDecl.decl` faces EOF, which
+ * `@:absentOn` cannot spell — an empty literal peeks true everywhere — so
+ * `@:absentOnEof` contributes that one disjunct of the same peek chain, and
+ * `class C {}` followed by a trailing `#if sys` / `#end` parses.
  *
  * Nested `#if` is supported transitively because the body re-enters
  * `HxClassMember.Conditional` through `HxMemberDecl`.

@@ -81,6 +81,7 @@ import unit.HxAnonVarFieldSliceTest;
 import unit.HxAnonMemberSliceTest;
 import unit.HxLocalVarMetaSliceTest;
 import unit.HxConditionalMemberSliceTest;
+import unit.HxOrphanPrefixDeclSliceTest;
 import unit.HxConditionalObjectFieldSliceTest;
 import unit.HxConditionalParamSliceTest;
 import unit.HxSharpErrorSliceTest;
@@ -756,6 +757,7 @@ class RunTests {
 		addCase(new HxAnonMemberSliceTest());
 		addCase(new HxLocalVarMetaSliceTest());
 		addCase(new HxConditionalMemberSliceTest());
+		addCase(new HxOrphanPrefixDeclSliceTest());
 		addCase(new HxConditionalObjectFieldSliceTest());
 		addCase(new HxConditionalParamSliceTest());
 		addCase(new HxSharpErrorSliceTest());

@@ -26,13 +26,18 @@ package anyparse.grammar.haxe;
  * before the field round-trips.
  *
  * The common no-metadata case yields an empty `meta` Star, so the
- * `@:sepAlt(';')` close-driven loop on `HxType.Anon` and the
- * per-branch `@:trail(';')` on `HxAnonField.VarField` / `FinalField`
- * behave exactly as before.
+ * `@:sepAlt(';')` close-driven loop on `HxType.Anon` and the per-branch
+ * `@:trail(';')` on `HxAnonField.VarField` / `FinalField` behave exactly as
+ * before.
+ *
+ * ω-orphan-prefix-decl: `field` is `@:optional @:absentOn('}')` for the same
+ * reason `HxMemberDecl.member` is — `typedef T = { #if sys #end }` puts the
+ * whole region in `meta` and leaves the field facing the body close. Anon scope
+ * needed no new mechanism, only the existing one applied here.
  */
 @:peg
 typedef HxAnonMember = {
 	@:trivia @:tryparse var meta: Array<HxMetadata>;
-	@:trivia @:tryparse var modifiers: Array<HxMemberModifier>;
-	var field: HxAnonField;
+	@:trivia @:tryparse @:fmt(keepBlankAfterStarCtor('meta', 'Conditional')) var modifiers: Array<HxMemberModifier>;
+	@:optional @:absentOn('}') @:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional')) var field: Null<HxAnonField>;
 }

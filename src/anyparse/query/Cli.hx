@@ -293,14 +293,26 @@ typedef SelfStatusWalk = {
 	var skipLines: Array<String>;
 };
 /**
- * Parsed options for `apq self-status` — `lang`, the `rootDir` to walk, and `strict` / `showSource` flags. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq self-status` — `lang`, the `roots` (file / dir / glob specs) to walk, and `strict` / `showSource` flags. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 typedef SelfStatusOpts = {
 	var lang: String;
-	var rootDir: Null<String>;
+	var roots: Array<String>;
 	var strict: Bool;
 	var showSource: Bool;
 	var errExit: Null<Int>;
+};
+/**
+ * What `resolveInputPaths` hands a subcommand: the grammar plugin for `--lang`,
+ * the `.hx` paths its file / dir / glob specs expanded to, and whether the call
+ * named exactly ONE concrete file (the gofmt-style "print to stdout" case).
+ * Named because three seats spell it out — the resolver itself, `shard-plan`
+ * and `self-status`.
+ */
+typedef ResolvedInputs = {
+	var plugin: GrammarPlugin;
+	var paths: Array<String>;
+	var singleFile: Bool;
 };
 /**
  * The outcome of one `lint --fix` pass over the active file set: `nextActive` is the file set (with rewritten sources) to feed the next fixpoint pass, and `fixedDelta` how many findings that pass resolved.
@@ -10282,12 +10294,12 @@ final class Cli {
 	/**
 	 * Parse `self-status` argv. `errExit` carries the exit code when a help
 	 * flag or a usage error short-circuits the command (EXIT_OK for -h,
-	 * EXIT_USAGE for a bad option / extra positional); null = proceed.
+	 * EXIT_USAGE for a bad option); null = proceed.
 	 */
 	private static function parseSelfStatusArgs(args: Array<String>): SelfStatusOpts {
 		final opts: SelfStatusOpts = {
 			lang: 'haxe',
-			rootDir: null,
+			roots: [],
 			strict: false,
 			showSource: false,
 			errExit: null
@@ -10312,12 +10324,7 @@ final class Cli {
 						opts.errExit = EXIT_USAGE;
 						return opts;
 					}
-					if (opts.rootDir != null) {
-						stderr('apq self-status: only one positional <dir> supported (got "${opts.rootDir}" and "$a")\n');
-						opts.errExit = EXIT_USAGE;
-						return opts;
-					}
-					opts.rootDir = a;
+					opts.roots.push(a);
 			}
 			i++;
 		}
@@ -10325,46 +10332,28 @@ final class Cli {
 	}
 
 	/**
-	 * Walk `root` for `.hx` files and parse each under the plugin, tallying
+	 * Parse every `.hx` file in `paths` under the plugin, tallying
 	 * parseable vs skip-parse and collecting a SKIP line (with locus, and an
 	 * optional source snippet) per failure.
 	 */
-	private static function walkSelfStatus(plugin: GrammarPlugin, root: String, showSource: Bool): SelfStatusWalk {
+	private static function walkSelfStatus(plugin: GrammarPlugin, paths: Array<String>, showSource: Bool): SelfStatusWalk {
 		var parseable: Int = 0;
 		var skipParse: Int = 0;
 		final skipLines: Array<String> = [];
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> if (a < b)
-				-1
-			else if (a > b)
-				1
-			else
-				0);
-			for (name in names) {
-				final path: String = '$dir/$name';
-				if (FileSystem.isDirectory(path)) {
-					stack.push(path);
-					continue;
-				}
-				if (!name.endsWith('.hx')) continue;
-				final source: String = try readSourceForParse(path) catch (_: Exception) continue;
-				try {
-					plugin.parseFile(source);
-					parseable++;
-				} catch (exception: ParseError) {
-					skipParse++;
-					final pos: Position = exception.span.lineCol(source);
-					final exp: String = reconNormalize(exception.expected);
-					final src: String = showSource ? ' :: src="${reconNormalize(reconSnippet(source, exception.span.from))}"' : '';
-					skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"$src');
-				} catch (exception: Exception) {
-					skipParse++;
-					skipLines.push('SKIP $path :: <non-ParseError> ${reconNormalize(exception.message)}');
-				}
+		for (path in paths) {
+			final source: String = try readSourceForParse(path) catch (_: Exception) continue;
+			try {
+				plugin.parseFile(source);
+				parseable++;
+			} catch (exception: ParseError) {
+				skipParse++;
+				final pos: Position = exception.span.lineCol(source);
+				final exp: String = reconNormalize(exception.expected);
+				final src: String = showSource ? ' :: src="${reconNormalize(reconSnippet(source, exception.span.from))}"' : '';
+				skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"$src');
+			} catch (exception: Exception) {
+				skipParse++;
+				skipLines.push('SKIP $path :: <non-ParseError> ${reconNormalize(exception.message)}');
 			}
 		}
 		return { parseable: parseable, skipParse: skipParse, skipLines: skipLines };
@@ -13142,9 +13131,7 @@ final class Cli {
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
-	private static function resolveInputPaths(
-		lang: String, specs: Array<String>
-	): { plugin: GrammarPlugin, paths: Array<String>, singleFile: Bool } {
+	private static function resolveInputPaths(lang: String, specs: Array<String>): ResolvedInputs {
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(specs, '.hx');
 		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
@@ -16196,13 +16183,13 @@ final class Cli {
 	private static function runSelfStatus(args: Array<String>): Int {
 		final opts: SelfStatusOpts = parseSelfStatusArgs(args);
 		if (opts.errExit != null) return opts.errExit;
-		final root: String = opts.rootDir ?? 'src';
-		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
-			stderr('apq self-status: "$root" is not a directory.\n');
+		final specs: Array<String> = opts.roots.length > 0 ? opts.roots : ['src'];
+		final io: ResolvedInputs = resolveInputPaths(opts.lang, specs);
+		if (io.paths.length == 0) {
+			stderr('apq self-status: ${specs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
-		final plugin: GrammarPlugin = pickPlugin(opts.lang);
-		final walk: SelfStatusWalk = walkSelfStatus(plugin, root, opts.showSource);
+		final walk: SelfStatusWalk = walkSelfStatus(io.plugin, io.paths, opts.showSource);
 		walk.skipLines.sort((a, b) -> if (a < b)
 			-1
 		else if (a > b)
@@ -16216,9 +16203,9 @@ final class Cli {
 	}
 
 	private static function printSelfStatusUsage(): Void {
-		sysPrint('apq self-status [<dir>] [--strict] [--source]\n');
+		sysPrint('apq self-status [<file/dir/glob>...] [--strict] [--source]\n');
 		sysPrint('\n');
-		sysPrint('Walks <dir> recursively (default `src/`) and prints which `.hx` files\n');
+		sysPrint('Walks each input recursively (default `src/`) and prints which `.hx` files\n');
 		sysPrint('the grammar plugin cannot parse. Each failure shows as:\n');
 		sysPrint('  SKIP <path> :: LINE:COL expected="<X>"\n');
 		sysPrint('\n');
@@ -16461,7 +16448,7 @@ final class Cli {
 		}
 		final shardCount: Int = shards;
 
-		final io: { plugin: GrammarPlugin, paths: Array<String>, singleFile: Bool } = resolveInputPaths(lang, [runner]);
+		final io: ResolvedInputs = resolveInputPaths(lang, [runner]);
 		final paths: Array<String> = io.paths;
 		if (paths.length != 1) {
 			stderr('apq shard-plan: --runner must name ONE file, "$runner" matched ${paths.length}\n');

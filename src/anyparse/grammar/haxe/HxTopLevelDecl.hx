@@ -39,11 +39,32 @@ package anyparse.grammar.haxe;
  * is meta-driven and reusable for any future "set bool opt flag from
  * sibling Star ctor presence" rule (e.g. `_classFinal`,
  * `_classMacro`).
+ *
+ * ω-orphan-prefix-decl: `decl` is `@:optional @:absentOnEof` — the module-scope
+ * twin of `HxMemberDecl.member`. A trailing `#if sys` / `#end` region holding
+ * no declaration is claimed by `meta` (`HxMetadata.Conditional` accepts an
+ * empty body) exactly as at member scope, which leaves `decl` facing the ONE
+ * terminator `@:absentOn` cannot name: end of input. `@:absentOnEof` adds
+ * `ctx.pos >= ctx.input.length` as a disjunct of the same peek chain.
+ *
+ * The zero-width spin this could have opened is closed by the enclosing Star's
+ * own shape, not by a guard: `HxModule.decls` is an EOF-terminated trivia Star
+ * whose exit test runs after `collectTrivia` and BEFORE each element parse, and
+ * `decl` is absent only when that same test would have said "stop" — so a
+ * prefix-only element can only be produced AT EOF, and an unterminated `#if`
+ * fails instead of looping.
+ *
+ * Two writer consequences follow from the field being optional rather than
+ * mandatory. `@:fmt(setBoolFlagFromStarCtor(...))` had to be taught to the
+ * optional-Ref writer seat (it lived only in `buildMandatoryRefWriteCall`, so
+ * `_classExtern` silently stopped firing), and every blank-line cascade on
+ * `HxModule.decls` classifies on this field, so their exhaustive-over-ctors
+ * switches grew a `case null` arm answering kind `0`.
  */
 @:peg
 typedef HxTopLevelDecl = {
 	@:trivia @:tryparse var meta: Array<HxMetadata>;
-	@:trivia @:tryparse @:fmt(forceInlineSep) var modifiers: Array<HxModifier>;
+	@:trivia @:tryparse @:fmt(forceInlineSep, keepBlankAfterStarCtor('meta', 'Conditional')) var modifiers: Array<HxModifier>;
 	@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers', 'Extern'))
-	var decl: HxDecl;
+	@:optional @:absentOnEof @:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional')) var decl: Null<HxDecl>;
 }

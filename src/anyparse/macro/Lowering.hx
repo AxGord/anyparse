@@ -883,9 +883,16 @@ class Lowering {
 			// — the latter has no fixed lead, so a regular `@:optional`
 			// can't dispatch.
 			final absentOnLits: Null<Array<String>> = child.readMetaStringArgs(':absentOn');
+			// ω-orphan-prefix-decl: `@:absentOnEof` is the same absence dispatch with
+			// the ONE terminator `@:absentOn` cannot spell — end of input has no
+			// literal to peek. Composable with `@:absentOn` (the peek chain ORs both)
+			// so a field whose terminator set is `}` at one call site and EOF at
+			// another needs no second mechanism. Sole consumer today:
+			// `HxTopLevelDecl.decl`, the module-scope twin of `HxMemberDecl.member`.
+			final absentOnEof: Bool = child.hasMeta(':absentOnEof');
 			final isStar: Bool = child.kind == Star;
 			final isOptional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
-			validateStructField(child, fieldName, isOptional, isStar, kwLead, leadText, trailText, absentOnLits);
+			validateStructField(child, fieldName, isOptional, isStar, kwLead, leadText, trailText, absentOnLits, absentOnEof);
 			// Binary @:length prefix — read an N-byte ASCII-encoded length
 			// BEFORE any field-level lead literal. The parsed integer is
 			// stored in `_lenPrefix_<field>` and consumed by the
@@ -937,9 +944,13 @@ class Lowering {
 			// `typedef Foo = Int` and the next decl) that the pre-field
 			// `skipWs` would otherwise silently consume — closes
 			// issue_216 / issue_321 cluster's parser-side bug.
+			// ω-region-prefix-blank: opt-in third slot of the pre-field gap.
+			final hasBeforeBlankSlot: Bool = hasBeforeBlankSlotFor(child, hasBeforeLeadingSlot);
+			final beforeBlankLocal: String = beforeBlankLocalName(fieldName);
 			emitPreFieldWs(
 				parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot, hasBeforeNewlineSlot,
-				beforeNlLocal, beforeLeadingLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal
+				beforeNlLocal, beforeLeadingLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal,
+				hasBeforeBlankSlot ? beforeBlankLocal : null
 			);
 			// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
 			// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
@@ -1007,7 +1018,7 @@ class Lowering {
 				);
 			}
 			emitFieldValueByKind(
-				child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits,
+				child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits, absentOnEof,
 				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
 				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix, hasBeforeNewlineSlot
 			);
@@ -5316,12 +5327,14 @@ class Lowering {
 	 */
 	private function emitOptionalRefField(
 		child: ShapeNode, fieldName: String, localName: String, parseSteps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>,
-		trailText: Null<String>, absentOnLits: Null<Array<String>>, hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr,
-		hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String,
-		beforeKwLeadingLocal: String, beforeKwTrailingLocal: String, hasBeforeSlots: Bool
+		trailText: Null<String>, absentOnLits: Null<Array<String>>, absentOnEof: Bool, hasOptionalRefAfterTrailSlot: Bool,
+		captureTrailPresentExpr: Expr, hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String,
+		bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String, hasBeforeSlots: Bool
 	): Void {
-		if (kwLead == null && leadText == null && absentOnLits == null) {
-			Context.fatalError('Lowering: @:optional struct field "$fieldName" requires @:lead, @:kw or @:absentOn', Context.currentPos());
+		if (kwLead == null && leadText == null && absentOnLits == null && !absentOnEof) {
+			Context.fatalError(
+				'Lowering: @:optional struct field "$fieldName" requires @:lead, @:kw, @:absentOn or @:absentOnEof', Context.currentPos()
+			);
 		}
 		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 		final subCallRaw: Expr = {
@@ -5383,8 +5396,15 @@ class Lowering {
 		final fieldCT: ComplexType = isSpanBearing(refName) || isTriviaBearing(refName)
 			? TPath({ pack: [], name: 'Null', params: [TPType(ruleReturnCT(refName))] })
 			: child.annotations[AnnotationKeys.BASE_FIELD_TYPE];
-		if (absentOnLits != null) {
-			emitAbsentOnRefField(fieldName, localName, parseSteps, absentOnLits, subCall, fieldCT, hasBeforeSlots);
+		if (absentOnLits != null || absentOnEof) {
+			// ω-region-prefix-blank: `hasBeforeSlots` IS this field's
+			// BeforeNewline/BeforeLeading gate (`computeBeforeSlots` returns the same
+			// `refSlot` for both), so the blank slot's own host predicate takes it
+			// directly — no fourth flag threaded down the chain.
+			emitAbsentOnRefField(
+				fieldName, localName, parseSteps, absentOnLits ?? [], absentOnEof, subCall, fieldCT, hasBeforeSlots,
+				hasBeforeBlankSlotFor(child, hasBeforeSlots)
+			);
 		} else {
 			emitOptionalRefLeadCommit(
 				parseSteps, localName, fieldCT, subCall, kwLead, leadText, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
@@ -5411,19 +5431,25 @@ class Lowering {
 	 * the terminator stays visible to the enclosing Star.
 	 */
 	private function emitAbsentOnRefField(
-		fieldName: String, localName: String, parseSteps: Array<Expr>, absentOnLits: Array<String>, subCall: Expr, fieldCT: ComplexType,
-		hasBeforeSlots: Bool
+		fieldName: String, localName: String, parseSteps: Array<Expr>, absentOnLits: Array<String>, absentOnEof: Bool, subCall: Expr,
+		fieldCT: ComplexType, hasBeforeSlots: Bool, hasBeforeBlankSlot: Bool
 	): Void {
+		// ω-orphan-prefix-decl: EOF is a disjunct of the same chain, not a
+		// second mechanism — `@:absentOnEof` contributes `ctx.pos >=
+		// ctx.input.length`, which is the terminator a module-scope Seq faces
+		// and the ONE `@:absentOn` cannot spell (an empty literal peeks true
+		// everywhere). The two metas compose: a field carrying both is absent
+		// on either signal.
 		final peekChain: Expr = {
-			var acc: Expr = macro peekLit(ctx, $v{absentOnLits[0]});
-			for (i in 1...absentOnLits.length) {
-				final lit: String = absentOnLits[i];
-				acc = macro $acc || peekLit(ctx, $v{lit});
+			var acc: Null<Expr> = absentOnEof ? (macro ctx.pos >= ctx.input.length) : null;
+			for (lit in absentOnLits) {
+				final peek: Expr = macro peekLit(ctx, $v{lit});
+				acc = acc == null ? peek : macro $acc || $peek;
 			}
 			acc;
 		};
 		final captureBeforeSlots: Bool = hasBeforeSlots && _ctx.trivia;
-		if (captureBeforeSlots) emitAbsentOnBeforeSlots(fieldName, parseSteps);
+		if (captureBeforeSlots) emitAbsentOnBeforeSlots(fieldName, parseSteps, hasBeforeBlankSlot);
 		final wsAction: Expr = _ctx.trivia
 			? macro {
 				final _t = collectTrivia(ctx);
@@ -5478,7 +5504,7 @@ class Lowering {
 	 * the `<field>BeforeNewline` / `<field>BeforeLeading` synth slots. Same split as
 	 * `emitPreFieldWs`'s mandatory bare-Ref arm, which this field bypasses.
 	 */
-	private function emitAbsentOnBeforeSlots(fieldName: String, parseSteps: Array<Expr>): Void {
+	private function emitAbsentOnBeforeSlots(fieldName: String, parseSteps: Array<Expr>, hasBeforeBlankSlot: Bool): Void {
 		final arrayStrCT: ComplexType = TPath({
 			pack: [],
 			name: 'Array',
@@ -5508,6 +5534,20 @@ class Lowering {
 					name: beforeLeadingLocalName(fieldName),
 					type: arrayStrCT,
 					expr: macro _absentTrivia.leadingComments,
+					isFinal: true
+				}
+			]),
+			pos: Context.currentPos()
+		});
+		// ω-region-prefix-blank: same third split as the mandatory arm in
+		// `emitPreFieldWs` — the absent branch rewinds past this trivia, but the
+		// PRESENT branch's writer still needs to know the gap held a blank.
+		if (hasBeforeBlankSlot) parseSteps.push({
+			expr: EVars([
+				{
+					name: beforeBlankLocalName(fieldName),
+					type: macro :Bool,
+					expr: macro _absentTrivia.blankBefore,
 					isFinal: true
 				}
 			]),
@@ -5707,6 +5747,13 @@ class Lowering {
 		// run captured alongside the BeforeNewline scan above.
 		if (hasBeforeLeadingSlot)
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX, expr: macro $i{beforeLeadingLocal} });
+		// ω-region-prefix-blank: the opt-in blank flag of the same scan. Derived
+		// from `child` here rather than threaded, so the push cannot drift from
+		// the capture — both call `hasBeforeBlankSlotFor`.
+		if (hasBeforeBlankSlotFor(child, hasBeforeLeadingSlot)) structFields.push({
+			field: fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX,
+			expr: macro $i{beforeBlankLocalName(fieldName)}
+		});
 		if (hasNewlineAfterSlot)
 			structFields.push({ field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal} });
 		// ω-condition-wrap-keep: push the `<field>CondOpenNewline:Bool`
@@ -5831,7 +5878,7 @@ class Lowering {
 	 */
 	private function emitFieldValueByKind(
 		child: ShapeNode, node: ShapeNode, fieldName: Null<String>, localName: String, parseSteps: Array<Expr>, isOptional: Bool,
-		kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, absentOnLits: Null<Array<String>>,
+		kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, absentOnLits: Null<Array<String>>, absentOnEof: Bool,
 		hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr, hasKwTriviaSlots: Bool, afterKwLocal: String,
 		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
 		beforeKwTrailingLocal: String, lenPrefix: Null<{ width: Int, encoding: String }>, hasBeforeSlots: Bool
@@ -5839,9 +5886,9 @@ class Lowering {
 		switch child.kind {
 			case Ref if (isOptional):
 				emitOptionalRefField(
-					child, fieldName, localName, parseSteps, kwLead, leadText, trailText, absentOnLits, hasOptionalRefAfterTrailSlot,
-					captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal,
-					beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeSlots
+					child, fieldName, localName, parseSteps, kwLead, leadText, trailText, absentOnLits, absentOnEof,
+					hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
+					bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeSlots
 				);
 			case Ref:
 				final refName: String = child.annotations[AnnotationKeys.BASE_REF];
@@ -6227,6 +6274,21 @@ class Lowering {
 
 	/** Sibling of `beforeNewlineLocalName` for the `<field>BeforeLeading` slot. */
 	public static inline function beforeLeadingLocalName(fieldName: String): String return '_beforeLeadCm_$fieldName';
+
+	/**
+	 * ω-region-prefix-blank — hosts of `<field>BeforeBlank`: a bare non-first Ref
+	 * (one that already grew `BeforeLeading`, so the same `collectTrivia` scan
+	 * fills all three) that opts in with `@:fmt(keepBlankAfterStarCtor(...))`.
+	 * Spelled to agree with `TriviaTypeSynth.isBeforeBlankRef` and
+	 * `WriterLowering`'s consume gate — the three decide synthesise / capture /
+	 * consume for ONE slot, and only an identical spelling makes the agreement
+	 * checkable by eye.
+	 */
+	public static inline function hasBeforeBlankSlotFor(child: ShapeNode, hasBeforeLeadingSlot: Bool): Bool {
+		return hasBeforeLeadingSlot && child.fmtReadStringArgs('keepBlankAfterStarCtor') != null;
+	}
+
+	public static inline function beforeBlankLocalName(fieldName: String): String return '_beforeBlank_$fieldName';
 
 	/**
 	 * Name of the `Bool` local that records whether a tryparse+nestBody
@@ -7388,13 +7450,14 @@ class Lowering {
 
 	/**
 	 * Compile-time validation of a struct field's metadata-combination
-	 * legality (`@:optional` / `@:kw` / `@:lead` / `@:trail` / `@:absentOn`).
+	 * legality (`@:optional` / `@:kw` / `@:lead` / `@:trail` / `@:absentOn` /
+	 * `@:absentOnEof`).
 	 * Each illegal combination halts the build via `Context.fatalError`.
 	 * Pure — no emit, no `ctx`; lifted out of `lowerStruct`'s per-field loop.
 	 */
 	private static function validateStructField(
 		child: ShapeNode, fieldName: Null<String>, isOptional: Bool, isStar: Bool, kwLead: Null<String>, leadText: Null<String>,
-		trailText: Null<String>, absentOnLits: Null<Array<String>>
+		trailText: Null<String>, absentOnLits: Null<Array<String>>, absentOnEof: Bool
 	): Void {
 		if (isOptional && child.kind != Ref && child.kind != Star) {
 			Context.fatalError(
@@ -7411,37 +7474,48 @@ class Lowering {
 			// bare abstract via `HxAbstractDecl.underlyingType`.
 			Context.fatalError('Lowering: @:optional @:kw combined with @:trail is deferred (field "$fieldName")', Context.currentPos());
 		}
-		if (absentOnLits != null) {
-			// `@:absentOn` is a peek-ahead absence dispatch — it does NOT
-			// consume any literals (the listed terminators belong to the
-			// enclosing context). Combined with `@:lead`/`@:kw` it would
-			// be ambiguous (which decides absence?), and combined with
-			// `@:trail` it inherits the same "trail inside peek" gap as
-			// regular `@:optional`. Both combinations are rejected. The
-			// meta also requires the field to be an optional Ref —
-			// Stars have their own commit semantics through `@:lead` /
-			// `@:trail`; `absentOn` adds nothing there.
-			if (!isOptional || child.kind != Ref) {
-				Context.fatalError('Lowering: @:absentOn requires @:optional Ref (field "$fieldName")', Context.currentPos());
-			}
-			if (kwLead != null || leadText != null) {
-				Context.fatalError('Lowering: @:absentOn cannot combine with @:lead or @:kw (field "$fieldName")', Context.currentPos());
-			}
-			if (trailText != null) {
-				Context.fatalError('Lowering: @:absentOn cannot combine with @:trail (field "$fieldName")', Context.currentPos());
-			}
-			if (absentOnLits.length == 0) {
-				Context.fatalError(
-					'Lowering: @:absentOn requires at least one terminator literal (field "$fieldName")', Context.currentPos()
-				);
-			}
-		}
+		if (absentOnLits != null || absentOnEof)
+			validateAbsenceDispatch(child, fieldName, isOptional, kwLead, leadText, trailText, absentOnLits, absentOnEof);
 		if (isStar && isOptional && kwLead == null && (leadText == null || trailText == null)) {
 			Context.fatalError(
 				'Lowering: @:optional Star field "$fieldName'
 				+ '" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
 				Context.currentPos()
 			);
+		}
+	}
+
+	/**
+	 * The `@:absentOn` / `@:absentOnEof` half of `validateStructField`: one
+	 * peek-ahead absence dispatch, so the two metas share every legality rule.
+	 * Neither CONSUMES anything (the listed terminators belong to the enclosing
+	 * context, and EOF is not a token at all). Combined with `@:lead` / `@:kw` the
+	 * commit point would be ambiguous — which one decides absence? — and combined
+	 * with `@:trail` it inherits the same "trail inside peek" gap as a plain
+	 * `@:optional`; both are rejected. The field must be an optional Ref: a Star
+	 * has its own commit semantics through `@:lead` / `@:trail` and absence
+	 * dispatch adds nothing there. Split out of the caller because folding the EOF
+	 * disjunct into every arm pushed that function past the complexity gate.
+	 */
+	private static function validateAbsenceDispatch(
+		child: ShapeNode, fieldName: Null<String>, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>,
+		absentOnLits: Null<Array<String>>, absentOnEof: Bool
+	): Void {
+		if (!isOptional || child.kind != Ref) {
+			Context.fatalError('Lowering: @:absentOn / @:absentOnEof requires @:optional Ref (field "$fieldName")', Context.currentPos());
+		}
+		if (kwLead != null || leadText != null) {
+			Context.fatalError(
+				'Lowering: @:absentOn / @:absentOnEof cannot combine with @:lead or @:kw (field "$fieldName")', Context.currentPos()
+			);
+		}
+		if (trailText != null) {
+			Context.fatalError(
+				'Lowering: @:absentOn / @:absentOnEof cannot combine with @:trail (field "$fieldName")', Context.currentPos()
+			);
+		}
+		if (!absentOnEof && (absentOnLits == null || absentOnLits.length == 0)) {
+			Context.fatalError('Lowering: @:absentOn requires at least one terminator literal (field "$fieldName")', Context.currentPos());
 		}
 	}
 
@@ -7610,7 +7684,7 @@ class Lowering {
 	private static function emitPreFieldWs(
 		parseSteps: Array<Expr>, triviaEofStar: Bool, isOptionalRef: Bool, isOptionalKwStar: Bool, optStarWithLead: Bool,
 		hasBeforeLeadingSlot: Bool, hasBeforeNewlineSlot: Bool, beforeNlLocal: String, beforeLeadingLocal: String,
-		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String
+		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String, beforeBlankLocal: Null<String>
 	): Void {
 		if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
 			if (hasBeforeLeadingSlot) {
@@ -7645,6 +7719,21 @@ class Lowering {
 							name: beforeLeadingLocal,
 							type: arrayStrCT,
 							expr: macro _beforeTrivia.leadingComments,
+							isFinal: true
+						}
+					]),
+					pos: Context.currentPos()
+				});
+				// ω-region-prefix-blank: third split of the SAME scan — whether
+				// the gap held a blank line, which `newlineBefore` cannot say.
+				// Null local = the field did not opt in, and no slot exists to
+				// write it onto.
+				if (beforeBlankLocal != null) parseSteps.push({
+					expr: EVars([
+						{
+							name: beforeBlankLocal,
+							type: macro :Bool,
+							expr: macro _beforeTrivia.blankBefore,
 							isFinal: true
 						}
 					]),

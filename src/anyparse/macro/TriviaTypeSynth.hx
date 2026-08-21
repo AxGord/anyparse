@@ -164,6 +164,21 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_LEADING_SUFFIX: String = 'BeforeLeading';
 
 	/**
+	 * ω-region-prefix-blank — third source-shape slot of the pre-field gap,
+	 * synthesised only for a bare non-first Ref that opts in with
+	 * `@:fmt(keepBlankAfterStarCtor(starField, ctorName))`. `BeforeNewline` says
+	 * the source broke; this says it left a BLANK line. Load-bearing for a
+	 * declaration whose whole prefix is a `#if X #end` region: the fork treats
+	 * such a region as its own entity and keeps the blank after it
+	 * (`emptylines/after_vars_before_conditionals` even MOVES a blank to that
+	 * side of `#end`), while the blank after an ordinary metadata prefix is
+	 * deleted (`emptylines/issue_384_macro_classes_with_metadata`) — which is
+	 * why the slot is opt-in and ctor-gated rather than a third unconditional
+	 * companion.
+	 */
+	public static inline final BEFORE_BLANK_SUFFIX: String = 'BeforeBlank';
+
+	/**
 	 * ω-cond-comp-expr-multiline — source-shape slot synthesised on
 	 * paired Seq types alongside bare-Ref fields that carry
 	 * `@:fmt(captureSourceNewlineAfter)`. Records whether the source
@@ -1093,6 +1108,10 @@ class TriviaTypeSynth {
 			// sibling above, gated on the same bare-Ref host.
 			if (isBareNonFirstRef(child, origNode))
 				entries.push({ field: fieldName + BEFORE_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
+			// ω-region-prefix-blank: raw→paired upcast default — a preWrite plugin
+			// rewrite carries no source blank, so the slot defaults to `false`
+			// (byte-inert emit). Same host gate as the synth.
+			if (isBeforeBlankRef(child, origNode)) entries.push({ field: fieldName + BEFORE_BLANK_SUFFIX, expr: macro false });
 			if (isTrailRef(child)) entries.push({ field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
 			if (isBeforeTrailRef(child)) entries.push({ field: fieldName + BEFORE_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
 			if (isPadTrailingTerminalRef(child)) entries.push({ field: fieldName + NEWLINE_AFTER_SUFFIX, expr: macro false });
@@ -1349,6 +1368,14 @@ class TriviaTypeSynth {
 					// the pre-field gap. The Star-opt-in host reads a different
 					// parser local, so it keeps `BeforeNewline` only.
 					if (isBareNonFirstRef(child, origNode)) fields.push(buildBeforeLeadingSlot(child, pos));
+					// ω-region-prefix-blank: the third slot of the same gap — whether the
+					// source put a BLANK line there, not merely a newline. Opt-in
+					// (`@:fmt(keepBlankAfterStarCtor(...))`), because for the ordinary
+					// metadata prefix the fork DELETES the blank
+					// (`emptylines/issue_384_macro_classes_with_metadata`: `@Test\n\n\tfunction
+					// foobar()` → `@Test\n\tfunction foobar()`), and only a `#if … #end`
+					// region in that position keeps it.
+					if (isBeforeBlankRef(child, origNode)) fields.push(buildBeforeBlankSlot(child, pos));
 					// ω-trivia-after-trail: any mandatory Ref field with
 					// `@:trail` grows a `<field>AfterTrail:Null<String>` slot
 					// holding a same-line `// comment` captured right after
@@ -1516,6 +1543,35 @@ class TriviaTypeSynth {
 		return {
 			name: fieldName + BEFORE_LEADING_SUFFIX,
 			kind: FVar(arrayStrCT),
+			pos: pos,
+			access: []
+		};
+	}
+
+	/**
+	 * ω-region-prefix-blank — hosts of `<field>BeforeBlank`: a bare non-first Ref
+	 * that opts in with `@:fmt(keepBlankAfterStarCtor(starField, ctorName))`.
+	 * Spelled as `isBareNonFirstRef` PLUS the opt-in on purpose, so the slot can
+	 * never be synthesised for a field whose writer seat would not read it —
+	 * the same synthesise / capture / consume agreement `BeforeNewline` keeps
+	 * across `Lowering.computeBeforeSlots` and `WriterLowering`.
+	 */
+	private static function isBeforeBlankRef(child: ShapeNode, parent: ShapeNode): Bool {
+		return isBareNonFirstRef(child, parent) && child.fmtReadStringArgs('keepBlankAfterStarCtor') != null;
+	}
+
+	/**
+	 * ω-region-prefix-blank — `<field>BeforeBlank:Bool` companion to
+	 * `buildBeforeNewlineSlot`. Records whether the `collectTrivia` scan that
+	 * filled `BeforeNewline` saw a BLANK line, which `newlineBefore` alone
+	 * cannot distinguish from a single break.
+	 */
+	private static function buildBeforeBlankSlot(child: ShapeNode, pos: Position): Field {
+		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
+		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+		return {
+			name: fieldName + BEFORE_BLANK_SUFFIX,
+			kind: FVar(boolCT),
 			pos: pos,
 			access: []
 		};
