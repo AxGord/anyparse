@@ -172,6 +172,10 @@ final class PreferFinalPublicField implements Check {
 		// blind to it — and a `final` field satisfies neither a structural `var` nor a
 		// structural method.
 		if (index.structuralConformanceForbidsFinal(owner, name)) return;
+		// Core-API gate: a `@:coreApi` type's members are pinned to the property access of a core
+		// type in the compiler's std path that no scope here holds, and `var` -> `final` is
+		// "Field <name> has different property access than core type".
+		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
 		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
 		if (initialized && !folded) {
 			if (writeIndex.writtenAnywhere(owner, name)) return;

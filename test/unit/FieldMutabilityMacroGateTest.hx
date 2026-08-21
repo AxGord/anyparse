@@ -67,6 +67,21 @@ class FieldMutabilityMacroGateTest extends Test {
 		Assert.equals(0, fieldViolations(owner).length);
 	}
 
+	/**
+	 * `@:genericBuild` builds the WHOLE type per instantiation, so the members read here are not
+	 * the members the compiler sees — the same claim `@:build` and `@:autoBuild` make, and the
+	 * predicate's own doc already stated it. It was missing from the token list, and its direction
+	 * is the DANGEROUS one: the rule ACTED on a type it cannot read, where the `@:buildXml` defect
+	 * only over-declined. Zero declarations in the Haxe 4.3.7 std (its three occurrences there are
+	 * doc-comment prose), live in `lime.app.Event`, `json2object.JsonParser` and
+	 * `tink.macro.DirectType`.
+	 */
+	public function testAGenericBuildTypeGatesTheField(): Void {
+		final owner: String = 'package p;\n\n@:genericBuild(p.B.build())\nclass W {\n\n\tprivate static var counter: Int = 0;\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function bump(): Int return counter;\n\n}\n';
+		Assert.equals(0, fieldViolations(owner).length);
+	}
+
 	public function testAnUnannotatedLocalOfAThisRebindingAbstractIsNotFinalized(): Void {
 		Assert.equals(0, localViolations('var t = new ThreadTasks();\n\t\tt.add(1);\n\t\treturn 0;').length);
 	}

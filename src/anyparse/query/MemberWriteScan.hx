@@ -8,7 +8,11 @@ using StringTools;
 /**
  * Conservative text scans for the cross-file questions a member-access rewrite has to answer:
  * "is this member NAME written here" (does a SUBTYPE write an inherited member, does an
- * `@:access` GRANTEE write it), and the weaker "is it MENTIONED here at all".
+ * `@:access` GRANTEE write it), and the weaker "is it MENTIONED here at all". Plus the two
+ * whole-file METADATA questions no name scan can answer: a build macro generates members no text
+ * holds (`carriesBuildMacro`), and a `@:coreApi` type has its member shape pinned by a core type in
+ * the compiler's own std path, which no report or resolution scope contains
+ * (`coreApiPinsMemberShape`).
  *
  * ## Why the checks need this
  *
@@ -113,17 +117,71 @@ final class MemberWriteScan {
 	}
 
 	/**
-	 * Whether `source` carries a `@:build` / `@:autoBuild` — a macro can add a member the
-	 * text scan cannot see, so a file with one counts as a possible writer. Matched as a whole
-	 * metadata TOKEN, never as a substring: `@:buildXml` is an unrelated cpp build-file tag (17
-	 * declarations in the Haxe std alone), and reading it as a build macro made every consumer
-	 * bail out on a type it had no reason to decline. A mention inside a comment or string still
-	 * over-counts, which only ever keeps the looser access. The one shape this cannot see is
-	 * metadata injected by the BUILD (`--macro addMetadata(...)` in an hxml); that is outside any
-	 * source scan, and the compiler oracle is the net for it.
+	 * Whether `source` carries a member-generating build macro — `@:build`, `@:autoBuild` or
+	 * `@:genericBuild`. A macro can add a member the text scan cannot see, so a file with one
+	 * counts as a possible writer.
+	 *
+	 * All three GENERATE the member set: the first two hand the declaration's fields to a macro
+	 * that returns the real ones, and `@:genericBuild` builds the WHOLE type per instantiation, so
+	 * the declaration read here describes none of them. `@:genericBuild` was missing until it was
+	 * measured, and its direction is the dangerous one — every consumer ACTED on such a type
+	 * instead of declining it. It has zero declarations in the Haxe 4.3.7 std (the three
+	 * occurrences there are doc-comment prose, which this scan over-counts anyway) and is live in
+	 * the libraries a real project resolves against: `lime.app.Event`, `lime.net.HTTPRequest`,
+	 * `json2object.JsonParser`, `tink.macro.DirectType`, `hxbitmini.Serializable`.
+	 *
+	 * Matched as a whole metadata TOKEN, never as a substring: `@:buildXml` is an unrelated cpp
+	 * build-file tag (17 declarations in the Haxe std alone), and reading it as a build macro made
+	 * every consumer bail out on a type it had no reason to decline. A mention inside a comment or
+	 * string still over-counts, which only ever keeps the looser access. The one shape this cannot
+	 * see is metadata injected by the BUILD (`--macro addMetadata(...)` in an hxml); that is
+	 * outside any source scan, and the compiler oracle is the net for it.
 	 */
 	public static inline function carriesBuildMacro(source: String): Bool {
-		return carriesMetaToken(source, '@:build') || carriesMetaToken(source, '@:autoBuild');
+		return carriesMetaToken(source, '@:build') || carriesMetaToken(source, '@:autoBuild') || carriesMetaToken(source, '@:genericBuild');
+	}
+
+	/**
+	 * Whether `source` declares a `@:coreApi` type — a target's replacement for a standard-library
+	 * core type, whose member shape the compiler pins against a declaration NO scan here will ever
+	 * see: the core type lives in the compiler's own std path, outside every report and resolution
+	 * scope. A rewrite that changes a member's property access, visibility or static-ness therefore
+	 * cannot be proved safe in such a file and is declined.
+	 *
+	 * Measured on Haxe 4.3.7 `--interp`, mutating `@:coreApi class sys.net.Socket` /
+	 * `sys.ssl.Socket` / `sys.ssl.Certificate` against their `extern` core types. For a member the
+	 * CORE type declares:
+	 *
+	 *     public var x             -> public final x                  ERR different property access
+	 *     public var x             -> public var x(default, null)     ERR different property access
+	 *     public var x             -> public var x(default, never)    ERR different property access
+	 *     public static var X      -> public static final X           ERR different property access
+	 *     public static var X      -> public static inline var X      ERR different property access
+	 *     public var x(get, null)  -> public var x(default, null)     ERR different property access
+	 *     public var x             -> private var x                   ERR different visibility
+	 *     public function f        -> private function f              ERR different visibility
+	 *     public var x             -> public static var x             ERR missing field / not part
+	 *     member deleted or renamed                                   ERR missing field
+	 *     public var x             -> public var x(default, default)  OK   identical access
+	 *     public function f        -> public inline function f        OK
+	 *     static public function f -> static public inline function f OK
+	 *     member ORDER changed                                        OK
+	 *     any member the core type does NOT declare                   OK
+	 *
+	 * So the gate belongs to the property-access / visibility / static-ness family and nowhere
+	 * else. `member-order` does not take it, because order is free; `prefer-inline` does not take
+	 * it either, because method `inline` is LEGAL under `@:coreApi` — contrary to what that rule's
+	 * own commit recorded — and it declines these classes regardless, through its inline-neutral
+	 * metadata whitelist.
+	 *
+	 * FILE-scoped and textual, the same conservatism `carriesBuildMacro` documents: a sibling type
+	 * in a `@:coreApi` module declines too, and so does a `@:coreApi` written in a comment. That
+	 * costs nothing a project owns — a `@:coreApi` type is by definition a standard-library
+	 * replacement — whereas a per-member answer would have to model which members the invisible
+	 * core type declares, which nothing here can.
+	 */
+	public static inline function coreApiPinsMemberShape(source: String): Bool {
+		return carriesMetaToken(source, '@:coreApi');
 	}
 
 	/**

@@ -90,6 +90,13 @@ final class MakeFinal {
 		if (keywordAt(src.source, fieldSpanNN.from) != VAR)
 			return Err('field "$fieldName" does not start with the `var` keyword — cannot make it final');
 
+		// Core-API gate, before the index because it is a pure text scan: a `@:coreApi` type
+		// replaces a standard-library core type whose declaration lives in the compiler's own std
+		// path, which no `--scope` can contain, and `var` -> `final` there is "Field <name> has
+		// different property access than core type". The same shared predicate the four field
+		// rules take.
+		if (MemberWriteScan.coreApiPinsMemberShape(src.source))
+			return Err('"$fieldName" belongs to a @:coreApi type, whose member shape a core type pins — cannot make it final');
 		// Structural-conformance gate — the same `SymbolIndex` predicate the `prefer-final-*`
 		// checks consult, placed after every cheaper one because it is the only gate here that
 		// builds an index. A field the compiler unifies against an anonymous structure declaring

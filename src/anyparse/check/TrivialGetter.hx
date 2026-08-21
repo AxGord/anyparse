@@ -7,6 +7,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -185,7 +186,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+			// Core-API bail: every collapse this rule makes rewrites the property's accessor pair,
+			// and a `@:coreApi` type's members are pinned to the access of a core type in the
+			// compiler's std path — measured, `(get, null)` -> `(default, null)` on
+			// `sys.ssl.Certificate.commonName` is "Field commonName has different property access
+			// than core type".
+			if (tree == null || MemberWriteScan.coreApiPinsMemberShape(entry.source)) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
 			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), entry.source);

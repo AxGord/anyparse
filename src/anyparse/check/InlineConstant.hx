@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -185,7 +186,12 @@ final class InlineConstant implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null)
+			// Core-API bail: both arms of this rule change a field's PROPERTY ACCESS — `static final`
+			// -> `static inline final`, and `static inline var` -> `static inline final` — and a
+			// `@:coreApi` type's fields are pinned to the access of a core type in the compiler's std
+			// path. Measured on Haxe 4.3.7: `static var X` -> `static inline var X` is already
+			// "Field X has different property access than core type".
+			if (tree != null && !MemberWriteScan.coreApiPinsMemberShape(entry.source))
 				walk(
 					violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, proof,
 					MemberBranchScan.seamsOf(plugin.refShape(), entry.source)

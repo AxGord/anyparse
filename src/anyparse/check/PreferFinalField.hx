@@ -170,6 +170,13 @@ final class PreferFinalField implements Check {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
+		// Core-API gate, FIRST because it is the only gate here that asks nothing of the index: a
+		// `@:coreApi` type's members are pinned to the property access of a core type in the
+		// compiler's std path that no scope here holds, and `var` -> `final` is "Field <name> has
+		// different property access than core type". Core types DO declare private fields
+		// (`haxe.Timer.id`, `haxe.ds.List.h`), so this rule needs the gate exactly like its public
+		// sibling.
+		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
 		// Interface-mutability gate: a field an implemented interface declares (or ANY
 		// unresolvable implemented interface) is pinned to that interface's property
 		// access — `var → final` would break parity ("different property access than in

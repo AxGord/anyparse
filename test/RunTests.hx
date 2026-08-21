@@ -683,6 +683,7 @@ import unit.UnusedCaseBinderConstantLanguageTest;
 import unit.HxCondDeclElseTrailingMetaTest;
 import unit.PreferNullCoalescingParensTest;
 import unit.PreferComprehensionFinalTest;
+import unit.CoreApiConformanceGateTest;
 import unit.FieldMutabilityMacroGateTest;
 import unit.LintLanguageVersionGateTest;
 import unit.MemberOrderModifierSpanSliceTest;
@@ -1132,6 +1133,7 @@ class RunTests {
 		addCase(new PreferNullCoalescingParensTest());
 		addCase(new PreferComprehensionFinalTest());
 		addCase(new FieldMutabilityMacroGateTest());
+		addCase(new CoreApiConformanceGateTest());
 		addCase(new LintLanguageVersionGateTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());

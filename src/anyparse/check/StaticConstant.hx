@@ -162,7 +162,11 @@ final class StaticConstant implements Check implements DefaultOff {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null || MemberWriteScan.carriesBuildMacro(entry.source)) continue;
+			// The core-API bail sits beside the build-macro one: promoting an instance field to
+			// `static` moves it out of the instance member set, and for a member a core type declares
+			// that is "Missing field <name> required by core type" (measured, Haxe 4.3.7).
+			if (tree == null || MemberWriteScan.carriesBuildMacro(entry.source) || MemberWriteScan.coreApiPinsMemberShape(entry.source))
+				continue;
 			walk(tree, {
 				out: violations,
 				file: entry.file,

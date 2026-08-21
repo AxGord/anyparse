@@ -146,6 +146,11 @@ final class PreferReadOnlyField implements Check {
 		// `var name:T` the type may be unified with. A structural METHOD member is fine here —
 		// that is the one kind this gate is narrower than `prefer-final-public-field`'s.
 		if (index.structuralConformanceForbidsWriteRestriction(owner, name)) return;
+		// Core-API gate: `(default, null)` is a property-access change, and a `@:coreApi` type's
+		// members are pinned to the access of a core type in the compiler's std path that no scope
+		// here holds — measured as "Field <name> has different property access than core type" for
+		// every restriction, `(default, null)` and `(default, never)` alike.
+		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
 		if (writeIndex.hasUnresolvedWrite(name)) return;
 		if (!writeIndex.writtenAnywhere(owner, name)) return;
 		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
