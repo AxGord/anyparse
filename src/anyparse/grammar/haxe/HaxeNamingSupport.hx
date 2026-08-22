@@ -22,6 +22,21 @@ using Lambda;
 final class HaxeNamingSupport implements NamingSupport {
 
 	/**
+	 * The neutral modifier every declaration INSIDE an `extern` type carries. `MOD_KIND_TO_NAME`'s
+	 * `Extern` entry IS this constant, so the modifier a declaration spells and the one its members
+	 * inherit down the walk are one spelling; the inheritance itself works exactly as an interface
+	 * member's `public` does (see `namedDeclOf`).
+	 *
+	 * It exists so `ignoreExtern` needs no new field on either neutral typedef: the question "is this
+	 * name an external contract's" is asked through the selector machinery a rule already has, and a
+	 * config stating `ignoreExtern: false` simply contributes no `forbidMods` entry. checkstyle asks it
+	 * of the DECLARING TYPE's `extern` flag and of nothing else — never of the member, never of an
+	 * `@:native` (`NameCheckBase` subclasses test `HExtern` / `EExtern` / `TDExtern`, and
+	 * `LocalVariableName` asks `isPosExtern`, which resolves the enclosing decl's same flag).
+	 */
+	public static inline final EXTERN_MOD: String = 'extern';
+
+	/**
 	 * Haxe reserved keywords. A de-prefixed local whose bare name lands on one of
 	 * these is not a usable identifier, so its rename is skipped (report-only).
 	 * Published through `RefShape.reservedWords` for the checks that DERIVE an
@@ -115,7 +130,7 @@ final class HaxeNamingSupport implements NamingSupport {
 		'Inline' => 'inline',
 		'Override' => 'override',
 		'Macro' => 'macro',
-		'Extern' => 'extern',
+		'Extern' => EXTERN_MOD,
 		'Dynamic' => 'dynamic',
 		'Abstract' => 'abstract',
 		'Overload' => 'overload'
@@ -157,17 +172,46 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static final HOIST_MOD_KINDS: Array<String> = ['Private', 'Static'];
 
+	/**
+	 * The effective policy of each directory `policyFor` has already resolved, so an 851-file scope
+	 * walks up to `checkstyle.json`, reads it and builds its rules ONCE per directory instead of once
+	 * per file — measured at 851 disk walks, 851 JSON parses and 851 policy builds for one config.
+	 *
+	 * RUN-SCOPED, and that is the whole of what makes it legitimate: `HaxeQueryPlugin.namingSupport()`
+	 * answers a NEW `HaxeNamingSupport` on every call, so this map's lifetime is one check invocation
+	 * and never the process's. A `static` here would be faster still and would be a REGRESSION —
+	 * `docs/design-principles.md` § 2 measures what process-scoped caches do to a parallel parse
+	 * (8 threads, 247 228 of 479 415 nodes, 132 failures, zero exceptions), and parallelism here is
+	 * PROCESSES, which a run-scoped field cannot corrupt.
+	 *
+	 * Keyed by DIRECTORY, not by file: `ConfigFinder.findUp` walks up from a file's own directory, so
+	 * two files sharing one resolve to the same config by construction. Two spellings of one directory
+	 * are two entries and one extra miss, never a wrong answer. The policy OBJECT is then shared across
+	 * a directory's files — safe because nothing mutates a rule after `defaults()` / `rulesOf` builds
+	 * it, and because each `EReg.match` on a shared `format` is read before the next call
+	 * (`normalizerFor` already hands the autofix its OWN `EReg` for exactly the interleaving that is
+	 * not).
+	 */
+	private final _policyByDir: Map<String, NamingPolicy> = [];
+
 	public function new() {}
 
 	public function project(tree: QueryNode): Array<NamedDecl> {
 		final out: Array<NamedDecl> = [];
-		walk(tree, [], null, false, null, out);
+		walk(tree, [], null, false, false, null, out);
 		return out;
 	}
 
 	public function policyFor(path: String): NamingPolicy {
+		final dir: String = haxe.io.Path.directory(path);
+		final memo: Null<NamingPolicy> = _policyByDir[dir];
+		if (memo != null) return memo;
 		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
-		return content == null ? defaults() : try CheckstyleConfigLoader.load(content) catch (exception: Exception) defaults();
+		final policy: NamingPolicy = content == null
+			? defaults()
+			: try CheckstyleConfigLoader.load(content) catch (exception: Exception) defaults();
+		_policyByDir[dir] = policy;
+		return policy;
 	}
 
 	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool {
@@ -194,7 +238,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * is reached via the projection's static-final → Constant categorisation.
 	 */
 	public static function defaults(): NamingPolicy {
-		return [
+		final policy: NamingPolicy = [
 			{
 				category: NamingCategory.Type,
 				requireMods: [],
@@ -270,6 +314,15 @@ final class HaxeNamingSupport implements NamingSupport {
 				normalize: snakeToCamel
 			}
 		];
+		// checkstyle's `ignoreExtern` defaults to TRUE and every `NameCheckBase` check honours it. The
+		// built-in convention has no config to state that in, so it states it here — once, over every
+		// rule, rather than as a literal in each, where the rule added next is the one that forgets.
+		// A member of an `extern` type is named by the contract that type binds to: measured on this
+		// tree before the gate landed, `lint --fix --rule naming` rewrote `var Bad_Field:Int;` inside
+		// an `extern class` to `var _badField:Int;`, which changes WHICH external symbol the program
+		// reads and which no compiler oracle can catch.
+		for (rule in policy) rule.forbidMods.push(EXTERN_MOD);
+		return policy;
 	}
 
 	/**
@@ -353,8 +406,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * (a compile-time constant - a write to it is a compile error).
 	 */
 	private static function walk(
-		node: QueryNode, ancestors: Array<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, host: Null<VarHost>,
-		out: Array<NamedDecl>
+		node: QueryNode, ancestors: Array<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, enclosingExtern: Bool,
+		host: Null<VarHost>, out: Array<NamedDecl>
 	): Void {
 		// Macro reification (`macro { … }`) is opaque: its identifiers are splice
 		// templates (`$name`), not real declarations — skip the whole subtree, as
@@ -368,7 +421,7 @@ final class HaxeNamingSupport implements NamingSupport {
 		// whole context: category, the modifier run that precedes the HEAD (`static var a = 1, b = 2`
 		// makes both Constants), and its structural-field status.
 		final inherited: Null<VarHost> = node.kind == VAR_MORE_KIND ? host : null;
-		final mods: Array<String> = inherited == null ? modsOf(node, parent) : inherited.mods;
+		final mods: Array<String> = withEnclosingExtern(inherited == null ? modsOf(node, parent) : inherited.mods, enclosingExtern);
 		final structural: Bool = inherited == null ? isStructuralField(parent) : inherited.structural;
 		var category: Null<NamingCategory> = inherited == null ? categoryOf(node, mods) : inherited.category;
 		if (parent != null && parent.kind == 'EnumAbstractDecl' && (node.kind == 'FinalMember' || node.kind == 'VarMember'))
@@ -385,12 +438,16 @@ final class HaxeNamingSupport implements NamingSupport {
 		final childEnclosingRtti: Bool = category == NamingCategory.Type
 			? enclosingRtti || metaInRun(node, ancestors, NamingCategory.Type, '@:rtti')
 			: enclosingRtti;
+		// An `extern` type's members are named by the external contract it binds to, never by the
+		// project — the question `ignoreExtern` asks, and checkstyle asks it of the DECLARING TYPE's own
+		// flag. Once true it stays true for every descendant, exactly as `@:rtti` does.
+		final childEnclosingExtern: Bool = category == NamingCategory.Type ? mods.contains(EXTERN_MOD) : enclosingExtern;
 		// The head binding's context, handed to the `VarMore` chain hanging off it. A `VarMore` passes
 		// its own inherited context straight on, since the chain is right-recursive (`a{more:[b{more:[c]}]}`).
 		final resolved: Null<NamingCategory> = category;
 		final childHost: Null<VarHost> = resolved == null ? null : { category: resolved, mods: mods, structural: structural };
 		ancestors.push(node);
-		for (child in node.children) walk(child, ancestors, childEnclosing, childEnclosingRtti, childHost, out);
+		for (child in node.children) walk(child, ancestors, childEnclosing, childEnclosingRtti, childEnclosingExtern, childHost, out);
 		ancestors.pop();
 	}
 
@@ -485,9 +542,42 @@ final class HaxeNamingSupport implements NamingSupport {
 		category: NamingCategory, name: String, node: QueryNode, ancestors: Array<QueryNode>, mods: Array<String>
 	): Bool {
 		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant)
-			&& (name == 'new' || DUNDER_NAME_PATTERN.match(name) || name.startsWith('get_') || name.startsWith('set_')
-				|| metaInRun(node, ancestors, category) || node.kind == 'FinalMember' && mods.contains('static')
-				&& isTypeReferenceInit(node));
+			&& (name == 'new' || DUNDER_NAME_PATTERN.match(name) || isAccessorName(name) || metaInRun(node, ancestors, category)
+				|| node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node));
+	}
+
+	/**
+	 * `mods` with the enclosing type's `extern` appended when there is one — a declaration inside an
+	 * `extern` type carries it as an EFFECTIVE modifier, exactly as an interface member carries
+	 * `public` without writing it (see `namedDeclOf`). That is what lets a rule state checkstyle's
+	 * `ignoreExtern` through the `forbidMods` selector it already has, rather than through a second
+	 * flag on `NamedDecl` that only one check would read. Idempotent, because a `VarMore` inherits the
+	 * head binding's already-decorated run.
+	 */
+	private static function withEnclosingExtern(mods: Array<String>, enclosingExtern: Bool): Array<String> {
+		return enclosingExtern && !mods.contains(EXTERN_MOD) ? mods.concat([EXTERN_MOD]) : mods;
+	}
+
+	/**
+	 * Whether `name` is a Haxe property ACCESSOR's — the `get_` / `set_` prefix a `(get, set)`
+	 * declaration binds a property to. checkstyle spells the identical test as `FieldUtils.isGetter` /
+	 * `isSetter`, and two questions in this class ask it for different reasons: `isImplicitlyReachable`
+	 * (an accessor is invoked THROUGH the property, so no in-source identifier reference reaches it)
+	 * and `isReservedName` (an accessor's spelling IS the property's, so no naming rule governs it —
+	 * `MethodNameCheck.checkField` returns on `f.isGetter() || f.isSetter()` before it matches a
+	 * format). Sharing the predicate and not the ANSWER is the point: reusing `implicitlyReachable` for
+	 * the naming question would also exempt `new`, a dunder name, a metadata-bearing member and a
+	 * `Class<T>`-registry static, four things checkstyle's gate says nothing about and three of which
+	 * are legitimate naming findings.
+	 *
+	 * Prefix-only, deliberately, and not "a sibling property declares this accessor": an `override
+	 * function get_x` backs a property declared in a SUPERTYPE, usually in another file, so a
+	 * structural test would exempt exactly the accessors whose property is nearest and report the ones
+	 * whose property is furthest out of reach. It would also be a THIRD independent spelling of "what
+	 * is an accessor" in this class — `hasPhysicalAccessors` already walks the other direction.
+	 */
+	private static inline function isAccessorName(name: String): Bool {
+		return name.startsWith('get_') || name.startsWith('set_');
 	}
 
 	/**
@@ -710,15 +800,27 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * Is `name` a Haxe idiom no naming policy governs? A discard binding
-	 * (`_`, `__` - `for (_ in items)`, a placeholder param) carries no meaning to
+	 * Is a declaration of `category` named `name` a Haxe idiom no naming policy governs? A discard
+	 * binding (`_`, `__` - `for (_ in items)`, a placeholder param) carries no meaning to
 	 * spell correctly, and a dunder name (`__init__` - the static module
 	 * initialiser; `__initializeUtest__`) is a language / framework contract a
 	 * rename silently breaks. A single leading `__` is NOT reserved: `__width` is
 	 * an ordinary field the policy still governs.
+	 *
+	 * A METHOD whose name is a property accessor's is the third: `get_x` is spelled by the property
+	 * `x` and by the `(get, set)` that binds it, so it is not a name the project chooses independently
+	 * — reporting it duplicates the finding the property itself already carries, and correcting it
+	 * alone would leave the property demanding an accessor that no longer exists. checkstyle draws the
+	 * line in the same place (`MethodNameCheck.checkField` returns on `isGetter() || isSetter()` before
+	 * any format is matched) and nowhere else: `MemberName` does NOT exempt a FIELD spelled `get_x`,
+	 * so neither does this. Invisible under the built-in convention by construction — its Method format
+	 * `^[a-z][a-zA-Z0-9_]*$` accepts every name that opens with `get_` / `set_` — and reached only by a
+	 * project config strict enough to reject an underscore, where it was measured at three spurious
+	 * findings for one property pair.
 	 */
-	private static function isReservedName(name: String): Bool {
-		return DISCARD_NAME_PATTERN.match(name) || DUNDER_NAME_PATTERN.match(name);
+	private static function isReservedName(category: NamingCategory, name: String): Bool {
+		return DISCARD_NAME_PATTERN.match(name) || DUNDER_NAME_PATTERN.match(name) || category == NamingCategory.Method
+			&& isAccessorName(name);
 	}
 
 	/**
@@ -767,7 +869,7 @@ final class HaxeNamingSupport implements NamingSupport {
 			implicitlyReachable: isImplicitlyReachable(category, name, node, ancestors, mods),
 			renameUnsafe: structural || hasPhysicalAccessors(node, parent, name) || (enclosingRtti && isMemberCategory(category)),
 			contractName: structural,
-			reservedName: isReservedName(name)
+			reservedName: isReservedName(category, name)
 		};
 	}
 

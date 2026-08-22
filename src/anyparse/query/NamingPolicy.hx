@@ -73,6 +73,13 @@ typedef NamedDecl = {
 	var span: Null<Span>;
 	var name: String;
 	var category: NamingCategory;
+
+	/**
+	 * The EFFECTIVE neutral modifiers of the declaration — not only the ones it spells. A grammar adds
+	 * what the enclosing declaration confers: a Haxe interface member is `public` without writing it,
+	 * and a member of an `extern` type is `extern` without writing it. That is what lets a rule select
+	 * on either through `requireMods` / `forbidMods` instead of growing a flag per question.
+	 */
 	var mods: Array<String>;
 
 	/**
@@ -107,10 +114,13 @@ typedef NamedDecl = {
 
 	/**
 	 * True when the identifier is a language / framework idiom rather than a
-	 * name the policy governs, so no rule applies to it at all. Two grammar-set
+	 * name the policy governs, so no rule applies to it at all. Three grammar-set
 	 * cases in Haxe: a discard binding (`for (_ in items)` - there is nothing to
-	 * rename), and a magic dunder name (`__init__`, the static module
-	 * initialiser - renaming it silently disables the code). Unlike
+	 * rename), a magic dunder name (`__init__`, the static module
+	 * initialiser - renaming it silently disables the code), and a property
+	 * ACCESSOR method (`get_x` / `set_x` - its spelling is the property's, so the
+	 * finding belongs to the property and a correction applied here alone would
+	 * orphan it). Unlike
 	 * `renameUnsafe`, this suppresses the WARNING too: the name is correct as
 	 * written. Absent (false) for ordinary declarations.
 	 */

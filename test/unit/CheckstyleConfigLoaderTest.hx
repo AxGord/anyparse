@@ -181,7 +181,9 @@ class CheckstyleConfigLoaderTest extends Test {
 		// An ABSENT `tokens` is checkstyle's "every token", so both arms are contributed.
 		Assert.equals(2, policy.length);
 		Assert.equals(NamingCategory.Field, policy[0].category);
-		Assert.same(['static'], policy[0].forbidMods);
+		// `extern` rides the same selector: `NameCheckBase.ignoreExtern` defaults to TRUE, so a check
+		// that never mentions it still exempts a declaration inside an `extern` type.
+		Assert.same(['static', 'extern'], policy[0].forbidMods);
 		Assert.equals(NamingCategory.EnumValue, policy[1].category);
 	}
 
@@ -195,17 +197,17 @@ class CheckstyleConfigLoaderTest extends Test {
 			'{"checks":[{"type":"ConstantName","props":{"format":"^[A-Z]+$","tokens":["INLINE"]}}]}'
 		);
 		Assert.same(['inline'], inlineOnly[0].requireMods);
-		Assert.same([], inlineOnly[0].forbidMods);
+		Assert.same(['extern'], inlineOnly[0].forbidMods);
 		final notInline: NamingPolicy = CheckstyleConfigLoader.load(
 			'{"checks":[{"type":"ConstantName","props":{"format":"^[A-Z]+$","tokens":["NOTINLINE"]}}]}'
 		);
 		Assert.same([], notInline[0].requireMods);
-		Assert.same(['inline'], notInline[0].forbidMods);
+		Assert.same(['inline', 'extern'], notInline[0].forbidMods);
 		final both: NamingPolicy = CheckstyleConfigLoader.load(
 			'{"checks":[{"type":"ConstantName","props":{"format":"^[A-Z]+$","tokens":["INLINE","NOTINLINE"]}}]}'
 		);
 		Assert.same([], both[0].requireMods);
-		Assert.same([], both[0].forbidMods);
+		Assert.same(['extern'], both[0].forbidMods);
 	}
 
 	/**
@@ -221,7 +223,7 @@ class CheckstyleConfigLoaderTest extends Test {
 		Assert.equals(1, policy.length);
 		Assert.equals(NamingCategory.Method, policy[0].category);
 		Assert.same(['static'], policy[0].requireMods);
-		Assert.same(['public', 'inline'], policy[0].forbidMods);
+		Assert.same(['public', 'inline', 'extern'], policy[0].forbidMods);
 	}
 
 	/**
@@ -238,7 +240,7 @@ class CheckstyleConfigLoaderTest extends Test {
 		Assert.equals(1, types.length);
 		Assert.equals(NamingCategory.Type, types[0].category);
 		Assert.same([], types[0].requireMods);
-		Assert.same([], types[0].forbidMods);
+		Assert.same(['extern'], types[0].forbidMods);
 		// `ENUM` alone contributes no field rule at all — checkstyle's three field arms all return.
 		final enumOnly: NamingPolicy = CheckstyleConfigLoader.load(
 			'{"checks":[{"type":"MemberName","props":{"format":"^[A-Z]","tokens":["ENUM"]}}]}'
@@ -292,6 +294,42 @@ class CheckstyleConfigLoaderTest extends Test {
 		final only: Null<String -> Null<String>> = prefixed[0].normalize;
 		Assert.notNull(only);
 		if (only != null) Assert.equals('_badName', only('bad_name'));
+	}
+
+	/**
+	 * `NameCheckBase.ignoreExtern` was dropped along with `tokens`, and dropping it does not widen a
+	 * rule — it NARROWS the exemption, which makes this adapter STRICTER than every config that never
+	 * mentions the key, since checkstyle's own default is TRUE. Stated as `false` the rule contributes
+	 * no `extern` entry and reaches the declarations again.
+	 */
+	public function testIgnoreExternDefaultsToTrueAndFalseIsStatable(): Void {
+		final stated: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MethodName","props":{"format":"^[a-z]+$","ignoreExtern":false}}]}'
+		);
+		Assert.same([], stated[0].forbidMods);
+		final omitted: NamingPolicy = CheckstyleConfigLoader.load('{"checks":[{"type":"MethodName","props":{"format":"^[a-z]+$"}}]}');
+		Assert.same(['extern'], omitted[0].forbidMods);
+		final explicit: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MethodName","props":{"format":"^[a-z]+$","ignoreExtern":true}}]}'
+		);
+		Assert.same(['extern'], explicit[0].forbidMods);
+	}
+
+	/**
+	 * `CatchParameterNameCheck` is the one naming check that does not extend `NameCheckBase`: it
+	 * declares no `ignoreExtern` field at all, so checkstyle never exempts a catch variable for one.
+	 * The flag is DROPPED for it rather than defaulted — the same reading that made this adapter drop
+	 * `LocalVariableName` / `ParameterName`'s unread `tokens`.
+	 */
+	public function testCatchParameterNameCarriesNoExternGate(): Void {
+		final policy: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"CatchParameterName","props":{"format":"^[a-z]+$","ignoreExtern":true}},'
+			+ '{"type":"LocalVariableName","props":{"format":"^[a-z]+$"}}]}'
+		);
+		Assert.equals(NamingCategory.CatchVar, policy[0].category);
+		Assert.same([], policy[0].forbidMods);
+		Assert.equals(NamingCategory.Local, policy[1].category);
+		Assert.same(['extern'], policy[1].forbidMods);
 	}
 
 }
