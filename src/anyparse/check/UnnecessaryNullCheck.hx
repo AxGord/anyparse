@@ -15,21 +15,30 @@ import anyparse.runtime.Span;
  * ## Type-aware, conservative
  *
  * The operand is proven non-null only when it is a plain identifier whose declared
- * type is recovered via `TypeInfoProvider.declaredTypes` AND is either a value type
- * the language can never null (`RefShape.nonNullableTypeNames` — Haxe `Int` / `Float`
- * / `Bool` / `UInt`), or any non-`Null<…>` nominal type while the enclosing type is
- * null-checked (`RefShape.nullSafetyMetaName`, e.g. `@:nullSafety`). Everything else —
- * an unannotated local, a `Null<…>` field (absent from `declaredTypes`), a method-call
- * or field-access operand — keeps the conservative default and is NOT flagged, so the
- * check never reports a load-bearing null guard. Macro-reification subtrees
- * (`RefShape.opaqueKinds`) are not descended into.
+ * type is recovered via `TypeInfoProvider.declaredTypes` and is a non-`Null<…>` nominal
+ * type while the enclosing type is null-checked (`RefShape.nullSafetyMetaName`, e.g.
+ * `@:nullSafety`). Everything else — an unannotated local, a `Null<…>` field (absent
+ * from `declaredTypes`), a method-call or field-access operand — keeps the conservative
+ * default and is NOT flagged, so the check never reports a load-bearing null guard.
+ * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
+ *
+ * A bare VALUE type (`RefShape.nonNullableTypeNames` — Haxe `Int` / `Float` / `Bool` /
+ * `UInt`) is deliberately NOT a proof here, which is why the check asks
+ * `TypeResolver.isProvablyNonNullAtNullComparison` and not the general
+ * `isProvablyNonNull`. Those types are non-nullable on STATIC targets only, and a file
+ * containing `x != null` on one is a dynamic-target file by construction — the
+ * comparison does not compile otherwise (`On static platforms, null can't be used as
+ * basic type Int`). Measured over 18 882 files (Pony, the Haxe std, `~/dev/haxelib`)
+ * the value-type arm yielded 110 findings and every site read was a load-bearing
+ * dynamic-target guard, several inside an explicit `#if neko` / `#if (js && html5)`.
  *
  * `Severity.Info`; `fix` conservatively drops the redundant comparison where a safe span
  * rewrite exists — unwrap the always-true `if (x != null)`, delete the always-false
  * `if (x == null)`, or drop a conjunct / disjunct from a homogeneous `&&` / `||` chain (shared
  * with `dead-null-guard` via `CheckScan.simplifyNullComparisonFixes`) — and refuses elsewhere.
- * A default-null parameter (`p:T = null`) is exempted at the proof, so it is never flagged;
- * the residual soundness caveat is the proof trusts `@:nullSafety` without a strict-null check.
+ * A declaration initialised by the literal `null` — a parameter default (`p:T = null`), a
+ * field or a local alike — is exempted at the proof, so it is never flagged; the residual
+ * soundness caveat is the proof trusts `@:nullSafety` without a strict-null check.
  */
 @:nullSafety(Strict)
 final class UnnecessaryNullCheck implements Check {
@@ -66,7 +75,7 @@ final class UnnecessaryNullCheck implements Check {
 					final rightIsNull: Bool = node.children[1].kind == nullLit;
 					if (leftIsNull != rightIsNull) {
 						final operand: QueryNode = leftIsNull ? node.children[1] : node.children[0];
-						if (TypeResolver.isProvablyNonNull(operand, root, shape, declaredTypes)) violations.push({
+						if (TypeResolver.isProvablyNonNullAtNullComparison(operand, root, shape, declaredTypes)) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'unnecessary-null-check',

@@ -316,30 +316,47 @@ final class TypeResolver {
 	}
 
 	/**
-	 * Whether the declaration binding at `bindingFrom` is a parameter with a
-	 * null-literal default value (`p: T = null`) — nullable per Haxe null-safety
-	 * ("an argument with a default value of null is nullable"), so its value may be
-	 * null even without the `?` sigil, despite `declaredTypes` recording a nominal
-	 * type. A param node (kind in `paramKinds`) whose span covers `bindingFrom` and
-	 * whose default-value child is a `nullLiteralKind` node.
+	 * Whether the declaration binding at `bindingFrom` initialises itself with the LITERAL
+	 * `null` — the declaration's own syntactic proof that the binding is nullable, whatever
+	 * its written type says. A parameter default (`p: T = null`), a field (`var f: T = null`)
+	 * and a local (`var l: T = null`) are one fact: `declaredTypes` records the nominal `T`
+	 * and the initialiser contradicts it.
+	 *
+	 * Needs no target and no compiler, which is why it can gate a proof no oracle can check.
+	 * `var x: Int = null` does not COMPILE on a static target, so a file holding one is a
+	 * dynamic-target file by construction and its `Int` is nullable there; on every target a
+	 * `T = null` holds null until something assigns it. Either way the binding is null at
+	 * least once, so no non-null proof may be granted over it — see `isProvablyNonNull`.
+	 *
+	 * The initialiser must be a DIRECT child, so `var x: Int = f(null)` (null a grandchild)
+	 * is not null-initialised.
 	 */
-	public static function bindingIsDefaultNullParam(
-		tree: QueryNode, bindingFrom: Int, paramKinds: Array<String>, nullLiteralKind: String
+	public static function bindingIsNullInitialised(
+		tree: QueryNode, bindingFrom: Int, declKinds: Array<String>, nullLiteralKind: String
 	): Bool {
-		var found: Bool = false;
-		function walk(n: QueryNode): Void {
-			if (found) return;
-			if (paramKinds.contains(n.kind)) {
-				final s: Null<Span> = n.span;
-				if (s != null && s.from <= bindingFrom && bindingFrom < s.to) for (c in n.children) if (c.kind == nullLiteralKind) {
-					found = true;
-					return;
-				}
-			}
-			for (c in n.children) walk(c);
-		}
-		walk(tree);
-		return found;
+		final decl: Null<QueryNode> = innermostDeclCovering(tree, declKinds, bindingFrom);
+		return decl != null && decl.children.exists(child -> child.kind == nullLiteralKind);
+	}
+
+	/**
+	 * Every declaration kind that binds a value together with an INITIALISER — parameters,
+	 * fields, locals (a multi-declarator continuation included), local declaration
+	 * expressions, static locals and module-level declarations. Composed from the `RefShape`
+	 * seams that already name each family, so a grammar declares nothing new to be covered.
+	 * A member of the union that is not a value binder (a module-level function decl) never
+	 * carries a bare literal as a DIRECT child, so its presence in the union is inert.
+	 */
+	public static function valueBinderDeclKinds(shape: RefShape): Array<String> {
+		final kinds: Array<String> = [];
+		for (family in [
+			shape.paramKinds,
+			shape.fieldDeclKinds,
+			shape.localDeclKinds,
+			shape.localDeclExprKinds,
+			shape.staticLocalDeclKinds,
+			shape.moduleValueDeclKinds
+		]) if (family != null) for (kind in family) if (!kinds.contains(kind)) kinds.push(kind);
+		return kinds;
 	}
 
 	/**
@@ -567,11 +584,17 @@ final class TypeResolver {
 	 * Whether `operand` is a plain identifier resolvable to a provably non-null
 	 * type — a `RefShape.nonNullableTypeNames` value type (null-safety-independent),
 	 * or any recovered nominal type while null-safety is active. An operand bound to
-	 * an optional parameter, to a default-null parameter (`p: T = null` — nullable per
-	 * Haxe null-safety even for a value type, so the null default is checked BEFORE
-	 * the nominal type), to a `RefShape.nullableWrapperTypeNames` type (`Null<…>` /
+	 * an optional parameter, to a declaration INITIALISED BY THE LITERAL `null`
+	 * (`p: T = null`, `var f: T = null`, `var l: T = null` alike — the declaration's
+	 * own syntax outranks its written type, so `bindingIsNullInitialised` is checked
+	 * BEFORE the nominal), to a `RefShape.nullableWrapperTypeNames` type (`Null<…>` /
 	 * `Dynamic` / `Any`), or with no recovered nominal type keeps the conservative
 	 * default and is NOT proven non-null.
+	 *
+	 * The value-type arm is target-dependent and this entry point grants it. A caller
+	 * whose CONSTRUCT proves the target is dynamic — a comparison against the `null`
+	 * literal, which does not compile on a static target — must ask
+	 * `isProvablyNonNullAtNullComparison` instead; both run the one implementation.
 	 *
 	 * The nominal-under-null-safety proof requires the enclosing `@:nullSafety` to be
 	 * active at BOTH the operand's binding declaration and the read — the nearest
@@ -581,41 +604,41 @@ final class TypeResolver {
 	 * is Haxe-default Loose and is trusted here: Loose rejects a null flowing into a
 	 * nominally non-nullable binding exactly as Strict does (its only relaxations are
 	 * read-side narrowing of already-`Null<…>` values, which never reach this proof).
-	 * Shared by every null-aware check (`unnecessary-null-check`,
-	 * `redundant-null-coalescing`, …).
+	 * Shared by every null-aware check whose construct is not itself target
+	 * evidence (`redundant-null-coalescing`, `unnecessary-safe-nav`,
+	 * `comparison-to-boolean`, …).
 	 */
 	public static function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Bool {
-		final bindingFrom: Null<Int> = operandBindingFrom(operand, root, shape);
-		if (bindingFrom == null) return false;
-		// A re-shadowed name whose resolved binding sits AFTER the use is a forward bind: the
-		// first-wins scope resolver picked a later same-name shadow (a `n:Null<T>` param plus a
-		// later `final n:T = n;` capture) that does not dominate this use, so its declared type
-		// is untrustworthy -> grant no non-null proof. A self-referential initializer
-		// (`final p:T = p ?? ...`) re-resolves in operandBindingFrom to the earlier enclosing
-		// binding (backward) and stays provable; a field used before its own later declaration
-		// has a single visible decl, so it is untouched.
-		final useName: Null<String> = operand.name;
-		final useSpan: Null<Span> = operand.span;
-		if (useName != null && useSpan != null && bindingFrom > useSpan.from && visibleDeclCount(root, shape, useName, useSpan) > 1)
-			return false;
-		final optionalParamKind: Null<String> = shape.optionalParamKind;
-		if (optionalParamKind != null && bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
-		final paramKinds: Null<Array<String>> = shape.paramKinds;
-		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
-		if (paramKinds != null && nullLiteralKind != null && bindingIsDefaultNullParam(root, bindingFrom, paramKinds, nullLiteralKind))
-			return false;
-		final typeName: Null<String> = declaredTypes[bindingFrom];
-		if (typeName == null) return false;
-		final nonNullableTypeNames: Array<String> = shape.nonNullableTypeNames ?? [];
-		if (nonNullableTypeNames.contains(typeName)) return true;
-		final nullableWrapperTypeNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
-		if (nullableWrapperTypeNames.contains(typeName)) return false;
-		final nullSafetyMetaName: Null<String> = shape.nullSafetyMetaName;
-		final opSpan: Null<Span> = operand.span;
-		if (nullSafetyMetaName == null || opSpan == null) return false;
-		final disableArg: Null<String> = shape.nullSafetyDisableArg;
-		return enclosingIsNullSafe(root, new Span(bindingFrom, bindingFrom), nullSafetyMetaName, disableArg)
-			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, disableArg);
+		return provablyNonNull(operand, root, shape, declaredTypes, true);
+	}
+
+	/**
+	 * `isProvablyNonNull` for an operand that sits in a COMPARISON AGAINST THE `null` LITERAL —
+	 * the question `unnecessary-null-check` and `dead-null-guard` ask. Same proof, minus the
+	 * value-type fast path: the comparison being asked about is ITSELF the evidence that this
+	 * file's target treats the value type as nullable.
+	 *
+	 * On a static target the comparison does not COMPILE — Haxe 4.3.7 answers `On static
+	 * platforms, null can't be used as basic type Int` (verified for `Int` / `Float` / `Bool` /
+	 * `UInt`, on a parameter and on a field, for `-cpp` and `-hl`; `-js` / `-neko` / `-python` /
+	 * `-lua` accept all four). So a file that CONTAINS one is a dynamic-target file by
+	 * construction, and there a bare `Int` IS nullable, which is exactly what the guard is
+	 * for. Nothing else the linter can read supplies that: `apqlint.json` carries no target
+	 * key, no seam reads compiler defines, and a `compilerOracle` hxml may name several
+	 * targets at once (Pony's names neko AND nodejs).
+	 *
+	 * The `@:nullSafety` arm below is untouched and still proves such an operand non-null:
+	 * null safety normalises a non-`Null<…>` type to non-nullable on EVERY target and rejects
+	 * a null flowing into it, so that conclusion is the COMPILER's rather than the target's.
+	 *
+	 * Note this argument does NOT extend to `??` / `?.`: `p ?? 7` on a `p: Int` compiles on
+	 * `-cpp` and `-hl` (the compiler folds it), so those constructs prove nothing about the
+	 * target and their checks keep `isProvablyNonNull`.
+	 */
+	public static function isProvablyNonNullAtNullComparison(
+		operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>
+	): Bool {
+		return provablyNonNull(operand, root, shape, declaredTypes, false);
 	}
 
 	/**
@@ -1087,36 +1110,90 @@ final class TypeResolver {
 	 * written type source `T`, so copying the source verbatim as a read's type would be
 	 * wrong. Three forms qualify: an OPTIONAL parameter with no default (`?p:T`, an
 	 * `optionalParamKind` node with no child) and any `= null`-default parameter
-	 * (`bindingIsDefaultNullParam`) are `Null<T>`; a REST parameter (`...p:T`, a
+	 * (`bindingIsNullInitialised`) are `Null<T>`; a REST parameter (`...p:T`, a
 	 * `restParamKind` node) is `haxe.Rest<T>`. A required param, and an optional / required
 	 * param with a NON-null default, keep `T` and are safe to copy.
 	 */
 	private static function paramTypeSourceUnsafe(tree: QueryNode, shape: RefShape, bindingFrom: Int): Bool {
 		final optKind: Null<String> = shape.optionalParamKind;
-		final optNode: Null<QueryNode> = optKind == null ? null : paramNodeCovering(tree, optKind, bindingFrom);
+		final optNode: Null<QueryNode> = optKind == null ? null : innermostDeclCovering(tree, [optKind], bindingFrom);
 		if (optNode != null && optNode.children.length == 0) return true;
 		final paramKinds: Null<Array<String>> = shape.paramKinds;
 		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
-		if (paramKinds != null && nullLiteralKind != null && bindingIsDefaultNullParam(tree, bindingFrom, paramKinds, nullLiteralKind))
+		if (paramKinds != null && nullLiteralKind != null && bindingIsNullInitialised(tree, bindingFrom, paramKinds, nullLiteralKind))
 			return true;
 		final restKind: Null<String> = shape.restParamKind;
-		return restKind != null && paramNodeCovering(tree, restKind, bindingFrom) != null;
+		return restKind != null && innermostDeclCovering(tree, [restKind], bindingFrom) != null;
 	}
 
-	/** The `kind` node whose span covers `bindingFrom` (a parameter decl located by its binding offset), or null. */
-	private static function paramNodeCovering(tree: QueryNode, kind: String, bindingFrom: Int): Null<QueryNode> {
-		var found: Null<QueryNode> = null;
+	/**
+	 * The one implementation behind both entry points. `trustValueTypes` grants the
+	 * `RefShape.nonNullableTypeNames` fast path; a caller whose construct proves the target is
+	 * dynamic passes `false` and falls through to the null-safety arm.
+	 */
+	private static function provablyNonNull(
+		operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, trustValueTypes: Bool
+	): Bool {
+		final bindingFrom: Null<Int> = operandBindingFrom(operand, root, shape);
+		if (bindingFrom == null) return false;
+		// A re-shadowed name whose resolved binding sits AFTER the use is a forward bind: the
+		// first-wins scope resolver picked a later same-name shadow (a `n:Null<T>` param plus a
+		// later `final n:T = n;` capture) that does not dominate this use, so its declared type
+		// is untrustworthy -> grant no non-null proof. A self-referential initializer
+		// (`final p:T = p ?? ...`) re-resolves in operandBindingFrom to the earlier enclosing
+		// binding (backward) and stays provable; a field used before its own later declaration
+		// has a single visible decl, so it is untouched.
+		final useName: Null<String> = operand.name;
+		final useSpan: Null<Span> = operand.span;
+		if (useName != null && useSpan != null && bindingFrom > useSpan.from && visibleDeclCount(root, shape, useName, useSpan) > 1)
+			return false;
+		final optionalParamKind: Null<String> = shape.optionalParamKind;
+		if (optionalParamKind != null && bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
+		// A declaration that initialises ITSELF to the literal `null` is nullable by its own
+		// syntax, before any written type or `@:nullSafety` is consulted: `var esVersion: Int =
+		// null` records the nominal `Int` in `declaredTypes` and is null on every target that
+		// compiles it. Parameters (`p: T = null`), fields and locals are one case here.
+		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
+		if (nullLiteralKind != null && bindingIsNullInitialised(root, bindingFrom, valueBinderDeclKinds(shape), nullLiteralKind))
+			return false;
+		final typeName: Null<String> = declaredTypes[bindingFrom];
+		if (typeName == null) return false;
+		final nonNullableTypeNames: Array<String> = shape.nonNullableTypeNames ?? [];
+		if (trustValueTypes && nonNullableTypeNames.contains(typeName)) return true;
+		final nullableWrapperTypeNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
+		if (nullableWrapperTypeNames.contains(typeName)) return false;
+		final nullSafetyMetaName: Null<String> = shape.nullSafetyMetaName;
+		final opSpan: Null<Span> = operand.span;
+		if (nullSafetyMetaName == null || opSpan == null) return false;
+		final disableArg: Null<String> = shape.nullSafetyDisableArg;
+		return enclosingIsNullSafe(root, new Span(bindingFrom, bindingFrom), nullSafetyMetaName, disableArg)
+			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, disableArg);
+	}
+
+	/**
+	 * The INNERMOST `declKinds` node whose span covers `bindingFrom` — the declaration that
+	 * actually binds that offset when several nest. A multi-declarator list nests its
+	 * continuations (`var a: T = null, b: T = 0` projects `b`'s node as a CHILD of `a`'s), so
+	 * an outermost-first walk answers for the FIRST declarator no matter which name was asked
+	 * about; the innermost answers for the one that owns `bindingFrom`. A single-kind caller
+	 * (a parameter located by its binding offset) passes a one-element list.
+	 */
+	private static function innermostDeclCovering(tree: QueryNode, declKinds: Array<String>, bindingFrom: Int): Null<QueryNode> {
+		var best: Null<QueryNode> = null;
+		var bestWidth: Int = -1;
 		function walk(node: QueryNode): Void {
-			if (found != null) return;
 			final s: Null<Span> = node.span;
-			if (s != null && node.kind == kind && s.from <= bindingFrom && bindingFrom < s.to) {
-				found = node;
-				return;
+			if (s != null && s.from <= bindingFrom && bindingFrom < s.to && declKinds.contains(node.kind)) {
+				final width: Int = s.to - s.from;
+				if (bestWidth == -1 || width < bestWidth) {
+					best = node;
+					bestWidth = width;
+				}
 			}
-			for (c in node.children) walk(c);
+			for (child in node.children) walk(child);
 		}
 		walk(tree);
-		return found;
+		return best;
 	}
 
 }

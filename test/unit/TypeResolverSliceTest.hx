@@ -129,6 +129,39 @@ class TypeResolverSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * The two entry points DIVERGE on exactly one arm. `isProvablyNonNull` grants the value
+	 * type; `isProvablyNonNullAtNullComparison` does not, because the comparison the caller is
+	 * asking about does not compile on a static target ("On static platforms, null can't be
+	 * used as basic type Int") — so its presence proves the target is one where `Int` is
+	 * nullable.
+	 */
+	public function testValueTypeSplitBetweenEntryPoints(): Void {
+		final src: String = 'class C { static function m(x:Int):Void { if (x != null) {} } }';
+		Assert.isTrue(nonNull(src), 'the general predicate still grants the value type');
+		Assert.isFalse(nonNullAtNullComparison(src), 'the null-comparison predicate declines it');
+	}
+
+	/** Under null safety the same operand is proven by the NOMINAL arm, so both agree again. */
+	public function testValueTypeUnderNullSafetyAgreesAcrossEntryPoints(): Void {
+		final src: String = '@:nullSafety(Strict) class C { static function m(x:Int):Void { if (x != null) {} } }';
+		Assert.isTrue(nonNull(src), 'null safety normalises Int to non-nullable on every target');
+		Assert.isTrue(nonNullAtNullComparison(src), 'the null-comparison predicate keeps the null-safety proof');
+	}
+
+	/**
+	 * A declaration initialised by the literal `null` is nullable by its own syntax, ahead of
+	 * both the value-type and the null-safety arm — the `pony` `esVersion: Int = null` shape,
+	 * and its nominal twin. BOTH entry points must decline.
+	 */
+	public function testNullInitialisedDeclRejectedByBoth(): Void {
+		final valueField: String = 'class C { var esVersion:Int = null; function m():Void { if (esVersion != null) {} } }';
+		Assert.isFalse(nonNull(valueField), 'a `= null` value-typed field is nullable');
+		Assert.isFalse(nonNullAtNullComparison(valueField), 'and stays so at a null comparison');
+		final nominalLocal: String = '@:nullSafety(Strict) class C { static function m():Void { var s:Foo = null; if (s != null) {} } }';
+		Assert.isFalse(nonNull(nominalLocal), 'a `= null` local outranks the null-safety proof');
+	}
+
 	public function testNonNullNominalUnderNullSafety(): Void {
 		Assert.isTrue(
 			nonNull('@:nullSafety class C { static function m(x:Foo):Void { if (x != null) {} } }'),
@@ -302,13 +335,27 @@ class TypeResolverSliceTest extends Test {
 	}
 
 	private function nonNull(src: String): Bool {
+		return proveNonNull(src, false);
+	}
+
+	/** `nonNull`'s twin over the null-COMPARISON entry point — the same fixture, the other predicate. */
+	private function nonNullAtNullComparison(src: String): Bool {
+		return proveNonNull(src, true);
+	}
+
+	/** The `… != null` operand of `src`, put to whichever `TypeResolver` entry point is asked for. */
+	private function proveNonNull(src: String, atNullComparison: Bool): Bool {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(src);
 		final shape: RefShape = plugin.refShape();
 		final declaredTypes: Map<Int, String> = plugin.declaredTypes(src);
 		final operand: Null<QueryNode> = nullCheckOperand(tree, shape);
 		Assert.notNull(operand, 'fixture must contain a `… != null` comparison');
-		return operand != null && TypeResolver.isProvablyNonNull(operand, tree, shape, declaredTypes);
+		if (operand == null) return false;
+		final found: QueryNode = operand;
+		return atNullComparison
+			? TypeResolver.isProvablyNonNullAtNullComparison(found, tree, shape, declaredTypes)
+			: TypeResolver.isProvablyNonNull(found, tree, shape, declaredTypes);
 	}
 
 	private function nullCheckOperand(tree: QueryNode, shape: RefShape): Null<QueryNode> {

@@ -69,8 +69,10 @@ final class DeadNullGuard implements Check implements RiskyFix {
 				if (operand == null || span == null) return;
 				final name: Null<String> = operand.name;
 				if (name == null) return;
-				// Owned by `unnecessary-null-check` when the declared type proves it.
-				if (TypeResolver.isProvablyNonNull(operand, root, shape, declaredTypes)) return;
+				// Owned by `unnecessary-null-check` when the declared type proves it — the SAME
+				// predicate it reports on, so a value-typed operand the null-comparison variant
+				// declines falls to this check's flow proof instead of between the two.
+				if (TypeResolver.isProvablyNonNullAtNullComparison(operand, root, shape, declaredTypes)) return;
 				if (facts.nonNull(name)) violations.push({
 					file: entry.file,
 					span: span,

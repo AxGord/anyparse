@@ -315,7 +315,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
 		if (
 			paramKinds != null && nullLiteralKind != null
-			&& TypeResolver.bindingIsDefaultNullParam(root, bindingFrom, paramKinds, nullLiteralKind)
+			&& TypeResolver.bindingIsNullInitialised(root, bindingFrom, paramKinds, nullLiteralKind)
 		)
 			return false;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
