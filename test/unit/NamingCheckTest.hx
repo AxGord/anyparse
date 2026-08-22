@@ -101,6 +101,31 @@ class NamingCheckTest extends NamingCheckTestBase {
 		Assert.equals(0, violations('class foo {}', policy).length);
 	}
 
+	/**
+	 * A `public static var` is not a member name to checkstyle — `MemberNameCheck.checkField` returns
+	 * on `f.isStatic(p)` — so a project's `MemberName` regex does not govern one. The instance field
+	 * the project DID write that regex for still is.
+	 */
+	public function testCheckstyleMemberNameSkipsStatics(): Void {
+		final policy: NamingPolicy = ponyShapedMemberPolicy();
+		Assert.equals(0, violations('class C {\n\tpublic static var ENVKEY:String;\n}', policy).length);
+		Assert.equals(1, violations('class C {\n\tpublic var ENVKEY:String;\n}', policy).length);
+	}
+
+	/**
+	 * And the arm the discriminator brings alive: with both `MemberName` entries loaded, an enum
+	 * constructor is judged by the `ENUM` regex. Before, both entries landed on the same category
+	 * with the same empty selector, first-applicable-wins made the second unreachable, and an enum
+	 * constructor — an `EnumValue`, which neither entry claimed — was governed by nothing at all.
+	 */
+	public function testCheckstyleMemberNameEnumArmGovernsConstructors(): Void {
+		final policy: NamingPolicy = ponyShapedMemberPolicy();
+		Assert.equals(0, violations('enum E {\n\tAlpha;\n\tBeta;\n}', policy).length);
+		final vs: Array<Violation> = violations('enum E {\n\talpha;\n}', policy);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.startsWith('MemberName'));
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('naming'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
@@ -305,6 +330,14 @@ class NamingCheckTest extends NamingCheckTestBase {
 	 */
 	public function testHeadPlusAcronymNameNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar sRGB = 1;\n\t}\n}').length);
+	}
+
+	/** A real project's two `MemberName` entries: instance fields of a class / typedef, and enum constructors. */
+	private function ponyShapedMemberPolicy(): NamingPolicy {
+		return CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MemberName","props":{"format":"^[_a-z][_a-zA-Z0-9]*$","tokens":["CLASS","PUBLIC","PRIVATE","TYPEDEF"]}},'
+			+ '{"type":"MemberName","props":{"format":"^[A-Z][A-z0-9_]*$","tokens":["ENUM"]}}]}'
+		);
 	}
 
 }

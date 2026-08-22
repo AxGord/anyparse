@@ -17,6 +17,14 @@ package anyparse.grammar.haxe.checkstyle;
 	/** Naming-family checks (`TypeName`, `MemberName`, …): the identifier regex. */
 	@:optional var format: String;
 
+	/**
+	 * Naming-family checks: the checkstyle tokens narrowing WHERE `format` applies
+	 * (`['CLASS', 'PUBLIC', 'PRIVATE', 'TYPEDEF']`, `['ENUM']`, `['INLINE']`, …).
+	 * An empty or absent list means every token, which is checkstyle's own
+	 * `NameCheckBase.hasToken` reading and not "no narrowing at all" by accident.
+	 */
+	@:optional var tokens: Array<String>;
+
 	/** `CyclomaticComplexity`: the severity/onset pairs the warning threshold is read from. */
 	@:optional var thresholds: Array<CheckstyleThreshold>;
 

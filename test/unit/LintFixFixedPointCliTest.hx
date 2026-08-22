@@ -511,17 +511,18 @@ class LintFixFixedPointCliTest extends Test {
 	 * as a ONE-VARIABLE matrix: the same source, the same finding, the same format regex — and the
 	 * only difference is where the policy came from.
 	 *
-	 * `CheckstyleConfigLoader` maps each naming check's `format` onto a rule and attaches no
-	 * `normalize`, so `correctedName` has nothing to return and every finding declines. The built-in
-	 * default policy states the IDENTICAL regex for `MethodName` and carries `stripUnderscorePrefix`,
-	 * so the same file fixes. 231 of 231 findings on an 851-file tree take the first arm.
+	 * The loader used to map each naming check's `format` onto a rule and attach no `normalize`, so
+	 * `correctedName` had nothing to return and every finding declined: `fixed 0` against `fixed 2`,
+	 * with 198 of an 851-file tree's 231 findings taking the first arm. `CheckstyleConfigLoader.ruleFor`
+	 * now asks `HaxeNamingSupport.normalizerFor` for the corrections the built-in policy attaches to the
+	 * rule's own category, so both arms write the same edits.
 	 *
-	 * This pins the DECLINE and the reason behind it, not a desirable end state: wiring the built-in
-	 * normalizers into a config-derived rule (`correctedName` already re-verifies the result against
-	 * the rule's OWN format, so it would be self-checking) is a recorded queue item, and landing it
-	 * means retiring the first assertion here on purpose.
+	 * The two arms are asserted EQUAL to each other rather than each against a literal, because the
+	 * property the matrix isolates is precisely that: where a policy came from does not change what it
+	 * fixes. The correction is still self-checking twice over — `normalizerFor` keeps only a candidate
+	 * the config's own format accepts, and `correctedName` re-verifies the survivor against it.
 	 */
-	public function testCheckstyleDerivedPolicyDeclinesTheRenameItsOwnFormatDemands(): Void {
+	public function testCheckstyleDerivedPolicyFixesTheRenameItsOwnFormatDemands(): Void {
 		#if (sys || nodejs)
 		final src: String = 'package p;\n\nclass A {\n\n\tpublic function run():Void {\n\t\t_foo();\n\t}\n\n'
 			+ '\tprivate function _foo():Void {\n\t\ttrace(1);\n\t}\n\n}\n';
@@ -531,19 +532,19 @@ class LintFixFixedPointCliTest extends Test {
 			'csnaming', [{ name: 'A.hx', source: src }, { name: 'checkstyle.json', source: checkstyle }]
 		);
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'naming', '$configured/A.hx']), 'lint --fix exits ok');
-		Assert.equals(
-			src, File.getContent('$configured/A.hx'),
-			'a policy adapted from checkstyle.json states the format and no normalizer, so the rename it demands is declined'
-		);
+		final fromConfig: String = File.getContent('$configured/A.hx');
 		CliFixture.removeDir(configured);
 		final bare: String = CliFixture.writeDir('csnaming', [{ name: 'A.hx', source: src }]);
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'naming', '$bare/A.hx']), 'lint --fix exits ok');
-		final out: String = File.getContent('$bare/A.hx');
-		Assert.isTrue(
-			out.indexOf('_foo') == -1 && out.indexOf('function foo():Void') >= 0,
-			'the SAME regex from the built-in policy, which carries a normalizer, renames declaration and call: $out'
-		);
+		final fromDefault: String = File.getContent('$bare/A.hx');
 		CliFixture.removeDir(bare);
+		Assert.isTrue(
+			fromDefault.indexOf('_foo') == -1 && fromDefault.indexOf('function foo():Void') >= 0,
+			'the built-in policy renames declaration and call site: $fromDefault'
+		);
+		Assert.equals(
+			fromDefault, fromConfig, 'and the SAME regex fixes the SAME bytes when a project config is what states it: $fromConfig'
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

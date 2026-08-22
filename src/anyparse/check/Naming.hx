@@ -1655,11 +1655,11 @@ private class RenameRefusal {
 	 * to propose. 198 of 231 findings on one such tree.
 	 */
 	public static inline final NO_NORMALIZER: String =
-		'the naming policy in force states a FORMAT this name fails but no mechanical normalizer that could produce a conforming one — a policy adapted from a project `checkstyle.json` carries the regex only, so the check can say the name is wrong and not what it should be';
+		'the naming policy in force states a FORMAT this name fails but no mechanical normalizer that could produce a conforming one — no correction is attached to a category whose rename reaches every file that names it, so the check can say the name is wrong and not what it should be';
 
 	/** The normalizer ran and what it produced was not usable. */
 	public static inline final NORMALIZER_DECLINED: String =
-		'the policy\'s normalizer ran and produced no usable name — it answered nothing, answered the name unchanged, or answered one that still fails the rule\'s own format';
+		'the policy\'s normalizer ran and produced no usable name — it answered nothing, answered the name unchanged, answered one that still fails the rule\'s own format, or (under a project config) answered two different conforming ones, which is a preference the config never stated';
 
 	/** A supertype may already declare the corrected name. */
 	public static inline final INHERITED_COLLISION: String =

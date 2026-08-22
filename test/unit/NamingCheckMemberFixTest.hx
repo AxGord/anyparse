@@ -1069,4 +1069,44 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		return vs[0].declineReason ?? '';
 	}
 
+	/**
+	 * The gate `testEveryRefusedRenameNamesItsGate` measured the largest share of, now open. 198 of
+	 * that run's 231 declines were one sentence — the policy came from a `checkstyle.json`, which
+	 * states a format and no correction, so `correctedName` had nothing to return — and the proof was
+	 * a ONE-VARIABLE matrix: same source, same finding, the same `MethodName` regex, only the
+	 * policy's ORIGIN differing, `fixed 0` against `fixed 2`. Both arms now write the same two edits,
+	 * the declaration and its call site.
+	 *
+	 * On disk because `Naming.fix` resolves its policy through `NamingSupport.policyFor`, which walks
+	 * up from the FILE: an in-memory policy would exercise the check and skip the loader, which is
+	 * the half that was broken.
+	 */
+	public function testACheckstyleDerivedPolicyFixesWhatTheDefaultWould(): Void {
+		#if (sys || nodejs)
+		final src: String =
+			'package pkg;\nclass C {\n\tprivate function _doThing():Void {}\n\n\tpublic function f():Void { _doThing(); }\n}';
+		final configured: String = CliFixture.writeDir('namingcsfix', [
+			{ name: 'C.hx', source: src },
+			{ name: 'checkstyle.json', source: '{"checks":[{"type":"MethodName","props":{"format":"^[a-z][a-zA-Z0-9_]*$"}}]}' }
+		]);
+		final bare: String = CliFixture.writeDir('namingnocsfix', [{ name: 'C.hx', source: src }]);
+		Assert.equals(2, discoveredPolicyFixCount(configured, src));
+		Assert.equals(2, discoveredPolicyFixCount(bare, src));
+		CliFixture.removeDir(configured);
+		CliFixture.removeDir(bare);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The naming fix edit count for `dir/C.hx`, with whatever config `dir` itself carries governing it. */
+	private function discoveredPolicyFixCount(dir: String, src: String): Int {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = [{ file: '$dir/C.hx', source: src }];
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, plugin);
+		Assert.equals(1, vs.length);
+		return check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length;
+	}
+
 }
