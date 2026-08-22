@@ -68,6 +68,18 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	// Layout metrics per config JSON — one entry per distinct `hxformat.json` in a run.
 	private final _layoutMetricsCache: Map<String, Null<LayoutMetrics>> = [];
 
+	/**
+	 * The complexity threshold per DIRECTORY. `maxComplexity` walks up from a file to a
+	 * `checkstyle.json`, reads it off disk and re-derives the threshold, and `Complexity.run` asks
+	 * it once per file: 851 disk walks, 851 JSON parses and 851 re-derivations for ONE config.
+	 *
+	 * Keyed by directory because `ConfigFinder.findUp` starts at a file's own directory, so two
+	 * files sharing one resolve to the same config by construction; two spellings of one directory
+	 * are two entries and one extra miss, never a wrong answer. `null` is a real answer (no config,
+	 * or one that does not configure `CyclomaticComplexity`), so reads go through `exists`.
+	 */
+	private final _maxComplexityCache: Map<String, Null<Int>> = [];
+
 	// Run-scoped, same lifecycle as the other caches on this class — a fresh
 	// RefsCache per wrapper instance, shared with every RefShape this plugin hands
 	// out so `Refs.find` resolves against ONE memoized index per tree instead of
@@ -291,7 +303,25 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	public function stringFoldSupport(): Null<StringFoldSupport> return _inner.stringFoldSupport();
 
-	public function maxComplexity(path: String): Null<Int> return _inner.maxComplexity(path);
+	/**
+	 * The wrapped grammar's complexity threshold for `path`, memoised per DIRECTORY.
+	 *
+	 * The one method here that memoises a DISK walk rather than a parse. `Complexity.run` asks it
+	 * once per file and the Haxe grammar answers by walking up to a `checkstyle.json`, reading it
+	 * and re-deriving the threshold — the identical walk-and-parse `HaxeNamingSupport.policyFor`
+	 * does, at the call site the FULL ruleset reaches, which is why memoising only `policyFor`
+	 * bought nothing measurable on a full run.
+	 *
+	 * Run-scoped like every cache on this class: a fresh wrapper per lint / fix run, never shared
+	 * across threads, never a `static` (`docs/design-principles.md` § 2).
+	 */
+	public function maxComplexity(path: String): Null<Int> {
+		final dir: String = haxe.io.Path.directory(path);
+		if (_maxComplexityCache.exists(dir)) return _maxComplexityCache[dir];
+		final max: Null<Int> = _inner.maxComplexity(path);
+		_maxComplexityCache[dir] = max;
+		return max;
+	}
 
 	public function controlFlowSupport(): Null<ControlFlowSupport> return _inner.controlFlowSupport();
 

@@ -266,10 +266,19 @@ final class CheckstyleConfigLoader {
 		return out;
 	}
 
-	/** `MethodName`'s rule, narrowed by its three token pairs in checkstyle's own order. */
+	/**
+	 * `MethodName`'s rule: its three token pairs in checkstyle's own order, plus the one arm no token
+	 * states - `checkClassType` returns on an INTERFACE before it reaches a field.
+	 */
 	private static function methodRule(label: String, format: String, tokens: Array<String>, ignoreExtern: Bool): NamingRule {
 		final requireMods: Array<String> = [];
-		final forbidMods: Array<String> = [];
+		// `MethodNameCheck.checkClassType` returns on `d.flags.contains(HInterface)` before it reaches a
+		// field, unconditionally and with no prop to state otherwise: to checkstyle an interface's
+		// method names are not method names. The projection confers `INTERFACE_MOD` on every member of
+		// an interface, so the arm is one more entry in the selector this rule already carries. It is
+		// this rule's ALONE — `MemberName` and `ConstantName` have no interface arm and keep governing
+		// an interface's properties and constants.
+		final forbidMods: Array<String> = [HaxeNamingSupport.INTERFACE_MOD];
 		visibilityPair(tokens, requireMods, forbidMods);
 		negatablePair(tokens, 'static', requireMods, forbidMods);
 		negatablePair(tokens, 'inline', requireMods, forbidMods);

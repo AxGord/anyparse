@@ -25,9 +25,9 @@ using Lambda;
  *
  * The UNNAMED question this file also used to answer - "does ANY annotation precede this member",
  * the one `unused-private` consumed - now belongs to the grammar's own
- * `NamedDecl.implicitlyReachable`, whose run walk crosses the seam in both directions. That is one
- * question with one answer; this file keeps only the NAME-FILTERED one, which no boolean
- * reachability flag can express: exempting every annotated method's parameters is a far wider rule
+ * `NamedDecl.implicitReach`, whose run walk crosses the seam in both directions. That is one
+ * question with one answer; this file keeps only the NAME-FILTERED one, which no reachability
+ * mechanism can express: exempting every annotated method's parameters is a far wider rule
  * than exempting an operator overload's operands.
  *
  * The walk is told which declarations it walks between (`memberStarts` / `typeStarts`) rather than

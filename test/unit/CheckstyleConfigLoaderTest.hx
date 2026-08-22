@@ -223,7 +223,10 @@ class CheckstyleConfigLoaderTest extends Test {
 		Assert.equals(1, policy.length);
 		Assert.equals(NamingCategory.Method, policy[0].category);
 		Assert.same(['static'], policy[0].requireMods);
-		Assert.same(['public', 'inline', 'extern'], policy[0].forbidMods);
+		// `interface` leads because no token states it: `MethodNameCheck.checkClassType` returns on
+		// `d.flags.contains(HInterface)` before it reaches a field, unconditionally, so every
+		// `MethodName` rule carries the entry whatever its tokens say.
+		Assert.same(['interface', 'public', 'inline', 'extern'], policy[0].forbidMods);
 	}
 
 	/**
@@ -306,13 +309,16 @@ class CheckstyleConfigLoaderTest extends Test {
 		final stated: NamingPolicy = CheckstyleConfigLoader.load(
 			'{"checks":[{"type":"MethodName","props":{"format":"^[a-z]+$","ignoreExtern":false}}]}'
 		);
-		Assert.same([], stated[0].forbidMods);
+		// `interface` survives every arm: it is not `ignoreExtern`'s and no prop states it — the
+		// interface skip is hard-coded in `MethodNameCheck.checkClassType`, where `ignoreExtern` is a
+		// field with a default. Stating `ignoreExtern: false` drops the `extern` entry and only that.
+		Assert.same(['interface'], stated[0].forbidMods);
 		final omitted: NamingPolicy = CheckstyleConfigLoader.load('{"checks":[{"type":"MethodName","props":{"format":"^[a-z]+$"}}]}');
-		Assert.same(['extern'], omitted[0].forbidMods);
+		Assert.same(['interface', 'extern'], omitted[0].forbidMods);
 		final explicit: NamingPolicy = CheckstyleConfigLoader.load(
 			'{"checks":[{"type":"MethodName","props":{"format":"^[a-z]+$","ignoreExtern":true}}]}'
 		);
-		Assert.same(['extern'], explicit[0].forbidMods);
+		Assert.same(['interface', 'extern'], explicit[0].forbidMods);
 	}
 
 	/**

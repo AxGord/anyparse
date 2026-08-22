@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 import anyparse.query.NamingPolicy.HoistedConstant;
+import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
@@ -35,6 +36,33 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * `LocalVariableName` asks `isPosExtern`, which resolves the enclosing decl's same flag).
 	 */
 	public static inline final EXTERN_MOD: String = 'extern';
+
+	/**
+	 * The neutral modifier every member declaration of an INTERFACE carries. `HInterface` is a
+	 * `ClassFlag` exactly as `HExtern` is, and checkstyle reads both off the same `d.flags` of the
+	 * same `checkClassType` arm, so the interface question travels the selector machinery
+	 * `EXTERN_MOD` already opened rather than a type KIND on `NamedDecl` — the thing `98ff574c`
+	 * named as the change this adapter cannot make.
+	 *
+	 * Only `MethodNameCheck` reads it: it returns on `d.flags.contains(HInterface)` before it looks
+	 * at a single field, while `MemberName` / `ConstantName` have no such arm and go on governing an
+	 * interface's properties and constants. So this is conferred on every member and FORBIDDEN by
+	 * exactly one rule.
+	 *
+	 * Conferred through the same `parent.kind == 'InterfaceDecl'` test that already gives an
+	 * interface member its unwritten `public` (see `namedDeclOf`) — one spelling of "declared in an
+	 * interface", so no rule can see a member that is `public`-by-interface and not `interface`, or
+	 * the reverse. Not spelled by any declaration, so `MOD_KIND_TO_NAME` carries no entry for it and
+	 * a member can never state it itself.
+	 *
+	 * STATED BOUNDARY, inherited from that same test: a member inside a conditional-compilation
+	 * region has the `Conditional` as its PARENT, so it is conferred neither modifier and a
+	 * `#if js function Bad_Method():Void; #end` inside an interface is still reported (measured).
+	 * Closing it means threading the enclosing type down the walk as `enclosingExtern` is threaded,
+	 * which would move the `public` conferral too — a wider change than this arm, and one whose
+	 * blast radius reaches every rule that selects on visibility.
+	 */
+	public static inline final INTERFACE_MOD: String = 'interface';
 
 	/**
 	 * Haxe reserved keywords. A de-prefixed local whose bare name lands on one of
@@ -531,19 +559,28 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * Is a member of `category` named `name` reachable without an in-source
-	 * identifier reference? A constructor (`new`), a magic dunder name the runtime
-	 * calls (`__init__` - the static module initialiser), a `get_` / `set_`
-	 * property accessor invoked through `(get, set)`, an annotated member a
-	 * framework / macro / `@:keep` may reach, and a static final initialised with a
-	 * type reference (a `Class<T>` registry entry) all qualify.
+	 * WHICH mechanism reaches a member of `category` named `name` without an in-source identifier
+	 * reference, or null when none does. Five, in the order they are asked: a constructor (`new`), a
+	 * magic dunder name the runtime calls (`__init__` - the static module initialiser), a `get_` /
+	 * `set_` property accessor invoked through `(get, set)`, an annotated member a framework / macro /
+	 * `@:keep` may reach, and a static final initialised with a type reference (a `Class<T>` registry
+	 * entry).
+	 *
+	 * It answered a `Bool`, and the naming autofix turned that ONE `true` into one decline SENTENCE
+	 * about metadata, false for four of the five. The order here is the disjunction's own, so a name
+	 * matching two mechanisms still answers the one it always did - only the reader is now told
+	 * which.
 	 */
-	private static function isImplicitlyReachable(
+	private static function implicitReachOf(
 		category: NamingCategory, name: String, node: QueryNode, ancestors: Array<QueryNode>, mods: Array<String>
-	): Bool {
-		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant)
-			&& (name == 'new' || DUNDER_NAME_PATTERN.match(name) || isAccessorName(name) || metaInRun(node, ancestors, category)
-				|| node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node));
+	): Null<ImplicitReach> {
+		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return null;
+		if (name == 'new') return ImplicitReach.Constructor;
+		if (DUNDER_NAME_PATTERN.match(name)) return ImplicitReach.MagicName;
+		if (isAccessorName(name)) return ImplicitReach.Accessor;
+		if (metaInRun(node, ancestors, category)) return ImplicitReach.Annotation;
+		final registry: Bool = node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node);
+		return registry ? ImplicitReach.TypeRegistry : null;
 	}
 
 	/**
@@ -561,11 +598,11 @@ final class HaxeNamingSupport implements NamingSupport {
 	/**
 	 * Whether `name` is a Haxe property ACCESSOR's — the `get_` / `set_` prefix a `(get, set)`
 	 * declaration binds a property to. checkstyle spells the identical test as `FieldUtils.isGetter` /
-	 * `isSetter`, and two questions in this class ask it for different reasons: `isImplicitlyReachable`
+	 * `isSetter`, and two questions in this class ask it for different reasons: `implicitReachOf`
 	 * (an accessor is invoked THROUGH the property, so no in-source identifier reference reaches it)
 	 * and `isReservedName` (an accessor's spelling IS the property's, so no naming rule governs it —
 	 * `MethodNameCheck.checkField` returns on `f.isGetter() || f.isSetter()` before it matches a
-	 * format). Sharing the predicate and not the ANSWER is the point: reusing `implicitlyReachable` for
+	 * format). Sharing the predicate and not the ANSWER is the point: reusing `implicitReach` for
 	 * the naming question would also exempt `new`, a dunder name, a metadata-bearing member and a
 	 * `Class<T>`-registry static, four things checkstyle's gate says nothing about and three of which
 	 * are legitimate naming findings.
@@ -857,16 +894,20 @@ final class HaxeNamingSupport implements NamingSupport {
 		node: QueryNode, parent: Null<QueryNode>, ancestors: Array<QueryNode>, category: NamingCategory, name: String, mods: Array<String>,
 		structural: Bool, enclosingType: Null<String>, enclosingRtti: Bool
 	): NamedDecl {
-		// Interface members carry no visibility modifier but are public.
+		// Interface members carry no visibility modifier but are public, and they carry the enclosing
+		// type's `interface` flag the same unwritten way — `MethodNameCheck` returns on it before it
+		// looks at a field, so a rule states that arm as a `forbidMods` entry (see `INTERFACE_MOD`).
 		final inInterface: Bool = parent != null && parent.kind == 'InterfaceDecl';
-		final declMods: Array<String> = inInterface && !mods.contains('public') ? mods.concat(['public']) : mods;
+		final declMods: Array<String> = inInterface
+			? mods.concat(mods.contains('public') ? [INTERFACE_MOD] : ['public', INTERFACE_MOD])
+			: mods;
 		return {
 			span: node.span,
 			name: name,
 			category: category,
 			mods: declMods,
 			enclosingType: enclosingType,
-			implicitlyReachable: isImplicitlyReachable(category, name, node, ancestors, mods),
+			implicitReach: implicitReachOf(category, name, node, ancestors, mods),
 			renameUnsafe: structural || hasPhysicalAccessors(node, parent, name) || (enclosingRtti && isMemberCategory(category)),
 			contractName: structural,
 			reservedName: isReservedName(category, name)

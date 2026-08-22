@@ -46,9 +46,9 @@ using StringTools;
  *
  * Constructors, property accessors (`get_` / `set_`, reached via `(get, set)`,
  * not by name), and annotation-bearing members (`@:keep`, abstract `@:from` /
- * `@:op`, ...) can be used without an in-source identifier reference. The grammar marks these via `NamedDecl.implicitlyReachable` — except when a
+ * `@:op`, ...) can be used without an in-source identifier reference. The grammar marks these via `NamedDecl.implicitReach` — except when a
  * conditional-compilation region sits between the annotation and the declaration,
- * which `AnnotatedMemberScan` recovers; the check never flags them — a missed dead member, never a deleted live one. Members reachable only through a framework or macro across files are skipped too: a `static final` macro-force field (`= SomeType`, via `implicitlyReachable`), and a utest `test*` method whose class transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
+ * which `AnnotatedMemberScan` recovers; the check never flags them — a missed dead member, never a deleted live one. Members reachable only through a framework or macro across files are skipped too: a `static final` macro-force field (`= SomeType`, via `implicitReach`), and a utest `test*` method whose class transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
  *
  * ## Members that are public despite no `public` keyword
  *
@@ -340,8 +340,8 @@ final class UnusedPrivate implements Check {
 		// An `abstract` member is a contract implemented by subclasses — reachable
 		// through every implementor, so never dead from the declaring class alone.
 		if (
-			decl.mods.contains('public') || decl.mods.contains('override') || decl.mods.contains('abstract')
-			|| decl.implicitlyReachable == true || support.frameworkReachable(decl, index)
+			decl.mods.contains('public') || decl.mods.contains('override') || decl.mods.contains('abstract') || decl.implicitReach != null
+			|| support.frameworkReachable(decl, index)
 		)
 			return null;
 		final owner: Null<String> = decl.enclosingType;
