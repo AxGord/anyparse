@@ -581,7 +581,7 @@ final class Naming implements Check implements CrossFileFix {
 
 	/**
 	 * The resolved cross-file rename CANDIDATE for one flagged violation, or null when it must be
-	 * skipped: not a member this path owns (see `crossFileCategory`), something the single-file path
+	 * skipped: not a member this path owns (see `crossCategoryRefusal`), something the single-file path
 	 * already covers (a confined private member), an unenumerable hierarchy (a skip-parse file hiding a
 	 * subtype, an `@:allow` grant, a non-unique owner), no derivable corrected name, or a blocked
 	 * inherited-member / `@:rtti` guard. Carries the parsed declaring file, `isPublic` (which decides the
@@ -606,12 +606,19 @@ final class Naming implements Check implements CrossFileFix {
 		// member - `RenameRefusal.of` refuses every public declaration, so this is a public member's only path.
 		if (decl.renameUnsafe == true) return null;
 		final isPublic: Bool = decl.mods.contains('public');
-		if (!crossFileCategory(decl)) return null;
+		// `13177bff`'s pattern, one gate later than it reached: this read `if (!crossFileCategory(decl))
+		// return null;`, an undeclared decline. It looked harmless because the per-file path writes a
+		// sentence for the same findings afterwards — and for a PUBLIC method it writes the WRONG one.
+		// `RenameRefusal.of` tests `public` BEFORE it tests `override`, so an override turned away here
+		// mute was reported as `a public member ... the cross-file path owns it, and declined too`, and
+		// the cross-file path had declined because it does not own the declaration at all.
+		final category: Null<String> = crossCategoryRefusal(decl);
+		if (category != null) return RenameRefusal.candidate(v, category);
 		final owner: Null<String> = decl.enclosingType;
 		if (owner == null) return null;
 		final ownerName: String = owner;
 		// A METHOD a SUBTYPE overrides renames as a FAMILY: the override is not a candidate of its own
-		// (`crossFileCategory` turns one away), and renaming the base alone leaves `override function
+		// (`crossCategoryRefusal` turns one away), and renaming the base alone leaves `override function
 		// __draw` overriding nothing - which the completeness gate catches across FILES, where the
 		// subtype's declaration is an occurrence no receiver attributes, but not within ONE file. The
 		// family carries every such declaration into the same edit set; `null` means one same-named
@@ -639,7 +646,10 @@ final class Naming implements Check implements CrossFileFix {
 			return RenameRefusal.candidate(v, RenameRefusal.CROSS_HIERARCHY_UNPROVABLE);
 		// Every refusal from here down belongs to THIS path: the gates above either hand the
 		// declaration to the single-file rename or are not about it at all, and speaking for those
-		// would overwrite the more accurate sentence that path is about to write.
+		// would overwrite the more accurate sentence that path is about to write. The category gate is
+		// the ONE exception and states why there: what it declines belongs to NEITHER path, so nothing
+		// more accurate is coming and the sentence it writes is the same one `RenameRefusal.of` holds
+		// for the same declaration.
 		final correction: Array<String> = [];
 		final targetName: Null<String> = correctedFieldName(
 			decl, support.policyFor(declFile), ownerName, resolutionIndex, declFile, reason -> correction.push(reason)
@@ -1075,21 +1085,29 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
-	 * Whether the cross-file rename path OWNS this declaration's category: a field / constant, or a
-	 * METHOD that is neither an `override` nor reached without an identifier naming it. Those two are
-	 * the hazards `RenameRefusal.of` names for a method - an `override` binds the name to the
-	 * SUPERTYPE's declaration, so renaming the override alone orphans it, and a member with an
-	 * `implicitReach` (a constructor, a magic name, an accessor, an annotated member, a type-registry
-	 * constant) is reached through references no identifier-level completeness proof sees. Visibility
-	 * is not asked here: a CONFINED private member is turned away later, by the proof that it is the
-	 * single-file path's job.
+	 * Why the cross-file rename path does NOT own this declaration's category — null when it does: a
+	 * field / constant / method reached by an identifier, and not an `override`.
+	 *
+	 * Both hazards are `RenameRefusal.of`'s, stated for the same declarations by the same sentences. An
+	 * `override` binds the name to the SUPERTYPE's declaration, so renaming the override alone orphans
+	 * it, and a member with an `implicitReach` (a constructor, a magic name, an accessor, an annotated
+	 * member, a type-registry constant) is reached through references no identifier-level completeness
+	 * proof sees — for a FIELD or a CONSTANT exactly as for a method, which is the widening `of` takes
+	 * too and which the Method-only spelling here kept this arm from making for the `Class<T>` registry
+	 * it exists for. Visibility is not asked: a CONFINED private member is turned away later, by the
+	 * proof that it is the single-file path's job.
+	 *
+	 * A `Null<String>` rather than a `Bool` because the caller must SAY it, and the sentence a reader
+	 * gets is then this gate's own — `13177bff`'s conversion, at the one gate of this path that had not
+	 * taken it.
 	 */
-	private static function crossFileCategory(decl: NamedDecl): Bool {
+	private static function crossCategoryRefusal(decl: NamedDecl): Null<String> {
+		final reach: Null<ImplicitReach> = decl.implicitReach;
+		final reached: Null<String> = reach == null ? null : RenameRefusal.implicitReach(reach);
 		return switch decl.category {
-			case NamingCategory.Field, NamingCategory.Constant: true;
-			case NamingCategory.Method:
-				!decl.mods.contains('override') && decl.implicitReach == null;
-			case _: false;
+			case NamingCategory.Field, NamingCategory.Constant: reached;
+			case NamingCategory.Method: decl.mods.contains('override') ? RenameRefusal.OVERRIDE : reached;
+			case _: RenameRefusal.NOT_A_MEMBER;
 		}
 	}
 
@@ -1741,10 +1759,13 @@ private class RenameRefusal {
 	 * after a mechanism the member does not have, which is worse than no reason at all. Same defect
 	 * `13177bff` split out of the run's ledger, one level down and inside a single sentence.
 	 *
-	 * Two of the five are what `of` can actually reach today, and the other three are unreachable
-	 * THROUGH IT rather than dead: `MagicName` and `Accessor` make a Haxe declaration
-	 * `reservedName`, so it carries no finding for a rename to be asked about, and `TypeRegistry`
-	 * needs a `FinalMember`, whose category is Constant or Field and never Method. The switch stays
+	 * THREE of the five are what `of` reaches today, and the count is the measure of the widening
+	 * that gate took: `TypeRegistry` needs a `FinalMember`, whose category is Constant or Field and
+	 * never Method, so while `of` asked the question under `category == Method` the arm that exists
+	 * FOR a `Class<T>` registry could not refuse anything at all. Widening the question to every
+	 * member is what connected it to its own purpose. The two that remain unreachable THROUGH here
+	 * are unreachable rather than dead: `MagicName` and `Accessor` make a Haxe declaration
+	 * `reservedName`, so it carries no finding for a rename to be asked about. The switch stays
 	 * total because the gate that keeps each of them away from here lives in another class, and a
 	 * sentence that is right only while a distant gate holds is exactly what this function exists to
 	 * stop.
@@ -1824,15 +1845,23 @@ private class RenameRefusal {
 		if (!isConfinableMemberCategory(category)) return NOT_A_MEMBER;
 		if (decl.mods.contains('public')) return PUBLIC_MEMBER;
 		if (index == null) return NO_INDEX;
-		// A METHOD carries two hazards no field has. An `override` binds the name to the
-		// SUPERTYPE's declaration, so renaming the override alone orphans it. And a member with
-		// an `implicitReach` is reached without an identifier naming it, through references no
-		// identifier-level completeness proof sees - by WHICH mechanism is what `implicitReach`
-		// names and this refusal repeats, rather than claiming metadata for all five. Both are
-		// refusals; the inherited-member and confinement proofs cover the rest.
+		// An `override` is a METHOD-only hazard - it binds the name to the SUPERTYPE's declaration, so
+		// renaming the override alone orphans it. `implicitReach` is EVERY member's: a member reached
+		// without an identifier naming it is reached that way whatever its category, and the OTHER check
+		// that asks this field (`UnusedPrivate.violationFor`) asks it with no category qualifier at all.
+		// Here it was asked under `category == Method`, which let TWO arms through on a Field or a
+		// Constant: an ANNOTATED member, refused all along when it was a method, and a `TypeRegistry`
+		// constant - whose arm has no other category to be reached in, since `isTypeReferenceInit`
+		// requires a `FinalMember` and a `FinalMember` is Constant or Field and never Method. So the
+		// gate that exists FOR a `Class<T>` registry could not refuse one at all. Measured on the base
+		// engine: `private static final _BAD_ENTRY = SomeType;` - which `unused-private` declines even
+		// to REPORT, because a macro may reach it by NAME - was renamed to `BAD_ENTRY` by
+		// `naming --fix`. A name a rename breaks is broken exactly as a deletion breaks it. WHICH
+		// mechanism is what `implicitReach` names and this refusal repeats, rather than claiming
+		// metadata for all five.
 		if (category == NamingCategory.Method && decl.mods.contains('override')) return OVERRIDE;
 		final reach: Null<ImplicitReach> = decl.implicitReach;
-		if (category == NamingCategory.Method && reach != null) return implicitReach(reach);
+		if (reach != null) return implicitReach(reach);
 		final owner: Null<String> = decl.enclosingType;
 		if (owner == null) return NO_OWNER;
 		// Cross-file reflection guard: a private member reached from ANOTHER file by a
