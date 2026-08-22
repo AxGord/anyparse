@@ -115,9 +115,16 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 	/** The finding message when the catch-clause gate passed — the rewrite is available. */
 	private static inline final MSG_FIXABLE: String = 'a raw string throw — prefer throwing a typed exception';
 
+	/**
+	 * Why the gate withheld the rewrite, in the words the run prints after `fix DECLINED — `.
+	 * ONE constant, rendered into `MSG_DEGRADED` below and written to `Violation.declineReason`
+	 * beside it, so the report-mode message and the `--fix` ledger can never say different things.
+	 */
+	private static inline final DECLINE_CATCH_IN_SCOPE: String =
+		'a String / Dynamic / Any catch clause in the resolution scope would stop matching, or rebind, a typed exception';
+
 	/** The finding message when the gate found a catch-all / String clause in scope — the rule is report-only. */
-	private static inline final MSG_DEGRADED: String =
-		'a raw string throw — prefer throwing a typed exception (report-only: a String / Dynamic / Any catch clause in the resolution scope would stop matching, or rebind, a typed exception)';
+	private static final MSG_DEGRADED: String = '$MSG_FIXABLE (report-only: $DECLINE_CATCH_IN_SCOPE)';
 
 	public function new() {}
 
@@ -149,7 +156,13 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 		}
 		// The gate reads every source in the resolution scope, so it runs ONLY once a candidate
 		// exists — a run that flags nothing must not pay for it.
-		if (violations.length > 0 && catchAllInScope(files, plugin, seams)) for (v in violations) v.message = MSG_DEGRADED;
+		if (violations.length > 0 && catchAllInScope(files, plugin, seams)) for (v in violations) {
+			v.message = MSG_DEGRADED;
+			// The same verdict in the slot `--fix` reads. The message is where a REPORT-mode
+			// reader learns why; a `--fix` run prints no findings at all, which is how 161
+			// degraded findings on one tree came to read as "this rule has no autofix".
+			v.declineReason = DECLINE_CATCH_IN_SCOPE;
+		}
 		return violations;
 	}
 

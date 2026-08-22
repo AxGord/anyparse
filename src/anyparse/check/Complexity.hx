@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -37,7 +38,7 @@ import anyparse.runtime.Span;
  * grammar plugin maxComplexity seam.
  */
 @:nullSafety(Strict)
-final class Complexity implements Check implements ConfigAware {
+final class Complexity implements Check implements ConfigAware implements NoAutofix {
 
 	/**
 	 * The complexity above which a function is flagged — the conventional checkstyle
@@ -95,6 +96,14 @@ final class Complexity implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	/**
+	 * The metric names a shape to restructure, never the restructuring. A mechanical split moves
+	 * the branches into a helper and leaves the same decision count spread over two functions.
+	 */
+	public function noAutofixReason(): String {
+		return 'the metric names a shape to restructure, never the restructuring — which decomposition is right is a human call';
 	}
 
 	/**

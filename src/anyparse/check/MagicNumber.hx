@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -44,7 +45,7 @@ using StringTools;
  * `numericLiteralKinds` (or no `functionKinds`) makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class MagicNumber implements Check implements ConfigAware {
+final class MagicNumber implements Check implements ConfigAware implements NoAutofix {
 
 	/** Conventional values that carry no hidden meaning and are never flagged. */
 	private static final EXEMPT: Array<Float> = [-1, 0, 1, 2];
@@ -92,6 +93,15 @@ final class MagicNumber implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	/**
+	 * The literal is flagged so a HUMAN names it. An auto-hoisted `CONST_7` restates the
+	 * digit and hides it behind an indirection, which is strictly worse than the literal.
+	 */
+	public function noAutofixReason(): String {
+		return
+			'the finding asks for a NAME, and only the author knows it — an auto-hoisted CONST_7 restates the digit behind an indirection';
 	}
 
 	/**

@@ -251,7 +251,14 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		for (block in blocksOf(source, header)) {
 			if (block.exists(line -> merged.contains(line.declFrom))) continue;
 			if (!block.exists(line -> flagged.contains(line.declFrom))) continue;
-			if (!reorderable(block, source, moduleTypes)) continue;
+			// A refusal is the ANSWER to "why did this rule not fix my file", and until it was
+			// written down here the run answered it with silence — which two readers took for
+			// "this rule has no autofix" while the guard below was doing exactly its job.
+			final refusal: Null<String> = reorderRefusal(block, source, moduleTypes);
+			if (refusal != null) {
+				noteDecline(violations, block, refusal);
+				continue;
+			}
 			final order: Int = fixOrder(requested, ImportOrder.pathsOf(block));
 			final sorted: Array<ImportLine> = block.copy();
 			ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
@@ -351,7 +358,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 *    `using StringTools` / `using Lambda` need no declaration.
 	 */
 	private static function mergeable(wedge: UsingWedge, source: String, moduleTypes: Map<String, Array<String>>): Bool {
-		if (!reorderable(wedge.imports, source, moduleTypes)) return false;
+		if (reorderRefusal(wedge.imports, source, moduleTypes) != null) return false;
 		for (head in wedge.heads) if (head.chunkFrom != RefactorSupport.startOfLine(source, head.declFrom)) return false;
 		for (statement in wedge.usings) {
 			final names: Null<Array<String>> = moduleTypes[statement.path];
@@ -426,14 +433,32 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 * while leaving it behind would strand it above a different import. Neither is a permutation
 	 * of the block's meaning, so the block stays report-only.
 	 */
-	private static function reorderable(block: Array<ImportLine>, source: String, moduleTypes: Map<String, Array<String>>): Bool {
-		if (block[0].chunkFrom != RefactorSupport.startOfLine(source, block[0].declFrom)) return false;
+	private static function reorderRefusal(
+		block: Array<ImportLine>, source: String, moduleTypes: Map<String, Array<String>>
+	): Null<String> {
+		if (block[0].chunkFrom != RefactorSupport.startOfLine(source, block[0].declFrom))
+			return 'the block does not begin at a line boundary — its first import shares its line with something else';
 		final bound: Array<String> = [];
 		for (line in block) for (name in boundNames(line.path, moduleTypes)) {
-			if (bound.contains(name)) return false;
+			if (bound.contains(name))
+				return 'two imports in the block bind the simple name "$name", which Haxe resolves to the LAST '
+					+ 'of them — reordering would silently change which type the file means';
 			bound.push(name);
 		}
-		return true;
+		return null;
+	}
+
+	/**
+	 * Record `reason` on every violation this call declined — the ones whose flagged import sits
+	 * in `lines`. Written at the refusal site, so the sentence a reader gets is the guard's own
+	 * and cannot drift from the condition that produced it.
+	 */
+	private static function noteDecline(violations: Array<Violation>, lines: Array<ImportLine>, reason: String): Void {
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			if (lines.exists(line -> line.declFrom == span.from)) v.declineReason = reason;
+		}
 	}
 
 	/** Module path -> the simple names it declares, from the resolution index; empty without one. */

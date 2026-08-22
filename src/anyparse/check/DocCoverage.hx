@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -55,7 +56,7 @@ using Lambda;
  * conservatively.
  */
 @:nullSafety(Strict)
-final class DocCoverage implements Check implements ConfigAware {
+final class DocCoverage implements Check implements ConfigAware implements NoAutofix {
 
 	/** Whether an undocumented public top-level type is flagged, unless an `apqlint.json` sets `requireTypeDoc`. */
 	private static inline final RULE_ID: String = 'doc-coverage';
@@ -113,6 +114,14 @@ final class DocCoverage implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	/**
+	 * A doc comment a machine writes restates the member name, which is the one thing the
+	 * reader already has. Nothing here can be mechanised without making the file worse.
+	 */
+	public function noAutofixReason(): String {
+		return 'a generated doc restates the member name; the sentence a reader needs is the one only its author can write';
 	}
 
 	/** The declared name of a type node — its own, or its container child's for a `final class` (whose name sits on the inner `ClassForm`). */

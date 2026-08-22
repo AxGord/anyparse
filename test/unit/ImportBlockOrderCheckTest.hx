@@ -438,6 +438,26 @@ class ImportBlockOrderCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The refusal above is correct and it was SILENT: four of them on one tree were read as
+	 * "import-order has no autofix", and a queue item was written to invent the very guard that
+	 * produced them. `fix` must now name its guard on the finding it refused — in `fix`, not in
+	 * `run`, because that is where the guard runs.
+	 */
+	public function testARefusedReorderNamesItsGuardOnTheFinding(): Void {
+		final src: String = 'package app;\n\nimport z.Widget;\nimport a.Widget;\nimport a.Alpha;\n\nclass C {}\n';
+		final files: Array<{ file: String, source: String }> = scope(src);
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: ImportBlockOrder = configured(null);
+		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'app/C.hx');
+		Assert.equals(1, own.length);
+		Assert.isTrue(own[0].declineReason == null, 'run() declines nothing — the guard belongs to the fix path');
+		Assert.equals(0, check.fix(src, own, plugin, SymbolIndex.build(files, plugin)).length);
+		final reason: Null<String> = own[0].declineReason;
+		Assert.notNull(reason, 'a refused reorder must name its guard on the finding it refused');
+		Assert.isTrue(reason.indexOf('Widget') != -1, 'and name the colliding simple name, got: $reason');
+	}
+
 	// --- helpers -------------------------------------------------------------------
 
 	/**

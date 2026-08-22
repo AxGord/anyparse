@@ -10,6 +10,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 using StringTools;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
 import sys.FileSystem;
 import sys.io.File;
@@ -196,6 +197,24 @@ class ComplexityCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f(a:Bool, x:Int):Void {\n\t\tfinal b = $chain;\n\t\tswitch x {\n\t\t\t#if debug\n'
 			+ '\t\t\tcase 1: p();\n\t\t\tcase 4: r();\n\t\t\t#end\n\t\t\tcase 2: q();\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * `testFixReturnsEmpty` above pins the BEHAVIOUR, and an empty array is the same answer a rule
+	 * whose gate declined gives — which is how `--fix` came to report the two identically and two
+	 * queue items were written on the wrong reading. The DECLARATION is what tells them apart, so
+	 * it is asserted here beside the behaviour: a `NoAutofix` marker on a rule that does emit an
+	 * edit would be a lie the run then repeats with a straight face.
+	 */
+	public function testDeclaresNoAutofixWithAReason(): Void {
+		final check: Complexity = new Complexity();
+		Assert.isTrue(check is NoAutofix, 'complexity is report-only BY DESIGN and must say so');
+		Assert.isTrue((cast check: NoAutofix).noAutofixReason().length > 0, 'and must say why a machine cannot do it');
+		final src: String = 'class C {\n\tfunction big(a:Bool):Bool {\n'
+			+ '\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the declaration must match the behaviour');
 	}
 
 	private function violations(src: String): Array<Violation> {
