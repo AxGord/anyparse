@@ -273,6 +273,50 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
+	 * The name normalizer a rule DERIVED FROM A PROJECT CONFIG carries for `category` — the autofix
+	 * half a `checkstyle.json` states nothing about.
+	 *
+	 * A checkstyle naming check declares a `format` and no correction, so a policy loaded from one
+	 * reached `Naming.correctedName` with `normalize == null` and every finding it produced was
+	 * report-only BY CONSTRUCTION: 198 of the 231 `naming` findings on an 851-file tree, where the
+	 * SAME regex fixed two of them the moment the identical policy came from the built-in default
+	 * instead. The corrections are the grammar's, not the config's, so they are taken from
+	 * `defaults()`: the candidate set for a category is exactly the `normalize` functions the built-in
+	 * policy attaches to THAT category, and a category the built-in leaves report-only — a type, an
+	 * enum value, whose rename reaches every file that names it — gets none here either.
+	 *
+	 * The candidates are tried against `format`, the config's OWN regex, and a name is corrected only
+	 * when EXACTLY ONE of them conforms. Two conforming candidates is a question the config did not
+	 * answer: a format admitting both `_count` and `count` says nothing about which a violating
+	 * `Count` should become, and an ordered fallback chain would answer it by fiat. Declining there
+	 * costs a rewrite; guessing renames a declaration to a spelling the project never asked for.
+	 */
+	public static function normalizerFor(category: NamingCategory, format: EReg): Null<String -> Null<String>> {
+		final candidates: Array<String -> Null<String>> = [];
+		for (rule in defaults()) if (rule.category == category) {
+			final normalize: Null<String -> Null<String>> = rule.normalize;
+			if (normalize != null) candidates.push(normalize);
+		}
+		return candidates.length == 0 ? null : name -> soleConforming(candidates, name, format);
+	}
+
+	/**
+	 * The one correction of `name` among `candidates` that `format` accepts, or null when none does
+	 * or two different ones do. A correction equal to `name` is not one - `Naming.correctedName`
+	 * rejects it anyway, and counting it would make an unfixable name read as an ambiguous one.
+	 */
+	private static function soleConforming(candidates: Array<String -> Null<String>>, name: String, format: EReg): Null<String> {
+		var found: Null<String> = null;
+		for (candidate in candidates) {
+			final corrected: Null<String> = candidate(name);
+			if (corrected == null || corrected == name || !format.match(corrected)) continue;
+			if (found != null && found != corrected) return null;
+			found = corrected;
+		}
+		return found;
+	}
+
+	/**
 	 * Whether a projected declaration is a structural / serialization field - a
 	 * typedef or inline anon-structure member (a `Required` / `Optional` node
 	 * whose parent is `Anon`). Its name is a wire contract (a server JSON key, a

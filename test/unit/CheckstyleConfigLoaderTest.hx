@@ -4,6 +4,8 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
 import anyparse.query.GrammarPlugin.CheckOverrides;
+import anyparse.query.NamingPolicy.NamingCategory;
+import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.runtime.ParseError;
 
 /**
@@ -144,6 +146,152 @@ class CheckstyleConfigLoaderTest extends Test {
 		);
 		Assert.same([7.0], ov.magicNumberIgnore);
 		Assert.equals(true, ov.emptyBlockEnabled);
+	}
+
+	/**
+	 * `tokens` is what tells two `MemberName` entries apart, and dropping it made one of them DEAD.
+	 * A project configuring the check twice — `CLASS / PUBLIC / PRIVATE / TYPEDEF` and `ENUM`, with
+	 * different regexes — got two rules of the same category and the same empty selector, and
+	 * `Naming.applicableRule` takes the FIRST that matches, so the second could never apply to
+	 * anything. The `ENUM` arm is a different CATEGORY (checkstyle's `checkEnumFields` walks enum
+	 * CONSTRUCTORS), not a narrowing of the first.
+	 */
+	public function testMemberNameEnumTokenBecomesItsOwnRule(): Void {
+		final policy: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MemberName","props":{"format":"^[_a-z][_a-zA-Z0-9]*$","tokens":["CLASS","PUBLIC","PRIVATE","TYPEDEF"]}},'
+			+ '{"type":"MemberName","props":{"format":"^[A-Z][A-z0-9_]*$","tokens":["ENUM"]}}]}'
+		);
+		Assert.equals(2, policy.length);
+		Assert.equals(NamingCategory.Field, policy[0].category);
+		Assert.equals(NamingCategory.EnumValue, policy[1].category);
+		// Both PUBLIC and PRIVATE stated is no visibility narrowing at all — checkstyle's own reading.
+		Assert.same([], policy[0].requireMods);
+	}
+
+	/**
+	 * `MemberNameCheck.checkField` returns on `f.isStatic(p)` before it consults a single token, so a
+	 * static field is not a member NAME to checkstyle — it is a `ConstantName` candidate. Reading it
+	 * as one produced 55 of an 851-file tree's 231 naming findings, every one an UPPER_SNAKE static,
+	 * and each would have been renamed toward the format the project wrote for its instance fields.
+	 */
+	public function testMemberNameNeverGovernsAStatic(): Void {
+		final policy: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MemberName","props":{"format":"^[_a-z][_a-zA-Z0-9]*$"}}]}'
+		);
+		// An ABSENT `tokens` is checkstyle's "every token", so both arms are contributed.
+		Assert.equals(2, policy.length);
+		Assert.equals(NamingCategory.Field, policy[0].category);
+		Assert.same(['static'], policy[0].forbidMods);
+		Assert.equals(NamingCategory.EnumValue, policy[1].category);
+	}
+
+	/**
+	 * `ConstantName`'s one pair. `INLINE` alone selects `static inline var` / `static inline final`
+	 * and nothing else, so a plain `static final` — which carries no `inline` keyword — falls outside
+	 * a rule the project narrowed that way. Stating BOTH tokens is what stating neither means.
+	 */
+	public function testConstantNameInlineTokenRequiresInline(): Void {
+		final inlineOnly: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"ConstantName","props":{"format":"^[A-Z]+$","tokens":["INLINE"]}}]}'
+		);
+		Assert.same(['inline'], inlineOnly[0].requireMods);
+		Assert.same([], inlineOnly[0].forbidMods);
+		final notInline: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"ConstantName","props":{"format":"^[A-Z]+$","tokens":["NOTINLINE"]}}]}'
+		);
+		Assert.same([], notInline[0].requireMods);
+		Assert.same(['inline'], notInline[0].forbidMods);
+		final both: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"ConstantName","props":{"format":"^[A-Z]+$","tokens":["INLINE","NOTINLINE"]}}]}'
+		);
+		Assert.same([], both[0].requireMods);
+		Assert.same([], both[0].forbidMods);
+	}
+
+	/**
+	 * `MethodName`'s three pairs map straight onto the neutral modifier vocabulary. `PRIVATE` becomes
+	 * "not public" rather than "carries private": a Haxe method with no visibility keyword IS
+	 * private, and the projection writes no modifier for it, so requiring one would select only the
+	 * members that say so out loud.
+	 */
+	public function testMethodNameTokensBecomeModifierSelectors(): Void {
+		final policy: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MethodName","props":{"format":"^[a-z]+$","tokens":["PRIVATE","STATIC","NOTINLINE"]}}]}'
+		);
+		Assert.equals(1, policy.length);
+		Assert.equals(NamingCategory.Method, policy[0].category);
+		Assert.same(['static'], policy[0].requireMods);
+		Assert.same(['public', 'inline'], policy[0].forbidMods);
+	}
+
+	/**
+	 * The boundary this adapter stops at. A token selecting a TYPE KIND — `CLASS` / `ABSTRACT` /
+	 * `TYPEDEF` on `MemberName`, every `TypeName` token — has no counterpart on `NamedDecl`, which
+	 * knows a declaration's category, its modifiers and the NAME of its enclosing type, never that
+	 * type's kind. Such a token decides only WHETHER a field rule is contributed; it never narrows
+	 * one, so the rule over-reports rather than silently governing nothing.
+	 */
+	public function testTypeKindTokensNarrowNothing(): Void {
+		final types: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"TypeName","props":{"format":"^[A-Z]","tokens":["INTERFACE"]}}]}'
+		);
+		Assert.equals(1, types.length);
+		Assert.equals(NamingCategory.Type, types[0].category);
+		Assert.same([], types[0].requireMods);
+		Assert.same([], types[0].forbidMods);
+		// `ENUM` alone contributes no field rule at all — checkstyle's three field arms all return.
+		final enumOnly: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MemberName","props":{"format":"^[A-Z]","tokens":["ENUM"]}}]}'
+		);
+		Assert.equals(1, enumOnly.length);
+		Assert.equals(NamingCategory.EnumValue, enumOnly[0].category);
+	}
+
+	/**
+	 * The autofix half a `checkstyle.json` cannot state. A config-derived rule used to carry no
+	 * `normalize` at all, so `Naming.correctedName` had nothing to return and every finding such a
+	 * policy produced was report-only BY CONSTRUCTION — 198 of an 851-file tree's 231. The
+	 * corrections are the grammar's: a rule gets the ones the built-in policy attaches to ITS
+	 * category, and none for a category the built-in itself leaves report-only.
+	 */
+	public function testConfigRuleCarriesItsCategorysNormalizer(): Void {
+		final checks: Array<String> = [
+			'{"type":"MethodName","props":{"format":"^[a-z][a-zA-Z0-9_]*$"}}',
+			'{"type":"TypeName","props":{"format":"^[A-Z][a-zA-Z0-9]*$"}}',
+			'{"type":"ParameterName","props":{"format":"^[a-z][a-zA-Z0-9]*$"}}'
+		];
+		final policy: NamingPolicy = CheckstyleConfigLoader.load('{"checks":[${checks.join(',')}]}');
+		final method: Null<String -> Null<String>> = policy[0].normalize;
+		Assert.notNull(method);
+		if (method != null) Assert.equals('doThing', method('_doThing'));
+		// A TYPE rename reaches every file that names it, so the built-in leaves it report-only.
+		Assert.isNull(policy[1].normalize);
+		final param: Null<String -> Null<String>> = policy[2].normalize;
+		Assert.notNull(param);
+		if (param != null) Assert.equals('countryId', param('country_id'));
+	}
+
+	/**
+	 * And where it declines. `Field` is the category the built-in policy corrects two different ways
+	 * — `_count` for a private field, `count` for a public one — so a config format admitting BOTH
+	 * spellings gets neither: the config stated a format, not a preference, and an ordered fallback
+	 * chain would answer by fiat a question its author never answered.
+	 */
+	public function testNormalizerDeclinesWhenTheFormatAdmitsTwoCorrections(): Void {
+		final policy: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MemberName","props":{"format":"^[_a-z][_a-zA-Z0-9]*$","tokens":["CLASS"]}}]}'
+		);
+		final ambiguous: Null<String -> Null<String>> = policy[0].normalize;
+		Assert.notNull(ambiguous);
+		// `_bad_name` conforms both as `_badName` and as `bad_name` — two answers, so no answer.
+		if (ambiguous != null) Assert.isNull(ambiguous('_bad_name'));
+		// The same category under a format only ONE correction satisfies does answer.
+		final prefixed: NamingPolicy = CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MemberName","props":{"format":"^_[a-z][a-zA-Z0-9]*$","tokens":["CLASS"]}}]}'
+		);
+		final only: Null<String -> Null<String>> = prefixed[0].normalize;
+		Assert.notNull(only);
+		if (only != null) Assert.equals('_badName', only('bad_name'));
 	}
 
 }
