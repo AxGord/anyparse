@@ -303,6 +303,17 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * DELIBERATE NON-GATE, the twin of `PreferFinalPublicFieldCheckTest`'s pin. Measured on Haxe
+	 * 4.3.7 `-cs`: `public var x:String` and `public var x(default, null):String` on a
+	 * `@:nativeGen class` emit BYTE-IDENTICAL C# — a plain public field either way, not a property —
+	 * so an editor inspector that serialises public fields sees no difference and no carve-out is
+	 * warranted. Re-measure before changing this.
+	 */
+	public function testNativeInteropPublicFieldStillFlagged(): Void {
+		Assert.equals(1, violations('@:nativeGen class C { public var x:Int = 0; function s():Void { x = 5; } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferReadOnlyField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
