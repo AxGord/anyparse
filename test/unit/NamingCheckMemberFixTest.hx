@@ -650,7 +650,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	}
 
 	/**
-	 * An annotated method is `implicitlyReachable`: a macro / `@:keep` / framework can reach it
+	 * An annotated method carries an `implicitReach`: a macro / `@:keep` / framework can reach it
 	 * by NAME through a channel no identifier-level completeness proof sees. Report-only.
 	 */
 	public function testFixSkipsAnnotatedPrivateMethod(): Void {
@@ -674,8 +674,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	/**
 	 * A region the run steps over grants NOTHING of its own: `#if js @:keep #end` says nothing about
 	 * the member that FOLLOWS it, and counting an annotation written inside a branch would exempt
-	 * every `extern inline` private in the tree from every unused / rename gate. So this member is
-	 * NOT `implicitlyReachable` and the confined-private rename still commits.
+	 * every `extern inline` private in the tree from every unused / rename gate. So this member has NO
+	 * `implicitReach` and the confined-private rename still commits.
 	 */
 	public function testFixRenamesMethodWhoseOnlyAnnotationIsInsideTheRegion(): Void {
 		final src: String =
@@ -1101,12 +1101,64 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 
 	/** The naming fix edit count for `dir/C.hx`, with whatever config `dir` itself carries governing it. */
 	private function discoveredPolicyFixCount(dir: String, src: String): Int {
+		final run: { edits: Int, findings: Array<Violation> } = fixedFindingsIn(dir, src);
+		Assert.equals(1, run.findings.length);
+		return run.edits;
+	}
+
+	/**
+	 * `dir/C.hx`'s naming findings after `fix` has been asked for each — so a caller can assert on
+	 * the EDIT COUNT or on the `declineReason` the refusals wrote, from one run. `dir`'s own config
+	 * governs, whatever it is: `Naming.fix` resolves its policy through `NamingSupport.policyFor`,
+	 * which walks up from the FILE.
+	 */
+	private function fixedFindingsIn(dir: String, src: String): { edits: Int, findings: Array<Violation> } {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/C.hx', source: src }];
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, plugin);
-		Assert.equals(1, vs.length);
-		return check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length;
+		return { edits: check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length, findings: vs };
+	}
+
+	/**
+	 * A decline reason that is FALSE is worse than none: it sends the next reader after a mechanism
+	 * the member does not have. `NamedDecl` carried a `Bool` for "reachable without an identifier
+	 * naming it", five disjoint mechanisms answered it, and one sentence spoke for all five — so a
+	 * `private function new()` declined with `the member carries metadata` and carries none.
+	 * Measured on the base engine, `lint --fix --rule naming` on exactly this fixture printed that
+	 * sentence for both findings.
+	 *
+	 * ONE-VARIABLE matrix: two members of one class, one finding each, under one `MethodName` regex
+	 * that admits neither name. The constructor and the annotated method must now state DIFFERENT
+	 * gates, and the constructor's must not be the metadata one.
+	 *
+	 * On disk because `Naming.fix` resolves its policy through `NamingSupport.policyFor`, which walks
+	 * up from the FILE — and because the built-in Method format accepts `new`, so only a config can
+	 * put a constructor in front of this gate at all.
+	 */
+	public function testEachImplicitReachMechanismStatesItsOwnGate(): Void {
+		#if (sys || nodejs)
+		final src: String = 'package pkg;\nclass C {\n\tprivate function new() {}\n\n\t@:keep private function boot():Void {}\n}';
+		final dir: String = CliFixture.writeDir('namingimplicitreach', [
+			{ name: 'C.hx', source: src },
+			{ name: 'checkstyle.json', source: '{"checks":[{"type":"MethodName","props":{"format":"^zz[a-z][a-zA-Z0-9]*$"}}]}' }
+		]);
+		final reasons: Array<String> = declineReasonsIn(dir, src);
+		Assert.equals(2, reasons.length);
+		Assert.stringContains('the method is the type\'s CONSTRUCTOR', reasons[0]);
+		Assert.isFalse(reasons[0].contains('carries metadata'), 'a constructor carries none');
+		Assert.stringContains('the member carries metadata', reasons[1]);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Every finding's `declineReason` for `dir/C.hx`, in document order, with `''` for one that got none. */
+	private function declineReasonsIn(dir: String, src: String): Array<String> {
+		final run: { edits: Int, findings: Array<Violation> } = fixedFindingsIn(dir, src);
+		Assert.equals(0, run.edits, 'every rename is refused');
+		return [for (v in run.findings) v.declineReason ?? ''];
 	}
 
 }

@@ -9,6 +9,7 @@ import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import sys.io.File;
 
 /**
  * `CachingGrammarPlugin` memoizes `parseFile` / `parseFileTypeRefs` by source
@@ -180,6 +181,44 @@ class CachingGrammarPluginTest extends Test {
 		Assert.equals(refs, shapeOf(reverse.parseFileTypeRefs(src)), 'parseFileTypeRefs third');
 		Assert.equals(tree, shapeOf(reverse.parseFile(src)), 'parseFile last');
 		Assert.equals(1, reverse.rootParses, 'the reverse wrapper parsed that source exactly once');
+	}
+
+	/**
+	 * `maxComplexity` is the one method here that memoises a DISK walk. The Haxe grammar answers it
+	 * by walking up to a `checkstyle.json`, reading it and re-deriving the threshold, and
+	 * `Complexity.run` asks it once per FILE: 851 walks and 851 JSON parses for one config on the
+	 * Pony scope, and the reason memoising `HaxeNamingSupport.policyFor` alone bought nothing
+	 * measurable on a FULL-ruleset run — the same walk-and-parse still happened once per file here.
+	 *
+	 * Observed by rewriting the config out from under the run, which is what makes both halves
+	 * visible without a call counter: a sibling file in the SAME directory must still answer the
+	 * OLD threshold (memoised, keyed by directory), and a NEW wrapper must answer the new one.
+	 *
+	 * That last assertion is the one invariant 1 is about (`docs/design-principles.md` § 2). The
+	 * cache is an instance field, so its lifetime is one lint / fix run and never the process's;
+	 * make it `static` and it is this assertion, and only this assertion, that fails.
+	 */
+	public function testMaxComplexityMemoizedPerDirectoryAndPerRun(): Void {
+		final dir: String = CliFixture.writeDir('cgpmaxcx', [
+			{
+				name: 'checkstyle.json',
+				source: '{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":10}]}}]}'
+			}
+		]);
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		Assert.equals(9, cached.maxComplexity('$dir/A.hx'));
+		File.saveContent(
+			'$dir/checkstyle.json',
+			'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":20}]}}]}'
+		);
+		Assert.equals(
+			19, new HaxeQueryPlugin().maxComplexity('$dir/A.hx'), 'the rewrite reached disk - the assertions below are not vacuous'
+		);
+		Assert.equals(9, cached.maxComplexity('$dir/B.hx'), 'a sibling file resolves to the memoised entry of its own directory');
+		Assert.equals(
+			19, new CachingGrammarPlugin(new HaxeQueryPlugin()).maxComplexity('$dir/A.hx'), 'the memo is RUN-scoped, never the process\'s'
+		);
+		CliFixture.removeDir(dir);
 	}
 
 	/** Every source-taking projection of one source, in the order a lint run demands them. */

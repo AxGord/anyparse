@@ -5,6 +5,7 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
@@ -1075,17 +1076,19 @@ final class Naming implements Check implements CrossFileFix {
 
 	/**
 	 * Whether the cross-file rename path OWNS this declaration's category: a field / constant, or a
-	 * METHOD that is neither an `override` nor `implicitlyReachable`. Those two are the hazards `RenameRefusal.of` names for a method — an `override` binds the name to the SUPERTYPE's declaration, so
-	 * renaming the override alone orphans it, and an annotation-bearing member can be reached by NAME from
-	 * a macro / `@:keep` / framework, references no identifier-level completeness proof sees. Visibility is
-	 * not asked here: a CONFINED private member is turned away later, by the proof that it is the
+	 * METHOD that is neither an `override` nor reached without an identifier naming it. Those two are
+	 * the hazards `RenameRefusal.of` names for a method - an `override` binds the name to the
+	 * SUPERTYPE's declaration, so renaming the override alone orphans it, and a member with an
+	 * `implicitReach` (a constructor, a magic name, an accessor, an annotated member, a type-registry
+	 * constant) is reached through references no identifier-level completeness proof sees. Visibility
+	 * is not asked here: a CONFINED private member is turned away later, by the proof that it is the
 	 * single-file path's job.
 	 */
 	private static function crossFileCategory(decl: NamedDecl): Bool {
 		return switch decl.category {
 			case NamingCategory.Field, NamingCategory.Constant: true;
 			case NamingCategory.Method:
-				!decl.mods.contains('override') && decl.implicitlyReachable != true;
+				!decl.mods.contains('override') && decl.implicitReach == null;
 			case _: false;
 		}
 	}
@@ -1629,9 +1632,25 @@ private class RenameRefusal {
 	public static inline final OVERRIDE: String =
 		'the method is an `override`, so its name is the SUPERTYPE declaration\'s — renaming this one alone would leave it overriding nothing';
 
+	/** The member is the type's CONSTRUCTOR. */
+	public static inline final IS_CONSTRUCTOR: String =
+		'the method is the type\'s CONSTRUCTOR — `new` is the language\'s own spelling for it, reached by every `new Owner(…)` and by no identifier a rename could follow';
+
+	/** A magic name the runtime itself calls. */
+	public static inline final MAGIC_NAME: String =
+		'the method carries a magic name the runtime calls directly (`__init__`), so renaming it disables the code silently instead of moving a reference';
+
+	/** A property accessor: its spelling is the property's. */
+	public static inline final IS_ACCESSOR: String =
+		'the method is a property ACCESSOR — its spelling is the PROPERTY\'s, invoked through that property\'s `(get, set)` and by no identifier naming the method, so correcting it alone would leave the property demanding an accessor that no longer exists';
+
 	/** Metadata-bearing member: a macro / framework can reach it by name. */
-	public static inline final IMPLICITLY_REACHABLE: String =
+	public static inline final CARRIES_METADATA: String =
 		'the member carries metadata, so a macro / `@:keep` / framework may reach it by NAME through references no identifier-level proof sees';
+
+	/** A `static final` bound to a type reference: a `Class<T>` registry entry. */
+	public static inline final TYPE_REGISTRY: String =
+		'the member is a `static final` bound to a TYPE reference — a `Class<T>` registry entry a macro / framework resolves by NAME, through references no identifier-level proof sees';
 
 	/** No enclosing type: the confinement proof has nothing to scope to. */
 	public static inline final NO_OWNER: String = 'the declaration reports no enclosing type, and the confinement proof is scoped to one';
@@ -1714,6 +1733,33 @@ private class RenameRefusal {
 	}
 
 	/**
+	 * The sentence for the mechanism that reaches `reach`'s member without an identifier naming it —
+	 * one gate per `ImplicitReach`, where there used to be one sentence for all five.
+	 *
+	 * `NamedDecl.implicitReach` was a `Bool`, so this refusal said `the member carries metadata` for
+	 * a `private function new()` that carries none — a decline reason that sends the next reader
+	 * after a mechanism the member does not have, which is worse than no reason at all. Same defect
+	 * `13177bff` split out of the run's ledger, one level down and inside a single sentence.
+	 *
+	 * Two of the five are what `of` can actually reach today, and the other three are unreachable
+	 * THROUGH IT rather than dead: `MagicName` and `Accessor` make a Haxe declaration
+	 * `reservedName`, so it carries no finding for a rename to be asked about, and `TypeRegistry`
+	 * needs a `FinalMember`, whose category is Constant or Field and never Method. The switch stays
+	 * total because the gate that keeps each of them away from here lives in another class, and a
+	 * sentence that is right only while a distant gate holds is exactly what this function exists to
+	 * stop.
+	 */
+	public static function implicitReach(reach: ImplicitReach): String {
+		return switch reach {
+			case ImplicitReach.Constructor: IS_CONSTRUCTOR;
+			case ImplicitReach.MagicName: MAGIC_NAME;
+			case ImplicitReach.Accessor: IS_ACCESSOR;
+			case ImplicitReach.Annotation: CARRIES_METADATA;
+			case ImplicitReach.TypeRegistry: TYPE_REGISTRY;
+		}
+	}
+
+	/**
 	 * Write `reason` on `v` unless something already spoke for it.
 	 *
 	 * FIRST writer wins. The cross-file pass runs BEFORE the per-file one inside a `--fix` pass and
@@ -1779,12 +1825,14 @@ private class RenameRefusal {
 		if (decl.mods.contains('public')) return PUBLIC_MEMBER;
 		if (index == null) return NO_INDEX;
 		// A METHOD carries two hazards no field has. An `override` binds the name to the
-		// SUPERTYPE's declaration, so renaming the override alone orphans it. And an
-		// `implicitlyReachable` member - one carrying metadata, which a macro / `@:keep` /
-		// framework can reach by NAME - has references no identifier-level completeness proof
-		// sees. Both are refusals; the inherited-member and confinement proofs cover the rest.
+		// SUPERTYPE's declaration, so renaming the override alone orphans it. And a member with
+		// an `implicitReach` is reached without an identifier naming it, through references no
+		// identifier-level completeness proof sees - by WHICH mechanism is what `implicitReach`
+		// names and this refusal repeats, rather than claiming metadata for all five. Both are
+		// refusals; the inherited-member and confinement proofs cover the rest.
 		if (category == NamingCategory.Method && decl.mods.contains('override')) return OVERRIDE;
-		if (category == NamingCategory.Method && decl.implicitlyReachable == true) return IMPLICITLY_REACHABLE;
+		final reach: Null<ImplicitReach> = decl.implicitReach;
+		if (category == NamingCategory.Method && reach != null) return implicitReach(reach);
 		final owner: Null<String> = decl.enclosingType;
 		if (owner == null) return NO_OWNER;
 		// Cross-file reflection guard: a private member reached from ANOTHER file by a

@@ -569,7 +569,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	}
 
 	/**
-	 * An `implicitlyReachable` member — one carrying metadata a macro / `@:keep` / framework can
+	 * A member with an `implicitReach` — here one carrying metadata a macro / `@:keep` / framework can
 	 * reach by NAME — has references no identifier-level completeness proof sees.
 	 */
 	public function testCrossFileFixRefusesImplicitlyReachablePublicMethod(): Void {
@@ -580,7 +580,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	/**
 	 * The same refusal when a conditional-compilation region sits between the annotation and the
 	 * member — the cross-version `extern` idiom. The projection's run walk crosses that seam, so the
-	 * CROSS-FILE arm reads the member as `implicitlyReachable` exactly like its region-free twin
+	 * CROSS-FILE arm reads the member as annotation-reached exactly like its region-free twin
 	 * above; before it did, this rename committed.
 	 */
 	public function testCrossFileFixRefusesImplicitlyReachableMethodBehindConditional(): Void {

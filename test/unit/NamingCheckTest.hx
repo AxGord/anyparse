@@ -411,6 +411,70 @@ class NamingCheckTest extends NamingCheckTestBase {
 	}
 
 	/**
+	 * `MethodNameCheck.checkClassType` returns on `d.flags.contains(HInterface)` before it reaches a
+	 * field, so to checkstyle an interface declares no method names at all — and a finding this
+	 * adapter labels `MethodName` claims to be that check's, which for an interface method it is not.
+	 *
+	 * ONE-VARIABLE matrix: the same name, the same rule, the same regex, only the enclosing type's
+	 * kind differing. `HInterface` is a `ClassFlag` exactly as `HExtern` is, read off the same
+	 * `d.flags` of the same arm, so it travels the selector machinery `EXTERN_MOD` opened rather than
+	 * a type KIND on `NamedDecl`.
+	 */
+	public function testACheckstyleMethodRuleSkipsAnInterfaceAndNotAClass(): Void {
+		final iface: Array<Violation> = violations('interface I {\n\tfunction Bad_Method():Void;\n}', externAwarePolicy(true));
+		final klass: Array<Violation> = violations('class C {\n\tpublic function Bad_Method():Void {}\n}', externAwarePolicy(true));
+		Assert.equals(0, iface.length);
+		Assert.equals(1, klass.length);
+		Assert.isTrue(klass[0].message.contains("'Bad_Method'"));
+	}
+
+	/**
+	 * The skip is `MethodName`'s ALONE. `MemberNameCheck` and `ConstantNameCheck` have no interface
+	 * arm — their `checkClassType` asks only about `HExtern` — so an interface's PROPERTIES stay
+	 * governed, and a gate written as "skip interfaces" rather than as this one rule's `forbidMods`
+	 * would have taken them with it.
+	 */
+	public function testAnInterfacePropertyIsStillAMemberName(): Void {
+		final vs: Array<Violation> = violations(
+			'interface I {\n\tvar Bad_Prop(get, set):Int;\n\tfunction Bad_Method():Void;\n}', externAwarePolicy(true)
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'Bad_Prop'"));
+	}
+
+	/**
+	 * The STATED BOUNDARY of `INTERFACE_MOD`, pinned so it is read rather than rediscovered.
+	 *
+	 * A member inside a `#if` region has the `Conditional` as its PARENT, so the conferral - the same
+	 * `parent.kind == 'InterfaceDecl'` test that gives an interface member its unwritten `public` -
+	 * does not reach it, and the finding this rule means to drop survives there. Closing it means
+	 * threading the enclosing type down the walk as `enclosingExtern` is threaded, which would move
+	 * the `public` conferral with it.
+	 */
+	public function testAnInterfaceMethodInsideAConditionalIsStillReported(): Void {
+		final vs: Array<Violation> = violations(
+			'interface I {\n\t#if js\n\tfunction Bad_Method():Void;\n\t#end\n}', externAwarePolicy(true)
+		);
+		Assert.equals(1, vs.length);
+	}
+
+	/**
+	 * The BUILT-IN convention keeps governing an interface method, and that divergence is the point.
+	 * `ignoreExtern` reached `defaults()` because an extern member's name is a FOREIGN contract and a
+	 * rename of it is silently wrong; an interface method's name is the project's own, and the rename
+	 * is complete (measured: declaration, every implementor and every call site, or a refusal). What
+	 * checkstyle's skip protects is FIDELITY to a `checkstyle.json` - a label naming a check whose
+	 * author excluded this declaration - and the built-in convention has no `checkstyle.json` to be
+	 * faithful to.
+	 */
+	public function testTheBuiltInConventionStillGovernsAnInterfaceMethod(): Void {
+		final vs: Array<Violation> = violations('interface I {\n\tfunction _badMethod():Void;\n}');
+		// One assertion, exact and total: pushing `INTERFACE_MOD` into `defaults()` empties `vs`, and
+		// a length check followed by `vs[0].message` would report that as a null dereference.
+		Assert.equals('camelCase method: \'_badMethod\'', vs.length == 1 ? vs[0].message : '<${vs.length} finding(s)>');
+	}
+
+	/**
 	 * `policyFor` walked up to the project `checkstyle.json`, read it and rebuilt its rules for EVERY
 	 * file — 851 disk walks, 851 JSON parses and 851 policy builds for ONE config on the Pony scope.
 	 * The memo is keyed by DIRECTORY because `ConfigFinder.findUp` walks up from a file's own

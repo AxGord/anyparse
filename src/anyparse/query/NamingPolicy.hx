@@ -32,6 +32,39 @@ enum abstract NamingCategory(String) {
 }
 
 /**
+ * WHICH mechanism reaches a member without an in-source identifier naming it — the answer
+ * `NamedDecl.implicitReach` carries, and the reason a rename of that member is refused.
+ *
+ * It was a `Bool`, and five disjoint mechanisms reached every consumer as one `true`. A yes/no
+ * is all the unused checks need, but the naming autofix WRITES a decline sentence from it, and
+ * one sentence over five mechanisms is a sentence that is false for four of them: a
+ * `private function new()` declined with `the member carries metadata` and carried none. Same
+ * defect `13177bff` split out of the ledger, one level down and inside a single sentence.
+ *
+ * Neutral, like `NamingCategory`: a grammar's projection decides which mechanism applies in ITS
+ * language, and the check only maps the answer to a sentence. Backed by `String` for readable
+ * debug; compared by value.
+ */
+enum abstract ImplicitReach(String) {
+
+	/** The type's constructor — reached by every `new Owner(…)` and by no identifier spelling it. */
+	final Constructor = 'constructor';
+
+	/** A magic name the runtime itself calls (`__init__`), not a style choice. */
+	final MagicName = 'magicName';
+
+	/** A property accessor (`get_x` / `set_x`), invoked through the property's own `(get, set)`. */
+	final Accessor = 'accessor';
+
+	/** An annotated member a macro / `@:keep` / framework may reach by NAME. */
+	final Annotation = 'annotation';
+
+	/** A `static final` bound to a type reference — a `Class<T>` registry entry resolved by name. */
+	final TypeRegistry = 'typeRegistry';
+
+}
+
+/**
  * One naming rule: a `format` every declaration of `category` (further
  * narrowed by `requireMods` / `forbidMods`) must match. `requireMods` are
  * neutral modifier strings (`'public'`, `'private'`, `'static'`, …) that must
@@ -90,13 +123,15 @@ typedef NamedDecl = {
 	var enclosingType: Null<String>;
 
 	/**
-	 * True when the member can be reached without an in-source identifier
-	 * reference — a constructor, a property accessor invoked via (get, set), or an
-	 * annotation-bearing member a framework / macro / @:keep may reference. The
-	 * unused checks must not flag such a member; absent for non-members. Set by the
-	 * grammar's projection, as the reachability rules are language-specific.
+	 * WHICH mechanism reaches this member without an in-source identifier naming it, or null when
+	 * none does — a constructor, a magic name, a property accessor invoked via `(get, set)`, an
+	 * annotation-bearing member a framework / macro / `@:keep` may reference, or a type-registry
+	 * constant. The unused checks must not flag such a member and ask only whether this is null;
+	 * the naming autofix writes its decline sentence from WHICH one, which is why the field names
+	 * the mechanism rather than answering `true`. Absent for non-members. Set by the grammar's
+	 * projection, as the reachability rules are language-specific.
 	 */
-	@:optional var implicitlyReachable: Bool;
+	@:optional var implicitReach: Null<ImplicitReach>;
 
 	/**
 	 * True when the autofix must not mechanically rename this declaration even
@@ -158,7 +193,7 @@ interface NamingSupport {
 	 * Whether `decl` is reachable through a framework or macro rather than an
 	 * in-source reference, given the cross-file `index` (e.g. a utest `test*` method
 	 * whose class transitively extends `Test`). Distinct from the per-decl,
-	 * index-free `NamedDecl.implicitlyReachable`.
+	 * index-free `NamedDecl.implicitReach`.
 	 */
 	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool;
 
