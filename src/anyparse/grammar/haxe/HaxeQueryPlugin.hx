@@ -828,7 +828,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// STRUCTURAL leading-run walk `unused-private` uses asks the grammar rather than spelling
 			// them itself. `BuildMacroMetaSeamTest` fails if the two lists ever disagree.
 			typeBuildMacroMetaNames: ['@:build', '@:autoBuild', '@:genericBuild'],
+			// The one of those three that builds SUBTYPES rather than its carrier. `SymbolIndex` needs the
+			// split because it reads the flags while climbing a chain upward; the file-scoped text scan does
+			// not and keeps the union.
+			descendantBuildMacroMetaNames: ['@:autoBuild'],
 			retainedDeclMetaName: '@:keep',
+			// `@:rtti` emits a `haxe.rtti.Rtti` description keyed by member NAME — a separate question from
+			// `@:keep`, which only keeps the member alive.
+			reflectedDeclMetaName: '@:rtti',
+			// `@:access(T)` lets the CARRIER read T's privates. The mirror tag `@:allow(T)`, which lets T
+			// read the carrier's, is a different question and still spelled by its two readers.
+			takesPrivateAccessMetaName: '@:access',
+			forwardingDeclMetaName: '@:forward',
+			implicitConstructorDeclMetaName: '@:structInit',
 			// `@:nativeGen` is what makes a cs/java class a plain native type foreign code holds
 			// directly — the Unity MonoBehaviour idiom. It is the marker, not `extends MonoBehaviour`:
 			// Pony declares `@:nativeGen class Tooltip` with no superclass at all, and

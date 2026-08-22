@@ -136,6 +136,11 @@ final class SymbolIndexBuilder {
 		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
 	}
 
+	/** Whether `pendingMeta` holds the grammar's (optional) tag `name` — false when the grammar names none. */
+	private static inline function carriesMeta(pendingMeta: Array<String>, name: Null<String>): Bool {
+		return name != null && pendingMeta.contains(name);
+	}
+
 	/**
 	 * The MODULE portion of a dotted import path: the segments up to and
 	 * INCLUDING the first upper-case-initial segment (packages are
@@ -203,13 +208,13 @@ final class SymbolIndexBuilder {
 					isAnonStruct: typeDecl.kind == TYPEDEF_DECL_KIND && node.children.exists(c -> c.kind == ANON_KIND),
 					aliasTargetNominal: aliasPath == null ? null : simpleName(aliasPath),
 					aliasTargetRaw: aliasPath,
-					hasRtti: pendingMeta.contains('@:rtti'),
-					hasBuild: pendingMeta.contains('@:build'),
-					hasAutoBuild: pendingMeta.contains('@:autoBuild'),
-					hasKeep: pendingMeta.contains('@:keep'),
+					hasRtti: carriesMeta(pendingMeta, shape.reflectedDeclMetaName),
+					hasBuild: carriesOwnBuildMacro(pendingMeta, shape),
+					hasAutoBuild: carriesAnyMeta(pendingMeta, shape.descendantBuildMacroMetaNames),
+					hasKeep: carriesMeta(pendingMeta, shape.retainedDeclMetaName),
 					members: collectMembers(node, source, accessors, writeAccessors, returnTypes, typeSources, memberSeams),
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
-					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta) : null
+					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null
 				});
 				pendingMeta = [];
 				pendingExtern = false;
@@ -292,7 +297,7 @@ final class SymbolIndexBuilder {
 			module: module,
 			imports: imports,
 			types: types,
-			accessGrants: collectAccessGrants(tree)
+			accessGrants: collectAccessGrants(tree, shape)
 		};
 	}
 
@@ -322,16 +327,42 @@ final class SymbolIndexBuilder {
 		return out;
 	}
 
-	/** Simple names of every type referenced in an `@:access(...)` metadata in `tree`. */
-	private static function collectAccessGrants(tree: QueryNode): Array<String> {
+	/**
+	 * Simple names of every type this file TAKES private access to — the arguments of every
+	 * `RefShape.takesPrivateAccessMetaName` annotation in `tree` (Haxe `@:access(pkg.Type)`). Empty
+	 * when the grammar names no such tag. The opposite direction (`grantsPrivateAccessMetaName`) is
+	 * NOT collected: its arguments are unenumerable by construction, so its consumers read only
+	 * whether it is present at all.
+	 */
+	private static function collectAccessGrants(tree: QueryNode, shape: RefShape): Array<String> {
 		final out: Array<String> = [];
+		final tag: Null<String> = shape.takesPrivateAccessMetaName;
+		if (tag == null) return out;
 		collectInto(tree, n -> {
-			if (n.kind == 'MetaCall' && n.name == '@:access') for (c in n.children) {
+			if (n.kind == 'MetaCall' && n.name == tag) for (c in n.children) {
 				final nm: Null<String> = c.name;
 				if (nm != null) out.push(simpleName(nm));
 			}
 		});
 		return out;
+	}
+
+	/** Whether `pendingMeta` holds any of the grammar's (optional) tag list `names`. */
+	private static function carriesAnyMeta(pendingMeta: Array<String>, names: Null<Array<String>>): Bool {
+		return (names ?? []).exists(name -> pendingMeta.contains(name));
+	}
+
+	/**
+	 * Whether `pendingMeta` holds a build-macro tag that rewrites the CARRIER's own member set —
+	 * `typeBuildMacroMetaNames` minus the descendant-ward `descendantBuildMacroMetaNames` (Haxe:
+	 * `@:build` / `@:genericBuild`, but not `@:autoBuild`, which builds subtypes). The two flags are
+	 * read while climbing a chain UPWARD, where the union a file-scoped text scan uses would answer
+	 * the wrong question; a tag the grammar puts in the union and nowhere else counts as own-ward,
+	 * the direction that can only make a consumer bail out more often.
+	 */
+	private static function carriesOwnBuildMacro(pendingMeta: Array<String>, shape: RefShape): Bool {
+		final descendant: Array<String> = shape.descendantBuildMacroMetaNames ?? [];
+		return (shape.typeBuildMacroMetaNames ?? []).exists(name -> !descendant.contains(name) && pendingMeta.contains(name));
 	}
 
 	/** Visit `node` and every descendant, applying `visit` to each. */
@@ -499,13 +530,16 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * Whether the abstract rooted at `node` may rebind its underlying `this`: it carries a
-	 * `@:build` / `@:autoBuild` (any macro-generated member is invisible to the scan, so treat it as
-	 * possibly-rebinding) or writes `this` in a member other than the constructor. `pendingMeta` holds
-	 * the module-level meta names accumulated before the decl.
+	 * Whether the abstract rooted at `node` may rebind its underlying `this`: it carries any
+	 * build-macro tag the grammar names (any macro-generated member is invisible to the scan, so
+	 * treat it as possibly-rebinding) or writes `this` in a member other than the constructor.
+	 * `pendingMeta` holds the module-level meta names accumulated before the decl. The DIRECTION
+	 * split the two index flags make is deliberately not made here: this is the conservative union,
+	 * the same one `MemberWriteScan.carriesBuildMacro` matches, and an over-declined abstract only
+	 * keeps the looser answer.
 	 */
 	private static function abstractRebindsThisScan(node: QueryNode, shape: RefShape, pendingMeta: Array<String>): Bool {
-		return pendingMeta.contains('@:build') || pendingMeta.contains('@:autoBuild') || memberRebindsThis(node, shape);
+		return carriesAnyMeta(pendingMeta, shape.typeBuildMacroMetaNames) || memberRebindsThis(node, shape);
 	}
 
 	/**
@@ -524,12 +558,12 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * The SIMPLE underlying-type name of a `@:forward` abstract `node` — its first `Named` child, last
-	 * dot-segment, type parameters stripped — or null when `pendingMeta` carries no `@:forward` or the
-	 * decl has no underlying.
+	 * The SIMPLE underlying-type name of a FORWARDING abstract `node` — its first `Named` child, last
+	 * dot-segment, type parameters stripped — or null when `pendingMeta` carries no
+	 * `RefShape.forwardingDeclMetaName` (Haxe `@:forward`) or the decl has no underlying.
 	 */
-	private static function forwardUnderlyingOf(node: QueryNode, pendingMeta: Array<String>): Null<String> {
-		if (!pendingMeta.contains('@:forward')) return null;
+	private static function forwardUnderlyingOf(node: QueryNode, pendingMeta: Array<String>, shape: RefShape): Null<String> {
+		if (!carriesMeta(pendingMeta, shape.forwardingDeclMetaName)) return null;
 		final named: Null<QueryNode> = node.children.find(c -> c.kind == 'Named');
 		if (named == null) return null;
 		final raw: Null<String> = named.name;

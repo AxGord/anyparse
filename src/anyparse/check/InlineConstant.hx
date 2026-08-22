@@ -196,12 +196,6 @@ final class InlineConstant implements Check {
 	/** The `var` keyword a `static inline var` host span starts at - swapped to `final`. */
 	private static inline final VAR_KEYWORD: String = 'var';
 
-	/** The meta that pins a field in place (reflection / external tooling); such a field is never inlined. */
-	private static inline final KEEP_META: String = '@:keep';
-
-	/** The meta that enables runtime type info (`haxe.rtti.Rtti`) for a type; a field it exposes is never inlined. */
-	private static inline final RTTI_META: String = '@:rtti';
-
 	public function new() {}
 
 	public function id(): String {
@@ -280,12 +274,15 @@ final class InlineConstant implements Check {
 	}
 
 	/**
-	 * Whether `meta` is an annotation that pins a member in place for reflection / external tooling
-	 * (`@:keep` or `@:rtti`) — a field it covers is never inlined. Applies to a field-level meta and,
-	 * via `walk`, to a class-level one covering every member.
+	 * Whether `meta` is an annotation that pins a member in place — the grammar's RETAINED tag
+	 * (nothing may delete this declaration) or its REFLECTED one (its member names are runtime data).
+	 * Two questions with one answer here: inlining moves the value out of the field either way. A
+	 * field it covers is never inlined; applies to a field-level meta and, via `walk`, to a
+	 * class-level one covering every member. Both tags come from the grammar, so this check spells no
+	 * Haxe metadata of its own.
 	 */
-	private static inline function isPinMeta(meta: Null<String>): Bool {
-		return meta == KEEP_META || meta == RTTI_META;
+	private static inline function isPinMeta(meta: Null<String>, seams: ConstantFieldSeams): Bool {
+		return meta != null && (meta == seams.retainedMetaName || meta == seams.reflectedMetaName);
 	}
 
 	/** Whether `c` can start an identifier — a letter or `_`. */
@@ -327,7 +324,7 @@ final class InlineConstant implements Check {
 		var classNative: Bool = inheritedNative;
 		for (child in node.children) {
 			if (seams.metaKinds.contains(child.kind)) {
-				classPinned = classPinned || isPinMeta(child.name);
+				classPinned = classPinned || isPinMeta(child.name, seams);
 				classNative = classNative || seams.nativeInteropMetaName != null && child.name == seams.nativeInteropMetaName;
 			} else {
 				if (seams.containers.contains(child.kind))
@@ -360,7 +357,7 @@ final class InlineConstant implements Check {
 			else if (seams.visibility.contains(mod.kind))
 				exported = exported || ConstantFieldScan.isExportedVisibility(source, mod, seams.defaultVis);
 			else if (seams.metaKinds.contains(mod.kind))
-				pinned = pinned || isPinMeta(mod.name);
+				pinned = pinned || isPinMeta(mod.name, seams);
 		}
 		return {
 			isStatic: isStatic,
