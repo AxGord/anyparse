@@ -108,9 +108,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class OrphanAccessor implements Check implements DefaultOff {
 
-	/** The metadata that pins a member against removal — its uses are not all in the source. */
-	private static inline final KEEP_META: String = '@:keep';
-
 	/**
 	 * `<file>#<from>:<to>` of every flagged accessor whose deletion `run` PROVED safe. The
 	 * deletion gates (chain resolution, project-wide call scan, skip-parse completeness) are all
@@ -145,7 +142,8 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			referenced: referencedAccessorNames(files, plugin),
 			reflected: reflection.whole,
 			fragments: reflection.fragments,
-			scanComplete: index.skippedFiles().length == 0
+			scanComplete: index.skippedFiles().length == 0,
+			retainedMeta: plugin.refShape().retainedDeclMetaName
 		};
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -207,7 +205,8 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			// pairing with its instance property, and produce a finding whose fix DELETES a live
 			// accessor. See `MemberBranchScan.joinRuns`.
 			if (!certain || !isMethod || name == null || span == null) return;
-			final memberKept: Bool = runCarries(run, KEEP_META, true);
+			final retained: Null<String> = ctx.retainedMeta;
+			final memberKept: Bool = retained != null && runCarries(run, retained, true);
 			final isStatic: Bool = runCarries(run, 'Static', false);
 			final target: Null<{ prop: String, getter: Bool }> = accessorTargetOf(name);
 			if (target == null) return;
@@ -487,5 +486,13 @@ private typedef Ctx = {
 
 	/** Whether every report file parsed, so the two scans above saw the whole scope. */
 	var scanComplete: Bool;
+
+	/**
+	 * `RefShape.retainedDeclMetaName` — the tag that pins a member against removal, because its
+	 * uses are not all in the source. Carried here rather than read at the member walk so the
+	 * grammar is asked once per run; null when the grammar names no such tag, and then no member
+	 * is pinned by annotation (the type-level `hasKeep` flag still applies).
+	 */
+	var retainedMeta: Null<String>;
 
 }

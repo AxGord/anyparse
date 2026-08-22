@@ -134,15 +134,6 @@ final class StaticConstant implements Check implements DefaultOff {
 	/** The `final` keyword the member host span starts at — `static ` is inserted immediately before it. */
 	private static inline final FINAL_KEYWORD: String = 'final';
 
-	/** The meta that pins a field in place for reflection / external tooling; such a field is never promoted. */
-	private static inline final KEEP_META: String = '@:keep';
-
-	/** The meta that enables runtime type info for a type; a field it exposes is never promoted. */
-	private static inline final RTTI_META: String = '@:rtti';
-
-	/** The meta that turns an initialized `final` field into an OPTIONAL CONSTRUCTOR ARGUMENT — promoting it would delete that argument. */
-	private static inline final STRUCT_INIT_META: String = '@:structInit';
-
 	public function new() {}
 
 	public function id(): String {
@@ -199,9 +190,16 @@ final class StaticConstant implements Check implements DefaultOff {
 		return edits;
 	}
 
-	/** Whether `meta` blocks the promotion — reflection pins (`@:keep` / `@:rtti`) and `@:structInit`. */
-	private static inline function isBlockingMeta(meta: Null<String>): Bool {
-		return meta == KEEP_META || meta == RTTI_META || meta == STRUCT_INIT_META;
+	/**
+	 * Whether `meta` blocks the promotion. Three grammar-named tags, three separate reasons: the
+	 * declaration is RETAINED (something no scan models reaches its members), it is REFLECTED (its
+	 * member names are runtime data), or its fields ARE its constructor's parameters — and moving a
+	 * field off the instance breaks all three. The names come from the grammar, so this check spells
+	 * no Haxe metadata of its own.
+	 */
+	private static inline function isBlockingMeta(meta: Null<String>, seams: ConstantFieldSeams): Bool {
+		return meta != null
+			&& (meta == seams.retainedMetaName || meta == seams.reflectedMetaName || meta == seams.implicitConstructorMetaName);
 	}
 
 	/**
@@ -215,7 +213,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		var blocked: Bool = inheritedBlock;
 		for (child in node.children) {
 			if (ctx.seams.metaKinds.contains(child.kind))
-				blocked = blocked || isBlockingMeta(child.name);
+				blocked = blocked || isBlockingMeta(child.name, ctx.seams);
 			else {
 				if (ctx.seams.classLikeContainers.contains(child.kind) && !blocked) scanContainer(child, ctx);
 				walk(child, ctx, blocked);
@@ -240,7 +238,7 @@ final class StaticConstant implements Check implements DefaultOff {
 				else if (seams.visibility.contains(mod.kind))
 					blocked = blocked || ConstantFieldScan.isExportedVisibility(ctx.source, mod, seams.defaultVis);
 				else if (seams.metaKinds.contains(mod.kind))
-					blocked = blocked || isBlockingMeta(mod.name);
+					blocked = blocked || isBlockingMeta(mod.name, seams);
 			}
 			if (!blocked) consider(member, container, ctx);
 		});

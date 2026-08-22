@@ -56,6 +56,9 @@ final class ConstantFieldScan {
 			identKind: shape.identKind,
 			metaKinds: plugin.metaShape().metaKinds,
 			nativeInteropMetaName: shape.nativeInteropDeclMetaName,
+			retainedMetaName: shape.retainedDeclMetaName,
+			reflectedMetaName: shape.reflectedDeclMetaName,
+			implicitConstructorMetaName: shape.implicitConstructorDeclMetaName,
 			literalKinds: literalKinds,
 			stringLiteralKinds: shape.stringLiteralKinds ?? [],
 			numericKinds: shape.numericLiteralKinds ?? [],
@@ -132,6 +135,28 @@ typedef ConstantFieldSeams = {
 
 	/** `RefShape.nativeInteropDeclMetaName` — read by `inline-constant` alone; null when the grammar leaves it unset. */
 	final nativeInteropMetaName: Null<String>;
+
+	/**
+	 * `RefShape.retainedDeclMetaName` — the declaration is pinned against removal, so machinery no
+	 * source scan models reaches its members. Both checks decline it.
+	 */
+	final retainedMetaName: Null<String>;
+
+	/**
+	 * `RefShape.reflectedDeclMetaName` — the declaration's member NAMES are runtime data. Both checks
+	 * decline it, for a different reason than `retainedMetaName`: retention keeps the member, this
+	 * keeps its NAME meaningful, and both rewrites move where the value lives.
+	 */
+	final reflectedMetaName: Null<String>;
+
+	/**
+	 * `RefShape.implicitConstructorDeclMetaName` — the declaration's fields ARE its constructor's
+	 * parameters. Read by `static-constant` alone: moving a field off the instance deletes an
+	 * argument every construction site is written against. `inline-constant` leaves the field where
+	 * it is, so it takes no such gate.
+	 */
+	final implicitConstructorMetaName: Null<String>;
+
 	final literalKinds: Array<String>;
 	final stringLiteralKinds: Array<String>;
 	final numericKinds: Array<String>;

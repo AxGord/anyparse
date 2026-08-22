@@ -1154,6 +1154,67 @@ typedef RefShape = {
 	@:optional var nativeInteropDeclMetaName: String;
 
 	/**
+	 * The metadata tags whose presence on a TYPE declaration means a macro generates the members of
+	 * that type's DESCENDANTS rather than its own (Haxe `@:autoBuild`, which runs on every subclass
+	 * and every implementor). A subset of `typeBuildMacroMetaNames`, and the line an INDEX has to
+	 * draw where a file-scoped text scan does not: a per-type flag is read while climbing a chain
+	 * UPWARD, so "a macro rewrote MY members" and "a macro rewrote my descendants' members" have to
+	 * be two flags or the climb answers the wrong one. `SymbolIndexBuilder` derives both from these
+	 * two lists — the own-ward set being `typeBuildMacroMetaNames` minus this one — so a tag added
+	 * to the union and to nothing else lands on the own-ward side, which can only make a consumer
+	 * more conservative. Optional; unset means every build-macro tag is own-ward.
+	 */
+	@:optional var descendantBuildMacroMetaNames: Array<String>;
+
+	/**
+	 * The metadata tag that makes a type's members reachable at RUNTIME BY NAME through reflected
+	 * type information (Haxe `@:rtti`, which emits the `haxe.rtti.Rtti` description a serializer
+	 * reads back). A DIFFERENT question from `retainedDeclMetaName`, and the two are easy to fold
+	 * together because both end in "leave this member alone": retention says a declaration must
+	 * survive dead-code elimination, this says its member NAMES are data some consumer looks up. So
+	 * a rewrite that keeps the member and merely changes its name, its storage or where its value
+	 * lives is unsound here and sound there. `inline-constant` and `static-constant` decline such a
+	 * type's fields; `SymbolIndex.transitivelyCarriesRtti` propagates it down a hierarchy for the
+	 * naming autofix. Optional; unset → no declaration is reflected.
+	 */
+	@:optional var reflectedDeclMetaName: String;
+
+	/**
+	 * The metadata tag by which a declaration TAKES access to another type's private members (Haxe
+	 * `@:access(pkg.Type)`), naming that type in its arguments. Privacy waivers are DIRECTED, and this
+	 * is the reaching-IN half: the carrier gets to read what the named type keeps private, so a scan
+	 * asking which files legitimately touch a private member reads the names out of it.
+	 * `SymbolIndexBuilder` collects them per file into `FileInfo.accessGrants`.
+	 *
+	 * The opposite direction — a declaration handing its OWN privates to another type (Haxe
+	 * `@:allow`) — is deliberately NOT seamed here yet. It is a different question with a different
+	 * consumer shape: its arguments are unenumerable, so its two readers (`Naming` and
+	 * `RefactorSupport.privateMemberScanIsSound`) only ask whether it is PRESENT, and reaching them
+	 * means threading a `RefShape` through predicates called once per member. Optional; unset → a
+	 * declaration takes no access it does not already have.
+	 */
+	@:optional var takesPrivateAccessMetaName: String;
+
+	/**
+	 * The metadata tag that makes a wrapper type FORWARD member access to the type it wraps (Haxe
+	 * `@:forward` on an abstract, which republishes the underlying type's members as the wrapper's
+	 * own). A member reached on such a type is declared by neither the wrapper nor anything the
+	 * wrapper's own body holds, so a resolution index has to follow the underlying type instead of
+	 * answering "not declared". Optional; unset → a declaration forwards nothing.
+	 */
+	@:optional var forwardingDeclMetaName: String;
+
+	/**
+	 * The metadata tag that turns a type's FIELDS into its constructor's parameters (Haxe
+	 * `@:structInit`, which lets the type be built from an object literal, every initialized `final`
+	 * field becoming an OPTIONAL argument). The field declarations are then part of a signature every
+	 * construction site is written against, so moving one off the instance deletes an argument — a
+	 * question neither retention nor reflection asks, and the third gate `static-constant` needs.
+	 * Optional; unset → a field declaration is part of no constructor signature.
+	 */
+	@:optional var implicitConstructorDeclMetaName: String;
+
+	/**
 	 * How the grammar SPELLS an enum-abstract declaration — the emission seam
 	 * `prefer-enum-abstract`'s autofix writes through when it converts a constant-only
 	 * class into one. Unset (the default for every grammar that does not fill it) leaves

@@ -197,6 +197,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final shape: RefShape = plugin.refShape();
+		// The grammar's RETAINED tag (Haxe `@:keep`). Asked separately from the inline-neutral
+		// whitelist below it: that set is about what a body MEANS, this is about reachability.
+		final retained: Null<String> = shape.retainedDeclMetaName;
 		final trees: Array<{ file: String, tree: QueryNode, branch: MemberBranchSeams }> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -207,7 +210,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// names the reference-kind scan below must resolve, keeping its blocked sets small.
 		final candidateNames: Array<String> = [];
 		for (t in trees) for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, t.branch, (name, fn, mods, metas) -> {
-			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed) && !candidateNames.contains(name)) candidateNames.push(name);
+			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed, retained) && !candidateNames.contains(name))
+				candidateNames.push(name);
 		});
 		// Pass B: the reference-kind gate over the whole scope — a candidate name used as a VALUE
 		// (a method-value reference forbids inlining) or passed to `Reflect.*` as a string literal.
@@ -223,7 +227,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		for (t in trees) {
 			final metaBlocked: Array<QueryNode> = metaBlockedClasses(t.tree, t.branch);
 			for (cls in CheckScan.classBodies(t.tree)) if (!metaBlocked.contains(cls))
-				considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed, t.branch);
+				considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed, t.branch, retained);
 		}
 		return out;
 	}
@@ -405,7 +409,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	private static function considerClass(
 		out: Array<Violation>, cls: QueryNode, file: String, index: SymbolIndex, valueBlocked: Array<String>,
-		reflectBlocked: Array<String>, relaxed: Bool, branch: MemberBranchSeams
+		reflectBlocked: Array<String>, relaxed: Bool, branch: MemberBranchSeams, retained: Null<String>
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
@@ -421,7 +425,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		final subtypeMembers: Array<String> = index.hasSubtype(owner) ? index.subtypeMemberNames(owner) : [];
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
-			if (!isCandidateMethod(name, fn, mods, metas, relaxed)) return;
+			if (!isCandidateMethod(name, fn, mods, metas, relaxed, retained)) return;
 			if (valueBlocked.contains(name) || reflectBlocked.contains(name) || subtypeMembers.contains(name)) return;
 			// An abstract-superclass implementation carries no `override` (Haxe does
 			// not require it), so the modifier gate misses it — a resolvable
@@ -474,8 +478,10 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	/**
 	 * Whether `name` / `fn` is an inline candidate: a non-constructor method with a benefit-class body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, not self-recursive (a bare `name` / `this.name` in its body), and whose body is a benefit class (see `isBaseCandidateMethod`).
 	 */
-	private static function isCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, relaxed: Bool): Bool {
-		return isBaseCandidateMethod(name, fn, mods, metas) && (relaxed || !bodyHasNullSafetyRisk(fn));
+	private static function isCandidateMethod(
+		name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, relaxed: Bool, retained: Null<String>
+	): Bool {
+		return isBaseCandidateMethod(name, fn, mods, metas, retained) && (relaxed || !bodyHasNullSafetyRisk(fn));
 	}
 
 	/**
@@ -488,14 +494,17 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * and is never a candidate. `isCandidateMethod` layers the null-safety gate on top, unless
 	 * `relaxed` (the oracle path) drops it.
 	 */
-	private static function isBaseCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>): Bool {
+	private static function isBaseCandidateMethod(
+		name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, retained: Null<String>
+	): Bool {
 		if (isReservedMemberName(name)) return false;
 		if (
 			mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')
 			|| mods.contains('Extern')
 		)
 			return false;
-		if (metas.contains('@:keep') || metas.exists(m -> !inlineNeutralMeta(m))) return false;
+		if (retained != null && metas.contains(retained)) return false;
+		if (metas.exists(m -> !inlineNeutralMeta(m))) return false;
 		if (referencesSelf(fn, name)) return false;
 		if (isEmptyBody(fn)) return true;
 		final root: Null<QueryNode> = bodyRootExpr(fn);
