@@ -303,16 +303,19 @@ class JoinReturnCheckTest extends Test {
 	}
 
 	/**
-	 * A REdeclaration inside ONE branch is a genuine same-scope collision and stays vetoed: the
-	 * first declaration carries two references and the second none, so neither is sole-referenced.
-	 * The branch-local frame must not turn a within-branch shadow into a join.
+	 * A REdeclaration inside ONE branch JOINS: each declaration owns the reads between it and the
+	 * next one, so `var x:Int = h(); return x;` is a sole-referenced pair exactly as it would be
+	 * without the shadow above it, and dropping the declaration leaves the shadowed one alone.
 	 *
-	 * CONTROL, not a discrimination: it holds with the branch frame reverted too. It pins that
-	 * relaxing the SIBLING-branch case did not relax the same-branch one.
+	 * It read as vetoed while `ScopeFrame` answered first-wins for a re-declared name: `use(x)`,
+	 * which the second declaration cannot reach, counted as its second reference.
 	 */
-	public function testSameBranchRedeclarationNotFlagged(): Void {
+	public function testSameBranchRedeclarationJoins(): Void {
 		final body: String = '#if A\n\t\tvar x:Int = g();\n\t\tuse(x);\n\t\tvar x:Int = h();\n\t\treturn x;\n\t\t#end';
-		Assert.equals(0, violations(wrapRet('Int', body)).length);
+		final src: String = wrapRet('Int', body);
+		Assert.equals(1, violations(src).length);
+		Assert.stringContains('var x:Int = g();', applyFixOnce(src));
+		Assert.stringContains('return h();', applyFixOnce(src));
 	}
 
 	/**

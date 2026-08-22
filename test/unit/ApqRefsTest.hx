@@ -1038,6 +1038,46 @@ class ApqRefsTest extends Test {
 	}
 
 	/**
+	 * A local RE-declared in ONE block takes over from its own position. Re-declaring a local in
+	 * the same block is legal Haxe and the second declaration wins from there on — measured against
+	 * 4.3.7: `var x:Int = 1; var x:String = null; x.length` typechecks, which it could not if the
+	 * read still carried `Int`.
+	 *
+	 * The frame kept the FIRST binding per name, so every read past the shadow answered the
+	 * earlier declaration's TYPE. openfl's `AMF3Reader.readObjectVector` is the specimen: three
+	 * reads of `header:AMF3ObjectHeader = null` resolved to the `var header:Int = readInt()` above
+	 * them, which is a non-null proof handed to nine deleting checks.
+	 */
+	public function testASecondDeclarationOfOneNameTakesOverFromItsPosition(): Void {
+		final source: String = 'class X { function f():Void { var h:Int = 1; use(h); var h:String = null; use(h); } }';
+		final hits: Array<RefHit> = findIn(source, 'h');
+		final decls: Array<RefHit> = hits.filter(x -> x.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(x -> x.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'two declarations expected - got ${describe(hits)}');
+		Assert.equals(2, reads.length, 'two reads expected - got ${describe(hits)}');
+		if (decls.length != 2 || reads.length != 2) return;
+		Assert.equals(source.indexOf('var h:String'), decls[1].span.from, 'the shadow is the second decl - got ${describe(hits)}');
+		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from ?? -1, 'the read BEFORE it keeps the first - got ${describe(hits)}');
+		Assert.equals(decls[1].span.from, reads[1].bindingSpan?.from ?? -1, 'the read AFTER it takes the second - got ${describe(hits)}');
+	}
+
+	/**
+	 * The take-over is per FRAME: a re-declaration inside a nested block dies with the block, so a
+	 * read after it answers the outer declaration again.
+	 *
+	 * CONTROL, not a discrimination — it holds with the frame reverted to first-wins too. It guards
+	 * the opposite mistake, letting the LAST declaration seen anywhere win outward.
+	 */
+	public function testARedeclarationInANestedBlockDoesNotEscapeIt(): Void {
+		final source: String = 'class X { function f(c:Bool):Void { var h:Int = 1; if (c) { var h:String = null; use(h); } use(h); } }';
+		final hits: Array<RefHit> = findIn(source, 'h');
+		final trailing: Null<RefHit> = hits.find(x -> x.kind == RefKind.Read && x.span.from > source.lastIndexOf('use(h)') - 1);
+		Assert.notNull(trailing, 'trailing read expected - got ${describe(hits)}');
+		if (trailing != null)
+			Assert.equals(source.indexOf('var h:Int'), trailing.bindingSpan?.from ?? -1, 'binds outward - got ${describe(hits)}');
+	}
+
+	/**
 	 * Two sibling local functions declared with `keyword` bind their same-named parameters
 	 * separately. Shared by the plain and the `inline` form: the grammar gives them different
 	 * ctors (`LocalFnStmt` / `LocalInlineFnStmt`) but identical binding semantics, and every

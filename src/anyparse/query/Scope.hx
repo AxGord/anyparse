@@ -69,10 +69,12 @@ final class ScopeStack {
 }
 
 /**
- * One lexical scope's bindings. Names that re-declare an already-
- * bound symbol in the same scope keep the FIRST binding (matches the
- * walker's pre-collect pass order — first seen wins). Cross-scope
- * shadowing is handled by `ScopeStack.resolveInnermost`, not here.
+ * One lexical scope's bindings. A name may be bound MORE THAN ONCE in one frame: a
+ * position-scoped frame re-declares it (`var x = 1; … var x = "s";` in one block is legal
+ * Haxe, and the second declaration takes over from its own position on — measured, `x.length`
+ * typechecks after it), while a hoisting frame can carry the same name on two mutually
+ * exclusive `#if` arms. `resolve` picks between them BY POSITION; cross-scope shadowing is
+ * handled by `ScopeStack.resolveInnermost`, not here.
  */
 @:nullSafety(Strict)
 final class ScopeFrame {
@@ -102,7 +104,8 @@ final class ScopeFrame {
 	 */
 	public final visibleFloor: Int;
 
-	private final _bindings: Map<String, ScopeBinding> = [];
+	/** Every binding of a name this frame declares, in pre-collect (source) order. */
+	private final _bindings: Map<String, Array<ScopeBinding>> = [];
 
 	public function new(node: QueryNode, positionScoped: Bool, visibleFloor: Int = 0) {
 		this.node = node;
@@ -114,18 +117,32 @@ final class ScopeFrame {
 	 * The declaration bound to `name` and visible at source offset `at`, or null when
 	 * this frame binds the name nowhere — or binds it only from a later offset, which is the
 	 * whole point of a position-scoped frame: the reference belongs to an enclosing binding.
+	 *
+	 * Of several bindings of one name the LATEST one already in effect wins: a re-declaration
+	 * shadows its predecessor from its own position on, so a read past it must not keep
+	 * answering the earlier declaration's type. Equal `visibleFrom` keeps the FIRST — a
+	 * hoisting frame records every binding at `0`, so a type body carrying one name on two
+	 * mutually exclusive `#if` arms answers exactly as it did before.
 	 */
-	public inline function resolve(name: String, at: Int): Null<ScopeBinding> {
-		final binding: Null<ScopeBinding> = _bindings[name];
-		return binding != null && at >= binding.visibleFrom ? binding : null;
+	public function resolve(name: String, at: Int): Null<ScopeBinding> {
+		final bindings: Null<Array<ScopeBinding>> = _bindings[name];
+		if (bindings == null) return null;
+		var best: Null<ScopeBinding> = null;
+		for (binding in bindings) {
+			final prev: Null<ScopeBinding> = best;
+			if (at >= binding.visibleFrom && (prev == null || binding.visibleFrom > prev.visibleFrom)) best = binding;
+		}
+		return best;
 	}
 
 	public function declare(name: String, node: QueryNode, span: Span, visibleFrom: Int): Void {
-		if (!_bindings.exists(name)) _bindings[name] = ({
+		final bindings: Array<ScopeBinding> = _bindings[name] ?? [];
+		_bindings[name] = bindings;
+		bindings.push(({
 			node: node,
 			span: span,
 			visibleFrom: visibleFrom < visibleFloor ? visibleFloor : visibleFrom
-		}: ScopeBinding);
+		}: ScopeBinding));
 	}
 
 }
