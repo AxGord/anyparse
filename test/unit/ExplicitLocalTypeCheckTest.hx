@@ -191,6 +191,51 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 		Assert.equals(0, violations('class Bad { function f() { var a = 5;').length);
 	}
 
+	/**
+	 * The arity proof may live OUTSIDE the report scope. `Widget` is declared only in the configured
+	 * RESOLUTION library, so the report index answers "no such name" and all the ladder used to have
+	 * left was the whitelist — a guess about always-in-scope stdlib names, which a project's own
+	 * libraries are not. The annotation copies the WRITTEN name a token away from the `new` that
+	 * already spells it, so it resolves identically and needs no import.
+	 */
+	public function testBareNewOfAResolutionScopedTypeIsNamed(): Void {
+		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [
+			{ file: 'lib/ext/Widget.hx', source: 'package ext;\n\nclass Widget {\n\tpublic function new() {}\n}' }
+		]).indexOf(':Widget') >= 0);
+	}
+
+	/** The discriminating half: a GENERIC library type stays report-only — a bare `:Widget` is a compile error. */
+	public function testBareNewOfAGenericResolutionScopedTypeStaysReportOnly(): Void {
+		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [
+			{ file: 'lib/ext/Widget.hx', source: 'package ext;\n\nclass Widget<T> {\n\tpublic function new() {}\n}' }
+		]).indexOf(':Widget') < 0);
+	}
+
+	/**
+	 * The REPORT index is asked FIRST, and its answer is final. A project type shadows a library's
+	 * same-named one, so the library's disagreeing arity must not dissolve the project's proof —
+	 * asking the union instead would leave `typeParamArityOf` null here and decline a sound
+	 * annotation.
+	 */
+	public function testReportScopeArityWinsOverADisagreeingResolutionScope(): Void {
+		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [
+			{ file: 'lib/ext/Widget.hx', source: 'package ext;\n\nclass Widget<T> {\n\tpublic function new() {}\n}' }
+		], [{ file: 'Widget.hx', source: 'class Widget {\n\tpublic function new() {}\n}' }]).indexOf(':Widget') >= 0);
+	}
+
+	/** And the same precedence the other way: a GENERIC project type declines even though the library's is not. */
+	public function testReportScopeGenericityWinsOverANonGenericResolutionScope(): Void {
+		Assert.isTrue(scopedFixText(
+			wrap('final w = new Widget();'),
+			[
+				{ file: 'lib/ext/Widget.hx', source: 'package ext;\n\nclass Widget {\n\tpublic function new() {}\n}' }
+			],
+			[
+				{ file: 'Widget.hx', source: 'class Widget<T> {\n\tpublic function new() {}\n}' }
+			]
+		).indexOf(':Widget') < 0);
+	}
+
 	public function testBareNewWhitelistedAmbiguousAritySkipped(): Void {
 		// StringBuf is whitelisted as non-generic, but the index disagrees on its arity
 		// (arity 0 vs arity 1). Ambiguity must never prove non-genericity: the whitelist

@@ -2,12 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -137,7 +136,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		// library (openfl's DisplayObject) declares the property slot a report-only index cannot
 		// see, and reading it as absent would flag every inherited accessor.
 		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final reflection: { whole: Array<String>, fragments: Array<String> } = stringContents(files, plugin);
+		final reflection: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final ctx: Ctx = {
 			referenced: referencedAccessorNames(files, plugin),
 			reflected: reflection.whole,
@@ -259,10 +258,10 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 */
 	private static function deletable(ctx: Ctx, kept: Bool, name: String): Bool {
 		// A LITERAL FRAGMENT of an interpolated string (`Reflect.field(o, 'get_$suffix')`) is only
-		// ever part of the runtime name, so containment is asked the other way round. Fragments
-		// shorter than an accessor prefix carry no intent and would block every deletion in scope.
+		// ever part of the runtime name, so containment is asked the other way round — the shared
+		// `runtimeNameFragment`, which also owns the floor below which a fragment carries no intent.
 		return ctx.scanComplete && !kept && !ctx.referenced.contains(name) && !ctx.reflected.exists(content -> content.indexOf(name) >= 0)
-			&& !ctx.fragments.exists(f -> f.length >= CheckScan.GET_PREFIX.length && name.indexOf(f) >= 0);
+			&& !ReflectionScan.runtimeNameFragment(ctx.fragments, name);
 	}
 
 	/**
@@ -349,41 +348,6 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			if (tree != null) collectReferences(tree, kinds, out);
 		}
 		return out;
-	}
-
-	/**
-	 * Every string-literal content in report scope — the `Reflect.field` / `@:keep` surface a
-	 * structural scan cannot see. Empty when the grammar exposes no string-fold support, which
-	 * only loses the gate (the deletion then rests on the structural scan alone).
-	 */
-	private static function stringContents(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin
-	): { whole: Array<String>, fragments: Array<String> } {
-		final out: { whole: Array<String>, fragments: Array<String> } = { whole: [], fragments: [] };
-		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		if (stringFold == null) return out;
-		final fold: StringFoldSupport = stringFold;
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) collectStringContents(tree, entry.source, fold, out);
-		}
-		return out;
-	}
-
-	/** Collect into `out` the literal content of every string `node` and its descendants carry. */
-	private static function collectStringContents(
-		node: QueryNode, source: String, fold: StringFoldSupport, out: { whole: Array<String>, fragments: Array<String> }
-	): Void {
-		final literal: Null<StringLiteral> = fold.literalOf(node, source);
-		if (literal != null)
-			out.whole.push(literal.content);
-		else if (CheckScan.STRING_EXPR_KINDS.contains(node.kind))
-			for (child in node.children) {
-				final fragment: Null<String> = child.name;
-				if (child.kind == CheckScan.STRING_FRAGMENT_KIND && fragment != null && !out.fragments.contains(fragment))
-					out.fragments.push(fragment);
-			}
-		for (child in node.children) collectStringContents(child, source, fold, out);
 	}
 
 	/** Collect into `out` the accessor-shaped names `node` and its descendants carry on a `kinds` node. */

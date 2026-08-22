@@ -4,7 +4,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -13,8 +12,11 @@ using StringTools;
  * The seams and scans the CONSTANT-FIELD pair of checks share — `inline-constant` (`static final`
  * scalar -> `static inline final`) and `static-constant` (instance `final` of a literal ->
  * `static final`). The two ask the same questions of the grammar (which kinds host a `final` field,
- * which modifier means `static`, which literals are compile-time constants) and of the scope (which
- * names might be read reflectively), and both act by inserting a keyword before a member's `final`.
+ * which modifier means `static`, which literals are compile-time constants), and both act by
+ * inserting a keyword before a member's `final`.
+ *
+ * The other question they share is not here: which names a runtime `Reflect` call might spell is
+ * `CheckScan.reflectionSurface`, asked by four checks rather than by this pair alone.
  *
  * They are separate checks because they move a field in opposite directions and gate on completely
  * different soundness proofs; this module is the part that is genuinely one question, resolved once.
@@ -67,27 +69,6 @@ final class ConstantFieldScan {
 		};
 	}
 
-	/**
-	 * The raw content of every PLAIN string literal across `files` — the names a member might be
-	 * reached by through reflection. Both checks erase a member's value from `Reflect.field` (one by
-	 * folding it into every use site, the other by moving it off the instance), so both refuse a
-	 * member whose name appears as any string in scope. Interpolated literals are absent by
-	 * construction: `literalOf` answers only for a plain one. Duplicates are kept — one caller reads
-	 * membership, the other subtracts a member's OWN value from the count.
-	 */
-	public static function reflectedNames(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, stringFold: Null<StringFoldSupport>
-	): Array<String> {
-		final out: Array<String> = [];
-		if (stringFold == null) return out;
-		final fold: StringFoldSupport = stringFold;
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) collectStrings(tree, entry.source, fold, out);
-		}
-		return out;
-	}
-
 	/** A member host's initializer — its last child (the value expression; the type annotation is not a child). */
 	public static function initializerOf(field: QueryNode): Null<QueryNode> {
 		final count: Int = field.children.length;
@@ -104,13 +85,6 @@ final class ConstantFieldScan {
 	public static function isScalarLiteral(init: QueryNode, seams: ConstantFieldSeams): Bool {
 		return seams.literalKinds.contains(init.kind) || seams.negationKind != null && init.kind == seams.negationKind
 			&& init.children.length == 1 && seams.numericKinds.contains(init.children[0].kind);
-	}
-
-	/** Append every plain string literal's content in `node`'s subtree to `out` (duplicates kept). */
-	private static function collectStrings(node: QueryNode, source: String, stringFold: StringFoldSupport, out: Array<String>): Void {
-		final literal: Null<StringLiteral> = stringFold.literalOf(node, source);
-		if (literal != null) out.push(literal.content);
-		for (child in node.children) collectStrings(child, source, stringFold, out);
 	}
 
 }

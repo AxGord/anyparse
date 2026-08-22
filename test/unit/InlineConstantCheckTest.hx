@@ -126,6 +126,56 @@ class InlineConstantCheckTest extends Test {
 	}
 
 	/**
+	 * The reflection key may be COMPUTED. `literalOf` answers null for an interpolated literal by
+	 * contract, so a scan over plain literals alone reads `'${p}MYCONST'` as no mention of `MYCONST`
+	 * at all — and inlining then erases the value a live `Reflect.field` still asks for, silently at
+	 * runtime. The static FRAGMENTS of the interpolation are what carry the intent.
+	 */
+	public function testInterpolatedReflectionFragmentNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { static final MYCONST:Int = 5; }' },
+			{ file: 'D.hx', source: 'class D { function f(p:String):Void { Reflect.field(C, \'$${p}MYCONST\'); } }' }
+		];
+		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * The discriminating half: the same interpolated call with a fragment no member name contains.
+	 * A gate that declined every constant in reach of ANY interpolation would be its own defect.
+	 */
+	public function testInterpolatedFragmentNamingSomethingElseStillFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { static final MYCONST:Int = 5; }' },
+			{ file: 'D.hx', source: 'class D { function f(p:String):Void { Reflect.field(C, \'$${p}OTHERNAME\'); } }' }
+		];
+		Assert.equals(1, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * A fragment shorter than the intent floor is a syllable, not a name. `CONST` CONTAINS `ONS`, so
+	 * a floorless containment test would keep this constant — and every other one in the scope.
+	 */
+	public function testShortInterpolationFragmentStillFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { static final CONST:Int = 5; }' },
+			{ file: 'D.hx', source: 'class D { function f(p:String):Void { Reflect.field(C, \'$${p}ONS\'); } }' }
+		];
+		Assert.equals(1, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * The `var` -> `final` arm reads the same surface through its own count-based gate: a fragment is
+	 * never the field's OWN value, so it answers before the self-name subtraction rather than through it.
+	 */
+	public function testInlineVarInterpolatedReflectionFragmentNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public static inline var MYCONST:Int = 5; }' },
+			{ file: 'D.hx', source: 'class D { function f(p:String):Void { Reflect.field(C, \'$${p}MYCONST\'); } }' }
+		];
+		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/**
 	 * A `#if`-guarded member is nested in a `Conditional` rather than being a direct container child;
 	 * the scan descends into the region, so it is judged exactly like its plain sibling. Adding
 	 * `inline` to a scalar constant is behaviour-preserving in whichever build compiles the branch,
