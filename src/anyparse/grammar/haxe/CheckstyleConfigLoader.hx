@@ -66,7 +66,10 @@ final class CheckstyleConfigLoader {
 			if (type == null) continue;
 			final format: Null<String> = check.props?.format;
 			if (format == null) continue;
-			for (rule in rulesOf(type, format, check.props?.tokens ?? [])) policy.push(rule);
+			// checkstyle's own default is TRUE: a check that states no `ignoreExtern` still skips a
+			// declaration inside an `extern` type, so reading the absent key as `false` would make this
+			// adapter STRICTER than every config that never mentions it.
+			for (rule in rulesOf(type, format, check.props?.tokens ?? [], check.props?.ignoreExtern ?? true)) policy.push(rule);
 		}
 		return policy;
 	}
@@ -185,19 +188,31 @@ final class CheckstyleConfigLoader {
 	 *   `CatchParameterName` does not even extend `NameCheckBase`. Dropping theirs is what checkstyle
 	 *   itself does.
 	 *
+	 * `props.ignoreExtern` rides the same selector, as one more `forbidMods` entry — see `ruleFor`. It
+	 * is `NameCheckBase`'s, so every check here but `CatchParameterName` carries it, and its default is
+	 * TRUE. ONE deliberate divergence: checkstyle gates its class / enum / typedef arms on the extern
+	 * flag and its ABSTRACT arm on nothing, in all five checks that have one — an `extern abstract`'s
+	 * members are reported there and exempt here. `NamedDecl` carries no type KIND (the boundary the
+	 * `CLASS` / `ABSTRACT` bullet above states), so the distinction is unrepresentable, and the
+	 * direction the gap is closed in is the one that declines to rename an external contract.
+	 *
 	 * `EnumValueName` is not a checkstyle check at all; it stays as the neutral spelling of this
 	 * model's `EnumValue` category, so a config can address that category directly.
 	 */
-	private static function rulesOf(type: String, format: String, tokens: Array<String>): Array<NamingRule> {
+	private static function rulesOf(type: String, format: String, tokens: Array<String>, ignoreExtern: Bool): Array<NamingRule> {
 		return switch type {
-			case 'TypeName': [ruleFor(NamingCategory.Type, type, format, [], [])];
-			case 'MemberName': memberRules(type, format, tokens);
-			case 'MethodName': [methodRule(type, format, tokens)];
-			case 'ConstantName': [constantRule(type, format, tokens)];
-			case 'LocalVariableName': [ruleFor(NamingCategory.Local, type, format, [], [])];
-			case 'ParameterName': [ruleFor(NamingCategory.Param, type, format, [], [])];
-			case 'EnumValueName': [ruleFor(NamingCategory.EnumValue, type, format, [], [])];
-			case 'CatchParameterName': [ruleFor(NamingCategory.CatchVar, type, format, [], [])];
+			case 'TypeName': [ruleFor(NamingCategory.Type, type, format, [], [], ignoreExtern)];
+			case 'MemberName': memberRules(type, format, tokens, ignoreExtern);
+			case 'MethodName': [methodRule(type, format, tokens, ignoreExtern)];
+			case 'ConstantName': [constantRule(type, format, tokens, ignoreExtern)];
+			case 'LocalVariableName': [ruleFor(NamingCategory.Local, type, format, [], [], ignoreExtern)];
+			case 'ParameterName': [ruleFor(NamingCategory.Param, type, format, [], [], ignoreExtern)];
+			case 'EnumValueName':
+				[ruleFor(NamingCategory.EnumValue, type, format, [], [], ignoreExtern)];
+			// `CatchParameterNameCheck` is the one naming check that does not extend `NameCheckBase`: it
+			// declares no `ignoreExtern` at all, so checkstyle never exempts a catch variable for one and
+			// neither does this — the flag is dropped here rather than defaulted.
+			case 'CatchParameterName': [ruleFor(NamingCategory.CatchVar, type, format, [], [], false)];
 			case _: [];
 		}
 	}
@@ -214,8 +229,14 @@ final class CheckstyleConfigLoader {
 	 * whether its own autofix had just consulted it.
 	 */
 	private static function ruleFor(
-		category: NamingCategory, label: String, format: String, requireMods: Array<String>, forbidMods: Array<String>
+		category: NamingCategory, label: String, format: String, requireMods: Array<String>, forbidMods: Array<String>, ignoreExtern: Bool
 	): NamingRule {
+		// checkstyle's `ignoreExtern` asks about the DECLARING TYPE's `extern` flag and about nothing
+		// else — not the member, not an `@:native` — and `HaxeNamingSupport` projects exactly that as an
+		// inherited modifier on every declaration inside such a type. So the flag needs no field of its
+		// own on `NamingRule`: it is one more entry in the selector every rule already carries, and a
+		// config stating `ignoreExtern: false` simply contributes none.
+		if (ignoreExtern) forbidMods.push(HaxeNamingSupport.EXTERN_MOD);
 		return {
 			category: category,
 			requireMods: requireMods,
@@ -231,7 +252,7 @@ final class CheckstyleConfigLoader {
 	 * rule for its enum arm, each contributed only when `tokens` reaches that arm. An empty `tokens`
 	 * reaches both, which is `hasToken`'s reading and checkstyle's.
 	 */
-	private static function memberRules(label: String, format: String, tokens: Array<String>): Array<NamingRule> {
+	private static function memberRules(label: String, format: String, tokens: Array<String>, ignoreExtern: Bool): Array<NamingRule> {
 		final out: Array<NamingRule> = [];
 		if (tokens.length == 0 || tokens.exists(token -> MEMBER_FIELD_TOKENS.contains(token))) {
 			final requireMods: Array<String> = [];
@@ -239,31 +260,31 @@ final class CheckstyleConfigLoader {
 			// a static is a CONSTANT candidate, never a member name.
 			final forbidMods: Array<String> = ['static'];
 			visibilityPair(tokens, requireMods, forbidMods);
-			out.push(ruleFor(NamingCategory.Field, label, format, requireMods, forbidMods));
+			out.push(ruleFor(NamingCategory.Field, label, format, requireMods, forbidMods, ignoreExtern));
 		}
-		if (hasToken(tokens, 'ENUM')) out.push(ruleFor(NamingCategory.EnumValue, label, format, [], []));
+		if (hasToken(tokens, 'ENUM')) out.push(ruleFor(NamingCategory.EnumValue, label, format, [], [], ignoreExtern));
 		return out;
 	}
 
 	/** `MethodName`'s rule, narrowed by its three token pairs in checkstyle's own order. */
-	private static function methodRule(label: String, format: String, tokens: Array<String>): NamingRule {
+	private static function methodRule(label: String, format: String, tokens: Array<String>, ignoreExtern: Bool): NamingRule {
 		final requireMods: Array<String> = [];
 		final forbidMods: Array<String> = [];
 		visibilityPair(tokens, requireMods, forbidMods);
 		negatablePair(tokens, 'static', requireMods, forbidMods);
 		negatablePair(tokens, 'inline', requireMods, forbidMods);
-		return ruleFor(NamingCategory.Method, label, format, requireMods, forbidMods);
+		return ruleFor(NamingCategory.Method, label, format, requireMods, forbidMods, ignoreExtern);
 	}
 
 	/**
 	 * `ConstantName`'s rule, narrowed by its one token pair: `INLINE` is `static inline var`,
 	 * `NOTINLINE` is `static var` and `static final` (neither carries the `inline` keyword).
 	 */
-	private static function constantRule(label: String, format: String, tokens: Array<String>): NamingRule {
+	private static function constantRule(label: String, format: String, tokens: Array<String>, ignoreExtern: Bool): NamingRule {
 		final requireMods: Array<String> = [];
 		final forbidMods: Array<String> = [];
 		negatablePair(tokens, 'inline', requireMods, forbidMods);
-		return ruleFor(NamingCategory.Constant, label, format, requireMods, forbidMods);
+		return ruleFor(NamingCategory.Constant, label, format, requireMods, forbidMods, ignoreExtern);
 	}
 
 	/**

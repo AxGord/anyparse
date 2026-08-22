@@ -25,6 +25,15 @@ package anyparse.grammar.haxe.checkstyle;
 	 */
 	@:optional var tokens: Array<String>;
 
+	/**
+	 * Naming-family checks that extend checkstyle's `NameCheckBase` (every one but
+	 * `CatchParameterName`): whether a declaration inside an `extern` type is exempt.
+	 * checkstyle's own default is TRUE, so a check that omits the key still ignores them —
+	 * which is why dropping this key made the adapter STRICTER than every config that says
+	 * nothing about it.
+	 */
+	@:optional var ignoreExtern: Bool;
+
 	/** `CyclomaticComplexity`: the severity/onset pairs the warning threshold is read from. */
 	@:optional var thresholds: Array<CheckstyleThreshold>;
 

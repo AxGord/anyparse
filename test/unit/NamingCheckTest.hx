@@ -8,6 +8,8 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.NamingPolicy.NamingPolicy;
+import anyparse.grammar.haxe.HaxeNamingSupport;
+import anyparse.query.NamingPolicy.NamedDecl;
 
 using StringTools;
 
@@ -330,6 +332,112 @@ class NamingCheckTest extends NamingCheckTestBase {
 	 */
 	public function testHeadPlusAcronymNameNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tpublic function f() {\n\t\tvar sRGB = 1;\n\t}\n}').length);
+	}
+
+	/**
+	 * checkstyle's `ignoreExtern` asks about the DECLARING TYPE's `extern` flag and about nothing else
+	 * — not the member, not an `@:native`. `HaxeNamingSupport` projects exactly that as an inherited
+	 * modifier, the way an interface member inherits `public`, so a rule states the exemption through
+	 * the `forbidMods` selector it already has instead of a flag only one check would read.
+	 */
+	public function testExternTypeMembersCarryTheTypesOwnExternModifier(): Void {
+		final decls: Array<NamedDecl> = new HaxeNamingSupport().project(
+			new HaxeQueryPlugin().parseFile('extern class E {\n\tvar Bad_Field:Int;\n\tfunction f(Bad_Param:Int):Void;\n}')
+		);
+		var seen: Int = 0;
+		for (decl in decls) if (decl.name == 'Bad_Field' || decl.name == 'Bad_Param' || decl.name == 'E') {
+			seen++;
+			Assert.isTrue(decl.mods.contains('extern'), '${decl.name} should carry the enclosing extern');
+		}
+		Assert.equals(3, seen);
+		final plain: Array<NamedDecl> =
+			new HaxeNamingSupport().project(new HaxeQueryPlugin().parseFile('class E {\n\tvar Bad_Field:Int;\n}'));
+		for (decl in plain) Assert.isFalse(decl.mods.contains('extern'));
+	}
+
+	/**
+	 * The built-in convention states no `ignoreExtern` — it has no config to state one in — so it
+	 * states the same answer checkstyle defaults to. Measured before the gate landed:
+	 * `lint --fix --rule naming` rewrote `var Bad_Field:Int;` inside an `extern class` to
+	 * `var _badField:Int;`, which changes WHICH external symbol the program reads and which no
+	 * compiler oracle can catch. The non-extern twin below is the control: every one of these four
+	 * declarations is a finding when the type is the project's own.
+	 */
+	public function testExternDeclarationsAreOutsideTheBuiltInConvention(): Void {
+		final members: String = '\n\tvar Bad_Field:Int;\n\tfunction Bad_Method(Bad_Param:Int):Void;\n';
+		Assert.equals(0, violations('extern class bad_cls {$members}').length);
+		Assert.equals(4, violations('class bad_cls {${members.replace(':Void;', ':Void {}')}}').length);
+	}
+
+	/**
+	 * `ignoreExtern: false` is a config stating the opposite, and it must still reach the same
+	 * declarations. The exemption is one `forbidMods` entry contributed by the flag, never a
+	 * suppression the projection applies on its own.
+	 */
+	public function testIgnoreExternFalseRestoresTheReport(): Void {
+		final src: String = 'extern class E {\n\tvar Bad_Field:Int;\n\tfunction Bad_Method():Void;\n}';
+		Assert.equals(2, violations(src, externAwarePolicy(false)).length);
+		Assert.equals(0, violations(src, externAwarePolicy(true)).length);
+	}
+
+	/**
+	 * `MethodNameCheck.checkField` returns on `f.isGetter() || f.isSetter()` before it matches a
+	 * format: an accessor's spelling is the PROPERTY's, so the finding belongs to the property and a
+	 * correction applied to the accessor alone would orphan it. Invisible under the built-in
+	 * convention (its Method format accepts every `get_` / `set_` name) and under Pony's config for the
+	 * same reason — reached only by a format strict enough to reject an underscore, where it was three
+	 * spurious findings for one property pair. The prefix is the whole test, deliberately: an
+	 * `override function get_x` backs a property declared in a supertype, so `set_x` here is exempt
+	 * with no `x` in sight.
+	 */
+	public function testAccessorMethodNameIsThePropertysNotTheProjects(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tpublic var other_thing(get, never):Int;\n\tfunction get_other_thing():Int return 1;\n'
+			+ '\tfunction set_x(v:Int):Int return v;\n}',
+			externAwarePolicy(true)
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'other_thing'"));
+	}
+
+	/**
+	 * The exemption is a METHOD's. `MemberNameCheck` has no getter / setter arm at all, so a FIELD
+	 * that happens to be spelled `get_x` is governed exactly like any other field.
+	 */
+	public function testAFieldSpelledLikeAnAccessorIsStillGoverned(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tpublic var get_x:Int;\n}', externAwarePolicy(true));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'get_x'"));
+	}
+
+	/**
+	 * `policyFor` walked up to the project `checkstyle.json`, read it and rebuilt its rules for EVERY
+	 * file — 851 disk walks, 851 JSON parses and 851 policy builds for ONE config on the Pony scope.
+	 * The memo is keyed by DIRECTORY because `ConfigFinder.findUp` walks up from a file's own
+	 * directory, so two files sharing one resolve to the same config by construction; two directories
+	 * resolving to the SAME config still build twice, which is the residue that key trades for its
+	 * one-line correctness proof.
+	 *
+	 * The last assertion is the one invariant 1 is about (`docs/design-principles.md` § 2). A new
+	 * support answers a new policy, so the memo's lifetime is one check invocation —
+	 * `HaxeQueryPlugin.namingSupport()` builds a fresh instance per call — and never the process's.
+	 * Make the field `static` and it is this assertion, and only this assertion, that fails.
+	 */
+	public function testPolicyIsResolvedOncePerDirectoryAndOncePerRun(): Void {
+		final support: HaxeNamingSupport = new HaxeNamingSupport();
+		final first: NamingPolicy = support.policyFor('pkg/a/C.hx');
+		Assert.isTrue(first == support.policyFor('pkg/a/D.hx'));
+		Assert.isFalse(first == support.policyFor('pkg/b/E.hx'));
+		Assert.isFalse(first == new HaxeNamingSupport().policyFor('pkg/a/C.hx'));
+	}
+
+	/** A `MemberName` + `MethodName` pair over checkstyle's own default format, stating `ignoreExtern`. */
+	private function externAwarePolicy(ignoreExtern: Bool): NamingPolicy {
+		return CheckstyleConfigLoader.load(
+			'{"checks":[{"type":"MemberName","props":{"format":"^[a-z][a-zA-Z0-9]*$","tokens":["CLASS","PUBLIC","PRIVATE"],'
+			+ '"ignoreExtern":$ignoreExtern}},'
+			+ '{"type":"MethodName","props":{"format":"^[a-z][a-zA-Z0-9]*$","ignoreExtern":$ignoreExtern}}]}'
+		);
 	}
 
 	/** A real project's two `MemberName` entries: instance fields of a class / typedef, and enum constructors. */
