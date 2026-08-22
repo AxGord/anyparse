@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.check.UnusedPrivate;
 
 using StringTools;
 
@@ -1030,14 +1031,14 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		Assert.equals(
 			'only a member (field / constant / method) has a confinement proof, and this declaration is not one — a type or enum-value '
 			+ 'rename reaches every file that names it',
-			refusalOf([{ file: 'C.hx', source: 'class foo {}' }], 'C.hx')
+			refusalFor([{ file: 'C.hx', source: 'class foo {}' }], 'C.hx')
 		);
 		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate function __render():Void {}\n}';
 		final overrideSrc: String = 'package pkg;\nclass C extends Base {\n\toverride private function __render():Void { trace(1); }\n}';
 		Assert.equals(
 			'the method is an `override`, so its name is the SUPERTYPE declaration\'s — renaming this one alone would leave it overriding '
 			+ 'nothing',
-			refusalOf([
+			refusalFor([
 				{ file: 'pkg/Base.hx', source: baseSrc },
 				{ file: 'pkg/C.hx', source: overrideSrc }
 			], 'pkg/C.hx')
@@ -1045,7 +1046,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		Assert.equals(
 			'a public member is reachable from every file holding a value of its owner type, so the single-file rename never applies to '
 			+ 'one — the cross-file path owns it, and declined too',
-			refusalOf([
+			refusalFor([
 				{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tpublic function __run():Void {}\n}' }
 			], 'pkg/C.hx')
 		);
@@ -1058,16 +1059,6 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		Assert.isNull(vs[0].declineReason, 'a rename that landed declined nothing');
 	}
 
-	/** The `declineReason` the naming fix wrote on `targetFile`'s single finding, or `''` when it wrote none. */
-	private function refusalOf(files: Array<{ file: String, source: String }>, targetFile: String): String {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == targetFile);
-		Assert.equals(1, vs.length);
-		final source: String = files.filter(f -> f.file == targetFile)[0].source;
-		Assert.equals(0, check.fix(source, vs, plugin, SymbolIndex.build(files, plugin)).length, 'the rename is refused');
-		return vs[0].declineReason ?? '';
-	}
 
 	/**
 	 * The gate `testEveryRefusedRenameNamesItsGate` measured the largest share of, now open. 198 of
@@ -1152,6 +1143,50 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/**
+	 * TWO RULES DISAGREEING ABOUT ONE MEMBER. `unused-private` declines even to REPORT
+	 * `private static final _BAD_ENTRY = SomeType;` — a `Class<T>` registry entry a macro resolves by
+	 * NAME — and `naming --fix` renamed it to `BAD_ENTRY`. A name reached by NAME is broken by a
+	 * rename exactly as it is broken by a deletion, and both rules read the SAME
+	 * `NamedDecl.implicitReach` to decide: `UnusedPrivate.violationFor` asks it of every member,
+	 * `RenameRefusal.of` asked it under `category == Method`. `isTypeReferenceInit` requires a
+	 * `FinalMember`, whose category is Constant or Field and never Method, so the arm that exists FOR
+	 * this shape could not refuse anything at all.
+	 *
+	 * ONE-VARIABLE matrix, the initializer: `= SomeType` against `= 5`, same declaration otherwise.
+	 * The plain twin is still deleted by one rule and still renamed by the other, which is what makes
+	 * this a narrowing of one question rather than a rule turned off.
+	 */
+	public function testATypeRegistryConstantIsNoMoreRenameableThanItIsDeletable(): Void {
+		final registry: String = 'package pkg;\nclass C {\n\tprivate static final _BAD_ENTRY = SomeType;\n}';
+		final plain: String = 'package pkg;\nclass C {\n\tprivate static final _BAD_ENTRY = 5;\n}';
+		Assert.equals(1, unusedPrivateCount(plain), 'the plain twin IS a dead private');
+		Assert.equals(0, unusedPrivateCount(registry), 'a macro may reach the registry entry by name');
+		final refused: { edits: Int, findings: Array<Violation> } = fixedFindingsIn('pkg', registry);
+		Assert.equals(0, refused.edits, 'and a rename breaks such a reference exactly as a deletion does');
+		Assert.stringContains('a `static final` bound to a TYPE reference', refused.findings[0].declineReason ?? '');
+		Assert.isTrue(fixedFindingsIn('pkg', plain).edits > 0, 'the plain twin still renames');
+	}
+
+	/**
+	 * The other arm the Method-only gate let through: an annotated member. `@:keep` is the mechanism
+	 * `unused-private` refuses a DELETION for, and a macro / framework reaches such a member through
+	 * references no identifier-level proof sees whatever the member's category is — so a field and a
+	 * constant carrying one were renamed while a method carrying one was refused.
+	 */
+	public function testAnAnnotatedFieldAndConstantAreRefusedAsAnAnnotatedMethodIs(): Void {
+		final field: String =
+			'package pkg;\nclass C {\n\t@:keep private var Bad_Field:Int = 1;\n\n\tpublic function f():Int { return Bad_Field; }\n}';
+		final constant: String =
+			'package pkg;\nclass C {\n\t@:keep private static final _KEPT:Int = 7;\n\n\tpublic function f():Int { return _KEPT; }\n}';
+		for (src in [field, constant]) Assert.stringContains('the member carries metadata', declineReasonsIn('pkg', src)[0]);
+	}
+
+	/** The `unused-private` findings a one-file `pkg/C.hx` fixture carries — the OTHER reader of `implicitReach`. */
+	private function unusedPrivateCount(src: String): Int {
+		return new UnusedPrivate().run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin()).length;
 	}
 
 	/** Every finding's `declineReason` for `dir/C.hx`, in document order, with `''` for one that got none. */

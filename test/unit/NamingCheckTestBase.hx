@@ -83,4 +83,26 @@ class NamingCheckTestBase extends Test {
 		assertCanonicalized(targetSrc, check.fix(targetSrc, vs, new HaxeQueryPlugin(), index), present, absent);
 	}
 
+	/**
+	 * The `declineReason` the naming autofix wrote on `targetFile`'s single finding, or `''` when it
+	 * wrote none — after the fix paths have been asked in the order `lint --fix` asks them: the
+	 * cross-file rename FIRST, against pristine sources, when `crossFirst`, then the per-file one.
+	 * Neither may emit an edit.
+	 *
+	 * `crossFirst` is the whole reason this lives here rather than once per test part. First writer
+	 * wins, so which path runs decides WHICH gate's sentence comes back — and a per-file-only run
+	 * reports the per-file path's answer even for a declaration that path does not own.
+	 */
+	private function refusalFor(files: Array<{ file: String, source: String }>, targetFile: String, crossFirst: Bool = false): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == targetFile);
+		Assert.equals(1, vs.length);
+		if (crossFirst) Assert.equals(0, check.crossFileFix(files, vs, plugin, index).length, 'the cross-file rename is refused');
+		final source: String = files.filter(f -> f.file == targetFile)[0].source;
+		Assert.equals(0, check.fix(source, vs, plugin, index).length, 'the rename is refused');
+		return vs[0].declineReason ?? '';
+	}
+
 }

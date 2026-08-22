@@ -742,6 +742,41 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		assertRenameSlice(second[0], 'pkg/X.hx', xSrc, 'return _caps', 'Caps');
 	}
 
+	/**
+	 * The cross-file twin of the reachability gate. `crossCategoryRefusal` answered "mine"
+	 * UNCONDITIONALLY for a Field / Constant, and a PUBLIC member reaches only this path —
+	 * `RenameRefusal.of` refuses every public declaration before it asks anything else — so a
+	 * `@:keep public var`, whose name a macro / framework may resolve, was renamed in the declaring
+	 * file AND in every file naming it. The refusal has to sit on BOTH paths or the public half of
+	 * the hole stays open.
+	 */
+	public function testCrossFileFixRefusesAnAnnotatedPublicMember(): Void {
+		// `_badField` and not `Bad_Field`: the public-field normalizer STRIPS a leading underscore and
+		// can propose nothing for a Pascal name, so the Pascal spelling declines on the normalizer
+		// gate whatever this one answers, and would prove nothing about it.
+		Assert.stringContains('the member carries metadata', refusalFor([
+			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\t@:keep public var _badField:Int = 1;\n}' },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\tpublic function g(c:C):Int { return c._badField; }\n}' }
+		], 'pkg/C.hx', true));
+	}
+
+	/**
+	 * `13177bff`'s pattern at the one gate of this path that had not taken it: the category test was
+	 * `if (!crossFileCategory(decl)) return null;`, an UNDECLARED decline. It read as harmless
+	 * because the per-file path writes a sentence for the same findings afterwards — and for a PUBLIC
+	 * override it writes the WRONG one, because `RenameRefusal.of` tests `public` before it tests
+	 * `override`. The reader was told the cross-file path owned the declaration and had declined too;
+	 * the cross-file path had turned it away as not its category at all.
+	 */
+	public function testAPublicOverrideNamesTheGateThatActuallyTurnedItAway(): Void {
+		final reason: String = refusalFor([
+			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {\n\tpublic function Bad_Method():Void {}\n}' },
+			{ file: 'pkg/Sub.hx', source: 'package pkg;\nclass Sub extends Base {\n\toverride public function Bad_Method():Void {}\n}' }
+		], 'pkg/Sub.hx', true);
+		Assert.stringContains('the method is an `override`', reason);
+		Assert.isFalse(reason.indexOf('a public member is reachable') >= 0, 'the gate that declined is the one that speaks');
+	}
+
 	/** The single cross-file rename `files` yields, as its per-file slices. */
 	private function crossFileRename(files: Array<{ file: String, source: String }>): Array<CrossFileEdits> {
 		final renames: Array<Array<CrossFileEdits>> = crossFileRenames(files);
