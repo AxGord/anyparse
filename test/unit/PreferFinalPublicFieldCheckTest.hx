@@ -965,6 +965,21 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * DELIBERATE NON-GATE, pinned so it is not re-litigated from memory. A `@:nativeGen` type is
+	 * emitted as a plain native type for foreign code (the Unity MonoBehaviour idiom), and a
+	 * plausible-sounding claim is that `final` there becomes a C# `readonly` an editor inspector
+	 * can no longer set. Measured on Haxe 4.3.7 `-cs`: `public var speed:Single = 200` and
+	 * `public final speed:Single = 200` on a `@:nativeGen class` emit BYTE-IDENTICAL C# — the same
+	 * plain `public float speed;`, no `readonly`, the same constructor store — so there is nothing
+	 * for a carve-out to protect and this check keeps flagging the field. `inline-constant` is the
+	 * one rule that DOES gate on the annotation, because `inline` is the one rewrite that changes
+	 * what the emitted code does. Re-measure before changing this.
+	 */
+	public function testNativeInteropPublicFieldStillFlagged(): Void {
+		Assert.equals(1, violations('@:nativeGen class C { public var speed:Float = 200; }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalPublicField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

@@ -752,6 +752,56 @@ the narrowing spent (3.6 s cold on that tree). On a wave that does NOT break the
 build the path is not entered at all: the same tree with no broken file gives
 `fixed 658 issue(s) in 228 file(s)` on both binaries.
 
+### The oracle answers for what it COMPILED, not for what you linted
+
+`haxe <compilerOracle> --no-output` exiting 0 is the strongest gate this project
+has, and it is authoritative only over the files that compile ran through. That
+set is NOT the lint scope, and on a real multi-target tree the gap is large and
+completely silent.
+
+Measured on Pony. Its `lint-oracle.hxml` has two arms, neko and nodejs, and each
+ends in `--macro include('pony', true, [ … ])` — whose third argument is an
+IGNORE list, 47 entries long. `pony.unity3d` and `pony.pixi` are both on it, on
+both arms, so no configuration in that repo typechecks either package. Nor could
+one: `haxe -cp src --no-output -neko … --macro include('pony.unity3d', true)`
+stops at
+
+    src/pony/unity3d/ui/TextureButton.hx:3: characters 8-22 :
+    You cannot access the cs package while targeting neko (for cs.NativeArray)
+
+and the externs those packages need — `unityhx` / `hugs` for `pony.unity3d`,
+`pixijs` for `pony.pixi` — are not installed haxelibs at all. The ignore list is
+not laziness; it is the only way an hxml that types the rest of the library can
+exist.
+
+The size of the hole, on the campaign's own full-ruleset `--fix` run over the
+851-file Pony lint scope: 234 files written, **32 of them (13.7 %) under
+`pony.unity3d.*` / `pony.pixi.*`** — a write set the green oracle says nothing
+about. The run's own summary is worded in exactly those terms and it is easy to
+over-read: `risky-fix verified: 61 file(s) applied` and `oracle-assisted: 3
+file(s) applied, 3 reverted to report-only (compiler rejected)` count the files
+the compiler could SEE. Nothing there is false; it simply does not extend to a
+subtree the compile never entered.
+
+Two consequences worth carrying to any project, not just this one:
+
+- **Read the oracle's own exclusion list before trusting its exit code.** Any
+  tree with per-target packages — flash-only, cpp-only, an engine binding — has
+  the same shape, and the excluded packages are usually the ones with the most
+  foreign coupling, which is to say the ones where a bad rewrite is least likely
+  to be a compile error.
+- **A rule whose failure mode inside such a subtree is SILENT has to gate
+  itself.** A rewrite the compiler would reject is caught eventually, in the
+  worst case by the next real build; a rewrite that compiles and changes what
+  the emitted code does is caught by nothing. `inline-constant`'s
+  native-interop gate (`RefShape.nativeInteropDeclMetaName`, Haxe
+  `@:nativeGen`) is the worked example: `inline` bakes a constant into every
+  read site while leaving the field a foreign consumer still writes, and the
+  types that consumer holds are precisely the ones no oracle here compiles. The
+  same file also records the measurement that scoped the gate to `inline` alone
+  — `var` -> `final` and `var` -> `var(default, null)` emit byte-identical C#
+  on a `@:nativeGen` class, so the neighbouring field rules took no gate.
+
 ### The verdict cache: one tree, one typecheck
 
 What the gates cannot decline they can at least stop paying twice. Before it

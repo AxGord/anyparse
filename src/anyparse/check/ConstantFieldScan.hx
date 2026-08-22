@@ -55,6 +55,7 @@ final class ConstantFieldScan {
 			inlineKind: shape.inlineModifierKind,
 			identKind: shape.identKind,
 			metaKinds: plugin.metaShape().metaKinds,
+			nativeInteropMetaName: shape.nativeInteropDeclMetaName,
 			literalKinds: literalKinds,
 			stringLiteralKinds: shape.stringLiteralKinds ?? [],
 			numericKinds: shape.numericLiteralKinds ?? [],
@@ -128,6 +129,9 @@ typedef ConstantFieldSeams = {
 	final inlineKind: Null<String>;
 	final identKind: String;
 	final metaKinds: Array<String>;
+
+	/** `RefShape.nativeInteropDeclMetaName` — read by `inline-constant` alone; null when the grammar leaves it unset. */
+	final nativeInteropMetaName: Null<String>;
 	final literalKinds: Array<String>;
 	final stringLiteralKinds: Array<String>;
 	final numericKinds: Array<String>;

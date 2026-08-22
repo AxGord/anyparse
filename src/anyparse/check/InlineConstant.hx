@@ -115,6 +115,29 @@ using StringTools;
  * KEEPS a constant non-inline). A private constant is off every external module surface, so the gate
  * is public-only.
  *
+ * ## Native-interop gate (public arm) — and what it deliberately does NOT cover
+ *
+ * A type the grammar marks with `nativeInteropDeclMetaName` (Haxe `@:nativeGen`) is emitted as a plain
+ * native type SO THAT code outside this compilation holds it — a C# script, a serializer, an editor
+ * inspector. That consumer is invisible to every scan here AND to the project's own compiler oracle, so
+ * a rewrite it would break fails SILENTLY, which is the one failure direction this rule set refuses.
+ * `inline` is exactly such a rewrite. Measured on Haxe 4.3.7 `-cs` over a `@:nativeGen class`:
+ * `public static var X:Float = 0.5` and `public static inline final X:Float = 0.5` emit a
+ * BYTE-IDENTICAL class — the field and its static initialiser survive verbatim — while the caller's
+ * read changes from `Cls.X` to the literal `0.5`. So the foreign side still has a field to write and
+ * this side has stopped reading it. A PUBLIC constant of such a type is skipped (gate 8); a private one
+ * is on no foreign surface and still inlines, and the `static inline var` -> `static inline final` arm
+ * changes no emission at all, only the keyword.
+ *
+ * The same measurement is why the gate stops there. On the same `@:nativeGen` class,
+ * `public var x` -> `public final x` and `public var x` -> `public var x(default, null)` emit
+ * byte-identical C# as well — no `readonly`, no property, the same plain public field a Unity Inspector
+ * serialises — so `prefer-final-public-field` / `prefer-read-only-field` need no such carve-out and were
+ * deliberately left alone. The marker is the ANNOTATION, not a superclass and not a target: a
+ * `@:nativeGen` type need not extend anything (Pony declares `@:nativeGen class Tooltip` with no
+ * superclass, and `class PercentSize extends MonoBehaviour` with no annotation), and one source tree is
+ * compiled for several targets at once, so "is this the cs build" is not a question a check can ask.
+ *
  * ## Soundness gates (must-skip)
  *
  * 1. VISIBILITY. A non-public constant is always a candidate. A PUBLIC constant is a candidate too
@@ -151,13 +174,18 @@ using StringTools;
  *    constant is behaviour-preserving in whichever build compiles the branch). A member whose
  *    modifier run only SOME builds see — a `static` carried out of a region — is refused instead.
  *
+ * 8. NO foreign-facing OWNER for a PUBLIC constant. A `nativeInteropDeclMetaName` type
+ *    (Haxe `@:nativeGen`) is held by code outside the compilation, which keeps writing the field
+ *    `inline` leaves behind while every read here is baked — see the native-interop gate above.
+ *
  * ## Grammar-agnostic
  *
  * Reads `visibilityContainerKinds` / `memberDeclKinds` / `fieldDeclKinds` / `mutableFieldDeclKinds`
  * (the final-field host = field minus mutable), `visibilityModifierKinds` +
  * `defaultVisibilityModifierText`, `staticModifierKind`, `inlineModifierKind`, `identKind`,
- * `inlineConstantLiteralKinds`, `numericLiteralKinds` + `negationKind`, plus `metaShape().metaKinds`
- * and `stringFoldSupport()`. Any required seam unset makes the check a no-op.
+ * `inlineConstantLiteralKinds`, `numericLiteralKinds` + `negationKind`,
+ * `nativeInteropDeclMetaName`, plus `metaShape().metaKinds` and `stringFoldSupport()`. Any
+ * required seam unset makes the check a no-op.
  */
 @:nullSafety(Strict)
 final class InlineConstant implements Check {
@@ -205,7 +233,7 @@ final class InlineConstant implements Check {
 			// "Field X has different property access than core type".
 			if (tree != null && !MemberWriteScan.coreApiPinsMemberShape(entry.source))
 				walk(
-					violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, proof,
+					violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, false, proof,
 					MemberBranchScan.seamsOf(plugin.refShape(), entry.source), index
 				);
 		}
@@ -292,19 +320,54 @@ final class InlineConstant implements Check {
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
-		macroConsumed: Array<String>, inheritedPin: Bool, proof: InitProof, branch: MemberBranchSeams, index: SymbolIndex
+		macroConsumed: Array<String>, inheritedPin: Bool, inheritedNative: Bool, proof: InitProof, branch: MemberBranchSeams,
+		index: SymbolIndex
 	): Void {
 		var classPinned: Bool = inheritedPin;
+		var classNative: Bool = inheritedNative;
 		for (child in node.children) {
-			if (seams.metaKinds.contains(child.kind))
+			if (seams.metaKinds.contains(child.kind)) {
 				classPinned = classPinned || isPinMeta(child.name);
-			else {
+				classNative = classNative || seams.nativeInteropMetaName != null && child.name == seams.nativeInteropMetaName;
+			} else {
 				if (seams.containers.contains(child.kind))
-					scanContainer(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof, branch, index);
-				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned, proof, branch, index);
+					scanContainer(
+						out, file, source, child, seams, reflected, macroConsumed, classPinned, classNative, proof, branch, index
+					);
+				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned, classNative, proof, branch, index);
 				classPinned = false;
+				classNative = false;
 			}
 		}
+	}
+
+	/**
+	 * The four questions a member's leading modifier run answers for this rule, read in one pass:
+	 * is it `static`, is it already `inline`, is its visibility exported, and does it carry a pin
+	 * meta (`@:keep` / `@:rtti`). Extracted from `scanContainer` so the arm conditions there read as
+	 * conditions rather than as the tail of a scan.
+	 */
+	private static function modifierRunOf(run: Array<QueryNode>, source: String, seams: ConstantFieldSeams): ModifierRun {
+		var isStatic: Bool = false;
+		var isInline: Bool = false;
+		var exported: Bool = false;
+		var pinned: Bool = false;
+		for (mod in run) {
+			if (mod.kind == seams.staticKind)
+				isStatic = true;
+			else if (seams.inlineKind != null && mod.kind == seams.inlineKind)
+				isInline = true;
+			else if (seams.visibility.contains(mod.kind))
+				exported = exported || ConstantFieldScan.isExportedVisibility(source, mod, seams.defaultVis);
+			else if (seams.metaKinds.contains(mod.kind))
+				pinned = pinned || isPinMeta(mod.name);
+		}
+		return {
+			isStatic: isStatic,
+			isInline: isInline,
+			exported: exported,
+			pinned: pinned
+		};
 	}
 
 	/**
@@ -312,14 +375,15 @@ final class InlineConstant implements Check {
 	 * they attach to, so a running flag set (`static`, `inline`, exported visibility, `@:keep` /
 	 * `@:rtti`) — reset at each member — describes the member that just appeared. Public members are
 	 * candidates too (the reflection and macro-consumption gates in `consider` keep them sound);
-	 * `classPinned` (a class-level `@:keep` / `@:rtti`) blocks the add-inline arm for every member.
+	 * `classPinned` (a class-level `@:keep` / `@:rtti`) blocks the add-inline arm for every member, and
+	 * `classNative` (a class-level `nativeInteropDeclMetaName`) blocks it for every EXPORTED one.
 	 * `MemberBranchScan.eachMember` supplies the members, so a `#if`-guarded one is visited with the
 	 * modifier run of its OWN branch; a run the branches disagree on cannot answer `static` and the
 	 * member is skipped.
 	 */
 	private static function scanContainer(
 		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
-		macroConsumed: Array<String>, classPinned: Bool, proof: InitProof, branch: MemberBranchSeams, index: SymbolIndex
+		macroConsumed: Array<String>, classPinned: Bool, classNative: Bool, proof: InitProof, branch: MemberBranchSeams, index: SymbolIndex
 	): Void {
 		// Build-macro bail. A macro-built type's fields are not the fields the declaration holds, and
 		// BOTH arms of this rule act on the declaration alone: measured on Haxe 4.3.7, a `@:build`
@@ -334,21 +398,22 @@ final class InlineConstant implements Check {
 			// this rule reads as enabling — see `MemberBranchScan.joinRuns`.
 			if (!certain) return;
 			final kind: String = member.kind;
-			var sawStatic: Bool = false;
-			var sawInline: Bool = false;
-			var exported: Bool = false;
-			var sawKeep: Bool = false;
-			for (mod in run) {
-				if (mod.kind == seams.staticKind)
-					sawStatic = true;
-				else if (seams.inlineKind != null && mod.kind == seams.inlineKind)
-					sawInline = true;
-				else if (seams.visibility.contains(mod.kind))
-					exported = exported || ConstantFieldScan.isExportedVisibility(source, mod, seams.defaultVis);
-				else if (seams.metaKinds.contains(mod.kind))
-					sawKeep = sawKeep || isPinMeta(mod.name);
-			}
-			if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !sawKeep && !classPinned)
+			final mods: ModifierRun = modifierRunOf(run, source, seams);
+			final sawStatic: Bool = mods.isStatic;
+			final sawInline: Bool = mods.isInline;
+			final exported: Bool = mods.exported;
+			final sawKeep: Bool = mods.pinned;
+			// Native-interop bail. A type the grammar marks as emitted for FOREIGN consumption
+			// (`nativeInteropDeclMetaName`) exists so that code outside this compilation holds its
+			// members; adding `inline` bakes the value into every read site here while LEAVING the
+			// field the foreign side writes, so that write silently stops being observed. Measured
+			// on Haxe 4.3.7 `-cs`, `@:nativeGen class`: `static var X = 0.5` and
+			// `static inline final X = 0.5` emit a byte-identical class (the field and its static
+			// initialiser survive verbatim), and the caller's read changes from `Cls.X` to `0.5`.
+			// PUBLIC only — a private constant is on no foreign surface, and the `static inline
+			// var` -> `static inline final` arm below changes no emission at all, only the keyword.
+			final pinned: Bool = sawKeep || classPinned || classNative && exported;
+			if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !pinned)
 				consider(out, file, member, seams, reflected, macroConsumed, container, exported, proof);
 			else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)
 				considerInlineVar(out, file, source, member, seams, reflected);
@@ -611,3 +676,13 @@ final class InlineConstant implements Check {
  * never pays for an index.
  */
 private typedef InitProof = (container:QueryNode, init:QueryNode) -> Bool;
+/**
+ * What a member's leading modifier run says about it, resolved once by `modifierRunOf`:
+ * `static` / already-`inline` / exported visibility / carrying a pin meta (`@:keep`, `@:rtti`).
+ */
+private typedef ModifierRun = {
+	final isStatic: Bool;
+	final isInline: Bool;
+	final exported: Bool;
+	final pinned: Bool;
+};

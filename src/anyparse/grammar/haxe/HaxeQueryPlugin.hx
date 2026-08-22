@@ -829,6 +829,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// them itself. `BuildMacroMetaSeamTest` fails if the two lists ever disagree.
 			typeBuildMacroMetaNames: ['@:build', '@:autoBuild', '@:genericBuild'],
 			retainedDeclMetaName: '@:keep',
+			// `@:nativeGen` is what makes a cs/java class a plain native type foreign code holds
+			// directly — the Unity MonoBehaviour idiom. It is the marker, not `extends MonoBehaviour`:
+			// Pony declares `@:nativeGen class Tooltip` with no superclass at all, and
+			// `class PercentSize extends MonoBehaviour` with no annotation.
+			nativeInteropDeclMetaName: '@:nativeGen',
 			enumAbstractSyntax: { head: 'enum abstract {name}({under}) to {under}', bodyOpen: '{' },
 			rawDynamicTypeName: 'Dynamic',
 			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],

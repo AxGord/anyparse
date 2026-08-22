@@ -1134,6 +1134,26 @@ typedef RefShape = {
 	@:optional var retainedDeclMetaName: String;
 
 	/**
+	 * The metadata tag that declares a type is emitted as a PLAIN NATIVE type for the host
+	 * platform rather than as a runtime object of the language's own model (Haxe `@:nativeGen`,
+	 * which is what makes a `cs` / `java` class usable directly by foreign code — the Unity
+	 * MonoBehaviour idiom). The question it answers for a check is not "how is this stored" but
+	 * "who can reach these members": a type carrying it exists PRECISELY so that code outside
+	 * the compilation — a C# script, a serializer, an editor inspector — holds it and reads and
+	 * writes its fields. That consumer is invisible to every scan here AND to the project's own
+	 * compiler oracle, so a rewrite it would break fails SILENTLY, where a Haxe consumer's would
+	 * fail loudly.
+	 *
+	 * `inline-constant` is the one caller: the value of an inlined constant is baked into every
+	 * read site, so a foreign write to the field it leaves behind stops being observed. The
+	 * measurement that scoped this to `inline` alone — `var` -> `final` and
+	 * `var` -> `var(default, null)` emit BYTE-IDENTICAL C# on a `@:nativeGen` class, so no gate
+	 * is warranted there — is recorded on `InlineConstant`. Optional; unset → no declaration is
+	 * foreign-facing, the right default for a grammar with no native-interop annotation.
+	 */
+	@:optional var nativeInteropDeclMetaName: String;
+
+	/**
 	 * How the grammar SPELLS an enum-abstract declaration — the emission seam
 	 * `prefer-enum-abstract`'s autofix writes through when it converts a constant-only
 	 * class into one. Unset (the default for every grammar that does not fill it) leaves

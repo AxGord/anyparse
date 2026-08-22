@@ -417,6 +417,41 @@ class InlineConstantCheckTest extends Test {
 		Assert.equals('class C {\n\t#if cpp\n\tstatic inline final A:Int = 1;\n\t#end\n}', fixedSource(src));
 	}
 
+	/**
+	 * A PUBLIC constant of a `@:nativeGen` type is not inlined. The annotation is the grammar's
+	 * `nativeInteropDeclMetaName`: the type is emitted as a plain native type so that code OUTSIDE
+	 * this compilation holds it, and `inline` bakes every read here while leaving the field that
+	 * foreign side writes. Measured on Haxe 4.3.7 `-cs`: the emitted class is byte-identical either
+	 * way, only the call site changes.
+	 */
+	public function testNativeInteropPublicConstantSkipped(): Void {
+		Assert.equals(0, violations('@:nativeGen class C { public static final A:Int = 5; }').length);
+	}
+
+	/** A PRIVATE constant of the same type is on no foreign surface and still inlines. */
+	public function testNativeInteropPrivateConstantStillFlagged(): Void {
+		Assert.equals(1, violations('@:nativeGen class C { static final A:Int = 5; }').length);
+	}
+
+	/**
+	 * The gate is per DECLARATION, not per file — the annotation binds to the type it precedes, and a
+	 * plain sibling in the same module keeps inlining. A file-scoped text scan (the shape the
+	 * `@:coreApi` bail uses) would exempt both.
+	 */
+	public function testNativeInteropPlainSiblingStillFlagged(): Void {
+		final vs: Array<Violation> =
+			violations('@:nativeGen class A { public static final X:Int = 1; }\nclass B { public static final Y:Int = 2; }');
+		Assert.isTrue(vs.length == 1 && vs[0].message.indexOf('\'Y\'') != -1, 'expected only Y, got ${vs.map(v -> v.message)}');
+	}
+
+	/**
+	 * The `static inline var` -> `static inline final` arm is untouched by the native-interop gate:
+	 * it changes no emission at all, only the keyword.
+	 */
+	public function testNativeInteropInlineVarStillFinalized(): Void {
+		Assert.equals(1, violations('@:nativeGen class C { public static inline var A:Int = 5; }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new InlineConstant().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
