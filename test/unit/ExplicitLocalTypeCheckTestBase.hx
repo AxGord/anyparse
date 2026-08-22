@@ -7,6 +7,7 @@ import anyparse.check.ExplicitLocalType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.CachingGrammarPlugin;
 
 /**
  * Fixture scaffolding shared by the `explicit-local-type` check test parts: the
@@ -72,6 +73,33 @@ class ExplicitLocalTypeCheckTestBase extends Test {
 		final fixFile: { file: String, source: String } = { file: 'C.hx', source: fixSrc };
 		final index: SymbolIndex = SymbolIndex.build([fixFile].concat(otherFiles), plugin);
 		Assert.equals(0, check.fix(fixSrc, check.run([fixFile], plugin), plugin, index).length);
+	}
+
+	/**
+	 * `fix`'s canonicalized result for `fixSrc` (as `C.hx`) when `libFiles` are reachable ONLY through
+	 * the plugin's RESOLUTION scope — the report index is built over the report files alone, exactly
+	 * as a `Cli` run builds it. The harness for the arms that ask the wider index; a bare plugin
+	 * carries no such scope, which is what makes every fixture above a report-scope-only one.
+	 *
+	 * An unfixed shape comes back as `fixSrc` itself, so a caller pins "report-only" by equality.
+	 */
+	private function scopedFixText(
+		fixSrc: String, libFiles: Array<{ file: String, source: String }>, ?otherReportFiles: Array<{ file: String, source: String }>
+	): String {
+		final check: ExplicitLocalType = new ExplicitLocalType();
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: fixSrc }].concat(otherReportFiles ?? []);
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(libFiles) } });
+		final index: SymbolIndex = SymbolIndex.build(report, scoped);
+		final vs: Array<Violation> = check.run(report, scoped);
+		Assert.isTrue(vs.length >= 1, 'the fixture must produce a finding to fix');
+		switch RefactorSupport.canonicalize(fixSrc, check.fix(fixSrc, vs, scoped, index), true, scoped) {
+			case Ok(text):
+				return text;
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+		return fixSrc;
 	}
 
 }

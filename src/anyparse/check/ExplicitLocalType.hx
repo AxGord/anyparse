@@ -47,10 +47,12 @@ using StringTools;
  *  - a literal — `String` / `Int` / `Float` / `Bool` (negatives included);
  *  - `new T<...>()` with WRITTEN type parameters → `T<...>` verbatim;
  *  - a bare `new T(...)` whose `T` is PROVABLY non-generic → the written `T`
- *    verbatim: every indexed declaration of the simple name agrees on zero type
- *    parameters (`SymbolIndex.typeParamArityOf`), or - when the index declares
- *    no such name - `T` is a whitelisted always-in-scope non-generic constructor
- *    type (`StringBuf`, `EReg`, ...). A generic, ambiguous-arity or unknown `T`
+ *    verbatim: every declaration of the simple name in the narrowest index that
+ *    knows it — the REPORT scope first, then report UNION the configured
+ *    resolution libraries and the std — agrees on zero type parameters
+ *    (`SymbolIndex.typeParamArityOf`); or, when NEITHER declares the name, `T` is
+ *    a whitelisted always-in-scope non-generic constructor type (`StringBuf`,
+ *    `EReg`, ...). A generic, ambiguous-arity or unknown `T`
  *    stays report-only (a bare `:T` would be a compile error or an inference
  *    change);
  *  - a typed cast / check-type `(x : T)` → `T`;
@@ -197,8 +199,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static final DECLINE_NO_STRUCTURAL_TYPE: String = 'no structural rule names the initializer type — the ladder spells a '
 		+ 'literal, a bare `new` of a PROVABLY non-generic type, a homogeneous array literal, and a call / index / identifier whose '
-		+ 'declared type this run can read; a generic or out-of-scope constructor, an empty array literal, and a call into a module '
-		+ 'the run never indexed fall through all of them, and inferring one anyway would change the type rather than restate it';
+		+ 'declared type this run can read; a generic constructor, one no index in the run declares, an empty array literal, and a '
+		+ 'call into a module the run never indexed fall through all of them, and inferring one anyway would change the type rather '
+		+ 'than restate it';
 
 	/**
 	 * Builtin type names a cross-file type SOURCE may be copied verbatim as: the source is
@@ -224,14 +227,15 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 
 	/**
 	 * Always-in-scope constructor types with NO type parameters — a bare `new T()`'s
-	 * written name is provably its complete type. Consulted only when the project
-	 * index declares no same-named type (an indexed declaration's arity wins).
+	 * written name is provably its complete type. Consulted only when NEITHER index
+	 * declares the name, and since the resolution scope now carries the std that means
+	 * a run holding no resolution scope at all: a direct `check.fix` with a bare
+	 * plugin, `APQ_NO_STD`, a machine without Haxe.
 	 *
 	 * The ALWAYS-IN-SCOPE property (that these builtins need no import to name) is NOT
-	 * derivable from a declaration — so, even once `StdResolver` joins std and their
-	 * arity becomes index-derivable (the `index` arm above), this small whitelist
-	 * stays as intrinsic in-scope-ness knowledge and the unindexed-run fallback,
-	 * unlike the extension-method and static-return tables now derived from std.
+	 * derivable from a declaration, so the list stays as intrinsic in-scope-ness
+	 * knowledge and as that unindexed-run fallback, unlike the extension-method and
+	 * static-return tables now derived from std.
 	 */
 	private static final NON_GENERIC_NEW_TYPES: Array<String> = [
 		'StringBuf',
@@ -306,6 +310,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// arm names it either. It is read here rather than per-arm because `fix` is the one place
 		// holding the violations the config resolver keys off.
 		final anonCap: Int = maxAnonLen(violations);
+		// The one question the REPORT index cannot answer: a constructor a configured library or the
+		// std declares is undeclared here, and "undeclared" is not "non-generic" — see `bareNewType`.
+		final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -320,7 +327,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 				continue;
 			}
 			final init: QueryNode = node.children[0];
-			final typeSource: Null<String> = inferLocalType(init, source, shape, tree, castTargets, declaredTypeSources, index, anonCap);
+			final typeSource: Null<String> = inferLocalType(
+				init, source, shape, tree, castTargets, declaredTypeSources, index, resolution, anonCap
+			);
 			// The admissibility gate covers BOTH arms, not just the oracle's: a structural arm can
 			// copy `Dynamic` or a `Void` return out of a declared type just as the compiler can
 			// answer them, and the annotation is as bad either way (see `inadmissibleType`).
@@ -738,15 +747,17 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static function inferLocalType(
 		rawInit: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
-		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>, maxAnonLen: Int
+		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, maxAnonLen: Int
 	): Null<String> {
 		final init: QueryNode = RefactorSupport.unwrapParens(rawInit, shape.parenKind);
 		return
-			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index) ?? arrayType(init, shape) ?? methodReturnType(
-				init, shape, tree, declaredTypeSources
-			) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(init, shape, tree, index) ?? indexAccessType(
-				init, shape, tree, declaredTypeSources, index, maxAnonLen
-			) ?? TypeResolver.identDeclaredTypeSource(init, shape, tree, declaredTypeSources, true);
+			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index, resolution) ?? arrayType(
+				init, shape
+			) ?? methodReturnType(init, shape, tree, declaredTypeSources) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(
+				init, shape, tree, index
+			) ?? indexAccessType(init, shape, tree, declaredTypeSources, index, maxAnonLen) ?? TypeResolver.identDeclaredTypeSource(
+				init, shape, tree, declaredTypeSources, true
+			);
 	}
 
 	/**
@@ -813,30 +824,61 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 
 	/**
 	 * The written type of a bare (parameterless) `new T(...)` initializer, when `T`
-	 * is provably non-generic: a name every indexed declaration agrees has zero type
-	 * parameters, or — when the index declares no such name — a whitelisted
-	 * always-in-scope constructor type. A generic, ambiguous-arity or unknown `T`
-	 * stays report-only (a bare `:T` annotation would be a compile error or an
-	 * inference change), as does a written-generic `new` (`newTypeSource`'s arm).
+	 * is provably non-generic: a name every declaration in the narrowest index that
+	 * knows it agrees has zero type parameters, or — when NEITHER index declares the
+	 * name — a whitelisted always-in-scope constructor type. A generic,
+	 * ambiguous-arity or unknown `T` stays report-only (a bare `:T` annotation would
+	 * be a compile error or an inference change), as does a written-generic `new`
+	 * (`newTypeSource`'s arm).
+	 *
+	 * TWO indexes, asked in that order, because they answer for different SCOPES. `index` is the
+	 * REPORT scope: when it declares the name, that declaration is what the file resolves — a
+	 * project type shadows a library's same-named one — and its arity is the answer. `resolution`
+	 * is report UNION the configured libraries and the std, consulted only when the project
+	 * declares no such name at all. That case is exactly what the whitelist used to have to guess
+	 * at: `new Stream()` in a project whose `resolutionLibs` name `hxnodejs` was unnameable not
+	 * because its arity is unknown but because the only index holding it was never asked.
+	 *
+	 * Widening the LOOKUP is sound because the annotation copies the WRITTEN name verbatim into the
+	 * same file, a token away from the `new` that already spells it: a type path resolves
+	 * identically in `new T()` and in `:T`, so this edit needs no import (none of the structural
+	 * arms emit one) and cannot rebind the name. All the wider index changes is where the ARITY
+	 * proof comes from, and unanimity is still required — two declarations disagreeing about `T`
+	 * leave `typeParamArityOf` null and the site report-only.
 	 */
-	private static function bareNewType(init: QueryNode, source: String, shape: RefShape, index: Null<SymbolIndex>): Null<String> {
+	private static function bareNewType(
+		init: QueryNode, source: String, shape: RefShape, index: Null<SymbolIndex>, resolution: Null<SymbolIndex>
+	): Null<String> {
 		final newKind: Null<String> = shape.newExprKind;
 		if (newKind == null || init.kind != newKind) return null;
 		final written: Null<String> = LiteralInfer.bareNewTypeName(init, source);
 		if (written == null) return null;
 		final simple: String = written.substring(written.lastIndexOf('.') + 1);
-		// Declared in the index: provably non-generic ONLY when every declaration agrees on zero type
-		// parameters. A unanimous non-zero arity, or an ambiguous one (declarations disagree, so
+		// Declared in an index: provably non-generic ONLY when every declaration THERE agrees on zero
+		// type parameters. A unanimous non-zero arity, or an ambiguous one (declarations disagree, so
 		// typeParamArityOf returns null), both fail `== 0` and stay report-only — ambiguity must never
 		// prove non-genericity.
-		// Undeclared anywhere in the index: the whitelist of always-in-scope non-generic stdlib
-		// constructors is the only remaining signal.
-		return if (index != null && index.declaringFiles(simple).length > 0)
-			index.typeParamArityOf(simple) == 0 ? written : null
+		// Undeclared in BOTH: the whitelist of always-in-scope non-generic stdlib constructors is the
+		// only remaining signal, and it carries knowledge no declaration does.
+		final declaring: Null<SymbolIndex> = declaringIndex(index, resolution, simple);
+		return if (declaring != null)
+			declaring.typeParamArityOf(simple) == 0 ? written : null
 		else if (NON_GENERIC_NEW_TYPES.contains(simple))
 			written
 		else
 			null;
+	}
+
+	/**
+	 * The narrowest of `index` / `resolution` that declares `simple` at all, or null when neither
+	 * does. The report scope goes first: a project type shadows a library's same-named one, so
+	 * asking the union would let a library declaration disagree its arity proof away.
+	 */
+	private static function declaringIndex(index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, simple: String): Null<SymbolIndex> {
+		final report: Null<SymbolIndex> = index;
+		if (report != null && report.declaringFiles(simple).length > 0) return report;
+		final wide: Null<SymbolIndex> = resolution;
+		return wide != null && wide.declaringFiles(simple).length > 0 ? wide : null;
 	}
 
 	/**

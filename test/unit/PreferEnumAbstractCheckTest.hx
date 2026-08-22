@@ -388,6 +388,18 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(7, alignFixEdits('class Use { static function f() { return Type.resolveClass(\'Other\'); } }', false));
 	}
 
+	public function testFixRefusesInterpolatedReflectionNamedType(): Void {
+		// The reflection key may be COMPUTED, and `literalOf` answers null for an interpolated
+		// literal — so a scan over plain literals alone reads this call as naming nothing and the
+		// conversion goes through, leaving `Type.resolveClass` to answer null at runtime.
+		Assert.equals(0, alignFixEdits('class Use { static function f(p:String) { return Type.resolveClass(\'$${p}Align\'); } }', false));
+	}
+
+	public function testFixConvertsWhenTheInterpolationNamesSomethingElse(): Void {
+		// The discriminating half: same interpolated call, a fragment no candidate name contains.
+		Assert.equals(7, alignFixEdits('class Use { static function f(p:String) { return Type.resolveClass(\'$${p}Other\'); } }', false));
+	}
+
 	public function testFixWithoutRunYieldsNothing(): Void {
 		// Fail-closed: the whole-scope refusals live in `run`, so a `fix` that skipped it must
 		// not convert anything at all.

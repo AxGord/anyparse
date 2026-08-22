@@ -10,8 +10,6 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -160,14 +158,6 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	private static inline final OVERRIDE_MODIFIER: String = 'Override';
 
 	/**
-	 * Shortest interpolation FRAGMENT that can block a deletion. Same rationale as
-	 * `orphan-accessor`'s accessor-prefix length: a one- or two-character fragment (`'_'`,
-	 * `'$a-$b'`) carries no naming intent and is contained in almost every identifier, so
-	 * admitting it would veto every deletion in scope.
-	 */
-	private static inline final MIN_FRAGMENT_LENGTH: Int = 4;
-
-	/**
 	 * Method names the runtime or the compiler reaches with NO call token anywhere in source —
 	 * so the reference test, which only ever sees written text, cannot possibly find one.
 	 *
@@ -234,7 +224,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final ctx: Ctx = {
 			tokens: tokenCounts(files, wide, plugin),
-			fragments: interpolationFragments(files, plugin),
+			fragments: ReflectionScan.reflectionSurface(files, plugin).fragments,
 			naming: plugin.namingSupport()
 		};
 		final out: Array<Violation> = [];
@@ -408,7 +398,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 * name (`'do$suffix'`) and containment is asked the other way round.
 	 */
 	private static function noRuntimeNameFragment(ctx: Ctx, name: String): Bool {
-		return !ctx.fragments.exists(f -> f.length >= MIN_FRAGMENT_LENGTH && name.indexOf(f) >= 0);
+		return !ReflectionScan.runtimeNameFragment(ctx.fragments, name);
 	}
 
 	/**
@@ -507,33 +497,6 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			out[token] = (out[token] ?? 0) + 1;
 			i = end;
 		}
-	}
-
-	/**
-	 * The static text FRAGMENTS of every INTERPOLATED string in report scope — a partially
-	 * computed reflection name. Empty when the grammar exposes no string-fold support, which only
-	 * loses the deletion gate.
-	 */
-	private static function interpolationFragments(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
-		final out: Array<String> = [];
-		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		if (stringFold == null) return out;
-		final fold: StringFoldSupport = stringFold;
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) collectFragments(tree, entry.source, fold, out);
-		}
-		return out;
-	}
-
-	/** Collect into `out` the static `Literal` fragments of every interpolated string `node` and its descendants carry. */
-	private static function collectFragments(node: QueryNode, source: String, fold: StringFoldSupport, out: Array<String>): Void {
-		final literal: Null<StringLiteral> = fold.literalOf(node, source);
-		if (literal == null && CheckScan.STRING_EXPR_KINDS.contains(node.kind)) for (child in node.children) {
-			final fragment: Null<String> = child.name;
-			if (child.kind == CheckScan.STRING_FRAGMENT_KIND && fragment != null && !out.contains(fragment)) out.push(fragment);
-		}
-		for (child in node.children) collectFragments(child, source, fold, out);
 	}
 
 	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */

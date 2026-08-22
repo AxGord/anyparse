@@ -169,6 +169,32 @@ class StaticConstantCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The same gate for a COMPUTED key. `literalOf` answers null for an interpolated literal, so a
+	 * scan over plain literals alone reads `'${p}_counter'` as no mention of `_counter` — and the
+	 * promotion then moves off the instance a field `Reflect.field` still reads there.
+	 */
+	public function testInterpolatedReflectedNameRefused(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tprivate final _counter:Int = 5;\n\tfunction f():Int return _counter;\n}',
+				'class R {\n\tfunction g(o:Dynamic, p:String):Dynamic return Reflect.field(o, \'$${p}_counter\');\n}'
+			).length
+		);
+	}
+
+	/** The discriminating half: a fragment no member name contains leaves the promotion alone. */
+	public function testInterpolatedFragmentNamingSomethingElseStillFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\tprivate final _counter:Int = 5;\n\tfunction f():Int return _counter;\n}',
+				'class R {\n\tfunction g(o:Dynamic, p:String):Dynamic return Reflect.field(o, \'$${p}_other\');\n}'
+			).length
+		);
+	}
+
 	public function testKeepMetaRefused(): Void {
 		Assert.equals(0, violations('class C {\n\t@:keep private final _n:Int = 5;\n\tfunction f():Int return _n;\n}').length);
 	}

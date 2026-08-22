@@ -4,6 +4,7 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -299,8 +300,10 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 		final mentioning: Array<{ file: String, source: String }> = [
 			for (entry in files) if (mentionsAny(entry.source, names)) entry
 		];
-		final literals: Array<String> = ConstantFieldScan.reflectedNames(mentioning, plugin, plugin.stringFoldSupport());
-		return [for (c in candidates) if (!literals.contains(c.name)) c];
+		final surface: ReflectionSurface = ReflectionScan.reflectionSurface(mentioning, plugin);
+		return [
+			for (c in candidates) if (!surface.whole.contains(c.name) && !ReflectionScan.runtimeNameFragment(surface.fragments, c.name)) c
+		];
 	}
 
 	/** Whether `source` contains any of `names` as raw text — the cheap pre-filter ahead of the literal scan. */

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
+import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
@@ -210,7 +211,7 @@ final class InlineConstant implements Check {
 		final resolved: Null<ConstantFieldSeams> = ConstantFieldScan.seams(plugin);
 		if (resolved == null) return [];
 		final seams: ConstantFieldSeams = resolved;
-		final reflected: Array<String> = ConstantFieldScan.reflectedNames(files, plugin, seams.stringFold);
+		final reflected: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
 		final proof: InitProof = (container, init) -> isInlinableInitializer(container, init, seams);
 		// Built for ONE question — `transitivelyCarriesBuildMacro` in `scanContainer`. This rule
@@ -316,7 +317,7 @@ final class InlineConstant implements Check {
 	 * (`inheritedPin`) to reach the container one level down.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
+		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: ConstantFieldSeams, reflected: ReflectionSurface,
 		macroConsumed: Array<String>, inheritedPin: Bool, inheritedNative: Bool, proof: InitProof, branch: MemberBranchSeams,
 		index: SymbolIndex
 	): Void {
@@ -379,7 +380,7 @@ final class InlineConstant implements Check {
 	 * member is skipped.
 	 */
 	private static function scanContainer(
-		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
+		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: ConstantFieldSeams, reflected: ReflectionSurface,
 		macroConsumed: Array<String>, classPinned: Bool, classNative: Bool, proof: InitProof, branch: MemberBranchSeams, index: SymbolIndex
 	): Void {
 		// Build-macro bail. A macro-built type's fields are not the fields the declaration holds, and
@@ -426,13 +427,13 @@ final class InlineConstant implements Check {
 	 * module surface).
 	 */
 	private static function consider(
-		out: Array<Violation>, file: String, field: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>,
+		out: Array<Violation>, file: String, field: QueryNode, seams: ConstantFieldSeams, reflected: ReflectionSurface,
 		macroConsumed: Array<String>, container: QueryNode, exported: Bool, proof: InitProof
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
-		if (reflected.contains(name)) return;
+		if (reflected.whole.contains(name) || ReflectionScan.runtimeNameFragment(reflected.fragments, name)) return;
 		final containerName: Null<String> = container.name;
 		if (exported && containerName != null && macroConsumed.contains(containerName)) return;
 		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
@@ -562,7 +563,7 @@ final class InlineConstant implements Check {
 	 * `inline` / `@:keep` gates are applied by the caller.
 	 */
 	private static function considerInlineVar(
-		out: Array<Violation>, file: String, source: String, field: QueryNode, seams: ConstantFieldSeams, reflected: Array<String>
+		out: Array<Violation>, file: String, source: String, field: QueryNode, seams: ConstantFieldSeams, reflected: ReflectionSurface
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -590,12 +591,16 @@ final class InlineConstant implements Check {
 	 * (`X = 'X'`, the common event-name shape) must not self-trip it: `var` -> `final` is
 	 * reflection-neutral, so only a name stringified in OTHER code (`Reflect.field(o, "X")`)
 	 * keeps the field a `var`. The field's own value string is subtracted from the count.
+	 *
+	 * An interpolation FRAGMENT is never the field's OWN value — a self-name test can only read a
+	 * plain literal — so it needs no subtraction and answers on its own.
 	 */
 	private static function reflectedElsewhere(
-		name: String, init: QueryNode, source: String, seams: ConstantFieldSeams, reflected: Array<String>
+		name: String, init: QueryNode, source: String, seams: ConstantFieldSeams, reflected: ReflectionSurface
 	): Bool {
+		if (ReflectionScan.runtimeNameFragment(reflected.fragments, name)) return true;
 		var count: Int = 0;
-		for (s in reflected) if (s == name) count++;
+		for (s in reflected.whole) if (s == name) count++;
 		if (count == 0) return false;
 		final self: Int = ownValueIsName(name, init, source, seams.stringFold) ? 1 : 0;
 		return count > self;

@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantFieldScan.ConstantFieldSeams;
+import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
@@ -149,7 +150,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		if (resolved == null) return [];
 		final seams: ConstantFieldSeams = resolved;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final reflected: Array<String> = ConstantFieldScan.reflectedNames(files, plugin, seams.stringFold);
+		final reflected: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -257,7 +258,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
 		if (init == null || !isConstantLiteral(init, ctx.source, ctx.seams)) return;
 		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length)) return;
-		if (ctx.reflected.contains(name)) return;
+		if (ctx.reflected.whole.contains(name) || ReflectionScan.runtimeNameFragment(ctx.reflected.fragments, name)) return;
 		if (memberAccessedInFile(ctx.source, name, span)) return;
 		if (!RefactorSupport.privateMemberScanIsSound(ctx.source, ctx.index, name)) return;
 		// A macro-built type's fields are not what the declaration says — a builder that moves
@@ -325,7 +326,7 @@ private typedef Ctx = {
 	final file: String;
 	final source: String;
 	final seams: ConstantFieldSeams;
-	final reflected: Array<String>;
+	final reflected: ReflectionSurface;
 	final index: SymbolIndex;
 	final plugin: GrammarPlugin;
 	final branch: MemberBranchSeams;
