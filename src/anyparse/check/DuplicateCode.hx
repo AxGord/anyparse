@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NormalizedSpan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
@@ -67,7 +68,7 @@ import anyparse.runtime.Span;
  * findings.
  */
 @:nullSafety(Strict)
-final class DuplicateCode implements Check {
+final class DuplicateCode implements Check implements NoAutofix {
 
 	/** The shortest run of consecutive statements considered a clone. */
 	private static inline final MIN_STATEMENTS: Int = 3;
@@ -117,6 +118,14 @@ final class DuplicateCode implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	/**
+	 * Two identical runs of statements may be one idea or a coincidence, and only a reader can
+	 * tell. Extracting the common lines mechanically is how a wrong abstraction gets born.
+	 */
+	public function noAutofixReason(): String {
+		return 'whether the copies are one idea or a coincidence — and where the shared factor belongs — is a design judgement';
 	}
 
 	/**

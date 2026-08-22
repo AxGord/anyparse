@@ -322,6 +322,31 @@ class PreferTypedThrowCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { throw').length);
 	}
 
+	/**
+	 * The degraded verdict has to reach `--fix`, which prints no findings at all — which is exactly
+	 * how 161 degraded findings on one tree came to be read as "this rule has no autofix" and a queue
+	 * item was written on it. `declineReason` is that verdict in the slot the fix ledger reads, and
+	 * asserting it is a SUBSTRING of the message pins the two spellings to one constant.
+	 */
+	public function testDegradedFindingCarriesTheDeclineReasonTheFixLedgerReads(): Void {
+		final check: PreferTypedThrow = new PreferTypedThrow();
+		final vs: Array<Violation> = check.run(
+			[{ file: 'C.hx', source: THROWER }, { file: 'H.hx', source: STRING_CATCH }], new HaxeQueryPlugin()
+		);
+		Assert.equals(1, vs.length);
+		final reason: Null<String> = vs[0].declineReason;
+		Assert.notNull(reason, 'a degraded finding must say WHY no edit is available');
+		Assert.isTrue(reason.indexOf('catch clause') != -1, 'the reason names the gate that closed, got: $reason');
+		Assert.isTrue(vs[0].message.indexOf(reason) != -1, 'report message and decline reason are ONE constant, got: ${vs[0].message}');
+	}
+
+	/** A finding the gate left FIXABLE declines nothing, so it carries no reason — the field is not a description slot. */
+	public function testFixableFindingCarriesNoDeclineReason(): Void {
+		final vs: Array<Violation> = violations(THROWER);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].declineReason == null, 'nothing declined this finding, got: ${vs[0].declineReason}');
+	}
+
 	private function scopedPlugin(
 		report: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>
 	): CachingGrammarPlugin {

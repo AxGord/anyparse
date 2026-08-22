@@ -255,22 +255,176 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
-
 	/**
-	 * `fixed 0 issue(s)` is ambiguous between "nothing to fix" and "every fix was declined", and
-	 * the second reading is the one that cost T9 and T17 a wrong conclusion each. The tail must
-	 * name the reporting rules with their counts and point at SCOPE; with nothing reported it must
-	 * stay empty, so a genuinely clean run gains no noise.
+	 * The defect: `--fix` reported a rule that HAS an autofix and one that has none in exactly the
+	 * same way, and its own tail spelled the ambiguity out rather than resolving it — "the check has
+	 * no autofix, or when its fix declined here". Two queue items were written on the wrong branch of
+	 * that `or`, for two rules that each had a working fix.
+	 *
+	 * So the four situations must get four DIFFERENT sentences, and the one a rule declared nothing
+	 * about must get the OBSERVATION (the fix was called, no edit came back) rather than a verdict.
 	 */
 	@:access(anyparse.query.Cli)
-	public function testDeclinedFixNudgeNamesTheReportingRulesAndPointsAtScope(): Void {
-		final tail: String = Cli.declinedFixNudge(['naming' => 2, 'dead-store' => 1]);
-		Assert.isTrue(tail.indexOf('naming 2') >= 0, 'the rule that reported most comes first with its count - got: $tail');
-		Assert.isTrue(tail.indexOf('dead-store 1') >= 0, 'every reporting rule is named - got: $tail');
-		Assert.isTrue(tail.indexOf('naming 2, dead-store 1') >= 0, 'rules are ordered by finding count - got: $tail');
-		Assert.isTrue(tail.indexOf('WIDER scope') >= 0, 'the tail must point at scope - got: $tail');
-		final none: Map<String, Int> = [];
-		Assert.equals('', Cli.declinedFixNudge(none), 'nothing reported means fixed 0 is the whole truth');
+	public function testUnfixedLedgerTellsNoAutofixApartFromDeclinedHere(): Void {
+		final lines: Array<String> = Cli.unfixedFixLedger([
+			'complexity' => {
+				reported: 3,
+				declined: 3,
+				edits: 0,
+				reason: null
+			},
+			'prefer-typed-throw' => {
+				reported: 9,
+				declined: 9,
+				edits: 0,
+				reason: 'a String catch clause is in scope'
+			},
+			'naming' => {
+				reported: 7,
+				declined: 2,
+				edits: 5,
+				reason: null
+			},
+			'magic-number' => {
+				reported: 1,
+				declined: 1,
+				edits: 0,
+				reason: null
+			}
+		], ['complexity' => 'which decomposition is right is a human call'], [], []);
+		final all: String = lines.join('');
+		Assert.isTrue(
+			all.indexOf('complexity 3: no autofix by design — which decomposition is right is a human call') >= 0,
+			'a rule that DECLARED it cannot fix says so, with its reason - got: $all'
+		);
+		Assert.isTrue(
+			all.indexOf('prefer-typed-throw 9: fix DECLINED — a String catch clause is in scope') >= 0,
+			'a declined finding carries the gate that withheld it - got: $all'
+		);
+		Assert.isTrue(
+			all.indexOf('naming 2 of 7: fix declined here, yet the rule produced 5 edit(s) elsewhere') >= 0,
+			'a rule that fixed elsewhere this run is PROVED to have an autofix, and the row shows the gap - got: $all'
+		);
+		Assert.isTrue(
+			all.indexOf('magic-number 1: its fix was called') >= 0, 'an undeclared rule gets the observation, never a verdict - got: $all'
+		);
+		Assert.isTrue(
+			all.indexOf('declares neither NoAutofix nor a decline reason') >= 0,
+			'and the observation names the DECLARATION as what is missing - got: $all'
+		);
+		Assert.isTrue(all.indexOf('15 reported finding(s) in 4 rule(s)') >= 0, 'the header totals the declined counts - got: $all');
+	}
+
+	/**
+	 * A run that fixed everything it reported, and a run that reported nothing, both print no ledger
+	 * — the block is about findings that got no edit, and a clean run must gain no noise.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testUnfixedLedgerIsSilentWhenNothingWasDeclined(): Void {
+		final fixedEverything: Array<String> = Cli.unfixedFixLedger([
+			'unused-import' => {
+				reported: 4,
+				declined: 0,
+				edits: 4,
+				reason: null
+			}
+		], [], [], []);
+		Assert.equals(0, fixedEverything.length, 'nothing was declined, so there is nothing to explain');
+		Assert.equals(0, Cli.unfixedFixLedger([], [], [], []).length, 'a clean run gains no noise');
+	}
+
+	/**
+	 * A `RiskyFix` / `OracleAssisted` rule is never handed to the safe loop, so no `fix` of its own
+	 * is ever called there and its row would be a silent zero. On Pony `avoid-dynamic` alone reports
+	 * 470 findings; a block about what did not get fixed that simply omits the largest rule on the
+	 * tree invites its own misreading, so the uncovered rules are named once at the end.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testUnfixedLedgerNamesTheRulesItDoesNotCover(): Void {
+		final all: String = Cli.unfixedFixLedger([
+			'magic-number' => {
+				reported: 1,
+				declined: 1,
+				edits: 0,
+				reason: null
+			},
+			'explicit-local-type' => {
+				reported: 5,
+				declined: 5,
+				edits: 0,
+				reason: null
+			}
+		], [], ['explicit-local-type'], ['avoid-dynamic', 'prefer-inline']).join('');
+		Assert.isTrue(all.indexOf('2 rule(s) never enter this ledger') >= 0, 'the RISKY rules are counted - got: $all');
+		Assert.isTrue(all.indexOf('avoid-dynamic, prefer-inline') >= 0, 'and named - got: $all');
+		// An OracleAssisted rule that is not ALSO risky runs in the safe loop, so it has a row here.
+		// The first version of this line listed it as absent, one line under its own row.
+		Assert.isTrue(all.indexOf('explicit-local-type 5:') >= 0, 'an oracle-assisted rule still gets a row - got: $all');
+		Assert.isTrue(
+			all.indexOf('oracle-assisted pass besides') >= 0,
+			'and its second fix path is noted ON the row, not by claiming the rule is missing - got: $all'
+		);
+	}
+
+	/**
+	 * Seventy-odd rules report on a real tree (74 on Pony), so the block names the biggest few and
+	 * totals the rest — otherwise the answer to "what did not get fixed" is a wall nobody reads.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testUnfixedLedgerCapsTheRuleListAndTotalsTheRest(): Void {
+		final all: String = Cli.unfixedFixLedger([
+			'r1' => {
+				reported: 8,
+				declined: 8,
+				edits: 0,
+				reason: null
+			},
+			'r2' => {
+				reported: 7,
+				declined: 7,
+				edits: 0,
+				reason: null
+			},
+			'r3' => {
+				reported: 6,
+				declined: 6,
+				edits: 0,
+				reason: null
+			},
+			'r4' => {
+				reported: 5,
+				declined: 5,
+				edits: 0,
+				reason: null
+			},
+			'r5' => {
+				reported: 4,
+				declined: 4,
+				edits: 0,
+				reason: null
+			},
+			'r6' => {
+				reported: 3,
+				declined: 3,
+				edits: 0,
+				reason: null
+			},
+			'r7' => {
+				reported: 2,
+				declined: 2,
+				edits: 0,
+				reason: null
+			},
+			'r8' => {
+				reported: 1,
+				declined: 1,
+				edits: 0,
+				reason: null
+			}
+		], [], [], []).join('');
+		Assert.isTrue(all.indexOf('r1 8:') >= 0 && all.indexOf('r6 3:') >= 0, 'the six biggest are named - got: $all');
+		Assert.isTrue(all.indexOf('r7 2:') < 0, 'the seventh is not - got: $all');
+		Assert.isTrue(all.indexOf('... +2 more rule(s), 3 finding(s)') >= 0, 'and the rest are totalled - got: $all');
 	}
 
 }

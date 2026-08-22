@@ -461,7 +461,7 @@ final class Cli {
 
 	private static inline final SKIP_PATHS_SHOWN: Int = 5;
 
-	/** How many rule ids `declinedFixNudge` names before it summarises the rest as a count. */
+	/** How many rule ids `unfixedFixLedger` names before it summarises the rest as a count. */
 	private static inline final DECLINED_RULES_SHOWN: Int = 6;
 
 	private static inline final FUZZY_MAX_DIST: Int = 3;
@@ -2097,7 +2097,9 @@ final class Cli {
 		var fixedCount: Int = 0;
 		var passes: Int = 0;
 		var hitCap: Bool = false;
-		final reportedByRule: Map<String, Int> = [];
+		// What each rule's fix DID this run — the measurement that replaces the guess
+		// `fixed N issue(s)` used to leave the reader to make.
+		final ledger: Map<String, RuleFixOutcome> = [];
 
 		while (active.length > 0) {
 			if (passes >= maxPasses) {
@@ -2107,7 +2109,7 @@ final class Cli {
 			passes++;
 			final pass: LintPassResult = applyLintPass(
 				active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile, passes,
-				noted, changedFiles, reportedByRule, coupled
+				noted, changedFiles, ledger, coupled
 			);
 			fixedCount += pass.fixedDelta;
 			active = pass.nextActive;
@@ -2159,15 +2161,16 @@ final class Cli {
 		final baselineTail: String = safePass.tail;
 		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
 		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
-		// `fixed 0 issue(s)` cannot be told apart from "there was nothing to fix", and that one
-		// ambiguous line was read twice tonight as "this rule has no autofix" when the rule had one
-		// and a gate declined it for want of scope. Only a run that changed NOTHING gets the tail —
-		// a productive run's unfixed report-only findings are not news.
-		final declinedTail: String = fixedCount == 0 ? declinedFixNudge(reportedByRule) : '';
 		stderr(
 			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
-			+ '$baselineTail$riskyTail$oracleTail$declinedTail\n'
+			+ '$baselineTail$riskyTail$oracleTail\n'
 		);
+		// What the run did NOT fix, per rule. Its own block, not a tail on the line above: that line
+		// is what every gate and doc quotes, and it keeps its bytes. It also prints on a PRODUCTIVE
+		// run, which the tail it replaces did not — `fixed 0` was the only trigger, so this 668-fix
+		// tree said nothing whatever about the 161 findings it declined, and a productive run is
+		// exactly where the misreading lands.
+		printUnfixedLedger(ledger, checks, split.risky, oracleAssisted);
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
 		// md5 snapshot before and after plus one run per candidate rule.
@@ -10139,7 +10142,7 @@ final class Cli {
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>,
-		reportedByRule: Map<String, Int>, coupled: Array<Array<String>>
+		ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>
 	): LintPassResult {
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
@@ -10154,9 +10157,10 @@ final class Cli {
 		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement);
 		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
 		// The FIRST pass's report is the one a reader compares `fixed N` against: later passes see
-		// only what an earlier edit exposed. Recorded here so a run that changes nothing can say
-		// WHICH rules reported, instead of leaving `fixed 0 issue(s)` to read as "nothing to fix".
-		if (passes == 1) for (v in violations) reportedByRule[v.rule] = (reportedByRule[v.rule] ?? 0) + 1;
+		// only what an earlier edit exposed. Recorded here so the run can say WHICH rules reported
+		// and — through the decline half of the same ledger, filled in below where each `fix` is
+		// actually called — which of them answered with no edit.
+		if (passes == 1) for (v in violations) ledgerFor(ledger, v.rule).reported++;
 		final nextActive: Array<{ file: String, source: String }> = [];
 		var fixedDelta: Int = 0;
 		// Cross-file fixes (naming's non-confined private / public member rename) run FIRST, against this
@@ -10168,13 +10172,22 @@ final class Cli {
 		final crossRenames: Array<Array<CrossFileEdits>> = [];
 		for (check in checks) if (check is CrossFileFix) {
 			final own: Array<Violation> = violations.filter(v -> v.rule == check.id());
-			for (rename in (cast check: CrossFileFix).crossFileFix(files, own, cached, index)) crossRenames.push(rename);
+			for (rename in (cast check: CrossFileFix).crossFileFix(files, own, cached, index)) {
+				crossRenames.push(rename);
+				// The ledger's "produced N edit(s) elsewhere" arm is a claim about the WHOLE rule, so it
+				// has to see this path too. `naming` fixes a non-confined member ONLY here, and a ledger
+				// blind to it would report the one rule that renames across files as having answered
+				// nothing at all — the exact shape of claim this whole block exists to stop making.
+				for (slice in rename) ledgerFor(ledger, check.id()).edits += slice.edits.length;
+			}
 		}
 		fixedDelta += applyCrossFileRenames(crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive, coupled);
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
 			if (fileViolations.length == 0) continue;
-			final disjoint: Array<{ span: Span, text: String }> = computeFileLintEdits(entry.source, fileViolations, checks, cached, index);
+			final disjoint: Array<{ span: Span, text: String }> = computeFileLintEdits(
+				entry.source, fileViolations, checks, cached, index, ledger, passes == 1
+			);
 			if (disjoint.length == 0) continue;
 			switch RefactorSupport.canonicalize(entry.source, disjoint, false, cached, optsByFile[entry.file]) {
 				case Ok(text):
@@ -10303,13 +10316,18 @@ final class Cli {
 	 * canonicalization.
 	 */
 	private static function computeFileLintEdits(
-		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex
+		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex,
+		ledger: Map<String, RuleFixOutcome>, countDeclines: Bool
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (check in checks) {
 			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 			if (own.length == 0) continue;
 			final checkEdits: Array<{ span: Span, text: String }> = check.fix(source, own, cached, index);
+			// The ONE place in the tool that knows what a check answered for a given set of its own
+			// findings. Recorded here rather than inferred later: "no edit came back" is a fact only
+			// this call site holds, and every reading of it downstream was a guess.
+			noteFixOutcome(ledger, check.id(), own, checkEdits.length, countDeclines);
 			// Accept a check's edits only when none overlaps an edit already accepted from
 			// an earlier check this pass — applying a subset would break an atomic fix
 			// (e.g. unused-parameter's signature edit without its call-site arg edit, when
@@ -10318,6 +10336,51 @@ final class Cli {
 			if (checkEdits.length > 0 && !RefactorSupport.editsOverlapAny(checkEdits, edits)) for (e in checkEdits) edits.push(e);
 		}
 		return RefactorSupport.dropContainedEdits(edits);
+	}
+
+	/**
+	 * `rule`'s ledger row, created empty on first sight. Every writer goes through here so a
+	 * rule that reports before it is ever asked for a fix (and one asked before it reports,
+	 * on a later pass) share one row instead of racing to create two.
+	 */
+	private static function ledgerFor(ledger: Map<String, RuleFixOutcome>, rule: String): RuleFixOutcome {
+		final found: Null<RuleFixOutcome> = ledger[rule];
+		if (found != null) return found;
+		final created: RuleFixOutcome = {
+			reported: 0,
+			declined: 0,
+			edits: 0,
+			reason: null
+		};
+		ledger[rule] = created;
+		return created;
+	}
+
+	/**
+	 * Record what `rule`'s `Check.fix` answered for `own` — `editCount` edits for those findings.
+	 *
+	 * `edits` accumulates on EVERY pass: one edit anywhere is proof the rule HAS an autofix, and
+	 * that single bit is what two slices got wrong by reading `fixed 0 issue(s)`. `declined` is
+	 * counted only when `countDeclines` (the first pass), so it stays comparable with `reported`
+	 * — a later pass re-reports whatever an earlier edit exposed, and summing those would count
+	 * one finding several times.
+	 *
+	 * The REASON is never inferred here. It is whatever the check itself wrote on one of its own
+	 * findings (`Violation.declineReason`), first one seen; a rule that says nothing leaves it
+	 * null and the ledger reports only what it observed.
+	 */
+	private static function noteFixOutcome(
+		ledger: Map<String, RuleFixOutcome>, rule: String, own: Array<Violation>, editCount: Int, countDeclines: Bool
+	): Void {
+		final entry: RuleFixOutcome = ledgerFor(ledger, rule);
+		entry.edits += editCount;
+		if (entry.reason == null) for (v in own) {
+			final reason: Null<String> = v.declineReason;
+			if (reason == null) continue;
+			entry.reason = reason;
+			break;
+		}
+		if (editCount == 0 && countDeclines) entry.declined += own.length;
 	}
 
 	/**
@@ -16612,29 +16675,135 @@ final class Cli {
 	}
 
 	/**
-	 * The tail `lint --fix` prints when it changed NOTHING. `fixed 0 issue(s)` alone reads exactly
-	 * like "there was nothing to fix", and that ambiguity cost two slices a wrong conclusion:
-	 * a check whose fix a gate declined was read as a check with no fix at all. Naming the rules
-	 * that DID report separates the two — the finding exists, it is the FIX that was withheld —
-	 * and points at the commonest cause, a scope too narrow to prove the rewrite safe.
+	 * The `lint --fix` block naming, per rule, the findings that got NO edit from their own check —
+	 * and which of the things that can mean happened to each.
 	 *
-	 * Empty when nothing was reported either: then `fixed 0` is the whole truth.
+	 * `fixed N issue(s)` answered none of that. Its ambiguous companion tail printed ONLY when the run
+	 * changed nothing, so a 668-fix tree said not one word about the 161 findings it declined; and the
+	 * tail itself spelled the ambiguity out rather than resolving it ("the check has no autofix, or when
+	 * its fix declined here"), which three readers resolved the wrong way and two of them filed work on.
+	 *
+	 * A row counts the DECLINED findings, not the reported ones — a finding whose check answered with an
+	 * edit is not news — so a run that fixed everything it reported, and a clean run, both print nothing.
+	 * `verifiedIds` are the rules the safe loop never asks at all; they are named once at the end rather
+	 * than shown as silent zeroes.
 	 */
-	private static function declinedFixNudge(reportedByRule: Map<String, Int>): String {
-		final rules: Array<String> = [for (id in reportedByRule.keys()) id];
-		if (rules.length == 0) return '';
-		rules.sort((a, b) -> {
-			final byCount: Int = (reportedByRule[b] ?? 0) - (reportedByRule[a] ?? 0);
-			return byCount != 0 ? byCount : Reflect.compare(a, b);
-		});
-		final shown: Array<String> = [
-			for (id in rules.slice(0, DECLINED_RULES_SHOWN)) '$id ${reportedByRule[id] ?? 0}'
+	private static function unfixedFixLedger(
+		ledger: Map<String, RuleFixOutcome>, noAutofixReasons: Map<String, String>, oracleAssistedIds: Array<String>,
+		riskyIds: Array<String>
+	): Array<String> {
+		final rows: Array<{
+			rule: String,
+			count: Int,
+			reported: Int,
+			verdict: String,
+			declared: Bool
+		}> = [];
+		for (rule => entry in ledger) if (entry.declined != 0) {
+			final declared: Null<String> = noAutofixReasons[rule];
+			rows.push({
+				rule: rule,
+				count: entry.declined,
+				reported: entry.reported,
+				verdict: unfixedVerdict(entry, declared, oracleAssistedIds.contains(rule)),
+				declared: declared != null || entry.reason != null
+			});
+		}
+		if (rows.length == 0) return [];
+		rows.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.rule, b.rule));
+		var total: Int = 0;
+		for (row in rows) total += row.count;
+		final lines: Array<String> = [
+			'apq lint --fix: $total reported finding(s) in ${rows.length} rule(s) got NO edit from their own check:\n'
 		];
-		final more: Int = rules.length - shown.length;
-		final tail: String = more > 0 ? ', +$more more rule(s)' : '';
-		return ' — but the run REPORTED: ${shown.join(', ')}$tail. A reported finding stays unfixed when the check has no autofix, or '
-			+ 'when its fix declined here — most often because proving the rewrite safe needs a WIDER scope than this run (a member '
-			+ 'rename must see every file that could collide). Re-run over the project root before concluding the rule cannot fix it.';
+		// `<n> of <reported>` only when the two differ — that gap IS the "fixed some, declined the
+		// rest" case, and a reader who cannot see it reads a partial decline as a total one.
+		for (row in rows.slice(0, DECLINED_RULES_SHOWN)) {
+			final label: String = row.count == row.reported ? '${row.rule} ${row.count}' : '${row.rule} ${row.count} of ${row.reported}';
+			lines.push('  $label: ${row.verdict}\n');
+		}
+		if (rows.length > DECLINED_RULES_SHOWN) {
+			var rest: Int = 0;
+			for (row in rows.slice(DECLINED_RULES_SHOWN)) rest += row.count;
+			lines.push('  ... +${rows.length - DECLINED_RULES_SHOWN} more rule(s), $rest finding(s)\n');
+		}
+		// ONLY the RiskyFix set is missing from the ledger. An `OracleAssisted` rule that is not also
+		// risky DOES run in the safe loop, so it has a row here — listing it as absent was the first
+		// version of this line and it contradicted the row three lines above it.
+		if (riskyIds.length > 0)
+			lines.push(
+				'apq lint --fix: ${riskyIds.length} rule(s) never enter this ledger — the risky-fix path owns them '
+				+ '(${riskyIds.join(', ')}); the summary line above is their whole verdict.\n'
+			);
+		if (rows.exists(row -> !row.declared))
+			lines.push(
+				'apq lint --fix: a rule above that declared NOTHING is not thereby a rule that CANNOT fix — a decline most often needs a '
+				+ 'WIDER scope than this run (a member rename must see every file that could collide). Re-run over the project root, and '
+				+ 'see `Check.NoAutofix` / `Violation.declineReason` for what a rule owes its reader here.\n'
+			);
+		return lines;
+	}
+	/**
+	 * Which of the things an unfixed finding can MEAN happened to `entry`'s.
+	 *
+	 * The order is by strength of evidence, and the last arm is the honest default: a check that
+	 * declared nothing gets only the observation (its fix was called and answered no edit), never
+	 * the claim that it HAS no fix. The `edits > 0` arm is the one no declaration is needed for —
+	 * a rule that produced an edit somewhere this run has PROVED it can fix, so its silence here
+	 * is a decline whatever it says.
+	 */
+	private static function unfixedVerdict(entry: RuleFixOutcome, noAutofixReason: Null<String>, oracleAssisted: Bool): String {
+		final verdict: String = plainUnfixedVerdict(entry, noAutofixReason);
+		// An OracleAssisted rule has a SECOND fix path this ledger never sees (it runs once, after
+		// the loop, against a warm display server). Saying only what the safe loop observed would
+		// under-report a rule whose oracle pass did land edits.
+		return oracleAssisted ? '$verdict — and this rule has an oracle-assisted pass besides, counted on the summary line above' : verdict;
+	}
+	/**
+	 * The verdict from what the SAFE loop observed, before the oracle-assisted note is added.
+	 *
+	 * The arms are in order of how strong the evidence is, and the last one is the honest default:
+	 * a check that declared nothing gets the observation (its fix was called, no edit came back),
+	 * never the claim that it HAS no fix — that claim, made by a reader rather than by the tool, is
+	 * what this whole block exists to stop. The `edits > 0` arm needs no declaration at all: a rule
+	 * that produced an edit somewhere this run has PROVED it can fix.
+	 */
+	private static function plainUnfixedVerdict(entry: RuleFixOutcome, noAutofixReason: Null<String>): String {
+		if (noAutofixReason != null) return 'no autofix by design — $noAutofixReason';
+		final reason: Null<String> = entry.reason;
+		return if (reason != null)
+			'fix DECLINED — $reason'
+		else if (entry.edits > 0)
+			'fix declined here, yet the rule produced ${entry.edits} edit(s) elsewhere in this run — so it HAS'
+				+ ' an autofix and withheld it, without saying why'
+		else
+			'its fix was called for these findings and returned no edit; the check declares neither NoAutofix nor a decline reason,'
+				+ ' so the run will not say which it is';
+	}
+
+	/**
+	 * Print the per-rule ledger of reported-but-unfixed findings.
+	 *
+	 * `risky` never enters the ledger at all: a `RiskyFix` check is excluded from the safe loop, so no
+	 * `Check.fix` of its own is ever called there and its row would be a silent zero. Naming those rules
+	 * is what keeps the block from reading as though it LOST the largest rule on the tree — on Pony
+	 * `avoid-dynamic` alone reports 470 — and the summary line above already carries their applied /
+	 * reverted verdict.
+	 *
+	 * `oracleAssisted` is the opposite case and was got wrong first time round: such a rule DOES run in
+	 * the safe loop (unless it is risky too), so it has a row here — its extra oracle pass is noted ON
+	 * that row rather than by claiming the rule is absent.
+	 */
+	private static function printUnfixedLedger(
+		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>
+	): Void {
+		final riskyIds: Array<String> = [for (c in risky) c.id()];
+		riskyIds.sort((a, b) -> Reflect.compare(a, b));
+		final oracleIds: Array<String> = [for (c in oracleAssisted) c.id()];
+		final reasons: Map<String, String> = [
+			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()
+		];
+		for (line in unfixedFixLedger(ledger, reasons, oracleIds, riskyIds)) stderr(line);
 	}
 	#end
 
@@ -17122,4 +17291,22 @@ private typedef OracleBatchResult = {
 private typedef NamedMember = {
 	final type: String;
 	final member: String;
+};
+/**
+ * What ONE rule's autofix did over a whole `lint --fix` run — the ledger behind the per-rule
+ * "reported but got no edit" block.
+ *
+ * `reported` is the FIRST pass's finding count (later passes see only what an earlier edit
+ * exposed, so summing them would not be a number to compare `fixed N` against). `declined`
+ * counts the first-pass findings whose `Check.fix` call answered with NO edit at all — the
+ * measurement, taken where the call happens, that replaces guessing. `edits` accumulates over
+ * EVERY pass on purpose: one edit anywhere PROVES the rule can fix, which is exactly the claim
+ * a reader of `fixed 0` got wrong twice. `reason` is the check's own `Violation.declineReason`,
+ * first one seen; null means the check said nothing and the run must not invent it.
+ */
+private typedef RuleFixOutcome = {
+	var reported: Int;
+	var declined: Int;
+	var edits: Int;
+	var reason: Null<String>;
 };

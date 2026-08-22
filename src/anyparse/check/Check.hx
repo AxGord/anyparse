@@ -10,7 +10,8 @@ import anyparse.runtime.Span;
  * grouped back per file); `span` is the source range to report (null
  * when the check cannot resolve one — rendered without a coordinate);
  * `rule` is the producing check's `id()`; `severity` ranks it; `message`
- * is the human-facing description.
+ * is the human-facing description; the optional `declineReason` is
+ * why no autofix edit was produced for it.
  */
 typedef Violation = {
 	var file: String;
@@ -18,6 +19,23 @@ typedef Violation = {
 	var rule: String;
 	var severity: Severity;
 	var message: String;
+
+	/**
+	 * Why THIS finding got no autofix edit, in the producing check's OWN words, or null —
+	 * the default, and the state of every finding nothing declined.
+	 *
+	 * Written AT the site that declines, by the code that decides to decline: in `run` when a
+	 * whole-scope gate closes before any edit is computed (`prefer-typed-throw`'s catch-clause
+	 * scan), inside `fix` when the gate is per-site (`import-order`'s same-simple-name guard —
+	 * `fix` is handed the caller's OWN violation objects, so a note set there reaches the
+	 * reporter). Writing it anywhere else means inventing a reason, which is the defect the
+	 * field exists to end.
+	 *
+	 * Only `apq lint --fix`'s per-rule unfixed ledger reads it. The text report and the json /
+	 * checkstyle records are built field by field from the other five, so a rule that adopts
+	 * this one changes no reported byte.
+	 */
+	@:optional var declineReason: Null<String>;
 }
 
 /**
@@ -71,6 +89,17 @@ interface Check {
 	 * than from `violations` can outlive the finding that motivated it. The
 	 * worked example is on `GroupedFix`, whose grouping seam says which edits
 	 * are inseparable, never that one is deserved.
+	 *
+	 * SAYING WHY NOTHING CAME BACK: an empty array is the same answer for a
+	 * check that has NO autofix and for one whose gate declined HERE, and
+	 * `apq lint --fix` reported the two identically until a reader filed work
+	 * on a guard the rule already had. A check with no autofix at all declares
+	 * `NoAutofix` and gives the reason once, on the class; a check that HAS a
+	 * fix and withholds it at a site writes `Violation.declineReason` on that
+	 * finding, naming the gate — here, or in `run` when the gate is
+	 * whole-scope. Declaring neither is allowed and is not a defect: the run
+	 * then reports only what it observed, that the fix was called for these
+	 * findings and answered nothing.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -334,5 +363,38 @@ interface GroupedFix {
 	public function fixGrouped(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<GroupedEdit>;
+
+}
+
+/**
+ * Opt-in declaration that a `Check` has NO autofix AT ALL — report-only BY DESIGN, rather
+ * than because a gate closed on this run.
+ *
+ * The two readings of an unfixed finding — the rule CANNOT fix, or its fix DECLINED here —
+ * were indistinguishable from outside, and `Check` had no slot that told them apart:
+ * `fix` answers an empty array for both. `apq lint --fix`'s own tail spelled the ambiguity
+ * out ("the check has no autofix, or when its fix declined here") and three readers took
+ * the first branch; two of them filed work on it, and both rules HAD a fix —
+ * `import-order`'s already carried the guard the work was to invent, `prefer-typed-throw`'s
+ * is closed wholesale by a project-wide catch-clause gate.
+ *
+ * A check implementing this says the first reading is the true one, and `noAutofixReason`
+ * says why a machine must not do the rewrite. A check that does NOT implement it is NOT
+ * thereby claiming an autofix: the `--fix` ledger reports what it OBSERVED (the fix was
+ * called for these findings and returned no edit) instead of guessing, which is where every
+ * builtin starts. The declaration only upgrades that observation into a verdict.
+ *
+ * The other half of the same question — a check that HAS a fix and withheld it at one site —
+ * is `Violation.declineReason`, written where the decline happens.
+ */
+@:nullSafety(Strict)
+interface NoAutofix {
+
+	/**
+	 * Why the finding cannot be mechanised: a lower-case fragment the run prints after
+	 * `no autofix by design — `, in terms a reader can act on ("which decomposition is right is
+	 * a human call"), never a restatement of the rule name.
+	 */
+	public function noAutofixReason(): String;
 
 }

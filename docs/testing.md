@@ -752,6 +752,100 @@ the narrowing spent (3.6 s cold on that tree). On a wave that does NOT break the
 build the path is not entered at all: the same tree with no broken file gives
 `fixed 658 issue(s) in 228 file(s)` on both binaries.
 
+### `fixed N issue(s)` is a count, not a verdict about a rule
+
+A finding `lint --fix` reports and does not fix has several different causes,
+and the run used to report them all the same way — with silence. Its one
+sentence on the subject spelled the ambiguity out instead of resolving it:
+
+```
+A reported finding stays unfixed when the check has no autofix, or when its
+fix declined here …
+```
+
+and it printed **only when `fixedCount == 0`**, so the full-ruleset Pony run —
+`fixed 668 issue(s) in 234 file(s)` — said nothing whatever about the 2746
+findings it left alone. Three readers took the first branch of that `or`; two
+of them filed work on it, and **both rules had a working fix**:
+
+- `import-order` — its four Pony findings are correct refusals by a guard that
+  already existed with two regression tests (two imports in the block bind the
+  same simple name, which Haxe resolves to the LAST one, so permuting them
+  rebinds the name);
+- `prefer-typed-throw` — 161 findings, every one degraded by the project-wide
+  catch-clause gate (86 blocking clauses on that tree). The reason was on each
+  finding's MESSAGE, and a `--fix` run prints no findings at all.
+
+The engine could not tell the two apart either: `Check.fix` answers an empty
+array for a rule that has no autofix and for a rule whose gate closed, and
+nothing on the interface said which. Two opt-in seams close that, and neither
+is required before the output improves:
+
+- **`Check.NoAutofix`** — a marker plus `noAutofixReason()`, for a rule that is
+  report-only BY DESIGN. Answers *could this rule ever fix?*
+- **`Violation.declineReason`** — an optional field the check writes AT the site
+  that declined: in `run` for a whole-scope gate, inside `fix` for a per-site one
+  (`fix` receives the caller's own violation objects, so a note set there reaches
+  the reporter). Answers *why did it decline HERE* — the question that cost the
+  two tasks, and the one a marker interface cannot answer.
+
+**The default carries the honest answer, because the driver measures instead of
+guessing.** `computeFileLintEdits` is the one place in the tool that knows what a
+check answered for a given set of its own findings, so per rule the run records
+first-pass findings reported, findings handed to `fix` that came back with no edit
+at all, and edits produced anywhere in the run. That last number needs no
+declaration behind it: a rule that produced an edit somewhere HAS an autofix, so
+its silence elsewhere is a decline whatever it says about itself.
+
+The block prints after — never appended to — the summary line, so the line every
+gate and doc quotes keeps its bytes. On the 851-file Pony scope:
+
+```
+apq lint --fix: fixed 668 issue(s) in 234 file(s) over 10 pass(es), risky-fix verified: 61 file(s) applied, 0 reverted to report-only, oracle-assisted: 3 file(s) applied, 3 reverted to report-only (compiler rejected)
+apq lint --fix: 2746 reported finding(s) in 44 rule(s) got NO edit from their own check:
+  magic-number 417: no autofix by design — the finding asks for a NAME, and only the author knows it — an auto-hoisted CONST_7 restates the digit behind an indirection
+  explicit-local-type 367: its fix was called for these findings and returned no edit; the check declares neither NoAutofix nor a decline reason, so the run will not say which it is — and this rule has an oracle-assisted pass besides, counted on the summary line above
+  naming 231: its fix was called for these findings and returned no edit; the check declares neither NoAutofix nor a decline reason, so the run will not say which it is
+  doc-coverage 223: no autofix by design — a generated doc restates the member name; the sentence a reader needs is the one only its author can write
+  unused-import 204 of 205: fix declined here, yet the rule produced 2 edit(s) elsewhere in this run — so it HAS an autofix and withheld it, without saying why
+  duplicate-code 202: no autofix by design — whether the copies are one idea or a coincidence — and where the shared factor belongs — is a design judgement
+  ... +38 more rule(s), 1102 finding(s)
+apq lint --fix: 12 rule(s) never enter this ledger — the risky-fix path owns them (avoid-dynamic, dead-null-guard, hoist-embedded-assignment, prefer-case-guard, prefer-enum-abstract, prefer-exists, prefer-inline, prefer-interpolation, prefer-map-type, prefer-null-coalescing, redundant-import, shorten-type-ref); the summary line above is their whole verdict.
+apq lint --fix: a rule above that declared NOTHING is not thereby a rule that CANNOT fix — a decline most often needs a WIDER scope than this run (a member rename must see every file that could collide). Re-run over the project root, and see `Check.NoAutofix` / `Violation.declineReason` for what a rule owes its reader here.
+```
+
+Five verdicts, ordered by how strong the evidence behind them is:
+
+| the row says | what it means |
+|---|---|
+| `no autofix by design — <reason>` | the rule implements `NoAutofix` |
+| `fix DECLINED — <reason>` | the rule wrote `declineReason` on the finding |
+| `fix declined here, yet the rule produced N edit(s) elsewhere` | measured; no declaration needed |
+| `its fix was called … and returned no edit; the check declares neither` | the honest default |
+| `… and this rule has an oracle-assisted pass besides` | appended for an `OracleAssisted` rule, which has a second fix path this ledger never sees |
+
+A `RiskyFix` rule is the one case with no row at all — it is excluded from the
+safe loop, so no `fix` of its own is ever called there. Those are named once at
+the end rather than shown as silent zeroes; on Pony `avoid-dynamic` alone reports
+470 findings, and a "what did not get fixed" block that simply omitted the
+largest rule on the tree would invite its own misreading. An `OracleAssisted`
+rule is the opposite case and easy to get wrong: unless it is ALSO risky it does
+run in the safe loop, so it has a row, and its extra pass is noted on that row.
+
+**The conversion is deliberately partial.** Four report-only rules declare
+`NoAutofix` — `magic-number`, `doc-coverage`, `duplicate-code`, `complexity` —
+and two declare their decline — `prefer-typed-throw`, `import-order`. A measured
+20 more report-only builtins are left on the default arm, which reads strictly
+better than the sentence it replaces and never claims what it cannot prove. A
+rule that always fixes needs no conversion at all: a rule whose findings all got
+an edit is not listed.
+
+One thing the ledger found on its first real run, worth a queue item rather than
+a fix here: `unused-import` reports 205 findings on Pony and writes exactly two
+import deletions (confirmed against the diff — `git diff -U0 | grep -c '^-import'`
+is 2). The rule HAS an autofix, so the row is the measured-decline arm; what it
+does not have is a reason for declining the other 203.
+
 ### The oracle answers for what it COMPILED, not for what you linted
 
 `haxe <compilerOracle> --no-output` exiting 0 is the strongest gate this project
