@@ -210,8 +210,10 @@ class CondBranchSplitTest extends Test {
 	/**
 	 * A reference inside a branch binds to THAT branch's declaration. `CondBranch` is deliberately
 	 * NOT a `scopeKinds` member, so the enclosing block frame pre-collects every branch's
-	 * declaration first-wins; `Refs` therefore pushes a branch-local frame of its own, else both
-	 * reads below resolve to the branch-1 declaration and branch 2 looks unreferenced.
+	 * declaration; `Refs` therefore pushes a branch-local frame of its own. In THIS fixture the
+	 * enclosing frame is position-scoped and arrives at the same answer unaided — the frame is what
+	 * carries a HOISTING one, where position cannot separate two exclusive arms
+	 * (`testPlainTreeKeepsFirstWinsBindingInAHoistingFrame`).
 	 */
 	public function testReadBindsToItsOwnBranchDecl(): Void {
 		final src: String = fn('#if A\n\t\tvar v = 1;\n\t\tuse(v);\n\t\t#else\n\t\tvar v = 2;\n\t\tuse(v);\n\t\t#end');
@@ -221,15 +223,34 @@ class CondBranchSplitTest extends Test {
 	}
 
 	/**
-	 * The plain projection has no `CondBranch` node, so it keeps the enclosing frame's first-wins
-	 * binding: both reads point at the FIRST declaration. Pins that the preference rides on the
-	 * projection and no plain-tree consumer changed.
+	 * A HOISTING frame keeps the first-wins binding in the plain projection: a type body makes
+	 * every member visible from offset `0`, so two mutually exclusive `#if` arms declaring one name
+	 * are indistinguishable BY POSITION and both reads point at the FIRST. This is the case that
+	 * still pins the preference onto the projection.
+	 *
+	 * The block-level fixture no longer discriminates it — a position-scoped frame resolves a read
+	 * to the nearest PRECEDING declaration, which inside a region already IS that region's own; see
+	 * `testPlainTreeResolvesARegionInABlockByPosition`.
 	 */
-	public function testPlainTreeKeepsFirstWinsBinding(): Void {
+	public function testPlainTreeKeepsFirstWinsBindingInAHoistingFrame(): Void {
+		final src: String = 'class C {\n\t#if A\n\tvar v = 1;\n\tfunction g():Void { use(v); }\n\t#else\n\tvar v = 2;\n'
+			+ '\tfunction h():Void { use(v); }\n\t#end\n}';
+		final plain: QueryNode = new HaxeQueryPlugin().parseFile(src);
+		final decls: Array<Int> = declsIn(plain, 'v');
+		Assert.equals(2, decls.length);
+		for (b in bindingsOf(plain, src, 'v')) Assert.equals(decls[0], b);
+	}
+
+	/**
+	 * A position-scoped frame resolves BY POSITION, so the plain projection binds each in-region
+	 * read to its own branch's declaration with no `CondBranch` frame involved — the two answers
+	 * coincide here. A read PAST `#end` binds to the LAST branch's declaration where the
+	 * branch-aware answer is the FIRST's; both are arbitrary, the branches being exclusive.
+	 */
+	public function testPlainTreeResolvesARegionInABlockByPosition(): Void {
 		final src: String = fn('#if A\n\t\tvar v = 1;\n\t\tuse(v);\n\t\t#else\n\t\tvar v = 2;\n\t\tuse(v);\n\t\t#end');
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final first: Int = declOffsets(src, 'v')[0];
-		for (b in bindingsOf(plugin.parseFile(src), src, 'v')) Assert.equals(first, b);
+		final plain: QueryNode = new HaxeQueryPlugin().parseFile(src);
+		Assert.same(declsIn(plain, 'v'), bindingsOf(plain, src, 'v'));
 	}
 
 	/**
@@ -255,8 +276,13 @@ class CondBranchSplitTest extends Test {
 
 	/** Every `Decl` hit offset for `name` in the branch-aware tree, in source order. */
 	private static function declOffsets(src: String, name: String): Array<Int> {
+		return declsIn(branchTree(src), name);
+	}
+
+	/** Every declaration offset of `name` in `tree`, in walk order. */
+	private static function declsIn(tree: QueryNode, name: String): Array<Int> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return [for (h in Refs.find(name, branchTree(src), plugin.refShape())) if (h.kind == RefKind.Decl) h.span.from];
+		return [for (h in Refs.find(name, tree, plugin.refShape())) if (h.kind == RefKind.Decl) h.span.from];
 	}
 
 	/** The binding offset each non-`Decl` hit for `name` resolves to in the branch-aware tree, in source order. */

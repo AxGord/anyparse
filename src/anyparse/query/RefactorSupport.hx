@@ -3571,12 +3571,15 @@ final class RefactorSupport {
 	 * The span of a SECOND same-block declaration of `name` within `scope`, or null when every
 	 * block there declares it at most once.
 	 *
-	 * Haxe allows re-declaring a name in one block, and the resolution index mis-binds every
-	 * reference that follows the second declaration — each stays bound to the FIRST. Two ops have
-	 * to refuse on that shape: `Rename`, whose splice would rewrite the wrong occurrences, and
-	 * `ExtractMethod`, which reads the same index to decide whether a range-local escapes the
-	 * range. Compared per PARENT node, so a re-declaration in a NESTED block — ordinary shadowing,
-	 * which the index resolves correctly — is not reported.
+	 * Haxe allows re-declaring a name in one block. The resolution index USED to mis-bind every
+	 * reference that follows the second declaration — each stayed bound to the FIRST — and the two
+	 * ops that read it had to refuse on the shape: `Rename`, whose splice would rewrite the wrong
+	 * occurrences, and `ExtractMethod`, which decides from the same index whether a range-local
+	 * escapes the range. `ScopeFrame` now resolves the shape BY POSITION, so that premise is
+	 * historical; both refusals are kept until the widening they would become is measured on the
+	 * corpora the way a fixer's is, and each costs only a manual rename. Compared per PARENT node,
+	 * so a re-declaration in a NESTED block — ordinary shadowing, correctly resolved before and
+	 * after — is not reported.
 	 *
 	 * The vocabulary is `TypeResolver.blockScopedValueDeclarationKinds`, NOT the grammar's local-var
 	 * lists alone: a local `function g() …` redeclared in one block is the same blind spot (every

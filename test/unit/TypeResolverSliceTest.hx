@@ -321,6 +321,32 @@ class TypeResolverSliceTest extends Test {
 		Assert.equals(1, fixEdits(src).length, 'this.f on an inherited plain field is side-effect-free — deletable');
 	}
 
+	/**
+	 * A local RE-declared in one block is proved on ITS OWN type, not on the type of the
+	 * declaration it shadows. While `ScopeFrame` kept the first binding per name, every read past
+	 * the shadow carried the earlier declaration's type into the proof — and a value type there IS
+	 * the proof. openfl's `AMF3Reader.readObjectVector` is the specimen: `var header:Int =
+	 * readInt()` above `var header:AMF3ObjectHeader = null` affirmed non-null for a reference the
+	 * compiler types as a nullable class, under nine checks whose fix deletes.
+	 */
+	public function testAReDeclaredLocalIsProvedOnItsOwnType(): Void {
+		final src: String = 'class C { function f():Void { var v:Int = 0; use(v); var v:C = mk(); if (v != null) g(); }'
+			+ ' function use(x:Int):Void {} function mk():C return this; function g():Void {} }';
+		Assert.isFalse(nonNull(src), 'the operand is the class-typed re-declaration, not the Int it shadows');
+	}
+
+	/**
+	 * The other direction — a read BEFORE the shadow still answers the declaration it was written
+	 * under, so nothing the fix does costs a legitimate proof.
+	 *
+	 * CONTROL, not a discrimination: first-wins answered the same here.
+	 */
+	public function testAReadBeforeAReDeclarationKeepsItsOwnProof(): Void {
+		final src: String = 'class C { function f():Void { var v:Int = 0; if (v != null) g(); var v:C = mk(); use(v); }'
+			+ ' function use(x:C):Void {} function mk():C return this; function g():Void {} }';
+		Assert.isTrue(nonNull(src), 'the guard precedes the shadow, so the Int declaration is the one in scope');
+	}
+
 	private function wrap(param: String, body: String): String {
 		return 'typedef Ctx = { var f:Int; }; class C { static function m($param):Void { $body } }';
 	}

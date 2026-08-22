@@ -14,10 +14,10 @@ import anyparse.query.Refs.RefHit;
  * that tree is then a map slice.
  *
  * Per-name results are byte-identical to a solo `Refs.find` call:
- * `Refs.walkMulti` resolution is per-name independent — `ScopeFrame.declare`
- * is first-wins PER NAME, and both hit emission and frame priming gate on
- * `out.exists(name)` per name — so priming with extra names never changes
- * what another name resolves to.
+ * `Refs.walkMulti` resolution is per-name independent — `ScopeFrame` keeps
+ * its bindings PER NAME and resolves each name against its own list, and
+ * both hit emission and frame priming gate on `out.exists(name)` per name
+ * — so priming with extra names never changes what another name resolves to.
  *
  * `find` returns a COPY of the cached array: the original `Refs.find`
  * hands back a fresh array per call, and a caller mutating its result
