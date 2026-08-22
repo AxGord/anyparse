@@ -271,25 +271,25 @@ class LintFixFixedPointCliTest extends Test {
 				reported: 3,
 				declined: 3,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'prefer-typed-throw' => {
 				reported: 9,
 				declined: 9,
 				edits: 0,
-				reason: 'a String catch clause is in scope'
+				reasons: [{ text: 'a String catch clause is in scope', count: 9 }]
 			},
 			'naming' => {
 				reported: 7,
 				declined: 2,
 				edits: 5,
-				reason: null
+				reasons: []
 			},
 			'magic-number' => {
 				reported: 1,
 				declined: 1,
 				edits: 0,
-				reason: null
+				reasons: []
 			}
 		], ['complexity' => 'which decomposition is right is a human call'], [], []);
 		final all: String = lines.join('');
@@ -326,7 +326,7 @@ class LintFixFixedPointCliTest extends Test {
 				reported: 4,
 				declined: 0,
 				edits: 4,
-				reason: null
+				reasons: []
 			}
 		], [], [], []);
 		Assert.equals(0, fixedEverything.length, 'nothing was declined, so there is nothing to explain');
@@ -346,13 +346,13 @@ class LintFixFixedPointCliTest extends Test {
 				reported: 1,
 				declined: 1,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'explicit-local-type' => {
 				reported: 5,
 				declined: 5,
 				edits: 0,
-				reason: null
+				reasons: []
 			}
 		], [], ['explicit-local-type'], ['avoid-dynamic', 'prefer-inline']).join('');
 		Assert.isTrue(all.indexOf('2 rule(s) never enter this ledger') >= 0, 'the RISKY rules are counted - got: $all');
@@ -377,54 +377,176 @@ class LintFixFixedPointCliTest extends Test {
 				reported: 8,
 				declined: 8,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'r2' => {
 				reported: 7,
 				declined: 7,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'r3' => {
 				reported: 6,
 				declined: 6,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'r4' => {
 				reported: 5,
 				declined: 5,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'r5' => {
 				reported: 4,
 				declined: 4,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'r6' => {
 				reported: 3,
 				declined: 3,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'r7' => {
 				reported: 2,
 				declined: 2,
 				edits: 0,
-				reason: null
+				reasons: []
 			},
 			'r8' => {
 				reported: 1,
 				declined: 1,
 				edits: 0,
-				reason: null
+				reasons: []
 			}
 		], [], [], []).join('');
 		Assert.isTrue(all.indexOf('r1 8:') >= 0 && all.indexOf('r6 3:') >= 0, 'the six biggest are named - got: $all');
 		Assert.isTrue(all.indexOf('r7 2:') < 0, 'the seventh is not - got: $all');
 		Assert.isTrue(all.indexOf('... +2 more rule(s), 3 finding(s)') >= 0, 'and the rest are totalled - got: $all');
+	}
+
+	/**
+	 * A rule that declines for SEVERAL different reasons gets one line per reason, with the count
+	 * that makes the shares readable.
+	 *
+	 * The ledger recorded the FIRST `Violation.declineReason` it saw and printed it as the rule's
+	 * whole verdict, which was right while every converted rule declined for a single cause. The
+	 * first rule to write the field per-ARM declines for four different ones on a single real tree
+	 * — `unused-import` on Pony: 110 out-of-scope, 54 `#if`-guarded, 25 unknown `using`, 15 unknown
+	 * wildcard — and naming whichever the file walk reached first states a quarter of the answer
+	 * with the confidence of the whole.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testUnfixedLedgerSpellsOutEveryReasonWithItsCount(): Void {
+		final all: String = Cli.unfixedFixLedger([
+			'unused-import' => {
+				reported: 205,
+				declined: 204,
+				edits: 2,
+				reasons: [
+					{ text: 'the import is `#if`-guarded', count: 54 },
+					{ text: 'the module is outside the lint scope', count: 110 },
+					{ text: 'the `using` module is unknown', count: 25 },
+					{ text: 'the wildcard symbol set is unknown', count: 15 }
+				]
+			}
+		], [], [], []).join('');
+		Assert.isTrue(
+			all.indexOf('unused-import 204 of 205: fix DECLINED, 4 distinct reason(s) over 204 finding(s)') >= 0,
+			'the row heads the list with how many different answers there are - got: $all'
+		);
+		final biggest: Int = all.indexOf('110× the module is outside the lint scope');
+		final second: Int = all.indexOf('54× the import is `#if`-guarded');
+		final third: Int = all.indexOf('25× the `using` module is unknown');
+		Assert.isTrue(biggest >= 0 && second >= 0 && third >= 0, 'each reason is spelled out with its own count - got: $all');
+		Assert.isTrue(biggest < second && second < third, 'strongest share first, so the dominant cause reads first - got: $all');
+		Assert.isTrue(all.indexOf('... +1 more reason(s), 15 finding(s)') >= 0, 'and the tail is totalled, not dropped - got: $all');
+		Assert.isTrue(all.indexOf('15× the wildcard symbol set is unknown') < 0, 'the fourth reason is past the cap - got: $all');
+		Assert.isTrue(
+			all.indexOf('produced 2 edit(s) elsewhere') < 0,
+			'a rule that SAID why never falls back to the measured arm, which says only that it did not - got: $all'
+		);
+	}
+
+	/**
+	 * The one-reason row keeps the exact bytes it has always printed, and a rule that spoke for only
+	 * SOME of its declines says so rather than letting the reasons it gave stand for all of them.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testUnfixedLedgerKeepsOneReasonInlineAndOwnsTheRemainder(): Void {
+		final one: String = Cli.unfixedFixLedger([
+			'prefer-typed-throw' => {
+				reported: 9,
+				declined: 9,
+				edits: 0,
+				reasons: [{ text: 'a String catch clause is in scope', count: 9 }]
+			}
+		], [], [], []).join('');
+		Assert.isTrue(
+			one.indexOf('prefer-typed-throw 9: fix DECLINED — a String catch clause is in scope\n') >= 0,
+			'one reason covering every decline stays on the row, byte for byte - got: $one'
+		);
+		Assert.isTrue(one.indexOf('×') < 0, 'and gains no sub-line it does not need - got: $one');
+		final partial: String = Cli.unfixedFixLedger([
+			'naming' => {
+				reported: 10,
+				declined: 10,
+				edits: 0,
+				reasons: [{ text: 'the method is an `override`', count: 4 }]
+			}
+		], [], [], []).join('');
+		Assert.isTrue(
+			partial.indexOf('4× the method is an `override`') >= 0, 'the reason that WAS given is shown with its share - got: $partial'
+		);
+		Assert.isTrue(
+			partial.indexOf('6× — the check declared no reason for these') >= 0,
+			'and the six the check said nothing about are reported, never rounded into the four it did - got: $partial'
+		);
+	}
+
+	/**
+	 * The mechanism behind `naming`'s wholesale zero on a project that ships a `checkstyle.json`,
+	 * as a ONE-VARIABLE matrix: the same source, the same finding, the same format regex — and the
+	 * only difference is where the policy came from.
+	 *
+	 * `CheckstyleConfigLoader` maps each naming check's `format` onto a rule and attaches no
+	 * `normalize`, so `correctedName` has nothing to return and every finding declines. The built-in
+	 * default policy states the IDENTICAL regex for `MethodName` and carries `stripUnderscorePrefix`,
+	 * so the same file fixes. 231 of 231 findings on an 851-file tree take the first arm.
+	 *
+	 * This pins the DECLINE and the reason behind it, not a desirable end state: wiring the built-in
+	 * normalizers into a config-derived rule (`correctedName` already re-verifies the result against
+	 * the rule's OWN format, so it would be self-checking) is a recorded queue item, and landing it
+	 * means retiring the first assertion here on purpose.
+	 */
+	public function testCheckstyleDerivedPolicyDeclinesTheRenameItsOwnFormatDemands(): Void {
+		#if (sys || nodejs)
+		final src: String = 'package p;\n\nclass A {\n\n\tpublic function run():Void {\n\t\t_foo();\n\t}\n\n'
+			+ '\tprivate function _foo():Void {\n\t\ttrace(1);\n\t}\n\n}\n';
+		final checkstyle: String = '{\n\t"checks": [\n\t\t{\n\t\t\t"type": "MethodName",\n\t\t\t"props": {\n'
+			+ '\t\t\t\t"format": "^[a-z][a-zA-Z0-9_]*$"\n\t\t\t}\n\t\t}\n\t]\n}\n';
+		final configured: String = CliFixture.writeDir(
+			'csnaming', [{ name: 'A.hx', source: src }, { name: 'checkstyle.json', source: checkstyle }]
+		);
+		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'naming', '$configured/A.hx']), 'lint --fix exits ok');
+		Assert.equals(
+			src, File.getContent('$configured/A.hx'),
+			'a policy adapted from checkstyle.json states the format and no normalizer, so the rename it demands is declined'
+		);
+		CliFixture.removeDir(configured);
+		final bare: String = CliFixture.writeDir('csnaming', [{ name: 'A.hx', source: src }]);
+		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'naming', '$bare/A.hx']), 'lint --fix exits ok');
+		final out: String = File.getContent('$bare/A.hx');
+		Assert.isTrue(
+			out.indexOf('_foo') == -1 && out.indexOf('function foo():Void') >= 0,
+			'the SAME regex from the built-in policy, which carries a normalizer, renames declaration and call: $out'
+		);
+		CliFixture.removeDir(bare);
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
 }

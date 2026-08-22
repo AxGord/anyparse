@@ -117,17 +117,23 @@ final class Naming implements Check implements CrossFileFix {
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
 		final support: Null<NamingSupport> = plugin.namingSupport();
-		if (support == null) return [];
+		if (support == null) return RenameRefusal.all(violations, RenameRefusal.NO_SUPPORT);
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
+		if (tree == null) return RenameRefusal.all(violations, RenameRefusal.NO_TREE);
 
 		final policy: NamingPolicy = support.policyFor(violations[0].file);
 		final shape: RefShape = plugin.refShape();
 
 		final flaggedFroms: Array<Int> = [];
+		// The violation each flagged declaration came from, so a gate deep in the rename chain can
+		// write its refusal onto the finding the caller will report (`Violation.declineReason`).
+		// `fix` is handed the caller's OWN objects, which is what makes a note set here reach it.
+		final flaggedAt: Map<Int, Violation> = [];
 		for (v in violations) {
 			final s: Null<Span> = v.span;
-			if (s != null) flaggedFroms.push(s.from);
+			if (s == null) continue;
+			flaggedFroms.push(s.from);
+			flaggedAt[s.from] = v;
 		}
 
 		// Hoisted ONCE per fix() call (not per finding): the flagged names any OTHER indexed
@@ -176,10 +182,10 @@ final class Naming implements Check implements CrossFileFix {
 			if (declSpan != null && hoistedFroms.contains(declSpan.from)) continue;
 			final rename: Null<DeclRename> = renameEditsFor(
 				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, index,
-				violations[0].file
+				violations[0].file, flaggedAt
 			);
 			final owner: Null<String> = RenameClaims.memberOwnerOf(decl);
-			if (rename == null || defersToAnAcceptedRename(rename, edits, claims, owner, resolutionIndex)) continue;
+			if (rename == null || deferred(rename, edits, claims, owner, resolutionIndex, flaggedAt, declSpan)) continue;
 			_runClaims.claim(owner, rename.newName, resolutionIndex);
 			claims.push(rename);
 			for (edit in rename.edits) edits.push(edit);
@@ -191,8 +197,7 @@ final class Naming implements Check implements CrossFileFix {
 	 * Cross-file autofix (the `CrossFileFix` seam): rename each flagged member whose references can reach
 	 * beyond its declaring file — a NON-confined private field / constant / method (reachable from its
 	 * subtypes / `@:access`-grant files), or ANY public one (reachable from anywhere). The single-file
-	 * `fix` skips both (a non-confined member is not provably contained; a public one is refused outright
-	 * by `isRenameSafe`); here the rename is proven complete across EVERY affected report file and emitted
+	 * `fix` skips both (a non-confined member is not provably contained; a public one is refused outright by `RenameRefusal.of`); here the rename is proven complete across EVERY affected report file and emitted
 	 * as one atomic multi-file edit set. The declaring file resolves scope-correctly (the T29 occurrence
 	 * set + completeness gate), and a collision with a constructor PARAMETER there is repaired by
 	 * qualifying through `this.` rather than refused; each other affected file classifies every occurrence
@@ -217,7 +222,11 @@ final class Naming implements Check implements CrossFileFix {
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {
 			final rename: Null<CrossFileRename> = crossFileRenameFor(v, sourceByFile, support, shape, plugin, idx, resolutionIndex);
-			if (rename == null || _runClaims.defers(rename.owner, rename.newName, resolutionIndex)) continue;
+			if (rename == null) continue;
+			if (_runClaims.defers(rename.owner, rename.newName, resolutionIndex)) {
+				if (v.declineReason == null) v.declineReason = RenameRefusal.NAME_CLAIMED;
+				continue;
+			}
 			_runClaims.claim(rename.owner, rename.newName, resolutionIndex);
 			out.push(rename.slices);
 		}
@@ -264,6 +273,23 @@ final class Naming implements Check implements CrossFileFix {
 	}
 
 	/**
+	 * Does `rename` yield to one this run has already accepted — and, when it does, record THAT as
+	 * the reason on the finding it came from?
+	 *
+	 * The two halves belong in one call. Spelled at the call site as
+	 * `if (defers(…)) { note(…); continue; }` the loop pays a branch it does not need and drops the
+	 * refusal helper's answer on the floor, and the reason is what the whole seam exists to carry.
+	 */
+	private function deferred(
+		rename: DeclRename, edits: Array<{ span: Span, text: String }>, claims: Array<DeclRename>, owner: Null<String>,
+		index: Null<SymbolIndex>, flaggedAt: Map<Int, Violation>, declSpan: Null<Span>
+	): Bool {
+		if (!defersToAnAcceptedRename(rename, edits, claims, owner, index)) return false;
+		if (declSpan != null) RenameRefusal.note(flaggedAt[declSpan.from], RenameRefusal.NAME_CLAIMED);
+		return true;
+	}
+
+	/**
 	 * The violations for `decls` under `policy`: each declaration is tested
 	 * against the first rule whose category matches and whose `requireMods` are
 	 * all present and `forbidMods` all absent; a name failing that rule's
@@ -291,15 +317,6 @@ final class Naming implements Check implements CrossFileFix {
 			});
 		}
 		return out;
-	}
-
-	/**
-	 * Whether `category` is a type MEMBER whose privacy the cross-file index can turn into a
-	 * confinement proof - a field, a static-final constant or a method. A type or a
-	 * function-body binding is neither (the former is never confinable, the latter always is).
-	 */
-	private static inline function isConfinableMemberCategory(category: NamingCategory): Bool {
-		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
 	}
 
 	/**
@@ -378,63 +395,22 @@ final class Naming implements Check implements CrossFileFix {
 	 * unchanged, or it does not itself satisfy the rule's format. The single decision point for
 	 * what a name should become, shared by the report side and both fix paths so they cannot drift.
 	 */
-	private static function correctedName(name: String, rule: NamingRule): Null<String> {
+	private static function correctedName(name: String, rule: NamingRule, ?refusal: (String) -> Void): Null<String> {
 		final artifact: Null<String> = artifactCorrection(name, rule);
 		if (artifact != null) return artifact;
+		final say: Null<(String) -> Void> = refusal;
 		final normalize: Null<String -> Null<String>> = rule.normalize;
-		if (normalize == null) return null;
+		// Announced HERE rather than reconstructed by the caller: which of the two ways this can
+		// answer nothing happened is knowable only inside, and a caller that guessed would be
+		// re-implementing the condition it is describing.
+		if (normalize == null) {
+			if (say != null) say(RenameRefusal.NO_NORMALIZER);
+			return null;
+		}
 		final newName: Null<String> = normalize(name);
-		return newName == null || newName == name || !rule.format.match(newName) ? null : newName;
-	}
-
-	/**
-	 * Is the rename of `decl`'s binding provably complete within `source`? A
-	 * declaration the grammar marked `renameUnsafe` (a structural / anon-struct
-	 * field, a property backed by physical accessors) never is. Otherwise a
-	 * function-body-scoped binding always is; a private field, private
-	 * static-final constant or private method is only when the cross-file `index`
-	 * plus in-file checks prove it cannot be referenced from outside its file.
-	 * Every other category (types, public members) is not.
-	 */
-	private static function isRenameSafe(
-		decl: NamedDecl, source: String, index: Null<SymbolIndex>, reflectionNames: Array<String>, confinedMemo: Map<String, Bool>
-	): Bool {
-		// A declaration the grammar marked rename-unsafe (a typedef / anon-structure
-		// field whose name is a wire contract, or a property backed by physical
-		// get_/set_ accessors a single-decl rename would orphan) is report-only -
-		// the check still warns, but the autofix must not rewrite it.
-		if (decl.renameUnsafe == true) return false;
-		final category: NamingCategory = decl.category;
-		if (category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar) return true;
-		if (!isConfinableMemberCategory(category) || decl.mods.contains('public') || index == null) return false;
-		// A METHOD carries two hazards no field has. An `override` binds the name to the
-		// SUPERTYPE's declaration, so renaming the override alone orphans it. And an
-		// `implicitlyReachable` member - one carrying metadata, which a macro / `@:keep` /
-		// framework can reach by NAME - has references no identifier-level completeness proof
-		// sees. Both are refusals; the inherited-member and confinement proofs cover the rest.
-		if (category == NamingCategory.Method && (decl.mods.contains('override') || decl.implicitlyReachable == true)) return false;
-		final owner: Null<String> = decl.enclosingType;
-		if (owner == null) return false;
-		// Cross-file reflection guard: a private member reached from ANOTHER file by a
-		// reflection call naming it (`Reflect.field(x, 'name')`) breaks silently after a
-		// rename — the identifier-level confinement proof cannot see it. The names come from
-		// the grammar's own AST projection (`NamingSupport.reflectionMemberNames`), NOT from a
-		// text scan: a string that merely SPELLS the member (a menu-action id, an asset key,
-		// a `case 'name':`) is not a reference to it and must not veto the rename. The
-		// declaring file is already covered by the in-file completeness check.
-		if (reflectionNames.contains(decl.name)) return false;
-		// Memoize confinement per owner-type within this fix() call: a type with
-		// many flagged private constants would otherwise redo the identical
-		// project-wide subtype / access-grant / `@:allow` scan once per finding.
-		// Keyed by owner AND member: the skipped-file half of the proof is per-NAME now (a file
-		// the grammar cannot read can only reach a member it spells), so two members of one type
-		// no longer share an answer.
-		final memoKey: String = '$owner\t${decl.name}';
-		final cached: Null<Bool> = confinedMemo[memoKey];
-		if (cached != null) return cached;
-		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, index);
-		confinedMemo[memoKey] = confined;
-		return confined;
+		if (newName != null && newName != name && rule.format.match(newName)) return newName;
+		if (say != null) say(RenameRefusal.NORMALIZER_DECLINED);
+		return null;
 	}
 
 	/**
@@ -449,36 +425,23 @@ final class Naming implements Check implements CrossFileFix {
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
 		flaggedFroms: Array<Int>, reflectionNames: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
-		index: Null<SymbolIndex>, file: String
+		index: Null<SymbolIndex>, file: String, flaggedAt: Map<Int, Violation>
 	): Null<DeclRename> {
 		final span: Null<Span> = decl.span;
-		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, reflectionNames, confinedMemo))
-			return null;
+		if (span == null || !flaggedFroms.contains(span.from)) return null;
+		final declFrom: Int = span.from;
+		final unsafe: Null<String> = RenameRefusal.of(decl, source, index, reflectionNames, confinedMemo);
+		if (unsafe != null) return RenameRefusal.rename(flaggedAt, declFrom, unsafe);
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
-		if (rule == null) return null;
-		final corrected: Null<String> = correctedName(decl.name, rule);
-		if (corrected == null) return null;
+		if (rule == null) return RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.NO_RULE);
+		final correction: Array<String> = [];
+		final corrected: Null<String> = correctedName(decl.name, rule, reason -> correction.push(reason));
+		if (corrected == null)
+			return RenameRefusal.rename(flaggedAt, declFrom, correction.length == 0 ? RenameRefusal.NORMALIZER_DECLINED : correction[0]);
 		final newName: String = corrected;
-		// A private INSTANCE field renamed to `_x` must not REDEFINE a field named `_x`
-		// inherited from a supertype - Haxe rejects "Redefinition of variable in subclass"
-		// (verified). A METHOD has the same hazard with a different message ("Field f should be
-		// declared with 'override' since it is inherited from superclass"), so both member
-		// categories take this gate. A local / param renamed to a bare name only SHADOWS an
-		// inherited member, which Haxe permits (verified) - the whole-file textual collision scan
-		// below covers that case. The proof walks the FULL supertype
-		// closure through `resolutionIndex` (the RESOLUTION scope — report files UNION the
-		// configured libraries — when the plugin carries one, else the report index): an `openfl`
-		// / `lime` subclass's inherited members are then resolvable rather than unprovable. Skip
-		// when the inherited-`_x` possibility cannot be ruled out (a still-unresolvable supertype
-		// closure), and skip a member of a `@:rtti` / drill-Node hierarchy whose subtype-ward
-		// `@:rtti` only the index reveals (the direct-`@:rtti` case is already `renameUnsafe`):
-		// such a class serializes by reflecting on member NAMES, so a rename would break saved files.
-		if (decl.category == NamingCategory.Field || decl.category == NamingCategory.Method) {
-			final owner: Null<String> = decl.enclosingType;
-			if (owner == null || resolutionIndex == null) return null;
-			final idx: SymbolIndex = resolutionIndex;
-			if (!idx.typeProvablyLacksMember(owner, newName, file) || idx.transitivelyCarriesRtti(owner)) return null;
-		}
+		// What the owner INHERITS can forbid the corrected name outright — see `RenameRefusal.inherited`.
+		final inherited: Null<String> = RenameRefusal.inherited(decl, newName, resolutionIndex, file);
+		if (inherited != null) return RenameRefusal.rename(flaggedAt, declFrom, inherited);
 		// Collision: a `newName` already bound where the rename lands would be duplicated or shadowed
 		// (the re-parse gate accepts it but it does not type-check). Scope-aware for a local /
 		// param / catch var - an occurrence in an UNRELATED function does not conflict; a field / constant
@@ -486,7 +449,7 @@ final class Naming implements Check implements CrossFileFix {
 		// the param idiom, by naming the captured occurrences through `this.` (see `qualifyCapturedEdits`);
 		// everything else is refused here, before the expensive occurrence resolution below.
 		final collides: Bool = collidesInScope(decl, source, tree, newName, shape, resolutionIndex, plugin);
-		if (collides && !qualifiableBinding(decl)) return null;
+		if (collides && !qualifiableBinding(decl)) return RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.NAME_COLLIDES);
 		// Completeness + comment-along: the SAME scope-correct occurrence resolution +
 		// `classifyOccurrences` gate the cross-file path applies to its declaring file — a `#if` /
 		// name-shaped string / `noqa` / resolver-missed active-code occurrence bails, a distinctive
@@ -504,7 +467,7 @@ final class Naming implements Check implements CrossFileFix {
 		final renameSpans: Null<Array<Span>> = declaringFileRenameSpans(
 			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name), bodyScoped, ctx
 		);
-		if (renameSpans == null) return null;
+		if (renameSpans == null) return RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.OCCURRENCE_UNRESOLVED);
 		final spans: Array<Span> = renameSpans;
 		final edits: Array<{ span: Span, text: String }> = [for (occ in spans) { span: occ, text: newName }];
 		final scope: Span = claimScope(tree, shape, span.from, bodyScoped, source.length);
@@ -512,7 +475,9 @@ final class Naming implements Check implements CrossFileFix {
 		final qualified: Null<Array<{ span: Span, text: String }>> = qualifyCapturedEdits(
 			source, tree, span.from, spans, newName, shape, plugin, edits, resolutionIndex, file
 		);
-		return qualified == null ? null : { newName: newName, edits: qualified, scope: scope };
+		return qualified == null
+			? RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.QUALIFY_FAILED)
+			: { newName: newName, edits: qualified, scope: scope };
 	}
 
 	/**
@@ -637,7 +602,7 @@ final class Naming implements Check implements CrossFileFix {
 		final decl: Null<NamedDecl> = support.project(tree).find(d -> d.span != null && d.span.from == vspan.from);
 		if (decl == null) return null;
 		// Candidate: a NON-confined private field / constant the single-file `fix` skips, or ANY public
-		// member - `isRenameSafe` refuses every public declaration, so this is a public member's only path.
+		// member - `RenameRefusal.of` refuses every public declaration, so this is a public member's only path.
 		if (decl.renameUnsafe == true) return null;
 		final isPublic: Bool = decl.mods.contains('public');
 		if (!crossFileCategory(decl)) return null;
@@ -660,7 +625,7 @@ final class Naming implements Check implements CrossFileFix {
 		// A PUBLIC member is never confined in that sense - any file holding a value of the owner's type
 		// reaches it - so the proof does not apply and it always crosses.
 		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, decl.name, source, index)) return null;
-		// No reflection guard here, deliberately. `isRenameSafe`'s exists because the single-file path
+		// No reflection guard here, deliberately. `RenameRefusal.of`'s exists because the single-file path
 		// never looks at another file; this path DOES - a public member's affected set is every scope file
 		// mentioning the name (`publicAffectedFiles`), and `otherFileRenameSpans` already refuses on a
 		// name-shaped string literal in any of them. Measured: with a duplicate AST-projected guard
@@ -669,20 +634,28 @@ final class Naming implements Check implements CrossFileFix {
 		// and a gate no in-memory test can reach.
 		// Unresolvable hierarchy: a skip-parse file could hide a subtype / grant we never see; an
 		// `@:allow` grants an unenumerable type; a non-unique owner makes the subtype match ambiguous.
-		if (index.skippedFiles().length > 0 || source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1) return null;
-		final targetName: Null<String> = correctedFieldName(decl, support.policyFor(declFile), ownerName, resolutionIndex, declFile);
-		return targetName == null ? null : {
-			declFile: declFile,
-			source: source,
-			tree: tree,
-			declFrom: vspan.from,
-			oldName: decl.name,
-			targetName: targetName,
-			ownerName: ownerName,
-			distinctive: isDistinctiveName(decl.name),
-			isPublic: isPublic,
-			family: overrides
-		};
+		if (index.skippedFiles().length > 0 || source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1)
+			return RenameRefusal.candidate(v, RenameRefusal.CROSS_HIERARCHY_UNPROVABLE);
+		// Every refusal from here down belongs to THIS path: the gates above either hand the
+		// declaration to the single-file rename or are not about it at all, and speaking for those
+		// would overwrite the more accurate sentence that path is about to write.
+		final correction: Array<String> = [];
+		final targetName: Null<String> = correctedFieldName(
+			decl, support.policyFor(declFile), ownerName, resolutionIndex, declFile, reason -> correction.push(reason)
+		);
+		return
+			targetName == null ? RenameRefusal.candidate(v, correction.length == 0 ? RenameRefusal.NORMALIZER_DECLINED : correction[0]) : {
+				declFile: declFile,
+				source: source,
+				tree: tree,
+				declFrom: vspan.from,
+				oldName: decl.name,
+				targetName: targetName,
+				ownerName: ownerName,
+				distinctive: isDistinctiveName(decl.name),
+				isPublic: isPublic,
+				family: overrides
+			};
 	}
 
 	/**
@@ -693,17 +666,25 @@ final class Naming implements Check implements CrossFileFix {
 	 * drive the inheritance + rtti guards through the resolution scope.
 	 */
 	private static function correctedFieldName(
-		decl: NamedDecl, policy: NamingPolicy, ownerName: String, resolutionIndex: SymbolIndex, declFile: String
+		decl: NamedDecl, policy: NamingPolicy, ownerName: String, resolutionIndex: SymbolIndex, declFile: String,
+		?refusal: (String) -> Void
 	): Null<String> {
+		final say: Null<(String) -> Void> = refusal;
+		function no(reason: String): Null<String> {
+			// Re-bound inside the closure: strict null-safety does not narrow a CAPTURED local.
+			final sink: Null<(String) -> Void> = say;
+			if (sink != null) sink(reason);
+			return null;
+		}
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
-		if (rule == null) return null;
-		final newName: Null<String> = correctedName(decl.name, rule);
+		if (rule == null) return no(RenameRefusal.NO_RULE);
+		final newName: Null<String> = correctedName(decl.name, rule, say);
 		return if (newName == null)
 			null
-		else if (
-			!resolutionIndex.typeProvablyLacksMember(ownerName, newName, declFile) || resolutionIndex.transitivelyCarriesRtti(ownerName)
-		)
-			null
+		else if (!resolutionIndex.typeProvablyLacksMember(ownerName, newName, declFile))
+			no(RenameRefusal.INHERITED_COLLISION)
+		else if (resolutionIndex.transitivelyCarriesRtti(ownerName))
+			no(RenameRefusal.RTTI_HIERARCHY)
 		else
 			newName;
 	}
@@ -727,13 +708,13 @@ final class Naming implements Check implements CrossFileFix {
 		// An override the edit set cannot reach makes the base unrenameable: the family is resolved
 		// against the RESOLUTION index, which sees files the lint scope does not, and half a family
 		// leaves a declaration overriding nothing.
-		for (fm in c.family) if (!scanned.contains(fm.file)) return null;
+		for (fm in c.family) if (!scanned.contains(fm.file)) return RenameRefusal.crossRename(v, RenameRefusal.CROSS_FAMILY_UNREACHABLE);
 		for (file in scanned) {
 			final fileSource: Null<String> = sourceByFile[file];
-			if (fileSource == null) return null;
+			if (fileSource == null) return RenameRefusal.crossRename(v, RenameRefusal.CROSS_FILE_UNREADABLE);
 			final fsrc: String = fileSource;
 			final fileTree: Null<QueryNode> = file == c.declFile ? c.tree : CheckScan.parseOrNull(plugin, fsrc);
-			if (fileTree == null) return null;
+			if (fileTree == null) return RenameRefusal.crossRename(v, RenameRefusal.CROSS_FILE_UNREADABLE);
 			final familySpans: Array<Span> = familyOccurrences(c.family, file, fsrc, fileTree, shape);
 			final spans: Null<Array<Span>> = file == c.declFile
 				? declaringFileRenameSpans(
@@ -741,7 +722,7 @@ final class Naming implements Check implements CrossFileFix {
 					{ index: resolutionIndex, file: c.declFile, ownerName: c.ownerName }, familySpans
 				)
 				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex, file, familySpans);
-			if (spans == null) return null;
+			if (spans == null) return RenameRefusal.crossRename(v, RenameRefusal.OCCURRENCE_UNRESOLVED);
 			// A file receiving NO edit and lying outside the owner's own hierarchy cannot collide: nothing
 			// is rewritten there and no member of the owner is inherited there, so the scan below would
 			// only refuse on an unrelated binding of the target name. Only a PUBLIC member's affected set
@@ -768,7 +749,7 @@ final class Naming implements Check implements CrossFileFix {
 				null;
 			else
 				qualifyCapturedEdits(fsrc, c.tree, c.declFrom, spans, c.targetName, shape, plugin, baseEdits, resolutionIndex, file);
-			if (edits == null) return null;
+			if (edits == null) return RenameRefusal.crossRename(v, RenameRefusal.CROSS_COLLISION);
 			// Re-bound: a narrowed local does not stay narrowed inside an anonymous structure literal.
 			final fileEdits: Array<{ span: Span, text: String }> = edits;
 			if (spans.length > 0) slices.push({ file: file, edits: fileEdits });
@@ -1094,8 +1075,7 @@ final class Naming implements Check implements CrossFileFix {
 
 	/**
 	 * Whether the cross-file rename path OWNS this declaration's category: a field / constant, or a
-	 * METHOD that is neither an `override` nor `implicitlyReachable`. Those two are the hazards
-	 * `isRenameSafe` names for a method — an `override` binds the name to the SUPERTYPE's declaration, so
+	 * METHOD that is neither an `override` nor `implicitlyReachable`. Those two are the hazards `RenameRefusal.of` names for a method — an `override` binds the name to the SUPERTYPE's declaration, so
 	 * renaming the override alone orphans it, and an annotation-bearing member can be reached by NAME from
 	 * a macro / `@:keep` / framework, references no identifier-level completeness proof sees. Visibility is
 	 * not asked here: a CONFINED private member is turned away later, by the proof that it is the
@@ -1604,3 +1584,261 @@ private typedef DeclRename = {
 	final edits: Array<{ span: Span, text: String }>;
 	final scope: Span;
 };
+/**
+ * Why a rename was withheld, one sentence per gate, plus the four ways a gate hands one to the
+ * `Violation` it came from — read only by `apq lint --fix`'s per-rule unfixed ledger.
+ *
+ * The rename path is a long chain of independent proofs, and `Check.fix` has ONE spelling for
+ * every failure of any of them: the empty edit list, which is also what a rule with no autofix at
+ * all answers. On an 851-file tree that reported 231 findings and wrote nothing, the run could
+ * therefore say only "its fix was called for these findings and returned no edit; the check
+ * declares neither NoAutofix nor a decline reason" — and the first hypothesis a reader forms about
+ * a wholesale zero is a gate closing by accident. It was not: `correctedName` had nothing to
+ * return, because the policy in force came from the project's own `checkstyle.json` and a rule
+ * adapted from one carries a `format` and no `normalize`. A legitimate refusal and a one-line
+ * answer, and it cost a task to find because nothing carried it out of the check.
+ *
+ * Its own module-level type rather than a block of `Naming` statics: twenty-four constants and
+ * their four writers are a third of that class's members, and a decomposition metric that counts
+ * a check's SENTENCES against its complexity is measuring the wrong thing.
+ *
+ * The sentences are deliberately GENERIC — no name, type or file is interpolated into any of them.
+ * The ledger groups declines by the reason TEXT, so a per-site detail would make every finding its
+ * own "distinct reason" and turn a four-line summary into a two-hundred-line one. The site is
+ * already on the finding; the reason is about the GATE.
+ */
+private class RenameRefusal {
+
+	/** A declaration the grammar itself marked unrenameable. */
+	public static inline final RENAME_UNSAFE: String =
+		'the grammar marked this declaration rename-unsafe — its identifier is a wire / accessor / `@:rtti` contract that a rewrite of the declaration alone cannot honour';
+
+	/** A Type / EnumValue: no member-confinement proof applies, so the in-file rename never owns it. */
+	public static inline final NOT_A_MEMBER: String =
+		'only a member (field / constant / method) has a confinement proof, and this declaration is not one — a type or enum-value rename reaches every file that names it';
+
+	/** A public member: reachable from anywhere holding a value of the owner's type. */
+	public static inline final PUBLIC_MEMBER: String =
+		'a public member is reachable from every file holding a value of its owner type, so the single-file rename never applies to one — the cross-file path owns it, and declined too';
+
+	/** No cross-file index: nothing can prove the member is unreferenced elsewhere. */
+	public static inline final NO_INDEX: String =
+		'this run built no cross-file index, so no proof that the member is referenced nowhere else is available';
+
+	/** An override binds the SUPERTYPE's name. */
+	public static inline final OVERRIDE: String =
+		'the method is an `override`, so its name is the SUPERTYPE declaration\'s — renaming this one alone would leave it overriding nothing';
+
+	/** Metadata-bearing member: a macro / framework can reach it by name. */
+	public static inline final IMPLICITLY_REACHABLE: String =
+		'the member carries metadata, so a macro / `@:keep` / framework may reach it by NAME through references no identifier-level proof sees';
+
+	/** No enclosing type: the confinement proof has nothing to scope to. */
+	public static inline final NO_OWNER: String = 'the declaration reports no enclosing type, and the confinement proof is scoped to one';
+
+	/** A reflection call in ANOTHER file names this member. */
+	public static inline final REFLECTION_NAME: String =
+		'another indexed file reaches this member by NAME through a reflection call, and a rename breaks such a reference silently';
+
+	/** The private member is reachable from some other file in the index. */
+	public static inline final NOT_CONFINED: String =
+		'the private member is not provably confined to this file — a subtype, an `@:access` / `@:allow` grant or a file the grammar could not read can reach it, so the rewrite must cross files';
+
+	/** No rule in the policy selects this declaration. */
+	public static inline final NO_RULE: String =
+		'no rule in the naming policy in force selects this declaration\'s category and modifier set, so there is no format to correct towards';
+
+	/**
+	 * The policy states a format and no way to reach it. THE dominant decline on any project that
+	 * ships a `checkstyle.json`: `CheckstyleConfigLoader` maps each naming check's `format` regex
+	 * onto a rule and attaches no `normalize`, so the check can prove a name wrong and has nothing
+	 * to propose. 198 of 231 findings on one such tree.
+	 */
+	public static inline final NO_NORMALIZER: String =
+		'the naming policy in force states a FORMAT this name fails but no mechanical normalizer that could produce a conforming one — a policy adapted from a project `checkstyle.json` carries the regex only, so the check can say the name is wrong and not what it should be';
+
+	/** The normalizer ran and what it produced was not usable. */
+	public static inline final NORMALIZER_DECLINED: String =
+		'the policy\'s normalizer ran and produced no usable name — it answered nothing, answered the name unchanged, or answered one that still fails the rule\'s own format';
+
+	/** A supertype may already declare the corrected name. */
+	public static inline final INHERITED_COLLISION: String =
+		'the owner\'s supertype closure cannot be proved free of a member already carrying the corrected name, which Haxe rejects as a redefinition (a method, as a missing `override`)';
+
+	/** The owner is in an `@:rtti` hierarchy. */
+	public static inline final RTTI_HIERARCHY: String =
+		'the owner sits in an `@:rtti` hierarchy, which serializes by member NAME — a rename would invalidate saved data';
+
+	/** The corrected name is already bound where the rename lands. */
+	public static inline final NAME_COLLIDES: String =
+		'the corrected name is already bound where the rename would land, and this declaration category cannot be disambiguated by qualifying the captured occurrences';
+
+	/** An occurrence of the old name is not accounted for. */
+	public static inline final OCCURRENCE_UNRESOLVED: String =
+		'some textual occurrence of the name is not accounted for by the resolved rename spans — a `#if` branch, a name-shaped string literal, a `noqa`, or an active-code reference the resolver does not attribute — so the rewrite would be incomplete';
+
+	/** Qualification could not repair the collision. */
+	public static inline final QUALIFY_FAILED: String =
+		'the collision is with a binding other than the parameter idiom, so qualifying the captured occurrences would not repair it';
+
+	/** Another accepted rename in this run already claims the name. */
+	public static inline final NAME_CLAIMED: String =
+		'another rename accepted earlier in this run already claims the corrected name in an overlapping scope';
+
+	/** The plugin projects no naming declarations at all. */
+	public static inline final NO_SUPPORT: String =
+		'the grammar plugin projects no naming declarations, so the check has nothing to rename';
+
+	/** The file did not re-parse for the fix pass. */
+	public static inline final NO_TREE: String = 'the file did not re-parse in the fix pass, so no declaration could be located in it';
+
+	/** The cross-file path's one three-part unresolvable-hierarchy gate. */
+	public static inline final CROSS_HIERARCHY_UNPROVABLE: String =
+		'the cross-file rename cannot enumerate who reaches the owner — the scope holds a file the grammar could not parse, or the declaring file carries an `@:allow` granting an unenumerable type, or the owner\'s simple name is not declared in exactly one file';
+
+	/** A member of the override family sits outside the files the rename would edit. */
+	public static inline final CROSS_FAMILY_UNREACHABLE: String =
+		'the rename would have to carry the whole override family, and one of its declarations sits outside the files this run would edit — half a family leaves a declaration overriding nothing';
+
+	/** A file the rename must touch could not be read or parsed. */
+	public static inline final CROSS_FILE_UNREADABLE: String =
+		'a file the rename would have to edit is not in this run\'s source set, or did not parse';
+
+	/** The target name is already bound in a file outside the declaring one. */
+	public static inline final CROSS_COLLISION: String =
+		'the corrected name is already bound in one of the files the rename would edit, where no `this.` qualification can disambiguate it';
+
+	/** Is `category` one whose rename a per-file confinement proof can ever cover? */
+	public static inline function isConfinableMemberCategory(category: NamingCategory): Bool {
+		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
+	}
+
+	/**
+	 * Write `reason` on `v` unless something already spoke for it.
+	 *
+	 * FIRST writer wins. The cross-file pass runs BEFORE the per-file one inside a `--fix` pass and
+	 * answers a strictly more specific question for the members it owns, so a reason it has already
+	 * written must not be replaced by the per-file path's "a public member is the cross-file path's
+	 * job". A null `v` is a declaration that carries no finding — nothing to tell.
+	 */
+	public static function note(v: Null<Violation>, reason: String): Void {
+		if (v != null && v.declineReason == null) v.declineReason = reason;
+	}
+
+	/** `note` for a gate addressed by declaration position, answering the `Null<DeclRename>` it must return. */
+	public static function rename(flaggedAt: Map<Int, Violation>, declFrom: Int, reason: String): Null<DeclRename> {
+		note(flaggedAt[declFrom], reason);
+		return null;
+	}
+
+	/** `note` for the cross-file candidate path, whose declining gates answer `Null<CrossFileCandidate>`. */
+	public static function candidate(v: Violation, reason: String): Null<CrossFileCandidate> {
+		note(v, reason);
+		return null;
+	}
+
+	/** `note` for the cross-file rename path, whose declining gates answer `Null<CrossFileRename>`. */
+	public static function crossRename(v: Violation, reason: String): Null<CrossFileRename> {
+		note(v, reason);
+		return null;
+	}
+
+	/**
+	 * Write `reason` on EVERY violation of a whole-file refusal and answer the empty edit list.
+	 *
+	 * `Check.fix` has one spelling for "nothing here" and it is also what a check with NO autofix
+	 * answers, so a whole-scope refusal that returns it silently is indistinguishable from a rule
+	 * that cannot fix at all — which is exactly the reading this rule's 231-finding zero drew.
+	 */
+	public static function all(violations: Array<Violation>, reason: String): Array<{ span: Span, text: String }> {
+		for (v in violations) v.declineReason = reason;
+		return [];
+	}
+
+	/**
+	 * Why the single-file rename of `decl`'s binding is not provably complete within `source` — null
+	 * when every proof passes and the rename may go ahead.
+	 *
+	 * This was `isRenameSafe`, a `Bool`, and eight different refusals reached the caller as one
+	 * `false`. Returning the SENTENCE instead is the whole conversion: the reason a reader gets is
+	 * then the guard's own and cannot drift from the condition that produced it.
+	 */
+	public static function of(
+		decl: NamedDecl, source: String, index: Null<SymbolIndex>, reflectionNames: Array<String>, confinedMemo: Map<String, Bool>
+	): Null<String> {
+		// A declaration the grammar marked rename-unsafe (a typedef / anon-structure
+		// field whose name is a wire contract, or a property backed by physical
+		// get_/set_ accessors a single-decl rename would orphan) is report-only -
+		// the check still warns, but the autofix must not rewrite it.
+		if (decl.renameUnsafe == true) return RENAME_UNSAFE;
+		final category: NamingCategory = decl.category;
+		if (category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar) return null;
+		// Three refusals that were ONE `if` while the caller only needed a yes/no. They are three
+		// different answers to "why not mine", so the reader gets three sentences.
+		if (!isConfinableMemberCategory(category)) return NOT_A_MEMBER;
+		if (decl.mods.contains('public')) return PUBLIC_MEMBER;
+		if (index == null) return NO_INDEX;
+		// A METHOD carries two hazards no field has. An `override` binds the name to the
+		// SUPERTYPE's declaration, so renaming the override alone orphans it. And an
+		// `implicitlyReachable` member - one carrying metadata, which a macro / `@:keep` /
+		// framework can reach by NAME - has references no identifier-level completeness proof
+		// sees. Both are refusals; the inherited-member and confinement proofs cover the rest.
+		if (category == NamingCategory.Method && decl.mods.contains('override')) return OVERRIDE;
+		if (category == NamingCategory.Method && decl.implicitlyReachable == true) return IMPLICITLY_REACHABLE;
+		final owner: Null<String> = decl.enclosingType;
+		if (owner == null) return NO_OWNER;
+		// Cross-file reflection guard: a private member reached from ANOTHER file by a
+		// reflection call naming it (`Reflect.field(x, 'name')`) breaks silently after a
+		// rename — the identifier-level confinement proof cannot see it. The names come from
+		// the grammar's own AST projection (`NamingSupport.reflectionMemberNames`), NOT from a
+		// text scan: a string that merely SPELLS the member (a menu-action id, an asset key,
+		// a `case 'name':`) is not a reference to it and must not veto the rename. The
+		// declaring file is already covered by the in-file completeness check.
+		if (reflectionNames.contains(decl.name)) return REFLECTION_NAME;
+		// Memoize confinement per owner-type within this fix() call: a type with
+		// many flagged private constants would otherwise redo the identical
+		// project-wide subtype / access-grant / `@:allow` scan once per finding.
+		// Keyed by owner AND member: the skipped-file half of the proof is per-NAME now (a file
+		// the grammar cannot read can only reach a member it spells), so two members of one type
+		// no longer share an answer.
+		final memoKey: String = '$owner\t${decl.name}';
+		final cached: Null<Bool> = confinedMemo[memoKey];
+		if (cached != null) return cached ? null : NOT_CONFINED;
+		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, index);
+		confinedMemo[memoKey] = confined;
+		return confined ? null : NOT_CONFINED;
+	}
+
+	/**
+	 * Why `newName` cannot be given to `decl` because of what its OWNER inherits — null when nothing
+	 * objects, and null at once for a category with no supertype hazard.
+	 *
+	 * A private INSTANCE field renamed to `_x` must not REDEFINE a field named `_x` inherited from a
+	 * supertype - Haxe rejects "Redefinition of variable in subclass" (verified). A METHOD has the
+	 * same hazard with a different message ("Field f should be declared with 'override' since it is
+	 * inherited from superclass"), so both member categories take this gate. A local / param renamed
+	 * to a bare name only SHADOWS an inherited member, which Haxe permits (verified) - the whole-file
+	 * textual collision scan in the caller covers that case. The proof walks the FULL supertype
+	 * closure through `resolutionIndex` (the RESOLUTION scope — report files UNION the configured
+	 * libraries — when the plugin carries one, else the report index): an `openfl` / `lime`
+	 * subclass's inherited members are then resolvable rather than unprovable. Refuse when the
+	 * inherited-`_x` possibility cannot be ruled out (a still-unresolvable supertype closure), and
+	 * refuse a member of a `@:rtti` / drill-Node hierarchy whose subtype-ward `@:rtti` only the index
+	 * reveals (the direct-`@:rtti` case is already refused by `of`): such a class serializes by
+	 * reflecting on member NAMES, so a rename would break saved files.
+	 */
+	public static function inherited(decl: NamedDecl, newName: String, resolutionIndex: Null<SymbolIndex>, file: String): Null<String> {
+		if (decl.category != NamingCategory.Field && decl.category != NamingCategory.Method) return null;
+		final owner: Null<String> = decl.enclosingType;
+		if (owner == null) return NO_OWNER;
+		if (resolutionIndex == null) return NO_INDEX;
+		final idx: SymbolIndex = resolutionIndex;
+		return if (!idx.typeProvablyLacksMember(owner, newName, file))
+			INHERITED_COLLISION
+		else if (idx.transitivelyCarriesRtti(owner))
+			RTTI_HIERARCHY
+		else
+			null;
+	}
+
+}

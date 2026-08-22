@@ -804,22 +804,34 @@ gate and doc quotes keeps its bytes. On the 851-file Pony scope:
 apq lint --fix: fixed 668 issue(s) in 234 file(s) over 10 pass(es), risky-fix verified: 61 file(s) applied, 0 reverted to report-only, oracle-assisted: 3 file(s) applied, 3 reverted to report-only (compiler rejected)
 apq lint --fix: 2746 reported finding(s) in 44 rule(s) got NO edit from their own check:
   magic-number 417: no autofix by design — the finding asks for a NAME, and only the author knows it — an auto-hoisted CONST_7 restates the digit behind an indirection
-  explicit-local-type 367: its fix was called for these findings and returned no edit; the check declares neither NoAutofix nor a decline reason, so the run will not say which it is — and this rule has an oracle-assisted pass besides, counted on the summary line above
-  naming 231: its fix was called for these findings and returned no edit; the check declares neither NoAutofix nor a decline reason, so the run will not say which it is
+  explicit-local-type 367: fix DECLINED, 3 distinct reason(s) over 367 finding(s) — and this rule has an oracle-assisted pass besides, counted on the summary line above
+      357× no structural rule names the initializer type — the ladder spells a literal, a bare `new` of a PROVABLY non-generic type, a homogeneous array literal, and a call / index / identifier whose declared type this run can read; …
+      7× the declaration carries no initializer, and every rule this check has infers the type FROM one
+      3× the only type on offer is `Dynamic` / `Any` / `Void`, which an annotation must not spell — …
+  naming 231: fix DECLINED, 6 distinct reason(s) over 231 finding(s)
+      198× the naming policy in force states a FORMAT this name fails but no mechanical normalizer that could produce a conforming one — a policy adapted from a project `checkstyle.json` carries the regex only, so the check can say the name is wrong and not what it should be
+      15× the cross-file rename cannot enumerate who reaches the owner — the scope holds a file the grammar could not parse, or the declaring file carries an `@:allow` granting an unenumerable type, or the owner's simple name is not declared in exactly one file
+      7× the method is an `override`, so its name is the SUPERTYPE declaration's — renaming this one alone would leave it overriding nothing
+      ... +3 more reason(s), 11 finding(s)
   doc-coverage 223: no autofix by design — a generated doc restates the member name; the sentence a reader needs is the one only its author can write
-  unused-import 204 of 205: fix declined here, yet the rule produced 2 edit(s) elsewhere in this run — so it HAS an autofix and withheld it, without saying why
+  unused-import 204 of 205: fix DECLINED, 4 distinct reason(s) over 204 finding(s)
+      110× declaration not in lint scope, cannot verify unused (lint with its source module included) — the module is declared in no file this run read, so a SECONDARY top-level type or a bare enum constructor of it could be the reference that keeps the import alive; …
+      54× `#if`-guarded, so advisory only: delete it by hand — the verdict holds in every branch, but the canonicaliser normalises the module-level import block ONLY, so deleting a span inside a `#if` region leaves the emptied line behind as a second blank
+      25× extension use not tracked — the module's extension methods are known neither to the std probe nor to the report index, so a `.method(` call on any receiver could be resolving through it
+      ... +1 more reason(s), 15 finding(s)
   duplicate-code 202: no autofix by design — whether the copies are one idea or a coincidence — and where the shared factor belongs — is a design judgement
   ... +38 more rule(s), 1102 finding(s)
 apq lint --fix: 12 rule(s) never enter this ledger — the risky-fix path owns them (avoid-dynamic, dead-null-guard, hoist-embedded-assignment, prefer-case-guard, prefer-enum-abstract, prefer-exists, prefer-inline, prefer-interpolation, prefer-map-type, prefer-null-coalescing, redundant-import, shorten-type-ref); the summary line above is their whole verdict.
 apq lint --fix: a rule above that declared NOTHING is not thereby a rule that CANNOT fix — a decline most often needs a WIDER scope than this run (a member rename must see every file that could collide). Re-run over the project root, and see `Check.NoAutofix` / `Violation.declineReason` for what a rule owes its reader here.
 ```
 
-Five verdicts, ordered by how strong the evidence behind them is:
+Six verdicts, ordered by how strong the evidence behind them is:
 
 | the row says | what it means |
 |---|---|
 | `no autofix by design — <reason>` | the rule implements `NoAutofix` |
-| `fix DECLINED — <reason>` | the rule wrote `declineReason` on the finding |
+| `fix DECLINED — <reason>` | the rule wrote ONE `declineReason`, and it covers every declined finding |
+| `fix DECLINED, N distinct reason(s) over M finding(s)` + `<count>× <reason>` lines | the rule declines per ARM, and each arm's share is counted |
 | `fix declined here, yet the rule produced N edit(s) elsewhere` | measured; no declaration needed |
 | `its fix was called … and returned no edit; the check declares neither` | the honest default |
 | `… and this rule has an oracle-assisted pass besides` | appended for an `OracleAssisted` rule, which has a second fix path this ledger never sees |
@@ -834,17 +846,65 @@ run in the safe loop, so it has a row, and its extra pass is noted on that row.
 
 **The conversion is deliberately partial.** Four report-only rules declare
 `NoAutofix` — `magic-number`, `doc-coverage`, `duplicate-code`, `complexity` —
-and two declare their decline — `prefer-typed-throw`, `import-order`. A measured
-20 more report-only builtins are left on the default arm, which reads strictly
-better than the sentence it replaces and never claims what it cannot prove. A
-rule that always fixes needs no conversion at all: a rule whose findings all got
-an edit is not listed.
+and five declare their decline — `prefer-typed-throw`, `import-order`,
+`unused-import`, `explicit-local-type`, `naming`. A measured 20 more report-only
+builtins are left on the default arm, which reads strictly better than the
+sentence it replaces and never claims what it cannot prove. A rule that always
+fixes needs no conversion at all: a rule whose findings all got an edit is not
+listed.
 
-One thing the ledger found on its first real run, worth a queue item rather than
-a fix here: `unused-import` reports 205 findings on Pony and writes exactly two
-import deletions (confirmed against the diff — `git diff -U0 | grep -c '^-import'`
-is 2). The rule HAS an autofix, so the row is the measured-decline arm; what it
-does not have is a reason for declining the other 203.
+#### A rule that declines for several DIFFERENT reasons gets one line per reason
+
+The first three conversions each had one gate, so the ledger recorded the first
+`declineReason` it saw and printed it as the rule's whole verdict. The three
+biggest undeclared declines on Pony do not: `unused-import` declines through
+four arms, `explicit-local-type` three, `naming` six. Naming whichever the file
+walk reached first states a quarter of an answer with the confidence of the
+whole, so `RuleFixOutcome.reasons` counts them, sorted by share, capped at three
+with the tail totalled. Two properties the block keeps:
+
+- a rule with ONE reason covering every declined finding keeps the exact
+  single-line `fix DECLINED — <reason>` bytes it always printed;
+- a rule that spoke for only SOME of its declines prints
+  `<k>× — the check declared no reason for these` rather than letting the
+  reasons it gave stand for the rest. The reason totals and `declined` are
+  counted over the same findings, at the same call site, so they compare.
+
+#### What the three biggest declines turned out to be
+
+All three are legitimate refusals, and the sentence each owed its reader is now
+attached at the gate that closes. Measured on the 851-file Pony scope, and each
+share verified against the source rather than counted:
+
+| rule | 100% of its declines |
+|---|---|
+| `unused-import` 204 | 110 the declaring module is outside the lint scope · 54 the import is `#if`-guarded (the `ac539d13` Info cap) · 25 a `using` whose extension set is unknown · 15 a wildcard whose symbol set is unknown. `fix` deletes exactly the `Warning`s, so every `Info` the check emits IS a decline; each arm's reason OPENS with the same constant its reported message is built from, so the two cannot drift. |
+| `explicit-local-type` 367 | 357 no structural rule names the initializer type · 7 no initializer at all · 3 `Dynamic` / `Any` / `Void`. Not a gate closing wrongly: on a synthetic file the ladder annotates 5 of 7 ordinary shapes, and Pony's 367 are the residue previous `--fix` passes left, and not one of them is a bare literal — 76 generic-or-unindexed `new`, 18 array literals (empty or comprehension), 138 calls whose return type this scope cannot read, and 125 other unpinnable initializers. |
+| `naming` 231 | 198 the policy states a FORMAT and carries no `normalize` · 15 an unprovable cross-file hierarchy · 7 `override` · 5 not a member (a type / enum value) · 3 grammar-marked rename-unsafe · 3 an unconfined private member. |
+
+`naming`'s dominant cause is worth its own queue item, because it is a
+capability gap rather than a refusal. `HaxeNamingSupport.policyFor` prefers a
+discovered `checkstyle.json`, and `CheckstyleConfigLoader.load` maps each naming
+check's `format` regex onto a rule and attaches **no `normalize`** — so
+`correctedName` has nothing to return and every finding on such a project
+declines. One-variable matrix, same file and the SAME regex
+(`MethodName` `^[a-z][a-zA-Z0-9_]*$`), only the policy's origin differing:
+
+```
+checkstyle.json present  →  fixed 0 issue(s) in 0 file(s)   (naming 1: fix DECLINED — …no mechanical normalizer…)
+checkstyle.json absent   →  fixed 2 issue(s) in 1 file(s)   (declaration and call site both renamed)
+```
+
+The fix is not "invent a normalizer per regex": `correctedName` already verifies
+its candidate against the rule's OWN format, so attaching the built-in
+normalizer for the category would be self-checking. Wiring one in as a
+three-line mutation flips the first arm immediately, which is what
+`LintFixFixedPointCliTest.testCheckstyleDerivedPolicyDeclinesTheRenameItsOwnFormatDemands`
+pins — landing the widening means retiring that assertion on purpose, and
+measuring what the rename set gains on a real tree. Note also that the loader
+DROPS each check's `tokens` (`MemberName` is configured twice on Pony, once for
+`CLASS/PUBLIC/PRIVATE/TYPEDEF` and once for `ENUM`, and only the first rule can
+ever apply) — the same widening has to decide what `tokens` means first.
 
 ### The oracle answers for what it COMPILED, not for what you linted
 

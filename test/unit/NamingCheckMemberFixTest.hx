@@ -1013,4 +1013,60 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
+	/**
+	 * The three refusals above, now each saying which gate closed.
+	 *
+	 * `naming` reported 231 findings on an 851-file tree and wrote nothing, by either the per-file or
+	 * the cross-file path, and the run could say only `its fix was called for these findings and
+	 * returned no edit; the check declares neither NoAutofix nor a decline reason`. The rename path is
+	 * a chain of independent proofs and `Check.fix` answers all of their failures with the same empty
+	 * array, so "which one" was unanswerable from outside — and the first hypothesis anyone forms
+	 * about a wholesale zero is a gate closing by accident. Measured with the reasons in place it is
+	 * not: 198 of the 231 are a policy that states a format and carries no normalizer, and the rest
+	 * split across these gates (7 override, 5 non-member, 3 rename-unsafe, 3 unconfined, 15 an
+	 * unprovable cross-file hierarchy).
+	 */
+	public function testEveryRefusedRenameNamesItsGate(): Void {
+		Assert.equals(
+			'only a member (field / constant / method) has a confinement proof, and this declaration is not one — a type or enum-value '
+			+ 'rename reaches every file that names it',
+			refusalOf([{ file: 'C.hx', source: 'class foo {}' }], 'C.hx')
+		);
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate function __render():Void {}\n}';
+		final overrideSrc: String = 'package pkg;\nclass C extends Base {\n\toverride private function __render():Void { trace(1); }\n}';
+		Assert.equals(
+			'the method is an `override`, so its name is the SUPERTYPE declaration\'s — renaming this one alone would leave it overriding '
+			+ 'nothing',
+			refusalOf([
+				{ file: 'pkg/Base.hx', source: baseSrc },
+				{ file: 'pkg/C.hx', source: overrideSrc }
+			], 'pkg/C.hx')
+		);
+		Assert.equals(
+			'a public member is reachable from every file holding a value of its owner type, so the single-file rename never applies to '
+			+ 'one — the cross-file path owns it, and declined too',
+			refusalOf([
+				{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tpublic function __run():Void {}\n}' }
+			], 'pkg/C.hx')
+		);
+		// The other half: a rename the chain DOES reach the end of declines nothing.
+		final renamed: String = 'package pkg;\nclass C {\n\tprivate function __run():Void {}\n\n\tpublic function u():Void { __run(); }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: renamed }];
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.isTrue(check.fix(renamed, vs, new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())).length > 0);
+		Assert.isNull(vs[0].declineReason, 'a rename that landed declined nothing');
+	}
+
+	/** The `declineReason` the naming fix wrote on `targetFile`'s single finding, or `''` when it wrote none. */
+	private function refusalOf(files: Array<{ file: String, source: String }>, targetFile: String): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == targetFile);
+		Assert.equals(1, vs.length);
+		final source: String = files.filter(f -> f.file == targetFile)[0].source;
+		Assert.equals(0, check.fix(source, vs, plugin, SymbolIndex.build(files, plugin)).length, 'the rename is refused');
+		return vs[0].declineReason ?? '';
+	}
+
 }
