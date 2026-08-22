@@ -937,6 +937,32 @@ file(s) applied, 3 reverted to report-only (compiler rejected)` count the files
 the compiler could SEE. Nothing there is false; it simply does not extend to a
 subtree the compile never entered.
 
+**A second, sharper instance: the deleted code COMPILED.** The oracle's blind
+spot above is a subtree it never entered. This one is inside the subtree it did
+enter, and the exit code is still 0 — because the rewrite is a behaviour change
+the type system has no opinion about. `unnecessary-null-check` read
+`public var esVersion: Int = null;` in `pony`'s `create.section.Build`, called
+the operand non-null on the strength of the written `Int`, and `--fix` deleted
+`if (esVersion != null)` from around the line that emits the `js-es$esVersion`
+compiler flag. The result typechecks on every target the oracle builds, so the
+run reported green; the emitted hxml simply started carrying `js-esnull`
+unconditionally. The user found it in a code review, not in a build.
+
+The rule this adds to the one above: **the oracle can only ever confirm that a
+fix still compiles, never that it still means the same thing.** A rule whose
+edit DELETES a guard has to prove the guard is dead from the source itself,
+because the only gate downstream of it agrees with any well-typed program. Two
+proofs of that kind carry the fix that closed this defect, and both are local
+syntax rather than a project setting: a declaration whose own initialiser is the
+literal `null` is nullable whatever its written type says, and a comparison
+against `null` on a value-typed operand does not COMPILE on a static target
+(`On static platforms, null can't be used as basic type Int`), so its presence
+proves the file's target is one where `Int` is nullable. Measured over 18 882
+files (Pony, the Haxe std, `~/dev/haxelib`), the value-type arm those two gates
+withdrew produced 115 findings; 14 distinct sites read, 13 were load-bearing
+dynamic-target guards — five of them inside an explicit `#if neko` /
+`#if js` / `#if (js && html5)` region.
+
 Two consequences worth carrying to any project, not just this one:
 
 - **Read the oracle's own exclusion list before trusting its exit code.** Any

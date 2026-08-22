@@ -18,17 +18,29 @@ import anyparse.query.RefactorSupport;
  */
 class UnnecessaryNullCheckCheckTest extends Test {
 
-	public function testValueTypeParamFlagged(): Void {
-		// `Int` is non-null on static targets regardless of null-safety.
-		Assert.equals(1, violations('class C { function f(x:Int) { if (x != null) trace(x); } }').length);
+	public function testValueTypeParamNotFlaggedWithoutNullSafety(): Void {
+		// `Int` is non-null on STATIC targets only, and this comparison does not compile on one
+		// ("On static platforms, null can't be used as basic type Int", 4.3.7) — so the file it
+		// sits in is a dynamic-target file, where `Int` IS nullable and the guard is load-bearing.
+		Assert.equals(0, violations('class C { function f(x:Int) { if (x != null) trace(x); } }').length);
 	}
 
-	public function testValueTypeLocalFlagged(): Void {
-		Assert.equals(1, violations('class C { function f() { final i:Int = 0; if (i != null) trace(i); } }').length);
+	public function testValueTypeParamFlaggedUnderNullSafety(): Void {
+		// Null safety normalises a non-`Null<…>` type to non-nullable on EVERY target and rejects
+		// a null flowing into it, so the same operand IS proven — by the compiler, not the target.
+		Assert.equals(1, violations('@:nullSafety(Strict) class C { function f(x:Int) { if (x != null) trace(x); } }').length);
+	}
+
+	public function testValueTypeLocalNotFlaggedWithoutNullSafety(): Void {
+		Assert.equals(0, violations('class C { function f() { final i:Int = 0; if (i != null) trace(i); } }').length);
+	}
+
+	public function testValueTypeLocalFlaggedUnderNullSafety(): Void {
+		Assert.equals(1, violations('@:nullSafety(Strict) class C { function f() { final i:Int = 0; if (i != null) trace(i); } }').length);
 	}
 
 	public function testEitherOperandOrder(): Void {
-		Assert.equals(1, violations('class C { function f(x:Int) { if (null == x) trace(x); } }').length);
+		Assert.equals(1, violations('@:nullSafety(Strict) class C { function f(x:Int) { if (null == x) trace(x); } }').length);
 	}
 
 	public function testNullSafeNominalFlagged(): Void {
@@ -58,8 +70,9 @@ class UnnecessaryNullCheckCheckTest extends Test {
 	}
 
 	public function testDefaultedParamFlagged(): Void {
-		// `x:Int = 0` is a required (non-null) parameter — the null check is redundant.
-		Assert.equals(1, violations('class C { function f(x:Int = 0) { if (x != null) trace(x); } }').length);
+		// `x:Int = 0` is a required (non-null) parameter — the null check is redundant. A NON-null
+		// default is not the `= null` exemption, and null safety carries the value type's proof.
+		Assert.equals(1, violations('@:nullSafety(Strict) class C { function f(x:Int = 0) { if (x != null) trace(x); } }').length);
 	}
 
 	public function testCallOperandNotFlagged(): Void {
@@ -79,7 +92,7 @@ class UnnecessaryNullCheckCheckTest extends Test {
 	}
 
 	public function testFlaggedAsInfo(): Void {
-		final vs: Array<Violation> = violations('class C { function f(x:Int) { if (x != null) trace(x); } }');
+		final vs: Array<Violation> = violations('@:nullSafety(Strict) class C { function f(x:Int) { if (x != null) trace(x); } }');
 		Assert.equals(1, vs.length);
 		Assert.equals('unnecessary-null-check', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -116,6 +129,71 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		// for a value-typed default (`x:Int = null` compiles with `x == null` reachable).
 		Assert.equals(0, violations('@:nullSafety(Strict) class C { function f(p:String = null) { if (p != null) trace(p); } }').length);
 		Assert.equals(0, violations('@:nullSafety(Strict) class C { function f(x:Int = null) { if (x != null) trace(x); } }').length);
+	}
+
+	/**
+	 * The reported defect, verbatim: `pony`'s `create.section.Build` declares
+	 * `public var esVersion: Int = null;` and guards its use with `if (esVersion != null)`.
+	 * The rule read `Int` off `declaredTypes`, called the operand non-null, and `--fix`
+	 * DELETED the guard — the emitted hxml then always carried `js-esnull`. The declaration's
+	 * own `= null` is local, syntactic, target-independent proof that the binding is nullable
+	 * and must outrank its written type.
+	 */
+	public function testNullInitialisedValueFieldNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var esVersion: Int = null; function f() { if (esVersion != null) trace(esVersion); } }').length
+		);
+	}
+
+	/** The same declaration as a LOCAL, and as a `final` — one predicate covers every binder. */
+	public function testNullInitialisedLocalNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f() { var x: Int = null; if (x != null) trace(x); } }').length);
+		Assert.equals(0, violations('class C { function f() { final x: Float = null; if (x != null) trace(x); } }').length);
+	}
+
+	/**
+	 * The exemption sits BEFORE the null-safety arm, so it also covers a nominal type whose
+	 * declaration contradicts it — `@:nullSafety` would otherwise prove `s` non-null.
+	 */
+	public function testNullInitialisedNominalNotFlaggedUnderNullSafety(): Void {
+		Assert.equals(
+			0, violations('@:nullSafety(Strict) class C { var s: String = null; function f() { if (s != null) trace(s); } }').length
+		);
+	}
+
+	/**
+	 * A multi-declarator list nests its continuation inside the first declarator's node, so an
+	 * outermost-first walk would exempt BOTH names off the first one's `= null`. Only the name
+	 * that owns the binding decides: `a` is exempt, `b` is still proven.
+	 */
+	public function testMultiDeclaratorExemptsOnlyTheNullOne(): Void {
+		final vs: Array<Violation> = violations(
+			'@:nullSafety(Strict) class C { function f() { var a: String = null, b: String = "x"; '
+			+ 'if (a != null) trace(a); if (b != null) trace(b); } }'
+		);
+		Assert.equals(1, vs.length);
+	}
+
+	/** The null literal must be the initialiser ITSELF; buried in a call it proves nothing. */
+	public function testNullDeepInInitialiserStillFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'@:nullSafety(Strict) class C { function f() { final x: Int = g(null); if (x != null) trace(x); } '
+				+ 'function g(v: Null<Int>): Int return 0; }'
+			).length
+		);
+	}
+
+	/**
+	 * `pony.pixi.ui.slices.SliceSprite`: a value-typed property with NO initialiser is `null`
+	 * on a dynamic target until its setter runs, and the guard picks the image's natural size.
+	 * The value-type arm called it non-null; the null-comparison variant declines.
+	 */
+	public function testUninitialisedValueFieldNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var sliceWidth: Float; function f() { if (sliceWidth != null) trace(sliceWidth); } }').length
+		);
 	}
 
 	public function testSkipParseNoCrash(): Void {
