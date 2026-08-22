@@ -201,6 +201,41 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 		]);
 	}
 
+	/**
+	 * Every shape above that stays report-only now says WHY, on the finding itself.
+	 *
+	 * A full-ruleset run over an 851-file tree reported all 367 of this rule's findings as
+	 * `its fix was called for these findings and returned no edit; the check declares neither
+	 * NoAutofix nor a decline reason` — which reads as a rule that cannot fix, while the ladder
+	 * annotates five of seven ordinary shapes on the same engine. The residue is the hard cases,
+	 * and that is a sentence the reader was owed: measured with the reasons in place, those 367
+	 * split 357 uninferable / 7 initializer-less / 3 inadmissible.
+	 */
+	public function testFixSaysWhyEachSkippedShapeGotNoAnnotation(): Void {
+		assertDeclineReason('var m = new Map();', 'no structural rule names the initializer type');
+		assertDeclineReason('var e = [];', 'no structural rule names the initializer type');
+		assertDeclineReason('var n;', 'carries no initializer');
+		assertDeclineReason('var d = (v : Dynamic);', 'which an annotation must not spell');
+		// The other half: a shape the ladder DOES name declined nothing, so it carries no reason.
+		final annotated: String = wrap('var a = 5;');
+		final check: ExplicitLocalType = new ExplicitLocalType();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: annotated }], new HaxeQueryPlugin());
+		Assert.equals(1, check.fix(annotated, vs, new HaxeQueryPlugin()).length);
+		Assert.isNull(vs[0].declineReason, 'a finding the ladder answers declined nothing');
+	}
+
+	/** `body`'s one finding gets no edit, and its `declineReason` names `gate`. */
+	private function assertDeclineReason(body: String, gate: String): Void {
+		final src: String = wrap(body);
+		final check: ExplicitLocalType = new ExplicitLocalType();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length, 'one finding for: $body');
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the shape is report-only: $body');
+		final reason: Null<String> = vs[0].declineReason;
+		Assert.notNull(reason, 'a declined finding must say why: $body');
+		if (reason != null) Assert.isTrue(reason.indexOf(gate) >= 0, 'the reason names the gate that closed - got: $reason');
+	}
+
 	// --- helpers ---
 
 	private function runGated(source: String, json: String, applyEnablement: Bool): Array<Violation> {

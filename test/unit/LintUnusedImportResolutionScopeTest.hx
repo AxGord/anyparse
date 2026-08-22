@@ -89,6 +89,54 @@ class LintUnusedImportResolutionScopeTest extends Test {
 		Assert.equals(0, vs.length);
 	}
 
+	/**
+	 * `fix` deletes exactly the `Warning`s, so every `Info` this check emits IS a decline — and the
+	 * run had no way to say so. On an 851-file tree `lint --fix` reported `unused-import 204 of 205:
+	 * fix declined here, yet the rule produced 2 edit(s) elsewhere in this run — so it HAS an autofix
+	 * and withheld it, without saying why`, and the four arms behind those 204 are four different
+	 * answers (110 out-of-scope, 54 `#if`-guarded, 25 unknown `using`, 15 unknown wildcard).
+	 *
+	 * Each arm now writes its own `Violation.declineReason`, composed from the SAME constant its
+	 * reported message is built from, so the report and the ledger cannot drift apart. A deletable
+	 * `Warning` carries none: nothing declined it.
+	 */
+	public function testEveryUnverifiableArmSaysWhyItDeclined(): Void {
+		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/lib/Widget.hx', source: WIDGET }];
+		final outOfScope: Array<Violation> = runScoped('package pkg;\n\nimport totally.unknown.Thing;\n\nclass C {}', lib);
+		assertDecline(outOfScope, 'the module is declared in no file this run read');
+		final guarded: Array<Violation> = runScoped('package pkg;\n\n#if js\nimport ext.lib.Widget;\n#end\n\nclass C {}', lib);
+		assertDecline(guarded, 'the canonicaliser normalises the module-level import block ONLY');
+		final wildcard: Array<Violation> = runScoped('package pkg;\n\nimport some.pack.*;\n\nclass C {}', lib);
+		assertDecline(wildcard, 'has an unknown member set');
+		final usingUnknown: Array<Violation> = runScoped('package pkg;\n\nusing totally.unknown.Helpers;\n\nclass C {}', lib);
+		assertDecline(usingUnknown, 'known neither to the std probe nor to the report index');
+		// The other half of the contract: a finding the fix DOES take carries no reason at all, so a
+		// reader never sees a decline where an edit happened.
+		final deletable: Array<Violation> = runScoped('package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}', lib);
+		Assert.equals(1, deletable.length);
+		Assert.equals(Severity.Warning, deletable[0].severity);
+		Assert.isNull(deletable[0].declineReason, 'a finding the fix takes declined nothing');
+		Assert.equals(
+			1, new UnusedImport().fix('package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}', deletable, new HaxeQueryPlugin()).length,
+			'and it really is the arm that produces an edit'
+		);
+	}
+
+	/**
+	 * `vs` is one unfixable advisory whose `declineReason` names `gate`, and whose message still
+	 * CONTAINS the shared half that reason opens with — the pin that keeps the two one string.
+	 */
+	private function assertDecline(vs: Array<Violation>, gate: String): Void {
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+		final reason: Null<String> = vs[0].declineReason;
+		Assert.notNull(reason, 'an Info advisory is a decline and must say why: ${vs[0].message}');
+		if (reason == null) return;
+		Assert.isTrue(reason.contains(gate), 'the reason names the gate that closed - got: $reason');
+		final shared: String = reason.split(' — ')[0];
+		Assert.isTrue(vs[0].message.contains(shared), 'and shares its opening with the reported message - got: ${vs[0].message}');
+	}
+
 	private function runScoped(useSource: String, lib: Array<{ file: String, source: String }>): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: useSource }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());

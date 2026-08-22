@@ -85,6 +85,50 @@ private typedef FileScan = { source: String, importSpans: Array<Span>, commentRe
 @:nullSafety(Strict)
 final class UnusedImport implements Check {
 
+	/**
+	 * The half of a `not in lint scope` message that is the GUARD's sentence rather than the
+	 * import's name — shared with `DECLINE_NOT_IN_SCOPE` below so the reported message and the
+	 * `--fix` ledger's reason cannot drift apart. Same contract for the three constants after it.
+	 */
+	private static inline final MSG_NOT_IN_SCOPE: String =
+		'declaration not in lint scope, cannot verify unused (lint with its source module included)';
+
+	/** The wildcard arm's own words for "the symbol set behind this import is unknown". */
+	private static inline final MSG_WILD_UNTRACKED: String = 'usage not tracked';
+
+	/** The `using` arm's own words for the same unknown symbol set. */
+	private static inline final MSG_USING_UNTRACKED: String = 'extension use not tracked';
+
+	/** The suffix `make` appends when it caps a guarded `Warning` at `Info`. */
+	private static inline final MSG_GUARDED: String = '`#if`-guarded, so advisory only: delete it by hand';
+
+	/**
+	 * Why `fix` produced nothing for a finding, per arm — the sentence `apq lint --fix` prints after
+	 * `fix DECLINED — `. Each one OPENS with the constant its own message is built from, so the two
+	 * are one string by construction: a reader of the report and a reader of the ledger get the same
+	 * verdict, and editing either edits both.
+	 *
+	 * `fix` deletes exactly the `Warning`s, so every `Info` this check emits IS a decline, and each
+	 * of the four is a different question the run could not answer — which is why one reason per arm,
+	 * written where the arm decides, and not one sentence for the rule.
+	 */
+	private static final DECLINE_NOT_IN_SCOPE: String = '$MSG_NOT_IN_SCOPE — the module is declared in no file this run read, so a '
+		+ 'SECONDARY top-level type or a bare enum constructor of it could be the reference that keeps the import alive; deleting one '
+		+ 'on the bound name alone broke real builds. Lint the project root, or add the module\'s root to `resolutionLibs`.';
+
+	/** Why a wildcard import is never deleted: nobody can enumerate what it brings into scope. */
+	private static final DECLINE_WILD_UNTRACKED: String = '$MSG_WILD_UNTRACKED — a package wildcard, or one on a type outside the '
+		+ 'report set, has an unknown member set, so no reference test can prove that NONE of its members is used';
+
+	/** Why an unrecognised `using` is never deleted: an extension call cannot be ruled out. */
+	private static final DECLINE_USING_UNTRACKED: String = '$MSG_USING_UNTRACKED — the module\'s extension methods are known neither '
+		+ 'to the std probe nor to the report index, so a `.method(` call on any receiver could be resolving through it';
+
+	/** Why a guarded import stays advisory even when the scan PROVED it unused. */
+	private static final DECLINE_GUARDED: String = '$MSG_GUARDED — the verdict holds in every branch (the scan reads the raw text of '
+		+ 'all of them), but the canonicaliser normalises the module-level import block ONLY, so deleting a span inside a `#if` region '
+		+ 'leaves the emptied line behind as a second blank';
+
 	public function new() {}
 
 	public function id(): String {
@@ -162,6 +206,13 @@ final class UnusedImport implements Check {
 	 * `Info` advisories are deliberately NOT fixed: they cannot be verified,
 	 * so removing one could break the file. The caller batches these edits
 	 * into one whole-file `canonicalize`, which drops the now-blank line.
+	 *
+	 * The gate here is one line — `severity == Warning` — but the DECISION it
+	 * reads was taken in `run`, one arm per unverifiable form, so that is where
+	 * each `Violation.declineReason` is written (see the `DECLINE_*` constants).
+	 * A measured 204 of 205 findings on an 851-file tree take this branch, and
+	 * until the reason travelled with them the run reported the rule as having
+	 * withheld an autofix "without saying why".
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -223,10 +274,7 @@ final class UnusedImport implements Check {
 				// is in use even though `Enum` itself is never named.
 				if (imp.kind == ImportKind.Import && enumCtorReferenced(imp.raw, scan, enumCtorsByPath)) return;
 				if (imp.kind == ImportKind.Import && !membersByPath.exists(imp.raw)) {
-					out.push(make(
-						file, imp, Severity.Info,
-						'import \'${imp.raw}\': declaration not in lint scope, cannot verify unused (lint with its source module included)'
-					));
+					out.push(make(file, imp, Severity.Info, 'import \'${imp.raw}\': $MSG_NOT_IN_SCOPE', DECLINE_NOT_IN_SCOPE));
 					return;
 				}
 				out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\''));
@@ -266,14 +314,17 @@ final class UnusedImport implements Check {
 	 * the next declaration. Until the writer normalises inside a conditional, a
 	 * guarded verdict is reported with its real reason and left to a human.
 	 */
-	private static function make(file: String, imp: ImportInfo, severity: Severity, message: String): Violation {
+	private static function make(file: String, imp: ImportInfo, severity: Severity, message: String, ?decline: String): Violation {
 		final guarded: Bool = imp.guarded && severity == Severity.Warning;
 		return {
 			file: file,
 			span: imp.span,
 			rule: 'unused-import',
 			severity: guarded ? Severity.Info : severity,
-			message: guarded ? '$message — `#if`-guarded, so advisory only: delete it by hand' : message
+			message: guarded ? '$message — $MSG_GUARDED' : message,
+			// The cap IS the decline, so the reason belongs where the cap happens — not at the four
+			// call sites, which would each have to restate a rule they do not apply.
+			declineReason: guarded ? DECLINE_GUARDED : decline
 		};
 	}
 
@@ -304,7 +355,7 @@ final class UnusedImport implements Check {
 		if (referenced(scan, bound)) return;
 		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? reportMembersByModule[imp.raw];
 		if (methods == null) {
-			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': extension use not tracked'));
+			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': $MSG_USING_UNTRACKED', DECLINE_USING_UNTRACKED));
 			return;
 		}
 		if (methods.exists(m -> RefactorSupport.methodCalledInSource(scan.source, m, bound))) return;
@@ -331,7 +382,7 @@ final class UnusedImport implements Check {
 	): Void {
 		final members: Null<Array<String>> = membersByPath[stripWildStar(imp.raw)];
 		if (members == null) {
-			out.push(make(file, imp, Severity.Info, 'wildcard import \'${imp.raw}\': usage not tracked'));
+			out.push(make(file, imp, Severity.Info, 'wildcard import \'${imp.raw}\': $MSG_WILD_UNTRACKED', DECLINE_WILD_UNTRACKED));
 			return;
 		}
 		if (members.exists(name -> referenced(scan, name))) return;

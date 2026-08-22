@@ -162,6 +162,45 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	private static inline final DEFAULT_MAX_ANON_LEN: Int = 80;
 
 	/**
+	 * Why `fix` produced no annotation for a finding — one sentence per gate, written on the
+	 * `Violation` AT the gate that closed (`Violation.declineReason`).
+	 *
+	 * Every one of these is a per-SITE refusal of a rule that fixes plenty elsewhere, and until they
+	 * were written down a full-ruleset run over an 851-file tree reported all 367 of its findings as
+	 * "its fix was called for these findings and returned no edit; the check declares neither
+	 * NoAutofix nor a decline reason". That reads as a rule with no autofix; measured on the same
+	 * tree, the ladder annotates five of seven ordinary shapes and the survivors are the hard ones —
+	 * which is the sentence the reader was owed and could not get.
+	 */
+	private static inline final DECLINE_NO_TREE: String =
+		'the file did not re-parse in the fix pass (or the grammar names no local-declaration kind), so no flagged declaration could be located';
+
+	/** The violation's span matched no local-declaration node in the tree `fix` re-parsed. */
+	private static inline final DECLINE_NO_NODE: String = 'the flagged span matched no local declaration in the tree this pass re-parsed';
+
+	/** A declaration with no initializer: the ladder infers FROM the initializer, and there is none. */
+	private static inline final DECLINE_NO_INIT: String =
+		'the declaration carries no initializer, and every rule this check has infers the type FROM one';
+
+	/** The ladder DID name a type, and the name is one an annotation must not spell. */
+	private static inline final DECLINE_INADMISSIBLE: String =
+		'the only type on offer is `Dynamic` / `Any` / `Void`, which an annotation must not spell — it would pin down a value whose implicit-conversion dispatch the compiler still resolves';
+
+	/** No insertion point between the binder and the initializer (an unusual declaration shape). */
+	private static inline final DECLINE_NO_INSERT_POINT: String =
+		'the declaration offers no position between its binder and its initializer to write the annotation into';
+
+	/**
+	 * The inference ladder ran and no arm named a type. The commonest decline by far — and the one
+	 * constant here that concatenates, so it sits LAST of the group: a non-`inline` `static final`
+	 * reads as a FIELD, and a field between two constants is what `member-order` reports.
+	 */
+	private static final DECLINE_NO_STRUCTURAL_TYPE: String = 'no structural rule names the initializer type — the ladder spells a '
+		+ 'literal, a bare `new` of a PROVABLY non-generic type, a homogeneous array literal, and a call / index / identifier whose '
+		+ 'declared type this run can read; a generic or out-of-scope constructor, an empty array literal, and a call into a module '
+		+ 'the run never indexed fall through all of them, and inferring one anyway would change the type rather than restate it';
+
+	/**
 	 * Builtin type names a cross-file type SOURCE may be copied verbatim as: the source is
 	 * spelled in the DECLARING file, so every component must resolve identically in ANY
 	 * consumer with no import. Deliberately NARROWER than `TypeRefPrinter.ALWAYS_IN_SCOPE` —
@@ -243,7 +282,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final shape: RefShape = plugin.refShape();
 		final locals: Array<String> = shape.localDeclKinds ?? [];
 		final tree: Null<QueryNode> = locals.length == 0 ? null : CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
+		if (tree == null) return decline(violations, DECLINE_NO_TREE);
 		final byKey: Map<String, QueryNode> = [];
 		RefactorSupport.indexNodesByKind(tree, locals, byKey);
 		// A cast target lookup costs a second full parse (`castTargetSources`), so compute
@@ -272,15 +311,35 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
-			if (node == null || node.children.length == 0) continue;
+			if (node == null) {
+				v.declineReason = DECLINE_NO_NODE;
+				continue;
+			}
+			if (node.children.length == 0) {
+				v.declineReason = DECLINE_NO_INIT;
+				continue;
+			}
 			final init: QueryNode = node.children[0];
 			final typeSource: Null<String> = inferLocalType(init, source, shape, tree, castTargets, declaredTypeSources, index, anonCap);
 			// The admissibility gate covers BOTH arms, not just the oracle's: a structural arm can
 			// copy `Dynamic` or a `Void` return out of a declared type just as the compiler can
 			// answer them, and the annotation is as bad either way (see `inadmissibleType`).
-			if (typeSource == null || inadmissibleType(typeSource)) continue;
+			// The two are ONE gate for the edit and TWO different answers for the reader, which is
+			// why the reason is written per branch rather than once on the pair.
+			if (typeSource == null) {
+				v.declineReason = DECLINE_NO_STRUCTURAL_TYPE;
+				continue;
+			}
+			if (inadmissibleType(typeSource)) {
+				v.declineReason = DECLINE_INADMISSIBLE;
+				continue;
+			}
 			final at: Int = LiteralInfer.insertPoint(node, init, source);
-			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
+			if (at < 0) {
+				v.declineReason = DECLINE_NO_INSERT_POINT;
+				continue;
+			}
+			edits.push({ span: new Span(at, at), text: ':$typeSource' });
 		}
 		return edits;
 	}
@@ -445,6 +504,18 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	public static function stripTypeParamQualifiers(printed: String, site: AnnotationSite): String {
 		return mapTypeRuns(printed, run -> bareTypeParam(run, site));
+	}
+
+	/**
+	 * Record `reason` on every violation of a WHOLE-scope refusal and answer the empty edit list.
+	 *
+	 * `Check.fix` has one spelling for "nothing here", and it is the same one a check with NO autofix
+	 * at all uses — so a refusal that returns it silently is indistinguishable from a rule that cannot
+	 * fix. Two lines, at the site that refuses, is the entire difference.
+	 */
+	private static function decline(violations: Array<Violation>, reason: String): Array<{ span: Span, text: String }> {
+		for (v in violations) v.declineReason = reason;
+		return [];
 	}
 
 	/**

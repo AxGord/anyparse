@@ -464,6 +464,14 @@ final class Cli {
 	/** How many rule ids `unfixedFixLedger` names before it summarises the rest as a count. */
 	private static inline final DECLINED_RULES_SHOWN: Int = 6;
 
+	/**
+	 * How many distinct decline reasons ONE rule's row spells out before it summarises the rest.
+	 * Smaller than the rule cap on purpose: a reason is a full sentence, and the row it hangs
+	 * under is already the answer to "which rule" — three is the whole of every real case measured
+	 * (`unused-import`'s four arms are the widest, and the fourth is 15 of 204 findings).
+	 */
+	private static inline final DECLINED_REASONS_SHOWN: Int = 3;
+
 	private static inline final FUZZY_MAX_DIST: Int = 3;
 
 	/** The maximum 32-bit signed integer — a null-span sort sentinel and the unbounded `--top` / `--all` count. */
@@ -10350,7 +10358,7 @@ final class Cli {
 			reported: 0,
 			declined: 0,
 			edits: 0,
-			reason: null
+			reasons: []
 		};
 		ledger[rule] = created;
 		return created;
@@ -10374,13 +10382,21 @@ final class Cli {
 	): Void {
 		final entry: RuleFixOutcome = ledgerFor(ledger, rule);
 		entry.edits += editCount;
-		if (entry.reason == null) for (v in own) {
+		if (editCount != 0 || !countDeclines) return;
+		entry.declined += own.length;
+		// Counted over exactly the findings `declined` counts, so the two numbers are comparable:
+		// a reason total BELOW `declined` says the check spoke for some of them and not the rest,
+		// which is a fact about the check, not an artefact of where the counting happened.
+		for (v in own) {
 			final reason: Null<String> = v.declineReason;
 			if (reason == null) continue;
-			entry.reason = reason;
-			break;
+			final text: String = reason;
+			final seen: Null<{ text: String, count: Int }> = entry.reasons.find(r -> r.text == text);
+			if (seen == null)
+				entry.reasons.push({ text: text, count: 1 })
+			else
+				seen.count++;
 		}
-		if (editCount == 0 && countDeclines) entry.declined += own.length;
 	}
 
 	/**
@@ -16697,6 +16713,7 @@ final class Cli {
 			count: Int,
 			reported: Int,
 			verdict: String,
+			detail: Array<String>,
 			declared: Bool
 		}> = [];
 		for (rule => entry in ledger) if (entry.declined != 0) {
@@ -16706,7 +16723,8 @@ final class Cli {
 				count: entry.declined,
 				reported: entry.reported,
 				verdict: unfixedVerdict(entry, declared, oracleAssistedIds.contains(rule)),
-				declared: declared != null || entry.reason != null
+				detail: declared != null ? [] : declineReasonLines(entry),
+				declared: declared != null || entry.reasons.length > 0
 			});
 		}
 		if (rows.length == 0) return [];
@@ -16721,6 +16739,7 @@ final class Cli {
 		for (row in rows.slice(0, DECLINED_RULES_SHOWN)) {
 			final label: String = row.count == row.reported ? '${row.rule} ${row.count}' : '${row.rule} ${row.count} of ${row.reported}';
 			lines.push('  $label: ${row.verdict}\n');
+			for (line in row.detail) lines.push(line);
 		}
 		if (rows.length > DECLINED_RULES_SHOWN) {
 			var rest: Int = 0;
@@ -16770,15 +16789,55 @@ final class Cli {
 	 */
 	private static function plainUnfixedVerdict(entry: RuleFixOutcome, noAutofixReason: Null<String>): String {
 		if (noAutofixReason != null) return 'no autofix by design — $noAutofixReason';
-		final reason: Null<String> = entry.reason;
-		return if (reason != null)
-			'fix DECLINED — $reason'
+		final reasons: Array<{ text: String, count: Int }> = entry.reasons;
+		return if (reasons.length == 1 && reasons[0].count == entry.declined)
+			'fix DECLINED — ${reasons[0].text}'
+		else if (reasons.length > 0)
+			// The head only; `declineReasonLines` spells the reasons out one per line under it. A
+			// rule that declines for several DIFFERENT reasons cannot be answered on one line, and
+			// picking one of them is how a quarter of an answer acquires the confidence of a whole.
+			'fix DECLINED, ${reasons.length} distinct reason(s) over ${entry.declined} finding(s)'
 		else if (entry.edits > 0)
 			'fix declined here, yet the rule produced ${entry.edits} edit(s) elsewhere in this run — so it HAS'
 				+ ' an autofix and withheld it, without saying why'
 		else
 			'its fix was called for these findings and returned no edit; the check declares neither NoAutofix nor a decline reason,'
 				+ ' so the run will not say which it is';
+	}
+
+	/**
+	 * The sub-lines under a rule's row when its check declined for MORE THAN ONE reason, or spoke
+	 * for only some of the findings — `<count>× <reason>`, strongest first.
+	 *
+	 * Empty for the two cases the row itself already answers in full: no reason at all (the row
+	 * carries the measured default), and one reason covering every declined finding (the row carries
+	 * it inline, in the exact bytes the single-reason form has always printed).
+	 *
+	 * The trailing `declared no reason for these` count is the honest remainder. A check that
+	 * declines at several sites and writes the reason at only some of them is a real state — the
+	 * ledger's whole point is that the run reports what it MEASURED — and silently rounding the
+	 * remainder into the reasons that were given would restate the defect this block exists to end.
+	 */
+	private static function declineReasonLines(entry: RuleFixOutcome): Array<String> {
+		final reasons: Array<{ text: String, count: Int }> = entry.reasons;
+		if (reasons.length == 0 || (reasons.length == 1 && reasons[0].count == entry.declined)) return [];
+		final sorted: Array<{ text: String, count: Int }> = reasons.copy();
+		sorted.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.text, b.text));
+		final out: Array<String> = [];
+		var explained: Int = 0;
+		for (reason in sorted.slice(0, DECLINED_REASONS_SHOWN)) {
+			out.push('      ${reason.count}× ${reason.text}\n');
+			explained += reason.count;
+		}
+		if (sorted.length > DECLINED_REASONS_SHOWN) {
+			var rest: Int = 0;
+			for (reason in sorted.slice(DECLINED_REASONS_SHOWN)) rest += reason.count;
+			out.push('      ... +${sorted.length - DECLINED_REASONS_SHOWN} more reason(s), $rest finding(s)\n');
+			explained += rest;
+		}
+		final silent: Int = entry.declined - explained;
+		if (silent > 0) out.push('      $silent× — the check declared no reason for these\n');
+		return out;
 	}
 
 	/**
@@ -17301,12 +17360,19 @@ private typedef NamedMember = {
  * counts the first-pass findings whose `Check.fix` call answered with NO edit at all — the
  * measurement, taken where the call happens, that replaces guessing. `edits` accumulates over
  * EVERY pass on purpose: one edit anywhere PROVES the rule can fix, which is exactly the claim
- * a reader of `fixed 0` got wrong twice. `reason` is the check's own `Violation.declineReason`,
- * first one seen; null means the check said nothing and the run must not invent it.
+ * a reader of `fixed 0` got wrong twice.
+ *
+ * `reasons` are the check's own `Violation.declineReason` texts, each with the number of DECLINED
+ * findings that carried it — never one sentence per rule. First-seen-wins was the shape while every
+ * converted rule declined for a single cause; the first rule to adopt the field per-ARM declines for
+ * four different ones on one tree (`unused-import`: 110 out-of-scope, 54 `#if`-guarded, 25 unknown
+ * `using`, 15 unknown wildcard), and reporting whichever the file walk reached first would state one
+ * quarter of the answer with the confidence of the whole. An empty array means the check said
+ * nothing and the run must not invent it; a sum below `declined` means it spoke for only some.
  */
 private typedef RuleFixOutcome = {
 	var reported: Int;
 	var declined: Int;
 	var edits: Int;
-	var reason: Null<String>;
+	var reasons: Array<{ text: String, count: Int }>;
 };
