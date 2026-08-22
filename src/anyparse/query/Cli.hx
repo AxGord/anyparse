@@ -26,6 +26,7 @@ import anyparse.query.CrossRename;
 import anyparse.query.Diff;
 import anyparse.query.ExtractMethod;
 import anyparse.query.ExtractVar;
+import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
@@ -11115,14 +11116,37 @@ final class Cli {
 			return { changed: false, failed: true, fatalExit: null };
 		};
 		final optsJson: Null<String> = discoverFormatConfig(path);
-		final formatted: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: Exception) {
+		// The FIXED POINT, not one round trip. `--list` and `--write` decide from
+		// the same `formatted == source` comparison, so they cannot disagree within
+		// a run — they disagreed ACROSS runs, because a writer whose output is not
+		// its own fixed point left `--write` one pass short of where the next
+		// `--list` looked. `FormatFixedPoint` carries the measured instance.
+		final roundTrip: (text:String) -> Null<String> = text -> plugin.writeRoundTrip(text, optsJson);
+		final fixedPoint: FormatFixedPointResult = try FormatFixedPoint.run(roundTrip, source) catch (exception: Exception) {
 			stderr('apq fmt: $path: ${exception.message}\n');
 			return { changed: false, failed: true, fatalExit: null };
 		};
+		final formatted: Null<String> = fixedPoint.text;
 		if (formatted == null) {
 			stderr('apq fmt: no writer for lang "$lang"\n');
 			return { changed: false, failed: false, fatalExit: EXIT_RUNTIME };
 		}
+		// Every mode fails here, deliberately. A file `--list` reports and `--write`
+		// cannot settle is the exact disagreement this postcondition exists to
+		// close, so no mode may report it as ordinary drift — and writing a
+		// non-fixed-point would churn the bytes again on the next run.
+		if (!fixedPoint.converged) {
+			stderr('apq fmt: $path: ${fixedPoint.failure}; left unchanged\n');
+			return { changed: false, failed: true, fatalExit: null };
+		}
+		// Converged, but not on the first rewrite: the file is formatted correctly
+		// and the WRITER is the defect. Reported rather than swallowed — a silent
+		// loop would hide it behind output that now looks stable.
+		if (fixedPoint.rewrites > 1)
+			stderr(
+				'apq fmt: $path: the writer needed ${fixedPoint.rewrites} rewrites to reach its fixed point'
+				+ ' — a wrap decision read the source line layout the writer itself rewrote\n'
+			);
 		final isCanonical: Bool = formatted == source;
 		if (verify) {
 			// A file already at its fixed point cannot diverge, so the scan is skipped

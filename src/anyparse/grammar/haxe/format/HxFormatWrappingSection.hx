@@ -24,7 +24,19 @@ package anyparse.grammar.haxe.format;
  *    ω-wrapping-objectLiteral-ingest — knob, default, and writer
  *    dispatch via `@:fmt(wrapRules('objectLiteralWrap'))` on
  *    `HxObjectLit.fields` were already wired before this slice; only
- *    the loader-side mapping was missing).
+ *    the loader-side mapping was missing). CAVEAT, measured
+ *    2026-08-22: this cascade is consulted only for a literal the
+ *    SOURCE kept on ONE line. A source-multiline literal is
+ *    force-one-per-lined before the cascade runs (the Star carries no
+ *    `@:fmt(reflowSourceMultiline)`), mirroring the fork's
+ *    `MarkWrapping.objectLiteralWrapping`, which returns early on
+ *    `!isOriginalSameLine`. A break-mode default therefore does not
+ *    reach its own output: pass 1's leading break makes the literal
+ *    multiline, so pass 2 lands on OnePerLine instead. `apq fmt`
+ *    absorbs that by writing the FIXED POINT and reporting the extra
+ *    rewrite (`FormatFixedPoint`); `anonType`, `callParameter`,
+ *    `arrayWrap`, `anonFunctionSignature` and `typeParameter`
+ *    share the shape.
  *  - `conditionWrapping`: `WrapRules` cascade → `conditionWrap` (slice
  *    ω-condition-wrap-ingest — foundational scaffold). Drives wrap
  *    shape for statement-condition parens (`if (cond)`, `for (item in

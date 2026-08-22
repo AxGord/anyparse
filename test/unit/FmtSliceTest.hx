@@ -3,6 +3,8 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
+import anyparse.query.FormatFixedPoint;
+import haxe.Exception;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -87,6 +89,111 @@ class FmtSliceTest extends Test {
 	/** No input specs is a usage error. */
 	public function testNoInputsIsUsageError(): Void {
 		Assert.equals(2, Cli.run(['fmt']));
+	}
+
+	/**
+	 * The layout-reading wrap decision, end to end. ONE `--write` must land the
+	 * file where every further `--write` leaves it, or the `--list` gate that
+	 * runs next disagrees with the `--write` that just ran.
+	 *
+	 * `objectLiteral.defaultWrap` is the widest instance — 163 of 854 Pony
+	 * files under `fillLineWithLeadingBreak` — and the shape reduces to this
+	 * one: a SINGLE-LINE literal wraps on rewrite 1, which makes it
+	 * source-MULTILINE, which force-one-per-lines it on rewrite 2 (the cascade
+	 * is never consulted for a multiline literal). The pass-1 shape the
+	 * assertion rejects is `\t\t\tx: 1, y: 2`.
+	 */
+	public function testWriteLandsOnTheWrapCascadeFixedPoint(): Void {
+		final config: String = '{"wrapping":{"objectLiteral":{"defaultWrap":"fillLineWithLeadingBreak","rules":[]}}}';
+		final dir: String = CliFixture.writeDir('apq_fmt_fixed_point', [
+			{ name: 'hxformat.json', source: config },
+			{ name: 'A.hx', source: 'class A {\n\tpublic function f(): Void {\n\t\tvar p = { x: 1, y: 2 };\n\t}\n}\n' }
+		]);
+		Assert.equals(0, Cli.run(['fmt', dir, '--write']));
+		final written: String = File.getContent('$dir/A.hx');
+		Assert.equals(
+			'class A {\n\tpublic function f():Void {\n\t\tvar p = {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t};\n\t}\n}\n', written,
+			'one --write must reach the fixed point, not the rewrite-1 shape the next --list rejects'
+		);
+		Assert.equals(0, Cli.run(['fmt', dir, '--write']));
+		Assert.equals(written, File.getContent('$dir/A.hx'), 'a second --write over the fixed point must change nothing');
+		Assert.equals(0, Cli.run(['fmt', dir, '-l']));
+		Assert.equals(written, File.getContent('$dir/A.hx'), '--list must never rewrite');
+		CliFixture.removeDir(dir);
+	}
+
+	/** A file already at its fixed point pays exactly one round trip. */
+	public function testCanonicalInputTakesOneRoundTrip(): Void {
+		var calls: Int = 0;
+		function identity(text: String): Null<String> {
+			calls++;
+			return text;
+		}
+		final result: FormatFixedPointResult = FormatFixedPoint.run(identity, 'a');
+		Assert.equals(1, calls, 'a canonical file must not pay a confirming round trip');
+		Assert.equals(0, result.rewrites);
+		Assert.isTrue(result.converged);
+		Assert.equals('a', result.text);
+	}
+
+	/** The healthy case: one rewrite, confirmed by a round trip that changes nothing. */
+	public function testOneRewriteConvergesAndIsNotReportable(): Void {
+		final result: FormatFixedPointResult = FormatFixedPoint.run(stepping(['a' => 'b']), 'a');
+		Assert.equals(1, result.rewrites, 'one rewrite is the healthy count and must not read as a writer defect');
+		Assert.isTrue(result.converged);
+		Assert.equals('b', result.text);
+	}
+
+	/** The layout-reading shape: a second rewrite the caller must both apply and report. */
+	public function testSecondRewriteIsReachedAndCounted(): Void {
+		final result: FormatFixedPointResult = FormatFixedPoint.run(stepping(['a' => 'b', 'b' => 'c']), 'a');
+		Assert.equals(2, result.rewrites);
+		Assert.isTrue(result.converged);
+		Assert.equals('c', result.text, 'the caller must write the fixed point, not the intermediate rewrite');
+	}
+
+	/** A writer that flips between two shapes has no fixed point and must not be written. */
+	public function testOscillatingWriterNeverConverges(): Void {
+		final result: FormatFixedPointResult = FormatFixedPoint.run(stepping(['a' => 'b', 'b' => 'a']), 'a');
+		Assert.isFalse(result.converged, 'a 2-cycle must be refused, not written on whichever pass the bound ends on');
+		Assert.equals(FormatFixedPoint.MAX_REWRITES, result.rewrites);
+		Assert.isTrue(result.failure != null);
+	}
+
+	/**
+	 * A failure on the writer's OWN output is a writer defect, not the file's:
+	 * captured into `failure` so the caller declines to write without blaming
+	 * the source it was handed.
+	 */
+	public function testMidLoopFailureIsCapturedNotPropagated(): Void {
+		var calls: Int = 0;
+		function failsOnItsOwnOutput(text: String): Null<String> {
+			calls++;
+			if (calls == 1) return '$text!';
+			throw new Exception('unexpected input');
+		}
+		final result: FormatFixedPointResult = FormatFixedPoint.run(failsOnItsOwnOutput, 'a');
+		Assert.isFalse(result.converged);
+		final failure: String = result.failure == null ? '' : (result.failure: String);
+		Assert.isTrue(failure.indexOf('rewrite 2') >= 0, 'the failure must name the rewrite that broke: $failure');
+		Assert.isTrue(failure.indexOf('unexpected input') >= 0, 'the failure must carry the writer message: $failure');
+	}
+
+	/** The FIRST round trip is the file's own — its failure propagates to the caller's report. */
+	public function testFirstRoundTripFailurePropagates(): Void {
+		function failsImmediately(text: String): Null<String> {
+			throw new Exception('unexpected input');
+		}
+		Assert.raises(FormatFixedPoint.run.bind(failsImmediately, 'a'), Exception);
+	}
+
+	/**
+	 * A round trip that walks `steps` and then repeats its own last answer —
+	 * the shape of a writer that settles after N rewrites (or, with a cycle in
+	 * `steps`, of one that never does).
+	 */
+	private static function stepping(steps: Map<String, String>): (text:String) -> Null<String> {
+		return text -> steps.exists(text) ? steps[text] : text;
 	}
 
 	private static function fixture(source: String): String {

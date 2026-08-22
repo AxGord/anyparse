@@ -1138,3 +1138,46 @@ SEQUENTIALLY on an otherwise idle machine; a battery row runs beside three
 other branches, up to nine `node`/`haxe` processes deep, and moves by tens of
 percent with ambient load. Never quote one as a benchmark result — see "The
 profiling harness" above for how a real arm is measured.
+
+### `--list` and `--write` disagreed across runs, and only the tool could see it
+
+`apq fmt --list` is a gate this campaign runs after every slice. It and `--write`
+decide from the SAME comparison — `writeRoundTrip(source) == source` — so within
+one run they cannot disagree. Across runs they did: `--write` rewrote a file and
+the very next `--list` reported that file again.
+
+The reason is that the writer's output is not always its own fixed point. A wrap
+decision that reads the SOURCE line layout gets a different answer once the writer
+has rewritten that layout. Measured 2026-08-22 with
+`wrapping.objectLiteral.defaultWrap` set to `fillLineWithLeadingBreak`: one `fmt
+--write` over the Pony tree rewrote 173 of 854 files and the next `fmt --list`
+still reported 163 of them; a second `--write` settled every one. The mechanism is
+one early return — a source-MULTILINE object literal is force-one-per-lined BEFORE
+the wrap cascade is consulted, and the leading break the cascade emits on pass 1
+is exactly what makes the literal multiline. It is faithful to the fork, which
+reproduces the same two-pass convergence on the same file under the same config;
+what was NOT faithful is a `--write` whose result its own `--list` rejects.
+
+Five other wrap knobs share the shape on the same corpus — `anonType` (33 files),
+`callParameter` (2), `arrayWrap`, `anonFunctionSignature`, `typeParameter` (one
+each) — so this is a bug SHAPE, not a bug: any list whose layout can be decided
+from source newlines instead of from the cascade.
+
+`fmt` therefore writes the FIXED POINT (`anyparse.query.FormatFixedPoint`), not
+one round trip — and neither swallows nor tolerates what it works around:
+
+- a file that needed more than one rewrite is REPORTED on stderr with the count.
+  A silent loop would turn a writer defect into a permanent tax nobody can see;
+- a file that never settles is a FAILURE in every mode and its bytes are left
+  alone. Churning a file forever is worse than declining to format it, and
+  `--list` has to fail on exactly the files `--write` cannot fix — otherwise the
+  two disagree again at the other end.
+
+It costs nothing where it does not apply: a canonical file answers `source` on the
+first round trip and nothing else runs, so a green tree — the gate's normal case —
+pays zero extra round trips. Measured 0 files needing a second rewrite over `src`,
+`test`, and the whole Pony tree under every config this project ships.
+
+The general shape is the sister of "A comment interior and a string literal are
+outside every gate": **a gate that reads the same component the defect lives in
+cannot see the defect — make the component check its own postcondition.**
