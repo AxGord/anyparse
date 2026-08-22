@@ -912,6 +912,39 @@ statement, an optional semicolon — and those are reported too. The rule stays
 "whitespace only" rather than encoding a policy list, because the defect it exists
 to surface is by definition one nobody has classified yet.
 
+### A comment interior and a string literal are outside every gate
+
+`fmt --verify` bounds the WRITER. Nothing bounds an EDIT OP that splices text
+INTO a region the writer re-emits byte for byte — a block comment's interior, a
+string or a regex literal. There the indentation IS the content, and every gate
+this project has reads past it: the writer re-emits the region verbatim, so `fmt
+--list` calls the file canonical; no lint rule reads a doc comment's ` * `
+continuation prefix; `self-status` only asks whether the file parses; and the
+compiler oracle type-checks a file whose comments it never looks at. A patch that
+lands one space too deep inside a doc block — or that changes the VALUE of a
+multi-line string by shifting its lines — produces a green run in every column.
+
+`hxq patch`'s line-wise arm did exactly that until 2026-08-22. It spliced at the
+matched line's first NON-whitespace byte, so the source's own indentation stayed
+standing and the replacement's was added on top of it. Code hid the defect (the
+writer re-indents code, so it never reached the file); comments and strings did
+not. It was found by reading `git diff` by eye, which is the only reader it had.
+
+The fix went where such a fix belongs: a postcondition INSIDE the op
+(`Patch.verbatimSpliceIntact`), not a new lint rule. A rule over doc-comment
+continuation prefixes would have to guess intent — a comment interior is
+legitimately free-form (ASCII art, indented code samples, nested lists) — and it
+could only ever speak after the damage was committed. The postcondition is exact
+instead: the op knows which bytes it synthesised and which region they landed in,
+so it compares the spliced block's RELATIVE per-line indentation across the writer
+round trip and refuses when it moved unevenly. A uniform shift is the writer
+re-basing the block onto its site, which is legal; a first-line-only shift is the
+defect, and no uniform shift can explain it.
+
+The general shape, worth asking of every new mutation op whose payload can reach a
+comment or a literal: **when an op writes into a region the writer COPIES rather
+than re-derives, the op is the last thing that can check it.**
+
 Every format-aware step is delegated to the CLI this project already builds —
 `apq lint-diff` for the blast radius, `apq sweep` for the corpus, `apq
 test-summary` and `apq shard-plan` through `suite-shard.sh` — rather than
