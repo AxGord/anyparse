@@ -702,6 +702,7 @@ import unit.NarrowLocalScopeCheckTest;
 import unit.RedundantUncheckedCastCheckTest;
 import unit.ShadowingLocalCheckTest;
 import unit.WrapFlatSourceFixedPointTest;
+import unit.HaxeFormatConfigDiagnosticsTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1058,6 +1059,7 @@ class RunTests {
 		addCase(new HxAssignChainWrapSliceTest());
 		addCase(new HaxeFormatConfigLoaderTest());
 		addCase(new FormatConfigDiscoveryTest());
+		addCase(new HaxeFormatConfigDiagnosticsTest());
 		addCase(new HaxeWriterRoundTripTest());
 		addCase(new HxFormatterCorpusTest());
 		addCase(new JsonTypedParserTest());

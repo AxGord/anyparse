@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -65,6 +66,13 @@ final class FormatConfigDiscovery {
 			if (FileSystem.exists(candidate) && !FileSystem.isDirectory(candidate)) {
 				final content: Null<String> = normalize(File.getContent(candidate));
 				CACHE[start] = content;
+				// The one place that holds BOTH a config's text and the path it
+				// came from, and reaches it exactly once per directory — so this
+				// is where "hxq will not act on these settings" can name a file.
+				// A config handed straight to the loader as a string (a corpus
+				// fixture's section 1, a test literal) has no file to name and
+				// stays silent by construction.
+				if (content != null) HaxeFormatConfigDiagnostics.warn(candidate, content);
 				return content;
 			}
 			final parent: String = haxe.io.Path.directory(dir);

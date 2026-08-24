@@ -35,8 +35,9 @@ class Codegen {
 		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
 		trivia: Bool = false, ?rootFnName: Null<String>
 	): Array<Field> {
-		final fields: Array<Field> = [
-			formatInfo.isBinary ? binaryEntry(rootTypePath, rootReturnCT, rootFnName) : publicEntry(rootTypePath, rootReturnCT, rootFnName)
+		final fields: Array<Field> = formatInfo.isBinary ? [binaryEntry(rootTypePath, rootReturnCT, rootFnName)] : [
+			publicEntryWith(rootTypePath, rootReturnCT, rootFnName),
+			publicEntry(rootReturnCT)
 		];
 		for (rule in rules) {
 			for (ereg in rule.eregs) fields.push(eregField(ereg));
@@ -67,12 +68,44 @@ class Codegen {
 
 	// -------- public entry point --------
 
-	private static function publicEntry(rootTypePath: String, rootReturnCT: ComplexType, ?rootFnName: Null<String>): Field {
+	private static function publicEntry(rootReturnCT: ComplexType): Field {
+		// The context-owning half is `parseWith`; `parse` exists so the
+		// overwhelmingly common "just give me the value" call site does not
+		// have to construct an `anyparse.runtime.Parser` of its own. A caller
+		// that wants what the parse OBSERVED but did not return — the
+		// unknown-key record, the farthest-failure position — builds the
+		// context itself and reads it back afterwards.
+		final body: Expr = macro {
+			return parseWith(new anyparse.runtime.Parser(new anyparse.runtime.StringInput(source)));
+		};
+		return {
+			name: 'parse',
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [{ name: 'source', type: macro :String }],
+				ret: rootReturnCT,
+				expr: body
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	private static function publicEntryWith(rootTypePath: String, rootReturnCT: ComplexType, ?rootFnName: Null<String>): Field {
 		final rootFn: String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
 		final parseCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro ctx]),
 			pos: Context.currentPos()
 		};
+		// Takes the context instead of owning it, so a caller can read what
+		// the parse observed but did not return. The context must be FRESH:
+		// `pos`, `maxFailPos`, `errors`, `indentStack`, `captures` and
+		// `unknownFields` are all cumulative, so a reused one resumes mid-way
+		// through the previous input and decorates this parse's error with
+		// the previous parse's farthest failure. The source text is recovered
+		// from `ctx.input` on the ERROR path only — that keeps the text and
+		// the positions provably the same string, which a separate `source`
+		// parameter could not.
+		//
 		// Span-mode (`{spans:true}`) routes the root function through the
 		// paired `*S` typed AST whose enum values each carry a `_span`
 		// arg — the public entry just forwards the value, no side-channel
@@ -85,7 +118,6 @@ class Codegen {
 		// the real innermost blocker for recon / diagnostics. Success
 		// path is unchanged — only the error path is rewritten.
 		final body: Expr = macro {
-			final ctx: anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.StringInput(source));
 			try {
 				final _v = $parseCall;
 				skipWs(ctx);
@@ -100,6 +132,7 @@ class Codegen {
 				// attachment site — the in-body construction sites in
 				// generated code have no `source` reference, and only
 				// the top-level catch is what callers actually see.
+				final source: String = ctx.input.substring(0, ctx.input.length);
 				if (ctx.maxFailPos > e.span.from) {
 					final farthest: anyparse.runtime.ParseError = new anyparse.runtime.ParseError(
 						new anyparse.runtime.Span(ctx.maxFailPos, ctx.maxFailPos), 'unexpected input', ctx.maxFailExpected
@@ -112,10 +145,10 @@ class Codegen {
 			}
 		};
 		return {
-			name: 'parse',
+			name: 'parseWith',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{ name: 'source', type: macro :String }],
+				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
 				ret: rootReturnCT,
 				expr: body
 			}),
