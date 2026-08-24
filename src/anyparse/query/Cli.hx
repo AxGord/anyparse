@@ -55,6 +55,7 @@ import anyparse.query.Uses.UsesHit;
 import anyparse.query.format.Json;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
+import anyparse.runtime.EditDistance;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -7277,7 +7278,10 @@ final class Cli {
 				scored.push({ name: cand, tier: 0, score: cand.length - qLen });
 				continue;
 			}
-			final d: Int = levenshtein(query, cand);
+			// `FUZZY_MAX_DIST + 1` as the ceiling: every distance the tier
+			// keeps comes back exact, and anything further comes back as the
+			// ceiling itself, which the test below rejects.
+			final d: Int = EditDistance.between(query, cand, FUZZY_MAX_DIST + 1);
 			if (d <= FUZZY_MAX_DIST) scored.push({ name: cand, tier: 1, score: d });
 		}
 		scored.sort((a, b) ->
@@ -7292,33 +7296,6 @@ final class Cli {
 		);
 		final take: Int = scored.length < FUZZY_TOP_K ? scored.length : FUZZY_TOP_K;
 		return [for (i in 0...take) scored[i].name];
-	}
-
-	/** Levenshtein edit distance (insert/delete/substitute = 1). */
-	private static function levenshtein(a: String, b: String): Int {
-		final la: Int = a.length;
-		final lb: Int = b.length;
-		if (la == 0) return lb;
-		if (lb == 0) return la;
-		var prev: Array<Int> = [for (j in 0...lb + 1) j];
-		var cur: Array<Int> = [for (j in 0...lb + 1) 0];
-		for (i in 1...la + 1) {
-			cur[0] = i;
-			final ai: Int = a.fastCodeAt(i - 1);
-			for (j in 1...lb + 1) {
-				final cost: Int = ai == b.fastCodeAt(j - 1) ? 0 : 1;
-				final del: Int = prev[j] + 1;
-				final ins: Int = cur[j - 1] + 1;
-				final sub: Int = prev[j - 1] + cost;
-				var m: Int = del < ins ? del : ins;
-				if (sub < m) m = sub;
-				cur[j] = m;
-			}
-			final tmp: Array<Int> = prev;
-			prev = cur;
-			cur = tmp;
-		}
-		return prev[lb];
 	}
 
 	/**

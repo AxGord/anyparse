@@ -2171,7 +2171,19 @@ class Lowering {
 					throw 'unreachable';
 				}
 				final anyFn: String = 'parse${simpleName(anyType)}';
+				// Skip still SKIPS — the value is consumed and discarded, so
+				// parse behaviour and the forward-compat contract are
+				// unchanged. What changes is that the key is no longer
+				// dropped without trace: it lands on the context with the
+				// schema's own field list beside it, and a boundary that
+				// knows where the input came from can say so. A consumer
+				// that never reads `ctx.unknownFields` sees nothing.
+				final knownNames: Expr = {
+					expr: EArrayDecl([for (c in switchCases) c.values[0]]),
+					pos: Context.currentPos()
+				};
 				macro {
+					ctx.recordUnknownField(_key, _keyPos, $knownNames);
 					$i{anyFn}(ctx);
 				};
 			case Error: macro throw new anyparse.runtime.ParseError(
@@ -2350,6 +2362,21 @@ class Lowering {
 			throw 'unreachable';
 		}
 		final keyFn: String = 'parse${simpleName(stringType)}';
+		// The key's own start offset, captured before the key is consumed:
+		// the unknown-key arm runs after the key AND its separator have been
+		// read, so `ctx.pos` no longer points anywhere useful for a
+		// diagnostic. One Int local per entry, on every ByName mapping.
+		final keyPosDecl: Expr = {
+			expr: EVars([
+				{
+					name: '${keyLocal}Pos',
+					type: macro :Int,
+					expr: macro ctx.pos,
+					isFinal: true
+				}
+			]),
+			pos: Context.currentPos()
+		};
 		final keyDecl: Expr = {
 			expr: EVars([
 				{
@@ -2373,6 +2400,7 @@ class Lowering {
 			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
 				while (true) {
 					skipWs(ctx);
+					$keyPosDecl;
 					$keyDecl;
 					skipWs(ctx);
 					expectLit(ctx, $v{keyValueSep});
