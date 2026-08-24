@@ -162,6 +162,31 @@ class LintDiffTest extends Test {
 		Assert.equals(0, result.removedTotal);
 	}
 
+	/**
+	 * `unused-local` names the re-declaration that took a binding over, so its message carries a
+	 * POSITION exactly as `duplicate-code`'s does. Without the mask an unrelated edit ABOVE such a
+	 * finding reports it as 1 removed + 1 added — and a disappearing finding is the direction the
+	 * blast-radius gate exists to catch, so the whole gate would read as a regression on every run
+	 * that shifted a line.
+	 */
+	public function testUnusedLocalRedeclarationPositionIsMaskedAway(): Void {
+		final before: String = reportOf([
+			record(
+				'src/A.hx', 'warning', 'unused-local',
+				"unused local 'a' - re-declared at 5:3, and every read past that belongs to the second binding"
+			)
+		]);
+		final after: String = reportOf([
+			record(
+				'src/A.hx', 'warning', 'unused-local',
+				"unused local 'a' - re-declared at 8:3, and every read past that belongs to the second binding"
+			)
+		]);
+		final result: LintDiffResult = diff(before, after, '');
+		Assert.equals(0, result.addedTotal, 'an edit above the finding must not report it as new');
+		Assert.equals(0, result.removedTotal, 'nor as removed - a disappearing finding is what the gate is for');
+	}
+
 	public function testASeverityFlipIsReported(): Void {
 		// severity is part of the key. A rule that keeps its message and changes
 		// severity has moved the blast radius, and the render publishes a

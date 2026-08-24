@@ -357,6 +357,143 @@ class UnusedLocalShadowTest extends Test {
 		Assert.isTrue(vs[0].message.contains("'dead'"));
 	}
 
+	/**
+	 * The reported shape: a name declared twice in ONE statement list. The second declaration is a
+	 * second BINDING in effect from its own position on, so `return a` belongs to it and the first is
+	 * dead — while the name still appears below, which is why a scan that counts the NAME reported
+	 * nothing here before.
+	 */
+	public function testSameBlockRedeclarationFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.equals('unused-local', vs[0].rule);
+		Assert.isTrue(vs[0].message.contains("'a'"));
+		Assert.isTrue(vs[0].message.contains('re-declared at 4:3'));
+	}
+
+	/** The autofix deletes the FIRST declaration; the second binding and its read stay. */
+	public function testSameBlockRedeclarationFixDeletesFirst(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f() {\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n}', applyFix(src));
+	}
+
+	/**
+	 * The second declaration's own INITIALIZER reads the FIRST binding — the one place this shape
+	 * differs from a loop's, and the one that would turn a finding into a wrong deletion. Only the
+	 * binder TOKEN is excluded, never the whole declaration, so `var a = a + 1` keeps the first alive.
+	 */
+	public function testRedeclarationInitializerReadKeepsDeclaration(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = a + 1;\n\t\treturn a;\n\t}\n}').length);
+	}
+
+	/** A read BETWEEN the two declarations belongs to the first — the excluded region starts at the re-declaration. */
+	public function testReadBeforeRedeclarationKeepsDeclaration(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\ttrace(a);\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n}').length
+		);
+	}
+
+	/**
+	 * A declaration one level DOWN takes nothing over: it is scoped to the block it sits in, and the
+	 * `return a` past that block reads the outer binding. Claiming it — which
+	 * `topLevelDeclaredName`'s descent through single-child wrappers would do — makes the autofix
+	 * delete a live declaration and leaves the read unbound.
+	 */
+	public function testNestedBlockRedeclarationKeepsDeclaration(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(c:Bool) {\n\t\tvar a = 1;\n\t\tif (c) {\n\t\t\tvar a = 2;\n\t\t\ttrace(a);\n\t\t}\n'
+				+ '\t\treturn a;\n\t}\n}'
+			).length
+		);
+	}
+
+	/** Same refusal one construct over: a `switch` arm is a statement list of its own, not this block's. */
+	public function testCaseArmRedeclarationKeepsDeclaration(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(x:Int) {\n\t\tvar a = 1;\n\t\tswitch x {\n\t\t\tcase 1:\n\t\t\t\tvar a = 2;\n'
+				+ '\t\t\t\ttrace(a);\n\t\t\tcase _:\n\t\t}\n\t\treturn a;\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A re-declaration on a conditional-compilation ARM claims nothing: its declarations are children
+	 * of the region, not of the block, so the name is never seen as taking over — the same refusal
+	 * `RefactorSupport.exclusiveBranchRedeclaration` makes for `rename` / `extract-method`, reached
+	 * here through the direct-child rule rather than through a second model of it. In the
+	 * configuration the arm is compiled out of, the first declaration is the only one there is.
+	 */
+	public function testConditionalArmRedeclarationKeepsDeclaration(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\t#if debug\n\t\tvar a = 2;\n\t\t#end\n\t\treturn a;\n\t}\n}').length
+		);
+	}
+
+	/** A side-effecting initializer is reported but never cut — the deletion would drop the call with it. */
+	public function testRedeclaredSideEffectingInitializerReportedNotFixed(): Void {
+		final src: String =
+			'class C {\n\tfunction f() {\n\t\tvar a = g();\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n\n\tfunction g() return 5;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'a'"));
+		Assert.equals(src, applyFix(src));
+	}
+
+	/**
+		 * Only the FIRST link of a chain is reported per pass: the scan spans the whole scope, so the
+	earlier declaration's own binder token reads as an occurrence of the middle one and keeps it
+	live. The `--fix` driver loops to a fixed point, and each pass promotes the next link to
+	first — three passes clear this one.
+	 */
+	public function testChainedRedeclarationsCollapseOverPasses(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = 2;\n\t\tvar a = 3;\n\t\treturn a;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\tfunction f() {\n\t\tvar a = 3;\n\t\treturn a;\n\t}\n}', applyFix(applyFix(src)));
+	}
+
+	/**
+	 * A read past the re-declaration written as a string interpolation belongs to the second binding
+	 * like any other. The scan is textual, so it sees the `$a` the reference walker never surfaces —
+	 * and the tail region has to cover it, or the finding is a property of how the read was spelled.
+	 */
+	public function testInterpolationPastRedeclarationFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = 2;\n\t\ttrace(\'$$a\');\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('re-declared at 4:3'));
+	}
+
+	/**
+	 * An INITIALIZER-LESS first declaration is not claimed. It carries no value of its own, so a
+	 * WRITE is what would make it live — and a `@:build` macro that rewrites the whole statement list
+	 * can supply one: Pony's `@:async` methods pre-declare `var err; var _;` ahead of an `@await`, and
+	 * `com.dongxiguo.continuation` turns each bare declaration into a continuation step. Deleting one
+	 * changes the generated CPS chain, and nothing in a source scan can see that.
+	 */
+	public function testInitializerlessDeclarationNotClaimed(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tvar a:Int;\n\t\tvar a:Int = 2;\n\t\treturn a;\n\t}\n}').length);
+	}
+
+	/**
+	 * The MIRROR of the arm refusal, and it is NOT refused: the first declaration is guarded, the
+	 * re-declaration is a direct child of the block. A direct child exists in EVERY configuration, so
+	 * the guarded declaration is dead in the configuration that has it and absent in the rest — dead
+	 * either way. The self-scoped half of the refinement IS suspended inside a `#if` region
+	 * (`shadowedRegions` bails on `withinConditional`); this half deliberately is not, which is why
+	 * the shape needs a fixture of its own rather than inheriting that gate's silence.
+	 */
+	public function testGuardedDeclarationRedeclaredOutsideFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction f() {\n\t\t#if debug\n\t\tvar a = 1;\n\t\t#end\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('re-declared at 6:3'));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnusedLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
