@@ -74,9 +74,11 @@ private typedef ReturnVar = {
  *    two-plus (the call returns an anonymous struct of them, destructured
  *    back into the original names at the call site).
  *  - A binding the range declares — a local, or a local `function` — whose
- *    name is declared MORE THAN ONCE in one block is refused: reference
- *    resolution mis-binds there, so whether it is read after the range cannot
- *    be decided — the same blind spot `rename` refuses on.
+ *    name is ALSO declared on a conditional-compilation arm another configuration
+ *    compiles out is refused: a read past that `#end` belongs to a different
+ *    declaration per build, so whether the binding is read after the range holds
+ *    for one configuration and not the other — the same shape `rename` refuses on.
+ *    A SEQUENTIAL re-declaration in one block is not this shape and extracts.
  *
  * Coordinate convention: `startLine` / `startCol` / `endLine` / `endCol`
  * are interpreted exactly as `apq refs` PRINTS them
@@ -164,17 +166,20 @@ final class ExtractMethod {
 		final decls: Array<LocalDecl> = collectLocalDecls(sel.stmts, LOCAL_DECL_KINDS);
 		final declNames: Array<String> = [for (d in decls) d.name];
 
-		// A range binding whose name is declared twice in ONE block is a resolution
-		// blind spot: every read that follows the second declaration stays bound to
-		// the FIRST, so the escape analysis below cannot see whether the binding is
-		// read after the range. Refuse it, exactly as `rename` does on this shape.
-		// The scope swept is the enclosing FUNCTION, `rename`'s own, so a block
-		// ELSEWHERE in that function declaring the name twice refuses too - measured,
+		// A range binding whose name is also declared on a conditional-compilation arm that
+		// another configuration compiles out has ONE declaration answering every read past
+		// the `#end`, so the escape analysis below decides "read after the range" for one
+		// build configuration and against the other. Refuse it, exactly as `rename` does on
+		// this shape. A SEQUENTIAL re-declaration in one block is a different shape and is
+		// NOT refused: it resolves by position, and the extraction it enables was measured
+		// correct.
+		// The scope swept is the enclosing FUNCTION, `rename`'s own, so a region
+		// ELSEWHERE in that function carrying the name on an arm refuses too - measured,
 		// and kept: the range's own binding does resolve there, but narrowing it would
 		// mean a second predicate answering the question the shared one already answers.
 		// Swept over the guard's OWN vocabulary, not `LOCAL_DECL_KINDS`: a local
-		// `function g()` declared twice mis-binds identically, and the range moving one
-		// of the two into the closure is what makes the later `g()` call the wrong body.
+		// `function g()` on an arm is the same ambiguity, and moving the range's own
+		// `function g()` into the closure is what makes the later `g()` call the wrong body.
 		// That function is the one owning the range's BLOCK, not the innermost one at
 		// `sel.fromOffset`: a range whose first statement IS a local `function` puts that
 		// offset inside it, and the sweep would then see only that function's own body.
@@ -191,13 +196,14 @@ final class ExtractMethod {
 				source, scope, nm, shape, 'extract of a range binding "$nm"'
 			);
 			if (opaque != null) return Err(opaque);
-			final dup: Null<Span> = RefactorSupport.sameBlockRedeclaration(scope, nm, plugin, shape);
+			final dup: Null<Span> = RefactorSupport.exclusiveBranchRedeclaration(scope, source, nm, plugin, shape);
 			if (dup == null) continue;
 			final at: Position = dup.lineCol(source);
 			return Err(
-				'cannot extract: local "$nm" is declared more than once in the block at ${at.line}:${at.col}, where'
-				+ ' reference resolution mis-binds — a read after the range binds to the FIRST declaration, so whether the'
-				+ ' extracted local is read after the range cannot be decided. Split the scopes or rename the other declaration first'
+				'cannot extract: local "$nm" has a declaration at ${at.line}:${at.col} on a conditional-compilation arm another'
+				+ ' configuration compiles out, while a second declaration of the name can be in effect past the same #end — a read'
+				+ ' there belongs to a different declaration per build, so whether the extracted local is read after the range holds'
+				+ ' for one configuration and not the other. Split the scopes first'
 			);
 		}
 

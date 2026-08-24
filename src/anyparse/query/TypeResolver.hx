@@ -857,15 +857,20 @@ final class TypeResolver {
 	 * The `valueDeclarationKinds` subset whose declaration binds into the ENCLOSING statement list
 	 * — the statement-position locals with their expression and `static` twins, and the LOCAL
 	 * FUNCTION forms (a bare read of one is a closure read, not a member read). Public because
-	 * `RefactorSupport.sameBlockRedeclaration` asks exactly this question ("does one block declare
-	 * this name twice?"), and the two vocabularies must not drift: the union below is this list
+	 * `RefactorSupport.exclusiveBranchRedeclaration` asks exactly this question ("does this statement
+	 * list declare this name?"), and the two vocabularies must not drift: the union below is this list
 	 * plus the binders that scope THEMSELVES.
 	 *
-	 * Those excluded binders are not an oversight. A parameter is never a block child; a `for`
-	 * iterator, a catch variable and a key-value binder each bind into the scope they open, so two
-	 * sibling `for (i in xs)` loops — or two `catch (e:T)` clauses of one `try` — declare the name
-	 * twice under one parent while resolving correctly. Counting those would report a
-	 * redeclaration where there is none.
+	 * The SELF-SCOPING binders are excluded on purpose: a `for` iterator, a catch variable and a
+	 * key-value binder each bind into the scope they open, so two sibling `for (i in xs)` loops — or
+	 * two `catch (e:T)` clauses of one `try` — carry the name under one parent while resolving
+	 * correctly, and counting them would report an ambiguity where there is none.
+	 *
+	 * A PARAMETER is excluded for a different reason and it is a LIMIT, not a property: a parameter is
+	 * never a block child, so this list cannot name it. `exclusiveBranchRedeclaration` therefore reads
+	 * the enclosing function's parameter list itself before it walks — without that, a region
+	 * declaring the name inside a function that takes it as a parameter read as unambiguous and the
+	 * rename corrupted every build the arm is compiled out of.
 	 *
 	 * `inlineFunctionKinds` is listed for completeness rather than for reachability: Haxe refuses a
 	 * bare read of an `inline function` local outright (`Cannot create closure on inline closure`),

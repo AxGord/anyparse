@@ -278,10 +278,13 @@ final class Rename {
 	 *    expression: a read of the name inside it is invisible to every scan, so the rename would
 	 *    part-apply. Scoped to the function that OWNS the binding, since the hole's contents cannot
 	 *    be attributed to a binding at all;
-	 *  - `oldName` declared MORE THAN ONCE in one block (Haxe-legal re-declaration, reached
-	 *    through a metadata wrapper too) — the index mis-binds the references that follow the
-	 *    second declaration. Same owning-function scope: a local cannot be referenced outside it, and
-	 *    a CURSOR anchor would confine the sweep to a nested local function the read sits in.
+	 *  - `oldName` declared on a conditional-compilation arm that another configuration compiles
+	 *    out, while a second declaration of it can be in effect past the same `#end` (a second arm,
+	 *    or a sibling declaration before the region) — a reference past the `#end` then belongs to a
+	 *    different declaration per build and the splice can only serve one. Same owning-function
+	 *    scope: a local cannot be referenced outside it, and a CURSOR anchor would confine the sweep
+	 *    to a nested local function the read sits in. A SEQUENTIAL re-declaration in one block is
+	 *    NOT this shape and renames normally — `ScopeFrame` resolves those by position.
 	 *
 	 * All three refusals are deliberately conservative: a false positive costs a manual rename, a
 	 * false negative silently changes behaviour.
@@ -312,11 +315,13 @@ final class Rename {
 					+ ' no parsed expression, so a read of the name inside it is invisible - respell that interpolation first';
 			}
 		}
-		final dup: Null<Span> = RefactorSupport.sameBlockRedeclaration(scope, oldName, plugin, shape);
+		final dup: Null<Span> = RefactorSupport.exclusiveBranchRedeclaration(scope, source, oldName, plugin, shape);
 		if (dup != null) {
 			final at: Position = dup.lineCol(source);
-			return 'rename of "$oldName" is unsafe: the name is declared more than once in the block at ${at.line}:${at.col},'
-				+ ' where reference resolution mis-binds - split the scopes or rename the other declaration first';
+			return 'rename of "$oldName" is unsafe: the declaration at ${at.line}:${at.col} sits on a conditional-compilation'
+				+ ' arm another configuration compiles out, while a second declaration of the name can be in effect past the same'
+				+ ' #end - a reference there belongs to a different declaration per build, so the splice would leave one'
+				+ ' configuration reading the old name. Rename every declaration by hand, or split the scopes first';
 		}
 		// A LOCAL cannot be referenced outside the function that owns it, so a splice elsewhere in
 		// the file says nothing about it. A MEMBER can be read from any method, and `scope` for one
