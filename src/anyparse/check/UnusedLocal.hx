@@ -19,6 +19,10 @@ using StringTools;
  * Built once per analyzed file so the recursive walk threads one value rather than
  * six positional arguments.
  *
+ * `localDeclContinuationKinds` is `RefShape.localDeclContinuationKinds` — the next-link kinds of
+ * a multi-declarator chain, which `bindsOwnValue` subtracts to tell an initializer from the
+ * declarator that follows it.
+ *
  * `conditionalIfKeyword` is `RefShape.conditionalIfKeyword`, and the conditional gates
  * test the DIRECTIVE that opens a region (`ModuleScan.opensConditionalRegion`) rather
  * than a node kind: the grammar projects a statement-position `#if` and an
@@ -32,6 +36,7 @@ private typedef ScanCtx = {
 	var scopeKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var localDeclKinds: Array<String>;
+	var localDeclContinuationKinds: Array<String>;
 	var selfScopeDeclKinds: Array<String>;
 	var valueBinderKinds: Array<String>;
 	var conditionalIfKeyword: Null<String>;
@@ -68,14 +73,27 @@ private typedef ScanCtx = {
  *
  * ## Occurrences a shadowing binding owns
  *
- * That scan also counts occurrences that CANNOT be a reference to this
- * binding, because an inner construct re-binds the name over the region they
- * sit in — the AS3-heritage `var item; for (item in xs) use(item);`, where the
- * `for` iterator is a fresh binding scoped to the loop and the outer
- * declaration is dead in every compile. So a scan that reports a reference is
- * run a SECOND time with those regions excluded as well, and the declaration
- * is flagged only when nothing textual survives outside them. The regions come
- * from the grammar's own self-scoped declarations (`RefShape.selfScopeDeclKinds`
+ * That scan also counts occurrences that CANNOT be a reference to this binding, because another
+ * binding owns the region they sit in. Two forms, and the second is the one a NAME-counting scan
+ * is blindest to:
+ *
+ * - an inner construct re-binds the name over its own region — the AS3-heritage `var item;
+ *   for (item in xs) use(item);`, where the `for` iterator is a fresh binding scoped to the loop
+ *   and the outer declaration is dead in every compile;
+ * - the SAME statement list declares the name again. That is legal, and since `6c1dc26b` the
+ *   resolver reads it the way the compiler does: the second declaration is a second BINDING, in
+ *   effect from its own position on, so `var a = 1; var a = 2; return a;` leaves the first dead
+ *   while the name still appears below. Only the re-declaration's BINDER TOKEN and everything
+ *   past its end are excluded, never its initializer — `var a = a + 1` reads the FIRST binding in
+ *   the second declaration's own right-hand side, and cutting the whole declaration would flag a
+ *   live one. DIRECT children of the scope only: a declaration in a nested block, a `switch` arm
+ *   or a conditional-compilation arm is scoped to what encloses it and takes nothing over — which
+ *   is how the last of those reaches the same refusal `RefactorSupport.exclusiveBranchRedeclaration`
+ *   makes for `rename` / `extract-method`, without a second model of it.
+ *
+ * A scan that reports a reference is therefore run a SECOND time with those regions excluded as
+ * well, and the declaration is flagged only when nothing textual survives outside them. The
+ * self-scoped half of them comes from the grammar's own declarations (`RefShape.selfScopeDeclKinds`
  * — the `for` iterator in both its statement and comprehension positions, the
  * `catch` exception), never from a second resolver: each contributes its binder
  * token and its body, and only when the construct's shape is verified (see
@@ -86,13 +104,21 @@ private typedef ScanCtx = {
  * re-declaration outside those regions keeps the binding exactly as
  * conservatively as before.
  *
- * Conditional compilation suspends the refinement on both sides — a
- * declaration inside a `#if` region, or a shadowing construct inside one —
- * since the region's branches project as flat siblings and no state of that
- * tree is the source a single compile sees. Both gates test the opening
- * DIRECTIVE (`ModuleScan.opensConditionalRegion`), not a node kind:
- * statement- and expression-position regions project under different kinds,
- * and a refusal naming one of them silently covers only that position.
+ * Conditional compilation suspends the SELF-SCOPED half on both sides — a declaration inside a
+ * `#if` region, or a shadowing loop inside one — since the region's branches project as flat
+ * siblings and no state of that tree is the source a single compile sees. Both gates test the
+ * opening DIRECTIVE (`ModuleScan.opensConditionalRegion`), not a node kind: statement- and
+ * expression-position regions project under different kinds, and a refusal naming one of them
+ * silently covers only that position.
+ *
+ * The re-declaration half is NOT suspended, and the asymmetry is deliberate. A re-declaration
+ * that is a direct child of the block exists in EVERY configuration, so a first declaration
+ * guarded by `#if` is dead in the configuration that has it and absent in the rest — dead either
+ * way. That is the same reasoning `RefactorSupport.exclusiveBranchRedeclaration` records for the
+ * mirror shape ("a sibling declaration AFTER the region is safe: it is in effect in every
+ * configuration from its own position on"). Verified by building the `--fix` output of a
+ * guarded declaration under both configurations. The reverse — a re-declaration ON an arm — is
+ * refused, by the direct-child rule rather than by this gate.
  *
  * ## Reification is opaque
  *
@@ -138,6 +164,7 @@ final class UnusedLocal implements Check {
 				scopeKinds: shape.scopeKinds,
 				opaqueKinds: shape.opaqueKinds ?? [],
 				localDeclKinds: shape.localDeclKinds ?? [],
+				localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 				selfScopeDeclKinds: shape.selfScopeDeclKinds,
 				valueBinderKinds: shape.iterationValueBinderKinds ?? [],
 				conditionalIfKeyword: shape.conditionalIfKeyword
@@ -220,17 +247,24 @@ final class UnusedLocal implements Check {
 	}
 
 	/**
-	 * Append a `Warning` if the local `decl` is unreferenced in `enclosingScope`.
-	 * Bails (no finding) when any coordinate the test needs is missing — a null
-	 * name, declaration span, or scope span — so an unspanned node is never
-	 * flagged.
-	 *
-	 * A scan that DOES find a reference is re-run once with the regions an inner
-	 * self-scoped binding of the same name owns excluded as well
-	 * (`shadowedRegions`): every occurrence of `var item; for (item in xs)
-	 * use(item);` belongs to the loop, and the declaration is dead. The second
-	 * scan is the same predicate over a WIDER exclusion set, so it can only turn a
-	 * silence into a finding, never a finding into a silence.
+		 * Append a `Warning` if the local `decl` is unreferenced in `enclosingScope`.
+		 * Bails (no finding) when any coordinate the test needs is missing — a null
+		 * name, declaration span, or scope span — so an unspanned node is never
+		 * flagged.
+		 *
+		 * A scan that DOES find a reference is re-run once with the regions an inner
+		 * self-scoped binding of the same name owns excluded as well
+		 * (`shadowedRegions`), and by a RE-DECLARATION of it in the same statement
+		 * list (`sameScopeRedeclaration`): every occurrence of `var item; for (item in
+		 * xs) use(item);` belongs to the loop, and every read past the second
+		 * `var a` belongs to the second binding. The two feed ONE exclusion set, and
+		 * the second scan is the same predicate over it, so the refinement can only
+		 * turn a silence into a finding, never a finding into a silence — measured over Pony (867 files),
+	anyparse `src test` (1471), the Haxe std (2625) and ~/dev/haxelib (16 744): 21 findings added
+	in total, none removed anywhere.
+		 *
+		 * A re-declaration also puts its own position in the message. The name IS
+		 * visible below the finding there, so a bare "unused local" reads as wrong.
 	 */
 	private static function checkDecl(ctx: ScanCtx, decl: QueryNode, enclosingScope: Null<QueryNode>): Void {
 		final name: Null<String> = decl.name;
@@ -239,36 +273,121 @@ final class UnusedLocal implements Check {
 		final scopeSpan: Null<Span> = enclosingScope.span;
 		if (scopeSpan == null) return;
 		final excluded: Array<Span> = [declSpan];
+		var note: String = '';
 		if (RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) {
 			final shadowed: Array<Span> = shadowedRegions(ctx, enclosingScope, name, declSpan);
+			// An INITIALIZER-LESS declaration carries no value of its own, so "its value is never
+			// read" is not what makes it dead — a WRITE does, and a build macro that rewrites the
+			// whole statement list can supply one. Pony's `@:async` methods pre-declare `var err;
+			// var _;` ahead of an `@await`, and `com.dongxiguo.continuation` turns each bare
+			// declaration into a continuation step: probed on that shape, the compiler reports
+			// `(_ : Unknown<1>) -> Void should be () -> Unknown<0>` AT the bare declaration, so the
+			// macro binds it, and deleting one is a silent CPS change no gate here would catch. The
+			// loop form needs no such guard — its shadowing binding is the language's own `for` /
+			// `catch` binder, which no statement-list rewrite moves.
+			final redecl: Null<QueryNode> = bindsOwnValue(ctx, decl) ? sameScopeRedeclaration(ctx, enclosingScope, name, declSpan) : null;
+			var claimed: Null<QueryNode> = null;
+			if (redecl != null && appendRedeclaredRegion(ctx, redecl, name, scopeSpan, shadowed)) claimed = redecl;
 			if (shadowed.length == 0) return;
 			for (region in shadowed) excluded.push(region);
 			if (RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) return;
+			if (claimed != null) note = redeclarationNote(ctx, claimed);
 		}
 		ctx.out.push({
 			file: ctx.file,
 			span: declSpan,
 			rule: 'unused-local',
 			severity: Severity.Warning,
-			message: 'unused local \'$name\''
+			message: 'unused local \'$name\'$note'
 		});
 	}
 
 	/**
-	 * The regions of `scope` in which an occurrence of `name` belongs to an INNER binding
-	 * rather than to the declaration at `declSpan` — one self-scoped declaration of the same
-	 * name (`RefShape.selfScopeDeclKinds`: the `for` iterator, the `catch` exception) per
-	 * pair of spans, its binder token and its body.
+	 * The regions of `scope` in which an occurrence of `name` belongs to an INNER binding rather than
+	 * to the declaration at `declSpan` — one self-scoped declaration of the same name
+	 * (`RefShape.selfScopeDeclKinds`: the `for` iterator, the `catch` exception) per pair of spans, its
+	 * binder token and its body.
 	 *
-	 * Empty — no refinement, the declaration stays silent — when the grammar declares no
-	 * self-scoped kind, when the declaration itself sits inside a conditional-compilation
-	 * region, or when no construct passes the shape check.
+	 * Empty when the grammar declares no self-scoped kind, when the declaration itself sits inside a
+	 * conditional-compilation region, or when no construct passes the shape check. Empty is no longer
+	 * the same as "the declaration stays silent": `checkDecl` appends the RE-DECLARATION regions to
+	 * this same array afterwards, and that half is deliberately not suspended inside a `#if` region
+	 * (see the class doc).
 	 */
 	private static function shadowedRegions(ctx: ScanCtx, scope: QueryNode, name: String, declSpan: Span): Array<Span> {
 		final out: Array<Span> = [];
 		if (ctx.selfScopeDeclKinds.length == 0 || withinConditional(ctx, scope, declSpan.from)) return out;
 		collectShadowedRegions(ctx, scope, name, out);
 		return out;
+	}
+
+	/**
+	 * Whether `decl` binds a VALUE of its own — whether it has a child that is not the next link of
+	 * a multi-declarator chain.
+	 *
+	 * The chain is right-recursive, so a middle declarator's only child is the declarator AFTER it:
+	 * `children.length > 0` reads `var a, i, j;` as though `i` had an initializer, which is exactly
+	 * the shape this test exists to reject.
+	 */
+	private static function bindsOwnValue(ctx: ScanCtx, decl: QueryNode): Bool {
+		return decl.children.exists(c -> !ctx.localDeclContinuationKinds.contains(c.kind));
+	}
+
+	/**
+	 * The RE-DECLARATION of `name` in `scope`'s own statement list that takes the binding over from
+	 * the declaration at `declSpan` — the first later DIRECT child of `scope` that declares the same
+	 * name — or null when there is none.
+	 *
+	 * Declaring a name twice in one statement list is legal, and since `6c1dc26b` the resolver reads
+	 * it the way the compiler does: the second declaration is a SECOND BINDING, in effect from its
+	 * own position on, so every read past it belongs to it and the first can be dead while the name
+	 * still appears below. That is invisible to a scan that counts the NAME, which is why
+	 * `var a = 1; var a = 2; return a;` reported nothing.
+	 *
+	 * DIRECT children only, and that is the whole safety argument. A declaration one level down is
+	 * scoped to what encloses it and takes nothing over: a nested block, a switch arm and a
+	 * brace-less `if` body each bind only within themselves, and `topLevelDeclaredName`'s descent
+	 * through single-child wrappers — right for a predicate whose conservative direction is REFUSAL —
+	 * would claim them here, where the conservative direction is silence. A conditional-compilation
+	 * arm is excluded by the same rule for a stronger reason: its declarations are children of the
+	 * region, not of the block, so a name declared there is never seen as taking over — which is
+	 * exactly the refusal `RefactorSupport.exclusiveBranchRedeclaration` makes for the mutation ops,
+	 * reached here without a second model of it.
+	 */
+	private static function sameScopeRedeclaration(ctx: ScanCtx, scope: QueryNode, name: String, declSpan: Span): Null<QueryNode> {
+		for (c in scope.children) {
+			final span: Null<Span> = c.span;
+			if (span != null && span.from > declSpan.from && c.name == name && ctx.localDeclKinds.contains(c.kind)) return c;
+		}
+		return null;
+	}
+
+	/**
+	 * Append the two regions a re-declaration owns — its binder token and everything past its end to
+	 * the end of the scope — and report whether it claimed them.
+	 *
+	 * The INITIALIZER is deliberately left out, and it is the one place this shape differs from a
+	 * loop's: `var a = 1; var a = a + 1;` reads the FIRST binding in the second declaration's own
+	 * right-hand side, so cutting the whole declaration would flag a live binding and the autofix
+	 * would delete it. Excluding only the binder token leaves that read counted, exactly as the
+	 * loop model leaves the iterated expression counted.
+	 */
+	private static function appendRedeclaredRegion(ctx: ScanCtx, redecl: QueryNode, name: String, scopeSpan: Span, out: Array<Span>): Bool {
+		final span: Null<Span> = redecl.span;
+		if (span == null) return false;
+		final binder: Null<Span> = RefactorSupport.binderTokenSpan(ctx.source, span.from, span.to, name);
+		if (binder == null) return false;
+		out.push(binder);
+		out.push(new Span(span.to, scopeSpan.to));
+		return true;
+	}
+
+	/** Where the second binding starts, so a reader who can see the name below knows which one owns it. */
+	private static function redeclarationNote(ctx: ScanCtx, redecl: QueryNode): String {
+		final span: Null<Span> = redecl.span;
+		if (span == null) return '';
+		final at: Position = span.lineCol(ctx.source);
+		return ' — re-declared at ${at.line}:${at.col}, and every read past that belongs to the second binding';
 	}
 
 	/**

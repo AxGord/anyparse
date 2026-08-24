@@ -48,6 +48,10 @@ using StringTools;
  * `LintDiffTest.testDuplicateCodeSubstitutionWithinOneFileIsMaskedAway` pins
  * the current behaviour so the change announces itself.
  *
+ * The list of masked rules is `POSITION_BEARING_RULES`, and it grows when a rule starts
+ * naming a position in its own message — `unused-local` did, when it learned to name the
+ * re-declaration that took a binding over.
+ *
  * What is deliberately NOT normalized: every other rule whose message carries
  * digits — `oversized-type` quotes a member and line count, `string-literal-dup`
  * a repetition count, `complexity` a score. Those digits ARE the finding, so a
@@ -62,8 +66,19 @@ using StringTools;
 @:nullSafety(Strict)
 final class LintDiff {
 
-	/** The one rule whose message carries the partner block's line numbers. */
-	private static inline final DUPLICATE_CODE: String = 'duplicate-code';
+	/**
+	 * The rules whose message carries a POSITION, and whose digits are therefore masked.
+	 *
+	 * `duplicate-code` names its partner block `<path>:<line>`; `unused-local` names the
+	 * re-declaration that took the binding over, and without the mask an unrelated edit above
+	 * such a finding turns one stable record into 1 removed + 1 added — a DISAPPEARING finding,
+	 * which is the direction the blast-radius gate exists to catch.
+	 *
+	 * A rule joins this list by carrying a position in its own message; the list is not a policy
+	 * about digits. `oversized-type`'s member and line count, `string-literal-dup`'s repetition
+	 * count and `complexity`'s score are all digits that ARE the finding, and they stay unmasked.
+	 */
+	private static final POSITION_BEARING_RULES: Array<String> = ['duplicate-code', 'unused-local'];
 
 	/**
 	 * Print order for the severity breakdown, most severe first. A severity
@@ -215,7 +230,7 @@ final class LintDiff {
 	 */
 	public static function normalizeMessage(rule: String, message: String, root: String): String {
 		final rooted: String = normalizeQuotedPaths(message, rootPrefix(root));
-		return rule == DUPLICATE_CODE ? maskDigits(rooted) : rooted;
+		return POSITION_BEARING_RULES.contains(rule) ? maskDigits(rooted) : rooted;
 	}
 
 	/**
