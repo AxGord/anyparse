@@ -7,6 +7,7 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
 
@@ -287,7 +288,11 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg("^([A-Z][A-Z0-9_]*|[a-z][a-zA-Z0-9]*)$", ''),
 				label: 'UPPER_SNAKE or camelCase static final',
-				normalize: stripUnderscorePrefix
+				normalize: stripUnderscorePrefix,
+				// The OTHER shape this rule's format accepts. Reached only when the stripped spelling is
+				// taken — `_height` next to an inherited `height` is the shape that found this: the
+				// stripped name collides, and the constant's own siblings are UPPER_SNAKE anyway.
+				normalizeAlt: upperSnakeConstant
 			},
 			{
 				category: NamingCategory.Field,
@@ -921,6 +926,16 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function modNames(kinds: Array<String>): Array<String> {
 		return [for (kind in kinds) MOD_KIND_TO_NAME[kind] ?? kind];
+	}
+
+
+	/**
+	 * `name` respelled UPPER_SNAKE, or null when that changes nothing or does not spell an
+	 * identifier. The constant rule's `normalizeAlt`: its format's other branch.
+	 */
+	private static function upperSnakeConstant(name: String): Null<String> {
+		final upper: String = RefactorSupport.upperSnake(name);
+		return upper != name && RefactorSupport.isIdentifier(upper) ? upper : null;
 	}
 
 }

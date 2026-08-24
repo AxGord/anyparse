@@ -649,6 +649,7 @@ import unit.ExplicitTypeReturnOracleTest;
 import unit.OracleBatchRevertReasonTest;
 import unit.JoinBranchCallCheckTest;
 import unit.HxCallParamIfExpressionArgSliceTest;
+import unit.HxSemicolonBeforeElseSliceTest;
 import unit.HxValueIfFitSliceTest;
 import unit.RenameMemberInFileCliTest;
 import unit.ApqAstTypeRefsCliTest;
@@ -695,6 +696,7 @@ import unit.HxCondSpliceReturnBlockSliceTest;
 import unit.OracleFixImportLeakTest;
 import unit.MemberOrderMessageTest;
 import unit.LintFixFollowUpRoundTest;
+import unit.NamingCheckAltSpellingFixTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -940,6 +942,7 @@ class RunTests {
 		addCase(new HxTypeParamFieldNoWrapSliceTest());
 		addCase(new HxCallParamObjectLiteralSliceTest());
 		addCase(new HxCallParamIfExpressionArgSliceTest());
+		addCase(new HxSemicolonBeforeElseSliceTest());
 		addCase(new HxValueIfFitSliceTest());
 		addCase(new HxCallParamFunctionLambdaSliceTest());
 		addCase(new HxComprehensionBlockHugSliceTest());
@@ -1362,6 +1365,7 @@ class RunTests {
 		addCase(new NamingCheckTest());
 		addCase(new NamingCheckLocalFixTest());
 		addCase(new NamingCheckMemberFixTest());
+		addCase(new NamingCheckAltSpellingFixTest());
 		addCase(new NamingCheckCrossFileFixTest());
 		addCase(new NamingCheckHoistFixTest());
 		addCase(new ClassifyOccurrencesTest());

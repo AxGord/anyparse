@@ -439,18 +439,13 @@ final class Naming implements Check implements CrossFileFix {
 		final corrected: Null<String> = correctedName(decl.name, rule, reason -> correction.push(reason));
 		if (corrected == null)
 			return RenameRefusal.rename(flaggedAt, declFrom, correction.length == 0 ? RenameRefusal.NORMALIZER_DECLINED : correction[0]);
-		final newName: String = corrected;
-		// What the owner INHERITS can forbid the corrected name outright — see `RenameRefusal.inherited`.
-		final inherited: Null<String> = RenameRefusal.inherited(decl, newName, resolutionIndex, file);
-		if (inherited != null) return RenameRefusal.rename(flaggedAt, declFrom, inherited);
-		// Collision: a `newName` already bound where the rename lands would be duplicated or shadowed
-		// (the re-parse gate accepts it but it does not type-check). Scope-aware for a local /
-		// param / catch var - an occurrence in an UNRELATED function does not conflict; a field / constant
-		// stays whole-file (see `collidesInScope`). A NON-STATIC member survives the collision when it is
-		// the param idiom, by naming the captured occurrences through `this.` (see `qualifyCapturedEdits`);
-		// everything else is refused here, before the expensive occurrence resolution below.
-		final collides: Bool = collidesInScope(decl, source, tree, newName, shape, resolutionIndex, plugin);
-		if (collides && !qualifiableBinding(decl)) return RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.NAME_COLLIDES);
+		final resolved: { name: String, collides: Bool, refusal: Null<String> } = resolvedRename(
+			decl, corrected, rule, source, tree, shape, resolutionIndex, plugin, file
+		);
+		final refused: Null<String> = resolved.refusal;
+		if (refused != null) return RenameRefusal.rename(flaggedAt, declFrom, refused);
+		final newName: String = resolved.name;
+		final collides: Bool = resolved.collides;
 		// Completeness + comment-along: the SAME scope-correct occurrence resolution +
 		// `classifyOccurrences` gate the cross-file path applies to its declaring file — a `#if` /
 		// name-shaped string / `noqa` / resolver-missed active-code occurrence bails, a distinctive
@@ -1538,6 +1533,48 @@ final class Naming implements Check implements CrossFileFix {
 		}
 		walk(tree);
 		return found;
+	}
+
+
+	/**
+	 * The name this rename will write and whether it still collides, or the refusal that stops it.
+	 *
+	 * What the owner INHERITS can forbid the corrected name outright (see `RenameRefusal.inherited`),
+	 * and a name already bound where the rename lands would be duplicated or shadowed — the re-parse
+	 * gate accepts that but it does not type-check. The collision test is scope-aware for a local /
+	 * param / catch var (an occurrence in an UNRELATED function does not conflict) while a field /
+	 * constant stays whole-file, see `collidesInScope`. A NON-STATIC member SURVIVES its collision
+	 * when it is the param idiom, by naming the captured occurrences through `this.` — that is what
+	 * the returned `collides` carries to `qualifyCapturedEdits`; everything else is refused here,
+	 * before the expensive occurrence resolution.
+	 *
+	 * omega-naming-alt-spelling: only once that verdict is a refusal does the rule get asked for its
+	 * SECOND conforming spelling, so every site that had no collision keeps the name it always got.
+	 */
+	private static function resolvedRename(
+		decl: NamedDecl, corrected: String, rule: NamingRule, source: String, tree: QueryNode, shape: RefShape,
+		resolutionIndex: Null<SymbolIndex>, plugin: GrammarPlugin, file: String
+	): { name: String, collides: Bool, refusal: Null<String> } {
+		final inherited: Null<String> = RenameRefusal.inherited(decl, corrected, resolutionIndex, file);
+		final collides: Bool = inherited == null && collidesInScope(decl, source, tree, corrected, shape, resolutionIndex, plugin);
+		final refusal: Null<String> = if (inherited != null)
+			inherited
+		else if (collides && !qualifiableBinding(decl))
+			RenameRefusal.NAME_COLLIDES
+		else
+			null;
+		if (refusal == null) return { name: corrected, collides: collides, refusal: null };
+		// The second spelling passes the SAME gates — the reason the first was refused says nothing
+		// about it — and the same post-conditions `correctedName` imposes on the first: a name that
+		// path would also have been allowed to produce.
+		final normalizeAlt: Null<String -> Null<String>> = rule.normalizeAlt;
+		final second: Null<String> = normalizeAlt == null ? null : normalizeAlt(decl.name);
+		if (second == null || second == decl.name || !rule.format.match(second))
+			return { name: corrected, collides: collides, refusal: refusal };
+		final candidate: String = second;
+		final blocked: Bool = RenameRefusal.inherited(decl, candidate, resolutionIndex, file) != null
+			|| collidesInScope(decl, source, tree, candidate, shape, resolutionIndex, plugin);
+		return blocked ? { name: corrected, collides: collides, refusal: refusal } : { name: candidate, collides: false, refusal: null };
 	}
 
 }

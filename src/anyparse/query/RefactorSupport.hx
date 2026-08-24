@@ -3929,6 +3929,31 @@ final class RefactorSupport {
 			.exists(hit -> hit.kind == RefKind.Write && hit.span.from >= scope.from && hit.span.from < scope.to);
 	}
 
+	/**
+	 * `name` respelled UPPER_SNAKE: leading and internal underscores separate segments, and so does
+	 * every capital that OPENS a word — one preceded by a lower-case letter or a digit (`cellsNum` ->
+	 * `CELLS_NUM`), or one closing an acronym run before a new word (`urlPath` -> `URL_PATH`). An
+	 * already-UPPER_SNAKE name survives unchanged.
+	 *
+	 * Shared rather than per-consumer: `field-init-in-constructor` derives a hoisted constant's name
+	 * from a field's, and the `naming` autofix derives a constant's SECOND conforming spelling from
+	 * its first — one question, and two copies of this answer would drift on the next acronym case.
+	 */
+	public static function upperSnake(name: String): String {
+		final segments: Array<String> = [];
+		var current: StringBuf = new StringBuf();
+		for (i in 0...name.length) {
+			final code: Int = name.fastCodeAt(i);
+			if (code == '_'.code || (isUpperCode(code) && current.length > 0 && opensWord(name, i))) {
+				if (current.length > 0) segments.push(current.toString());
+				current = new StringBuf();
+			}
+			if (code != '_'.code) current.addChar(code);
+		}
+		if (current.length > 0) segments.push(current.toString());
+		return segments.join('_').toUpperCase();
+	}
+
 	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
 	private static inline function isHorizontalSpace(code: Int): Bool {
 		return code == ' '.code || code == '\t'.code || code == '\r'.code;
@@ -3984,6 +4009,10 @@ final class RefactorSupport {
 		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
 	): Null<ConditionalCtorInit> {
 		return soleMatchedCtorIf(source, container, ctor, field, shape, conditionalFieldAssign);
+	}
+
+	private static inline function isUpperCode(code: Int): Bool {
+		return code >= 'A'.code && code <= 'Z'.code;
 	}
 
 	/**
@@ -5344,6 +5373,13 @@ final class RefactorSupport {
 			break;
 		}
 		return out;
+	}
+
+	/** True when the capital at `at` OPENS a word: it follows a non-capital, or it closes an acronym run before a new word. */
+	private static function opensWord(name: String, at: Int): Bool {
+		if (!isUpperCode(name.fastCodeAt(at - 1))) return true;
+		final next: Int = at + 1 < name.length ? name.fastCodeAt(at + 1) : 0;
+		return next >= 'a'.code && next <= 'z'.code;
 	}
 
 }

@@ -594,6 +594,7 @@ final class HaxeFormatConfigLoader {
 			dropSingleStmtBraces: base.dropSingleStmtBraces,
 			dropSwitchSubjectParens: base.dropSwitchSubjectParens,
 			optionalSemicolon: base.optionalSemicolon,
+			semicolonBeforeElse: base.semicolonBeforeElse,
 			leftCurly: base.leftCurly,
 			emptyCurly: base.emptyCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
@@ -623,6 +624,7 @@ final class HaxeFormatConfigLoader {
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			expressionIfArrowBodyReflow: base.expressionIfArrowBodyReflow,
 			expressionIfFit: base.expressionIfFit,
+			expressionIfFitMaxBranches: base.expressionIfFitMaxBranches,
 			elseIfCommentReflow: base.elseIfCommentReflow,
 			fitLineBodyGlue: base.fitLineBodyGlue,
 			loopBodyIfElseNext: base.loopBodyIfElseNext,
@@ -1013,6 +1015,9 @@ final class HaxeFormatConfigLoader {
 		// body -- it fans out into no body policy either, it decides whether a FITTING chain may
 		// collapse to one line while a breaking one keeps exactly the policy layout.
 		if (section.expressionIfFit != null) opt.expressionIfFit = section.expressionIfFit;
+		// omega-value-if-fit branch cap: read even when `expressionIfFit` itself is absent -- a
+		// config may set the cap once and toggle the knob, and the cap is inert while it is off.
+		if (section.expressionIfFitMaxBranches != null) opt.expressionIfFitMaxBranches = section.expressionIfFitMaxBranches;
 		// omega-elseif-comment-reflow: an independent Bool knob on the `elseIf`
 		// glue path - it changes no body policy, it decides whether ONE interposed
 		// line comment may move to the nested if's head line.
@@ -1782,6 +1787,11 @@ final class HaxeFormatConfigLoader {
 		// default in place, so an existing config is byte-inert.
 		final semi: Null<HxFormatOptionalSemicolonPolicy> = section.optionalSemicolon;
 		if (semi != null) opt.optionalSemicolon = HaxeFormatValues.optionalSemicolonToRuntime(semi);
+		// omega-semi-before-else: sister key with its own default -- it reuses the
+		// three-way policy TYPE but never the value, so `optionalSemicolon: always`
+		// (statement terminators) composes with `semicolonBeforeElse: never`.
+		final semiElse: Null<HxFormatOptionalSemicolonPolicy> = section.semicolonBeforeElse;
+		if (semiElse != null) opt.semicolonBeforeElse = HaxeFormatValues.optionalSemicolonToRuntime(semiElse);
 	}
 
 }

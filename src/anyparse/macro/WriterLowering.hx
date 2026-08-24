@@ -8931,6 +8931,7 @@ class WriterLowering {
 		// every expression below collapses to the arrow-only shape, so a 3-arg site stays byte-inert.
 		final fitAccess: Expr = args.length == FIT_KNOB_ARG_COUNT ? optFieldAccess(args[3]) : macro false;
 		final spineCleanExpr: Expr = arrowValueIfSpineCleanExpr(node, args[1], args[2]);
+		final branchCapExpr: Expr = arrowValueIfBranchCapExpr(node, args[1], args[2]);
 		return macro {
 			final _aifGate: Bool = $knobAccess && opt._inArrowLambdaBody;
 			// The arrow gate is checked FIRST and excludes the fit gate: a chain in an arrow body
@@ -8943,7 +8944,10 @@ class WriterLowering {
 			// off, since `_vifGate` is then false and `_anyGate` collapses to `_aifGate`.
 			final _aifClean: Bool = _anyGate && !opt._arrowValueIfBlocked && !opt._arrowValueIfElemTrailComment && $spineCleanExpr;
 			final _aifReflow: Bool = _aifGate && _aifClean;
-			final _vifFit: Bool = _vifGate && _aifClean;
+			// The cap refuses the chain as a WHOLE: `_aifBlocked` below turns a refusal here into a
+			// refusal for every nested member, so a capped 3-branch chain cannot render with its
+			// 2-branch tail collapsed and its head in policy layout.
+			final _vifFit: Bool = _vifGate && _aifClean && $branchCapExpr;
 			// Two comment positions live outside the node: one on the branch
 			// VALUE's own slot (a call's `closeTrailing`), which the spine walk
 			// now asks for, and one on the enclosing list element, which arrives
@@ -9016,6 +9020,65 @@ class WriterLowering {
 				$stepSwitch;
 			}
 			_aifClean;
+		};
+	}
+
+	/**
+	 * omega-value-if-fit branch cap - the runtime gate `_vifFit` folds in: true when no cap is
+	 * configured, else the chain's branch count measured against it.
+	 *
+	 * A SECOND spine walk, deliberately not folded into `arrowValueIfSpineCleanExpr` -- that one runs
+	 * under `_anyGate` (either knob), while the count must run only when the fit knob is on AND a cap
+	 * is set, which the `||` short-circuit here gives it for free. Folding them would pay the count on
+	 * every arrow-knob file for an answer nothing reads.
+	 */
+	private function arrowValueIfBranchCapExpr(node: ShapeNode, spineField: String, spineCtor: String): Expr {
+		final countExpr: Expr = arrowValueIfBranchCountExpr(node, spineField, spineCtor);
+		return macro opt.expressionIfFitMaxBranches <= 0 || $countExpr <= opt.expressionIfFitMaxBranches;
+	}
+
+	/**
+	 * omega-value-if-fit branch cap - counts the VALUE BRANCHES of an `else`-spine: `if (c) a else b`
+	 * is 2, `if (c) a else if (d) b else e` is 3, and a trailing-`else`-less `if (c) a else if (d) b`
+	 * is 2 as well.
+	 *
+	 * Same iterative spine walk as `arrowValueIfSpineCleanExpr` (see there for why it is emitted
+	 * inline rather than as a per-type static): one member per `if` keyword, plus one for the final
+	 * `else` value when the innermost member has an `else` that is not itself a chain member. A
+	 * grammar whose spine field cannot be captured answers from the direct sibling alone, which is
+	 * the no-chain shape and therefore the layout-preserving direction.
+	 */
+	private function arrowValueIfBranchCountExpr(node: ShapeNode, spineField: String, spineCtor: String): Expr {
+		final spineNode: Null<ShapeNode> = findFieldByName(node, spineField);
+		if (spineNode == null) return macro 1;
+		final spineAccess: Expr = { expr: EField(macro _vifCur, spineField), pos: Context.currentPos() };
+		final spineRef: Null<String> = spineNode.annotations.get(AnnotationKeys.BASE_REF);
+		final capture: Null<Expr> = spineRef == null ? null : ctorCapturePattern(spineRef, spineCtor, '_vifInner');
+		if (capture == null) {
+			final directAccess: Expr = { expr: EField(macro value, spineField), pos: Context.currentPos() };
+			return macro $directAccess != null ? 2 : 1;
+		}
+		final stepCases: Array<Case> = [
+			{
+				values: [capture],
+				expr: macro {
+					_vifCur = _vifInner;
+					_vifN++;
+				},
+				guard: null
+			},
+			{ values: [macro _], expr: macro break, guard: null }
+		];
+		final stepSwitch: Expr = { expr: ESwitch(macro _vifNext, stepCases, null), pos: Context.currentPos() };
+		return macro {
+			var _vifCur = value;
+			var _vifN: Int = 1;
+			while (true) {
+				final _vifNext = $spineAccess;
+				if (_vifNext == null) break;
+				$stepSwitch;
+			}
+			$spineAccess != null ? _vifN + 1 : _vifN;
 		};
 	}
 
@@ -10939,8 +11002,55 @@ class WriterLowering {
 		if (
 			hasStructFieldTrailOptSlot && !isOptional && !hasCondWrap && !hasCondWrapEnd && trailOptText != null
 			&& !child.fmtHasFlag('dropSingleStmtBraces')
-		)
-			parts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
+		) {
+			final sourcePresent: Expr = macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText});
+			parts.push(semicolonBeforeSiblingWrap(child, trailOptText, fieldAccess, sourcePresent) ?? sourcePresent);
+		}
+	}
+
+	/**
+	 * omega-semi-before-else: `@:fmt(semicolonBeforeSibling('<field>'))` routes a mandatory-Ref
+	 * `@:trailOpt(LIT)` slot through `opt.semicolonBeforeElse` INSTEAD of plain source presence,
+	 * but only for the shape where the named sibling field is present.
+	 *
+	 * The one consumer is `HxIfExpr.thenBranch`, whose slot holds the `;` Haxe accepts before an
+	 * `else` (`final x = if (c) a; else b;`). That `;` is inert -- verified against the compiler,
+	 * both `if (c) var x = 1 else var y = 2` and a semicolon-less value-`if` chain compile -- so
+	 * `Never` may drop it. The sibling gate is not a refinement but the correctness condition:
+	 * with NO `else`, the same slot can hold the terminator of the ENCLOSING statement, which the
+	 * grammar has no other place to park, and dropping it would emit code that does not compile.
+	 *
+	 * Distinct from `optionalSemicolon` (the `}`-terminated statement's own `;`) because a config
+	 * legitimately wants opposite answers for the two: TM writes every statement terminator and
+	 * no `;` before `else`. Returns null -- caller keeps plain source presence -- for every field
+	 * without the meta, so the whole path is byte-inert unless a grammar opts in.
+	 */
+	private function semicolonBeforeSiblingWrap(
+		child: ShapeNode, trailOptText: String, fieldAccess: Expr, sourcePresent: Expr
+	): Null<Expr> {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('semicolonBeforeSibling');
+		if (args == null) return null;
+		if (args.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(semicolonBeforeSibling) expects 1 string arg (siblingField), got ${args.length}',
+				Context.currentPos()
+			);
+		final siblingAccess: Null<Expr> = switch fieldAccess.expr {
+			case EField(base, _): { expr: EField(base, args[0]), pos: fieldAccess.pos };
+			case _: null;
+		};
+		if (siblingAccess == null) return null;
+		return macro {
+			final _sbeSibling: Bool = $siblingAccess != null;
+			switch opt.semicolonBeforeElse {
+				case anyparse.format.OptionalSemicolon.Never:
+					_sbeSibling ? _de() : $sourcePresent;
+				case anyparse.format.OptionalSemicolon.Always:
+					_sbeSibling ? _dt($v{trailOptText}) : $sourcePresent;
+				case _:
+					$sourcePresent;
+			}
+		};
 	}
 
 	/**

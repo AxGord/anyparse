@@ -238,6 +238,13 @@ package anyparse.grammar.haxe.format;
 	 */
 	@:optional var expressionIfFit: Bool;
 
+	/**
+	 * Largest number of value branches an `expressionIfFit` chain may hold and still collapse onto
+	 * one line -- `if (c) a else b` is 2, `if (c) a else if (d) b else e` is 3. `0` (default) is no
+	 * cap. Inert while `expressionIfFit` is off.
+	 */
+	@:optional var expressionIfFitMaxBranches: Int;
+
 	@:optional var elseIfCommentReflow: Bool;
 
 	@:optional var comprehensionFor: HxFormatBodyPolicy;

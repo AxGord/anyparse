@@ -89,6 +89,20 @@ typedef NamingRule = {
 	 * categories.
 	 */
 	@:optional var normalize: String -> Null<String>;
+
+	/**
+	 * Optional SECOND mechanical spelling, asked for only when the one `normalize` produced cannot
+	 * be applied — the name it derived is already bound where the rename would land, or the owner's
+	 * supertype closure already carries it. It exists because a `format` can admit more than one
+	 * convention: the built-in constant rule accepts UPPER_SNAKE *or* camelCase, so a `_height`
+	 * whose stripped spelling `height` is taken still has `HEIGHT` available, and refusing there
+	 * left a name the check itself calls wrong with no correction anyone would ever apply.
+	 *
+	 * Never consulted while the first correction is usable — this is a fallback, not a preference,
+	 * so a rule carrying one produces exactly the same names it did before on every site that had
+	 * no collision.
+	 */
+	@:optional var normalizeAlt: String -> Null<String>;
 }
 /**
  * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category / modifier selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the grammar built-in default.
