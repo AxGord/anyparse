@@ -105,6 +105,29 @@ typedef WrapListOptions = {
 	/** The source had this list broken across lines and the cascade must floor to a break mode. Default `false`. */
 	var ?sourceMultilineKeep: Bool;
 
+	/**
+	 * This Star force-one-per-lines any SOURCE-multiline list, and this instance's source was
+	 * FLAT — so the only break shape it may emit is the one a second pass would force.
+	 *
+	 * The force-multi gate reads `Trivial<T>.newlineBefore`, i.e. the source line layout. When
+	 * the writer's own previous pass is what put those newlines there, the gate answers about
+	 * the writer's output rather than the author's file: pass 1 consults the cascade and emits
+	 * (say) `FillLine`, pass 2 sees the break it just wrote, force-one-per-lines, and the two
+	 * passes disagree forever. `writeRoundTrip(s) == s` — the canonical gate every writer-emit
+	 * mutation op is built on — then never holds after ONE pass.
+	 *
+	 * Setting this maps every break-introducing cascade answer to `OnePerLine`, which IS what
+	 * the force-multi path produces, so pass 2 reproduces pass 1 by construction. `NoWrap`
+	 * (and the `Keep` / `Ignore` engine fallbacks, which render flat) are untouched — a list
+	 * that stays on one line grows no newline for the next pass to read.
+	 *
+	 * Off for a Star that carries `@:fmt(reflowSourceMultiline)` (its source-multiline lists go
+	 * through the cascade too, so both passes already agree) and for Keep / Ignore runtime modes
+	 * (Keep reproduces the source layout, Ignore drops it — both are fixed points already).
+	 * Default `false`.
+	 */
+	var ?breakAsOnePerLine: Bool;
+
 	/** Per-element `Bool` array marking the elements the SOURCE placed a break before. Omitted = no source breaks recorded. */
 	var ?sourceBreakBefore: Array<Bool>;
 
@@ -225,6 +248,7 @@ class WrapList {
 		final groupRestProbe: Bool = axes.groupRestProbe;
 		final sepBeforeFlags: Null<Array<Bool>> = axes.sepBeforeFlags;
 		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
+		final breakAsOnePerLine: Bool = axes.breakAsOnePerLine;
 		final sourceBreakBefore: Null<Array<Bool>> = axes.sourceBreakBefore;
 		final keepCloseGlued: Bool = axes.keepCloseGlued;
 		final flatTrailingComma: Bool = axes.flatTrailingComma;
@@ -272,7 +296,9 @@ class WrapList {
 		final total: Int = measure.total;
 		final maxLen: Int = measure.maxLen;
 		final anyHardline: Bool = measure.anyHardline;
-		final cols: Int = continuationCols(rules, opt, items, maxLen, total, anyHardline, sourceMultilineKeep, compactContinuation);
+		final cols: Int = continuationCols(
+			rules, opt, items, maxLen, total, anyHardline, sourceMultilineKeep, compactContinuation, breakAsOnePerLine
+		);
 		// ω-complex-item-count: the cascade counter behind `complexItemCount >= n`.
 		// A caller that supplies no kinds counts 0, so the condition never fires
 		// and every pre-slice list is byte-identical.
@@ -304,12 +330,15 @@ class WrapList {
 		// on typedef-RHS anon types via the runtime gate
 		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
-			return forceMode ?? floorSourceMultiline(
-				decideWithLineLengthState(
-					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
-					complexCount
+			return forceMode ?? onePerLineWhenBreaking(
+				floorSourceMultiline(
+					decideWithLineLengthState(
+						rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
+						complexCount
+					),
+					sourceMultilineKeep
 				),
-				sourceMultilineKeep
+				breakAsOnePerLine, exceeds
 			);
 		}
 
@@ -1217,6 +1246,25 @@ class WrapList {
 	}
 
 	/**
+	 * Collapse every break-introducing mode to `OnePerLine` when `on` — the writer's own
+	 * fixed point for a Star that force-one-per-lines a source-multiline list.
+	 *
+	 * `NoWrap` and the `Keep` / `Ignore` engine fallbacks render on one line and so leave
+	 * nothing for the next pass's source-newline scan to read; every other mode puts a
+	 * newline inside the list, and the next pass answers that newline with one-per-line
+	 * regardless of what the cascade said. Emitting one-per-line here is not a different
+	 * layout — it is the SAME bytes `fmt` already ends up writing, one pass earlier.
+	 */
+	private static inline function onePerLineWhenBreaking(mode: WrapMode, on: Bool, exceeds: Bool): WrapMode {
+		if (!on) return mode;
+		return switch mode {
+			case OnePerLineAfterFirst, FillLineWithLeadingBreak, PackedOrOnePerLine: OnePerLine;
+			case FillLine: exceeds ? OnePerLine : mode;
+			case _: mode;
+		};
+	}
+
+	/**
 	 * Returns `true` when `sepBeforeFlags[i]` is set, meaning
 	 * the engine should skip the separator between items `[i-1]` and `i`.
 	 * Null / out-of-bounds is treated as "do not skip".
@@ -1509,12 +1557,15 @@ class WrapList {
 	 */
 	private static function continuationCols(
 		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, maxLen: Int, total: Int, anyHardline: Bool, sourceMultilineKeep: Bool,
-		compactContinuation: Bool
+		compactContinuation: Bool, breakAsOnePerLine: Bool
 	): Int {
 		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 		final additional: Int = rules.defaultAdditionalIndent ?? 0;
-		final probeMode: WrapMode = floorSourceMultiline(
-			decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false), sourceMultilineKeep
+		final probeMode: WrapMode = onePerLineWhenBreaking(
+			floorSourceMultiline(
+				decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false), sourceMultilineKeep
+			),
+			breakAsOnePerLine, true
 		);
 		final cascadeForcesBreak: Bool = probeMode == OnePerLine || probeMode == OnePerLineAfterFirst
 			|| probeMode == FillLineWithLeadingBreak;
@@ -3998,6 +4049,7 @@ class WrapList {
 			groupRestProbe: axes.groupRestProbe ?? false,
 			sepBeforeFlags: axes.sepBeforeFlags,
 			sourceMultilineKeep: axes.sourceMultilineKeep ?? false,
+			breakAsOnePerLine: axes.breakAsOnePerLine ?? false,
 			sourceBreakBefore: axes.sourceBreakBefore,
 			keepCloseGlued: axes.keepCloseGlued ?? false,
 			flatTrailingComma: axes.flatTrailingComma ?? false,
@@ -4028,6 +4080,7 @@ private typedef ResolvedWrapListOptions = {
 	final groupRestProbe: Bool;
 	final sepBeforeFlags: Null<Array<Bool>>;
 	final sourceMultilineKeep: Bool;
+	final breakAsOnePerLine: Bool;
 	final sourceBreakBefore: Null<Array<Bool>>;
 	final keepCloseGlued: Bool;
 	final flatTrailingComma: Bool;

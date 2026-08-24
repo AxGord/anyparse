@@ -701,6 +701,7 @@ import unit.NamingCheckAltSpellingFixTest;
 import unit.NarrowLocalScopeCheckTest;
 import unit.RedundantUncheckedCastCheckTest;
 import unit.ShadowingLocalCheckTest;
+import unit.WrapFlatSourceFixedPointTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -898,6 +899,7 @@ class RunTests {
 		addCase(new HxTypedefSemiSliceTest());
 		addCase(new HxTypedefAnonForceMultiTest());
 		addCase(new HxAnonTypeIgnoreReflowTest());
+		addCase(new WrapFlatSourceFixedPointTest());
 		addCase(new HxObjectLitRestProbeTest());
 		addCase(new HxPackedOrOnePerLineTest());
 		addCase(new HxReturnValueBreaksInsideTest());
