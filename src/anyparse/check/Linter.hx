@@ -204,6 +204,7 @@ final class Linter {
 			new ImpossibleCast(),
 			new RedundantUpcast(),
 			new RedundantCastType(),
+			new RedundantUncheckedCast(),
 			new RedundantAscription(),
 			new DeadNullGuard(),
 			new DeadNullCoalescing(),
@@ -264,6 +265,7 @@ final class Linter {
 			new TrivialGetter(),
 			new NullableSwitchMissingNull(),
 			new ShadowingCaseBinder(),
+			new ShadowingLocal(),
 			new UnusedCaseBinder(),
 			new RedundantCaseBody(),
 			// Deletes a whole case arm, as `redundant-case-body`'s subsume does, and the two CAN

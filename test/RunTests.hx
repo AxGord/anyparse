@@ -699,6 +699,8 @@ import unit.MemberOrderMessageTest;
 import unit.LintFixFollowUpRoundTest;
 import unit.NamingCheckAltSpellingFixTest;
 import unit.NarrowLocalScopeCheckTest;
+import unit.RedundantUncheckedCastCheckTest;
+import unit.ShadowingLocalCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1276,6 +1278,7 @@ class RunTests {
 		addCase(new ImpossibleCastTest());
 		addCase(new RedundantUpcastTest());
 		addCase(new RedundantCastTypeCheckTest());
+		addCase(new RedundantUncheckedCastCheckTest());
 		addCase(new RedundantAscriptionTest());
 		addCase(new DeadNullGuardTest());
 		addCase(new DeadSafeNavTest());
@@ -1298,6 +1301,7 @@ class RunTests {
 		addCase(new CollapseNestedSwitchCheckTest());
 		addCase(new UnusedCaseBinderCheckTest());
 		addCase(new ShadowingCaseBinderCheckTest());
+		addCase(new ShadowingLocalCheckTest());
 		addCase(new RedundantCaseBodyCheckTest());
 		addCase(new EmptyCaseArmCheckTest());
 		addCase(new UnnecessarySwitchCheckTest());
