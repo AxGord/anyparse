@@ -64,6 +64,9 @@ final class HxOpAddTrailingParenGlueSliceTest extends Test {
 		+ '\t\tgraphicPanel.y = Boundaries.NODE_PACK_MESH_CELL_EXTENT - photo.extent - (toggle ? linkedToggle ? '
 		+ 'Boundaries.NODE_PACK_MESH_BADGEMARK_LINKED_TOGGLE_LOWEST_SPACING : Boundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING : '
 		+ 'Boundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING);\n\t}\n}';
+	private static final SRC_VALUE_IF: String = 'class Sample {\n\tfunction run() {\n'
+		+ '\t\tbadgeContainer.offset = baselineTextExtent + (if (packed) Boundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING else if '
+		+ '(linked) Boundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING else Boundaries.NODE_PACK_MESH_CELL_EXTENT);\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -101,6 +104,69 @@ final class HxOpAddTrailingParenGlueSliceTest extends Test {
 			+ 'BADGE_SLOT_RESERVED_SIZE\n\t\t\t+ (Boundaries.NODE_PACK_MESH_CELL_EXTENT - iconBitmap.width) / 2;\n\t}\n\n}',
 			triviaWrite(src, CFG)
 		);
+	}
+
+	/**
+	 * ω-opadd-hardline-paren-glue: the tail paren holds a value-`if` ladder that the
+	 * `expressionIf: "next"` policy renders with FORCED breaks. That hardline used to commit the
+	 * chain to its break tree before the trailing-paren glue arm could run, so the head split off
+	 * onto its own line for no gain — the operand is multi-line either way. It now glues like the
+	 * hardline-free ternary above, and the paren still opens under the fillLine expressionWrapping.
+	 */
+	public function testHardlineValueIfTailGluesChainHead(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tbadgeContainer.offset = baselineTextExtent + (\n'
+			+ '\t\t\tif (packed)\n\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING\n'
+			+ '\t\t\telse if (linked)\n\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING\n'
+			+ '\t\t\telse\n\t\t\t\tBoundaries.NODE_PACK_MESH_CELL_EXTENT\n\t\t);\n\t}\n\n}',
+			triviaWrite(SRC_VALUE_IF, CFG)
+		);
+	}
+
+	/**
+	 * The glue does NOT require the paren to OPEN. Without expressionWrapping the paren stays
+	 * content-glued (`+ (if (packed)`) and the ladder hard-flattens, but the chain head still keeps
+	 * its two leading operands on one line: the probe glues on a head line that FITS, and only falls
+	 * back to the ends-at-an-open-delimiter test when it does not. Unlike the hardline-free ternary
+	 * sibling above, this arm is therefore NOT a no-expressionWrapping inertness pin.
+	 */
+	public function testHardlineValueIfTailGluesWithoutExpressionWrapping(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tbadgeContainer.offset = baselineTextExtent + (if (packed)\n'
+			+ '\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING\n'
+			+ '\t\telse if (linked)\n\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING\n'
+			+ '\t\telse\n\t\t\tBoundaries.NODE_PACK_MESH_CELL_EXTENT);\n\t}\n\n}',
+			triviaWrite(SRC_VALUE_IF, CFG.replace(EXPR_WRAP_SECTION, ''))
+		);
+	}
+
+	/**
+	 * Gate discrimination for `hasBareParenTail` on the HARDLINE path: the same ladder as a Div
+	 * NUMERATOR (`a + (ladder) / d`) leads with `(` but does not END with its `)`, so the tail is not
+	 * a bare paren and the chain keeps its leading break. Dropping the `endsWithCloseDelim` conjunct
+	 * makes this input glue — measured, so the conjunct is load-bearing here and not merely inherited
+	 * from the hardline-free sibling. Source is written ALREADY BROKEN because the flat spelling of
+	 * this shape is not a writer fixed point (a pre-existing, unrelated non-idempotence); this layout
+	 * re-formats to itself.
+	 */
+	public function testHardlineParenDivTailDoesNotGlue(): Void {
+		final src: String = 'class Sample {\n\tfunction run() {\n\t\tbadgeContainer.offset = baselineTextExtent\n'
+			+ '\t\t\t+ (\n\t\t\t\tif (packed)\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING\n'
+			+ '\t\t\t\telse if (linked)\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING\n'
+			+ '\t\t\t\telse\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_CELL_EXTENT\n\t\t\t) / scaleDivisorValue;\n\t}\n}';
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tbadgeContainer.offset = baselineTextExtent\n'
+			+ '\t\t\t+ (\n\t\t\t\tif (packed)\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_LOWEST_SPACING\n'
+			+ '\t\t\t\telse if (linked)\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_BADGEMARK_TOGGLE_LOWEST_SPACING\n'
+			+ '\t\t\t\telse\n\t\t\t\t\tBoundaries.NODE_PACK_MESH_CELL_EXTENT\n\t\t\t) / scaleDivisorValue;\n\t}\n\n}',
+			triviaWrite(src, CFG)
+		);
+	}
+
+	/** The glued shape re-formats to itself byte-for-byte. */
+	public function testHardlineValueIfGlueIsIdempotent(): Void {
+		final once: String = triviaWrite(SRC_VALUE_IF, CFG);
+		Assert.equals(once, triviaWrite(once, CFG));
 	}
 
 	private inline function triviaWrite(src: String, cfg: String): String {

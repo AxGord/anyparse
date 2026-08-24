@@ -184,11 +184,7 @@ final class BinaryChainEmit {
 		return if (forceKeep)
 			WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: forceKeepLocation ?? evalAt(true, []).location }))
 		else if (anyHardline)
-			WrapBoundary(
-				extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0
-					? IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops))
-					: buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt)
-			)
+			WrapBoundary(hardlineChainShape(items, ops, opt, extraThresholds, evalAt, shapeAt, shapeNoWrapAt))
 		else if (extraThresholds.length == 0)
 			emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
 		else if (extraThresholds.length == 1)
@@ -287,6 +283,17 @@ final class BinaryChainEmit {
 	 */
 	private static inline function isBreakMode(m: WrapMode): Bool {
 		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak;
+	}
+
+	/**
+	 * The chain's LAST operand is a BARE paren-expr — it both leads with `(` and ends with its own
+	 * `)` — while operand-1 does not itself open a delimiter. The shape gate the two trailing-paren
+	 * glue arms share: `(a - b) / 2` leads with `(` but is a Div whose paren covers only the
+	 * numerator, so `endsWithCloseDelim` refuses it and the chain breaks `beforeLast` instead.
+	 */
+	private static inline function hasBareParenTail(items: Array<Doc>): Bool {
+		return leadingOperandOpensDelim(items[items.length - 1], true) && WrapList.endsWithCloseDelim(items[items.length - 1])
+			&& !leadingOperandOpensDelim(items[0]);
 	}
 
 	/**
@@ -462,6 +469,47 @@ final class BinaryChainEmit {
 				// here instead of silently inheriting `false`.
 				false;
 		};
+	}
+
+	/**
+	 * ω-opadd-hardline-paren-glue — the chain Doc for the `anyHardline` commit, where a forced
+	 * hardline inside some operand has already decided that the chain breaks.
+	 *
+	 * Two shapes escape the plain break tree, both because the break it emits buys nothing:
+	 *
+	 * - the ternary collection hug (`cond ? flat : {…}`) — keep the head glued and let the sole
+	 *   multi-line branch self-break, WHEN that head fits.
+	 * - a bare paren TAIL on an add/sub chain (`a + (…)`): the leading break before the last
+	 *   operand costs a line and an indent level and saves nothing, because that operand is
+	 *   multi-line either way. This is the arm the hardline commit had cut off — the identical
+	 *   chain WITHOUT a hardline reaches `emitNoThreshold`'s ω-opadd-trailing-paren-glue and
+	 *   keeps its head glued, so a paren carrying a forced break (a value-`if` chain in
+	 *   `expressionIf` policy layout, a `switch`, a block) was the one shape that did not.
+	 *
+	 * The pivot is the same `IfNaturalFirstLineFitsOpenDelim` that arm uses, so the two agree by
+	 * construction: glue when the glued shape's natural first line FITS, else only when it ends
+	 * at an open delimiter. Note this does NOT require the paren to open — a content-glued paren
+	 * whose head line fits glues too, which is the intended reading of "the break buys nothing".
+	 *
+	 * Measured inert on the fork corpus (946 fixtures, identical pass/fail set): at the fork
+	 * defaults an expression-position `if` branch carries no forced break, so the shape does not
+	 * arise there.
+	 *
+	 * `extraThresholds` non-empty keeps the column-aware tree — a `LineLengthLargerThan` rule at
+	 * a non-`lineWidth` threshold cannot be answered here.
+	 */
+	private static function hardlineChainShape(
+		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, extraThresholds: Array<Int>,
+		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
+		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc
+	): Doc {
+		if (extraThresholds.length == 0) {
+			if (ternaryHugCollectionBranchIndex(items, ops) >= 0)
+				return IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops));
+			if (isAddSubOps(ops) && hasBareParenTail(items))
+				return IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrapAt(evalAt(false, []).location));
+		}
+		return buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt);
 	}
 
 	private static function shape(
@@ -822,8 +870,7 @@ final class BinaryChainEmit {
 			// operand) via `endsWithCloseDelim`, so `(a - b) / 2` -- which leads with
 			// `(` but is a Div whose paren is only the numerator -- does NOT glue: the
 			// chain breaks `beforeLast` and the operand stays flat on its own line.
-			final isBareParenTail: Bool = leadingOperandOpensDelim(items[items.length - 1], true)
-				&& WrapList.endsWithCloseDelim(items[items.length - 1]) && !leadingOperandOpensDelim(items[0]);
+			final isBareParenTail: Bool = hasBareParenTail(items);
 			if (!isBareParenTail) return WrapBoundary(brkDoc);
 			final glueProbe: Doc = IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, brkDoc, shapeNoWrapAt(flat.location));
 			// ω-opadd-trailing-paren-break: a 2-operand `a OP (bare paren)` whose

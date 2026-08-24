@@ -128,17 +128,19 @@ final class HxParenValueIfOpenWrapSliceTest extends Test {
 	}
 
 	/**
-	 * SIBLING GATE — multi-line `switch`. Already correct before the slice: it opens
-	 * with a hardline, so the earlier `startsWithHardline` arm owns it and lands
-	 * `});` on its own line. First token `switch`, so the new arm never sees it.
+	 * SIBLING GATE — multi-line `switch`. First token `switch`, so the value-`if` arm never
+	 * sees it: the paren stays CONTENT-glued (`- (switch … {`) and never opens. What DID change
+	 * is the chain around it — ω-opadd-hardline-paren-glue drops the leading break before the
+	 * last operand, so both leading operands stay on the head line. The paren-level shape this
+	 * gate exists for is untouched.
 	 */
 	public function testParenSwitchKeepsItsShape(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT - image.height '
 			+ '- (switch bucketKind {\n\t\t\tcase Alpha: MeasureMap.PANEL_ROW_GRID_MARKICON_BOTTOM_PAD;\n'
 			+ '\t\t\tcase _: MeasureMap.PANEL_ROW_GRID_MARKICON_BUCKET_BOTTOM_PAD;\n\t\t});\n\t}\n}';
-		final out: String = 'class Sample {\n\tfunction run() {\n\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT\n\t\t\t- '
-			+ 'image.height\n\t\t\t- (switch bucketKind {\n\t\t\t\tcase Alpha: MeasureMap.PANEL_ROW_GRID_MARKICON_BOTTOM_PAD;\n'
-			+ '\t\t\t\tcase _: MeasureMap.PANEL_ROW_GRID_MARKICON_BUCKET_BOTTOM_PAD;\n\t\t\t});\n\t}\n}';
+		final out: String = 'class Sample {\n\tfunction run() {\n\t\tmarkerSprite.y = MeasureMap.PANEL_ROW_GRID_ITEM_HEIGHT - image.height'
+			+ ' - (switch bucketKind {\n\t\t\tcase Alpha: MeasureMap.PANEL_ROW_GRID_MARKICON_BOTTOM_PAD;\n'
+			+ '\t\t\tcase _: MeasureMap.PANEL_ROW_GRID_MARKICON_BUCKET_BOTTOM_PAD;\n\t\t});\n\t}\n}';
 		Assert.equals(out, triviaWrite(src, CFG));
 	}
 
