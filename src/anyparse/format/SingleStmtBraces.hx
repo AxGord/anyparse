@@ -107,9 +107,9 @@ class SingleStmtBraces {
 		// puzzle, so braces are REQUIRED there and fmt self-heals previously unwrapped
 		// sources. Runs even under `suppress` (adding braces is always semantics-safe:
 		// the parse tree already fixed the else binding).
-		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block);
+		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block, 'BlockStmt');
 		// Gate 7 repair direction (omega-ssb-symmetry-wrap) - see `needsSymmetryWrap`.
-		if (needsSymmetryWrap(block, siblingKeepsBraces)) return wrapInBlock(block);
+		if (needsSymmetryWrap(block, siblingKeepsBraces)) return wrapInBlock(block, 'BlockStmt');
 		// The do-body is the ONE brace-droppable field a suppress frame cannot reach: its
 		// rendering is always followed by the `while (...)` keyword+paren, so no de-braced
 		// do-body can ever sit on the trailing spine of an enclosing then-body. Gate 5's
@@ -232,6 +232,57 @@ class SingleStmtBraces {
 		if (elem == null) return null;
 		final own: Null<String> = elem.trailingComment;
 		return own ?? openTrailingOf(body);
+	}
+
+	/**
+	 * `value` inside a synthesized single-element block of ITS OWN enum — `blockCtor` names the block
+	 * constructor there, and `lift` raises the value into the block's element type when the two differ.
+	 *
+	 * One constructor for both symmetry directions. The STATEMENT side (gates 7 and 8) wraps a statement
+	 * into a block of statements: same enum, no lift. The VALUE side wraps a branch EXPRESSION into a
+	 * block expression, whose elements are STATEMENTS — so it passes a lift that builds the
+	 * expression-statement, typed, from the writer's generated code. What is shared is the part that
+	 * would otherwise drift: the Star element wrapper and the block ctor's positional slot vector.
+	 */
+	public static function wrapInBlock(value: EnumValue, blockCtor: String, ?lift: (EnumValue) -> Dynamic): Dynamic {
+		final en: Null<Enum<Dynamic>> = Type.getEnum(cast value);
+		if (en == null) return value;
+		final raise: Null<(EnumValue) -> Dynamic> = lift;
+		final elem: Dynamic = {
+			blankBefore: false,
+			blankAfterLeadingComments: false,
+			newlineBefore: true,
+			leadingComments: [],
+			trailingComment: null,
+			trailingBeforeSep: false,
+			sepAfter: true,
+			node: raise == null ? value : raise(value)
+		};
+		final args: Array<Dynamic> = [[elem], null, null, false, [], false];
+		return Type.createEnum(en, blockCtor, args);
+	}
+
+	/**
+	 * omega-value-brace-symmetry: does a VALUE-position branch need a synthesized block so its `if` /
+	 * `else` pair is braced on both sides or neither?
+	 *
+	 * The value twin of gate 7's question, asked differently because the two sides differ in what
+	 * "braced" means. A statement body may be DE-braced, so gate 7 has to probe what its sibling would
+	 * RENDER as (`keepsBraces`); a value branch is never de-braced, so being braced is simply being
+	 * `blockCtor`. Sharing one predicate would mean one function answering two questions.
+	 *
+	 * `skipCtors` carries the shapes a wrap would break: the chain ctor (`else if`, where a block would
+	 * bury the chain) and any brace-LED value such as an object literal, which a block would re-open in
+	 * statement position where `{` reads as a block.
+	 */
+	public static function symmetryNeedsValueWrap(
+		value: Dynamic, sibling: Dynamic, drop: Bool, blockCtor: String, skipCtors: Array<String>
+	): Bool {
+		if (!drop || value == null || sibling == null) return false;
+		if (!Reflect.isEnumValue(value) || !Reflect.isEnumValue(sibling)) return false;
+		if (Type.enumConstructor(cast sibling) != blockCtor) return false;
+		final own: String = Type.enumConstructor(cast value);
+		return own != blockCtor && !skipCtors.contains(own);
 	}
 
 	/**
@@ -532,33 +583,6 @@ class SingleStmtBraces {
 		if (Type.enumConstructor(innerE) != 'ExprStmt') return block;
 		final en: Null<Enum<Dynamic>> = Type.getEnum(cast block);
 		return en == null ? block : Type.createEnum(en, 'ExprBody', [Type.enumParameters(innerE)[0], false]);
-	}
-
-	/**
-	 * omega-ssb-wrap - the repair direction of gate 8: a bare `if` in
-	 * then-position is wrapped in a synthesized brace block so
-	 * `if (a) if (b) ... else ...` self-heals to `if (a) { if (b) ... }` on
-	 * the next write. The synthesized `BlockStmt` slots mirror
-	 * `singleCleanInner`'s locked layout (stmts, closeTrailing, openTrailing,
-	 * trailingBlankBefore, trailingLeading, trailPresent); the sole element
-	 * carries empty trivia with `newlineBefore=true` so the wrapped statement
-	 * lands on its own line inside the braces.
-	 */
-	private static function wrapInBlock(stmt: EnumValue): Dynamic {
-		final en: Null<Enum<Dynamic>> = Type.getEnum(cast stmt);
-		if (en == null) return stmt;
-		final elem: Dynamic = {
-			blankBefore: false,
-			blankAfterLeadingComments: false,
-			newlineBefore: true,
-			leadingComments: [],
-			trailingComment: null,
-			trailingBeforeSep: false,
-			sepAfter: true,
-			node: stmt
-		};
-		final args: Array<Dynamic> = [[elem], null, null, false, [], false];
-		return Type.createEnum(en, 'BlockStmt', args);
 	}
 
 	/**

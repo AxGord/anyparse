@@ -47,6 +47,9 @@ class WriterLowering {
 	/** `@:fmt(arrowValueIfReflow)` arg count that carries the optional value-if FIT knob as its 4th arg. */
 	private static inline final FIT_KNOB_ARG_COUNT: Int = 4;
 
+	/** `@:fmt(valueBraceSymmetry)` required args (siblingField, blockCtor, stmtCtor); any further ones are skip-ctors. */
+	private static inline final VALUE_BRACE_SYMMETRY_MIN_ARGS: Int = 3;
+
 	/**
 	 * ω-orphan-prefix-member — the first-field escape read at three sites that
 	 * must agree on ONE answer: it also gates `TriviaTypeSynth.isBareNonFirstRef`
@@ -11342,7 +11345,7 @@ class WriterLowering {
 					);
 				_sv;
 			}
-			: fieldAccess;
+			: valueBraceSymmetryWrap(child, fieldAccess);
 		parts.push(macro {
 			final _optVal = $optValInit;
 			if (_optVal != null)
@@ -11719,7 +11722,7 @@ class WriterLowering {
 				);
 				_sv;
 			}
-			: fieldAccess;
+			: valueBraceSymmetryWrap(child, fieldAccess);
 		// The runtime gate includes `opt.dropSingleStmtBraces` so the default-off
 		// path never allocates a suppress-frame opt copy (byte-inert AND
 		// allocation-inert).
@@ -12037,6 +12040,78 @@ class WriterLowering {
 			? macro _dg($grpInner)
 			: macro (_vifFit ? $grpInner : _dg($grpInner));
 		return macro $elseAcc == null ? _dbg($grpInner) : $grouped;
+	}
+
+	/**
+	 * omega-value-brace-symmetry: `@:fmt(valueBraceSymmetry('<siblingField>', '<blockCtor>', '<stmtCtor>',
+	 * '<skipCtor>'…))` gives a VALUE-position branch the brace symmetry `SingleStmtBraces` gate 7 gives a
+	 * statement one — when the sibling branch is a `{ … }` block, this branch is wrapped in a synthesized
+	 * single-statement block of its own.
+	 *
+	 * The statement gate cannot reach here: it keys on the statement block kind, and a braced branch of a
+	 * value-`if` is a block EXPRESSION. What was left is the shape this closes — `if (c) { … } else -1`.
+	 *
+	 * The block is SYNTHESIZED rather than drawn as braces around the branch's Doc, for the reason gate 8
+	 * synthesizes one: the real writer then renders it, so a second format pass over the result produces the
+	 * same bytes. A Doc-level wrap would have to reproduce that rendering exactly or `fmt` would stop being
+	 * idempotent, with nothing to catch the drift. `SingleStmtBraces.wrapInBlock` builds it — the same
+	 * constructor the statement side uses, given the block ctor and a typed `lift` that raises the branch
+	 * EXPRESSION into the block's element type.
+	 *
+	 * Gated on trivia mode (the ctor arity differs in plain mode) and on `opt.dropSingleStmtBraces`, the knob
+	 * that already owns the statement-side symmetry: the two are the repair directions of ONE policy.
+	 * Returns `fieldAccess` untouched for every field without the meta.
+	 */
+	private function valueBraceSymmetryWrap(child: ShapeNode, fieldAccess: Expr): Expr {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('valueBraceSymmetry');
+		if (args == null || !_ctx.trivia) return fieldAccess;
+		if (args.length < VALUE_BRACE_SYMMETRY_MIN_ARGS)
+			Context.fatalError(
+				'WriterLowering: @:fmt(valueBraceSymmetry) expects at least 3 string args (siblingField, blockCtor'
+				+ ', stmtCtor, [skipCtor…]), got ${args.length}',
+				Context.currentPos()
+			);
+		final valuePath: Null<String> = child.annotations.get(AnnotationKeys.BASE_REF);
+		if (valuePath == null) return fieldAccess;
+		final stmtPath: Null<String> = starElementTypePath(valuePath, args[1]);
+		if (stmtPath == null) return fieldAccess;
+		final siblingAccess: Expr = { expr: EField(macro value, args[0]), pos: Context.currentPos() };
+		final stmtRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(stmtPath, args[2]));
+		// `$a{…}` in a call-argument position SPLICES its elements as separate arguments — build the
+		// array literal itself, so the callee receives ONE `Array<String>`.
+		final skipArray: Expr = {
+			expr: EArrayDecl([for (c in args.slice(VALUE_BRACE_SYMMETRY_MIN_ARGS)) macro $v{c}]),
+			pos: Context.currentPos()
+		};
+		final blockCtor: String = args[1];
+		return macro {
+			final _vbsVal = $fieldAccess;
+			anyparse.format.SingleStmtBraces.symmetryNeedsValueWrap(
+				_vbsVal, $siblingAccess, opt.dropSingleStmtBraces, $v{blockCtor}, $skipArray
+			)
+				? cast anyparse.format.SingleStmtBraces.wrapInBlock(
+					cast _vbsVal, $v{blockCtor}, _vbsInner -> $stmtRef(cast _vbsInner, true)
+				)
+				: _vbsVal;
+		};
+	}
+
+	/**
+	 * The ELEMENT type path of `ctor`'s single Star child in the rule at `typePath`, or null when it has none.
+	 *
+	 * The element ref sits one level BELOW the Star — `branch → Star → inner Ref` — the same walk
+	 * `emitWriterStarField` makes to name its per-element write function. Reading `BASE_REF` off the Star
+	 * itself answers null, which is what a value-`if` block ctor looks like from the outside.
+	 */
+	private function starElementTypePath(typePath: String, ctor: String): Null<String> {
+		final rule: Null<ShapeNode> = _shape.rules[typePath];
+		if (rule == null || rule.kind != Alt) return null;
+		for (branch in rule.children) if (branch.annotations.get(AnnotationKeys.BASE_CTOR) == ctor) {
+			final star: Null<ShapeNode> = branch.children.length == 1 && branch.children[0].kind == Star ? branch.children[0] : null;
+			if (star == null || star.children.length == 0) return null;
+			return star.children[0].annotations.get(AnnotationKeys.BASE_REF);
+		}
+		return null;
 	}
 
 	/**

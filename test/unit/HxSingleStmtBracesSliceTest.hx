@@ -654,6 +654,57 @@ class HxSingleStmtBracesSliceTest extends Test {
 		assertInert('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) { // outer\n\t\t\tp(); // inner\n\t\t}\n\t}\n}', removeConfig);
 	}
 
+	/**
+	 * omega-value-brace-symmetry: the same policy reaches a VALUE-position `if`. Gate 7 cannot — it keys
+	 * on the statement block kind, and a braced branch here is a block EXPRESSION — so the branch is
+	 * wrapped through the SAME `SingleStmtBraces.wrapInBlock`, given the block ctor and a lift into the
+	 * block's element type.
+	 */
+	public inline function testValueIfBareElseGainsBraces(): Void {
+		assertFmt(
+			'class F {\n\tfunction f(c:Bool):Int {\n\t\tfinal x:Int = if (c) {\n\t\t\tg();\n\t\t\t1;\n\t\t} else -1;\n\t\treturn x;\n'
+			+ '\t}\n}',
+			'class F {\n\tfunction f(c:Bool):Int {\n\t\tfinal x:Int = if (c) {\n\t\t\tg();\n\t\t\t1;\n\t\t} else {\n\t\t\t-1;\n\t\t};\n'
+			+ '\t\treturn x;\n\t}\n}'
+		);
+	}
+
+	/** The symmetry reads the same from the other side: a bare THEN next to a braced `else`. */
+	public inline function testValueIfBareThenGainsBraces(): Void {
+		assertFmt(
+			'class F {\n\tfunction f(c:Bool):Int {\n\t\tfinal x:Int = if (c) 1 else {\n\t\t\tg();\n\t\t\t-1;\n\t\t};\n\t\treturn x;\n'
+			+ '\t}\n}',
+			'class F {\n\tfunction f(c:Bool):Int {\n\t\tfinal x:Int = if (c) {\n\t\t\t1;\n\t\t} else {\n\t\t\tg();\n\t\t\t-1;\n\t\t};\n'
+			+ '\t\treturn x;\n\t}\n}'
+		);
+	}
+
+	/** An `else if` is a chain member, not a bare branch — a block there would bury the chain. */
+	public inline function testValueIfChainKeepsShape(): Void {
+		roundTrip(
+			'class F {\n\tfunction f(c:Bool, d:Bool):Int {\n\t\tfinal x:Int = if (c) {\n\t\t\t1;\n\t\t} else if (d) {\n\t\t\t2;\n'
+			+ '\t\t} else {\n\t\t\t3;\n\t\t};\n\t\treturn x;\n\t}\n}'
+		);
+	}
+
+	/**
+	 * An object literal already opens with `{`, so the pair reads as braced — and a wrap would re-open
+	 * `{x: 1}` in statement position, where `{` is a block.
+	 */
+	public inline function testValueIfObjectLiteralSiblingKeepsShape(): Void {
+		roundTrip(
+			'class F {\n\tfunction f(c:Bool):Dynamic {\n\t\tfinal x:Dynamic = if (c) {\n\t\t\tg();\n\t\t\t1;\n\t\t} else {x: 1};\n'
+			+ '\t\treturn x;\n\t}\n}'
+		);
+	}
+
+	/** Default options (knob off) leave the asymmetric value-`if` exactly as written. */
+	public inline function testValueIfInertWithoutKnob(): Void {
+		final source: String = 'class F {\n\tfunction f(c:Bool):Int {\n\t\tfinal x:Int = if (c) {\n\t\t\tg();\n\t\t\t1;\n\t\t} else -1;\n'
+			+ '\t\treturn x;\n\t}\n}';
+		assertInert(source, '{ "sameLine": { "ifBody": "fitLine" } }');
+	}
+
 	public function testLoaderMapsRemove(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
 		Assert.isTrue(opts.dropSingleStmtBraces);

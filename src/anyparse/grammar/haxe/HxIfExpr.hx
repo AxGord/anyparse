@@ -38,6 +38,15 @@ package anyparse.grammar.haxe;
  * and dropping it there would emit code that does not compile; every
  * policy value therefore falls back to source presence in that shape.
  *
+ * `@:fmt(valueBraceSymmetry('<sibling>', 'BlockExpr', 'ExprStmt', 'IfExpr', 'ObjectLit'))` on BOTH
+ * branches (omega-value-brace-symmetry) — under `whitespace.bracesConfig.singleStatementBraces:
+ * "remove"` a branch whose SIBLING is a `{ … }` block gains braces of its own, the value twin of
+ * `SingleStmtBraces` gate 7. That gate keys on the statement block kind and cannot see a block
+ * EXPRESSION, which is why the two branches carry the meta rather than `dropSingleStmtBraces`. The
+ * block is built by the SAME `SingleStmtBraces.wrapInBlock`, given `BlockExpr` and a lift that
+ * raises the branch expression into `ExprStmt`. An `else if` chain member and a brace-LED value
+ * (an object literal, which a block would re-open in statement position) are excluded.
+ *
  * Dangling-else follows the same rule as `HxIfStmt`: the nearest
  * enclosing `if` greedily consumes the next `else`, so
  * `if (a) if (b) x else y` binds `else y` to the inner `if`.
@@ -190,7 +199,9 @@ typedef HxIfExpr = {
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
 		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite,
-		semicolonBeforeSibling('elseBranch')) var thenBranch: HxExpr;
+		semicolonBeforeSibling('elseBranch'), valueBraceSymmetry('elseBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'ObjectLit'))
+	var thenBranch: HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
-		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite) var elseBranch: Null<HxExpr>;
+		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite,
+		valueBraceSymmetry('thenBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'ObjectLit')) var elseBranch: Null<HxExpr>;
 };
