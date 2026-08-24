@@ -1047,6 +1047,18 @@ final class TriviaSepLowering {
 					? anyparse.grammar.haxe.HaxeFormat.defaultComprehensionWrap()
 					: $rulesExpr;
 				final _effSmlKeep: Bool = _comprehensionFit ? false : _smlKeep;
+				// ω-flat-source-fixed-point: this branch is reached only when the source
+				// list carried NO newline of its own, and (for a Star without
+				// `@:fmt(reflowSourceMultiline)`) a source newline is exactly what the
+				// force-multi path answers with one-per-line. So a cascade answer that
+				// BREAKS here would be re-read as author intent by the very next pass and
+				// overridden — `fmt` would need two rewrites and `writeRoundTrip(s) == s`
+				// would fail after one. Collapse such an answer to one-per-line, which is
+				// the shape that second pass produces anyway: same final bytes, one pass
+				// earlier. Keep / Ignore reproduce or drop the source layout and are fixed
+				// points already; a reflow Star routes its multiline lists through the same
+				// cascade, so both passes agree there too.
+				final _breakAsOnePerLine: Bool = !$v{c.reflowSourceMultiline} && !_keepEmit && !_ignoreEmit;
 				$complexKindsDecl;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules, {
@@ -1060,6 +1072,7 @@ final class TriviaSepLowering {
 						groupRestProbe: $v{c.groupRestProbe},
 						sepBeforeFlags: _sepBeforeFlags,
 						sourceMultilineKeep: _effSmlKeep,
+						breakAsOnePerLine: _breakAsOnePerLine,
 						flatTrailingComma: $flatTrailingCommaExpr,
 						comprehensionFitMeasure: _comprehensionFit,
 						complexItemKinds: _complexKinds

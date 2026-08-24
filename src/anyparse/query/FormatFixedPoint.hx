@@ -29,8 +29,17 @@ import haxe.Exception;
  * same 854-file corpus finds five more lists whose layout can be decided from
  * source newlines instead of from the cascade — `anonType` (33 files),
  * `callParameter` (2), `arrayWrap`, `anonFunctionSignature` and
- * `typeParameter` (one each). None of the 201 files needed more than two
- * rewrites, and none oscillated.
+ * `typeParameter` (one each). None of the 201 files needed more than
+ * two rewrites, and none oscillated.
+ *
+ * ω-flat-source-fixed-point since closed that class at the wrap decision
+ * itself: a cascade answer that BREAKS a source-flat list is emitted as
+ * `OnePerLine` — the shape the force-multi path would force on the next pass
+ * anyway — so pass 2 reproduces pass 1 by construction
+ * (`WrapList.breakAsOnePerLine`). Measured over the whole Pony tree (867
+ * files, its own `hxformat.json`): the three files that took two rewrites now
+ * take one, and `fmt --write` writes a BYTE-IDENTICAL tree. The corpus stayed
+ * at 775/126/43 with zero fixtures moved.
  *
  * So `fmt` writes the fixed point instead of one round trip. Two properties
  * make that safe rather than clever:
@@ -55,7 +64,9 @@ final class FormatFixedPoint {
 
 	/**
 	 * How many rewrites one file may take before `fmt` gives up. A correct
-	 * writer needs exactly one; the objectLiteral instance above needs two.
+	 * writer needs exactly one, and since ω-flat-source-fixed-point every wrap
+	 * cascade is one — the loop stays as the net that REPORTS a layout-reading
+	 * decision rather than swallowing it.
 	 * Four leaves room for a chain of nested layout-reading decisions settling
 	 * one level per pass, and still bounds the work for a file that oscillates
 	 * between two shapes instead of converging on either.
