@@ -143,27 +143,55 @@ class ExtractMethodSliceTest extends Test {
 	}
 
 	/**
-	 * A local the range declares whose name is declared TWICE in the enclosing
-	 * block is refused: `Refs` binds every later read to the FIRST declaration, so
-	 * the escape analysis cannot see that the range local is read after the range
-	 * and would drop the return value, silently changing what the program prints.
-	 * The shape `rename` refuses on too.
+	 * A local the range declares whose name is declared TWICE in the enclosing block extracts:
+	 * `ScopeFrame` binds the trailing read to the SECOND declaration, which is the one the range
+	 * carries, so the escape analysis sees it and hands the value back through the return slot.
 	 */
-	public function testRefuseSameBlockRedeclaration(): Void {
+	public function testSameBlockRedeclarationExtractsWithReturnValue(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\tvar v = 9;\n\t\ttrace(v);\n\t\ttrace(v);\n\t}\n}\n';
-		assertRefusedWith(source, 4, 3, 5, 3, 'helper', true, 'local "v" is declared more than once in the block at 4:3');
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\tfunction helper() {\n\t\t\tvar v = 9;\n'
+			+ '\t\t\ttrace(v);\n\t\t\treturn v;\n\t\t}\n\t\tfinal v = helper();\n\t\ttrace(v);\n\t}\n}\n';
+		assertExtract(source, 4, 3, 5, 3, 'helper', true, expected);
 	}
 
 	/**
-	 * The same refusal for a local `function` the range declares: a later `g()` binds to the
-	 * FIRST declaration, so moving the second into the closure silently makes that call run the
-	 * other body. Reached only because the guard sweeps the block-scoped DECLARATION vocabulary
-	 * rather than `LOCAL_DECL_KINDS`, which knows `var` / `final` alone.
+	 * A local `function` the range declares extracts the same way: the `g()` after the second
+	 * declaration binds to that declaration, so it moves into the closure with it and the `g()`
+	 * between the two keeps calling the first body. Reached only because the guard sweeps the
+	 * block-scoped DECLARATION vocabulary rather than `LOCAL_DECL_KINDS`, which knows `var` /
+	 * `final` alone.
 	 */
-	public function testRefuseSameBlockLocalFunctionRedeclaration(): Void {
+	public function testSameBlockLocalFunctionRedeclarationExtracts(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfunction g()\n\t\t\ttrace(1);\n\t\tg();\n'
 			+ '\t\tfunction g()\n\t\t\ttrace(2);\n\t\tg();\n\t}\n}\n';
-		assertRefusedWith(source, 6, 3, 8, 3, 'helper', true, 'local "g" is declared more than once in the block at 6:3');
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction g()\n\t\t\ttrace(1);\n\t\tg();\n'
+			+ '\t\tfunction helper() {\n\t\t\tfunction g()\n\t\t\t\ttrace(2);\n\t\t\tg();\n\t\t}\n\t\thelper();\n\t}\n}\n';
+		assertExtract(source, 6, 3, 8, 3, 'helper', true, expected);
+	}
+
+	/**
+	 * The re-declaration shape that stays refused: the name the range binds is also declared on
+	 * two mutually exclusive conditional-compilation arms, so a read past the `#end` belongs to
+	 * exactly one of them and "is the extracted local read after the range" holds for one build
+	 * configuration and not the other. The same shape `rename` refuses on.
+	 */
+	public function testRefuseExclusiveCondArmRedeclaration(): Void {
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\t#if js\n\t\tvar v = 2;\n'
+			+ '\t\t#else\n\t\tvar v = 3;\n\t\t#end\n\t\treturn v;\n\t}\n}\n';
+		assertRefusedWith(source, 3, 3, 4, 3, 'helper', true, 'declaration at 8:3 on a conditional-compilation arm');
+	}
+
+	/**
+	 * The one-arm half of the same ambiguity, which is what the escape analysis actually gets wrong
+	 * here: `return v` binds to the arm's declaration, so the range's own `v` reads as dead after
+	 * the range and no return slot is emitted — correct under `-D js`, and a dangling `v` in every
+	 * other configuration. Measured: with the guard comparing arms only, this extraction wrote a
+	 * file `--interp` rejected with `Unknown identifier : v`.
+	 */
+	public function testRefuseCondArmPlusPrecedingSibling(): Void {
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\t#if js\n\t\tvar v = 2;\n'
+			+ '\t\ttrace(v);\n\t\t#end\n\t\treturn v;\n\t}\n}\n';
+		assertRefusedWith(source, 3, 3, 4, 3, 'helper', true, 'declaration at 6:3 on a conditional-compilation arm');
 	}
 
 	/**

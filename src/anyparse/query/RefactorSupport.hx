@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.CondBranchProjection.CondBranchRun;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefHit;
@@ -197,6 +198,21 @@ private typedef ConditionalCtorInit = {
 	final value: Span;
 	final sole: Bool;
 	final terminator: String;
+};
+
+/**
+ * The seams `RefactorSupport.condArmDeclarations` reads while scanning one conditional region's
+ * arms for a declaration of `name` — the grammar's conditional and declaration vocabularies plus
+ * the file text the branch splitter needs, gathered once per `exclusiveBranchRedeclaration` call.
+ */
+private typedef ArmScan = {
+	final source: String;
+	final name: String;
+	final condKind: String;
+	final declKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final elseKeywords: Array<String>;
+	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
 };
 
 /**
@@ -2114,8 +2130,8 @@ final class RefactorSupport {
 	/**
 	 * The local name a top-level statement DECLARES, or null — the `name` of
 	 * `topLevelDeclaredNode`'s result. ONE `declKinds` list rather than the node walk's
-	 * statement/expression pair: its only caller, `sameBlockRedeclaration`, asks with a
-	 * vocabulary that is already a union.
+	 * statement/expression pair: its two callers, `exclusiveBranchRedeclaration` and
+	 * `condArmDeclarations`, ask with a vocabulary that is already a union.
 	 */
 	public static function topLevelDeclaredName(stmt: QueryNode, declKinds: Array<String>, metaKinds: Array<String>): Null<String> {
 		final decl: Null<QueryNode> = topLevelDeclaredNode(stmt, declKinds, [], metaKinds);
@@ -3534,25 +3550,26 @@ final class RefactorSupport {
 	/**
 	 * The function subtree the same-name guards sweep - the one that OWNS `binding`.
 	 *
-	 * Those guards ask a question about the BINDING - is this name declared twice in one block? -
-	 * so the anchor is the binding's declaration, never the cursor. A read inside a nested local
-	 * function or lambda resolves to a binding declared in the OUTER function, and a cursor anchor
-	 * confines the sweep to that nested body, which holds no redeclaration: the guard passes and
-	 * the rename silently rebinds every reference that followed the second declaration.
+	 * Those guards ask a question about the BINDING - can a reference to this name past an `#end`
+	 * belong to a declaration that another build configuration does not have? - so the anchor is the
+	 * binding's declaration, never the cursor. A read inside a nested local function or lambda resolves
+	 * to a binding declared in the OUTER function, and a cursor anchor confines the sweep to that
+	 * nested body, which holds no conditional region: the guard passes and the rename rewrites the
+	 * references of one configuration only.
 	 *
 	 * A local `function g` is declared in its PARENT's block while its own span contains that
-	 * declaration offset, so an anchor landing exactly on the function it names steps out one
-	 * level. Otherwise renaming `g` from its own declaration would sweep only its body and miss
-	 * the sibling `function g` two statements down. That is the climb the cursor anchor also needed,
-	 * now gated on the binding's identity instead of on its name.
+	 * declaration offset, so an anchor landing exactly on the function it names steps out one level.
+	 * Otherwise renaming `g` from its own declaration would sweep only its body and miss a conditional
+	 * region two statements down that declares the same name. That is the climb the cursor anchor also
+	 * needed, now gated on the binding's identity instead of on its name.
 	 *
 	 * A binding no function owns is a TYPE MEMBER, for which `enclosingFunctionSubtree` answers the
-	 * whole tree. A block-local redeclaration cannot mis-bind a member's references - the duplicated
-	 * locals shadow the member and bind only to each other - so sweeping the module for one would
-	 * cost working renames and prove nothing (measured: 433 extra refusals across the installed
-	 * haxelib). Such a binding keeps the cursor's own function, which is what shipped.
+	 * whole tree. A local declared in some other method shadows the member and binds only to itself, so
+	 * sweeping the module for one would cost working renames and prove nothing (measured: 433 extra
+	 * refusals across the installed haxelib). Such a binding keeps the cursor's own function, which is
+	 * what shipped.
 	 *
-	 * Every step widens, which is the safe direction: `sameBlockRedeclaration` recurses through
+	 * Every step widens, which is the safe direction: `exclusiveBranchRedeclaration` recurses through
 	 * everything under the scope it is given, so a scope that is too wide can only over-refuse.
 	 */
 	public static function bindingHostSubtree(tree: QueryNode, cursor: Int, binding: Null<Int>, shape: RefShape): QueryNode {
@@ -3568,40 +3585,92 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * The span of a SECOND same-block declaration of `name` within `scope`, or null when every
-	 * block there declares it at most once.
+	 * The span of a declaration of `name` under `scope` whose EXISTENCE depends on build flags while
+	 * another declaration of the same name is already in effect where it sits, or null when no
+	 * conditional-compilation region there creates that ambiguity.
 	 *
-	 * Haxe allows re-declaring a name in one block. The resolution index USED to mis-bind every
-	 * reference that follows the second declaration — each stayed bound to the FIRST — and the two
-	 * ops that read it had to refuse on the shape: `Rename`, whose splice would rewrite the wrong
-	 * occurrences, and `ExtractMethod`, which decides from the same index whether a range-local
-	 * escapes the range. `ScopeFrame` now resolves the shape BY POSITION, so that premise is
-	 * historical; both refusals are kept until the widening they would become is measured on the
-	 * corpora the way a fixer's is, and each costs only a manual rename. Compared per PARENT node,
-	 * so a re-declaration in a NESTED block — ordinary shadowing, correctly resolved before and
-	 * after — is not reported.
+	 * A conditional-compilation branch is NOT a scope — a name declared inside `#if` stays visible past
+	 * the `#end` — while the arms are mutually exclusive, so the tree carries declarations of which only
+	 * some exist in any one build. Every reference past the `#end` resolves to exactly one of them, which
+	 * makes a rename or an escape analysis correct for that configuration and wrong for the other. Two
+	 * shapes create it, and both are reported:
 	 *
-	 * The vocabulary is `TypeResolver.blockScopedValueDeclarationKinds`, NOT the grammar's local-var
-	 * lists alone: a local `function g() …` redeclared in one block is the same blind spot (every
-	 * later `g()` stays bound to the first), and it reached both ops as a silent miscompile until the
-	 * two vocabularies were derived from one place.
+	 * - the name declared on TWO OR MORE arms of one region;
+	 * - the name declared on ONE arm while a declaration ALREADY IN EFFECT there also carries it — a
+	 *   sibling declaration BEFORE the region, a parameter of the enclosing function, or either of
+	 *   those in an ENCLOSING statement list. In the configuration the arm is compiled out of, the
+	 *   reference falls through to that declaration instead.
+	 *
+	 * An arm's declaration may sit inside a NESTED region: the inner `#end` does not end the outer arm,
+	 * so the scan recurses and attributes it to the arm that holds it.
+	 *
+	 * A declaration AFTER the region is not this shape: it is in effect in every configuration from its
+	 * own position on, which is where the references that could differ live. Neither is a SEQUENTIAL
+	 * re-declaration in one block or in one arm — `ScopeFrame` resolves those by position, so a
+	 * reference past the second declaration answers the second, and `rename` / `extract-method` both
+	 * produce correct output. Measured on a loop body, a try/catch, a case branch, a second binding
+	 * shadowing a parameter, a closure declared between the two, a self-reading `var x = x + 1` and two
+	 * declarations inside ONE arm, each compiled under two `#if` configurations after the edit.
+	 *
+	 * One conservative edge: the arm test is `topLevelDeclaredName`, which descends a single-child
+	 * wrapper, so an arm whose only statement is a BLOCK declaring the name counts as declaring it even
+	 * though a block-scoped declaration cannot be read past the `#end`. That direction refuses, which is
+	 * the safe one; the same descent is what lets a lone-statement NESTED region be seen at all.
 	 */
-	public static function sameBlockRedeclaration(scope: QueryNode, name: String, plugin: GrammarPlugin, shape: RefShape): Null<Span> {
-		final declKinds: Array<String> = TypeResolver.blockScopedValueDeclarationKinds(shape);
-		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
-		function walk(node: QueryNode): Null<Span> {
-			var seen: Bool = false;
+	public static function exclusiveBranchRedeclaration(
+		scope: QueryNode, source: String, name: String, plugin: GrammarPlugin, shape: RefShape
+	): Null<Span> {
+		final kind: Null<String> = shape.conditionalMemberKind;
+		final keywords: Null<Array<String>> = shape.conditionalElseKeywords;
+		if (kind == null || keywords == null) return null;
+		// Re-bound to non-null locals: strict null-safety narrowing does not reach into an
+		// anonymous-structure literal.
+		final condKind: String = kind;
+		final elseKeywords: Array<String> = keywords;
+		// No `#if` in the file means no region to read, and the walk below is per node — so the
+		// overwhelmingly common file skips it on one string scan, as the branch projection does.
+		if (source.indexOf(shape.conditionalIfKeyword ?? '#if') == -1) return null;
+		final scan: ArmScan = {
+			source: source,
+			name: name,
+			condKind: condKind,
+			declKinds: TypeResolver.blockScopedValueDeclarationKinds(shape),
+			metaKinds: plugin.metaShape().metaKinds,
+			elseKeywords: elseKeywords,
+			comments: collectCommentTokens(source)
+		};
+		// A PARAMETER is in effect for the whole body, so it is an "already in effect" declaration
+		// for every region under it - the same standing a sibling declaration before the region has.
+		final params: Array<String> = shape.paramKinds ?? [];
+		final shadowsParam: Bool = scope.children.exists(c -> params.contains(c.kind) && c.name == name);
+		// A reference past the `#end` binds to a declaration whose EXISTENCE depends on build flags
+		// in two shapes, and `inEffect` is what separates them from the safe rest: the name on two
+		// arms of one region, and the name on ONE arm while a declaration ALREADY IN EFFECT there
+		// also carries it - in the configuration the arm is compiled out of, the reference falls
+		// through to that one instead. Already in effect means a sibling declaration BEFORE the
+		// region, a parameter, or either of those in an ENCLOSING statement list, which is what the
+		// `inherited` argument carries down: a local declared in an outer block is visible in the
+		// inner one and a rename of the arm's own declaration breaks the same way there.
+		// A sibling declaration AFTER the region is safe: it is in effect in every configuration
+		// from its own position on, which is where the references that could differ live.
+		function walk(node: QueryNode, inherited: Bool): Null<Span> {
+			var inEffect: Bool = inherited;
 			for (c in node.children) {
-				if (topLevelDeclaredName(c, declKinds, metaKinds) == name) {
-					if (seen) return c.span;
-					seen = true;
-				}
-				final found: Null<Span> = walk(c);
+				if (c.kind == scan.condKind) {
+					final decls: Array<QueryNode> = condArmDeclarations(c, scan);
+					if (decls.length > 1) return decls[1].span;
+					if (decls.length == 1) {
+						if (inEffect) return decls[0].span;
+						inEffect = true;
+					}
+				} else if (topLevelDeclaredName(c, scan.declKinds, scan.metaKinds) == scan.name)
+					inEffect = true;
+				final found: Null<Span> = walk(c, inEffect);
 				if (found != null) return found;
 			}
 			return null;
 		}
-		return walk(scope);
+		return walk(scope, shadowsParam);
 	}
 
 	/**
@@ -5233,6 +5302,48 @@ final class RefactorSupport {
 	private static function isConditionalModifierRegion(node: QueryNode): Bool {
 		return node.kind == CONDITIONAL_REGION_KIND && node.children.length > 0
 			&& node.children.foreach(c -> MODIFIER_META_KINDS.contains(c.kind));
+	}
+
+	/**
+	 * The declarations of `scan.name` this conditional region carries, ONE per arm that declares it,
+	 * in arm order — the per-region half of `exclusiveBranchRedeclaration`.
+	 *
+	 * A run whose candidate is a NESTED region contributes that region's own declaration: the nested
+	 * `#end` does not end the enclosing arm, so a declaration under it is still visible past the outer
+	 * one. Two arms of a nested region already carry the name on mutually exclusive arms, and that
+	 * verdict is returned as it stands, whatever the enclosing region does. A run contributes at most
+	 * one declaration: a SEQUENTIAL re-declaration inside one arm resolves by position like any other
+	 * and is not this shape.
+	 *
+	 * When the splitter refuses the region's shape it reports null runs and which arm a declaration
+	 * belongs to is unknown; every top-level declaration among the flat children is then counted as its
+	 * own arm's, which is the refusing direction. On that path alone the caller's message overstates
+	 * what was established — two SEQUENTIAL declarations inside one arm would also reach it — but no
+	 * constructed input makes `CondBranchProjection.monotonicChildSpans` refuse, so the message is left
+	 * as the reachable paths need it rather than split for a path nothing can exercise.
+	 */
+	private static function condArmDeclarations(region: QueryNode, scan: ArmScan): Array<QueryNode> {
+		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
+			region, scan.source, scan.elseKeywords, scan.comments
+		);
+		final out: Array<QueryNode> = [];
+		if (runs == null) {
+			for (c in region.children) if (topLevelDeclaredName(c, scan.declKinds, scan.metaKinds) == scan.name) out.push(c);
+			return out;
+		}
+		for (run in runs) for (n in run.nodes) {
+			if (n.kind == scan.condKind) {
+				final nested: Array<QueryNode> = condArmDeclarations(n, scan);
+				if (nested.length > 1) return nested;
+				if (nested.length == 0) continue;
+				out.push(nested[0]);
+				break;
+			}
+			if (topLevelDeclaredName(n, scan.declKinds, scan.metaKinds) != scan.name) continue;
+			out.push(n);
+			break;
+		}
+		return out;
 	}
 
 }

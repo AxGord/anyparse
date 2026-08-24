@@ -110,37 +110,39 @@ class RenameSliceTest extends Test {
 		assertRenameErr(src, 3, 7, 'q', 'no parsed expression');
 	}
 
-	public function testSameBlockRedeclarationRefused(): Void {
-		// Haxe allows re-declaring a name in the same block; the resolution index
-		// mis-binds the references that follow the second declaration, so renaming
-		// either binding must REFUSE until the scopes are split.
+	public function testSameBlockRedeclarationRenamesTheSecondBinding(): Void {
+		// Haxe allows re-declaring a name in the same block, and the second declaration takes
+		// over from its own position on. `ScopeFrame` resolves that by position, so the splice
+		// carries exactly the second binding's own occurrences - the FIRST declaration and the
+		// read between the two keep the old name. One assertion over the whole program, so
+		// neither half can be satisfied alone.
 		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tfinal path = v + "!";\n\t\ttrace(path);\n'
 			+ '\t\t@:nullSafety(Off) var path = v;\n\t\treturn path;\n\t}\n}';
-		switch renameOf(src, 5, 21, 'relPath') {
-			case Ok(text):
-				Assert.fail('expected Err, got Ok: $text');
-			case Err(message):
-				Assert.isTrue(message.indexOf('declared more than once') != -1, message);
-		}
+		final expected: String = 'class C {\n\tfunction f(v:String):String {\n\t\tfinal path = v + "!";\n\t\ttrace(path);\n'
+			+ '\t\t@:nullSafety(Off) var relPath = v;\n\t\treturn relPath;\n\t}\n}';
+		assertRename(src, 5, 21, 'relPath', expected);
 	}
 
 	/**
-	 * A local `function g()` declared twice in one block is the same mis-bind as a duplicated
-	 * `var`: every later `g()` stays bound to the FIRST body, so renaming either declaration
-	 * rewrites the declaration alone and silently changes which body the calls run. The
-	 * position the message carries is the SECOND declaration's.
+	 * A local `function g()` declared twice in one block binds each call to the body in effect
+	 * at that call - the FIRST declaration owns the call between the two, the second owns the
+	 * one after it. Renaming the first therefore carries exactly one call with it.
 	 */
-	public function testSameBlockLocalFunctionRedeclarationRefused(): Void {
+	public function testSameBlockLocalFunctionRedeclarationRenamesFirstBody(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfunction g()\n\t\t\ttrace(1);\n\t\tg();\n'
 			+ '\t\tfunction g()\n\t\t\ttrace(2);\n\t\tg();\n\t}\n}';
-		assertRenameErr(src, 3, 3, 'h', 'declared more than once in the block at 6:3');
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction h()\n\t\t\ttrace(1);\n\t\th();\n'
+			+ '\t\tfunction g()\n\t\t\ttrace(2);\n\t\tg();\n\t}\n}';
+		assertRename(src, 3, 3, 'h', expected);
 	}
 
-	/** The `inline function` local form of that redeclaration refuses too. */
-	public function testSameBlockInlineFunctionRedeclarationRefused(): Void {
+	/** The `inline function` local form of that redeclaration splits the same way. */
+	public function testSameBlockInlineFunctionRedeclarationRenamesFirstBody(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tinline function g()\n\t\t\ttrace(1);\n\t\tg();\n'
 			+ '\t\tinline function g()\n\t\t\ttrace(2);\n\t\tg();\n\t}\n}';
-		assertRenameErr(src, 3, 3, 'h', 'declared more than once in the block at 6:3');
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tinline function h()\n\t\t\ttrace(1);\n\t\th();\n'
+			+ '\t\tinline function g()\n\t\t\ttrace(2);\n\t\tg();\n\t}\n}';
+		assertRename(src, 3, 3, 'h', expected);
 	}
 
 	/**
@@ -518,15 +520,17 @@ class RenameSliceTest extends Test {
 
 	/**
 	 * A read of `v` inside a nested local `function k` binds to the OUTER `v`, which `f`
-	 * declares twice - the shape this guard exists for. Anchored on the CURSOR the sweep was
-	 * confined to `k`'s body, which holds no redeclaration, so the rename went through: it
-	 * rewrote the trailing `trace(v)` and left `var v = 9` behind, and the program silently
-	 * printed the FIRST value there. Anchored on the resolved BINDING it refuses.
+	 * declares twice - and the read sits BEFORE the second declaration, so it belongs to the
+	 * first. The splice carries the first declaration, the read between the two and the nested
+	 * read; the trailing `trace(v)` belongs to `var v = 9` and stays. That trailing read is the
+	 * discriminator: an engine that resolved it to the first declaration would rewrite it here.
 	 */
-	public function testNestedLocalFunctionReadOfRedeclaredOuterLocalRefused(): Void {
+	public function testNestedLocalFunctionReadOfRedeclaredOuterLocalRenamesFirstBinding(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\tfunction k()\n\t\t\ttrace(v);\n'
 			+ '\t\tk();\n\t\tvar v = 9;\n\t\ttrace(v);\n\t}\n}';
-		assertRenameErr(src, 6, 10, 'w', 'declared more than once in the block at 8:3');
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar w = 1;\n\t\ttrace(w);\n\t\tfunction k()\n\t\t\ttrace(w);\n'
+			+ '\t\tk();\n\t\tvar v = 9;\n\t\ttrace(v);\n\t}\n}';
+		assertRename(src, 6, 10, 'w', expected);
 	}
 
 	/**
@@ -555,11 +559,94 @@ class RenameSliceTest extends Test {
 		assertRename(src, 6, 4, 'w', expected);
 	}
 
-	/** A LAMBDA body is the same blind spot as a named local function, and refuses the same way. */
-	public function testLambdaReadOfRedeclaredOuterLocalRefused(): Void {
+	/**
+	 * The re-declaration shape that stays REFUSED: the name is declared on two mutually exclusive
+	 * conditional-compilation arms. Only one arm exists in any one build, and the `return v` past
+	 * the `#end` resolves to exactly one of them - so renaming either arm rewrites the reference
+	 * for that configuration and leaves the other reading the old name. Measured: renaming EITHER
+	 * arm of this shape makes the file stop compiling under one of `--interp` / `-js`.
+	 */
+	public function testExclusiveCondArmRedeclarationRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\t#else\n'
+			+ '\t\tvar v = 2;\n\t\ttrace(v);\n\t\t#end\n\t\treturn v;\n\t}\n}';
+		assertRenameErr(src, 4, 3, 'w', 'the declaration at 7:3 sits on a conditional-compilation arm');
+		assertRenameErr(src, 7, 3, 'w', 'the declaration at 7:3 sits on a conditional-compilation arm');
+	}
+
+	/**
+	 * The SECOND refusing shape, and the one a two-arm-only guard silently lets through: the name
+	 * on ONE arm plus a sibling declaration BEFORE the region. In the configuration the arm is
+	 * compiled out of, `return v` falls through to the sibling; in the other it belongs to the arm.
+	 * Measured against a guard that only compared arms with each other: renaming either declaration
+	 * wrote a file that `--interp` rejected with `Unknown identifier : v` while `-js` still
+	 * compiled, so a single-configuration check could not see it.
+	 */
+	public function testCondArmPlusPrecedingSiblingRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar v = 1;\n\t\t#if js\n\t\tvar v = 2;\n\t\t#end\n\t\treturn v;\n\t}\n}';
+		assertRenameErr(src, 3, 3, 'w', 'the declaration at 5:3 sits on a conditional-compilation arm');
+		assertRenameErr(src, 5, 3, 'w', 'the declaration at 5:3 sits on a conditional-compilation arm');
+	}
+
+	/**
+	 * A declaration nested one region deeper is the same ambiguity, and the arm scan has to recurse
+	 * to see it: the inner arm holds TWO statements, so the single-child descent that reaches a
+	 * lone-statement region does not apply. Measured: without the recursion both this and the
+	 * pre-change engine wrote a file neither `--interp` nor `-js` compiled.
+	 */
+	public function testNestedCondArmDeclarationRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar v = 0;\n\t\t#if js\n\t\t#if cpp\n\t\tvar v = 2;\n'
+			+ '\t\ttrace(v);\n\t\t#end\n\t\t#end\n\t\treturn v;\n\t}\n}';
+		assertRenameErr(src, 3, 3, 'w', 'the declaration at 6:3 sits on a conditional-compilation arm');
+		assertRenameErr(src, 6, 3, 'w', 'the declaration at 6:3 sits on a conditional-compilation arm');
+	}
+
+	/**
+	 * A sibling declaration AFTER the region is NOT this shape and renames: it is in effect in every
+	 * configuration from its own position on, so every reference past it means the same declaration
+	 * and the arm's own reads stay inside the arm. Asserted on the whole program - the arm keeps the
+	 * old name while the declaration below it and its read take the new one.
+	 */
+	public function testCondArmPlusFollowingSiblingRenames(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tvar v = 1;\n\t\t#end\n\t\tvar v = 2;\n\t\treturn v;\n\t}\n}';
+		final expected: String =
+			'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tvar v = 1;\n\t\t#end\n\t\tvar w = 2;\n\t\treturn w;\n\t}\n}';
+		assertRename(src, 6, 3, 'w', expected);
+		// The ARM'S OWN declaration renames too, and this is the direction that pins the guard's
+		// polarity: the region SETS "in effect" and must not then fire on itself. Inverting the
+		// `if (inEffect)` test leaves the assertion above passing and fails this one.
+		final armRenamed: String =
+			'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tvar w = 1;\n\t\t#end\n\t\tvar v = 2;\n\t\treturn v;\n\t}\n}';
+		assertRename(src, 4, 3, 'w', armRenamed);
+	}
+
+	/** An `#elseif` ladder is three arms, and the name on any two of them refuses the same way. */
+	public function testCondElseIfArmRedeclarationRefused(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tvar v = 1;\n\t\t#elseif cpp\n\t\tvar v = 2;\n'
+			+ '\t\t#else\n\t\tvar v = 3;\n\t\t#end\n\t\treturn v;\n\t}\n}';
+		assertRenameErr(src, 4, 3, 'w', 'the declaration at 6:3 sits on a conditional-compilation arm');
+	}
+
+	/**
+	 * The SAME arm declaring the name twice is a sequential re-declaration, not an exclusive
+	 * one, and renames like any other: the branch splitter puts both declarations in one run,
+	 * so only a name spread across two runs refuses. Asserted on the whole program - the
+	 * second declaration and its read keep the old name.
+	 */
+	public function testSameCondArmRedeclarationRenames(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\t#if js\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\tvar v = 2;\n\t\ttrace(v);\n\t\t#end\n\t}\n}';
+		final expected: String =
+			'class C {\n\tfunction f():Void {\n\t\t#if js\n\t\tvar w = 1;\n\t\ttrace(w);\n\t\tvar v = 2;\n\t\ttrace(v);\n\t\t#end\n\t}\n}';
+		assertRename(src, 4, 3, 'w', expected);
+	}
+
+	/** A LAMBDA body reads the outer binding the same way a named local function does. */
+	public function testLambdaReadOfRedeclaredOuterLocalRenamesFirstBinding(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t\tvar g = () -> trace(v);\n'
 			+ '\t\tg();\n\t\tvar v = 9;\n\t\ttrace(v);\n\t}\n}';
-		assertRenameErr(src, 5, 23, 'w', 'declared more than once in the block at 7:3');
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar w = 1;\n\t\ttrace(w);\n\t\tvar g = () -> trace(w);\n'
+			+ '\t\tg();\n\t\tvar v = 9;\n\t\ttrace(v);\n\t}\n}';
+		assertRename(src, 5, 23, 'w', expected);
 	}
 
 	/**
