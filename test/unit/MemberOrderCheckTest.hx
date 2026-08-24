@@ -18,7 +18,7 @@ using StringTools;
 
 /**
  * The `member-order` check: a type whose members are not in canonical order
- * (constants, fields, constructor, methods; public before private) is flagged
+ * (constants, properties, fields, constructor, accessors, instance methods, static methods; public before private) is flagged
  * `Info` and `--fix` reorders them. Reordering bails when a field initializer is side-effecting or reads a sibling field in a way the sort would reverse - counting only flips with INITIALIZED fields, since an init-less field runs no code in the init phase. Within one rank `inline` members sort first, then initialized fields before init-less ones.
  */
 class MemberOrderCheckTest extends Test {
@@ -1101,8 +1101,10 @@ class MemberOrderCheckTest extends Test {
 	 */
 	private function assertOrderAdvisoryOnly(vs: Array<Violation>): Void {
 		Assert.equals(1, vs.length);
-		Assert.equals(
-			'type members are not in canonical order (constants, fields, constructor, methods; public before private)', vs[0].message
+		Assert.equals('member-order', vs[0].rule);
+		Assert.isTrue(
+			vs[0].message.startsWith('type member \'') && vs[0].message.contains('is out of canonical order: '),
+			'the order advisory names the member and its reason, got: ${vs[0].message}'
 		);
 	}
 
