@@ -698,6 +698,7 @@ import unit.OracleFixImportLeakTest;
 import unit.MemberOrderMessageTest;
 import unit.LintFixFollowUpRoundTest;
 import unit.NamingCheckAltSpellingFixTest;
+import unit.NarrowLocalScopeCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1341,6 +1342,7 @@ class RunTests {
 		addCase(new PreferTryExpressionAssignmentCheckTest());
 		addCase(new PreferTryExpressionReturnCheckTest());
 		addCase(new TryCatchNullGuardCheckTest());
+		addCase(new NarrowLocalScopeCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
 		addCase(new HoistBranchStringAffixCheckTest());
 		addCase(new HoistEmbeddedAssignmentCheckTest());

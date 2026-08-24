@@ -28,7 +28,7 @@ class TryCatchNullGuardCheckTest extends Test {
 		Assert.notNull(Linter.byId('try-catch-null-guard'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('try-catch-null-guard'));
-		Assert.equals(172, Linter.builtins().length);
+		Assert.equals(173, Linter.builtins().length);
 	}
 
 	/** DEFAULT OFF: the rule ships opt-in, so a project only sees it after enabling it. */

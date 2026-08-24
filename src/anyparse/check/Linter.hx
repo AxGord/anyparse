@@ -115,6 +115,12 @@ final class Linter {
 			// only — the `--fix` driver loops to a fixed point, so the two compose whatever the
 			// registry order, and nothing here gates on the position.
 			new TryCatchNullGuard(),
+			// Registered ahead of `join-declaration-assignment`, which is the shape it PRODUCES: sinking a
+			// bare declaration into the block that uses it lands it directly above its first assignment, and
+			// the join then pairs them. Registry order is free -- the `--fix` driver loops to a fixed point,
+			// and the two can never claim one site (a join needs the assignment to be the declaration's
+			// immediate sibling, which this rule's "every occurrence is inside a nested block" gate refuses).
+			new NarrowLocalScope(),
 			new JoinDeclarationAssignment(),
 			new JoinOverrideChain(),
 			// Reads the ONE statement shape the statement-list rules deliberately skip — a
