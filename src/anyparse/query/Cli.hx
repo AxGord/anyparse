@@ -2110,19 +2110,34 @@ final class Cli {
 		// `fixed N issue(s)` used to leave the reader to make.
 		final ledger: Map<String, RuleFixOutcome> = [];
 
-		while (active.length > 0) {
-			if (passes >= maxPasses) {
-				hitCap = true;
-				break;
+		// The safe fixed-point loop, as a closure, because it runs TWICE: the risky and
+		// oracle-assisted phases below write AFTER it has finished, so without a second round
+		// every finding their edits EXPOSE is left standing by the very run that created it.
+		// The motivating pair: `prefer-inline` marks a method `inline` (risky, oracle-verified),
+		// which moves that method under `member-order`'s within-rank sub-order (inline leads its
+		// rank) — and the loop that would have re-sorted it had already converged. `--fix` then
+		// reported success while leaving a finding it had just introduced, and a second invocation
+		// of the identical command fixed it. Four workers read that as two checks demanding an
+		// impossible arrangement; it is one missing round. Each round gets its OWN `maxPasses`
+		// budget: sharing one would let a tree that spends the whole budget converging the safe
+		// checks silently skip the follow-up round entirely.
+		function converge(budget: Int): Void {
+			final limit: Int = passes + budget;
+			while (active.length > 0) {
+				if (passes >= limit) {
+					hitCap = true;
+					break;
+				}
+				passes++;
+				final pass: LintPassResult = applyLintPass(
+					active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile,
+					passes, noted, changedFiles, ledger, coupled
+				);
+				fixedCount += pass.fixedDelta;
+				active = pass.nextActive;
 			}
-			passes++;
-			final pass: LintPassResult = applyLintPass(
-				active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile, passes,
-				noted, changedFiles, ledger, coupled
-			);
-			fixedCount += pass.fixedDelta;
-			active = pass.nextActive;
 		}
+		converge(maxPasses);
 
 		// The safe pass is applied under a NET when an oracle is configured: typecheck the
 		// tree BEFORE writing, write, then typecheck again. A green-then-red transition is
@@ -2134,15 +2149,17 @@ final class Cli {
 		// just done as a pre-existing condition, and left the tree un-typecheckable with no
 		// hint that `--fix` was the cause. The insurance was disabled at exactly the moment
 		// it was needed.
-		final preBaseline: Null<OracleOutcome> = oracleHxml != null && changedFiles.length > 0
-			? CompilerOracle.typecheck(oracleHxml, oracleDir)
-			: null;
-		for (entry in files) if (changedFiles.contains(entry.file)) writeFile(entry.file, entry.source);
-		final safePass: SafePassOutcome = reconcileSafePass(files, changedFiles, originalOf, coupled, preBaseline, oracleHxml, oracleDir);
+		final safePass: SafePassOutcome = commitSafeWrites(files, changedFiles, originalOf, coupled, oracleHxml, oracleDir);
 		if (safePass.reverted) {
 			stderr(safePass.notice);
 			return EXIT_RUNTIME;
 		}
+
+		// The bytes the SAFE loop settled on, so the follow-up round below can name exactly the
+		// files the two verified phases went on to rewrite. Their own applied/reverted lists do
+		// not answer that: a file already in `changedFiles` is not pushed twice, and a reverted
+		// candidate leaves the file byte-identical to this snapshot.
+		final settledOf: Map<String, String> = sourceSnapshot(files);
 
 		// RiskyFix checks: applied ONLY when a compiler oracle is configured — each
 		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
@@ -2167,12 +2184,28 @@ final class Cli {
 		fixedCount += oa.appliedCount;
 		final oracleTail: String = oa.tail;
 
+		// The follow-up convergence round: `followUpRound` re-enters the loop over whatever the two
+		// verified phases above rewrote, since both of them write AFTER it has already converged.
+		final followUp: SafePassOutcome = followUpRound(files, settledOf, list -> {
+			final before: Int = fixedCount;
+			active = list;
+			converge(maxPasses);
+			return fixedCount - before;
+		}, coupled, changedFiles, oracleHxml, oracleDir);
+		if (followUp.reverted) {
+			stderr(followUp.notice);
+			return EXIT_RUNTIME;
+		}
+
 		final baselineTail: String = safePass.tail;
 		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
-		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
+		// Names the per-ROUND budget, not the run total: `passes` spans both rounds now, so the old
+		// wording produced `over 12 pass(es) (stopped at 10 passes …)` — a line that reads as a
+		// contradiction rather than as the two budgets it actually reports.
+		final capTail: String = hitCap ? ' (a round stopped at its $maxPasses-pass budget — re-run if more remain)' : '';
 		stderr(
 			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
-			+ '$baselineTail$riskyTail$oracleTail\n'
+			+ '$baselineTail$riskyTail$oracleTail${followUp.tail}\n'
 		);
 		// What the run did NOT fix, per rule. Its own block, not a tail on the line above: that line
 		// is what every gate and doc quotes, and it keeps its bytes. It also prints on a PRODUCTIVE
@@ -13395,6 +13428,77 @@ final class Cli {
 		return { reverted: true, tail: '', notice: LintFixSafePass.revertNotice(narrowing, changedFiles.length, errors) };
 	}
 
+	/** Every file's current bytes, keyed by path - the baseline a later round measures its own writes against. */
+	private static function sourceSnapshot(files: Array<{ file: String, source: String }>): Map<String, String> {
+		final snapshot: Map<String, String> = [];
+		for (entry in files) snapshot[entry.file] = entry.source;
+		return snapshot;
+	}
+
+	/** The entries whose in-memory source has moved since `snapshot` was taken. */
+	private static function changedSince(
+		files: Array<{ file: String, source: String }>, snapshot: Map<String, String>
+	): Array<{ file: String, source: String }> {
+		return [for (entry in files) if (entry.source != snapshot[entry.file]) entry];
+	}
+
+	/**
+	 * Write `changed` to disk under the green-then-red net: typecheck BEFORE writing, write, typecheck
+	 * again, and roll the wave back when a tree that was green turned red. Shared by the first safe
+	 * round and by the follow-up round after the verified phases - both commit UNVERIFIED fixes over a
+	 * tree the previous phase left green, so both owe the same insurance, and a second hand-written
+	 * copy of this dance is exactly how one of them would come to lack it.
+	 */
+	private static function commitSafeWrites(
+		files: Array<{ file: String, source: String }>, changed: Array<String>, originalOf: Map<String, String>,
+		coupled: Array<Array<String>>, oracleHxml: Null<String>, oracleDir: Null<String>
+	): SafePassOutcome {
+		final baseline: Null<OracleOutcome> = oracleHxml != null && changed.length > 0
+			? CompilerOracle.typecheck(oracleHxml, oracleDir)
+			: null;
+		for (entry in files) if (changed.contains(entry.file)) writeFile(entry.file, entry.source);
+		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracleHxml, oracleDir);
+	}
+
+	/**
+	 * Re-enter the safe fixed-point loop over the files the VERIFIED phases rewrote.
+	 *
+	 * `verifyRiskyFixes` and `applyOracleAssistedFixes` both write after the safe loop has converged,
+	 * so until this round existed every finding their edits EXPOSED was left in the tree by the run
+	 * that created it: `--fix` printed a success line, and a byte-identical second invocation of the
+	 * same command fixed more. The motivating pair is `prefer-inline` and `member-order` - marking a
+	 * method `inline` moves it under the within-rank sub-order, and the loop that would have re-sorted
+	 * it had already finished. Measured on Pony (867 files, oracle configured): 5 fixes in 3 files.
+	 *
+	 * `converge` is the caller's own loop, passed as a closure because it owns the run-wide counters;
+	 * it takes the active set and answers how many fixes the round made. The net restores the bytes
+	 * the VERIFIED phases left, never the ones the safe loop settled on - rolling back to the latter
+	 * would undo an oracle-CONFIRMED risky fix as collateral for a follow-up edit that broke the
+	 * build. A run with no oracle reaches here with nothing changed and returns at the first line.
+	 */
+	private static function followUpRound(
+		files: Array<{ file: String, source: String }>, settledOf: Map<String, String>,
+		converge: (Array<{ file: String, source: String }>) -> Int, coupled: Array<Array<String>>, changedFiles: Array<String>,
+		oracleHxml: Null<String>, oracleDir: Null<String>
+	): SafePassOutcome {
+		final quiet: SafePassOutcome = { reverted: false, tail: '', notice: '' };
+		final verifiedChanged: Array<{ file: String, source: String }> = changedSince(files, settledOf);
+		if (verifiedChanged.length == 0) return quiet;
+		final verifiedOf: Map<String, String> = sourceSnapshot(files);
+		final fixed: Int = converge(verifiedChanged);
+		// Over ALL files, not just `verifiedChanged`: a cross-file rename in this round commits slices
+		// into files the verified phases never touched.
+		final rewritten: Array<String> = [for (entry in changedSince(files, verifiedOf)) entry.file];
+		if (rewritten.length == 0) return quiet;
+		for (f in rewritten) if (!changedFiles.contains(f)) changedFiles.push(f);
+		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracleHxml, oracleDir);
+		return {
+			reverted: pass.reverted,
+			tail: '${pass.tail}, follow-up: $fixed fix(es) in ${rewritten.length} file(s) exposed by the verified phases',
+			notice: pass.notice
+		};
+	}
+
 	/**
 	 * Verify and apply the RiskyFix checks' fixes: a no-op with no risky check,
 	 * report-only (no compile) with no oracle, else `FixVerifier`-gated — files
@@ -13943,6 +14047,7 @@ final class Cli {
 		display.stop();
 		if (candidates.length == 0) return { tail: ', oracle-assisted: 0 applied', appliedCount: 0 };
 		final result: OracleBatchResult = verifyOracleBatch(candidates, oracleHxml, oracleDir);
+		syncAppliedSources(files, candidates, result.applied);
 		for (f in result.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
 		var edits: Int = 0;
 		for (f in result.applied) edits += editsPerFile[f] ?? 0;
@@ -14008,6 +14113,24 @@ final class Cli {
 		}
 		final applied: Array<String> = [for (c in candidates) if (!reverted.contains(c.file)) c.file];
 		return { applied: applied, reverted: reverted, reason: reason };
+	}
+
+	/**
+	 * Put the in-memory sources back in step with what `verifyOracleBatch` WROTE.
+	 *
+	 * The oracle-assisted phase used to be the last thing that touched the tree, so nothing read
+	 * `entry.source` afterwards and the drift was invisible. `followUpRound` reads it: an unsynced
+	 * file is re-linted from its PRE-annotation bytes and written back over the verified edit, so
+	 * the annotation is silently lost and the round is blind to this phase besides. Measured on a
+	 * file taking both a risky `inline` and an oracle-assisted `:Int` — the `inline` survived, the
+	 * return type did not, and `--fix` counted both. A REVERTED candidate is already back at
+	 * `before` on disk, which is what `entry.source` still holds, so it is left alone.
+	 */
+	private static function syncAppliedSources(
+		files: Array<{ file: String, source: String }>, candidates: Array<{ file: String, before: String, after: String }>,
+		applied: Array<String>
+	): Void {
+		for (c in candidates) if (applied.contains(c.file)) for (entry in files) if (entry.file == c.file) entry.source = c.after;
 	}
 
 	/** Candidate files (not already reverted) the compiler error text blames — a local's bad annotation errors in its own file, so the error's `path:` names the culprit. */

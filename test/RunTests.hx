@@ -693,6 +693,8 @@ import unit.MemberOrderModifierSpanSliceTest;
 import unit.OperatorOverloadGateTest;
 import unit.HxCondSpliceReturnBlockSliceTest;
 import unit.OracleFixImportLeakTest;
+import unit.MemberOrderMessageTest;
+import unit.LintFixFollowUpRoundTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1125,6 +1127,7 @@ class RunTests {
 		addCase(new StdResolverReturnTypeTest());
 		addCase(new LintPerFileConfigCliTest());
 		addCase(new LintFixFixedPointCliTest());
+		addCase(new LintFixFollowUpRoundTest());
 		addCase(new LintConfigTest());
 		addCase(new LintSliceTest());
 		addCase(new LintModuleSecondaryTypeSliceTest());
@@ -1213,6 +1216,7 @@ class RunTests {
 		addCase(new ModifierKindSeamTest());
 		addCase(new BuildMacroMetaSeamTest());
 		addCase(new MemberOrderCheckTest());
+		addCase(new MemberOrderMessageTest());
 		addCase(new MemberOrderModifierSpanSliceTest());
 		addCase(new FragmentedDocCommentCheckTest());
 		addCase(new PreferLineCommentCheckTest());
