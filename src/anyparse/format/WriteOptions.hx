@@ -234,6 +234,48 @@ typedef WriteOptions = {
 	comprehensionCuddledOpen: Bool,
 
 	/**
+	 * When `true`, a BRACKET-delimited list (`[ … ]`) with exactly ONE element
+	 * keeps both brackets CUDDLED to that element — `[for (x in xs) f({` … `})]`
+	 * — instead of breaking the `[` onto its own line and nesting the element
+	 * one level deeper, whenever the element's own natural first line fits the
+	 * line AND ends at an open delimiter, i.e. the element already owns a wrap
+	 * point of its own.
+	 *
+	 * The policy this states: a leading break is worth taking only when it
+	 * RESCUES the line. For a sole element that lays out across lines anyway,
+	 * it rescues nothing — it buys two extra lines and one indent level while
+	 * the overflow is settled by the element's own break. Same reasoning the
+	 * call-arg side already applies from the outside in
+	 * `shapeSingleArgGlue`'s bracket arm ("a bracket-delimited collection owns
+	 * its own multi-line layout: its `[` IS its wrap point"), read from the
+	 * inside out.
+	 *
+	 * The decision is the RENDERER's, through
+	 * `Doc.IfNaturalFirstLineFitsOpenDelim`: an element whose natural first
+	 * line overflows, or which breaks at an operator / mid-argument rather
+	 * than at an open delimiter, keeps the pre-knob exploded layout — so a
+	 * sole element with no wrap point of its own can never be forced flat past
+	 * `lineWidth`. Cascade-independent: it wraps whichever shape the cascade
+	 * resolved (`OnePerLine`, `PackedOrOnePerLine`, the fill family) and
+	 * declines outright for `NoWrap`, which already hugs.
+	 *
+	 * Deliberately NOT covered: multi-element lists (the cuddle would strand
+	 * siblings), non-bracket delimiters (a `{` list's own hug policies own
+	 * that question), arrow-body and method-chain elements (their dedicated
+	 * glue intercepts run first and answer it better), and an element carrying
+	 * a leading break or a leading / trailing LINE comment, where a cuddled
+	 * bracket would land on a comment line.
+	 *
+	 * Default `false` — absent from config means byte-identical output to the
+	 * pre-knob writer. Fed by `wrapping.soleItemCuddledBrackets` through
+	 * `HaxeFormatConfigLoader`. Lives on the base options alongside the other
+	 * cascade-independent layout policies the wrap engine reads directly; the
+	 * shape it recognises is expressed purely in `Doc` terms, so any grammar
+	 * emitting bracket lists through `WrapList` inherits it.
+	 */
+	soleItemCuddledBrackets: Bool,
+
+	/**
 	 * When `true`, a method-chain link whose PRECEDING link already rendered
 	 * multi-line and ended in a dedented closing-delimiter run (`}` / `})` /
 	 * `}]`) starts ON that closing line instead of on a fresh indented line of

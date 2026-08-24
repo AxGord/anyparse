@@ -113,6 +113,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingTrailingCommaPolicy;
  *   whose PRECEDING link rendered multi-line and ended in a dedented
  *   closing-delimiter run (`})`) starts on that closing line instead of on
  *   its own indented line. Default `false` (absent) is byte-inert.
+ * - `wrapping.soleItemCuddledBrackets` (ω-solitem-cuddled-brackets):
+ *   bool → `soleItemCuddledBrackets`. A `[…]` list holding exactly ONE element
+ *   keeps both brackets cuddled to it (`[for (x in xs) f({` … `})]`) when the
+ *   element's natural first line fits and ends at an open delimiter — i.e. the
+ *   element already owns the wrap point the leading break would have supplied.
+ *   Default `false` (absent) is byte-inert.
  * - `wrapping.arrayWrap` (ω-arraylit-wraprules + ω-peg-byname-array):
  *   `WrapRules` cascade → `arrayLiteralWrap`. `defaultWrap:String` sets
  *   the cascade's `defaultMode`; `rules:Array<HxFormatWrapRule>` is
@@ -710,6 +716,7 @@ final class HaxeFormatConfigLoader {
 			trailingComma: base.trailingComma,
 			comprehensionCuddledOpen: base.comprehensionCuddledOpen,
 			methodChainCuddledLinks: base.methodChainCuddledLinks,
+			soleItemCuddledBrackets: base.soleItemCuddledBrackets,
 			conditionalPolicy: base.conditionalPolicy,
 			alignInlineSwitchCaseBody: base.alignInlineSwitchCaseBody,
 			addLineCommentSpace: base.addLineCommentSpace,
@@ -1241,6 +1248,7 @@ final class HaxeFormatConfigLoader {
 		if (section.trailingComma != null) opt.trailingComma = HaxeFormatValues.trailingCommaRemovalToRuntime(section.trailingComma);
 		if (section.comprehensionCuddledOpen != null) opt.comprehensionCuddledOpen = section.comprehensionCuddledOpen;
 		if (section.methodChainCuddledLinks != null) opt.methodChainCuddledLinks = section.methodChainCuddledLinks;
+		if (section.soleItemCuddledBrackets != null) opt.soleItemCuddledBrackets = section.soleItemCuddledBrackets;
 	}
 
 	private static function applyWrappingRulesA(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {

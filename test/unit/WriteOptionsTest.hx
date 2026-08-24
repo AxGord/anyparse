@@ -48,6 +48,7 @@ class WriteOptionsTest extends Test {
 			conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 			alignInlineSwitchCaseBody: false,
 			comprehensionCuddledOpen: false,
+			soleItemCuddledBrackets: false,
 			methodChainCuddledLinks: false,
 			addLineCommentSpace: true,
 			normalizeLineCommentIndent: false,

@@ -412,6 +412,7 @@ import unit.HxCondExprValueFixpointSliceTest;
 import unit.HxComprehensionChainIdempotencyTest;
 import unit.HxComprehensionFitLineNoBreakTest;
 import unit.HxComprehensionCuddledOpenTest;
+import unit.HxSoleItemCuddledBracketsTest;
 import unit.HxComprehensionCloserSliceTest;
 import unit.HxComprehensionDeclRhsBracketWrapTest;
 import unit.HxMethodChainCuddledLinkTest;
@@ -932,6 +933,7 @@ class RunTests {
 		addCase(new HxComprehensionChainIdempotencyTest());
 		addCase(new HxComprehensionFitLineNoBreakTest());
 		addCase(new HxComprehensionCuddledOpenTest());
+		addCase(new HxSoleItemCuddledBracketsTest());
 		addCase(new HxComplexItemWrapTest());
 		addCase(new HxComprehensionDeclRhsBracketWrapTest());
 		addCase(new HxExprParenObjectLitGlueTest());

@@ -164,6 +164,16 @@ package anyparse.grammar.haxe.format;
  *    and comment-bearing chains, and links whose predecessor breaks only by
  *    width, are deliberately excluded — see
  *    `WriteOptions.methodChainCuddledLinks`.
+ *  - `soleItemCuddledBrackets`: bool → `soleItemCuddledBrackets` (slice
+ *    ω-solitem-cuddled-brackets). Also not a cascade — a Bool layout policy
+ *    on a `[…]` list holding exactly ONE element: when that element already
+ *    owns a wrap point of its own, both brackets stay cuddled to it
+ *    (`[for (x in xs) f({` … `})]`) instead of the `[` breaking onto its own
+ *    line and the element nesting one level deeper. Default `false` (config
+ *    absent) keeps the pre-slice leading-break layout byte-identical. The
+ *    fit is a render-time probe, so an element with no wrap point of its own
+ *    is never pinned flat past `maxLineLength` — see
+ *    `WriteOptions.soleItemCuddledBrackets`.
  */
 @:peg typedef HxFormatWrappingSection = {
 
@@ -176,6 +186,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var comprehensionCuddledOpen: Bool;
 
 	@:optional var methodChainCuddledLinks: Bool;
+
+	@:optional var soleItemCuddledBrackets: Bool;
 
 	@:optional var arrayWrap: HxFormatWrapRules;
 

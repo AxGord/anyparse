@@ -319,7 +319,7 @@ class WrapList {
 			final body: Doc = shape(
 				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
 				sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma, opt.comprehensionCuddledOpen,
-				complexItemKinds
+				opt.soleItemCuddledBrackets, complexItemKinds
 			);
 			return prependLead(body, lead);
 		}
@@ -1817,6 +1817,10 @@ class WrapList {
 		// `WriteOptions`. Default `false` keeps every non-threaded caller
 		// byte-identical.
 		comprehensionCuddledOpen: Bool = false,
+		// ω-solitem-cuddled-brackets: `opt.soleItemCuddledBrackets`, threaded down
+		// from `emit` for the same reason as the knob above. Default `false` keeps
+		// every non-threaded caller byte-identical.
+		soleItemCuddledBrackets: Bool = false,
 		// ω-complex-item-count (D2): the per-element AST classification, read by
 		// the fill-mode CHUNK policy in `shapeFillLine` / `shapeFillLineWith
 		// LeadingBreak`. Forwarded through `shapeMultiArgCollection` because its
@@ -1869,10 +1873,106 @@ class WrapList {
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
 			keepCloseGlued, lineWidth, complexItemKinds
 		);
-		return multiArgCollection ?? shapeByMode(
+		if (multiArgCollection != null) return multiArgCollection;
+		final byMode: Doc = shapeByMode(
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
 			sourceBreakBefore, keepCloseGlued, flatTrailingComma, complexItemKinds
 		);
+		// ω-solitem-cuddled-brackets runs LAST on purpose: it is the only intercept
+		// that WRAPS the cascade's own shape rather than replacing it, so it needs
+		// that shape as its break branch. Reaching it means every glue intercept
+		// above declined — and the two multi-arg ones cannot have fired anyway,
+		// since both require `items.length > 1` while this one requires exactly 1.
+		final soleItemCuddled: Null<Doc> = shapeSoleItemCuddledBrackets(
+			soleItemCuddledBrackets, mode, open, close, items, openInside, closeInside, lineWidth, byMode
+		);
+		return soleItemCuddled ?? byMode;
+	}
+
+	/**
+	 * ω-solitem-cuddled-brackets: under `wrapping.soleItemCuddledBrackets`, a
+	 * BRACKET-delimited list with exactly ONE element keeps both brackets
+	 * cuddled to that element — `[for (x in xs) f({` … `})]` — instead of the
+	 * cascade's exploded `[` / element / `]` three-line shape.
+	 *
+	 * The claim is about what a leading break BUYS. `shapeOnePerLine` opens the
+	 * bracket so the element gets a full continuation line; for a SOLE element
+	 * that already lays out across lines, that line is not the one overflowing,
+	 * so the break costs two lines and one indent level and rescues nothing.
+	 * The element's own break settles the width either way.
+	 *
+	 * FIT PROBE — `IfNaturalFirstLineFitsOpenDelim(lineWidth, openShape,
+	 * glueShape)`, the same primitive `shapeSingleArgGlue` uses to answer the
+	 * mirror-image question from the call side. Its two conjuncts are exactly
+	 * the two ways this cuddle can be wrong, and both are RENDER-time:
+	 *  - the natural first line must FIT — an element with no wrap point of its
+	 *    own (a bare over-wide expression) would otherwise be pinned flat past
+	 *    `lineWidth`, so it falls back to the exploded shape;
+	 *  - that line must END at an open delimiter (`(` / `[` / `{` / `->`) — an
+	 *    element that breaks at an operator or mid-argument instead has no
+	 *    dedented closing run for the `]` to ride, and its cuddled `]` would
+	 *    land at body indent under a continuation line.
+	 * A static walk cannot answer either: the element's breaks live in `Group`s
+	 * the renderer resolves by column. That is why this is a Doc probe and not
+	 * a `WrapConditionType` — a cascade condition is evaluated at emit time,
+	 * where the answer does not exist yet.
+	 *
+	 * Gates, each refusing a shape the probe alone would get wrong:
+	 *  - `NoWrap` is excluded — it already emits the cuddled shape, so wrapping
+	 *    it would only add a probe whose branches agree;
+	 *  - arrow-body and method-chain elements are excluded, mirroring
+	 *    `shapeSingleArgGlue`'s own two exclusions: both own dedicated glue
+	 *    intercepts above, and the natural-first-line measurer is documented to
+	 *    diverge from render for a chain operand;
+	 *  - an element that STARTS with a hardline, or carries a LEADING `//`
+	 *    comment, keeps the exploded shape — a cuddled `[` would open onto a
+	 *    line the element immediately abandons, or land inside the comment.
+	 *    Both are structural guards rather than pinned behaviour: every
+	 *    leading-comment / leading-break element found so far is already routed
+	 *    away from this shape upstream, so neither fires on a fixture today.
+	 *    The TRAILING `//` half below is the measured one;
+	 *  - an element that does NOT end at a close delimiter
+	 *    (`endsWithCloseDelim`) keeps the exploded shape. The probe answers for
+	 *    the element's FIRST line only; the cuddled `]` rides its LAST one, and
+	 *    that line is back at container indent exactly when the element's own
+	 *    trailing token is the closer of the construct that broke. An element
+	 *    trailing an operand instead — a comprehension whose filter `if`
+	 *    condition wraps and whose body is a bare field access — strands the
+	 *    `]` on a continuation line at body indent, the same defect
+	 *    `isHeadGluedBraceBodyComprehension` refuses for the block-hug shape
+	 *    (`ω-comprehension-closer`);
+	 *  - a TRAILING `//` comment on the element is refused: the cuddled `]`
+	 *    would follow it on the comment line and be swallowed (measured —
+	 *    dropping this conjunct produces `}) // keep me` then a lone `];`).
+	 *    Block comments are fine on both ends and are not excluded.
+	 *
+	 * The trailing separator is deliberately dropped from the glued shape (as
+	 * in `shapeSingleArgGlue`): `trailingComma*` describes a list broken one
+	 * element per line, and a cuddled sole element is not that list.
+	 */
+	private static function shapeSoleItemCuddledBrackets(
+		enabled: Bool, mode: WrapMode, open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, lineWidth: Int,
+		openShape: Doc
+	): Null<Doc> {
+		if (!enabled || open != '[' || close != ']' || items.length != 1 || isFlatMode(mode)) return null;
+		final item: Doc = items[0];
+		if (isArrowBodyMarker(item) || isMethodChainItem(item) || startsWithHardline(item)) return null;
+		if (isLineCommentText(firstVisibleText(item)) || isLineCommentText(lastVisibleText(item))) return null;
+		if (!endsWithCloseDelim(item)) return null;
+		final glueShape: Doc = Concat([Text(open), openInside, item, closeInside, Text(close)]);
+		return IfNaturalFirstLineFitsOpenDelim(lineWidth, openShape, glueShape);
+	}
+
+	/**
+	 * True iff `s` is a `//` LINE comment atom — the one comment form whose
+	 * presence at an element's edge makes a cuddled delimiter unreadable
+	 * (everything after `//` on that line is comment). `isCommentTextAtom`
+	 * accepts block comments too and answers a different question ("which
+	 * source token does this line structurally end on"); a `/* … *\/` can share
+	 * a line with a delimiter, so it is not excluded here.
+	 */
+	private static function isLineCommentText(s: Null<String>): Bool {
+		return s != null && s.trim().startsWith('//');
 	}
 
 	/**
