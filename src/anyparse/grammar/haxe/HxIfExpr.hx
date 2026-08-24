@@ -22,8 +22,21 @@ package anyparse.grammar.haxe;
  * failed. The `;` is consumed, not stored — the AST is identical to
  * the no-semicolon form. Same `@:trailOpt(';')` meta as
  * `HxStatement.VarStmt`/`FinalStmt` (there paired with
- * `trailOptShapeGate`); here the generic writer-emit default applies
- * since no corpus fixture pins a byte-exact `if-expr; else` layout.
+ * `trailOptShapeGate`); here the source-presence synth slot decides
+ * re-emission, so `preserve` keeps a byte-exact `if-expr; else`
+ * layout for the corpus fixtures that pin one.
+ *
+ * `@:fmt(semicolonBeforeSibling('elseBranch'))` on `thenBranch`
+ * (omega-semi-before-else) — under `whitespace.semicolonBeforeElse`
+ * that slot answers from the policy instead of source presence, but
+ * ONLY when `elseBranch` is non-null. The `;` before an `else` is
+ * inert: Haxe accepts the chain with or without it, and even a
+ * `var`-valued branch (`if (c) var x = 1 else var y = 2`) compiles
+ * both ways — so `never` may drop it. With NO `else` the same slot
+ * can be holding the ENCLOSING statement's terminator (the value-`if`
+ * ate it on the way in and the grammar has nowhere else to park it),
+ * and dropping it there would emit code that does not compile; every
+ * policy value therefore falls back to source presence in that shape.
  *
  * Dangling-else follows the same rule as `HxIfStmt`: the nearest
  * enclosing `if` greedily consumes the next `else`, so
@@ -176,7 +189,8 @@ typedef HxIfExpr = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap')) var cond: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
-		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite) var thenBranch: HxExpr;
+		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite,
+		semicolonBeforeSibling('elseBranch')) var thenBranch: HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
 		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite) var elseBranch: Null<HxExpr>;
 };

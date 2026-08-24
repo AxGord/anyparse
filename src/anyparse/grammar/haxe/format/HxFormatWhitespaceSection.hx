@@ -214,6 +214,17 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var optionalSemicolon: HxFormatOptionalSemicolonPolicy;
 
+	/**
+	 * The optional `;` between a value-`if`'s then-branch and its `else`
+	 * (`final x = if (c) a; else b;`) -- a separate key from
+	 * `optionalSemicolon`, sharing only its three-way policy type. Default
+	 * `"preserve"` re-emits what the source had; `"never"` drops it wherever
+	 * an `else` follows; `"always"` writes it there. With no `else` the `;`
+	 * can belong to the enclosing statement, so every value keeps source
+	 * presence in that shape. Feeds `opt.semicolonBeforeElse`.
+	 */
+	@:optional var semicolonBeforeElse: HxFormatOptionalSemicolonPolicy;
+
 	@:optional var parenConfig: HxFormatParenConfigSection;
 
 	@:optional var bracesConfig: HxFormatBracesConfigSection;

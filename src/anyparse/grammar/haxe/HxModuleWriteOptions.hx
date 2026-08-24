@@ -897,6 +897,20 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionIfFit: Bool,
 
 	/**
+	 * omega-value-if-fit branch cap: the largest number of VALUE BRANCHES an `expressionIfFit` chain
+	 * may hold and still be allowed to collapse onto one line. `if (c) a else b` is 2, `if (c) a else
+	 * if (d) b else e` is 3. `0` (default) means no cap -- every fitting chain collapses, the
+	 * pre-cap behaviour.
+	 *
+	 * Width alone is the wrong gate for this: a three-branch chain of short atoms fits 140 columns
+	 * easily and still reads as two decisions crammed into one line, while the same width buys a
+	 * two-branch chain nothing but a saved line. The count is what the reader parses, so the count is
+	 * what the knob measures. Refusing a chain leaves it on the exact `expressionIf` policy layout,
+	 * the same answer the knob-off path gives. Fed by `sameLine.expressionIfFitMaxBranches`.
+	 */
+	expressionIfFitMaxBranches: Int,
+
+	/**
 	 * omega-elseif-comment-reflow: when `true`, an `else if` whose nested `if`
 	 * carries EXACTLY one interposed `//` line comment glues as usual and
 	 * re-emits that comment at the end of the nested `if`'s head line - after
@@ -1109,6 +1123,19 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// plain writer keeps its `trailOptShapeGate` AST-shape gate. Fed by
 	// `whitespace.optionalSemicolon`.
 	optionalSemicolon: OptionalSemicolon,
+	// omega-semi-before-else: the SEPARATE three-way policy for the optional
+	// `;` Haxe accepts between a value-`if`'s then-branch and its `else`
+	// (`final x = if (c) a; else b;`). A distinct key from `optionalSemicolon`
+	// because the two answer different questions about the same character: a
+	// statement's terminator is a legitimate style choice, while a `;` before
+	// `else` is an editing leftover -- a config that wants `Always` for the
+	// first wants `Never` for the second, which one shared key cannot express.
+	// `Preserve` (default) re-emits source presence (byte-inert, fork parity);
+	// `Never` drops it; `Always` emits it. Only ever consulted when the node
+	// HAS an `else`: with none, that `;` can be the ENCLOSING statement's own
+	// terminator, so source presence always wins there. Fed by
+	// `whitespace.semicolonBeforeElse`.
+	semicolonBeforeElse: OptionalSemicolon,
 	accessBracketsOpen: WhitespacePolicy,
 	accessBracketsClose: WhitespacePolicy,
 	arrayLiteralBracketsOpen: WhitespacePolicy,
