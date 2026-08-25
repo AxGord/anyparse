@@ -41,8 +41,13 @@ final class Patch {
 	 * re-bases the replacement onto the matched line's indentation, so a fragment
 	 * landing in a comment interior or a multi-line string — the two regions the
 	 * writer re-emits byte for byte, where no gate would see a wrong indent — keeps
-	 * the shape it was written with. Returns `Ok(rewritten)` or an `Err` naming the
-	 * offending pair.
+	 * the shape it was written with.
+	 *
+	 * The call is ALL-OR-NOTHING: one pair that cannot be placed discards the whole
+	 * payload, so an `Err` names the offending pair AND says nothing was applied.
+	 * Locating against the ORIGINAL is what makes the payload order-independent, and
+	 * it is also why a pair written against an earlier pair's OUTPUT can never match
+	 * — that case gets a refusal of its own rather than "copy it verbatim".
 	 */
 	public static function patchNodeMany(
 		source: String, target: ReplaceTarget, pairs: Array<{ oldText: String, newText: String }>, reformat: Bool, plugin: GrammarPlugin,
@@ -67,34 +72,57 @@ final class Patch {
 		);
 		final slice: String = source.substring(groupSpan.from, groupSpan.to);
 		final edits: Array<{ span: Span, text: String }> = [];
+		// The same edits in SLICE coordinates — what `sequencingRefusal` replays to see
+		// the text the pairs placed so far produce.
+		final placed: Array<{ span: Span, text: String }> = [];
 		// The subset whose indentation THIS op made up rather than copied — the only
 		// edits `verbatimSpliceIntact` has anything to say about.
 		final synthesised: Array<{ span: Span, text: String }> = [];
+		final multi: Bool = pairs.length > 1;
 		for (i in 0...pairs.length) {
-			final label: String = pairs.length > 1 ? 'pair ${i + 1}: ' : '';
+			final label: String = multi ? 'pair ${i + 1}: ' : '';
 			final oldText: String = pairs[i].oldText;
-			if (oldText.length == 0) return Err('${label}the old fragment is empty — copy it verbatim from `apq source --select`');
-			if (oldText == pairs[i].newText) return Err('${label}the old and new fragments are identical — nothing to change');
+			if (oldText.length == 0)
+				return Err(discarded('${label}the old fragment is empty — copy it verbatim from `apq source --select`', multi));
+			if (oldText == pairs[i].newText)
+				return Err(discarded('${label}the old and new fragments are identical — nothing to change', multi));
 			final located: { ranges: Array<Located>, error: Null<String> } = locate(slice, oldText, node.kind, label, all);
 			final failure: Null<String> = located.error;
-			if (failure != null) return Err(failure);
+			if (failure != null) return Err(discarded(sequencingRefusal(label, failure, slice, placed, oldText, node.kind, all), multi));
 			for (r in located.ranges) {
 				final edit: { span: Span, text: String } = {
 					span: new Span(groupSpan.from + r.from, groupSpan.from + r.to),
 					text: r.dedented ? rebased(pairs[i].newText, r.indent) : pairs[i].newText
 				};
 				edits.push(edit);
+				placed.push({ span: new Span(r.from, r.to), text: edit.text });
 				if (r.dedented) synthesised.push(edit);
 			}
 		}
 		final sorted: Array<{ span: Span, text: String }> = edits.copy();
 		sorted.sort((a, b) -> a.span.from - b.span.from);
 		for (i in 1...sorted.length) if (sorted[i].span.from < sorted[i - 1].span.to)
-			return Err('the matched fragments overlap — merge the overlapping pairs into one');
+			return Err(discarded('the matched fragments overlap — merge the overlapping pairs into one', multi));
 		return switch RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson) {
 			case Ok(text): verbatimSpliceIntact(source, synthesised, text);
 			case failed: failed;
 		}
+	}
+
+	/**
+	 * A multi-pair call is ALL-OR-NOTHING: the first pair that cannot be placed
+	 * discards the whole payload, the pairs that already located included. The bare
+	 * per-pair refusal names one pair and says nothing about the rest, which reads
+	 * as "the others landed" — and a caller who believes that goes on to build on an
+	 * edit the file never received. Say what actually happened instead.
+	 */
+	private static inline function discarded(message: String, multi: Bool): String {
+		return multi ? '$message. Nothing was applied — a multi-pair call is all-or-nothing' : message;
+	}
+
+	/** How many times `oldText` locates in `slice`, with the exactly-once discipline lifted. */
+	private static inline function occurrences(slice: String, oldText: String, kind: String): Int {
+		return locate(slice, oldText, kind, '', true).ranges.length;
 	}
 
 	/** The repeated-fragment refusal, shared by the byte-exact and dedented arms. */
@@ -110,6 +138,52 @@ final class Patch {
 	/** The leading horizontal whitespace of `line` — the indentation a dedented fragment dropped. */
 	private static inline function leadingSpace(line: String): String {
 		return line.substring(0, line.length - line.ltrim().length);
+	}
+
+	/**
+	 * The refusal for a pair the caller SEQUENCED — wrote against the text an earlier
+	 * pair produces rather than against the original node. Every pair is located
+	 * against the ORIGINAL slice, deliberately: that is what keeps a payload
+	 * order-independent and gives the overlap check something to mean. So such a pair
+	 * can never match, no matter how faithfully it was copied — and the standing
+	 * remedy ("copy it verbatim from `apq source --select`") sends the caller to
+	 * re-copy bytes that are already right, which is why the same pairs applied one
+	 * per call while the batch refused.
+	 *
+	 * `failure` back unchanged when the fragment does not locate against the placed
+	 * pairs' output either — then the ordinary refusal is the accurate one — and when
+	 * it does but the fragment is merely AMBIGUOUS in the original: there the repeated
+	 * arm's own remedy (widen THIS pair, or pass --all) still resolves the call in one
+	 * go, so it is kept and only the missing fact is added. Replacing it cost the caller
+	 * the one instruction that works.
+	 *
+	 * The spans in `placed` are slice-relative and may overlap each other — the overlap
+	 * check runs only once every pair has been located — so the replayed text is not
+	 * necessarily an intermediate the op would ever produce. It decides wording only.
+	 */
+	private static function sequencingRefusal(
+		label: String, failure: String, slice: String, placed: Array<{ span: Span, text: String }>, oldText: String, kind: String,
+		all: Bool
+	): String {
+		return placed.length == 0 || locate(RefactorSupport.applyEdits(slice, placed), oldText, kind, '', all).error != null
+			? failure
+			: sequencedMessage(label, failure, slice, oldText, kind);
+	}
+
+	/**
+	 * The refusal for a fragment that DOES match the text the placed pairs produce,
+	 * split by what the ORIGINAL holds: nothing, which is the sequencing mistake and
+	 * needs the locating rule spelled out; or several, which is plain ambiguity the
+	 * repeated arm already knows how to resolve.
+	 */
+	private static function sequencedMessage(label: String, failure: String, slice: String, oldText: String, kind: String): String {
+		return occurrences(slice, oldText, kind) > 0
+			? '$failure. An earlier pair does leave exactly one of them standing — but every pair is located against the ORIGINAL '
+				+ 'node, so that is not an occurrence this call can address'
+			: '${label}the old fragment matches the text the EARLIER PAIRS produce and does not occur in the original $kind node at '
+				+ 'all. Every pair is located against the ORIGINAL node — that is what keeps a payload order-independent — so a pair '
+				+ 'written against an earlier pair\'s output can never match. Give that pair its own `apq patch` call, or widen the '
+				+ 'earlier pair to cover both changes';
 	}
 
 	/**

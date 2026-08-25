@@ -1387,7 +1387,8 @@ final class Cli {
 		};
 
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos('rename', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final op: String = 'rename';
+		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 
 		if (scope != null) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scope, write, plugin);
@@ -1408,9 +1409,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq rename: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq rename: $message\n');
@@ -1472,6 +1472,7 @@ final class Cli {
 				} else {
 					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
 					sysPrint('total: ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
+					stderr('apq rename: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
 				if (advisory != null) stderr('apq rename: $advisory\n');
 				return EXIT_OK;
@@ -1560,8 +1561,13 @@ final class Cli {
 				if (write) {
 					writeFile(change.file, change.newSource);
 					stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)\n');
-				} else
+				} else {
+					// The one preview tail that spells the notice itself: this op's name already
+					// occurs twice as a bare literal, and a third would read as an extractable
+					// constant rather than as the CLI vocabulary it is.
 					sysPrint(change.newSource);
+					stderr('apq rename: ${change.file} NOT written — this is a preview on stdout; re-run with --write to apply\n');
+				}
 				stderr('apq rename: in-file rename - references in OTHER files keep the old name; pass --scope <dir> to cover them\n');
 				if (advisory != null) stderr('apq rename: $advisory\n');
 				return EXIT_OK;
@@ -2399,7 +2405,8 @@ final class Cli {
 		};
 
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos('inline', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final op: String = 'inline';
+		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: InlineResult = Inline.inlineVar(source, pos.line, pos.col, plugin, shape);
@@ -2408,9 +2415,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq inline: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq inline: $message\n');
@@ -2490,7 +2496,8 @@ final class Cli {
 		};
 
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos('inline-method', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final op: String = 'inline-method';
+		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: EditResult = InlineMethod.inlineMethod(source, pos.line, pos.col, plugin, shape);
@@ -2499,9 +2506,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq inline-method: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq inline-method: $message\n');
@@ -2525,6 +2531,7 @@ final class Cli {
 	 */
 	private static function runExtractVar(args: Array<String>): Int {
 		// noqa: complexity
+		final op: String = 'extract-var';
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var file: Null<String> = null;
@@ -2600,7 +2607,7 @@ final class Cli {
 					return EXIT_RUNTIME;
 			}
 		} else {
-			pos = resolveAddressPos('extract-var', source, plugin, posSpec, null, null, null);
+			pos = resolveAddressPos(op, source, plugin, posSpec, null, null, null);
 		}
 		if (pos == null) return EXIT_RUNTIME;
 		final loc: Position = pos;
@@ -2610,9 +2617,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq extract-var: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq extract-var: $message\n');
@@ -2657,7 +2663,7 @@ final class Cli {
 		final result: EditResult = ExtractMethod.extractMethod(
 			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, o.reformat, plugin, shape, optsJson
 		);
-		return emitEditResult('extract-method', filePath, result, o.write);
+		return finishEdit('extract-method', filePath, o.write, result);
 	}
 
 	/**
@@ -2733,7 +2739,8 @@ final class Cli {
 		};
 
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos('add-param', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final op: String = 'add-param';
+		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final result: AddParamResult = AddParam.addParam(source, pos.line, pos.col, paramStr, plugin);
 		switch result {
@@ -2741,9 +2748,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq add-param: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq add-param: $message\n');
@@ -2791,7 +2797,7 @@ final class Cli {
 		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		final result: EditResult = AddMember.addMember(source, typeStr, memberStr, o.reformat, plugin, optsJson);
-		return emitEditResult('add-member', filePath, result, o.write);
+		return finishEdit('add-member', filePath, o.write, result);
 	}
 
 	/**
@@ -2867,9 +2873,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq add-import: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit('add-import', filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq add-import: $message\n');
@@ -2946,19 +2951,38 @@ final class Cli {
 		final result: EditResult = appendSpec != null
 			? AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
 			: AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
-		return emitEditResult('add-element', filePath, result, o.write);
+		return finishEdit('add-element', filePath, o.write, result);
 	}
 
-	/** Shared Ok/Err + write/print tail for the single-result remove ops. */
-	private static function finishEdit(opName: String, filePath: String, write: Bool, result: EditResult): Int {
+	/**
+	 * The print-only tail every writer-emit op shares: the rewritten source goes to
+	 * STDOUT, and — the half that was missing — a line on stderr saying the file was
+	 * NOT touched.
+	 *
+	 * Without it the two outcomes a caller most needs to tell apart, "the edit
+	 * landed" and "the edit was a preview", were distinguished only by output nobody
+	 * is obliged to read: `--write` reports on stderr, a preview reported nothing
+	 * there at all. A caller that keeps stderr and drops stdout — the documented way
+	 * to run these ops without drowning in source — saw the same silence either way,
+	 * and silence reads as success.
+	 */
+	private static function previewEdit(opName: String, filePath: String, text: String, detail: String = ''): Void {
+		sysPrint(text);
+		stderr('apq $opName: $filePath NOT written — this is a preview on stdout$detail; re-run with --write to apply\n');
+	}
+
+	/** Shared Ok/Err + write/preview tail for the single-result writer-emit ops. */
+	private static function finishEdit(opName: String, filePath: String, write: Bool, result: EditResult, ?detail: String): Int {
 		switch result {
 			case Ok(text):
+				// `detail` reaches the PREVIEW too: a preview leaves no file to inspect, so it is
+				// the mode where "did all of them land?" has no other answer.
+				final tail: String = detail == null ? '' : ' ($detail)';
 				if (write) {
 					writeFile(filePath, text);
-					stderr('apq $opName: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+					stderr('apq $opName: wrote $filePath$tail\n');
+				} else
+					previewEdit(opName, filePath, text, tail);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq $opName: $message\n');
@@ -3355,7 +3379,12 @@ final class Cli {
 		if (target == null) return EXIT_RUNTIME;
 
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit('patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson, o.all));
+		// A multi-pair call is all-or-nothing, so a success line that names the count is
+		// the one thing that settles "did all of them land?" without re-reading the file.
+		return finishEdit(
+			'patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson, o.all),
+			pairs.length > 1 ? '${pairs.length} fragment pairs applied' : null
+		);
 	}
 
 	/**
@@ -3457,7 +3486,8 @@ final class Cli {
 		};
 
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos('change-sig', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final op: String = 'change-sig';
+		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: ChangeSigResult = ChangeSig.changeSig(source, pos.line, pos.col, permStr, plugin, shape);
@@ -3466,9 +3496,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq change-sig: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				if (advisory != null) stderr('apq change-sig: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
@@ -3564,7 +3593,8 @@ final class Cli {
 		};
 
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos('remove-param', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final op: String = 'remove-param';
+		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: RemoveParamResult = RemoveParam.removeParam(source, pos.line, pos.col, paramIndex, plugin, shape);
@@ -3573,9 +3603,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq remove-param: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				if (advisory != null) stderr('apq remove-param: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
@@ -7639,7 +7668,7 @@ final class Cli {
 		if (loc == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		final result: EditResult = SetDoc.setDoc(source, loc.line, loc.col, docStr, o.reformat, plugin, optsJson);
-		return emitEditResult('set-doc', filePath, result, o.write);
+		return finishEdit('set-doc', filePath, o.write, result);
 	}
 
 	private static function printSetDocUsage(): Void {
@@ -7725,7 +7754,8 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final loc: Null<Position> = resolveAddressPos('set-modifier', source, plugin, pos, selectExpr, matchExpr, nth);
+		final op: String = 'set-modifier';
+		final loc: Null<Position> = resolveAddressPos(op, source, plugin, pos, selectExpr, matchExpr, nth);
 		if (loc == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		switch SetModifier.setModifier(source, loc.line, loc.col, changes, reformat, plugin, optsJson) {
@@ -7734,7 +7764,7 @@ final class Cli {
 					writeFile(filePath, text);
 					stderr('apq set-modifier: wrote $filePath\n');
 				} else
-					sysPrint(text);
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq set-modifier: $message\n');
@@ -7811,7 +7841,7 @@ final class Cli {
 					writeFile(filePath, text);
 					stderr('apq new: wrote $filePath\n');
 				} else
-					sysPrint(text);
+					previewEdit('new', filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq new: $message\n');
@@ -7889,8 +7919,8 @@ final class Cli {
 		};
 		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return emitEditResult(
-			'set-comment', filePath, SetComment.setComment(source, loc.line, loc.col, commentStr, o.reformat, plugin, optsJson), o.write
+		return finishEdit(
+			'set-comment', filePath, o.write, SetComment.setComment(source, loc.line, loc.col, commentStr, o.reformat, plugin, optsJson)
 		);
 	}
 
@@ -7971,7 +8001,7 @@ final class Cli {
 					writeFile(filePath, text);
 					stderr('apq rewrite: wrote $filePath\n');
 				} else
-					sysPrint(text);
+					previewEdit('rewrite', filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq rewrite: $message\n');
@@ -10874,22 +10904,6 @@ final class Cli {
 		return allEntries;
 	}
 
-	private static function emitEditResult(opName: String, filePath: String, result: EditResult, write: Bool): Int {
-		switch result {
-			case Ok(text):
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq $opName: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq $opName: $message\n');
-				return EXIT_RUNTIME;
-		}
-	}
-
 	private static function parseExtractMethodArgs(args: Array<String>): ExtractMethodOpts {
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -11271,6 +11285,7 @@ final class Cli {
 						sysPrint('${c.file}: $tag\n');
 					}
 					sysPrint('total: ${changes.length} file(s)\n');
+					stderr('apq $cmd: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
 				if (advisory != null) stderr('apq $cmd: $advisory\n');
 				return EXIT_OK;
@@ -11970,7 +11985,7 @@ final class Cli {
 							changed++;
 						}
 					} else
-						sysPrint(text);
+						previewEdit('comment-rewrite', path, text);
 				case Err(message):
 					stderr('apq comment-rewrite: $path: $message\n');
 					failed++;
@@ -12700,6 +12715,7 @@ final class Cli {
 				} else {
 					for (c in changes) sysPrint('${c.file}: ${c.file == ifaceFile ? 'created' : 'updated'}\n');
 					sysPrint('total: ${changes.length} file(s)\n');
+					stderr('apq extract-interface: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
 				if (advisory != null) stderr('apq extract-interface: $advisory\n');
 				return EXIT_OK;
@@ -12877,6 +12893,7 @@ final class Cli {
 				} else {
 					for (c in changes) sysPrint('${c.file}: ${c.file == superFile ? 'created' : 'updated'}\n');
 					sysPrint('total: ${changes.length} file(s)\n');
+					stderr('apq extract-superclass: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
 				if (advisory != null) stderr('apq extract-superclass: $advisory\n');
 				return EXIT_OK;
@@ -12952,7 +12969,8 @@ final class Cli {
 		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
 
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles('safe-delete', scopeDir, [srcFileNN]);
+		final op: String = 'safe-delete';
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles(op, scopeDir, [srcFileNN]);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: EditResult = SafeDelete.safeDelete(
@@ -12963,9 +12981,8 @@ final class Cli {
 				if (write) {
 					writeFile(srcFileNN, text);
 					stderr('apq safe-delete: removed "$memberNameNN" from $srcFileNN\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, srcFileNN, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq safe-delete: $message\n');
@@ -13046,9 +13063,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq encapsulate-field: encapsulated "$fieldNameNN" in $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit('encapsulate-field', filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq encapsulate-field: $message\n');
@@ -13068,6 +13084,7 @@ final class Cli {
 	}
 
 	private static function runMakeFinal(args: Array<String>): Int {
+		final op: String = 'make-final';
 		var lang: String = 'haxe';
 		var typeName: Null<String> = null;
 		var scopeDir: Null<String> = null;
@@ -13124,7 +13141,7 @@ final class Cli {
 					return EXIT_RUNTIME;
 				}
 			}
-		] : collectScopeFiles('make-final', scopeDir, [filePath]);
+		] : collectScopeFiles(op, scopeDir, [filePath]);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: EditResult = MakeFinal.makeFinal(filePath, typeNameNN, fieldNameNN, scopeFiles, plugin);
@@ -13133,9 +13150,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq make-final: made "$fieldNameNN" final in $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq make-final: $message\n');
@@ -13158,6 +13174,7 @@ final class Cli {
 	}
 
 	private static function runIntroduceParameterObject(args: Array<String>): Int {
+		final op: String = 'introduce-parameter-object';
 		var lang: String = 'haxe';
 		var params: Null<String> = null;
 		var typeName: Null<String> = null;
@@ -13221,9 +13238,7 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos(
-			'introduce-parameter-object', source, plugin, posSpec, selectExpr, matchExpr, nth, true
-		);
+		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final paramNames: Array<String> = paramsNN.split(',').map(StringTools.trim).filter(n -> n != '');
 
@@ -13235,9 +13250,8 @@ final class Cli {
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq introduce-parameter-object: folded ${paramNames.length} parameter(s) into "$typeNameNN" in $filePath\n');
-				} else {
-					sysPrint(text);
-				}
+				} else
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq introduce-parameter-object: $message\n');
@@ -13842,7 +13856,7 @@ final class Cli {
 					writeFile(filePath, text);
 					stderr('apq extract-constant: wrote $filePath\n');
 				} else
-					sysPrint(text);
+					previewEdit('extract-constant', filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq extract-constant: $message\n');
@@ -13919,6 +13933,7 @@ final class Cli {
 					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
 					sysPrint('total: ${changes.length} file(s), $total occurrence(s)\n');
 					sysPrint('module: $verb $intoPath\n');
+					stderr('apq extract-constant: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
 				return EXIT_OK;
 			case Err(message):
