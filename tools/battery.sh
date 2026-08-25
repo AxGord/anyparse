@@ -492,7 +492,19 @@ branch_fmt() {
     branch_init fmt
     step_begin "fmt"
     local fmt_rc=0
-    bin/hxq fmt --list src test tools > "$work/fmt.log" 2>&1 || fmt_rc=$?
+    # `.log` and `.err` kept APART, like `replay_branch` and the suite step: the
+    # gate's question is "did any file drift", and that answer is on stdout
+    # alone. Merging the two with `2>&1` made this gate fail on a line that
+    # names no file at all -- hxq writes a config advisory to stderr on every
+    # invocation that loads this repo's own hxformat.json (12 keys it does not
+    # implement), so `-s` on the merged log read "some file drifted" from it and
+    # the battery's single verdict was red on every run in that environment.
+    # stderr is still PRINTED whenever it is non-empty -- dropping it on success
+    # would hide a real future warning -- it just does not decide the verdict.
+    bin/hxq fmt --list src test tools > "$work/fmt.log" 2> "$work/fmt.err" || fmt_rc=$?
+    if [ -s "$work/fmt.err" ]; then
+        cat "$work/fmt.err" >&2
+    fi
     if [ "$fmt_rc" -ne 0 ] || [ -s "$work/fmt.log" ]; then
         cat "$work/fmt.log" >&2
         fail "fmt --list is not empty (or exited $fmt_rc)"
