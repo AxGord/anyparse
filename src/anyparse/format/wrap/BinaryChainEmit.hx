@@ -181,10 +181,27 @@ final class BinaryChainEmit {
 		// keep `cond ? A : {` on the head line and let the collection self-
 		// break — WHEN that head fits (`IfFirstLineExceeds` picks the flat
 		// `shapeNoWrap` hug), else fall through to the leading-break-all shape.
+		// ω-render-pivot-collection-arg, ternary leg: a collection branch whose
+		// break is decided at RENDER time leaves `anyHardline` false, so the chain
+		// takes the cascade route and breaks `?` / `:` — then writes a newline the
+		// next pass force-commits, `anyHardline` turns true, and the hug above
+		// fires instead. Route to the same hug one pass earlier, behind the ONE
+		// condition that makes resolving the branch's pivot legal: the ternary
+		// does not fit the line it is on, so that pivot is certain to fire. The
+		// `IfLineExceeds` flat arm is the untouched cascade route, so a ternary
+		// that still fits is byte-identical.
+		final pivotHugIdx: Int = !anyHardline && !forceKeep && extraThresholds.length == 0
+			? ternaryHugCollectionBranchIndex(items, ops)
+			: -1;
 		return if (forceKeep)
 			WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: forceKeepLocation ?? evalAt(true, []).location }))
 		else if (anyHardline)
 			WrapBoundary(hardlineChainShape(items, ops, opt, extraThresholds, evalAt, shapeAt, shapeNoWrapAt))
+		else if (pivotHugIdx >= 0)
+			WrapBoundary(IfLineExceeds(
+				opt.lineWidth + 1, ternaryHugShape(pivotHugIdx, items, ops, opt, evalAt, shapeAt),
+				emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
+			))
 		else if (extraThresholds.length == 0)
 			emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
 		else if (extraThresholds.length == 1)
@@ -504,8 +521,8 @@ final class BinaryChainEmit {
 		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc
 	): Doc {
 		if (extraThresholds.length == 0) {
-			if (ternaryHugCollectionBranchIndex(items, ops) >= 0)
-				return IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops));
+			final hugIdx: Int = ternaryHugCollectionBranchIndex(items, ops);
+			if (hugIdx >= 0) return ternaryHugShape(hugIdx, items, ops, opt, evalAt, shapeAt);
 			if (isAddSubOps(ops) && hasBareParenTail(items))
 				return IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrapAt(evalAt(false, []).location));
 		}
@@ -1061,11 +1078,44 @@ final class BinaryChainEmit {
 			if (idx != -1) return -1;
 			idx = i;
 		}
+		// ω-render-pivot-collection-arg: no branch has committed to a break yet, so
+		// look for one whose break the RENDERER decides — it reads flat to
+		// `flatLength` on the pass that writes the newline and multi-line on the
+		// pass that reads it back, and the hug would fire on the second pass only.
+		// A SECOND scan, not a widening of the first: a pivot may only NOMINATE a
+		// branch, never disqualify one, since nearly every nested CALL carries a
+		// pivot and the first scan's second-branch bail would then reject almost
+		// every ternary (measured: it cost `a ? { … } : f(x)` its hug).
+		if (idx == -1) for (i in 1...3) if (WrapList.renderPivotBreakArm(items[i]) != null) { // noqa: magic-number
+			if (idx != -1) return -1;
+			idx = i;
+		}
 		if (idx == -1) return -1;
 		final branch: Doc = items[idx];
 		if (!WrapList.startsWithCollectionDelim(branch)) return -1;
 		final last: Null<String> = WrapList.lastVisibleText(branch);
 		return last == '}' || last == ']' ? idx : -1;
+	}
+
+	/**
+	 * ω-render-pivot-collection-arg, ternary leg: the hug probe, with the
+	 * branch's own render-time break pivot resolved to its break arm.
+	 *
+	 * `IfFirstLineExceeds` measures the FLAT arm's first line, and that arm is
+	 * the hug — so the branch inside it must carry the break the hug exists to
+	 * accommodate. Left unresolved, the probe measures the whole ternary flat,
+	 * picks the leading-break shape, and the newline it writes is what the next
+	 * pass force-commits — after which this same hug fires and the two passes
+	 * disagree. A branch that already carries a hardline resolves to itself.
+	 */
+	private static function ternaryHugShape(
+		idx: Int, items: Array<Doc>, ops: Array<String>, opt: WriteOptions,
+		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
+		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc
+	): Doc {
+		final arm: Null<Doc> = WrapList.renderPivotBreakArm(items[idx]);
+		final hugItems: Array<Doc> = arm == null ? items : [for (i in 0...items.length) i == idx ? arm : items[i]];
+		return IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(hugItems, ops));
 	}
 
 }
