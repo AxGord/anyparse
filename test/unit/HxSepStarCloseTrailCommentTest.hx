@@ -93,15 +93,28 @@ class HxSepStarCloseTrailCommentTest extends Test {
 	}
 
 	/**
-	 * An object literal as the last CALL ARGUMENT. The list re-packs against
-	 * the open paren and only `)` moves to its own line — the same recovery
-	 * shape `HxGroupTrailCommentWriteTest` pins for a comment on the last
-	 * argument itself.
+	 * An object literal as the last CALL ARGUMENT.
+	 *
+	 * ω-item-close-trail: this used to expect `g(1, {a: 2} // last` with a lone
+	 * `);` under it — the multi-arg collection glue
+	 * (`WrapList.shapeMultiArgCollection`) overriding a cascade that had
+	 * already resolved to a breaking mode, after which the comment guard broke
+	 * the seam and left the closer by itself under a fully packed call. The
+	 * slot SURVIVED, which is this class's subject, so the shape rode along as
+	 * expected bytes rather than being chosen.
+	 *
+	 * The glue now declines a list whose last item ends in `//` and the mode's
+	 * own shape emits instead. Under these compiled defaults that mode is
+	 * `FillLine`, so the closer moves to the continuation indent rather than
+	 * all the way onto its own opened list — a smaller improvement than the one
+	 * `HxFillAfterCollectionTest` pins under a `fillLineWithLeadingBreak`
+	 * cascade, where the call opens and the closer returns to the statement
+	 * indent. Both are the cascade's own answer; neither is this glue's.
 	 */
 	public inline function testCallLastArgObjectLiteralKeepsCloseTrail(): Void {
 		assertRewrites(
 			'class C {\n\tstatic function f() {\n\t\tg(\n\t\t\t1,\n\t\t\t{a: 2} // last\n\t\t);\n\t}\n}',
-			'class C {\n\tstatic function f() {\n\t\tg(1, {a: 2} // last\n\t\t);\n\t}\n}\n', '// last'
+			'class C {\n\tstatic function f() {\n\t\tg(1,\n\t\t\t{a: 2} // last\n\t\t\t);\n\t}\n}\n', '// last'
 		);
 	}
 
