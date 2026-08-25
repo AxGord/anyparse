@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
 import anyparse.query.Patch;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 
@@ -239,6 +240,179 @@ class PatchSliceTest extends Test {
 		assertPatch(source, BySelector('ClassDecl:C'), ' * one\n * two', '\t * ONE\n\t * TWO', expected);
 	}
 
+	/**
+	 * A pair the caller SEQUENCED — wrote against the text the previous pair produces
+	 * — can never match, because every pair is located against the ORIGINAL node. The
+	 * standing remedy ("copy it verbatim from `apq source --select`") is wrong advice
+	 * there: the bytes ARE right, the reference text is not. This is the shape that
+	 * made a 9-pair call refuse while the same pairs applied one call at a time.
+	 */
+	public function testSequencedPairRefusalNamesTheOriginalTextRule(): Void {
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'return 1;', newText: 'return 2;' },
+			{ oldText: 'return 2;', newText: 'return 3;' }
+		];
+		final message: String = refusalMessage(source, pairs);
+		Assert.isTrue(message.indexOf('EARLIER PAIRS') != -1, 'the refusal must name the earlier pairs, got: $message');
+		Assert.isTrue(
+			message.indexOf('located against the ORIGINAL node') != -1, 'the refusal must state the locating rule, got: $message'
+		);
+		Assert.isTrue(message.indexOf('does not occur in the original') != -1, 'it must say what the original holds, got: $message');
+	}
+
+	/**
+	 * A pair that is merely AMBIGUOUS in the original — it occurs twice there and an
+	 * earlier pair happens to overwrite one of them — is NOT a sequencing mistake, and
+	 * the repeated arm already carries the remedy that resolves the whole call in one
+	 * go: widen THIS pair, or pass --all. Superseding that message with the sequencing
+	 * one took the working instruction away and offered two that do not apply, so the
+	 * remedy is kept and only the missing fact is appended.
+	 */
+	public function testAmbiguousPairKeepsTheWidenRemedy(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = 1;\n\t\tvar b = 1;\n\t}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'var a = 1;', newText: 'var a = 9;' },
+			{ oldText: '= 1;', newText: '= 8;' }
+		];
+		final message: String = refusalMessage(source, pairs);
+		Assert.isTrue(message.indexOf('occurs 2 times') != -1, 'it must count the original occurrences, got: $message');
+		Assert.isTrue(message.indexOf('--all') != -1, 'the widen/--all remedy must survive, got: $message');
+		Assert.isTrue(message.indexOf('An earlier pair does leave exactly one') != -1, 'it must add the earlier-pair fact, got: $message');
+		Assert.isTrue(message.indexOf('EARLIER PAIRS') == -1, 'an ambiguous pair is not a sequencing mistake, got: $message');
+		// And the remedy it keeps is the one that works: widening pair 2 lands both in ONE call.
+		final widened: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'var a = 1;', newText: 'var a = 9;' },
+			{ oldText: 'var b = 1;', newText: 'var b = 8;' }
+		];
+		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), widened, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.equals('class C {\n\tfunction f():Void {\n\t\tvar a = 9;\n\t\tvar b = 8;\n\t}\n}\n', text);
+			case Err(message2):
+				Assert.fail('widening the ambiguous pair must resolve the call, got Err: $message2');
+		}
+	}
+
+	/**
+	 * Every multi-pair refusal says the whole payload was discarded. Naming one pair
+	 * and stopping reads as "the others landed", and a caller who believes that goes
+	 * on to build on an edit the file never received.
+	 */
+	public function testMultiPairRefusalSaysNothingWasApplied(): Void {
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'return 1;', newText: 'return 2;' },
+			{ oldText: 'missing();', newText: 'present();' }
+		];
+		final message: String = refusalMessage(source, pairs);
+		Assert.isTrue(message.indexOf('pair 2:') != -1, 'the refusal must name the offending pair, got: $message');
+		Assert.isTrue(message.indexOf('Nothing was applied') != -1, 'the refusal must say nothing landed, got: $message');
+		Assert.isTrue(message.indexOf('all-or-nothing') != -1, 'the refusal must state the transaction rule, got: $message');
+	}
+
+	/** A single-pair call has no other pairs to discard — its refusal stays as it was. */
+	public function testSinglePairRefusalStaysUnqualified(): Void {
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [{ oldText: 'missing();', newText: 'present();' }];
+		final message: String = refusalMessage(source, pairs);
+		Assert.isTrue(message.indexOf('all-or-nothing') == -1, 'a single-pair refusal must not talk about pairs, got: $message');
+		Assert.isTrue(message.indexOf('pair 1:') == -1, 'a single-pair refusal must not carry a pair label, got: $message');
+	}
+
+	/**
+	 * The CLI half of the contract, the half a caller composes with: a refused patch
+	 * exits NON-ZERO and leaves the file byte-identical. That is the signal that
+	 * survives a caller who reads neither stream — and the one the reported
+	 * "printed nothing and applied nothing" call actually had.
+	 */
+	public function testCliRefusalExitsNonZeroAndLeavesTheFileAlone(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final fixture: String = CliFixture.write('apq_patch_refuse', source);
+		final payload: String = CliFixture.writeAs(
+			'apq_patch_payload', 'txt', 'return 1;\n====\nreturn 2;\n====\nreturn 2;\n====\nreturn 3;\n'
+		);
+		Assert.equals(1, Cli.run(['patch', fixture, '--select', 'FnMember:f', '--from-file', payload, '--write']));
+		Assert.equals(source, sys.io.File.getContent(fixture), 'a refused multi-pair patch must leave the file byte-identical');
+		sys.FileSystem.deleteFile(fixture);
+		sys.FileSystem.deleteFile(payload);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Print-only mode is the one `patch` invocation that legitimately applies nothing
+	 * and exits 0 — so the file must come back untouched. What used to make it
+	 * indistinguishable from a silent no-op was the reporting, not this: `--write`
+	 * announces itself on stderr and a preview announced nothing there at all.
+	 */
+	public function testCliPreviewLeavesTheFileUntouched(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final fixture: String = CliFixture.write('apq_patch_preview', source);
+		final payload: String = CliFixture.writeAs('apq_patch_payload', 'txt', 'return 1;\n====\nreturn 2;\n');
+		Assert.equals(0, Cli.run(['patch', fixture, '--select', 'FnMember:f', '--from-file', payload]));
+		Assert.equals(source, sys.io.File.getContent(fixture), 'a preview must not write the file');
+		sys.FileSystem.deleteFile(fixture);
+		sys.FileSystem.deleteFile(payload);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The reporting half, and the only assertion in this project that reads a mutation
+	 * op's STDERR. That stream is the whole fix: `--write` announced itself there and a
+	 * preview announced nothing at all, so a caller keeping stderr and dropping stdout —
+	 * the documented way to run these ops quietly — saw the same silence either way.
+	 * `Cli.run` writes it to the real fd 2, which an in-process test cannot read, so the
+	 * CLI runs as a child process here.
+	 *
+	 * Skipped, saying so, when the engine has not been built: `haxe test-js.hxml` alone
+	 * is enough to run the suite, and a missing `bin/apq.js` is not a failing contract.
+	 */
+	public function testCliPreviewAndWriteBothAnnounceThemselvesOnStderr(): Void {
+		#if nodejs
+		final engine: String = 'bin/apq.js';
+		if (!sys.FileSystem.exists(engine)) {
+			Assert.pass('bin/apq.js is not built — the stderr contract needs the CLI as a process');
+			return;
+		}
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n}\n';
+		final payload: String = CliFixture.writeAs(
+			'apq_patch_stderr_payload', 'txt', 'trace(1);\n====\ntrace(2);\n====\nreturn 1;\n====\nreturn 3;\n'
+		);
+		final preview: String = patchStderr(CliFixture.write('apq_patch_stderr', source), payload, false, 0);
+		Assert.isTrue(preview.indexOf('NOT written') != -1, 'a preview must say so on stderr, got: $preview');
+		Assert.isTrue(preview.indexOf('2 fragment pairs applied') != -1, 'a multi-pair preview must name the count, got: $preview');
+		final applied: String = patchStderr(CliFixture.write('apq_patch_stderr', source), payload, true, 0);
+		Assert.isTrue(applied.indexOf('wrote') != -1, 'a write must say so on stderr, got: $applied');
+		Assert.isTrue(applied.indexOf('2 fragment pairs applied') != -1, 'a multi-pair write must name the count, got: $applied');
+		// A refusal is the third outcome, and the one that must never be mistaken for either.
+		final refusedPayload: String = CliFixture.writeAs(
+			'apq_patch_stderr_payload', 'txt', 'trace(1);\n====\ntrace(2);\n====\ntrace(2);\n====\ntrace(3);\n'
+		);
+		final refused: String = patchStderr(CliFixture.write('apq_patch_stderr', source), refusedPayload, true, 1);
+		Assert.isTrue(refused.indexOf('all-or-nothing') != -1, 'a refusal must say nothing landed, got: $refused');
+		sys.FileSystem.deleteFile(payload);
+		sys.FileSystem.deleteFile(refusedPayload);
+		#else
+		Assert.pass('non-nodejs target');
+		#end
+	}
+
+	/** The refusal text for `pairs`, or a failure when the call unexpectedly succeeded. */
+	private function refusalMessage(source: String, pairs: Array<{ oldText: String, newText: String }>): String {
+		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+				return '';
+			case Err(message):
+				return message;
+		}
+	}
+
 	private function assertManyRefused(source: String, pairs: Array<{ oldText: String, newText: String }>): Void {
 		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
 			case Ok(text):
@@ -265,5 +439,30 @@ class PatchSliceTest extends Test {
 				Assert.pass();
 		}
 	}
+
+	#if nodejs
+	/** Run `apq patch` as a child process on `fixture`, assert its exit code, return its stderr. */
+	private function patchStderr(fixture: String, payload: String, write: Bool, expectedExit: Int): String {
+		final args: Array<String> = [
+			'bin/apq.js',
+			'patch',
+			fixture,
+			'--lang',
+			'haxe',
+			'--select',
+			'FnMember:f',
+			'--from-file',
+			payload
+		];
+		if (write) args.push('--write');
+		final run: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
+			'node', args, cast { encoding: 'utf8' }
+		);
+		Assert.equals(expectedExit, run.status);
+		final err: Null<String> = run.stderr == null ? null : Std.string(run.stderr);
+		sys.FileSystem.deleteFile(fixture);
+		return err ?? '';
+	}
+	#end
 
 }
