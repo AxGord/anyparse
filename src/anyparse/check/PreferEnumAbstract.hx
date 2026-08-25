@@ -116,9 +116,11 @@ using StringTools;
  * - the container carries ANY metadata (a preceding `metaKinds` sibling) — `@:rtti` /
  *   `@:keep` / `@:build` attach behaviour to a CLASS declaration, and whether it survives
  *   the change of declaration kind is not knowable from the annotation's name;
- * - the type's NAME occurs as a plain string literal anywhere in scope — the
- *   `Type.resolveClass('Name')` shape, which compiles before and after and returns null
- *   after (`ConstantFieldScan.reflectedNames`, the same proof `static-constant` uses);
+ * - the type's PATH occurs as a string literal anywhere in scope — the
+ *   `Type.resolveClass('pkg.Name')` shape, which compiles before and after and returns null
+ *   after. A runtime lookup takes the FULLY-QUALIFIED path, so the refusal is a dot-path test on
+ *   `ReflectionScan`'s surface (`runtimeTypePath` / `runtimeTypePathFragment`) and not the bare-name
+ *   test the MEMBER gates take;
  * - the index reports a subtype or a transitive `@:rtti` hierarchy for the name.
  *
  * Two more refusals are about what the head TEMPLATE would silently drop, since neither
@@ -285,11 +287,20 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 
 	/**
 	 * The subset of `candidates` no whole-scope refusal rejects. The one such refusal is the
-	 * REFLECTION-NAME gate: a converted type stops existing as a runtime class, so a
-	 * `Type.resolveClass('Name')` anywhere in scope keeps compiling and starts returning null.
-	 * The proof is `static-constant`'s — every plain string literal in scope — narrowed to the
-	 * files whose raw text even MENTIONS a candidate name, since parsing 800 files to find out
-	 * that nine names appear in fifty of them is the same answer for a fraction of the walk.
+	 * REFLECTION-PATH gate: a converted type stops existing as a runtime class, so a
+	 * `Type.resolveClass('pkg.Name')` anywhere in scope keeps compiling and starts returning null.
+	 * The surface is `ReflectionScan`'s — every plain string literal in scope, plus the static
+	 * fragments of the interpolated ones — narrowed to the files whose raw text even MENTIONS a
+	 * candidate name, since parsing 800 files to find out that nine names appear in fifty of them is
+	 * the same answer for a fraction of the walk — the same answer for the whole-literal half, at
+	 * least: a fragment only has to be CONTAINED in a candidate name, so a file spelling the
+	 * fragment and not the name is filtered out before the fragment test can refuse on it.
+	 *
+	 * The containment test is the TYPE one, not the member one a name gate would reach for: a runtime
+	 * lookup spells a type by its FULLY-QUALIFIED path, so the literal to refuse on is `'pkg.Name'`
+	 * and an equality test against `Name` answers correctly only for root-package types. That gap was
+	 * measured end to end — the oracle typechecks the conversion green and `resolveClass` answers null
+	 * at run time.
 	 */
 	private static function acceptedPlans(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, candidates: Array<ConversionPlan>
@@ -302,7 +313,12 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 		];
 		final surface: ReflectionSurface = ReflectionScan.reflectionSurface(mentioning, plugin);
 		return [
-			for (c in candidates) if (!surface.whole.contains(c.name) && !ReflectionScan.runtimeNameFragment(surface.fragments, c.name)) c
+			for (c in candidates)
+				if (
+					!ReflectionScan.runtimeTypePath(surface.whole, c.name)
+					&& !ReflectionScan.runtimeTypePathFragment(surface.fragments, c.name)
+				)
+					c
 		];
 	}
 

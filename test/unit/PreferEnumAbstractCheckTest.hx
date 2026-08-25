@@ -400,6 +400,48 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(7, alignFixEdits('class Use { static function f(p:String) { return Type.resolveClass(\'$${p}Other\'); } }', false));
 	}
 
+	public function testFixRefusesQualifiedReflectionNamedType(): Void {
+		// The runtime lookup takes a FULLY-QUALIFIED path, so the literal that reaches `Align` at
+		// run time is `pkg.Align` and never the bare name — a whole-literal gate comparing against
+		// the simple name reads this call as naming nothing and converts the type out from under it.
+		Assert.equals(0, alignFixEdits('class Use { static function f() { return Type.resolveClass(\'pkg.Align\'); } }', false));
+	}
+
+	public function testFixRefusesDeeplyQualifiedReflectionNamedType(): Void {
+		// Same shape at depth, and through the enum entry point — the surface is every plain
+		// literal in scope, so which reflection call spells it is not part of the question.
+		Assert.equals(0, alignFixEdits('class Use { static function f() { return Type.resolveEnum(\'a.b.c.Align\'); } }', false));
+	}
+
+	public function testFixConvertsWhenTheQualifiedPathNamesSomethingElse(): Void {
+		// The discriminating half: a qualified path whose last segment is a different type.
+		Assert.equals(7, alignFixEdits('class Use { static function f() { return Type.resolveClass(\'pkg.Other\'); } }', false));
+	}
+
+	public function testFixConvertsWhenTheNameIsOnlyASubstringOfTheQualifiedPath(): Void {
+		// The suffix test is a DOT-PATH test, not a substring one: `pkg.MisAlign` ends with the
+		// candidate's name but not with `.Align`, so it names a different type and the conversion
+		// goes through — otherwise every name that is a suffix of a sibling's would block.
+		Assert.equals(7, alignFixEdits('class Use { static function f() { return Type.resolveClass(\'pkg.MisAlign\'); } }', false));
+	}
+
+	public function testFixRefusesQualifiedInterpolatedReflectionNamedType(): Void {
+		// The computed half of the same blind spot: the static fragment of `'${p}.Align'` is
+		// `.Align`, which the simple name does not contain — so the fragment test has to read the
+		// fragment's last dot-segment, exactly as the whole-literal test reads the literal's.
+		Assert.equals(0, alignFixEdits('class Use { static function f(p:String) { return Type.resolveClass(\'$${p}.Align\'); } }', false));
+	}
+
+	public function testFixConvertsWhenTheQualifiedInterpolationNamesSomethingElse(): Void {
+		// The discriminating half, and it has to spell the candidate name to BE one: the surface is
+		// narrowed to files whose raw text mentions a candidate, so a fixture naming only `Other`
+		// never reaches the fragment test at all and would pass however the predicate answered.
+		// `MisAlign` clears that pre-filter, and its last segment is not contained in `Align`.
+		Assert.equals(
+			7, alignFixEdits('class Use { static function f(p:String) { return Type.resolveClass(\'$${p}.MisAlign\'); } }', false)
+		);
+	}
+
 	public function testFixWithoutRunYieldsNothing(): Void {
 		// Fail-closed: the whole-scope refusals live in `run`, so a `fix` that skipped it must
 		// not convert anything at all.

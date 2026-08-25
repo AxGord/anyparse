@@ -19,6 +19,13 @@ using Lambda;
  * only for PLAIN literals, so `Reflect.field(o, '${p}NAME')` was invisible to one pair and visible
  * to the other. The domain of that scan is what makes the difference sound or silent, so it is
  * asked once, here.
+ *
+ * ONE scan, TWO questions. A MEMBER is reached by its bare name (`Reflect.field(o, 'NAME')`), a
+ * TYPE only by its fully-qualified dot path (`Type.resolveClass('pkg.Align')`) — so the containment
+ * tests fork where the scan does not: `runtimeNameFragment` for the member question,
+ * `runtimeTypePath` / `runtimeTypePathFragment` for the type one. Asking the MEMBER test about a
+ * type is what let `prefer-enum-abstract` convert a type a qualified `resolveClass` reached: it
+ * compiles either way and answers null afterwards.
  */
 @:nullSafety(Strict)
 final class ReflectionScan {
@@ -26,14 +33,14 @@ final class ReflectionScan {
 	/**
 	 * The shortest static fragment of an interpolated string that carries reflection INTENT. Below it
 	 * a fragment is punctuation or a syllable — contained in half the names of any scope — and a gate
-	 * reading it would decline every rewrite the scope offers. Calibrated as an accessor prefix's
-	 * length, which is what the two checks that already had this test each reached for independently.
+	 * reading it would decline every rewrite the scope offers. Calibrated as an accessor prefix's length, which is what the two checks that already had this
+	 * test each reached for independently.
 	 */
 	private static inline final MIN_NAME_FRAGMENT_LENGTH: Int = 4;
 
 	/**
-	 * Every string across `files` a member name could be reached by at runtime — the reflection
-	 * surface no structural scan sees.
+	 * Every string across `files` a member name or a type PATH could be reached by at runtime — the
+	 * reflection surface no structural scan sees.
 	 *
 	 * The split into two lists is the whole point. `StringFoldSupport.literalOf` answers null for an
 	 * INTERPOLATED literal by contract, so a scan built on it alone reports `Reflect.field(o,
@@ -74,6 +81,46 @@ final class ReflectionScan {
 	}
 
 	/**
+	 * Whether some PLAIN literal in `whole` spells the TYPE `name` the way a runtime lookup has to.
+	 *
+	 * A type is not reached by its simple name. `Type.resolveClass` / `Type.resolveEnum` take the
+	 * FULLY-QUALIFIED dot path, so the literal that reaches `pkg.Align` at run time is `'pkg.Align'`,
+	 * and a bare `'Align'` reaches it only from the root package. An equality test against the simple
+	 * name is therefore the right answer for root-package types and for nothing else — which is why
+	 * the TYPE question takes its own containment test rather than borrowing the member one's.
+	 *
+	 * The test reads the literal's LAST dot-segment, so it is a path test and never a substring one:
+	 * `'pkg.MisAlign'` ends with `Align` yet names a different type, so only a `.` — or the literal's
+	 * own start — counts as the separator that makes the tail the type's own name. The bare equality
+	 * stays in front of it so the test is a superset of the one it replaced for ANY `name`, not only
+	 * for the dot-free ones a type declaration can spell.
+	 */
+	public static function runtimeTypePath(whole: Array<String>, name: String): Bool {
+		return whole.exists(literal -> literal == name || CheckScan.simpleModuleName(literal) == name);
+	}
+
+	/**
+	 * Whether some static FRAGMENT of an interpolated string could spell the TYPE `name` at runtime.
+	 *
+	 * A fragment is only PART of the path the run computes, so the containment runs the same way
+	 * round as in `runtimeNameFragment`. What differs is that the fragment can carry the path
+	 * SEPARATOR with it — the static text of `'${pkg}.Align'` is `.Align`, which no simple name ever contains — so the
+	 * fragment is read from its last `.` onward, and that segment then takes the same test and the
+	 * same `MIN_NAME_FRAGMENT_LENGTH` floor. The floor is load-bearing here and not merely an
+	 * over-refusal guard: a fragment of `'.'` alone segments to the empty string, which every name
+	 * contains.
+	 *
+	 * A type name holds no `.`, so a dotted fragment can never pass `runtimeNameFragment`: this
+	 * answers everything that one does for a type name, and the qualified spellings besides.
+	 */
+	public static function runtimeTypePathFragment(fragments: Array<String>, name: String): Bool {
+		return fragments.exists(fragment -> {
+			final segment: String = CheckScan.simpleModuleName(fragment);
+			return segment.length >= MIN_NAME_FRAGMENT_LENGTH && name.indexOf(segment) >= 0;
+		});
+	}
+
+	/**
 	 * Collect into `out` the plain-literal content and the interpolation fragments that `node` and its
 	 * descendants carry. A node the fold answers for is a PLAIN literal and contributes its content;
 	 * one whose kind is a string-EXPRESSION host contributes each static `Literal` child instead.
@@ -94,7 +141,8 @@ final class ReflectionScan {
 }
 
 /**
- * The reflection SURFACE of a scope: every string a member name could be reached by at runtime.
+ * The reflection SURFACE of a scope: every string a member name — or a type's fully-qualified
+ * path — could be reached by at runtime.
  *
  * `whole` holds each PLAIN string literal's raw content, DUPLICATES KEPT — one reader counts
  * occurrences rather than asking membership, so a self-named constant (`X = 'X'`) does not trip a
