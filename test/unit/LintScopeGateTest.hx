@@ -7,6 +7,8 @@ import anyparse.check.ReflectionScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
+import anyparse.check.LintConfig;
+import haxe.io.Path;
 
 /**
  * The SCOPE half of the reflection gate — the one input that decides whether a "nothing
@@ -116,6 +118,49 @@ class LintScopeGateTest extends Test {
 		Assert.isTrue(activeScopeIds().contains('redundant-parens'));
 		Assert.isFalse(fullScopeIds().contains('redundant-parens'));
 	}
+
+	#if (sys || nodejs)
+	/**
+	 * This project's OWN `apqlint.json` declares its sources as `resolutionRoots` — the residual the
+	 * union above cannot close from inside a check, because it is a CONFIG fact. Without the key
+	 * there is no resolution scope over the project's own files, so the documented edit-loop call
+	 * `hxq lint <file> --all --no-oracle` answers every reflection gate from the ONE file it was
+	 * handed, exactly the way the four tests above describe.
+	 *
+	 * Measured on a two-file probe in this tree with the key absent: `--fix --rule inline-constant`
+	 * over the declaring file ALONE reported `fixed 1 issue(s)` and wrote `inline` onto a constant
+	 * that a sibling file spells as `Reflect.field(o, "PROBE_TOKEN")`, while the same command over
+	 * BOTH files refused — the one-file answer contradicted the two-file one. With the key it
+	 * reports `fixed 0 issue(s)`. Changing the sibling's literal so it names nothing makes BOTH
+	 * arms fix, which is what pins the literal as the discriminator.
+	 *
+	 * The assertion is COVERAGE, and over EVERY config that governs a linted file: the roots must
+	 * span what the project's own gate lints (`tools/battery.sh` runs
+	 * `hxq lint --format json --all src test`), since a narrower root leaves the same hole one
+	 * directory smaller — dropping `test` measured 3 `unused-public-member` false positives across
+	 * `src/` that the full scope suppresses, and declaring the roots only in the ROOT document left
+	 * all 739 files under `test/` blind, since a nested `apqlint.json` replaces its parent rather
+	 * than extending it.
+	 */
+	public function testTheProjectDeclaresItsOwnLintScopeAsResolutionRoots(): Void {
+		final root: String = CliFixture.repoRoot();
+		// BOTH configs, because discovery stops at the FIRST apqlint.json above the linted file and
+		// takes it WHOLESALE — `test/apqlint.json` does not inherit the root document, so declaring
+		// the roots only at the root leaves every one-file lint under `test/` exactly as blind as
+		// before. Measured: the same two-file probe under `test/` reported the finding for the file
+		// alone and refused over both, until the nested config declared the roots too.
+		for (probe in [
+			'$root/src/anyparse/check/ReflectionScan.hx',
+			'$root/test/unit/LintScopeGateTest.hx'
+		]) {
+			final roots: Array<String> = LintConfig.discover(probe).resolutionRoots();
+			for (dir in ['src', 'test'])
+				Assert.isTrue(
+					roots.contains(Path.normalize('$root/$dir')), '$probe: its apqlint.json must declare "$dir" in resolutionRoots'
+				);
+		}
+	}
+	#end
 
 	@:access(anyparse.query.Cli)
 	private function fullScopeIds(): Array<String> {

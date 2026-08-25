@@ -8,7 +8,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.check.StaticConstant;
 import anyparse.query.SymbolIndex;
-import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import anyparse.check.CheckScan;
@@ -350,9 +349,7 @@ class BuildMacroMetaSeamTest extends Test {
 	 * reports the file as clean and the guard's own record of it goes stale.
 	 */
 	public function testNoUnaccountedTargetLanguageTagInTheGrammarAgnosticLayers(): Void {
-		final root: Null<String> = repoRoot();
-		Assert.notNull(root, 'src/anyparse/check not found from the cwd - this guard cannot run');
-		if (root == null) return;
+		final root: String = CliFixture.repoRoot();
 		final seen: Array<String> = [];
 		for (path in layerFiles(root)) {
 			final raw: String = File.getContent('$root/$path');
@@ -410,18 +407,6 @@ class BuildMacroMetaSeamTest extends Test {
 			}
 		}
 		return out;
-	}
-
-	/** The nearest ancestor of the cwd holding `src/anyparse/check`, or null. */
-	private function repoRoot(): Null<String> {
-		var dir: String = Path.removeTrailingSlashes(Path.normalize(Sys.getCwd()));
-		for (_ in 0...8) {
-			if (FileSystem.exists('$dir/src/anyparse/check')) return dir;
-			final up: String = Path.removeTrailingSlashes(Path.normalize('$dir/..'));
-			if (up == dir) return null;
-			dir = up;
-		}
-		return null;
 	}
 
 	/** `content`'s leading `@:`-tag (`@:isVar ` -> `@:isVar`, `@:access(` -> `@:access`), or null when it starts with none. */

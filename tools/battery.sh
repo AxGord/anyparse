@@ -545,8 +545,9 @@ branch_jvm() {
 
 # --- 5. branch: oracle → lint → blast ----------------------------------
 #
-# The `lint` step runs a PROJECT-WIDE `haxe <hxml> --no-output` — 16s of its
-# own, on an hxml the build step already typechecked. `apq oracle` runs that
+# The `lint` step runs a PROJECT-WIDE `haxe <hxml> --no-output` — ~18s of its
+# own as of 2026-08-25 (16s when this was written; it grows with the tree), on an
+# hxml the build step already typechecked. `apq oracle` runs that
 # typecheck ONCE and records the verdict under a content fingerprint of the
 # whole compile input; lint then re-derives the fingerprint and reuses the
 # verdict only if it still matches. Nothing is trusted — the record comes from
