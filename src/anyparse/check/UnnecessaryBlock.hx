@@ -19,7 +19,8 @@ using StringTools;
  * ## What is flagged
  *
  * A `blockStmtKind` node whose PARENT is itself a statement-list container — a block container
- * (`ControlFlowSupport.blockKinds()` — a function body, another statement block, or a block expression) OR a
+ * (`ControlFlowSupport.blockKinds()` — a function body, another statement block, a block expression, or a
+ * `CondBranch`, one `#if` branch's statement run in the branch-aware projection this check reads) OR a
  * `case` / `default` arm (`caseBranchKind` / `defaultBranchKind`, whose body is a statement list too) — and which
  * passes the three unwrap gates `harvest` documents: it must be the ONLY bare block of its container, hold at
  * most `CheckScan.BARE_BLOCK_MAX_STATEMENTS` statements, and bind no name already live in the frame it would
@@ -41,7 +42,9 @@ using StringTools;
  *
  * `RefShape.blockStmtKind` is the statement-block kind, `caseBranchKind` / `defaultBranchKind` the switch-arm
  * containers, `opaqueKinds` the reification subtrees to skip, and `GrammarPlugin.controlFlowSupport` supplies the
- * block-container kinds. The scope model behind the collision gate is `ScopeFrames`, driven by
+ * block-container kinds — `CondBranch` among them, which exists only in the branch-aware projection
+ * (`CheckScan.parseBranchAwareOrNull`) both `run` and `fix` read, so a bare block written inside a `#if` region is
+ * flagged in its own branch's statement list. The scope model behind the collision gate is `ScopeFrames`, driven by
  * `RefShape.scopeKinds` plus the widened binding-kind set `ScopeFrames.bindingKinds` assembles. Any unset seam →
  * no-op.
  */
@@ -64,7 +67,7 @@ final class UnnecessaryBlock implements Check {
 		final seams: Seams = resolved;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			for (block in unwrappable(tree, seams)) {
 				final span: Null<Span> = block.span;
@@ -93,7 +96,7 @@ final class UnnecessaryBlock implements Check {
 		final resolved: Null<Seams> = resolveSeams(plugin);
 		if (resolved == null) return [];
 		final seams: Seams = resolved;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
 		final approved: Map<String, Bool> = [];
 		for (block in unwrappable(tree, seams)) {

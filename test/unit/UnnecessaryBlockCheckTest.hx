@@ -157,6 +157,36 @@ class UnnecessaryBlockCheckTest extends Test {
 		Assert.equals(2, violations(src).length);
 	}
 
+	/**
+	 * A bare block inside a `#if` region: the branch is a statement list of its own, so the braces buy nothing
+	 * there either — the case the plain tree hid, since the block's parent is then the `Conditional` node.
+	 */
+	public function testBlockInsideCondRegionFlagged(): Void {
+		final body: String = '#if js\n\t\t{\n\t\t\tvar x = 1;\n\t\t\ttrace(x);\n\t\t}\n\t\t#end';
+		Assert.equals(1, violations(wrap(body)).length);
+	}
+
+	/** Each branch of a region is its own container, so a bare block in each is flagged on its own. */
+	public function testBlockInEachCondBranchFlagged(): Void {
+		final body: String = '#if js\n\t\t{\n\t\t\ttrace(1);\n\t\t}\n\t\t#else\n\t\t{\n\t\t\ttrace(2);\n\t\t}\n\t\t#end';
+		Assert.equals(2, violations(wrap(body)).length);
+	}
+
+	/**
+	 * A `#if` branch is not a Haxe scope, so a block unwrapped there lands in the ENCLOSING block's frame — a
+	 * local of the same name outside the region collides just as it would without the region.
+	 */
+	public function testBlockInsideCondRegionWithCollidingOuterLocalNotFlagged(): Void {
+		final body: String = 'var x = 0;\n\t\t#if js\n\t\t{\n\t\t\tvar x = 1;\n\t\t\ttrace(x);\n\t\t}\n\t\t#end\n\t\ttrace(x);';
+		Assert.equals(0, violations(wrap(body)).length);
+	}
+
+	/** The unwrapped statements stay inside the region — the directives are not part of the block's span. */
+	public function testFixUnwrapsBlockInsideCondRegion(): Void {
+		final fixed: String = fixedCanonical(wrap('#if js\n\t\t{\n\t\t\tvar x = 1;\n\t\t\ttrace(x);\n\t\t}\n\t\t#end\n\t\ttrace(2);'));
+		Assert.isTrue(fixed.indexOf('#if js\n\t\tvar x = 1;\n\t\ttrace(x);\n\t\t#end\n\t\ttrace(2);') >= 0, 'unexpected: $fixed');
+	}
+
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}
