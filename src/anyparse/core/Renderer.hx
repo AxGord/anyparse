@@ -762,12 +762,38 @@ class Renderer {
 	 * the `IfFirstLineExceeds` probe to answer "would the first rendered
 	 * line of `flatDoc` exceed `n` columns from the current pen?".
 	 *
-	 * Departure from `DocMeasure.flatTokenWidth`: forced hardlines abort the walk
-	 * instead of contributing zero width. `BodyGroup` is still deferred
-	 * (zero, no abort) — its content decides its own flat/break later
-	 * and cannot be predicted at probe time. `Group` descends as usual;
-	 * a forced hardline anywhere in its inner aborts the first-line walk
-	 * because such a Group must commit to break mode.
+	 * Departure from `DocMeasure.flatTokenWidth`: forced hardlines abort the
+	 * walk instead of contributing zero width. `Group` descends as usual; a
+	 * forced hardline anywhere in its inner aborts the first-line walk because
+	 * such a Group must commit to break mode. `BodyGroup` is still deferred
+	 * (zero, no abort) — right for a group with no forced hardline of its own,
+	 * whose flat/break really is decided later at the live column, and wrong for
+	 * a COMMITTED one; see below.
+	 *
+	 * THE FAMILY GIVES FOUR ANSWERS TO ONE QUESTION — what does a `BodyGroup`
+	 * put on the CURRENT line — and this walker gives the least accurate of them.
+	 * `WrapList.flatLength` descends it (right for "can this be one line", which
+	 * is a different question). `naturalWidthStructural` resolves it by its own
+	 * fit at the running column, the same thing render does, and is therefore
+	 * exactly right. `restNodeWidth` (`bgDescend == false`) charges a committed
+	 * group its first-line prefix and ends the walk — right for every group whose
+	 * content already carries a forced hardline, since `fitsFlat` can then never
+	 * answer flat and render is guaranteed to break it. This one defers
+	 * unconditionally, which is wrong in both halves for such a group.
+	 *
+	 * Making this walker agree was measured (W16, 2026-08-25) and NOT shipped.
+	 * Charging the prefix WITHOUT ending the line is free and closes nothing: 0
+	 * files move here, 0 on the Pony tree. Charging it AND ending the line — or
+	 * descending the group outright, which measures identically — closes two of
+	 * the seven Pony files that still need two writer rewrites
+	 * (`ui/xml/PixiXmlUi.hx`, `tools/nodesrc/module/Bmfont.hx`), leaves the suite
+	 * and the corpus unmoved and Pony's drift set unmoved at 80 — and reformats
+	 * SIX files of this project's own tree, whose `apq fmt src test --list` is
+	 * otherwise empty. At least three of the six read worse
+	 * (`for (candidate in candidatesOf(\n\tsource, plugin\n))`,
+	 * `if (index.skippedFiles()\n\t.length == 0)`), because the `IfFirstLineExceeds`
+	 * family was calibrated against the deferring answer. So the honest fix is a
+	 * recalibration of that family, not this arm on its own.
 	 *
 	 * Stack-based walk — items pushed in reverse so pop order matches
 	 * left-to-right traversal. The `aborted` flag short-circuits
@@ -850,10 +876,16 @@ class Renderer {
 	 * `naturalWidthStep` stops the walk on it. The flat-projection
 	 * statement of the same rule is `embeddedLineWidths`.
 	 *
-	 * `BodyGroup` is DEFERRED (zero width, no first-line termination) —
-	 * its content decides its own flat/break later and is invisible to a
-	 * parent's first-line probe (Departure 2, mirrors `fitsFlat` /
-	 * `flatTokenWidthFirstLine`).
+	 * `BodyGroup` is NOT deferred here — `naturalWidthStructural` routes it
+	 * through `pushNaturalGroup` exactly like a `Group`, resolving it by its own
+	 * fit at the running column, because deferring it would under-measure a RHS
+	 * whose own body breaks and hide the overflow from the parent `=`-probe. That
+	 * makes this the MOST accurate of the family's answers to "what does a
+	 * `BodyGroup` put on the current line", and `flatFirstLineStep`'s
+	 * unconditional defer the least; `flatTokenWidthFirstLine`'s doc carries the
+	 * verdict and what agreement would cost. (This paragraph used to claim the
+	 * opposite — "DEFERRED... Departure 2, mirrors `fitsFlat` /
+	 * `flatTokenWidthFirstLine`" — contradicting the arm directly below it.)
 	 *
 	 * `startCol` is folded into the accumulator so each per-Group
 	 * `fitsFlat(width - col, ...)` budget uses the live running column —
@@ -989,9 +1021,13 @@ class Renderer {
 	 *  - nested `Group` content is descended in `MFlat` (static walk
 	 *    can't predict the runtime Group decision; flat-side measurement
 	 *    matches the cascade rule semantic "if everything stayed flat,
-	 *    would the line exceed?");
-	 *  - `BodyGroup` is deferred (zero width, no abort) — same Departure 2
-	 *    as `fitsFlat`.
+	 *    would the line exceed?"); - `BodyGroup` is NOT deferred here, unlike `fitsFlat`: this walk goes
+	 *    through `restNodeWidth` with `bgDescend == false`, which charges a
+	 *    COMMITTED group its own first-line prefix and ends the walk on it. A
+	 *    group with no forced hardline of its own is still deferred. (The doc
+	 *    this bullet used to carry — "deferred, same Departure 2 as `fitsFlat`"
+	 *    — was wrong about its own function; see `flatTokenWidthFirstLine`'s doc
+	 *    for which of the two answers is right and what agreement costs.)
 	 *
 	 * Stack-based walk over a `(doc, mode)` pair list — items pushed in
 	 * reverse so pop order matches left-to-right traversal of each
@@ -1307,6 +1343,12 @@ class Renderer {
 				// limit (its `{` was the missing column). A fully inline body
 				// (no hardline on its first line) stays deferred, so the cond-wrap
 				// rest-probe never pulls an inline for/while body onto the header.
+				//
+				// That EXCEPT is not a special case, it is the CURRENT-LINE
+				// question answered correctly, and `flatFirstLineStep` answers the
+				// same question by deferring a committed group too. The
+				// disagreement is real and unresolved; what making the other side
+				// agree costs is measured on `flatTokenWidthFirstLine`'s doc.
 				if (bgDescend) {
 					inner.push({ doc: innerDoc, mode: MFlat });
 					return { add: 0, aborted: false };

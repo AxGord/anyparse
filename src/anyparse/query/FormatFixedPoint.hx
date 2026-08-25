@@ -48,12 +48,29 @@ import haxe.Exception;
  *    its fixed point answers `source` on pass 1 and nothing else runs; a
  *    normally-dirty file confirms on pass 2. Every config this project ships
  *    is in that class — measured 0 files needing a second rewrite over `src`,
- *    `test`, and the whole Pony tree under its own `hxformat.json`.
- *  - It never SWALLOWS the defect it works around. A file that needed more
- *    than one rewrite is reported on stderr, and one that never settles is a
- *    failure that leaves the bytes alone — churning a file forever is worse
- *    than declining to format it, and a silent fixed-point loop would turn a
- *    writer bug into a permanent tax nobody can see.
+ *    `test`, and the whole Pony tree under its own `hxformat.json`. - It never SWALLOWS the defect it works around, PROVIDED the caller
+ *    reports it. A file that never settles is a failure that leaves the bytes
+ *    alone at every caller — churning a file forever is worse than declining
+ *    to format it. A file that merely needed a SECOND rewrite is reported on
+ *    stderr by `fmt` and by nobody else: `run` hands back `rewrites` and the
+ *    three op-side callers below discard it, because `EditResult` /
+ *    `NewFileResult` have nowhere to carry it. So a mutation op absorbs the
+ *    writer defect silently today, which is the "permanent tax nobody can
+ *    see" this bullet warns about, one caller short of closed. Plumbing
+ *    `rewrites` out to the CLI boundary is the open work; a library must not
+ *    own the diagnostic itself.
+ *
+ * `fmt` is no longer the only caller. `RefactorSupport.canonicalize` and
+ * `NewFile.create` / `NewFile.createRaw` run the same loop over what they are
+ * about to WRITE, because the gate the NEXT writer-emit op puts on that file is
+ * `writeRoundTrip(s) == s` after ONE pass. A single round trip there reported
+ * `wrote <file>` and left a file its own `fmt --list` immediately called
+ * drifted, after which the next op refused it as non-canonical — measured on
+ * Pony's `tools/src/module/Unpack.hx` through `apq add-member --reformat` and
+ * through `apq new --raw -`. Seven files of that tree needed two rewrites when this landed (a count that
+ * goes stale the moment the writer moves — the SHAPES are what is pinned);
+ * `unit.WrapFlatSourceFixedPointTest` pins the three writer shapes behind them
+ * and records what closing each would cost.
  *
  * Sister postcondition to `Patch.verbatimSpliceIntact`: an op-internal check
  * for a corruption class no tree-level gate can observe, because every gate

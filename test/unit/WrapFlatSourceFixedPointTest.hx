@@ -5,7 +5,9 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.query.RefactorSupport;
 
 /**
  * ω-flat-source-fixed-point — ONE writer round trip must land where every
@@ -87,6 +89,53 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '"onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, '
 		+ '"ternaryExpression": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", '
 		+ '"value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"}]}}}';
+
+	/**
+	 * The case-body source behind `tools/src/module/Unpack.hx`, reduced. ONE
+	 * copy, because three tests read it and they must not drift apart: the pin
+	 * below asserts it still takes two writer rewrites, and
+	 * `testCanonicalizeWritesTheWriterFixedPoint` is only a regression test for
+	 * as long as that holds. (`unit.NewFileSliceTest` needs its own copy — a
+	 * different class — and carries a local precondition instead.)
+	 */
+	private static final CASE_BODY_SRC: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n'
+		+ '\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n\t\t\t\tcfg.zips.push({ path: try '
+		+ 'StringTools.trim(xml.innerData) catch (_: Any) \'\', file: xml.att.file, rm: xml.isTrue(\'rm\'), '
+		+ 'log: !xml.isFalse(\'log\') });\n\t\t\tcase _:\n\t\t\t\tsuper.readNode(xml);\n\t\t}\n\t}\n}';
+
+	/**
+	 * Pony's own `objectLiteral` cascade under a `sameLine.caseBody: fitLine`
+	 * switch — the host is `BodyFit.fitLineLayout`, which asks
+	 * `WrapList.flatLength` whether the body can render on one line at all.
+	 */
+	private static final CASE_BODY_OBJECT: String = '{"indentation": {"character": "tab", "tabWidth": 4, '
+		+ '"alignInlineSwitchCaseBody": true}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}, '
+		+ '"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": '
+		+ '[{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
+
+	/**
+	 * The same literal cascade with an `arrayWrap` one beside it, under a
+	 * value-`if` host. The pivot sits under the literal's own ARRAY item, so
+	 * every enclosing measure reads it two levels down.
+	 */
+	private static final VALUE_IF_NESTED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, '
+		+ '"sameLine": {"ifBody": "fitLine", "expressionIf": "next"}, "wrapping": {"maxLineLength": 140, '
+		+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", '
+		+ '"value": 140}], "type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "noWrap", "rules": [{"conditions": '
+		+ '[{"cond": "hasMultilineItems", "value": 1}], "type": "onePerLine"}, {"conditions": [{"cond": '
+		+ '"totalItemLength <= n", "value": 80}], "type": "noWrap"}, {"conditions": [{"cond": "anyItemLength >= n", '
+		+ '"value": 30}], "type": "onePerLine"}]}}}';
+
+	/**
+	 * A sole-argument call whose argument is a TERNARY whose branches are the
+	 * pivot-bearing literals — the pivot is two levels below the call.
+	 */
+	private static final CALL_TERNARY_NESTED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, '
+		+ '"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": '
+		+ '[{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, "callParameter": {"defaultWrap": '
+		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], '
+		+ '"type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", '
+		+ '"value": 100}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();
@@ -182,6 +231,120 @@ class WrapFlatSourceFixedPointTest extends Test {
 		final once: String = write(src, CALL_ARG_FILL_LINE);
 		Assert.isTrue(once.indexOf('f(a, b, {x: 1, y: 2});') != -1, 'expected the fitting call left on one line, got:\n<$once>');
 		Assert.equals(once, write(once, CALL_ARG_FILL_LINE), 'a call that fits was already a fixed point');
+	}
+
+	/**
+	 * The three writer shapes of the convergence tail, PINNED AS STILL DIVERGENT
+	 * (ω-canonical-fixed-point). Each needs two writer rewrites under the config
+	 * beside it, and each is one of the seven files that still warn on Pony's
+	 * committed `hxformat.json` — `tools/src/module/Unpack.hx` and
+	 * `src/pony/net/http/modules/mmodels/Builder.hx` (case body),
+	 * `src/pony/magic/builder/DIBuilder.hx` (value-`if` branch),
+	 * `src/pony/magic/builder/HasSignalBuilder.hx` (ternary under a sole-arg
+	 * call).
+	 *
+	 * ONE root cause under all three: a static measure reads a collection whose
+	 * break the RENDERER decides — `emitZeroThresholdAgree`'s `IfFirstLineExceeds`
+	 * pivot, or a committed `BodyGroup` — and answers differently depending on
+	 * whether the SOURCE line was flat. Pass 1 measures the pivot's flat arm and
+	 * commits the enclosing shape on it; the renderer breaks the collection; pass 2
+	 * reads that newline, force-commits the list, and the same measure answers
+	 * `-1` (or `0`, behind the `BodyGroup`), so the enclosing shape flips.
+	 *
+	 * Four candidate fixes were measured on this tree and Pony's, and every one
+	 * that closes any file reformats anyparse's OWN tree, whose
+	 * `apq fmt src test --list` is otherwise EMPTY:
+	 *
+	 *  - `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s committed-
+	 *    `BodyGroup` answer (charge its first-line prefix, END the line): closes
+	 *    `PixiXmlUi.hx` and `Bmfont.hx`, suite and corpus unmoved, Pony drift
+	 *    unmoved at 80 — and reformats 6 files here, at least three of them worse
+	 *    (`for (candidate in candidatesOf(\n\tsource, plugin\n))`,
+	 *    `if (index.skippedFiles()\n\t.length == 0)`). Charging the prefix WITHOUT
+	 *    ending the line is free (0 files here, 0 on Pony) and closes nothing, so
+	 *    the line-ending half is the whole effect and the whole cost.
+	 *  - the same arm descending the group instead: identical outcome, 2 closed /
+	 *    6 reformatted.
+	 *  - `DocMeasure.flatTokenWidth` descending a `BodyGroup` (the measure
+	 *    `WrapList.measureItems` reads): closes three, opens `IRPC.hx`, reformats
+	 *    74 files here — and makes `src/anyparse/core/CollapsePass.hx` itself a
+	 *    two-rewrite file.
+	 *  - resolving the pivot for the `BodyFit`/case-sibling measures: closes the
+	 *    two case-body files, reformats 7 here and 8 more on Pony. It cannot be
+	 *    narrowed to the divergent population, because the discriminator is
+	 *    whether the list's Star reflows source newlines and `HxExpr.ArrayExpr` is
+	 *    the ONLY Star in the Haxe grammar that does — every call-parameter list
+	 *    in this tree is in the same population as Pony's object literals.
+	 *
+	 * So the writer defect is left standing and reported (`apq fmt` warns), and
+	 * the CONSUMER that was silently harmed by it — `RefactorSupport.canonicalize`
+	 * — was fixed instead. When a fix does land, these three become `Assert.equals`
+	 * on `once` and `twice`; do not delete them.
+	 */
+	public function testConvergenceTailStillNeedsTwoRewrites(): Void {
+		final cases: Array<{ name: String, src: String, config: String }> = [
+			{
+				name: 'case body (Unpack.hx, Builder.hx)',
+				config: CASE_BODY_OBJECT,
+				src: CASE_BODY_SRC
+			},
+			{
+				name: 'value-if branch (DIBuilder.hx)',
+				config: VALUE_IF_NESTED,
+				src: 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n'
+					+ '\t\t\t{ expr: EVars([\n\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', '
+					+ 'params: [TPType(t)] }), expr: macro null, isFinal: false }\n\t\t\t]), pos: Context.currentPos() }\n'
+					+ '\t\telse\n\t\t\tcheckExpr(x);\n\t}\n}'
+			},
+			{
+				name: 'ternary under a sole-arg call (HasSignalBuilder.hx)',
+				config: CALL_TERNARY_NESTED,
+				src: 'class C {\n\tfunction f(): Void {\n\t\tfields.push({\n\t\t\tname: setterName,\n'
+					+ '\t\t\taccess: ast.concat([AInline, setterAccess]),\n\t\t\tmeta: null,\n\t\t\tpos: f.pos,\n'
+					+ '\t\t\tkind: FFun(setcontroll ? { args: [{ name: \'v\', type: null }], ret: null, expr: macro return '
+					+ 'evName == null || v != fName && !evName.dispatchWithFlag(v, fName, notsave) ? fName = v : fName } : '
+					+ '{ args: [{ name: \'v\', type: null }], ret: null, expr: macro { if (evName == null) '
+					+ '{ var prev = fName; } return fName; } })\n\t\t});\n\t}\n}'
+			}
+		];
+		for (c in cases) {
+			final once: String = write(c.src, c.config);
+			final twice: String = write(once, c.config);
+			Assert.notEquals(
+				once, twice, '${c.name}: this writer divergence is CLOSED — flip this case to Assert.equals and re-run the Pony census'
+			);
+			Assert.equals(twice, write(twice, c.config), '${c.name}: the second rewrite must itself be the fixed point');
+		}
+	}
+
+	/**
+	 * The convergence tail's actual BITE, and the half of it this slice closes:
+	 * `RefactorSupport.canonicalize` writes the writer's FIXED POINT, not one
+	 * round trip.
+	 *
+	 * Every writer-emit mutation op finalises through `canonicalize`, and the gate
+	 * the NEXT such op puts on the file it wrote is `writeRoundTrip(s) == s` after
+	 * ONE pass. For a source the writer cannot settle in one, a single round trip
+	 * there reported `wrote <file>` and left a file its own `fmt --list` called
+	 * drifted — measured with `apq add-member --reformat` on Pony's
+	 * `tools/src/module/Unpack.hx`, after which the very next `add-member` refused
+	 * with `file is not in canonical form`.
+	 *
+	 * `edits` is empty deliberately: the defect is in the FINALISE, not in any
+	 * splice, so the smallest statement of it is "canonicalise this source and the
+	 * answer must be a fixed point".
+	 */
+	public function testCanonicalizeWritesTheWriterFixedPoint(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		switch RefactorSupport.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_OBJECT) {
+			case Ok(text):
+				Assert.equals(
+					text, plugin.writeRoundTrip(text, CASE_BODY_OBJECT),
+					'the op must write a file the next op\'s one-pass canonical gate accepts, got:\n<$text>'
+				);
+			case Err(message):
+				Assert.fail('canonicalize refused: $message');
+		}
 	}
 
 	private static function write(src: String, config: String): String {
