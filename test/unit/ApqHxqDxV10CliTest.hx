@@ -3,6 +3,9 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
+
+using StringTools;
+
 #if sys
 import sys.FileSystem;
 #end
@@ -184,6 +187,50 @@ class ApqHxqDxV10CliTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/**
+	 * An ABSENT baseline is diagnosed as absent, not as a FORMAT problem.
+	 *
+	 * `loadSweepFixtureStatus` fails soft, so a missing file, a malformed one and one with
+	 * no `fixtures` array all arrive as the same empty map. The single message this used to
+	 * print named the last of the three — and the case a fresh worktree actually hits is the
+	 * first, so the reader went looking for a corrupt snapshot nothing had written yet.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testSweepDiffAbsentBaselineIsNotReportedAsAFormatProblem(): Void {
+		final absent: String = Cli.sweepDiffNoBaseline('bin/.prev-sweep.json', false, true);
+		Assert.isTrue(absent.contains('does not exist'), 'names ABSENCE - got: $absent');
+		Assert.isFalse(absent.contains('`fixtures` array'), 'and never the format cause - got: $absent');
+		Assert.isTrue(absent.contains('ROTATION'), 'and says why a first sweep leaves it absent - got: $absent');
+		final malformed: String = Cli.sweepDiffNoBaseline('bin/.prev-sweep.json', true, true);
+		Assert.isTrue(malformed.contains('carries no readable `fixtures` array'), 'a PRESENT one names the format - got: $malformed');
+		Assert.isFalse(malformed.contains('does not exist'), 'and never absence - got: $malformed');
+	}
+
+	/** An EXPLICIT baseline that is absent gets the --save remedy, never the rotation explainer that does not apply to it. */
+	@:access(anyparse.query.Cli)
+	public function testSweepDiffExplicitAbsentBaselineGetsItsOwnRemedy(): Void {
+		final explicit: String = Cli.sweepDiffNoBaseline('/tmp/base.json', false, false);
+		Assert.isTrue(explicit.contains('does not exist'), 'names ABSENCE - got: $explicit');
+		Assert.isTrue(explicit.contains('--save'), 'and points at the op that creates one - got: $explicit');
+		Assert.isFalse(explicit.contains('ROTATION'), 'and not at a rotation that never touches it - got: $explicit');
+	}
+
+	/**
+	 * The AUTO-ROTATED baseline's `0 changed` carries what it is worth, on the same run.
+	 *
+	 * The harness overwrites `bin/.prev-sweep.json` with the preceding run's snapshot before
+	 * every write, so the default `--diff` compares the last two runs of ONE tree. In a fresh
+	 * worktree both of those ran after the change, which makes 0 the only answer the
+	 * comparison can give — a gate that cannot fail, printing as a pass.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testSweepDiffAutoRotatedBaselineDeclaresItsProvenance(): Void {
+		final note: String = Cli.sweepDiffAutoRotatedNote('bin/.prev-sweep.json');
+		Assert.isTrue(note.contains('bin/.prev-sweep.json'), 'names the baseline - got: $note');
+		Assert.isTrue(note.contains('AUTO-ROTATED'), 'says what that baseline is - got: $note');
+		Assert.isTrue(note.contains('--save'), 'and names the form that can fail - got: $note');
 	}
 
 	// --- #5: search rejects macro reification with clear error ---

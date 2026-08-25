@@ -703,6 +703,7 @@ import unit.RedundantUncheckedCastCheckTest;
 import unit.ShadowingLocalCheckTest;
 import unit.WrapFlatSourceFixedPointTest;
 import unit.HaxeFormatConfigDiagnosticsTest;
+import unit.LintScopeGateTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1156,6 +1157,7 @@ class RunTests {
 		addCase(new LintLanguageVersionGateTest());
 		addCase(new LintUnusedImportDottedSliceTest());
 		addCase(new LintUnusedImportResolutionScopeTest());
+		addCase(new LintScopeGateTest());
 		addCase(new LintFailOnCliTest());
 		addCase(new LintNoOracleCliTest());
 		addCase(new LintListRulesCliTest());
