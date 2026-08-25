@@ -294,14 +294,10 @@ final class HxCasePredLowering extends AstPredLowering {
 				}
 			}
 		};
-		return predField(
-			'_caseSiblingUnitsInto',
-			[
-				valueArg('p', HX_CONDITIONAL_CASE),
-				{ name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }
-			],
-			macro :Void, body, 'Appends every case element of every branch of one `#if` case region to `out`.'
-		);
+		return predField('_caseSiblingUnitsInto', [
+			valueArg('p', HX_CONDITIONAL_CASE),
+			{ name: 'out', type: ruleArrayCT(HX_SWITCH_CASE) }
+		], macro :Void, body, 'Appends every case element of every branch of one `#if` case region to `out`.');
 	}
 
 	/**

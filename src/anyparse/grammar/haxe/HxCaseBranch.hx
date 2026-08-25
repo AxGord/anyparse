@@ -86,12 +86,23 @@ package anyparse.grammar.haxe;
  *  - no → the body GLUES to the label with an `OptSpace`, the same shape
  *    `Same` produces. No measurement happens (none would be meaningful),
  *    so the case line may exceed `lineWidth`.
- * Asking the flat-length question FIRST is what keeps the decision out of
- * the source line shape: `fitsFlat` DEFERS a nested `BodyGroup` while
- * `WrapList.flatLength` DESCENDS one, and the writer wraps
- * source-multi-line literals in a `BodyGroup` and single-line ones not —
- * so `fitsFlat` alone answered differently for the two source shapes of
- * one AST and `fitLine` needed two passes to settle.
+ * Asking the flat-length question FIRST NARROWS this decision's dependence on the
+ * source line shape; it does NOT remove it, which is what the sentence here
+ * claimed before W17 measured it. `fitsFlat` DEFERS a nested `BodyGroup` while
+ * `WrapList.flatLength` DESCENDS one, so the flat-length question does close
+ * every shape `fitsFlat` alone got wrong. What it leaves open is a collection
+ * whose cascade answers a NON-breaking mode and which the RENDERER then breaks
+ * on width: source-flat it is a conditional Group (`flatLength >= 0`, the
+ * MEASURED arm, body below the label), and once the writer's own newline is in
+ * the file the trivia path force-commits the list (`flatLength == -1`, the GLUE
+ * arm). Same AST, two answers, two writer rewrites. One-variable repro under
+ * Pony's `objectLiteral` cascade (`totalItemLength <= 140` -> `noWrap`, default
+ * `onePerLine`): a four-field literal totalling UNDER 140 takes two rewrites
+ * through this path, and the same literal padded OVER 140 — cascade
+ * `onePerLine`, so its hardline is already there on pass 1 — takes one. Those
+ * are `tools/src/module/Unpack.hx` and `net/http/modules/mmodels/Builder.hx` of
+ * the convergence tail; the pin in `unit.WrapFlatSourceFixedPointTest` records
+ * the `fitLineLayout` fix that was measured for them and rejected.
  * `refuseFlatOnComplexExpr` gates BOTH paths, so a refused body breaks
  * even when it fits; a case label carrying its own trailing comment is
  * refused by `_fitCase` too (the comment would land on the wrong side of
