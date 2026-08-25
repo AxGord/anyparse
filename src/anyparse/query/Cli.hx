@@ -333,6 +333,14 @@ typedef CheckPartition = {
 	var fullScope: Array<Check>;
 };
 /**
+ * One fixture whose sweep status moved, as `apq sweep --diff` reports it: `key` is the
+ * breakdown bucket (`PASS->FAIL`, `ADDED(FAIL)`, …) and `line` the human row.
+ */
+typedef SweepFixtureMove = {
+	var key: String;
+	var line: String;
+};
+/**
  * A single-construct current-parse probe for `apq recon`: whether the construct is `unwired`, whether it parses `ok`, and the `line` / `col` / `msg` of the failure when it does not.
  */
 typedef ReconCurrentParse = {
@@ -2315,6 +2323,14 @@ final class Cli {
 			// `OracleRelaxable`), so the entry is INERT today — it is kept because it would carry
 			// the fixes again if the rule ever stopped being risky.
 			'unused-public-member',
+			// inline-constant's reflection gate is the same whole-project string scan its three
+			// siblings on this list share (`orphan-accessor` and `unused-public-member` above,
+			// `static-constant` below), and it gates the FINDING rather than the fix. On the
+			// active SUBSET a `Reflect.field(o, "NAME")` in an unchanged file reads as absent, so a
+			// constant pass 1 correctly refused is marked `inline` by pass 2 — measured on a
+			// two-file fixture where the whole-set REPORT named one finding and the same command's
+			// `--fix` reported `fixed 2 issue(s) over 3 pass(es)`.
+			'inline-constant',
 			// static-constant's reachability gates are all whole-project: the subtype MENTION gate
 			// (a subtype's unqualified read of a private static does not resolve) and the
 			// reflection-name scan over every string literal in scope. On the active SUBSET a
@@ -16037,6 +16053,14 @@ final class Cli {
 		var filePath: String = 'bin/.last-sweep.json';
 		var prevPath: Null<String> = null;
 		var diffPath: Null<String> = null;
+		// The auto-rotated baseline, named once so the run can RECOGNISE it rather than
+		// infer it from how the argument was spelled. Those are not the same test, and the
+		// difference is the whole point: this file is overwritten with the previous run's
+		// snapshot before every corpus write, so a `0 changed` against it is a statement
+		// about the last two runs of one tree. Keying on "the caller passed no path" would
+		// have exempted `--diff bin/.prev-sweep.json` — the same vacuous comparison, spelled
+		// out — from the note that exists to catch it.
+		final autoRotatedBaseline: String = 'bin/.prev-sweep.json';
 		// `--save <path>`: discoverable shorthand for "copy the current
 		// snapshot to <path> so I can `--prev` / `--diff` against it
 		// after the next sweep". Replaces the manual
@@ -16060,7 +16084,7 @@ final class Cli {
 					// token is a flag, not a value.
 					diffPath = i + 1 < args.length && !StringTools.startsWith(args[i + 1], '--')
 						? expectValue(args, ++i, '--diff')
-						: 'bin/.prev-sweep.json';
+						: autoRotatedBaseline;
 				case '--save':
 					savePath = expectValue(args, ++i, '--save');
 				case '--lang':
@@ -16110,7 +16134,7 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 		}
-		return diffPath != null ? runSweepDiff(filePath, diffPath) : EXIT_OK;
+		return diffPath != null ? runSweepDiff(filePath, diffPath, diffPath == autoRotatedBaseline) : EXIT_OK;
 	}
 
 	/**
@@ -16262,10 +16286,15 @@ final class Cli {
 	 * array. Composes with `--prev` (totals delta is printed first, then
 	 * the per-fixture rows; the two are orthogonal).
 	 *
-	 * Output shape: one line per changed path, plus a transition-count
-	 * breakdown summary. Sorted by path for deterministic output.
+	 * Output shape: one line per changed path, plus a transition-count breakdown summary naming the
+	 * baseline it compared, and sorted by path for deterministic output.
+	 *
+	 * `autoRotated` says the baseline was the DEFAULT `bin/.prev-sweep.json` rather than a path the
+	 * caller spelled. It changes no comparison — it decides what the run is allowed to CLAIM: that
+	 * default is overwritten with the previous run's snapshot before every corpus write, so its
+	 * `0 changed` is a statement about the last two runs of one tree and not about a change.
 	 */
-	private static function runSweepDiff(curPath: String, prevPath: String): Int {
+	private static function runSweepDiff(curPath: String, prevPath: String, autoRotated: Bool): Int {
 		final cur: Map<String, String> = loadSweepFixtureStatus(curPath);
 		final prev: Map<String, String> = loadSweepFixtureStatus(prevPath);
 		if (!cur.iterator().hasNext()) {
@@ -16276,7 +16305,7 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 		if (!prev.iterator().hasNext()) {
-			stderr('apq sweep: --diff: $prevPath has no `fixtures` array\n');
+			stderr(sweepDiffNoBaseline(prevPath, sweepSnapshotExists(prevPath), autoRotated));
 			return EXIT_RUNTIME;
 		}
 		final allPaths: Map<String, Bool> = [];
@@ -16296,21 +16325,9 @@ final class Cli {
 			final cs: Null<String> = cur[path];
 			if (ps == cs) continue;
 			changed++;
-			final key: String = if (ps == null)
-				'ADDED($cs)'
-			else if (cs == null)
-				'REMOVED($ps)'
-			else
-				'$ps->$cs';
-			transitions[key] = (transitions[key] ?? 0) + 1;
-			sysPrint(
-				if (ps == null)
-					'ADDED $path (now $cs)\n'
-				else if (cs == null)
-					'REMOVED $path (was $ps)\n'
-				else
-					'$ps -> $cs: $path\n'
-			);
+			final moved: SweepFixtureMove = sweepDiffMove(path, ps, cs);
+			transitions[moved.key] = (transitions[moved.key] ?? 0) + 1;
+			sysPrint('${moved.line}\n');
 		}
 		final breakdown: Array<String> = [for (k => v in transitions) '$k: $v'];
 		breakdown.sort((a: String, b: String) -> if (a < b)
@@ -16321,10 +16338,76 @@ final class Cli {
 			0);
 		sysPrint(
 			changed == 0
-				? '--- sweep --diff: 0 fixtures changed (snapshots identical) ---\n'
-				: '--- sweep --diff: $changed fixtures changed (${breakdown.join(', ')}) ---\n'
+				? '--- sweep --diff: 0 fixtures changed vs $prevPath (snapshots identical) ---\n'
+				: '--- sweep --diff: $changed fixtures changed vs $prevPath (${breakdown.join(', ')}) ---\n'
 		);
+		// The one line this gate was missing. A `0 changed` off the auto-rotated
+		// baseline is not a verdict about a change — see `sweepDiffAutoRotatedNote`.
+		if (changed == 0 && autoRotated) stderr(sweepDiffAutoRotatedNote(prevPath));
 		return EXIT_OK;
+	}
+
+	/** Whether a sweep snapshot file is on disk — the half of "no baseline" that is not a FORMAT problem. */
+	private static inline function sweepSnapshotExists(path: String): Bool {
+		return FileSystem.exists(path);
+	}
+
+	/**
+	 * The breakdown KEY and the printed line for one fixture whose status moved. ONE three-way
+	 * decision: the two parallel copies it replaces drifted apart the moment either was edited.
+	 */
+	private static function sweepDiffMove(path: String, prev: Null<String>, cur: Null<String>): SweepFixtureMove {
+		return if (prev == null)
+			{ key: 'ADDED($cur)', line: 'ADDED $path (now $cur)' }
+		else if (cur == null)
+			{ key: 'REMOVED($prev)', line: 'REMOVED $path (was $prev)' }
+		else
+			{ key: '$prev->$cur', line: '$prev -> $cur: $path' };
+	}
+
+	/**
+	 * Why `--diff` has no baseline, as the line the caller prints — and the remedy that
+	 * matches the actual cause.
+	 *
+	 * `loadSweepFixtureStatus` fails soft: an ABSENT file, a malformed one and one holding
+	 * no `fixtures` array all come back as the same empty map. The single message this
+	 * used to print named the last of the three, so the common case — a fresh worktree
+	 * whose first corpus run has not rotated a baseline into existence yet — sent the
+	 * reader looking for a corrupt snapshot that was never written. `exists` is what tells
+	 * the two apart, and the auto-rotated default gets the extra sentence its provenance
+	 * needs: the harness copies the PREVIOUS snapshot over it before each write, so the
+	 * first sweep in a tree leaves it absent by construction and only the second creates it.
+	 */
+	private static function sweepDiffNoBaseline(prevPath: String, exists: Bool, autoRotated: Bool): String {
+		final cause: String = exists
+			? 'carries no readable `fixtures` array — malformed JSON, an older snapshot format, or a wrong-typed entry'
+			: 'does not exist';
+		final remedy: String = if (exists)
+			' — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to rewrite it'
+		else if (autoRotated)
+			' — the corpus harness creates it by ROTATION, copying the previous `bin/.last-sweep.json` over it before each write, so '
+				+ 'the FIRST sweep in a tree leaves it absent and only the SECOND one makes a comparison possible. For a baseline that can '
+				+ 'fail against a CHANGE, save one before the change (`apq sweep --save <path>`) and pass it (`apq sweep --diff <path>`)'
+		else
+			' — save one with `apq sweep --save <path>` after a sweep of the tree you want to compare against';
+		return 'apq sweep: --diff: $prevPath $cause$remedy\n';
+	}
+
+	/**
+	 * What a `0 fixtures changed` off the DEFAULT baseline is worth, printed next to it.
+	 *
+	 * `bin/.prev-sweep.json` is not a baseline anybody chose: the corpus harness overwrites
+	 * it with the preceding run's snapshot before every write. So `--diff` with no path
+	 * compares the last TWO runs of this tree — and when both of them ran after the edit
+	 * under test, which is the whole of a fresh worktree's history, 0 is the only answer it
+	 * can give. That line has been quoted as a slice gate; it is not one, and a gate that
+	 * cannot fail has to say so rather than print a pass.
+	 */
+	private static function sweepDiffAutoRotatedNote(prevPath: String): String {
+		return 'apq sweep: --diff: $prevPath is the AUTO-ROTATED baseline — the corpus harness overwrites it with the PREVIOUS run\'s'
+			+ ' snapshot before every write, so this compared the last two runs of this tree, not a change against its base. If both'
+			+ ' of those runs measured the same sources, 0 was the only possible answer. For a gate that can fail, snapshot before the'
+			+ ' change (`apq sweep --save <path>`) and compare with `apq sweep --diff <path>`.\n';
 	}
 
 	/**
@@ -16373,7 +16456,10 @@ final class Cli {
 		sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
 		sysPrint('                  FAIL->PASS, ADDED/REMOVED entries). Composes with --prev.\n');
 		sysPrint('                  Auto-default: `bin/.prev-sweep.json` (the corpus harness\n');
-		sysPrint('                  auto-rotates this before each sweep write), no path needed.\n');
+		sysPrint('                  auto-rotates this before each sweep write), no path needed —\n');
+		sysPrint('                  but that default is the PREVIOUS RUN of this same tree, so\n');
+		sysPrint('                  its 0 is not a verdict about a change. For a gate that can\n');
+		sysPrint('                  fail, --save a baseline BEFORE the change and --diff it.\n');
 		sysPrint('  --save <path>   Copy the current snapshot to <path>. Use before a grammar\n');
 		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
 		sysPrint('  -h, --help      Show this help\n');

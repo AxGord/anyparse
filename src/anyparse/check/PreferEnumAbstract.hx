@@ -290,11 +290,16 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	 * REFLECTION-PATH gate: a converted type stops existing as a runtime class, so a
 	 * `Type.resolveClass('pkg.Name')` anywhere in scope keeps compiling and starts returning null.
 	 * The surface is `ReflectionScan`'s — every plain string literal in scope, plus the static
-	 * fragments of the interpolated ones — narrowed to the files whose raw text even MENTIONS a
-	 * candidate name, since parsing 800 files to find out that nine names appear in fifty of them is
-	 * the same answer for a fraction of the walk — the same answer for the whole-literal half, at
-	 * least: a fragment only has to be CONTAINED in a candidate name, so a file spelling the
+	 * fragments of the interpolated ones — narrowed to the files whose raw
+	 * text even MENTIONS a candidate name, since parsing 800 files to find out that nine names appear in
+	 * fifty of them is the same answer for a fraction of the walk — the same answer for the whole-literal
+	 * half, at least: a fragment only has to be CONTAINED in a candidate name, so a file spelling the
 	 * fragment and not the name is filtered out before the fragment test can refuse on it.
+	 *
+	 * That narrowing reaches the REPORT argument only. `reflectionSurface` unions the resolution sources
+	 * in ITSELF, and their report half is the whole report array, so under a `Cli` run this filter buys
+	 * scan ORDER and nothing else; it still narrows for a caller carrying no resolution scope at all — a
+	 * bare plugin, which is what the unit tests hand in.
 	 *
 	 * The containment test is the TYPE one, not the member one a name gate would reach for: a runtime
 	 * lookup spells a type by its FULLY-QUALIFIED path, so the literal to refuse on is `'pkg.Name'`
