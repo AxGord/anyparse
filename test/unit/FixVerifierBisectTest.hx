@@ -3,8 +3,12 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.FixVerifier;
+import anyparse.check.Check.GroupedEdit;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 
 using Lambda;
+using StringTools;
 
 /**
  * Unit coverage of `FixVerifier.isolateFailers` — the bisect that replaces the old
@@ -90,6 +94,45 @@ class FixVerifierBisectTest extends Test {
 		Assert.equals(3, FixVerifier.ceilLog2(5));
 		Assert.equals(3, FixVerifier.ceilLog2(8));
 		Assert.equals(4, FixVerifier.ceilLog2(9));
+	}
+
+	/**
+	 * A source the tree never canonicalised is not a verdict about the CHECK, and
+	 * `verifyEntry` must not file one.
+	 *
+	 * `RefactorSupport.canonicalize` can refuse for two unrelated reasons, and with
+	 * `reformat = false` the FIRST gate it applies is "this source is not already
+	 * the writer's fixed point" — nothing spliced, nothing typechecked, nothing
+	 * learned about the check's edit. Reporting that as a revert puts a
+	 * `risky-fix REVERTED` line and a +1 on the reverted count under every risky
+	 * rule on every drifted file, which on an unformatted tree is the common case.
+	 * `isWriterCanonical` re-asks the gate rather than matching on message text, so
+	 * only the writer's OWN refusal reaches `FixRevertCause.NotCanonical`.
+	 *
+	 * Reached WITHOUT spawning a compiler — the oracle path is never entered, which
+	 * is half the claim under test.
+	 */
+	public function testUncanonicalInputIsNotChargedToTheCheck(): Void {
+		final entry: { file: String, source: String } = { file: 'pkg/C.hx', source: 'class C {\n  function f():Void {}\n}\n' };
+		final edits: Array<GroupedEdit> = [
+			{
+				span: new Span(0, 5),
+				text: 'class',
+				group: null
+			}
+		];
+		var written: Int = 0;
+		final verdict = FixVerifier.verifyEntry(
+			entry, edits, new HaxeQueryPlugin(), null, 'no-such-oracle.hxml', null, (_, _) -> written++
+		);
+		Assert.equals(0, written, 'nothing may be written when no candidate was produced');
+		Assert.equals(
+			'NoChange', verdict.getName(), 'a source the tree never canonicalised says nothing about the check — it is not a revert'
+		);
+		Assert.isFalse(
+			FixVerifier.isWriterCanonical(entry.source, new HaxeQueryPlugin(), null),
+			'the fixture must actually be non-canonical, else the assertion above proves nothing'
+		);
 	}
 
 	private function assertComplementSafe(count: Int, failers: Null<Array<Int>>, probe: Array<Int> -> Bool): Void {

@@ -149,6 +149,67 @@ class ExtractSuperclassSliceTest extends Test {
 		Assert.isTrue(newSrc.contains('/* Holder { */'), 'the comment is left verbatim: <$newSrc>');
 	}
 
+	/**
+	 * The created superclass is canonical UNDER THE PROJECT'S CONFIG — the twin of
+	 * `ExtractInterfaceSliceTest.testCreatedInterfaceIsCanonicalUnderProjectConfig`,
+	 * and the same `writeRoundTrip(source, null)` defect.
+	 */
+	public function testCreatedSuperclassIsCanonicalUnderProjectConfig(): Void {
+		final config: String = '{"indentation": {"character": "    ", "tabWidth": 4}}';
+		final src: String = 'package pkg;\n\nclass Widget {\n    public function new() {}\n\n'
+			+ '    public function bump():Void {}\n\n    public function render():String return \'w\';\n}\n';
+		switch ExtractSuperclass.extract('pkg/Widget.hx', 'Widget', 'Base', 'pkg/Base.hx', ['bump'], src, plugin(), config) {
+			case Ok(changes, _):
+				final base: String = changeFor(changes, 'pkg/Base.hx').newSource;
+				Assert.isTrue(base.contains('\n    public function bump'), 'indented by the config, not the default tab:\n<$base>');
+				Assert.equals(
+					base, plugin().writeRoundTrip(base, config),
+					'the created file must pass the ONE-pass canonical gate the next op puts on it'
+				);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * A pulled-up member carries its BODY, so every writer shape that needs TWO
+	 * round trips to settle can reach the assembled superclass. One round trip
+	 * there wrote a file its own `fmt --list` called drifted; the fixed-point loop
+	 * is what closes it, and the advisory says the writer needed the second pass.
+	 *
+	 * The config and the body are the case-body shape
+	 * `unit.WrapFlatSourceFixedPointTest` pins as STILL divergent, and this test
+	 * goes LOUD the day that pin does — deliberately, the same way the pin itself
+	 * does. The fixed-point assertion below stays true either way, but the
+	 * ADVISORY assertion FAILS once the writer converges in one pass: the note is
+	 * born from `rewrites > 1`, so a fixed writer produces no note and there is
+	 * nothing for `advisory` to contain. That failure is the signal to read, not a
+	 * bug to patch — delete the advisory assertion then, and keep the fixed-point
+	 * one.
+	 */
+	public function testCreatedSuperclassSettlesTheWriterFixedPoint(): Void {
+		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": true}, "sameLine": {'
+			+ '"caseBody": "fitLine", "expressionCase": "fitLine"}, "wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": '
+			+ '"onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
+		final src: String = 'package pkg;\n\nclass Unpack {\n\tpublic function new() {}\n\n\tpublic function readNode(xml: Fast): Void {\n'
+			+ '\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n\t\t\t\tcfg.zips.push({ path: try StringTools.trim(xml.innerData) catch ('
+			+ '_: Any) \'\', file: xml.att.file, rm: xml.isTrue(\'rm\'), log: !xml.isFalse(\'log\') });\n\t\t\tcase _:\n'
+			+ '\t\t\t\ttrace(xml);\n\t\t}\n\t}\n\n\tpublic function keep(): Void {}\n}\n';
+		switch ExtractSuperclass.extract(
+			'pkg/Unpack.hx', 'Unpack', 'BaseUnpack', 'pkg/BaseUnpack.hx', ['readNode'], src, plugin(), config
+		) {
+			case Ok(changes, advisory):
+				final base: String = changeFor(changes, 'pkg/BaseUnpack.hx').newSource;
+				Assert.equals(base, plugin().writeRoundTrip(base, config), 'the created file must be the writer FIXED POINT:\n<$base>');
+				Assert.isTrue(
+					advisory != null && advisory.contains('rewrites to reach its fixed point'),
+					'the advisory must say the writer needed a second pass, got: $advisory'
+				);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	private function okChanges(
 		srcFile: String, srcType: String, superName: String, superFile: String, memberNames: Array<String>, srcSource: String
 	): Array<MoveChange> {

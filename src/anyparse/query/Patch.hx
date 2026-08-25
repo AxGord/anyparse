@@ -104,7 +104,7 @@ final class Patch {
 		for (i in 1...sorted.length) if (sorted[i].span.from < sorted[i - 1].span.to)
 			return Err(discarded('the matched fragments overlap — merge the overlapping pairs into one', multi));
 		return switch RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson) {
-			case Ok(text): verbatimSpliceIntact(source, synthesised, text);
+			case Ok(text, rewrites): verbatimSpliceIntact(source, synthesised, text, rewrites);
 			case failed: failed;
 		}
 	}
@@ -302,7 +302,9 @@ final class Patch {
 	 * line of the run by ONE amount. The defect this guards moves the FIRST line only,
 	 * which no uniform shift can explain.
 	 */
-	private static function verbatimSpliceIntact(source: String, edits: Array<{ span: Span, text: String }>, result: String): EditResult {
+	private static function verbatimSpliceIntact(
+		source: String, edits: Array<{ span: Span, text: String }>, result: String, rewrites: Null<Int>
+	): EditResult {
 		final regions: Array<Span> = RefactorSupport.collectNonCodeRegions(source);
 		final lines: Array<String> = result.replace('\r\n', '\n').split('\n');
 		for (edit in edits) {
@@ -321,7 +323,10 @@ final class Patch {
 					+ '`apq source --select` so the indentation it dropped can be recovered'
 				);
 		}
-		return Ok(result);
+		// `rewrites` is carried THROUGH, not dropped: this postcondition re-wraps
+		// `canonicalize`'s `Ok`, and a re-wrap that forgets the count makes `patch` — the
+		// default small-edit op — the one seam that absorbs the writer defect in silence.
+		return Ok(result, rewrites);
 	}
 
 	/**

@@ -15,15 +15,24 @@ using StringTools;
 using Lambda;
 
 /**
- * Outcome of a source-mutation operation: `Ok` carries the rewritten
- * source, `Err` a human-readable diagnostic. Shared by the structural
- * INSERT / REPLACE ops (`AddMember` / `AddImport` / `ReplaceNode`),
- * which all funnel their finalize through `RefactorSupport.canonicalize`
- * and therefore return the same shape.
+ * Outcome of a source-mutation operation: `Ok` carries the rewritten source
+ * and, when the producer measured one, how many writer round trips the
+ * finalise took (`rewrites`); `Err` a human-readable diagnostic. Shared by
+ * the structural INSERT / REPLACE ops (`AddMember` / `AddImport` /
+ * `ReplaceNode`), which all funnel their finalize through
+ * `RefactorSupport.canonicalize` and therefore return the same shape.
+ *
+ * `rewrites` is `null` from any producer that never ran the writer loop — an
+ * `Ok` built straight from a splice — and the argument is OPTIONAL so the
+ * ~280 `case Ok(text)` sites that do not care keep matching unchanged. A
+ * value above 1 says the WRITER needed a second pass on this content, which
+ * is the defect `apq fmt` reports and every mutation op used to swallow: the
+ * op wrote a file its own `fmt --list` would call drifted, and nobody was
+ * told.
  */
 enum EditResult {
 
-	Ok(text: String);
+	Ok(text: String, ?rewrites: Int);
 	Err(message: String);
 
 }
@@ -1357,18 +1366,21 @@ final class RefactorSupport {
 		// on the same file refused with `file is not in canonical form`.
 		//
 		// So the result goes through the SAME loop `fmt` uses, and refuses the same
-		// way: a result that never settles is an error, not a written file. What did
-		// NOT cross with the loop is `fmt`'s REPORTING — `fmt` warns on
-		// `rewrites > 1`, and this seam discards `FormatFixedPointResult.rewrites`
-		// because `EditResult` has nowhere to carry it, so every mutation op now
-		// absorbs the writer defect in silence. Plumbing it out to the CLI is the
-		// open half.
+		// way: a result that never settles is an error, not a written file — and it
+		// reports the same way too: `Ok` carries `rewrites`, so a caller that wrote a
+		// file the writer needed two passes to settle can say so in `fmt`'s own words
+		// (`FormatFixedPoint.rewritesNote`). That half used to be MUTE, because
+		// `EditResult.Ok` had nowhere to carry a count; the argument is optional, so
+		// the ~280 sites that match `Ok(text)` never noticed it arrive.
 		//
 		// BYTE-INERT, not free. The output is identical wherever the writer already
 		// converges, but the confirming pass is not skipped there: `run` short-cuts
 		// only when its input is ALREADY canonical, and the spliced text never is —
-		// that is what makes it spliced. Measured on this tree's 3 800-line
-		// `RefactorSupport.hx`, `apq add-member` went 700 ms to 850 ms, +21%. No
+		// that is what makes it spliced. (With an EMPTY edit set it can be: `applyEdits`
+		// hands back `source` unchanged, so a canonical source takes the short-cut and
+		// answers `rewrites: 0`. That is the shape the unit tests drive.) Measured on
+		// this tree's 3 800-line `RefactorSupport.hx`, `apq add-member` went 700 ms to
+		// 850 ms, +21%. No
 		// cheap early-out exists, because the second pass IS the proof and the
 		// gate's own round trip above says nothing about the splice.
 		//
@@ -1389,7 +1401,7 @@ final class RefactorSupport {
 		// --write` refuses the same file for the same reason, so pointing at it —
 		// the remedy the gate above offers — would send them in a circle.
 		return fixedPoint.converged
-			? Ok(settled)
+			? Ok(settled, fixedPoint.rewrites)
 			: Err(
 				'the writer cannot settle this file, so the edit was not written (${fixedPoint.failure})'
 				+ ' — edit it with ordinary tools and report the construct'

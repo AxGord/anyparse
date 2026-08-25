@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 /**
  * Outcome of a risky-fix verification pass. `baseline` is the typecheck of the
@@ -45,6 +46,40 @@ typedef FixVerifyResult = {
 typedef FixVerifyRevert = {
 	var file: String;
 	var rule: String;
+
+	/** Which of the two failures rolled it back — see `FixRevertCause`. */
+	var cause: FixRevertCause;
+}
+
+/**
+ * WHY a risky edit set was rolled back, and the whole point is that these are
+ * NOT the same event.
+ *
+ * `OracleRejected` is the verdict a `compilerOracle` exists to give: a candidate
+ * was written, the compiler read it, and it did not build. `NotCanonical` says
+ * no candidate ever reached the compiler — the writer refused to canonicalise
+ * the spliced source, so nothing was typechecked and nothing about the check's
+ * edit was learned. `OracleUnavailable` is the third: the oracle could not run
+ * at all.
+ *
+ * They were one answer until now, because every non-`Ok` from
+ * `RefactorSupport.canonicalize` fell into a `case _: false` that the bisect
+ * reads as "the compiler said no". Since `canonicalize` began refusing a source
+ * the writer cannot settle on a fixed point, that arm carries a WRITER defect
+ * wearing the compiler's name — and a reader chasing the recorded reason goes
+ * looking in the check's edit for a type error that is not there.
+ */
+enum FixRevertCause {
+
+	/** The candidate was written and the compiler rejected it. */
+	OracleRejected;
+
+	/** The oracle could not run; `reason` is its own diagnostic. */
+	OracleUnavailable(reason: String);
+
+	/** No candidate was produced: `RefactorSupport.canonicalize` refused with `message`. */
+	NotCanonical(message: String);
+
 }
 
 /**
@@ -70,15 +105,14 @@ typedef FixVerifyPartial = {
 /**
  * The verdict `verifyEntry` returns for one (check, file) edit set: nothing
  * happened (`NoChange`), the whole set survived (`Applied`), the whole set was
- * rolled back (`Reverted`), or the set was bisected into a kept complement and a
- * reverted remainder (`Partial`, carrying the kept / reverted counts and the
- * oracle spawns spent). The caller folds these into the `FixVerifyResult` lists.
+ * rolled back (`Reverted`, carrying WHY), or the set was bisected into a kept complement and a reverted remainder (`Partial`, carrying
+ * the kept / reverted counts, the oracle spawns spent, and why). The caller folds these into the `FixVerifyResult` lists.
  */
 private enum EntryVerdict {
 	NoChange;
 	Applied;
-	Reverted;
-	Partial(appliedEdits: Int, revertedEdits: Int, oracleInvocations: Int);
+	Reverted(cause: FixRevertCause);
+	Partial(appliedEdits: Int, revertedEdits: Int, oracleInvocations: Int, cause: FixRevertCause);
 }
 
 /**
@@ -167,14 +201,22 @@ final class FixVerifier {
 					case Applied:
 						applied.push(entry.file);
 						appliedEdits += edits.length;
-					case Reverted:
-						reverted.push({ file: entry.file, rule: check.id() });
-					case Partial(keptEdits, revertedEdits, probes):
+					case Reverted(cause):
+						reverted.push({
+							file: entry.file,
+							rule: check.id(),
+							cause: cause
+						});
+					case Partial(keptEdits, revertedEdits, probes, cause):
 						appliedEdits += keptEdits;
 						if (keptEdits > 0)
 							applied.push(entry.file)
 						else
-							reverted.push({ file: entry.file, rule: check.id() });
+							reverted.push({
+								file: entry.file,
+								rule: check.id(),
+								cause: cause
+							});
 						partials.push({
 							file: entry.file,
 							rule: check.id(),
@@ -219,19 +261,32 @@ final class FixVerifier {
 	): EntryVerdict {
 		final before: String = entry.source;
 		final full: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
+		// Three outcomes, not two: an `Err` here is the WRITER declining the spliced
+		// source, which is not the same event as a check that proposed nothing — and
+		// `case _: return NoChange` recorded both as the latter, so a refused edit set
+		// left no trace at all.
+		//
+		// But only ONE of the two `Err` origins belongs to this check. With
+		// `reformat = false`, `canonicalize` first REFUSES a source that is not already
+		// the writer's fixed point: nothing was spliced, nothing was learned, and on a
+		// tree nobody has formatted that is the common case, not the exceptional one.
+		// Charging the check for the TREE's state would put a `risky-fix REVERTED` line
+		// and a +1 on the reverted count under every risky rule on every drifted file.
+		// Re-asking the gate costs one round trip on an error path that is rare.
 		final fullText: String = switch RefactorSupport.canonicalize(before, full, false, plugin, opts) {
 			case Ok(text) if (text != before): text;
-			case _: return NoChange;
+			case Ok(_): return NoChange;
+			case Err(message): return isWriterCanonical(before, plugin, opts) ? Reverted(NotCanonical(message)) : NoChange;
 		};
 		write(entry.file, fullText);
 		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
 			case Confirmed:
 				entry.source = fullText;
 				return Applied;
-			case Unavailable(_):
+			case Unavailable(reason):
 				entry.source = before;
 				write(entry.file, before);
-				return Reverted;
+				return Reverted(OracleUnavailable(reason));
 			case Rejected(_):
 		}
 		final units: Array<Array<Int>> = unitsOf(edits);
@@ -239,7 +294,7 @@ final class FixVerifier {
 		if (n < 2) {
 			entry.source = before;
 			write(entry.file, before);
-			return Reverted;
+			return Reverted(OracleRejected);
 		}
 		// Cap all oracle spawns for this file at 2*ceil(log2(n)) + 2: the initial full-set
 		// typecheck (already spent) + the bisect search + the confirm. The search gets the
@@ -247,6 +302,12 @@ final class FixVerifier {
 		// never spuriously falls back.
 		final searchBudget: Int = 2 * ceilLog2(n);
 		final spent: Array<Int> = [0];
+		// `isolateFailers` reads a BOOLEAN oracle, so a probe that could not build a
+		// candidate has no honest answer to give it: `false` means "the compiler
+		// rejected this subset" and would blame these units for a failure they never
+		// caused. Record the refusal instead and abandon the bisect below — its search
+		// is only as sound as the answers it was fed.
+		var uncanonical: Null<String> = null;
 		function probe(indices: Array<Int>): Bool {
 			final subset: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, indices);
 			return switch RefactorSupport.canonicalize(before, subset, false, plugin, opts) {
@@ -256,14 +317,22 @@ final class FixVerifier {
 						case Confirmed: true;
 						case _: false;
 					}
-				case _: false;
+				case Err(message):
+					if (uncanonical == null) uncanonical = message;
+					false;
 			};
 		}
 		final failers: Null<Array<Int>> = isolateFailers(n, searchBudget, probe, spent);
+		final refusal: Null<String> = uncanonical;
+		if (refusal != null) {
+			entry.source = before;
+			write(entry.file, before);
+			return Partial(0, edits.length, 1 + spent[0], NotCanonical(refusal));
+		}
 		if (failers == null || failers.length >= n) {
 			entry.source = before;
 			write(entry.file, before);
-			return Partial(0, edits.length, 1 + spent[0]);
+			return Partial(0, edits.length, 1 + spent[0], OracleRejected);
 		}
 		final failerUnits: Array<Int> = failers;
 		final keptUnits: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
@@ -275,16 +344,24 @@ final class FixVerifier {
 				switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
 					case Confirmed:
 						entry.source = safeText;
-						Partial(safe.length, edits.length - safe.length, invocations);
+						// `OracleRejected` explicitly, not by defaulting: the cause is REQUIRED so
+						// that a future `Partial` cannot silently claim the compiler refused
+						// something it never saw. Here it is the truth — the full set was
+						// compiler-rejected, which is how the bisect was reached at all.
+						Partial(safe.length, edits.length - safe.length, invocations, OracleRejected);
 					case _:
 						entry.source = before;
 						write(entry.file, before);
-						Partial(0, edits.length, invocations);
+						Partial(0, edits.length, invocations, OracleRejected);
 				}
-			case _:
+			case Ok(_):
 				entry.source = before;
 				write(entry.file, before);
-				Partial(0, edits.length, 1 + spent[0]);
+				Partial(0, edits.length, 1 + spent[0], OracleRejected);
+			case Err(message):
+				entry.source = before;
+				write(entry.file, before);
+				Partial(0, edits.length, 1 + spent[0], NotCanonical(message));
 		};
 	}
 
@@ -387,10 +464,26 @@ final class FixVerifier {
 		return k;
 	}
 
+
+	/**
+	 * Does `source` already satisfy the one-pass canonical gate `canonicalize` puts on
+	 * its input?
+	 *
+	 * The discriminator between the two ways `canonicalize` can refuse: `false` means
+	 * the INPUT was never canonical, so the refusal is about the tree and says nothing
+	 * about the check's edit; `true` means the input passed that gate and the refusal
+	 * is the writer's own — a parse failure, a comment loss, or a source it cannot
+	 * settle on a fixed point. Asked by re-running the gate rather than by matching on
+	 * the message text, which would break the day the wording changes.
+	 */
+	private static function isWriterCanonical(source: String, plugin: GrammarPlugin, opts: Null<String>): Bool {
+		return try plugin.writeRoundTrip(source, opts) == source catch (_: Exception) false;
+	}
+
 }
 
 /** Internal control-flow signal: the bisect probe budget was exhausted. */
-private class BudgetExceeded extends haxe.Exception {
+private class BudgetExceeded extends Exception {
 
 	public function new() {
 		super('fix-verifier bisect budget exceeded');
