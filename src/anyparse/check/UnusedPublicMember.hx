@@ -1,10 +1,12 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
@@ -143,7 +145,7 @@ using StringTools;
  * type by rules the index does not model, and an `enum` / `typedef` declares no methods.
  */
 @:nullSafety(Strict)
-final class UnusedPublicMember implements Check implements DefaultOff implements RiskyFix {
+final class UnusedPublicMember implements Check implements DefaultOff implements RiskyFix implements ConfigAware {
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'unused-public-member';
@@ -198,7 +200,14 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 */
 	private var _deletable: Array<String> = [];
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return RULE_ID;
@@ -222,10 +231,12 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		// Names resolve over report UNION resolution scope: a call from a configured library is a
 		// real reference, and reading it as absent would report every method a library reaches.
 		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final ctx: Ctx = {
 			tokens: tokenCounts(files, wide, plugin),
 			fragments: ReflectionScan.reflectionSurface(files, plugin).fragments,
-			naming: plugin.namingSupport()
+			naming: plugin.namingSupport(),
+			contracts: contracts
 		};
 		final out: Array<Violation> = [];
 		for (entry in files) {
@@ -369,12 +380,15 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	}
 
 	/**
-	 * Whether a FRAMEWORK reaches `name` with no written call — in Haxe, a utest `test*` method of
-	 * a class transitively extending `Test`. Routed through `NamingSupport.frameworkReachable`,
-	 * the same predicate `unused-private` consults, so the two unused-* rules can never give
-	 * different answers about one member. Resolved through `scope` (report UNION resolution) so a
-	 * `Test` base living in a configured library still counts; a grammar exposing no naming
-	 * support answers `false` and the member is judged on the text scan alone.
+	 * Whether a FRAMEWORK reaches `name` with no written call — a utest `test*` method of a class
+	 * transitively extending `Test`, or any member a contract the project declared in `apqlint.json`
+	 * (`frameworks`) names. Routed through `NamingSupport.frameworkReachable`, the same predicate
+	 * `unused-private` consults, and asked with the same roster — so the two unused-* rules share the
+	 * PREDICATE and the contracts, not the resolution scope: this one resolves through the wide report
+	 * UNION scope (so a `Test` base living in a configured library still counts), `unused-private`
+	 * through its report index, and a member visible to one index and not the other can still get
+	 * different answers. A grammar exposing no naming support answers `false` and the member is judged
+	 * on the text scan alone.
 	 */
 	private static function frameworkReachable(ctx: Ctx, name: String, owner: String, span: Span, scope: SymbolIndex): Bool {
 		final naming: Null<NamingSupport> = ctx.naming;
@@ -386,7 +400,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			mods: [],
 			enclosingType: owner
 		};
-		return naming.frameworkReachable(decl, scope);
+		return naming.frameworkReachable(decl, () -> scope, ctx.contracts);
 	}
 
 	/**
@@ -542,5 +556,8 @@ private typedef Ctx = {
 
 	/** The grammar's naming projection, for its framework-reachability predicate; null when it exposes none. */
 	final naming: Null<NamingSupport>;
+
+	/** The project's declared framework contracts, resolved once per run — the roster the reachability predicate is asked with. */
+	final contracts: Array<FrameworkContract>;
 
 };

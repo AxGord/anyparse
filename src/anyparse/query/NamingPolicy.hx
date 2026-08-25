@@ -188,6 +188,32 @@ typedef NamedDecl = {
 	@:optional var contractName: Bool;
 }
 /**
+ * One framework's INVOCATION contract: the root type whose subtypes the framework drives, and the
+ * member names it reaches BY NAME with no call written anywhere in the project.
+ *
+ * A project states these in `apqlint.json` (`frameworks`), because that is the only place the fact
+ * lives: WHICH framework drives a tree is a property of the project, not of the language, and the
+ * metadata that looks like it answers this does not. Measured on one Unity tree, 29 files carry a
+ * lifecycle callback and 6 of them carry no `@:nativeGen` at all — `@:nativeGen` answers EMISSION,
+ * never INVOCATION.
+ *
+ * `names` matches a member name EXACTLY (Unity's `Start` / `Update`, Godot's `_ready`); `prefixes`
+ * matches a leading fragment (utest discovers a test method by its `test` / `spec` / `setup` /
+ * `teardown` prefix). Both exist because both discovery styles are real, and because a grammar's
+ * OWN built-in framework uses the prefix one: expressing the built-in in this same record is what
+ * keeps the shipped default and the project's roster ONE predicate instead of two that drift.
+ */
+typedef FrameworkContract = {
+	/** Simple name of the root type whose subtypes the framework drives (`MonoBehaviour`, `Test`). */
+	final root: String;
+
+	/** Member names the framework reaches by name, matched exactly. */
+	final names: Array<String>;
+
+	/** Member-name prefixes the framework discovers by, matched as a leading fragment. */
+	final prefixes: Array<String>;
+};
+/**
  * A grammar plugins projection for the `naming` check: `project` lists the name-checkable declarations of a tree, and the policy lookup resolves each file to its effective `NamingPolicy` (discovered project config or built-in default). Keeps the check free of grammar-specific node types.
  */
 @:nullSafety(Strict)
@@ -204,12 +230,37 @@ interface NamingSupport {
 	public function policyFor(path: String): NamingPolicy;
 
 	/**
-	 * Whether `decl` is reachable through a framework or macro rather than an
-	 * in-source reference, given the cross-file `index` (e.g. a utest `test*` method
-	 * whose class transitively extends `Test`). Distinct from the per-decl,
-	 * index-free `NamedDecl.implicitReach`.
+	 * Whether `decl` is reachable through a framework rather than an in-source reference: its
+	 * enclosing type transitively extends some contract's `root`, and that contract reaches its
+	 * name. `contracts` is the PROJECT's declared roster (`apqlint.json` `frameworks`); an
+	 * implementation unions it with the frameworks its own language ships with and runs both
+	 * through one predicate, so a project that declares a framework can never get the carve-out
+	 * from one rule and not from its siblings.
+	 *
+	 * `index` is a THUNK rather than an index because the two halves of the question cost wildly
+	 * different amounts: naming the declaration is a string test, walking the supertype closure is
+	 * a whole-scope index. A caller that has built no index yet (`naming`) then pays for one only
+	 * when a contract actually names the declaration, and a null answer — no index could be built —
+	 * leaves the closure unprovable, which is `false`.
+	 *
+	 * Distinct from the per-decl, index-free `NamedDecl.implicitReach`.
 	 */
-	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool;
+	public function frameworkReachable(decl: NamedDecl, index: () -> Null<SymbolIndex>, contracts: Array<FrameworkContract>): Bool;
+
+	/**
+	 * Whether a framework's claim on `decl`'s name is TOTAL — the whole spelling IS the message, so
+	 * no rename of it can be safe. Strictly narrower than `frameworkReachable`, and the two are
+	 * separate questions rather than one answer read twice. An exact `names` contract always owns the
+	 * spelling. A PREFIX contract owns it only when a rename would DESTROY the fragment it claims: utest's `test` / `spec` / `setup` / `teardown` are fragments no correction the Haxe grammar ships
+	 * can eat, so what follows them is still the project's to choose and a naming finding there is
+	 * right — where a prefix like Godot's `_` survives no correction at all, and dropping it unhooks the
+	 * member from the framework as surely as renaming it whole. WHICH prefixes survive is the
+	 * implementation's knowledge, because the normalizers are.
+	 *
+	 * `index` and `contracts` mean exactly what they do on `frameworkReachable`; an implementation
+	 * answers both through one supertype closure.
+	 */
+	public function frameworkOwnsName(decl: NamedDecl, index: () -> Null<SymbolIndex>, contracts: Array<FrameworkContract>): Bool;
 
 	/**
 	 * The member names `tree` reaches BY NAME through a reflection API — every string

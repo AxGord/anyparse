@@ -705,6 +705,7 @@ import unit.WrapFlatSourceFixedPointTest;
 import unit.HaxeFormatConfigDiagnosticsTest;
 import unit.HxWrapConditionVocabularyTest;
 import unit.LintScopeGateTest;
+import unit.FrameworkContractTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1379,6 +1380,7 @@ class RunTests {
 		addCase(new FoldStringLiteralsCandidateGateTest());
 		addCase(new FoldStringLiteralsCondRegionTest());
 		addCase(new NamingCheckTest());
+		addCase(new FrameworkContractTest());
 		addCase(new NamingCheckLocalFixTest());
 		addCase(new NamingCheckMemberFixTest());
 		addCase(new NamingCheckAltSpellingFixTest());

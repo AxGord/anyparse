@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.HoistedConstant;
 import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamedDecl;
@@ -202,6 +203,21 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static final HOIST_MOD_KINDS: Array<String> = ['Private', 'Static'];
 
 	/**
+	 * The frameworks Haxe's own ecosystem ships, unioned with whatever the project declares in
+	 * `apqlint.json` (`frameworks`). utest discovers a test method by PREFIX — which is why
+	 * `FrameworkContract` carries a prefix set at all: with the built-in stated as a contract, the
+	 * shipped default and the configured roster go through one predicate, instead of the built-in
+	 * being a second code path nothing keeps in step.
+	 */
+	private static final BUILTIN_CONTRACTS: Array<FrameworkContract> = [
+		{
+			root: 'Test',
+			names: [],
+			prefixes: ['test', 'spec', 'setup', 'teardown']
+		}
+	];
+
+	/**
 	 * The effective policy of each directory `policyFor` has already resolved, so an 851-file scope
 	 * walks up to `checkstyle.json`, reads it and builds its rules ONCE per directory instead of once
 	 * per file — measured at 851 disk walks, 851 JSON parses and 851 policy builds for one config.
@@ -243,10 +259,12 @@ final class HaxeNamingSupport implements NamingSupport {
 		return policy;
 	}
 
-	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool {
-		if (decl.category != NamingCategory.Method) return false;
-		final owner: Null<String> = decl.enclosingType;
-		return owner != null && isUtestMethodName(decl.name) && transitivelyExtendsTest(owner, index);
+	public function frameworkReachable(decl: NamedDecl, index: () -> Null<SymbolIndex>, contracts: Array<FrameworkContract>): Bool {
+		return nominated(decl, index, contracts, false);
+	}
+
+	public function frameworkOwnsName(decl: NamedDecl, index: () -> Null<SymbolIndex>, contracts: Array<FrameworkContract>): Bool {
+		return nominated(decl, index, contracts, true);
 	}
 
 	public function reflectionMemberNames(tree: QueryNode, source: String): Array<String> {
@@ -718,9 +736,36 @@ final class HaxeNamingSupport implements NamingSupport {
 		return isMemberCategory(target) ? isMemberCategory(category) : category == target;
 	}
 
-	/** A method name utest's `@:autoBuild` collects: a `test*` / `spec*` test or a `setup*` / `teardown*` fixture. */
-	private static function isUtestMethodName(name: String): Bool {
-		return name.startsWith('test') || name.startsWith('spec') || name.startsWith('setup') || name.startsWith('teardown');
+	/**
+	 * The shared body of both framework questions: `decl` is a METHOD whose enclosing type transitively
+	 * extends the root of some contract that claims its name. `wholeName` picks WHICH claim counts — an
+	 * exact `names` entry, plus (`claimsByPrefix`) a `prefixes` fragment: any of them for the
+	 * reachability question the unused-* rules ask, only one a rename would destroy for the naming
+	 * rule's narrower `frameworkOwnsName`. One body, because the two differ in a single predicate and
+	 * would otherwise drift in the expensive half they share.
+	 *
+	 * METHOD only, deliberately. Every case this was built from is a message the framework SENDS;
+	 * widening it to fields would let a configured name suppress an `unused-private` FIELD report, and
+	 * nothing measured has asked for that yet.
+	 *
+	 * The name test runs FIRST and the supertype closure second: naming the declaration is a string
+	 * compare, the closure is a whole-scope index the caller may not have built.
+	 */
+	private static function nominated(
+		decl: NamedDecl, index: () -> Null<SymbolIndex>, contracts: Array<FrameworkContract>, wholeName: Bool
+	): Bool {
+		if (decl.category != NamingCategory.Method) return false;
+		final owner: Null<String> = decl.enclosingType;
+		if (owner == null) return false;
+		final ownerName: String = owner;
+		final name: String = decl.name;
+		final claiming: Array<FrameworkContract> = BUILTIN_CONTRACTS.concat(contracts)
+			.filter(c -> c.names.contains(name) || c.prefixes.exists(prefix -> claimsByPrefix(name, prefix, wholeName)));
+		if (claiming.length == 0) return false;
+		final resolved: Null<SymbolIndex> = index();
+		if (resolved == null) return false;
+		final idx: SymbolIndex = resolved;
+		return claiming.exists(c -> transitivelyExtends(ownerName, c.root, idx));
 	}
 
 	/** Whether `member`'s initializer is a bare PascalCase type reference (`= SomeType`) — the macro-force anchor shape. */
@@ -734,11 +779,16 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * Whether `typeName` transitively extends a `Test` base (utest), via BFS over the
-	 * index's per-type direct-supertype names (`extends utest.Test` is indexed as the
-	 * simple name `Test`). Resolves the intermediate-base case a single tree cannot.
+	 * Whether `typeName` transitively extends `root`, via BFS over the index's per-type
+	 * direct-supertype names (`extends utest.Test` is indexed as the simple name `Test`).
+	 * Resolves the intermediate-base case a single tree cannot.
+	 *
+	 * Deliberately NOT `SymbolIndex.isSubtype`: that one REFUSES when the type name is declared in
+	 * more than one file, so adopting it here would silently DROP the carve-out for an ambiguous
+	 * name and start reporting members this predicate used to spare — a behaviour change this seam
+	 * does not own.
 	 */
-	private static function transitivelyExtendsTest(typeName: String, index: SymbolIndex): Bool {
+	private static function transitivelyExtends(typeName: String, root: String, index: SymbolIndex): Bool {
 		final superMap: Map<String, Array<String>> = [];
 		for (f in index.allFiles()) for (t in f.types) superMap[t.name] = t.supertypes;
 		final seen: Array<String> = [typeName];
@@ -748,7 +798,7 @@ final class HaxeNamingSupport implements NamingSupport {
 			i++;
 			if (supers == null) continue;
 			for (s in supers) {
-				if (s == 'Test') return true;
+				if (s == root) return true;
 				if (!seen.contains(s)) seen.push(s);
 			}
 		}
@@ -936,6 +986,42 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function upperSnakeConstant(name: String): Null<String> {
 		final upper: String = RefactorSupport.upperSnake(name);
 		return upper != name && RefactorSupport.isIdentifier(upper) ? upper : null;
+	}
+
+
+	/**
+	 * Whether contract prefix `prefix` claims `name` for the question `wholeName` asks.
+	 *
+	 * REACHABILITY takes any leading fragment — the framework finds the member either way.
+	 * OWNERSHIP takes only a fragment a RENAME WOULD DESTROY, and here that is decidable from the
+	 * fragment alone: `defaults()` gives `NamingCategory.Method` exactly ONE normalizer,
+	 * `stripUnderscorePrefix`, and `normalizerFor` draws its candidates from `defaults()`, so a project
+	 * `checkstyle.json` can change the FORMAT a method must match but never the correction. A fragment
+	 * of lowercase letters therefore starts a name with no leading underscore, for which that
+	 * normalizer derives nothing — no rename of it exists to lose the fragment, and utest's `test` /
+	 * `spec` / `setup` / `teardown` are all such fragments, which is what keeps the shipped default arm
+	 * inert. A fragment carrying anything else is one a correction that reshapes the head would eat:
+	 * `_` is destroyed by the normalizer that ships (Godot's `_ready` corrects to `ready`, which the
+	 * engine never calls again), and `On` would be by any camelCase correction added later.
+	 *
+	 * ⚠️ That soundness is a COUPLING, not a theorem: it holds while the Method category has no
+	 * normalizer that reshapes the head. `snakeToCamel` is already attached to `Local` / `Param` /
+	 * `CatchVar` and is the obvious next one — attach it to `Method` and a lowercase fragment starts
+	 * being destroyed while this predicate still calls it safe. Read this before editing `defaults()`.
+	 *
+	 * Conservative on the residue (a digit, a non-ASCII unit): survival it cannot prove reads as
+	 * destroyed, which costs one unreported name and never an unhooked callback. An EMPTY fragment
+	 * would claim every name here; `LintConfig.parseFrameworks` is what makes that unreachable, by
+	 * filtering `""` out of a declared roster and dropping the entry it empties — not dead validation.
+	 */
+	private static function claimsByPrefix(name: String, prefix: String, wholeName: Bool): Bool {
+		if (!name.startsWith(prefix)) return false;
+		if (!wholeName) return true;
+		for (i in 0...prefix.length) {
+			final code: Int = prefix.fastCodeAt(i);
+			if (code < 'a'.code || code > 'z'.code) return true;
+		}
+		return false;
 	}
 
 }
