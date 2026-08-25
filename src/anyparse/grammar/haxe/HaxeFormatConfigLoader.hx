@@ -698,6 +698,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralWrap: base.objectLiteralWrap,
 			callParameterWrap: base.callParameterWrap,
 			arrayLiteralWrap: base.arrayLiteralWrap,
+			mapLiteralWrap: base.mapLiteralWrap,
 			multiVarWrap: base.multiVarWrap,
 			casePatternWrap: base.casePatternWrap,
 			anonTypeWrap: base.anonTypeWrap,
@@ -977,7 +978,13 @@ final class HaxeFormatConfigLoader {
 			final ct: Null<WrapConditionType> = HaxeFormatValues.wrapCondFromString(condStr);
 			if (ct == null) return null;
 			final condNarrow: WrapConditionType = ct;
-			mapped.push({ cond: condNarrow, value: rc.value ?? 0 });
+			// `?? 1`, not `?? 0` — haxe-formatter declares `@:default(1)` on
+			// `WrapCondition.value`, and for the three POLARITY predicates
+			// (`exceedsMaxLineLength`, `hasMultilineItems`, `equalItemLengths`) the
+			// two differ by the whole meaning of the rule: `0` reads as "match when
+			// the signal does NOT hold". A threshold predicate with no `value` is a
+			// config error under either default.
+			mapped.push({ cond: condNarrow, value: rc.value ?? 1 });
 		}
 		final locStr: Null<String> = raw.location;
 		final location: Null<WrappingLocation> = locStr != null ? HaxeFormatValues.wrappingLocationFromString(locStr) : null;
@@ -1253,6 +1260,7 @@ final class HaxeFormatConfigLoader {
 
 	private static function applyWrappingRulesA(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
+		if (section.mapWrap != null) opt.mapLiteralWrap = wrapRulesFromConfig(section.mapWrap, opt.mapLiteralWrap);
 		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
 		if (section.casePattern != null) opt.casePatternWrap = wrapRulesFromConfig(section.casePattern, opt.casePatternWrap);
 		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);

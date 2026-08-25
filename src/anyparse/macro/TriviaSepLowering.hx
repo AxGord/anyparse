@@ -129,7 +129,17 @@ final class TriviaSepLowering {
 		// condition and the fill-mode chunk policy. Default false → no
 		// classification runs and every other sep-Star caller is
 		// byte-identical.
-		complexItems: Bool = false
+		complexItems: Bool = false,
+		// ω-mapwrap: when the sep-Star ctor carries
+		// `@:fmt(mapWrapRules('<field>'))` (`HxExpr.ArrayExpr`), a MAP literal
+		// reads THAT cascade instead of the one `wrapRules` names — the fork's
+		// `arrayWrapping` split between `arrayLiteralWrapping` and
+		// `mapLiteralWrapping` on `getBkOpenType == MapLiteral`. The caller
+		// supplies both the field name and the runtime test that decides,
+		// because only it can reach the grammar's own bracket-kind predicate.
+		// Null → every list keeps reading the `wrapRules` cascade, which is
+		// what the writer did before.
+		?mapWrap: WriterLowering.SepStarMapWrap
 	): Expr {
 		// noqa: complexity
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
@@ -212,7 +222,7 @@ final class TriviaSepLowering {
 		// tail consumes. Extracted to `triviaSepCheckExprs` so the orchestrator
 		// stays under the complexity gate; behaviour byte-identical.
 		final checks: WriterLowering.SepStarChecks = triviaSepCheckExprs(
-			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob, forceMultiInTypedef
+			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob, forceMultiInTypedef, mapWrap
 		);
 		final keepCheckExpr: Expr = checks.keepCheckExpr;
 		final ignoreCheckExpr: Expr = checks.ignoreCheckExpr;
@@ -260,6 +270,7 @@ final class TriviaSepLowering {
 			closeText: closeText,
 			sepText: sepText,
 			wrapRulesField: wrapRulesField,
+			mapWrap: mapWrap,
 			bodyAwareCompactIndent: bodyAwareCompactIndent,
 			matrixWrap: matrixWrap,
 			groupRestProbe: groupRestProbe,
@@ -599,6 +610,30 @@ final class TriviaSepLowering {
 	}
 
 	/**
+	 * The `opt` field the cascade for THIS list lives on. Plain
+	 * `opt.<wrapRulesField>` unless the Star also named a map-literal
+	 * cascade, in which case the generated code picks between the two per
+	 * list, off the caller-supplied `isMapLiteral` test.
+	 *
+	 * That test arrives as an `Expr` rather than as a name because
+	 * building it needs `_shape` and `_ctx` to resolve the AST-predicate class
+	 * for this build, and this module has neither — `WriterLowering.mapWrapFor`
+	 * owns both halves. It reads `_arr`, the element array bound by the block
+	 * `triviaSepStarExpr` returns: the same unhygienic cross-function coupling
+	 * every other `_arr` / `_docs` splice fed to this module has. Nothing
+	 * enforces it; a mismatch is a typing error at build, not a silent
+	 * miscompile.
+	 */
+	@:access(anyparse.macro.WriterLowering)
+	private static function wrapRulesAccess(wrapRulesField: String, mapWrap: Null<WriterLowering.SepStarMapWrap>): Expr {
+		final base: Expr = WriterLowering.optFieldAccess(wrapRulesField);
+		if (mapWrap == null) return base;
+		final mapAccess: Expr = WriterLowering.optFieldAccess(mapWrap.field);
+		final isMapLiteralExpr: Expr = mapWrap.isMapLiteralExpr;
+		return macro ($isMapLiteralExpr ? $mapAccess : $base);
+	}
+
+	/**
 	 * Sep-Star keep/ignore/noWrap runtime checks + leftCurly/rightCurly
 	 * placement Doc builders. Bundles the eight spliced Expr fragments the
 	 * sep-Star tail consumes, keeping the knob/pattern intermediates
@@ -608,10 +643,10 @@ final class TriviaSepLowering {
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaSepCheckExprs(
 		wrapRulesField: Null<String>, ignoreSourceNewlinesForWrap: Bool, reflowInExprPosition: Bool, leftCurlyKnob: Null<String>,
-		rightCurlyKnob: Null<String>, forceMultiInTypedef: Bool
+		rightCurlyKnob: Null<String>, forceMultiInTypedef: Bool, mapWrap: Null<WriterLowering.SepStarMapWrap>
 	): WriterLowering.SepStarChecks {
 		final keepCheckExpr: Expr = wrapRulesField != null ? {
-			final rulesAccess: Expr = WriterLowering.optFieldAccess(wrapRulesField);
+			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
 			macro anyparse.format.wrap.WrapList.cascadeIsKeep($rulesAccess, _arr.length);
 		} : macro false;
 		// ω-cascade-emits-comments: Ignore-mode runtime check, sister to
@@ -634,7 +669,7 @@ final class TriviaSepLowering {
 		final ignoreBase: Expr = if (ignoreSourceNewlinesForWrap)
 			macro true
 		else if (wrapRulesField != null) {
-			final rulesAccess: Expr = WriterLowering.optFieldAccess(wrapRulesField);
+			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
 			macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
 		} else
 			macro false;
@@ -684,7 +719,7 @@ final class TriviaSepLowering {
 		// (break only after a line-comment) when a mid-list `//` forced the
 		// list into the trivia branch.
 		final noWrapFlatCheckExpr: Expr = wrapRulesField != null ? {
-			final rulesAccess: Expr = WriterLowering.optFieldAccess(wrapRulesField);
+			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
 			macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap && $rulesAccess.rules.length == 0;
 		} : macro false;
 		// ω-objectlit-leftCurly-cascade: when the call site delegates
@@ -919,7 +954,7 @@ final class TriviaSepLowering {
 				: anyparse.grammar.haxe.HxComplexItems.kinds(cast _arr)
 			: macro final _complexKinds: Null<Array<Int>> = null;
 		return if (c.wrapRulesField != null) {
-			final rulesExpr: Expr = WriterLowering.optFieldAccess(c.wrapRulesField);
+			final rulesExpr: Expr = wrapRulesAccess(c.wrapRulesField, c.mapWrap);
 			// ω-functionsignature-body-aware-indent: thread the field-level
 			// `@:fmt(bodyAwareCompactIndent)` opt-in into `WrapList.emit`'s
 			// `compactContinuation` param as `true` for EVERY function-signature

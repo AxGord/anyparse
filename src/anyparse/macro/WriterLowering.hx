@@ -47,6 +47,16 @@ class WriterLowering {
 	/** `@:fmt(arrowValueIfReflow)` arg count that carries the optional value-if FIT knob as its 4th arg. */
 	private static inline final FIT_KNOB_ARG_COUNT: Int = 4;
 
+	/**
+	 * The grammar-supplied predicate that classifies an array-`[…]` ctor by its
+	 * first element (1 map literal, 2 comprehension, 0 array literal). Named
+	 * once because three emission paths ask for it — inner-bracket padding and
+	 * both trivia sep-Star entry points — and they must ask the SAME question:
+	 * a list that is a map to one of them and an array to another is a bug the
+	 * user sees as inconsistent formatting.
+	 */
+	private static inline final ARRAY_BRACKET_KIND_PRED: String = 'arrayBracketKind';
+
 	/** `@:fmt(valueBraceSymmetry)` required args (siblingField, blockCtor, stmtCtor); any further ones are skip-ctors. */
 	private static inline final VALUE_BRACE_SYMMETRY_MIN_ARGS: Int = 3;
 
@@ -2012,12 +2022,28 @@ class WriterLowering {
 			// chunk policy. Live here for `HxNewExpr.args`; the array literal
 			// opts in through the enum-Alt reader.
 			final complexItemsStar: Bool = starNode.fmtHasFlag('complexItems');
+			// ω-mapwrap: struct-Star reader, dual-dispatch twin of the enum-Alt
+			// one in `triviaSepStarBuild`. This is the OTHER trivia sep-Star
+			// entry point, and it is the only other one: the two plain-path
+			// `wrapRules` sites build their own `WrapList.emit` call and never
+			// reach `triviaSepStarExpr`, so a Star naming a map cascade there
+			// would be ignored — but no Star can, since `@:trivia` is what routes
+			// a sep-Star here and `HxExpr.ArrayExpr` carries it.
+			//
+			// No struct-Star names a map cascade today, so this reads null and the
+			// emitted call is byte-identical. It is wired rather than hardcoded
+			// null because the read alone is what the next Star to carry the meta
+			// on this path will need. Such a Star would also have to hold `HxExpr`
+			// elements — `mapWrapFor` hands `_arr[0].node` to a predicate whose
+			// parameter is `Null<HxExpr>`, so a Star of anything else is a
+			// macro-time type error rather than a silent misclassification.
+			final mapWrapStar: Null<SepStarMapWrap> = mapWrapFor(starNode.fmtReadString('mapWrapRules'));
 			parts.push(TriviaSepLowering.triviaSepStarExpr(
 				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
-				uniformStmtBlanksStar, complexItemsStar
+				uniformStmtBlanksStar, complexItemsStar, mapWrapStar
 			));
 			return;
 		}
@@ -5457,10 +5483,45 @@ class WriterLowering {
 		return _ctx.trivia ? TriviaTypeSynth.extraAltArgs(branch) : 0;
 	}
 
+	/**
+	 * The second wrap cascade a trivia sep-Star named through
+	 * `@:fmt(mapWrapRules('<field>'))`, paired with the runtime test that selects
+	 * it — `null` for the Stars that named none, which is all but one.
+	 *
+	 * The test is the grammar's OWN `arrayBracketKind` predicate, the same one
+	 * `@:fmt(bracketKindPad)` consults for inner-bracket padding, so a list cannot
+	 * be a map to one knob and an array to the other. It is built HERE rather than
+	 * inside `TriviaSepLowering` because resolving the predicate's class needs
+	 * `_shape` and `_ctx`, and it is built ONCE rather than at each of the two
+	 * sep-Star entry points because the argument expression and the length guard
+	 * are exactly the part that must not drift.
+	 *
+	 * `_arr[0].node` is an identifier bound by the block `triviaSepStarExpr`
+	 * emits — the same unhygienic coupling the `bracketKindPad` override Docs
+	 * have. Unlike those, this expression IS reachable with an empty list: the
+	 * Star's empty short-circuit also requires no close-trailing trivia, so a `[]`
+	 * carrying a line comment still runs the keep / ignore / noWrap checks. The
+	 * length guard is what stands between that and reading `.node` of nothing.
+	 */
+	private function mapWrapFor(field: Null<String>): Null<SepStarMapWrap> {
+		if (field == null) return null;
+		final kind: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, ARRAY_BRACKET_KIND_PRED, [macro _arr[0].node]);
+		return {
+			field: field,
+			isMapLiteralExpr: macro (_arr.length > 0 && $kind == 1)
+		};
+	}
+
 	@:access(anyparse.macro.TriviaSepLowering)
 	private function triviaSepStarBuild(c: EnumStarCtx, slots: TriviaAltSlots): Expr {
 		final branch: ShapeNode = c.branch;
 		final wrapRulesField: Null<String> = branch.fmtReadString('wrapRules');
+		// ω-mapwrap: enum-Alt branch reader for `@:fmt(mapWrapRules('<field>'))`
+		// (`HxExpr.ArrayExpr`) — a MAP literal goes to `wrapping.mapWrap`, every
+		// other bracket list to `wrapping.arrayWrap`, mirroring the fork's
+		// `arrayWrapping` split on `getBkOpenType == MapLiteral`. Null on every
+		// other Star.
+		final mapWrap: Null<SepStarMapWrap> = mapWrapFor(branch.fmtReadString('mapWrapRules'));
 		// ω-arraylit-trailing-comma-dispatch: enum-Alt branches
 		// (e.g. `HxExpr.ArrayExpr`) carry `@:fmt(trailingComma(
 		// '<knob>'))` but the trivia-mode emit at this site
@@ -5592,7 +5653,7 @@ class WriterLowering {
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt, false,
-			trailingCommaRemovableAlt, uniformStmtBlanksAlt, complexItemsAlt
+			trailingCommaRemovableAlt, uniformStmtBlanksAlt, complexItemsAlt, mapWrap
 		);
 	}
 
@@ -6242,15 +6303,21 @@ class WriterLowering {
 	 * resolves to any non-NoWrap mode.
 	 */
 	private function buildStarWrapsCascadePred(fieldExpr: Expr, cascadeAccess: Expr, itemFieldExpr: Expr): Expr {
-		// Width arithmetic mirrors `WrapList.emit`: each non-last item
-		// contributes `name + sep + space` (= +2 for fork-standard `, `),
-		// the last item contributes just `name`. Applied symmetrically
-		// to BOTH `_sum` (→ `totalItemLength` cascade cond) AND `_maxLen`
-		// (→ `anyItemLength` cascade cond) so the predicate's threshold
-		// answers match `WrapList.emit`'s at runtime. Without sep in
-		// maxLen the predicate could undershoot on item-length boundary
-		// cases (e.g. item of exactly 49 chars vs threshold 50: predicate
-		// false, emit true).
+		// Width arithmetic mirrors `WrapList.measureItems`: each non-last item
+		// contributes `name + sep + space` (= +2 for fork-standard `, `), the last
+		// item contributes just `name`. Applied to EVERY measurement the cascade
+		// reads — `_sum` (`totalItemLength`), `_maxLen` (`anyItemLength >= n` /
+		// `allItemLengths <= n`), `_minLen` (`anyItemLength <= n` /
+		// `allItemLengths >= n`) and `_equalLens` (`equalItemLengths`, with the
+		// same last-item allowance `measureItems` spells, since that item carries
+		// no separator) — so the predicate's answers match `WrapList.emit`'s at
+		// runtime. Without sep in maxLen the predicate could undershoot on
+		// item-length boundary cases (e.g. item of exactly 49 chars vs threshold
+		// 50: predicate false, emit true).
+		//
+		// The `+ 2` is literal because this predicate's only consumer is a
+		// comma-separated Star; a Star with a wider separator would need it
+		// threaded, and would silently measure short until then.
 		return macro {
 			final _arr = $fieldExpr;
 			if (_arr == null || _arr.length == 0)
@@ -6258,6 +6325,9 @@ class WriterLowering {
 			else {
 				var _sum: Int = 0;
 				var _maxLen: Int = 0;
+				var _minLen: Int = anyparse.format.wrap.WrapList.MAX_ITEM_LEN;
+				var _firstLen: Int = -1;
+				var _equalLens: Bool = true;
 				final _lastIdx: Int = _arr.length - 1;
 				for (_i in 0..._arr.length) {
 					final _p = _arr[_i];
@@ -6265,9 +6335,14 @@ class WriterLowering {
 					final _w: Int = _i < _lastIdx ? _raw + 2 : _raw;
 					_sum += _w;
 					if (_w > _maxLen) _maxLen = _w;
+					if (_w < _minLen) _minLen = _w;
+					if (_firstLen < 0)
+						_firstLen = _w;
+					else if (_w != _firstLen && !(_i == _lastIdx && _w + 2 == _firstLen))
+						_equalLens = false;
 				}
 				anyparse.format.wrap.WrapList.decideWithLineLengthState(
-					$cascadeAccess, _arr.length, _maxLen, _sum, false, false, _ -> false
+					$cascadeAccess, _arr.length, _maxLen, _sum, false, false, _ -> false, 0, _minLen, _equalLens
 				) != anyparse.format.wrap.WrapMode.NoWrap;
 			}
 		};
@@ -11793,7 +11868,7 @@ class WriterLowering {
 		// Kind 0 (ArrayLiteral) is the predicate's own null/other default,
 		// so the `arrayLiteralBrackets` policy applies — its `None`
 		// default keeps the tight `[1]` form.
-		final predCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, 'arrayBracketKind', [firstAccess]);
+		final predCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, ARRAY_BRACKET_KIND_PRED, [firstAccess]);
 		return macro {
 			final _abk: Int = $predCall;
 			final _abp: anyparse.format.WhitespacePolicy = $policyExpr;
@@ -15653,6 +15728,7 @@ typedef SepStarNoTriviaCtx = {
 	final closeText: String;
 	final sepText: String;
 	final wrapRulesField: Null<String>;
+	final mapWrap: Null<SepStarMapWrap>;
 	final bodyAwareCompactIndent: Bool;
 	final matrixWrap: Bool;
 	final groupRestProbe: Bool;
@@ -15676,6 +15752,20 @@ typedef SepStarNoTriviaCtx = {
 	 * byte-identical.
 	 */
 	final complexItems: Bool;
+};
+
+/**
+ * The second wrap cascade a sep-Star can name, and the runtime test that
+ * chooses it — `@:fmt(mapWrapRules('<field>'))` on `HxExpr.ArrayExpr`, where a
+ * MAP literal reads `wrapping.mapWrap` and everything else `wrapping.arrayWrap`.
+ *
+ * The two travel together because neither is usable alone: the field name
+ * without the test would pick a cascade for every list, and the test without
+ * the name has nothing to pick. `isMapLiteralExpr` is a spliced `Expr` rather than a predicate name because the class it calls depends on the build (`AstPreds` plain, `AstPredsT` trivia), which only the lowering that owns `_shape` and `_ctx` can resolve — `WriterLowering.mapWrapFor` builds both halves.
+ */
+typedef SepStarMapWrap = {
+	final field: String;
+	final isMapLiteralExpr: Expr;
 };
 /**
  * Output bundle of `triviaSepTrailExprs` — the source-trailing-comma /

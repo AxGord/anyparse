@@ -703,6 +703,7 @@ import unit.RedundantUncheckedCastCheckTest;
 import unit.ShadowingLocalCheckTest;
 import unit.WrapFlatSourceFixedPointTest;
 import unit.HaxeFormatConfigDiagnosticsTest;
+import unit.HxWrapConditionVocabularyTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -992,6 +993,7 @@ class RunTests {
 		addCase(new HxElseIfCommentReflowSliceTest());
 		addCase(new HxMethodChainCloseTrailingTest());
 		addCase(new HxWrapRulesIngestTest());
+		addCase(new HxWrapConditionVocabularyTest());
 		addCase(new PairedConvertersSmokeTest());
 		addCase(new HxAbstractClauseSpacingTest());
 		addCase(new HxElseIfOptionsTest());

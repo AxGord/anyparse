@@ -856,7 +856,21 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * Consumed by `@:fmt(bracketKindPad)` emission
 	 * (`WriterLowering.arrayBracketInsidePolicySpace`), whose runtime
 	 * switch maps 1 → `mapLiteralBrackets*`, 2 → `comprehensionBrackets*`,
-	 * default → `arrayLiteralBrackets*`.
+	 * default → `arrayLiteralBrackets*`; and by `@:fmt(mapWrapRules(…))`
+	 * (`WriterLowering.mapWrapFor`), which sends kind 1 to
+	 * `wrapping.mapWrap` and everything else to `wrapping.arrayWrap`. Two
+	 * knobs, ONE answer — a list that is a map to the padding and an array
+	 * to the cascade would read as arbitrary to the user.
+	 *
+	 * Where it diverges from the fork's token scan: `determineBkChildren`
+	 * looks for ANY `=>` at bracket depth 0, not just a first element, so
+	 * it sees through wrappers this does not — `[(1 => 2), (3 => 4)]`
+	 * (`ParenExpr` first) and `[@:foo 1 => 2]` (`MetaExpr` first) are map
+	 * literals upstream and array literals here, as is any list that MIXES
+	 * arrows with non-arrows. None of those compile as Haxe, and the array
+	 * answer is where every list went before either consumer existed, so
+	 * the gap costs nothing today; it is recorded because it is invisible
+	 * from the call sites.
 	 */
 	private function arrayBracketKindField(): Field {
 		final body: Expr = nullSwitch(ident('e'), macro 0, [

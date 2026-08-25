@@ -29,13 +29,25 @@ spelling against the tables below, not to look for the missing feature.
 
 The classes (`HxFormatWrappingSection`) — each takes the same rules object:
 
-`arrayWrap`, `multiVar`, `casePattern`, `anonType`, `methodChain`, `opBoolChain`,
-`opAddSubChain`, `callParameter`, `objectLiteral`, `conditionWrapping`,
+`arrayWrap`, `mapWrap`, `multiVar`, `casePattern`, `anonType`, `methodChain`,
+`opBoolChain`, `opAddSubChain`, `callParameter`, `objectLiteral`, `conditionWrapping`,
 `ternaryExpression`, `functionSignature`, `anonFunctionSignature`,
 `metadataCallParameter`, `typeParameter`, `expressionWrapping`, `implementsExtends`.
 
+`mapWrap` governs a MAP literal — a bracket list whose FIRST element is a `=>` arrow
+(`[k => v, …]`) — and `arrayWrap` governs an ordinary array literal, matching the fork's
+split between `mapLiteralWrapping` and `arrayLiteralWrapping`. A COMPREHENSION
+(`[for (x in xs) …]`) is NOT a map however it is spelled — upstream routes that bracket
+kind to `arrayLiteralWrapping` alongside plain arrays, so `arrayWrap` governs it here too
+(subject to `sameLine.comprehensionFor`, which can pre-empt the cascade).
+hxq asks the same question its
+`whitespace.bracketConfig` padding asks, so a list cannot be a map to one knob and an
+array to the other. Both cascades default to the same rules, so a config that sets only
+one of them is where the difference shows.
+
 Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (String),
-`trailingComma`, `comprehensionCuddledOpen` (Bool), `methodChainCuddledLinks` (Bool).
+`trailingComma`, `comprehensionCuddledOpen` (Bool), `methodChainCuddledLinks` (Bool),
+`soleItemCuddledBrackets` (Bool).
 
 A rules object holds `defaultWrap`, `defaultLocation`, `defaultAdditionalIndent` (Int),
 `rules` (an array of `{type, location, conditions}`) and `itemsAfterCloseParenOnly` (Bool,
@@ -68,14 +80,20 @@ source-flat three-item literal breaks one-per-line. The fork's `WrappingType` ha
 
 ### `rules[].conditions[].cond`
 
-The exact spellings, with the `value` each reads (`n`); a condition naming no `n` ignores it:
+The exact spellings. A condition whose name contains `n` reads `value` as that threshold;
+the three that do not — `exceedsMaxLineLength`, `hasMultilineItems`, `equalItemLengths` —
+read it as a POLARITY, `1` for "the signal holds" and `0` for "it does not". An omitted
+`value` reads as `1`.
 
 | `cond` | true when |
 |---|---|
 | `itemCount <= n` | the list has at most `n` items |
 | `itemCount >= n` | at least `n` items |
-| `anyItemLength >= n` | some item renders at least `n` chars wide |
-| `allItemLengths < n` | every item is under `n` chars |
+| `anyItemLength >= n` | the WIDEST item renders at least `n` chars wide |
+| `anyItemLength <= n` | the NARROWEST item is at most `n` chars |
+| `allItemLengths <= n` | every item is at most `n` chars (the fork's spelling; `allItemLengths < n` is an older hxq alias for the same test) |
+| `allItemLengths >= n` | every item is at least `n` chars |
+| `equalItemLengths` | `value: 1` — every item measures the same; `value: 0` — some two differ |
 | `totalItemLength >= n` | the items together are at least `n` chars |
 | `totalItemLength <= n` | at most `n` chars |
 | `exceedsMaxLineLength` | the flat form would pass `maxLineLength` |
@@ -83,8 +101,27 @@ The exact spellings, with the `value` each reads (`n`); a condition naming no `n
 | `hasMultilineItems` | some item is itself multi-line |
 | `complexItemCount >= n` | at least `n` items are "complex" (a call, a literal list, a lambda) |
 
+Item width is per-construct. For a delimited list (`arrayWrap`, `mapWrap`, `objectLiteral`,
+`callParameter`, `anonType`, …) it includes the separator and the space after it for every
+item but the last, which is why `equalItemLengths` still holds for a list whose last item
+is one separator shorter. The chain classes (`methodChain`, `opBoolChain`, `opAddSubChain`)
+measure differently and say so in `WrapItemMeasure`'s own doc — a method chain has no
+separator at all, and a binary chain compares `equalItemLengths` on the bare operands.
+
 Capitalised enum spellings (`ItemCountLargerThan`, `ExceedsMaxLineLength`, …) are accepted
-too. All conditions of one rule must hold; the first matching rule wins, else `defaultWrap`.
+too — including the fork's `HasMultiLineItems`, whose capital `L` differs from hxq's own
+`HasMultilineItems`. All conditions of one rule must hold; the first matching rule wins,
+else `defaultWrap`.
+
+**`lineLength <= n` is the one fork-shipped condition spelling hxq does NOT implement** —
+answering it needs the renderer's column probe inverted. A rule naming it is dropped whole.
+The same is true of the wrap TYPE `equalNumber`, which upstream declares and then does
+nothing with (its own `applyRule` arm is empty, so the rule matches and no wrapping is
+applied); hxq drops the rule instead, which lets a LATER rule match — a divergence only a
+config that names `equalNumber` can see.
+
+Every drop is named on stderr when the config is read, so a condition or type hxq cannot
+answer says so rather than quietly removing your rule.
 
 ### `rules[].location` / `defaultLocation`
 

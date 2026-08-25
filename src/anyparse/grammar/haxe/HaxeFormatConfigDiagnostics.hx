@@ -29,7 +29,11 @@ import haxe.Exception;
  * `Pony/hxformat.json`, `horse_game/hxformat.json`): 12, 19 and 19
  * unimplemented keys respectively, plus three of the fork's own shipped
  * condition strings (`equalItemLengths`, `allItemLengths <= n`,
- * `anyItemLength <= n`) that drop a whole rule each.
+ * `anyItemLength <= n`) that dropped a whole rule each. Re-measured the
+ * same day after those three predicates and `wrapping.mapWrap` were
+ * implemented: 12 / 18 / 18 keys and no wrap settings at all. What is
+ * left is the per-rule `additionalIndent` and a handful of whitespace /
+ * brace policies.
  *
  * Analysis and reporting are split on purpose: `diagnose` is a pure function of the config text and is what tests assert on, while `warn` is the boundary shell that knows the file the text came from and owns the once-per-path stderr line. One older diagnostic of the same kind still lives elsewhere: `HaxeFormatConfigLoader.warnUnknownIndentCharacter` reports an unreadable `indentation.character` from inside the loader, deduplicated by VALUE and without naming the file. Folding it in here needs its recognition predicate to become a shared `…FromString` reader first, so it stays where it is for now — and `indentation` is therefore the one section whose VALUES this class does not survey.
  */
@@ -182,6 +186,7 @@ final class HaxeFormatConfigDiagnostics {
 	private static function cascades(section: HxFormatWrappingSection): Array<HxFormatWrapRules> {
 		final all: Array<Null<HxFormatWrapRules>> = [
 			section.arrayWrap,
+			section.mapWrap,
 			section.multiVar,
 			section.casePattern,
 			section.anonType,

@@ -101,12 +101,23 @@ final class HaxeFormatValues {
 			case 'itemCount <= n', 'ItemCountLessThan': WrapConditionType.ItemCountLessThan;
 			case 'itemCount >= n', 'ItemCountLargerThan': WrapConditionType.ItemCountLargerThan;
 			case 'anyItemLength >= n', 'AnyItemLengthLargerThan': WrapConditionType.AnyItemLengthLargerThan;
-			case 'allItemLengths < n', 'AllItemLengthsLessThan': WrapConditionType.AllItemLengthsLessThan;
+			case 'anyItemLength <= n', 'AnyItemLengthLessThan':
+				WrapConditionType.AnyItemLengthLessThan;
+			// `allItemLengths <= n` is the FORK's spelling; `allItemLengths < n` is
+			// hxq's own older one, kept because this repo's docs and one ingest
+			// test still name it. Both mean `max(itemFlatLength) <= n`.
+			case 'allItemLengths <= n', 'allItemLengths < n', 'AllItemLengthsLessThan': WrapConditionType.AllItemLengthsLessThan;
+			case 'allItemLengths >= n', 'AllItemLengthsLargerThan': WrapConditionType.AllItemLengthsLargerThan;
+			case 'equalItemLengths', 'EqualItemLengths': WrapConditionType.EqualItemLengths;
 			case 'totalItemLength >= n', 'TotalItemLengthLargerThan': WrapConditionType.TotalItemLengthLargerThan;
 			case 'totalItemLength <= n', 'TotalItemLengthLessThan': WrapConditionType.TotalItemLengthLessThan;
 			case 'exceedsMaxLineLength', 'ExceedsMaxLineLength': WrapConditionType.ExceedsMaxLineLength;
-			case 'lineLength >= n', 'LineLengthLargerThan': WrapConditionType.LineLengthLargerThan;
-			case 'hasMultilineItems', 'HasMultilineItems': WrapConditionType.HasMultilineItems;
+			case 'lineLength >= n', 'LineLengthLargerThan':
+				WrapConditionType.LineLengthLargerThan;
+			// The fork's IDENTIFIER is `HasMultiLineItems` (capital L); hxq's own
+			// enum spells it `HasMultilineItems`. Accept both, or a config
+			// serialised from the fork's enum drops the whole rule.
+			case 'hasMultilineItems', 'HasMultiLineItems', 'HasMultilineItems': WrapConditionType.HasMultilineItems;
 			case 'complexItemCount >= n', 'ComplexItemCountLargerThan': WrapConditionType.ComplexItemCountLargerThan;
 			case _: null;
 		};

@@ -109,7 +109,7 @@ final class BinaryChainEmit {
 		//     would lay out flat. Replaces the old `HARDLINE_LEN` (~1M)
 		//     inflation that conflated "has hardline anywhere" with
 		//     "rule-bound widths".
-		final measure: { total: Int, maxLen: Int, anyHardline: Bool } = measureChain(items, ops);
+		final measure: WrapItemMeasure = measureChain(items, ops);
 		final total: Int = measure.total;
 		final maxLen: Int = measure.maxLen;
 		final anyHardline: Bool = measure.anyHardline;
@@ -151,7 +151,8 @@ final class BinaryChainEmit {
 		// `buildBinaryThresholdTree` (Haxe forbids closure-on-inline-closure).
 		function evalAt(exceeds: Bool, firing: Array<Int>): { mode: WrapMode, location: WrappingLocation } {
 			return WrapList.decideRuleWithLineLengthState(
-				rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
+				rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t), 0,
+				measure.minLen, measure.equalLens
 			);
 		}
 
@@ -1018,9 +1019,12 @@ final class BinaryChainEmit {
 	 * has a hardline anywhere (drives the break-commit shortcut). Split out of
 	 * `emit` for the complexity threshold.
 	 */
-	private static function measureChain(items: Array<Doc>, ops: Array<String>): { total: Int, maxLen: Int, anyHardline: Bool } {
+	private static function measureChain(items: Array<Doc>, ops: Array<String>): WrapItemMeasure {
 		var total: Int = 0;
 		var maxLen: Int = 0;
+		var minLen: Int = WrapList.MAX_ITEM_LEN;
+		var equalLens: Bool = true;
+		var firstLen: Int = -1;
 		var anyHardline: Bool = false;
 		for (i => item in items) {
 			if (WrapList.flatLength(item) < 0) anyHardline = true;
@@ -1039,12 +1043,46 @@ final class BinaryChainEmit {
 			// measures `maxLen=42` (`|| ` + 39) and the rule fires.
 			final renderedW: Int = i == 0 ? w : (ops[i - 1].length + 1 + w);
 			if (renderedW > maxLen) maxLen = renderedW;
+			if (renderedW < minLen) minLen = renderedW;
+			// `equalItemLengths` reads the BARE operand width, not the rendered
+			// one. `renderedW` charges every operand but the FIRST for an operator,
+			// so a chain of identical operands answers "not equal" no matter how
+			// uniform it is: the predicate could never match, and its `value: 0`
+			// twin could never fail.
+			//
+			// This is a deliberate DIVERGENCE from upstream, not parity with it.
+			// Upstream charges every operand but the LAST (its operator is
+			// trailing) and forgives the short one with a hard-coded `(length + 2)
+			// == itemLength` — a literal 2, which only ever equalises a ONE-
+			// character operator. Every operator these two cascades handle is two
+			// (`||`, `&&`, and `+` / `-` arrive here via `opAddSubChain` with the
+			// same ` op ` padding), so upstream's allowance never fires and it
+			// answers "not equal" for uniform chains too. Measuring the operands
+			// themselves is the semantic the predicate NAMES; matching upstream's
+			// arithmetic would only reproduce a number that never fires.
+			//
+			// `minLen` / `maxLen` deliberately keep the rendered width — those feed
+			// width-vs-`maxLineLength` questions, where the operator is real ink —
+			// so a cascade CAN be told "every item is equal" beside a min and max
+			// that differ. Nothing reads them together today, and no shipped fork
+			// config names `equalItemLengths` on a chain cascade at all (its two
+			// uses are both `arrayWrap` / `mapWrap`).
+			if (firstLen < 0)
+				firstLen = w;
+			else if (w != firstLen)
+				equalLens = false;
 		}
 		// Add ` op ` width per gap so the cascade's `totalLength` /
 		// `exceedsMaxLineLength` predicates measure the realistic flat
 		// span (`items joined by ' op '`).
 		for (i in 0...ops.length) total += ops[i].length + 2;
-		return { total: total, maxLen: maxLen, anyHardline: anyHardline };
+		return {
+			total: total,
+			maxLen: maxLen,
+			minLen: minLen,
+			equalLens: equalLens,
+			anyHardline: anyHardline
+		};
 	}
 
 	/**

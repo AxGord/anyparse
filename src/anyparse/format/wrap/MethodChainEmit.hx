@@ -106,13 +106,9 @@ class MethodChainEmit {
 		// default rule). Cascade rules `TotalItemLengthLargerThan` /
 		// `AnyItemLengthLargerThan` then see chain widths consistent
 		// with the renderer's flat-fit decision (ω-chain-itemlen-bg-defer).
-		var total: Int = 0;
-		var maxLen: Int = 0;
-		for (seg in segments) {
-			final len: Int = DocMeasure.flatTokenWidth(seg);
-			total += len;
-			if (len > maxLen) maxLen = len;
-		}
+		final measure: WrapItemMeasure = measureSegments(segments);
+		final total: Int = measure.total;
+		final maxLen: Int = measure.maxLen;
 
 		final cols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 
@@ -145,7 +141,8 @@ class MethodChainEmit {
 		// `buildChainThresholdTree` (Haxe forbids closure-on-inline-closure).
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
 			return WrapList.decideWithLineLengthState(
-				rules, segments.length, maxLen, total, exceeds, false, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
+				rules, segments.length, maxLen, total, exceeds, false, t -> t == opt.lineWidth ? exceeds : firing.contains(t), 0,
+				measure.minLen, measure.equalLens
 			);
 		}
 
@@ -308,6 +305,45 @@ class MethodChainEmit {
 			// break shape) — a future slice can split if a fixture
 			// demands it.
 			case _: shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth, cuddledLinks);
+		};
+	}
+
+	/**
+	 * The chain's per-segment measurements, in the shape the cascade tests
+	 * against. Segment width is the segment's rendered width with `BodyGroup`
+	 * content deferred (mirrors `Renderer.fitsFlat`'s BG-defer) and carries no
+	 * separator adjustment — a method chain has no separator, only the `.` that
+	 * each segment already begins with, so unlike a delimited list every segment
+	 * measures the same way and `equalLens` needs no last-item allowance.
+	 *
+	 * `anyHardline` is reported as `false`: this emitter has no force-break path
+	 * mirroring `BinaryChainEmit`'s, and its callers pass `hasMultilineItems =
+	 * false` to the cascade deliberately (see `emit`'s own note). The field is
+	 * present because `WrapItemMeasure` is one shape for all three emitters, not
+	 * because it is measured here.
+	 */
+	private static function measureSegments(segments: Array<Doc>): WrapItemMeasure {
+		var total: Int = 0;
+		var maxLen: Int = 0;
+		var minLen: Int = WrapList.MAX_ITEM_LEN;
+		var equalLens: Bool = true;
+		var firstLen: Int = -1;
+		for (seg in segments) {
+			final len: Int = DocMeasure.flatTokenWidth(seg);
+			total += len;
+			if (len > maxLen) maxLen = len;
+			if (len < minLen) minLen = len;
+			if (firstLen < 0)
+				firstLen = len;
+			else if (len != firstLen)
+				equalLens = false;
+		}
+		return {
+			total: total,
+			maxLen: maxLen,
+			minLen: minLen,
+			equalLens: equalLens,
+			anyHardline: false
 		};
 	}
 

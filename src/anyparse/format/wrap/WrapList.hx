@@ -224,6 +224,18 @@ typedef WrapListOptions = {
 class WrapList {
 
 	/**
+	 * Empty-list sentinel for the minimum item width. The fork's
+	 * `MarkWrappingBase` seeds its own `minItemLength` with the same literal,
+	 * for the same reason: a zero would make `anyItemLength <= n` fire on a
+	 * list with nothing to measure. It is a sentinel, not a neutral value: `allItemLengths >= n`
+	 * reads 9999 as MATCHING, so an empty list takes whatever mode a min-width
+	 * rule selects rather than falling past it. All three emitters return
+	 * before the cascade on an empty item list, so the only readers that ever
+	 * see the sentinel are the width-blind probes (`cascadeIsKeep`).
+	 */
+	public static inline final MAX_ITEM_LEN: Int = 9999;
+
+	/**
 	 * Emit the `Doc` for one delimited list. The positional arguments are the list's
 	 * IDENTITY — its delimiters and separator, the per-item Docs, the resolved
 	 * `WriteOptions`, the inside-delimiter padding and the rule set — and every one of
@@ -292,13 +304,13 @@ class WrapList {
 		if (groupified != null) items = groupified;
 
 		final sepWidth: Int = sep.length + 1;
-		final measure: { total: Int, maxLen: Int, anyHardline: Bool } = measureItems(items, sepWidth);
+		final measure: WrapItemMeasure = measureItems(items, sepWidth);
 		final total: Int = measure.total;
 		final maxLen: Int = measure.maxLen;
+		final minLen: Int = measure.minLen;
+		final equalLens: Bool = measure.equalLens;
 		final anyHardline: Bool = measure.anyHardline;
-		final cols: Int = continuationCols(
-			rules, opt, items, maxLen, total, anyHardline, sourceMultilineKeep, compactContinuation, breakAsOnePerLine
-		);
+		final cols: Int = continuationCols(rules, opt, items, measure, sourceMultilineKeep, compactContinuation, breakAsOnePerLine);
 		// ω-complex-item-count: the cascade counter behind `complexItemCount >= n`.
 		// A caller that supplies no kinds counts 0, so the condition never fires
 		// and every pre-slice list is byte-identical.
@@ -334,7 +346,7 @@ class WrapList {
 				floorSourceMultiline(
 					decideWithLineLengthState(
 						rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
-						complexCount
+						complexCount, minLen, equalLens
 					),
 					sourceMultilineKeep
 				),
@@ -374,7 +386,8 @@ class WrapList {
 		else if (extraThresholds.length == 0)
 			emitZeroThreshold(
 				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
-				leadFlat, leadBreak, evalAt, shapeAt, leadFor
+				leadFlat, leadBreak, evalAt, shapeAt, leadFor,
+				onePerLineWhenBreaking(floorSourceMultiline(rules.defaultMode, sourceMultilineKeep), breakAsOnePerLine, true)
 			)
 		else if (extraThresholds.length == 1)
 			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
@@ -462,7 +475,11 @@ class WrapList {
 		if (sourceOpenNewline && rules.defaultMode == WrapMode.Keep) return WrapBoundary(brkShape);
 
 		inline function decideAt(exceeds: Bool): WrapMode {
-			return decideWithLineLengthState(rules, 1, condW, condW, exceeds, hasHardline, t -> t == opt.lineWidth && exceeds);
+			// One item, so min and max are the same width and the widths are
+			// trivially equal.
+			return decideWithLineLengthState(
+				rules, 1, condW, condW, exceeds, hasHardline, t -> t == opt.lineWidth && exceeds, 0, condW, true
+			);
 		}
 
 		// Only `FillLineWithLeadingBreak` materialises the leading +
@@ -665,11 +682,12 @@ class WrapList {
 	 */
 	public static function decideWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false
 	): WrapMode {
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
-				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount
+				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
+				minItemLen, equalItemLengths
 			))
 				return rule.mode;
 		}
@@ -696,9 +714,20 @@ class WrapList {
 	 * disagrees across the probes and correctly returns `false`, so the
 	 * trivia path does NOT force keep when the source-layout intent is
 	 * actually gated on rendered width — that case stays on the legacy
-	 * cascade. Item-length / total-length conditions cannot be evaluated
-	 * pre-render either, so they are probed as "not firing"; no current
-	 * function-signature keep fixture uses them.
+	 * cascade. Width conditions cannot be evaluated pre-render either: they are
+	 * probed at the zero-width / empty-list sentinels (`maxItemLen = 0`,
+	 * `totalItemLen = 0`, `minItemLen = MAX_ITEM_LEN`, `hasMultilineItems =
+	 * false`, `equalItemLengths = false`, `complexItemCount = 0`), and that is
+	 * not "not firing" for most of them: `allItemLengths <= n`,
+	 * `allItemLengths >= n`, `totalItemLength <= n`, `complexItemCount >= n`
+	 * and the `value: 0` polarity of `equalItemLengths` / `hasMultilineItems`
+	 * all read as MATCHING there. That is the safe direction for every cascade this project has
+	 * met, because in all of them a spurious match resolves to a non-Keep mode,
+	 * so the probe answers false and the caller falls back to the width-aware
+	 * cascade. It is not safe by construction: a config whose `keep` rule is
+	 * ITSELF gated on one of those predicates would be force-kept on width
+	 * grounds the probe cannot see. Nothing here detects that shape; no
+	 * function-signature keep fixture has it.
 	 */
 	public static function cascadeIsKeep(rules: WrapRules, itemCount: Int): Bool {
 		inline function at(exceeds: Bool): WrapMode {
@@ -724,12 +753,13 @@ class WrapList {
 	 */
 	public static function decideRuleWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false
 	): { mode: WrapMode, location: WrappingLocation } {
 		final fallback: WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
-				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount
+				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
+				minItemLen, equalItemLengths
 			))
 				return { mode: rule.mode, location: rule.location ?? fallback };
 		}
@@ -1373,13 +1403,14 @@ class WrapList {
 	private static function emitZeroThreshold(
 		rules: WrapRules, items: Array<Doc>, opt: WriteOptions, cols: Int, open: String, close: String, openInside: Doc, closeInside: Doc,
 		forceMode: Null<WrapMode>, groupRestProbe: Bool, leadFlat: Doc, leadBreak: Doc, evalAt: (Bool, Array<Int>) -> WrapMode,
-		shapeAt: (WrapMode, Doc) -> Doc, leadFor: WrapMode -> Doc
+		shapeAt: (WrapMode, Doc) -> Doc, leadFor: WrapMode -> Doc, defaultBreakMode: WrapMode
 	): Doc {
 		final modeFlat: WrapMode = evalAt(false, []);
 		final modeBreak: WrapMode = evalAt(true, []);
 		if (modeFlat == modeBreak)
 			return emitZeroThresholdAgree(
-				modeFlat, rules, items, opt, cols, open, close, openInside, closeInside, forceMode, leadFlat, leadBreak, shapeAt, leadFor
+				modeFlat, rules, items, opt, cols, open, close, openInside, closeInside, forceMode, leadFlat, leadBreak, shapeAt, leadFor,
+				defaultBreakMode
 			);
 		final flatWithLead: Doc = shapeAt(modeFlat, leadFlat);
 		final breakWithLead: Doc = shapeAt(modeBreak, leadBreak);
@@ -1423,7 +1454,7 @@ class WrapList {
 	private static function emitZeroThresholdAgree(
 		modeFlat: WrapMode, rules: WrapRules, items: Array<Doc>, opt: WriteOptions, cols: Int, open: String, close: String,
 		openInside: Doc, closeInside: Doc, forceMode: Null<WrapMode>, leadFlat: Doc, leadBreak: Doc, shapeAt: (WrapMode, Doc) -> Doc,
-		leadFor: WrapMode -> Doc
+		leadFor: WrapMode -> Doc, defaultBreakMode: WrapMode
 	): Doc {
 		// ω-iffirstline-callarg: both states resolve to `NoWrap`
 		// (the cascade's NoWrap rules shadow a break `defaultMode`),
@@ -1443,6 +1474,24 @@ class WrapList {
 		// shape conflicts with `applyArrowWrapping`'s break-after-
 		// `->` layout. `forceMode != null` already bypasses the
 		// cascade, so it is excluded too.
+		// The GATE reads the RAW `defaultMode`; only the SHAPE reads the decorated
+		// one. `defaultBreakMode` is that mode after `floorSourceMultiline` /
+		// `onePerLineWhenBreaking`, and both can widen it into this branch's
+		// membership test: flooring turns a `NoWrap` default into `OnePerLine`,
+		// and `onePerLineWhenBreaking` promotes `PackedOrOnePerLine` — which
+		// `dmBreak` deliberately does not list — into `OnePerLine` too. Deciding
+		// the gate off the decorated mode would let this branch claim cascades it
+		// never served. (`floorSourceMultiline` cannot actually fire here today:
+		// its gate is `sourceMultilineKeep`, which forces the cascade to
+		// `OnePerLine` and so never reaches a `modeFlat == NoWrap` agreement. It
+		// is applied for symmetry with `evalAt`, so the two decorate identically
+		// if that ever stops being true.)
+		//
+		// With the shape decorated, a config pairing `defaultWrap:
+		// fillLineWithLeadingBreak` with a `noWrap` rule no longer escapes the
+		// `breakAsOnePerLine` axis here — its break arm emits the one-per-line
+		// shape the NEXT writer pass would have forced anyway, so the file
+		// reaches its fixed point in one pass.
 		final dm: WrapMode = rules.defaultMode;
 		final dmBreak: Bool = dm == OnePerLine || dm == OnePerLineAfterFirst || dm == FillLine || dm == FillLineWithLeadingBreak;
 		final soleArrow: Bool = items.length == 1 && isArrowBodyMarker(items[0]);
@@ -1475,14 +1524,14 @@ class WrapList {
 		if (items.length == 1) {
 			final split: Null<{ head: Doc, body: Doc }> = bareArrowSplit(items[0]);
 			if (split != null && !DocMeasure.firstVisibleTextStartsWith(split.body, '{'.code) && bareArrowBodyBreaks(split.body)) {
-				final openShape: Doc = shapeAt(dm, leadBreak);
+				final openShape: Doc = shapeAt(defaultBreakMode, leadBreak);
 				final flatShape: Doc = shapeAt(NoWrap, leadFlat);
 				final glueShape: Doc = bareArrowGlueShape(open, close, openInside, closeInside, split.head, split.body, cols);
 				final brk: Doc = IfFirstLineExceeds(opt.lineWidth, openShape, glueShape);
 				return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, brk, flatShape));
 			}
 		}
-		return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, shapeAt(dm, leadBreak), shapeAt(NoWrap, leadFlat)));
+		return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, shapeAt(defaultBreakMode, leadBreak), shapeAt(NoWrap, leadFlat)));
 	}
 
 	/**
@@ -1547,11 +1596,18 @@ class WrapList {
 	 * extends each non-last `endToken` to include the trailing comma and
 	 * its `spacesAfter`, and the renderer always pairs the bare `sep` with
 	 * a flat-mode space — so the effective per-gap width is `sep.length + 1`
-	 * (closes `wrapping/issue_494_type_parameter`).
+	 * (closes `wrapping/issue_494_type_parameter`). `minLen` / `equalLens`
+	 * feed `anyItemLength <= n` / `allItemLengths >= n` / `equalItemLengths`
+	 * off the SAME per-item width, so the last item — which carries no
+	 * separator — is allowed to measure `sepWidth` short of the others and
+	 * still count as equal.
 	 */
-	private static function measureItems(items: Array<Doc>, sepWidth: Int): { total: Int, maxLen: Int, anyHardline: Bool } {
+	private static function measureItems(items: Array<Doc>, sepWidth: Int): WrapItemMeasure {
 		var total: Int = 0;
 		var maxLen: Int = 0;
+		var minLen: Int = MAX_ITEM_LEN;
+		var equalLens: Bool = true;
+		var firstLen: Int = -1;
 		var anyHardline: Bool = false;
 		final lastIdx: Int = items.length - 1;
 		for (i => item in items) {
@@ -1560,8 +1616,22 @@ class WrapList {
 			final w: Int = i < lastIdx ? rawW + sepWidth : rawW;
 			total += w;
 			if (w > maxLen) maxLen = w;
+			if (w < minLen) minLen = w;
+			if (firstLen < 0)
+				firstLen = w;
+			// The last item carries no trailing separator, so a list of
+			// equal-width items measures `sepWidth` short there — the fork
+			// spells the same allowance as `(length + 2) == itemLength`.
+			else if (w != firstLen && !(i == lastIdx && w + sepWidth == firstLen))
+				equalLens = false;
 		}
-		return { total: total, maxLen: maxLen, anyHardline: anyHardline };
+		return {
+			total: total,
+			maxLen: maxLen,
+			minLen: minLen,
+			equalLens: equalLens,
+			anyHardline: anyHardline
+		};
 	}
 
 	/**
@@ -1586,14 +1656,18 @@ class WrapList {
 	 * signature is followed by an empty / absent body.
 	 */
 	private static function continuationCols(
-		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, maxLen: Int, total: Int, anyHardline: Bool, sourceMultilineKeep: Bool,
+		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, measure: WrapItemMeasure, sourceMultilineKeep: Bool,
 		compactContinuation: Bool, breakAsOnePerLine: Bool
 	): Int {
 		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 		final additional: Int = rules.defaultAdditionalIndent ?? 0;
 		final probeMode: WrapMode = onePerLineWhenBreaking(
 			floorSourceMultiline(
-				decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false), sourceMultilineKeep
+				decideWithLineLengthState(
+					rules, items.length, measure.maxLen, measure.total, true, measure.anyHardline, _ -> false, 0, measure.minLen,
+					measure.equalLens
+				),
+				sourceMultilineKeep
 			),
 			breakAsOnePerLine, true
 		);
@@ -1734,7 +1808,7 @@ class WrapList {
 
 	private static function matchesWithLineLengthState(
 		rule: WrapRule, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool, complexItemCount: Int = 0
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false
 	): Bool {
 		for (cond in rule.conditions) {
 			final ok: Bool = switch cond.cond {
@@ -1742,6 +1816,9 @@ class WrapList {
 				case ItemCountLessThan: itemCount <= cond.value;
 				case AnyItemLengthLargerThan: maxItemLen >= cond.value;
 				case AllItemLengthsLessThan: maxItemLen <= cond.value;
+				case AllItemLengthsLargerThan: minItemLen >= cond.value;
+				case AnyItemLengthLessThan: minItemLen <= cond.value;
+				case EqualItemLengths: cond.value == 0 ? !equalItemLengths : equalItemLengths;
 				case TotalItemLengthLargerThan: totalItemLen >= cond.value;
 				case TotalItemLengthLessThan: totalItemLen <= cond.value;
 				case ExceedsMaxLineLength: cond.value == 0 ? !exceedsMaxLineLength : exceedsMaxLineLength;

@@ -17,11 +17,12 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * drops rules with an unrecognised `cond` predicate, and degrades
  * gracefully when an entry is malformed.
  *
- * `testMultipleConditionsAndAllPredicates` exercises every
- * `wrapCondFromString` branch (`itemCount <= n` / `itemCount >= n` /
- * `anyItemLength >= n` / `allItemLengths < n` / `totalItemLength <= n` /
- * `totalItemLength >= n` / `exceedsMaxLineLength` / `lineLength >= n`)
- * so a regression in any single arm is caught by this file alone.
+ * Between them the tests here name every mapped predicate at least
+ * once, so a dropped `wrapCondFromString` arm is caught by this file alone. They do NOT cover every accepted SPELLING — each arm
+ * takes both a symbolic form and one or more enum identifiers, and only a
+ * few identifiers are exercised. `testLineLengthLessThanStillDropsRule`
+ * pins the one fork-shipped predicate that is still unmapped, from the
+ * other side.
  */
 @:nullSafety(Strict)
 class HxWrapRulesIngestTest extends Test {
@@ -84,6 +85,69 @@ class HxWrapRulesIngestTest extends Test {
 		Assert.equals(1, opts.methodChainWrap.rules[0].conditions.length);
 		Assert.equals(WrapConditionType.LineLengthLargerThan, opts.methodChainWrap.rules[0].conditions[0].cond);
 		Assert.equals(160, opts.methodChainWrap.rules[0].conditions[0].value);
+	}
+
+	/**
+	 * The four predicates the fork SHIPS in its own default config that hxq
+	 * had no mapping for — so `wrapRuleFromConfig` returned null and the
+	 * whole rule vanished from the cascade, silently and indistinguishably
+	 * from a typo. `allItemLengths <= n` is the fork's spelling of a
+	 * condition hxq already evaluated under its own older `allItemLengths <
+	 * n` (both still map, see the arm below); the other three are new
+	 * `WrapConditionType` members. `HasMultiLineItems` is the fork's
+	 * enum IDENTIFIER, which differs from hxq's `HasMultilineItems` by one
+	 * capital and drops the rule just as quietly.
+	 */
+	public function testForkShippedCondSpellingsIngest(): Void {
+		final conds: Array<String> = [
+			'{"cond":"equalItemLengths","value":1}',
+			'{"cond":"allItemLengths <= n","value":30}',
+			'{"cond":"allItemLengths >= n","value":5}',
+			'{"cond":"anyItemLength <= n","value":15}',
+			'{"cond":"HasMultiLineItems","value":1}',
+			'{"cond":"allItemLengths < n","value":30}'
+		];
+		final ruleList: String = [for (cond in conds) '{"type":"noWrap","conditions":[$cond]}'].join(',');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"wrapping":{"arrayWrap":{"rules":[$ruleList]}}}');
+		final rules: Array<WrapRule> = opts.arrayLiteralWrap.rules;
+		Assert.equals(6, rules.length);
+		Assert.equals(WrapConditionType.EqualItemLengths, rules[0].conditions[0].cond);
+		Assert.equals(1, rules[0].conditions[0].value);
+		Assert.equals(WrapConditionType.AllItemLengthsLessThan, rules[1].conditions[0].cond);
+		Assert.equals(30, rules[1].conditions[0].value);
+		Assert.equals(WrapConditionType.AllItemLengthsLargerThan, rules[2].conditions[0].cond);
+		Assert.equals(WrapConditionType.AnyItemLengthLessThan, rules[3].conditions[0].cond);
+		Assert.equals(15, rules[3].conditions[0].value);
+		Assert.equals(WrapConditionType.HasMultilineItems, rules[4].conditions[0].cond);
+		Assert.equals(WrapConditionType.AllItemLengthsLessThan, rules[5].conditions[0].cond);
+	}
+
+	/**
+	 * `lineLength <= n` is the ONE fork-shipped predicate still unmapped
+	 * after the four above: answering it needs the renderer's column probe
+	 * inverted, and no config this project has met uses it. Pinned as a
+	 * DROP so the day it is implemented this test fails and says where.
+	 */
+	public function testLineLengthLessThanStillDropsRule(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"arrayWrap":{"rules":[{"type":"noWrap","conditions":[{"cond":"lineLength <= n","value":80}]},'
+			+ '{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":4}]}]}}}'
+		);
+		Assert.equals(1, opts.arrayLiteralWrap.rules.length);
+		Assert.equals(WrapMode.OnePerLine, opts.arrayLiteralWrap.rules[0].mode);
+	}
+
+	/**
+	 * A condition with no `value` reads `1`, matching haxe-formatter's
+	 * `@:default(1)` on the field. It used to read `0`, which for the three
+	 * POLARITY predicates is not a missing threshold but the OPPOSITE rule:
+	 * `equalItemLengths` with no value meant "match when the items differ".
+	 */
+	public function testOmittedCondValueDefaultsToOne(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"arrayWrap":{"rules":[{"type":"noWrap","conditions":[{"cond":"equalItemLengths"}]}]}}}'
+		);
+		Assert.equals(1, opts.arrayLiteralWrap.rules[0].conditions[0].value);
 	}
 
 	/**
