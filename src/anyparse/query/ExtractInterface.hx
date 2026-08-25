@@ -1,9 +1,9 @@
 package anyparse.query;
 
-import anyparse.format.comment.CommentLossException;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
+import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -34,7 +34,9 @@ private typedef IfaceMethod = {
  *    signature requirement per selected member (default: every public,
  *    non-static instance method), plus the source imports those
  *    signatures reference (so the interface type-checks, not just parses).
- *    Built through `NewFile.create` so it is byte-canonical + validated.
+ *    Built through `NewFile.createRaw`, so it is byte-canonical at the
+ *    WRITER FIXED POINT under the format config governing where the file
+ *    lands.
  *  - The source class gains an `implements <Iface>` clause (a verbatim
  *    header splice — no call sites change; an interface is purely
  *    additive, so nothing else in the scope needs rewriting).
@@ -56,13 +58,19 @@ final class ExtractInterface {
 	/**
 	 * Extract an interface named `ifaceName` (written to `ifaceFile`) from
 	 * `srcTypeName` in `srcSource`. `memberNames` selects the methods; null
-	 * means every public instance method. PURE — the CLI writes the
-	 * returned changes. Returns an `Ok` with two changes (the new
-	 * interface file, the modified source) or an `Err`.
+	 * means every public instance method. PURE — the CLI writes the returned
+	 * changes. Returns an `Ok` with two changes (the new interface file, the
+	 * modified source) or an `Err`.
+	 *
+	 * `optsJson` is the `hxformat.json` governing where `ifaceFile` LANDS, and
+	 * omitting it is not a neutral default: the interface is then styled by the
+	 * writer's compiled defaults while `fmt --list` and the next writer-emit
+	 * op's canonical gate judge it under the project's config. That is the
+	 * defect this parameter exists to close.
 	 */
 	public static function extract(
 		srcFile: String, srcTypeName: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String,
-		plugin: GrammarPlugin
+		plugin: GrammarPlugin, ?optsJson: String
 	): MoveResult {
 		if (!RefactorSupport.isIdentifier(ifaceName)) return Err('interface name "$ifaceName" is not a valid identifier');
 		if (ifaceName == srcTypeName) return Err('interface name must differ from the source type "$srcTypeName"');
@@ -85,9 +93,15 @@ final class ExtractInterface {
 
 		final pkg: String = ModuleScan.packageOf(tree);
 		final imports: Array<String> = carriedImports(tree, selected);
-		final ifaceSource: String = switch buildInterface(ifaceName, pkg, selected, imports, plugin) {
-			case Left(message): return Err(message);
-			case Right(source): source;
+		// The count is the WRITER's, not the extraction's, and it reaches the user only
+		// through the advisory: a created file the writer needed two passes to settle is
+		// the defect `apq fmt` reports and every op used to absorb in silence.
+		var ifaceRewrites: Null<Int> = null;
+		final ifaceSource: String = switch buildInterface(ifaceName, pkg, selected, imports, plugin, optsJson) {
+			case Err(message): return Err(message);
+			case Ok(source, rewrites):
+				ifaceRewrites = rewrites;
+				source;
 		};
 
 		final srcEdit: Null<{ span: Span, text: String }> = implementsEdit(srcSource, decl, srcTypeName, ifaceName);
@@ -104,8 +118,10 @@ final class ExtractInterface {
 			return Err('rewritten $srcFile does not parse: ${exception.message}');
 
 		final incomplete: Array<String> = [for (m in selected) if (m.signature.indexOf(':') < 0) m.name];
-		final advisory: String = 'extracted ${selected.length} method(s) into interface "$ifaceName"'
-			+ (incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : '');
+		final rewritesNote: Null<String> = FormatFixedPoint.rewritesNote(ifaceRewrites);
+		final advisory: String = 'extracted ${selected.length} method(s) into interface "$ifaceName"' + (
+			incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : ''
+		) + (rewritesNote == null ? '' : '; $ifaceFile: $rewritesNote');
 		final changes: Array<MoveChange> = [
 			{ file: ifaceFile, newSource: ifaceSource },
 			{ file: srcFile, newSource: newSrc }
@@ -229,14 +245,21 @@ final class ExtractInterface {
 	}
 
 	/**
-	 * Assemble the interface source through `NewFile.create` — the
-	 * signatures become body-less method requirements, the carried imports
-	 * an `@@ imports` section — so the result is byte-canonical and
-	 * validated.
+	 * Assemble the interface source through `NewFile.createRaw` — the signatures
+	 * become body-less method requirements, the carried imports plain import
+	 * statements — so the result is parse-validated and canonical AT THE WRITER'S
+	 * FIXED POINT, under `optsJson` rather than under compiled defaults.
+	 *
+	 * Both of those used to be wrong here, and each on its own is enough to make
+	 * the created file drift: a `plugin.writeRoundTrip(source, null)` formatted the
+	 * interface with the writer's built-in style while `fmt --list` judged it under
+	 * the project's discovered `hxformat.json`, and one round trip lands short of
+	 * the fixed point on the shapes `WrapFlatSourceFixedPointTest` pins. The doc on
+	 * this class claimed `NewFile` all along; now it is true.
 	 */
 	private static function buildInterface(
-		ifaceName: String, pkg: String, methods: Array<IfaceMethod>, imports: Array<String>, plugin: GrammarPlugin
-	): Either<String, String> {
+		ifaceName: String, pkg: String, methods: Array<IfaceMethod>, imports: Array<String>, plugin: GrammarPlugin, optsJson: Null<String>
+	): EditResult {
 		final sb: StringBuf = new StringBuf();
 		if (pkg != '') {
 			sb.add('package ');
@@ -258,14 +281,10 @@ final class ExtractInterface {
 			sb.add(';\n');
 		}
 		sb.add('}\n');
-		final canonical: Null<String> = try plugin.writeRoundTrip(sb.toString(), null) catch (exception: ParseError) {
-			return Left('assembled interface does not parse: $exception');
-		} catch (exception: CommentLossException) {
-			return Left('the assembled interface cannot be written without losing the comment `${exception.comment}`');
-		} catch (exception: Exception) {
-			return Left('assembled interface does not parse: ${exception.message}');
+		return switch NewFile.createRaw(sb.toString(), plugin, optsJson) {
+			case Ok(text, rewrites): Ok(text, rewrites);
+			case Err(message): Err('the assembled interface: $message');
 		};
-		return canonical == null ? Left('no writer for this grammar') : Right(canonical);
 	}
 
 	/**

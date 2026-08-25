@@ -135,7 +135,8 @@ final class NewFile {
 		final settled: FormatFixedPointResult = try FormatFixedPoint.run(
 			text -> plugin.writeRoundTrip(text, optsJson), source
 		) catch (exception: ParseError) {
-			return err('assembled source does not parse: ${exception.message}');
+			// `$exception` keeps the `line:col` + `(expected …)` — see `createRaw`.
+			return err('assembled source does not parse: $exception');
 		} catch (exception: CommentLossException) {
 			return err('the assembled source cannot be written without losing the comment `${exception.comment}`');
 		} catch (exception: Exception) {
@@ -144,7 +145,7 @@ final class NewFile {
 		final canonical: Null<String> = settled.text;
 		if (canonical == null) return err('no writer for this grammar');
 		return settled.converged
-			? { result: EditResult.Ok(canonical), stubbed: stubbed }
+			? { result: EditResult.Ok(canonical, settled.rewrites), stubbed: stubbed }
 			: err('the writer cannot settle the assembled source, so no file was created (${settled.failure})');
 	}
 
@@ -165,7 +166,12 @@ final class NewFile {
 		final settled: FormatFixedPointResult = try FormatFixedPoint.run(
 			text -> plugin.writeRoundTrip(text, optsJson), content
 		) catch (exception: ParseError) {
-			return EditResult.Err('source does not parse: ${exception.message}');
+			// `$exception`, not `${exception.message}`: `ParseError.toString` carries the
+			// `line:col` and the `(expected …)` hint, and this is the arm a CALLER's own
+			// bespoke catch used to own. `ExtractInterface` / `ExtractSuperclass` route
+			// their assembled module through here now, and the message they used to print
+			// located the failure.
+			return EditResult.Err('source does not parse: $exception');
 		} catch (exception: CommentLossException) {
 			return EditResult.Err(
 				'the writer cannot re-emit this content without losing the comment `${exception.comment}` — '
@@ -177,7 +183,7 @@ final class NewFile {
 		final canonical: Null<String> = settled.text;
 		if (canonical == null) return EditResult.Err('no writer for this grammar');
 		return settled.converged
-			? EditResult.Ok(canonical)
+			? EditResult.Ok(canonical, settled.rewrites)
 			: EditResult.Err(
 				'the writer cannot settle this content, so no file was created (${settled.failure})'
 				+ ' — write it with ordinary tools and report the construct'

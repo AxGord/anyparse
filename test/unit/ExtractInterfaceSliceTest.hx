@@ -147,6 +147,34 @@ class ExtractInterfaceSliceTest extends Test {
 		assertErr(ExtractInterface.extract('pkg/S.hx', 'Other', 'IS', 'pkg/IS.hx', null, src, plugin()));
 	}
 
+	/**
+	 * The created interface is canonical UNDER THE PROJECT'S CONFIG, not under the
+	 * writer's compiled defaults.
+	 *
+	 * `buildInterface` used to call `plugin.writeRoundTrip(source, null)`, so a
+	 * project whose `hxformat.json` sets anything the writer has an opinion about
+	 * got a file styled by the DEFAULTS while its own `fmt --list` judged it by the
+	 * config — drifted from birth, and the next writer-emit op on it refused with
+	 * `file is not in canonical form`. Four-space indentation is the cheapest
+	 * discriminator: the default is a tab.
+	 */
+	public function testCreatedInterfaceIsCanonicalUnderProjectConfig(): Void {
+		final config: String = '{"indentation": {"character": "    ", "tabWidth": 4}}';
+		final src: String =
+			'package pkg;\n\nclass Service {\n    public function new() {}\n\n    public function fetch(id:Int):String return \'x\';\n}\n';
+		switch ExtractInterface.extract('pkg/Service.hx', 'Service', 'IService', 'pkg/IService.hx', null, src, plugin(), config) {
+			case Ok(changes, _):
+				final iface: String = changeFor(changes, 'pkg/IService.hx').newSource;
+				Assert.isTrue(iface.contains('\n    function fetch'), 'indented by the config, not by the default tab:\n<$iface>');
+				Assert.equals(
+					iface, plugin().writeRoundTrip(iface, config),
+					'the created file must pass the ONE-pass canonical gate the next op puts on it'
+				);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	private function okChanges(
 		srcFile: String, srcType: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String
 	): Array<MoveChange> {

@@ -1,9 +1,9 @@
 package anyparse.query;
 
-import anyparse.format.comment.CommentLossException;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
+import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -52,8 +52,9 @@ private enum Either<L, R> {
  *    it to the set or refactor first). Members in the set may reference
  *    each other freely.
  *
- * Atomic: the superclass is assembled through `writeRoundTrip` (canonical
- * + validated) and the source re-parses before either is returned.
+ * Atomic: the superclass is assembled through `NewFile.createRaw` (canonical at
+ * the WRITER FIXED POINT, under the format config governing where the file
+ * lands) and the source re-parses before either is returned.
  */
 @:nullSafety(Strict)
 final class ExtractSuperclass {
@@ -63,10 +64,14 @@ final class ExtractSuperclass {
 	 * `srcTypeName` in `srcSource`, pulling up `memberNames`. PURE — the
 	 * CLI writes the returned changes. `Ok` carries two changes (the new
 	 * superclass, the modified source); `Err` a diagnostic.
+	 *
+	 * `optsJson` is the `hxformat.json` governing where `superFile` LANDS —
+	 * see `ExtractInterface.extract` for why omitting it is not a neutral
+	 * default.
 	 */
 	public static function extract(
 		srcFile: String, srcTypeName: String, superName: String, superFile: String, memberNames: Array<String>, srcSource: String,
-		plugin: GrammarPlugin
+		plugin: GrammarPlugin, ?optsJson: String
 	): MoveResult {
 		if (!RefactorSupport.isIdentifier(superName)) return Err('superclass name "$superName" is not a valid identifier');
 		if (superName == srcTypeName) return Err('superclass name must differ from the source type "$srcTypeName"');
@@ -94,9 +99,15 @@ final class ExtractSuperclass {
 		final blocks: Array<String> = [for (m in moved) trimNewlineEdges(srcSource.substring(m.cut.from, m.cut.to))];
 		final pkg: String = ModuleScan.packageOf(tree);
 		final imports: Array<String> = carriedImports(tree, blocks);
-		final superSource: String = switch buildSuperclass(superName, pkg, blocks, imports, plugin) {
-			case Left(message): return Err(message);
-			case Right(source): source;
+		// The count is the WRITER's, not the extraction's, and it reaches the user only
+		// through the advisory: a created file the writer needed two passes to settle is
+		// the defect `apq fmt` reports and every op used to absorb in silence.
+		var superRewrites: Null<Int> = null;
+		final superSource: String = switch buildSuperclass(superName, pkg, blocks, imports, plugin, optsJson) {
+			case Err(message): return Err(message);
+			case Ok(source, rewrites):
+				superRewrites = rewrites;
+				source;
 		};
 
 		final headerEdit: Null<{ span: Span, text: String }> = extendsEdit(srcSource, declNN, srcTypeName, superName);
@@ -113,8 +124,10 @@ final class ExtractSuperclass {
 		catch (exception: Exception)
 			return Err('rewritten $srcFile does not parse: ${exception.message}');
 
+		final rewritesNote: Null<String> = FormatFixedPoint.rewritesNote(superRewrites);
 		final advisory: String = 'pulled ${moved.length} member(s) up into new superclass "$superName'
-			+ '" — subclass access preserved by inheritance; the superclass has no constructor (the source constructor is unchanged).';
+			+ '" — subclass access preserved by inheritance; the superclass has no constructor (the source constructor is unchanged)'
+			+ (rewritesNote == null ? '' : '; $superFile: $rewritesNote');
 		final changes: Array<MoveChange> = [
 			{ file: superFile, newSource: superSource },
 			{ file: srcFile, newSource: newSrc }
@@ -241,10 +254,20 @@ final class ExtractSuperclass {
 		return out;
 	}
 
-	/** Assemble the superclass through `writeRoundTrip` (canonical + validated). */
+	/**
+	 * Assemble the superclass through `NewFile.createRaw` — parse-validated and
+	 * canonical AT THE WRITER'S FIXED POINT, under `optsJson` rather than under
+	 * compiled defaults.
+	 *
+	 * A moved member carries its BODY, so every writer shape that needs two round
+	 * trips to settle can arrive here; and a `writeRoundTrip(source, null)` styled
+	 * the new file by the writer's built-in defaults while `fmt --list` judged it
+	 * under the project's discovered `hxformat.json`. Either alone left the created
+	 * file drifted from birth.
+	 */
 	private static function buildSuperclass(
-		superName: String, pkg: String, blocks: Array<String>, imports: Array<String>, plugin: GrammarPlugin
-	): Either<String, String> {
+		superName: String, pkg: String, blocks: Array<String>, imports: Array<String>, plugin: GrammarPlugin, optsJson: Null<String>
+	): EditResult {
 		final sb: StringBuf = new StringBuf();
 		if (pkg != '') {
 			sb.add('package ');
@@ -262,14 +285,10 @@ final class ExtractSuperclass {
 		sb.add(' {\n\n');
 		sb.add(blocks.join('\n\n'));
 		sb.add('\n\n}\n');
-		final canonical: Null<String> = try plugin.writeRoundTrip(sb.toString(), null) catch (exception: ParseError) {
-			return Left('assembled superclass does not parse: $exception');
-		} catch (exception: CommentLossException) {
-			return Left('the assembled superclass cannot be written without losing the comment `${exception.comment}`');
-		} catch (exception: Exception) {
-			return Left('assembled superclass does not parse: ${exception.message}');
+		return switch NewFile.createRaw(sb.toString(), plugin, optsJson) {
+			case Ok(text, rewrites): Ok(text, rewrites);
+			case Err(message): Err('the assembled superclass: $message');
 		};
-		return canonical == null ? Left('no writer for this grammar') : Right(canonical);
 	}
 
 	/**
