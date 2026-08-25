@@ -60,9 +60,12 @@ package anyparse.format.wrap;
  *    constructor call / function call, or as a container literal
  *    (object / array) carrying a call or `new` anywhere in its subtree.
  *    The per-element classification is a grammar-side question, so the
- *    writer supplies it through `WrapListOptions.complexItemKinds`; a
- *    list whose caller supplies no kinds counts 0 and the condition
- *    never fires. Deliberately SEMANTIC rather than width-based: the
+ *    writer supplies it through `WrapListOptions.complexItemKinds`, which
+ *    the Haxe grammar sets at three Stars only — array-literal elements,
+ *    call arguments, `new` arguments. Every other wrap class supplies no
+ *    kinds, counts 0, and cannot fire the condition for any `value >= 1`
+ *    (which is every shipped config, since an omitted `value` reads 1).
+ *    Deliberately SEMANTIC rather than width-based: the
  *    same cascade also governs array PATTERNS in `case` arms and
  *    switch-subject arrays, whose elements are identifiers and
  *    wildcards, so a width proxy mangles them while this counter cannot

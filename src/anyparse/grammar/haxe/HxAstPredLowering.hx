@@ -847,8 +847,11 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * fork's token-based `TokenTreeCheckUtils.getBkOpenType`):
 	 *
 	 *  - `Arrow` (`k => v`) → map literal (1);
-	 *  - `ForExpr` / `WhileExpr` (`[for …]` / `[while …]`) →
-	 *    comprehension (2);
+	 *  - the `HxComprehension.GENERATOR_CTORS` constructors (`[for …]` /
+	 *    `[while …]`) → comprehension (2). It has a
+	 *    module of its own because `HaxeFormat.isComprehensionGenerator`
+	 *    reads it too and neither side can host it — the measurement is
+	 *    recorded there;
 	 *  - anything else, or a null first element (empty list) → array
 	 *    literal (0) — the default tight bracket has no padding either
 	 *    way.
@@ -875,7 +878,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private function arrayBracketKindField(): Field {
 		final body: Expr = nullSwitch(ident('e'), macro 0, [
 			caseOf(HX_EXPR, ['Arrow'], macro 1),
-			caseOf(HX_EXPR, ['ForExpr', 'WhileExpr'], macro 2)
+			caseOf(HX_EXPR, HxComprehension.GENERATOR_CTORS, macro 2)
 		], macro 0);
 		return predField(
 			'arrayBracketKind',

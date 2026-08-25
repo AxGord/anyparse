@@ -310,11 +310,17 @@ class WrapList {
 		final minLen: Int = measure.minLen;
 		final equalLens: Bool = measure.equalLens;
 		final anyHardline: Bool = measure.anyHardline;
-		final cols: Int = continuationCols(rules, opt, items, measure, sourceMultilineKeep, compactContinuation, breakAsOnePerLine);
 		// ω-complex-item-count: the cascade counter behind `complexItemCount >= n`.
-		// A caller that supplies no kinds counts 0, so the condition never fires
-		// and every pre-slice list is byte-identical.
+		// A caller that supplies no kinds counts 0, so the condition cannot fire
+		// for any `value >= 1` — which is every shipped config, since the loader
+		// defaults an omitted `value` to 1 — and every such list is byte-identical
+		// to the pre-slice layout. Computed BEFORE
+		// `continuationCols` because the continuation-indent probe re-runs the same
+		// cascade and has to see the same count the real decision does.
 		final complexCount: Int = countComplexItems(complexItemKinds);
+		final cols: Int = continuationCols(
+			rules, opt, items, measure, sourceMultilineKeep, compactContinuation, breakAsOnePerLine, complexCount
+		);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
 		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
@@ -719,12 +725,15 @@ class WrapList {
 	 * `totalItemLen = 0`, `minItemLen = MAX_ITEM_LEN`, `hasMultilineItems =
 	 * false`, `equalItemLengths = false`, `complexItemCount = 0`), and that is
 	 * not "not firing" for most of them: `allItemLengths <= n`,
-	 * `allItemLengths >= n`, `totalItemLength <= n`, `complexItemCount >= n`
-	 * and the `value: 0` polarity of `equalItemLengths` / `hasMultilineItems`
-	 * all read as MATCHING there. That is the safe direction for every cascade this project has
-	 * met, because in all of them a spurious match resolves to a non-Keep mode,
-	 * so the probe answers false and the caller falls back to the width-aware
-	 * cascade. It is not safe by construction: a config whose `keep` rule is
+	 * `allItemLengths >= n`, `totalItemLength <= n` and the
+	 * `value: 0` polarity of `equalItemLengths` / `hasMultilineItems` all read
+	 * as MATCHING there. That is the safe direction for every cascade this
+	 * project has met, because in all of them a spurious match resolves to a
+	 * non-Keep mode, so the probe answers false and the caller falls back to
+	 * the width-aware cascade. (`complexItemCount >= n` is the one sentinel
+	 * that reads as NOT matching — `0 >= n` is false for every `n >= 1`, and
+	 * the loader defaults an omitted `value` to 1 — which lands on the same
+	 * safe side by the other route.) It is not safe by construction: a config whose `keep` rule is
 	 * ITSELF gated on one of those predicates would be force-kept on width
 	 * grounds the probe cannot see. Nothing here detects that shape; no
 	 * function-signature keep fixture has it.
@@ -1650,22 +1659,27 @@ class WrapList {
 	 * The probe mode is evaluated at `exceeds=true / firing=∅` before
 	 * threshold enumeration — a heuristic that does not cover cascades
 	 * combining `defaultAdditionalIndent > 0` with `LineLengthLargerThan`
-	 * thresholds (no current consumer does). ω-functionsignature-body-aware-
+	 * thresholds (no current consumer does). `complexItemCount` is NOT part
+	 * of that heuristic: it is a static per-list count, known before either
+	 * probe runs, so the caller hands it in and the probe answers the same
+	 * cascade the real decision answers. Passing a hardcoded 0 here made a
+	 * `complexItemCount >= n` rule select the wrap MODE and then compute the
+	 * continuation INDENT as if the list held no complex items. ω-functionsignature-body-aware-
 	 * indent: `compactContinuation` (from `opt._fnSigBodyEmpty`) extends the
 	 * `additional`-only regime to FillLine / NoWrap when the wrapped
 	 * signature is followed by an empty / absent body.
 	 */
 	private static function continuationCols(
 		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, measure: WrapItemMeasure, sourceMultilineKeep: Bool,
-		compactContinuation: Bool, breakAsOnePerLine: Bool
+		compactContinuation: Bool, breakAsOnePerLine: Bool, complexItemCount: Int
 	): Int {
 		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 		final additional: Int = rules.defaultAdditionalIndent ?? 0;
 		final probeMode: WrapMode = onePerLineWhenBreaking(
 			floorSourceMultiline(
 				decideWithLineLengthState(
-					rules, items.length, measure.maxLen, measure.total, true, measure.anyHardline, _ -> false, 0, measure.minLen,
-					measure.equalLens
+					rules, items.length, measure.maxLen, measure.total, true, measure.anyHardline, _ -> false, complexItemCount,
+					measure.minLen, measure.equalLens
 				),
 				sourceMultilineKeep
 			),
@@ -1806,6 +1820,17 @@ class WrapList {
 		return IfWidthExceeds(t, brk, flat);
 	}
 
+	/**
+	 * Does one cascade rule hold against the measured list?
+	 *
+	 * The switch has NO wildcard arm on purpose. `WrapConditionType` is an
+	 * `enum abstract(Int) from Int to Int`, but Haxe still proves exhaustiveness
+	 * from the declared members, so a new condition kind fails this build with
+	 * `Unmatched patterns: <Ctor>` instead of silently evaluating to `false` —
+	 * which is how an unevaluated condition and an unmapped one become
+	 * indistinguishable from outside (the rule just never selects a mode). Adding
+	 * a `case _` back re-arms that trap; add the real arm instead.
+	 */
 	private static function matchesWithLineLengthState(
 		rule: WrapRule, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
 		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false
@@ -1825,7 +1850,6 @@ class WrapList {
 				case LineLengthLargerThan: lineLengthFires(cond.value);
 				case HasMultilineItems: cond.value == 0 ? !hasMultilineItems : hasMultilineItems;
 				case ComplexItemCountLargerThan: complexItemCount >= cond.value;
-				case _: false;
 			};
 			if (!ok) return false;
 		}

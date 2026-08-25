@@ -1126,7 +1126,7 @@ final class TriviaSepLowering {
 				// tried and REGRESSED: an enclosing call then under-measures, commits to flat,
 				// and overflows into a mangled break — see
 				// `testChainOwnedArrayPastSoftBreakLeadingBreaks`.) Detect by AST structure
-				// (first element a `ForExpr`/`WhileExpr`), gated on the compile-time
+				// (first element a `HxComprehension.GENERATOR_CTORS` ctor), gated on the compile-time
 				// `reflowSourceMultiline` array-Star flag so the `Type.enumConstructor` probe
 				// never runs on a non-array Star (whose element node is a non-enum struct →
 				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow

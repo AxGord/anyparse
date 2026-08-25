@@ -7,6 +7,10 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.AstPreds;
+import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HxComprehension;
+import anyparse.grammar.haxe.HxExpr;
 
 /**
  * Bracket-whitespace parity for array comprehensions vs plain array /
@@ -78,6 +82,48 @@ class HxComprehensionBracketPolicyTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.comprehensionBracketsOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.comprehensionBracketsClose);
+	}
+
+	/**
+	 * `arrayBracketKind`'s kind-2 arm and `HaxeFormat.isComprehensionGenerator` classify
+	 * ONE grammar fact — which `HxExpr` ctors can be a comprehension's generator — from two
+	 * compilation contexts: a macro-generated typed predicate on `AstPreds`, and a runtime
+	 * `Reflect` walk over the untyped elements the grammar-agnostic writer lowering holds.
+	 * They cannot share a body, so they share the LIST, `HxComprehension.GENERATOR_CTORS`;
+	 * before that they were two hand-kept spellings that happened to agree.
+	 *
+	 * The fixture is driven off that list rather than off a literal pair, and the count is
+	 * asserted BOTH ways: a ctor added to the list fails here on a missing sample, and a
+	 * ctor removed from it fails on the count rather than passing with a shorter loop.
+	 *
+	 * Two limits worth knowing before extending it. It exercises the PLAIN-mode `AstPreds`;
+	 * the trivia writer calls the separately generated `AstPredsT.arrayBracketKind`, covered
+	 * here only end-to-end by the formatting tests above. And `Type.createEnum` with `[null]`
+	 * matches the arity every generator ctor happens to have today — a future one with a
+	 * different arity needs its own payload, not a copied `[null]`, which on js would build a
+	 * malformed value rather than throw.
+	 */
+	public function testBothComprehensionClassifiersAnswerFromOneList(): Void {
+		final samples: Map<String, HxExpr> = [
+			'ForExpr' => Type.createEnum(HxExpr, 'ForExpr', [null]),
+			'WhileExpr' => Type.createEnum(HxExpr, 'WhileExpr', [null])
+		];
+		Assert.equals(HxComprehension.GENERATOR_CTORS.length, Lambda.count(samples), 'the sample set and GENERATOR_CTORS have diverged');
+		for (ctor in HxComprehension.GENERATOR_CTORS) {
+			final sample: Null<HxExpr> = samples[ctor];
+			if (sample == null) {
+				Assert.fail('no sample for generator ctor $ctor — add one, matching the ctor\'s arity');
+				continue;
+			}
+			Assert.equals(2, AstPreds.arrayBracketKind(sample), 'arrayBracketKind($ctor)');
+			Assert.isTrue(HaxeFormat.isComprehensionGenerator(sample), 'isComprehensionGenerator($ctor)');
+			Assert.isTrue(HaxeFormat.isComprehensionGenerator({ node: sample }), 'trivia-wrapped $ctor');
+		}
+		final notAGenerator: HxExpr = Type.createEnum(HxExpr, 'NewExpr', [null]);
+		Assert.equals(0, AstPreds.arrayBracketKind(notAGenerator));
+		Assert.isFalse(HaxeFormat.isComprehensionGenerator(notAGenerator));
+		Assert.equals(0, AstPreds.arrayBracketKind(null));
+		Assert.isFalse(HaxeFormat.isComprehensionGenerator(null));
 	}
 
 	private inline function write(src: String, json: String): String {
