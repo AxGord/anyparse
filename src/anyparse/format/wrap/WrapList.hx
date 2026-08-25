@@ -757,6 +757,36 @@ class WrapList {
 	}
 
 	/**
+	 * ω-render-pivot-collection-arg: the item with its own render-time break
+	 * pivot resolved to that pivot's BREAK arm, or `null` when the item carries
+	 * no such pivot.
+	 *
+	 * The pivot is `emitZeroThresholdAgree`'s `IfFirstLineExceeds`, emitted when
+	 * a cascade's `noWrap` rules shadow a BREAKING `defaultWrap`. Every static
+	 * measure — `flatLength` above, `flatTokenWidthFirstLine` in the renderer —
+	 * descends an `If*` node into its FLAT arm, so a host asking "does this item
+	 * render multi-line" is told NO while the renderer goes on to break it
+	 * anyway. The next pass reads the newline the writer itself wrote: a Star
+	 * without `@:fmt(reflowSourceMultiline)` force-commits the list to
+	 * `OnePerLine`, the same measure now answers YES, and the host picks a
+	 * different shape — `fmt` needs two rewrites and `writeRoundTrip(s) == s`
+	 * fails after one.
+	 *
+	 * Resolving the arm is legal only for a host that has ALREADY committed to a
+	 * break: the item cannot be on one line there, so its pivot is certain to
+	 * fire. Each caller states which fact gives it that certainty.
+	 */
+	public static function renderPivotBreakArm(d: Doc): Null<Doc> {
+		// An item that ALREADY breaks needs no resolution, and resolving one
+		// would be wrong: its pivot may legitimately pick the FLAT arm, whose
+		// hardline comes from a nested item rather than from this list's own
+		// cascade — substituting the break arm there re-lays out a shape both
+		// passes already agree on (measured: it opened the call paren on the
+		// nested-array hug fixtures).
+		return flatLength(d) < 0 ? null : pivotBreakArm(d);
+	}
+
+	/**
 	 * Returns `true` if `d`, when laid out in break mode, would emit a
 	 * forced hardline (`Line('\n')` or `OptHardline`) before any
 	 * non-newline content. Walks the leftmost spine: descends through
@@ -1801,13 +1831,51 @@ class WrapList {
 		};
 	}
 
+	/** `renderPivotBreakArm`'s spine walk, past the wrappers the writer adds. */
+	private static function pivotBreakArm(d: Doc): Null<Doc> {
+		switch (d) {
+			case IfFirstLineExceeds(_, brk, _):
+				return flatLength(brk) < 0 ? brk : null;
+			// The recursion re-enters HERE, not the guarded entry: `flatLength` is
+			// invariant under these three wrappers (it descends `WrapBoundary` /
+			// `Nest` unchanged, and returns `-1` on a `Concat`'s FIRST negative
+			// part), so the entry's check already answered for every subterm.
+			case WrapBoundary(inner):
+				final arm: Null<Doc> = pivotBreakArm(inner);
+				return arm == null ? null : WrapBoundary(arm);
+			case Nest(n, inner):
+				final arm: Null<Doc> = pivotBreakArm(inner);
+				return arm == null ? null : Nest(n, arm);
+			case Concat(parts):
+				// The writer hands a wrapped construct down as a one-element
+				// `Concat` (lead / trail slots empty), so the pivot is reachable
+				// only through here. Exactly ONE part may carry it: two would
+				// leave the resolved shape ambiguous, and the caller's contract
+				// is a single collection.
+				var idx: Int = -1;
+				var found: Null<Doc> = null;
+				for (i in 0...parts.length) {
+					final part: Null<Doc> = pivotBreakArm(parts[i]);
+					if (part == null) continue;
+					if (idx >= 0) return null;
+					idx = i;
+					found = part;
+				}
+				// Re-bound: Strict does not carry a loop-mutated `var`'s narrowing
+				// into the comprehension below.
+				final arm: Null<Doc> = found;
+				return arm == null ? null : Concat([for (i in 0...parts.length) i == idx ? arm : parts[i]]);
+			case _:
+				return null;
+		}
+	}
+
 	/**
 	 * Returns the index of the SOLE multi-line arg in `items` when that arg's
 	 * multi-line-ness is owned by a breaking array literal — either the arg IS the
 	 * array (`startsWithCollectionDelim`) OR the array is nested and is the arg's
 	 * FIRST break (`firstBreakIsArrayDelim` — `new X([\n … \n], y)` / `f([\n …
-	 * \n])`) — AND `flatLength < 0`, while EVERY other arg renders single-line
-	 * (`flatLength >= 0`); else -1.
+	 * \n])`) — while EVERY other arg renders single-line; else -1.
 	 *
 	 * The multi-arg-collection-glue intercept's structural predicate: gluing all
 	 * args inline is a valid fixed point ONLY when exactly one arg breaks and it
@@ -1820,8 +1888,14 @@ class WrapList {
 	 * the FIRST line break, so a chain-owned bracket (reached past a soft break) is
 	 * refused.
 	 *
-	 * `flatLength(item) < 0` short-circuits on the first hardline per arg (no full
-	 * re-measure); the scan is O(Σ arg spines up to first hardline).
+	 * When no arg has committed to a break at all, `solePivotCollectionArg` gets
+	 * a second look: a collection whose break the RENDERER decides carries no
+	 * hardline yet, and reading it flat here is what made the glue fire one pass
+	 * late.
+	 *
+	 * The first scan short-circuits on the first hardline per arg; the second walks
+	 * each arg's leading spine in full, and runs only when the first found
+	 * nothing.
 	 */
 	private static function soleMultilineCollectionArg(items: Array<Doc>): Int {
 		var collIdx: Int = -1;
@@ -1831,6 +1905,37 @@ class WrapList {
 			if (collIdx >= 0) return -1;
 			final it: Doc = items[i];
 			if (isArrowBodyMarker(it) || isMethodChainItem(it) || !(startsWithCollectionDelim(it) || firstBreakIsArrayDelim(it))) return -1;
+			collIdx = i;
+		}
+		return collIdx >= 0 ? collIdx : solePivotCollectionArg(items);
+	}
+
+	/**
+	 * ω-render-pivot-collection-arg: `soleMultilineCollectionArg`'s answer for a
+	 * list where NO arg has committed to a break yet and exactly ONE is a
+	 * collection whose break the RENDERER decides.
+	 *
+	 * A SECOND scan rather than a widening of the first, because the pivot
+	 * population is far wider than the collection one: nearly every nested CALL
+	 * carries a pivot under a cascade whose `noWrap` rules shadow a breaking
+	 * default. Counting a pivot as "this arg breaks" inside the first scan would
+	 * therefore trip its second-breaking-arg bail on almost every multi-arg call
+	 * — measured on this tree, it opened the paren of every
+	 * `f(a, macro false, [ … ], macro false)` that used to hug. Here a pivot only ever NOMINATES a candidate; it never disqualifies one.
+	 *
+	 * Reached only after the first scan proved NO arg carries a hardline, which is
+	 * what lets it ignore that half of its sibling's bail. It also asks only
+	 * `startsWithCollectionDelim`, not its sibling's `firstBreakIsArrayDelim`
+	 * alternative: a nested collection (`new X([ … ], y)`) is covered for a
+	 * committed break and deliberately not for a pivot — no repro demanded it, and
+	 * the arg's head-flat / tail-flat argument is unproven for a break the
+	 * renderer has not taken yet.
+	 */
+	private static function solePivotCollectionArg(items: Array<Doc>): Int {
+		var collIdx: Int = -1;
+		for (i in 0...items.length) if (renderPivotBreakArm(items[i]) != null && startsWithCollectionDelim(items[i])) {
+			if (collIdx >= 0) return -1;
+			if (isArrowBodyMarker(items[i]) || isMethodChainItem(items[i])) return -1;
 			collIdx = i;
 		}
 		return collIdx;
@@ -2270,14 +2375,36 @@ class WrapList {
 		// break has already opened the call; the chunk policy's job is the
 		// element the glue never sees — one that would otherwise stay PACKED on
 		// a shared argument line.
-		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+		// ω-render-pivot-collection-arg: the glue shape is what the first-line
+		// probe MEASURES, so the collection arg inside it must carry the break
+		// the glue exists to accommodate. A render-time pivot still reads flat
+		// here, and the probe would then measure the whole call and open the
+		// paren — the shape whose written newline the next pass force-commits,
+		// after which this same glue fires and the two passes disagree.
+		// `openShape` keeps the unresolved item: on that path the arg sits at a
+		// shallower column and may legitimately stay on one line.
+		final collArm: Null<Doc> = renderPivotBreakArm(items[collIdx]);
+		final glueItems: Array<Doc> = collArm == null ? items : [for (i in 0...items.length) i == collIdx ? collArm : items[i]];
+		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, glueItems, openInside, closeInside, sepBeforeFlags);
 		final openShape: Doc = mode == FillLineWithLeadingBreak
 			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds)
 			: shapeFillLine(
 				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
 				keepCloseGlued, complexItemKinds
 			);
-		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
+		final probe: Doc = IfFirstLineExceeds(lineWidth, openShape, glueShape);
+		// ω-render-pivot-collection-arg: the committed population (`collArm ==
+		// null`) reaches this shape only from a host that already refused the flat
+		// line — the arg carries a hardline, so `emit` took its `anyHardline` arm.
+		// A RESOLVED arg carries none, so nothing above proved that: `shape` is
+		// also reached with a mode the cascade answered in the FITS state
+		// (`emitZeroThresholdAgree`'s early return, `emitZeroThreshold`'s flat
+		// side), and there the glue would break a collection the line had room for
+		// — measured on a rules-free `fillLine` cascade, `f(a, b, { x: 1, y: 2 })`
+		// exploded. Gate that population on the fit the caller did not test.
+		// `openShape` IS `shapeByMode(mode, …)` for both modes this intercept
+		// admits, so the fits arm is the pre-slice shape verbatim.
+		return collArm == null ? probe : IfLineExceeds(lineWidth + 1, probe, openShape);
 	}
 
 	/**
