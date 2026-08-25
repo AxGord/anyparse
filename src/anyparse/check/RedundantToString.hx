@@ -311,7 +311,9 @@ final class RedundantToString implements Check implements DefaultOff {
 
 	/** Every in-scope top-level declaration named `typeName`. */
 	private static function declsOf(typeName: String, ctx: Ctx): Array<TypeDeclInfo> {
-		return [for (info in ctx.index.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName) decl];
+		return [
+			for (info in ctx.index.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName) decl
+		];
 	}
 
 	/** The human-facing half of a finding's message — why this position already stringifies. */

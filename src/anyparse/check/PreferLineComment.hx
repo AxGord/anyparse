@@ -116,8 +116,9 @@ final class PreferLineComment implements Check implements DefaultOff {
 			if (span != null) flagged.push(span.from);
 		}
 		return [
-			for (rewrite in rewrites(source, plugin, kinds)) if (flagged.contains(rewrite.comment.from))
-				{ span: rewrite.edit, text: rewrite.text }
+			for (rewrite in rewrites(
+				source, plugin, kinds
+			)) if (flagged.contains(rewrite.comment.from)) { span: rewrite.edit, text: rewrite.text }
 		];
 	}
 

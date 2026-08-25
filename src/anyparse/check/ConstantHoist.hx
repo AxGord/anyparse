@@ -240,7 +240,9 @@ final class ConstantHoist {
 	private static function immutableLocalKinds(shape: RefShape): Array<String> {
 		final mutable: Array<String> = shape.mutableLocalDeclKinds ?? [];
 		final continuation: Array<String> = shape.localDeclContinuationKinds ?? [];
-		return [for (kind in shape.localDeclKinds ?? []) if (!mutable.contains(kind) && !continuation.contains(kind)) kind];
+		return [
+			for (kind in shape.localDeclKinds ?? []) if (!mutable.contains(kind) && !continuation.contains(kind)) kind
+		];
 	}
 
 	/**

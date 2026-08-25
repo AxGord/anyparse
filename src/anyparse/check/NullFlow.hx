@@ -1093,11 +1093,18 @@ final class NullFlow {
 			nonNull: [for (n in a.nonNull) if (b.nonNull.contains(n)) n],
 			known: [for (n in a.known) if (b.known.contains(n)) n],
 			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n],
-			predicates: [for (p in a.predicates) if (b.predicates.exists(q ->
-				q.bool == p.bool && q.target == p.target && q.notEq == p.notEq && q.compound == p.compound
-			)) p],
-			aliases: [for (x in a.aliases) if (b.aliases.exists(q -> (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a))) x],
-			present: [for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e]
+			predicates: [
+				for (p in a.predicates) if (b.predicates.exists(q ->
+					q.bool == p.bool && q.target == p.target && q.notEq == p.notEq && q.compound == p.compound
+				))
+					p
+			],
+			aliases: [
+				for (x in a.aliases) if (b.aliases.exists(q -> (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a))) x
+			],
+			present: [
+				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e
+			]
 		};
 	}
 

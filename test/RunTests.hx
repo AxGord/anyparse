@@ -707,6 +707,7 @@ import unit.HxWrapConditionVocabularyTest;
 import unit.LintScopeGateTest;
 import unit.FrameworkContractTest;
 import unit.HxContainerItemWrapTest;
+import unit.HxComprehensionFilterMeasureTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -941,6 +942,7 @@ class RunTests {
 		addCase(new HxFnSigFillLastParamBoundaryTest());
 		addCase(new HxFnSigSingleParamWrapIndentTest());
 		addCase(new HxComprehensionChainIdempotencyTest());
+		addCase(new HxComprehensionFilterMeasureTest());
 		addCase(new HxComprehensionFitLineNoBreakTest());
 		addCase(new HxComprehensionCuddledOpenTest());
 		addCase(new HxSoleItemCuddledBracketsTest());

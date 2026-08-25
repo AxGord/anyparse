@@ -156,12 +156,11 @@ typedef WrapListOptions = {
 	 * ω-comprehension-fit-measure: this list is a `for`/`while` array comprehension resolved
 	 * through the fit cascade (`HaxeFormat.defaultComprehensionWrap`), whose ONLY rule is
 	 * `exceedsMaxLineLength` — a pure WIDTH question, so anything a static measure cannot see
-	 * is a wrong answer rather than a rounding error. Set by `WriterLowering`'s sep-Star emit
-	 * when `_comprehensionFit` holds. TWO consumers, both about that width:
+	 * is a wrong answer rather than a rounding error. Set by `TriviaSepLowering`'s sep-Star emit
+	 * when `_comprehensionFit` holds. ONE consumer, about that width — the
+	 * under-measure it also used to carry moved to `comprehensionBodyMeasure` below, which is
+	 * not a property of the fit cascade at all:
 	 *
-	 *  - the `groupifyInlineBodies` pass in `emit` — a generator body parked behind a
-	 *    `BodyGroup` (a filter `if`'s then-branch under `sameLine.ifBody: fitLine`) is
-	 *    deferred to width 0, so the item under-measures and the bracket never opens;
 	 *  - the `groupRestProbe` argument of `emitZeroThreshold` — the fit decision must also
 	 *    charge the same-line tail after `]` (the `;` of `= [ … ];`), or the bracket holds
 	 *    one column past the limit.
@@ -172,6 +171,33 @@ typedef WrapListOptions = {
 	 * is always empty; a cascade rule added there would silently drop the rest probe.
 	 */
 	var ?comprehensionFitMeasure: Bool;
+
+	/**
+	 * ω-comprehension-body-measure: this list is a `for`/`while` array comprehension,
+	 * whatever cascade resolves it. Carries the `groupifyInlineBodies` half of
+	 * `comprehensionFitMeasure` — and only that half — to the comprehensions the fit
+	 * cascade does NOT own. Set by `TriviaSepLowering`'s sep-Star emit from
+	 * `_isComprehension`.
+	 *
+	 * The under-measure is the cascade's, not the fit rule's: a generator body parked
+	 * behind a `BodyGroup` (a filter `if`'s then-branch under `sameLine.ifBody: fitLine`)
+	 * is deferred to width 0 by every static measure, so a `for (x in xs) if (…) x` item
+	 * reports the width of `for (x in xs)` alone. Under `wrapping.arrayWrap` that lands the
+	 * item in `totalItemLength <= n` and the bracket answers NoWrap, pinning a comprehension
+	 * that overflows its line — the only wrap left is the filter's own `conditionWrapping`,
+	 * which breaks INSIDE `if (` and strands `) x];` on a line of its own. The reference
+	 * formatter opens the bracket for exactly these items, so the honest width is also the
+	 * parity answer.
+	 *
+	 * The split is a strict WIDENING, and one line at the caller is why:
+	 * `_comprehensionFit = _isComprehension && opt.comprehensionBracketsOpen == After`. So
+	 * `comprehensionFitMeasure` cannot hold where this one does not, and no comprehension
+	 * that already had the re-tag can lose it. The rest-probe half stays with
+	 * `comprehensionFitMeasure` alone — it answers for the fit cascade's single
+	 * `exceedsMaxLineLength` rule, not for a threshold cascade that already runs its own
+	 * column-aware probes.
+	 */
+	var ?comprehensionBodyMeasure: Bool;
 
 	/**
 	 * Per-element complexity classification, length-aligned with `items` — the
@@ -283,6 +309,7 @@ class WrapList {
 		final keepCloseGlued: Bool = axes.keepCloseGlued;
 		final flatTrailingComma: Bool = axes.flatTrailingComma;
 		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
+		final comprehensionBodyMeasure: Bool = axes.comprehensionBodyMeasure;
 		final complexItemKinds: Null<Array<Int>> = axes.complexItemKinds;
 		final trailBreakDoc: Doc = axes.trailBreakDoc;
 		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
@@ -297,11 +324,19 @@ class WrapList {
 		// the overflowing line, matching the fork's full-arrow-line measure.
 		// Copy-on-write: untouched when no such arg is present.
 		//
-		// ω-comprehension-fit-measure: `comprehensionFitMeasure` extends the
-		// SAME re-tag to each item of a fit-cascade comprehension — identical
+		// ω-comprehension-body-measure: `comprehensionBodyMeasure` extends the
+		// SAME re-tag to each item of a comprehension — identical
 		// defect (a `BodyGroup`-parked body hiding its width from a width-only
 		// cascade), identical remedy, one mechanism. No per-item Doc sniff: the
 		// caller already proved the list IS a comprehension from the AST.
+		// It is NOT gated on the fit cascade: `wrapping.arrayWrap`'s
+		// `totalItemLength <= n` rule is just as width-only as
+		// `defaultComprehensionWrap`'s `exceedsMaxLineLength`, and a filter-`if`
+		// comprehension under-measured there stays pinned flat past the line limit
+		// (`comprehensionFitMeasure` still owns the rest probe, which does belong
+		// to the fit cascade alone). The copy-on-write below is per-LIST, not per-item:
+		// every comprehension now rebuilds its items, whether or not one of them
+		// parks a body — the walk is the only way to find out.
 		//
 		// `flatLength(item) >= 0` is the load-bearing half of that gate. The
 		// re-tag exists to let a hardline-FREE item reveal the width the
@@ -315,7 +350,7 @@ class WrapList {
 		// the bracket. Host positions are out of this slice's remit, so the
 		// gate keeps the re-tag where it decides something.
 		var groupified: Null<Array<Doc>> = null;
-		for (i in 0...items.length) if ((comprehensionFitMeasure && flatLength(items[i]) >= 0) || isArrowPlainIfBody(items[i])) {
+		for (i in 0...items.length) if ((comprehensionBodyMeasure && flatLength(items[i]) >= 0) || isArrowPlainIfBody(items[i])) {
 			if (groupified == null) groupified = items.copy();
 			groupified[i] = groupifyInlineBodies(items[i]);
 		}
@@ -4399,6 +4434,7 @@ class WrapList {
 			keepCloseGlued: axes.keepCloseGlued ?? false,
 			flatTrailingComma: axes.flatTrailingComma ?? false,
 			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
+			comprehensionBodyMeasure: axes.comprehensionBodyMeasure ?? false,
 			complexItemKinds: axes.complexItemKinds,
 			trailBreakDoc: axes.trailBreak ?? Line('\n')
 		};
@@ -4430,6 +4466,7 @@ private typedef ResolvedWrapListOptions = {
 	final keepCloseGlued: Bool;
 	final flatTrailingComma: Bool;
 	final comprehensionFitMeasure: Bool;
+	final comprehensionBodyMeasure: Bool;
 	final complexItemKinds: Null<Array<Int>>;
 	final trailBreakDoc: Doc;
 };

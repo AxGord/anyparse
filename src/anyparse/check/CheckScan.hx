@@ -267,9 +267,9 @@ final class CheckScan {
 		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
 		// Without the block-container seam `ScopeFrames` cannot collect a frame, so every collision test would
 		// pass vacuously — leave `containerKinds` empty and never unwrap rather than unwrap unchecked.
-		final caseBranchKinds: Array<String> = support == null ? [] : [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (
-			k != null
-		) k];
+		final caseBranchKinds: Array<String> = support == null
+			? []
+			: [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k];
 		final seams: CondSimplifySeams = {
 			ifKinds: shape.ifStatementKinds ?? [],
 			andKind: shape.logicalAndKind ?? '',
@@ -417,7 +417,9 @@ final class CheckScan {
 	 * a naive `lastIndexOf('/*')` hits.
 	 */
 	public static function docBlockEnds(source: String): Map<Int, Bool> {
-		return [for (tok in RefactorSupport.collectCommentTokens(source)) if (RefactorSupport.isDocBlock(source, tok)) tok.to => true];
+		return [
+			for (tok in RefactorSupport.collectCommentTokens(source)) if (RefactorSupport.isDocBlock(source, tok)) tok.to => true
+		];
 	}
 
 	/**

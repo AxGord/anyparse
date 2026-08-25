@@ -173,8 +173,9 @@ final class TailMerge implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [
-			for (c in scan(tree, source, seams)) if (c.fixable && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}'))
-				{ span: c.removeSpan, text: '' }
+			for (c in scan(
+				tree, source, seams
+			)) if (c.fixable && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) { span: c.removeSpan, text: '' }
 		];
 		return RefactorSupport.dropContainedEdits(edits);
 	}
