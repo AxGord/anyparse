@@ -514,10 +514,10 @@ class Renderer {
 	 *    a fixture from 108 to 146 columns.
 	 *  - `flatTokenWidthFirstLine(flatDoc) <= 1` is what states "breaks before any
 	 *    other token". MEASURED, not assumed: a statement block sits behind a
-	 *    `BodyGroup` that the first-line walk defers to 0, and a self-breaking object
-	 *    literal measures exactly 1 (its `{`, then the hardline) — both stay in the
-	 *    population, while the keep-mode literal above measures its whole head run
-	 *    and drops out.
+	 *    `BodyGroup` whose committed-prefix answer is its bare `{` (0 before W17
+	 *    taught the walk to charge it), and a self-breaking object literal measures
+	 *    exactly 1 (its `{`, then the hardline) — both stay in the population, while
+	 *    the keep-mode literal above measures its whole head run and drops out.
 	 *
 	 * Read STRUCTURALLY — all three walkers resolve every conditional on its flat
 	 * side — so no render-time width measurement can change which arm a construct
@@ -758,49 +758,81 @@ class Renderer {
 	 * First-line variant of `DocMeasure.flatTokenWidth`. Walks the same flat-shape
 	 * tree but caps the measurement at the first forced hardline
 	 * (`Line('\n')` or `OptHardline`): the running total at that point is
-	 * returned and the rest of the tree is ignored. Used exclusively by
-	 * the `IfFirstLineExceeds` probe to answer "would the first rendered
-	 * line of `flatDoc` exceed `n` columns from the current pen?".
+	 * returned and the rest of the tree is ignored. TWO render arms read it:
+	 * the `IfFirstLineExceeds` probe, to answer "would the first rendered line
+	 * of `flatDoc` exceed `n` columns from the current pen?", and
+	 * `selfBreakingBraceBody`, the `IfResidualLineExceeds` arrow-body guard,
+	 * whose `<= 1` threshold this same charging answer feeds — see the bullet
+	 * on that threshold further up this file.
 	 *
 	 * Departure from `DocMeasure.flatTokenWidth`: forced hardlines abort the
 	 * walk instead of contributing zero width. `Group` descends as usual; a
 	 * forced hardline anywhere in its inner aborts the first-line walk because
-	 * such a Group must commit to break mode. `BodyGroup` is still deferred
-	 * (zero, no abort) — right for a group with no forced hardline of its own,
-	 * whose flat/break really is decided later at the live column, and wrong for
-	 * a COMMITTED one; see below.
+	 * such a Group must commit to break mode. A COMMITTED `BodyGroup` — one whose
+	 * own first line already carries a forced hardline — is charged its first-line
+	 * prefix and ENDS the walk (`bgPrefix == true`), the same answer
+	 * `restNodeWidth` gives: `fitsFlat` can never answer flat for such a group, so
+	 * render is guaranteed to break it and its leading ` {` really does land on
+	 * this line. A BodyGroup with no forced hardline of its own stays deferred —
+	 * its flat/break is genuinely decided later, at the live column.
 	 *
-	 * THE FAMILY GIVES FOUR ANSWERS TO ONE QUESTION — what does a `BodyGroup`
-	 * put on the CURRENT line — and this walker gives the least accurate of them.
-	 * `WrapList.flatLength` descends it (right for "can this be one line", which
-	 * is a different question). `naturalWidthStructural` resolves it by its own
-	 * fit at the running column, the same thing render does, and is therefore
-	 * exactly right. `restNodeWidth` (`bgDescend == false`) charges a committed
-	 * group its first-line prefix and ends the walk — right for every group whose
-	 * content already carries a forced hardline, since `fitsFlat` can then never
-	 * answer flat and render is guaranteed to break it. This one defers
-	 * unconditionally, which is wrong in both halves for such a group.
+	 * THE FAMILY ANSWERS ONE QUESTION — what does a `BodyGroup` put on the CURRENT
+	 * line. `WrapList.flatLength` descends it, which is "can this be one line at
+	 * all", a different question. `naturalWidthStructural` resolves it by its own
+	 * fit at the running column, the same thing render does. Under
+	 * `bgPrefix == true` this walker and `restNodeWidth` (`bgDescend == false`)
+	 * apply the same POLICY — charge the prefix, end the line. Their
+	 * committedness TEST still differs: the classifier's own probe passes
+	 * `false` (next paragraph).
 	 *
-	 * Making this walker agree was measured (W16, 2026-08-25) and NOT shipped.
-	 * Charging the prefix WITHOUT ending the line is free and closes nothing: 0
-	 * files move here, 0 on the Pony tree. Charging it AND ending the line — or
-	 * descending the group outright, which measures identically — closes two of
-	 * the seven Pony files that still need two writer rewrites
-	 * (`ui/xml/PixiXmlUi.hx`, `tools/nodesrc/module/Bmfont.hx`), leaves the suite
-	 * and the corpus unmoved and Pony's drift set unmoved at 80 — and reformats
-	 * SIX files of this project's own tree, whose `apq fmt src test --list` is
-	 * otherwise empty. At least three of the six read worse
-	 * (`for (candidate in candidatesOf(\n\tsource, plugin\n))`,
-	 * `if (index.skippedFiles()\n\t.length == 0)`), because the `IfFirstLineExceeds`
-	 * family was calibrated against the deferring answer. So the honest fix is a
-	 * recalibration of that family, not this arm on its own.
+	 * `bgPrefix == false` is NOT a second question — do not read the flag as one.
+	 * It is this same question answered LESS accurately: it lets a nested
+	 * `BodyGroup` that is itself committed pass as zero width without ending the
+	 * line, when render really does land that group's ` {` here. Two callers take
+	 * it: `sepWidthBeforeBreak` (a Fill separator — the flag is inert there)
+	 * and — the one that matters — `restNodeWidth`'s own
+	 * committed-vs-movable classifier, which calls this walker to decide whether a
+	 * BodyGroup is committed at all. Charging there makes a body read as committed
+	 * whenever a nested COMMITTED body sits on its first line:
+	 * `for (x in xs) if (c) { … }` charges the whole `if (c) {` header to the
+	 * rest-of-stack lookahead, and the cond-wrap consumers downstream of it wrap
+	 * the for-header.
+	 *
+	 * That cost is CALIBRATION debt, not a second question, and it belongs to the
+	 * REST-STACK consumers — `flatTokenWidthOfRestStack`'s seven readers (the chain
+	 * probe, `GroupWithRestProbe`, the Fill rest probes, `IfLineExceeds`,
+	 * `IfNaturalFirstLineExceedsWithRest`), the only ones that reach this
+	 * classifier. NOT `IfFirstLineExceeds`, which does not read the rest stack at
+	 * all and is exactly the consumer W17 moved onto the charging answer. W16's
+	 * recalibration verdict stands for the rest-stack readers; W17 did not retire
+	 * it, it confined the disagreement to them. Measured (W17, 2026-08-25,
+	 * re-measured at review): charging in BOTH walkers closes the same two Pony
+	 * files, leaves Pony's drift set identical at 80 and the other five
+	 * two-rewrite files untouched, and reformats SIX files here instead of three,
+	 * three of them worse — `for (candidate in candidatesOf(\n\tsource, plugin\n))`,
+	 * `if (index.skippedFiles()\n\t.length == 0)`,
+	 * `for (group in coupled) if (group.exists(f ->\n\thit.contains(f)\n))`.
+	 * Charging the prefix WITHOUT ending the line is free and closes nothing:
+	 * 0 files here, 0 on Pony, census still 7.
+	 *
+	 * What the committed-prefix answer closed (W17): `ui/xml/PixiXmlUi.hx` and
+	 * `tools/nodesrc/module/Bmfont.hx`, two of the seven Pony files that needed
+	 * two writer rewrites — suite and corpus byte-unmoved, Pony's drift set
+	 * unmoved at 80 (its OUTPUT moves for exactly those two files, which now
+	 * settle on their pass-1 shape), and three files of this tree reformatted,
+	 * each a call or ternary whose collection argument now GLUES instead of the
+	 * head opening — the shape `WrapFlatSourceFixedPointTest` already pins as the
+	 * correct fixed point for the same construct. The five that remain are that
+	 * test's three pinned cases plus `net/http/modules/mmodels/Builder.hx` and
+	 * `tools/nodesrc/module/Imagemin.hx`; none of them is a `BodyGroup` question —
+	 * measured, charging in both walkers closes none of them either.
 	 *
 	 * Stack-based walk — items pushed in reverse so pop order matches
 	 * left-to-right traversal. The `aborted` flag short-circuits
 	 * remaining work once a hardline is seen.
 	 */
 	private static function flatTokenWidthFirstLine(d: Doc): Int {
-		return flatTokenWidthFirstLineWithBreak(d).width;
+		return flatTokenWidthFirstLineWithBreak(d, true).width;
 	}
 
 	/**
@@ -823,7 +855,7 @@ class Renderer {
 				case Line(_):
 					aborted = true;
 				case _:
-					final step: { add: Int, aborted: Bool } = flatFirstLineStep(node, stack);
+					final step: { add: Int, aborted: Bool } = flatFirstLineStep(node, stack, false);
 					total += step.add;
 					aborted = step.aborted;
 			}
@@ -835,20 +867,24 @@ class Renderer {
 	 * Flat width of `d`'s first physical line (up to but excluding its first
 	 * hardline), paired with `broke` = whether such a hardline was reached
 	 * (`false` means the walk drained with no hardline — the content is fully
-	 * inline). Nested `BodyGroup`s are deferred by `flatFirstLineStep`, so a
-	 * cuddled block body reports just its leading ` {` prefix with `broke = true`
-	 * while an inline body reports its whole first line with `broke = false` —
-	 * the distinction the rest-probe uses to count a signature's trailing block
-	 * brace without pulling an inline for/while body onto the header line.
-	 * `flatTokenWidthFirstLine` is the width-only projection of this.
+	 * inline). `bgPrefix` selects what a NESTED `BodyGroup` contributes: `false`
+	 * defers every one of them (zero width, no line end), `true` charges a
+	 * COMMITTED one its own first-line prefix and ends the line. Under either, a
+	 * directly cuddled block body reports just its leading ` {` prefix with
+	 * `broke = true` while an inline body reports its whole first line with
+	 * `broke = false` — the distinction the rest-probe uses to count a
+	 * signature's trailing block brace without pulling an inline for/while body
+	 * onto the header line. Which caller passes which, and why the two answers
+	 * are ONE question and not two, is on `flatTokenWidthFirstLine` — the
+	 * width-only projection of this under `bgPrefix == true`.
 	 */
-	private static function flatTokenWidthFirstLineWithBreak(d: Doc): { width: Int, broke: Bool } {
+	private static function flatTokenWidthFirstLineWithBreak(d: Doc, bgPrefix: Bool): { width: Int, broke: Bool } {
 		final stack: Array<Doc> = [d];
 		var total: Int = 0;
 		var broke: Bool = false;
 		while (stack.length > 0 && !broke) {
 			final node: Doc = stack.pop();
-			final step: { add: Int, aborted: Bool } = flatFirstLineStep(node, stack);
+			final step: { add: Int, aborted: Bool } = flatFirstLineStep(node, stack, bgPrefix);
 			total += step.add;
 			broke = step.aborted;
 		}
@@ -1159,12 +1195,14 @@ class Renderer {
 	 * onto `stack`. Returns the flat width contributed by `node` and whether
 	 * the first line is terminated (a hardline was reached).
 	 */
-	private static function flatFirstLineStep(node: Doc, stack: Array<Doc>): { add: Int, aborted: Bool } {
+	private static function flatFirstLineStep(node: Doc, stack: Array<Doc>, bgPrefix: Bool): { add: Int, aborted: Bool } {
 		switch (node) {
-			case Empty, BodyGroup(_):
-				// Empty contributes nothing; BodyGroup is deferred — it decides
-				// its own flat/break independently.
+			case Empty:
 				return { add: 0, aborted: false };
+			case BodyGroup(innerDoc):
+				if (!bgPrefix) return { add: 0, aborted: false };
+				final prefix: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(innerDoc, true);
+				return prefix.broke ? { add: prefix.width, aborted: true } : { add: 0, aborted: false };
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				return { add: 0, aborted: true };
 			case Text(s):
@@ -1345,15 +1383,26 @@ class Renderer {
 				// rest-probe never pulls an inline for/while body onto the header.
 				//
 				// That EXCEPT is not a special case, it is the CURRENT-LINE
-				// question answered correctly, and `flatFirstLineStep` answers the
-				// same question by deferring a committed group too. The
-				// disagreement is real and unresolved; what making the other side
-				// agree costs is measured on `flatTokenWidthFirstLine`'s doc.
+				// question answered correctly, and since W17 `flatFirstLineStep`
+				// answers it the same way under `bgPrefix == true`. The call BELOW
+				// deliberately passes `false` and keeps the LESS accurate answer:
+				// it is this arm's own committed-vs-movable classifier, and a
+				// nested body that is itself COMMITTED would otherwise make every
+				// `for (…) if (…) { … }` read as committed here. That reading is
+				// what render does; the REST-STACK consumers downstream — this arm
+				// is reached only through `flatTokenWidthOfRestStack` — are simply
+				// calibrated against the deferring one, so charging here wraps
+				// headers that fit. `flatTokenWidthFirstLine`'s doc carries the
+				// measurement and says why this is calibration debt rather than a
+				// second question. Nothing in `test/` flips when this `false` is
+				// flipped: what guards it is the whole-tree `apq fmt src test
+				// --list` (6 files instead of 3, 3 of them worse) plus the Pony
+				// A/B, not a fixture.
 				if (bgDescend) {
 					inner.push({ doc: innerDoc, mode: MFlat });
 					return { add: 0, aborted: false };
 				}
-				final prefix: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(innerDoc);
+				final prefix: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(innerDoc, false);
 				return prefix.broke ? { add: prefix.width, aborted: true } : { add: 0, aborted: false };
 			case Concat(items):
 				var k: Int = items.length;

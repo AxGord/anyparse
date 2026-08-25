@@ -138,6 +138,22 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '"type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", '
 		+ '"value": 100}], "type": "noWrap"}]}}}';
 
+	/**
+	 * Pony's `objectLiteral` + `callParameter` cascades beside the
+	 * `anonFunctionSignature` one that makes a lambda argument's own signature
+	 * wrap — the pair behind `tools/nodesrc/module/Bmfont.hx` and
+	 * `src/pony/ui/xml/PixiXmlUi.hx`.
+	 */
+	private static final COMMITTED_BODY_PREFIX: String = '{"indentation": {"character": "tab", "tabWidth": 4}, '
+		+ '"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": '
+		+ '[{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, "callParameter": {"defaultWrap": '
+		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], '
+		+ '"type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", '
+		+ '"value": 100}], "type": "noWrap"}]}, "anonFunctionSignature": {"defaultWrap": "noWrap", "rules": '
+		+ '[{"conditions": [{"cond": "totalItemLength >= n", "value": 80}], "type": "fillLine"}]}, '
+		+ '"ternaryExpression": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", '
+		+ '"value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"}]}}}';
+
 	public function new(): Void {
 		super();
 	}
@@ -235,14 +251,73 @@ class WrapFlatSourceFixedPointTest extends Test {
 	}
 
 	/**
+	 * The two files W17 closed — the part of the tail (2 of 7) that IS a
+	 * `BodyGroup` question. Both are a call whose object-literal argument breaks only at
+	 * RENDER time and whose remaining arguments end in a group committed to
+	 * breaking — a `{`-bodied lambda, or a ternary the cascade has already
+	 * broken.
+	 *
+	 * MEASURED direction (base `f9ca91fc`, `ast --writer-output` chained three
+	 * times over
+	 * `src/pony/ui/xml/PixiXmlUi.hx` and `tools/nodesrc/module/Bmfont.hx`):
+	 * pass 1 reads a source-FLAT literal, GLUES the argument list, and the
+	 * renderer then writes the literal's own newlines into the file. Pass 2
+	 * reads those newlines, force-commits the literal to one-per-line — and
+	 * `Renderer.flatFirstLineStep` deferred that now-committed `BodyGroup` to
+	 * zero width and KEPT WALKING, so the argument list's first-line probe
+	 * measured a header the renderer never emits and OPENED the list. Pass 3
+	 * re-settles on the opened shape, which is what `fmt` used to write.
+	 *
+	 * So the fix changes nothing on pass 1 — base and fixed pass-1 output are
+	 * byte-equal for both files — it makes pass 2 REPRODUCE pass 1, by charging
+	 * a committed group its leading `{` and ending the line, the answer
+	 * `restNodeWidth` already gave.
+	 *
+	 * Both assertions must discriminate, so the shape is asserted on the SETTLED
+	 * text: on base `twice` is the opened list, so shape and equality both flip
+	 * when `Renderer.hx` alone is reverted. Asserting the shape on `once`
+	 * instead does NOT discriminate — base's pass 1 is already glued, and that
+	 * assertion passes with the fix reverted.
+	 */
+	public function testCommittedBodyGroupPrefixConvergesOnFirstPass(): Void {
+		final cases: Array<{ name: String, src: String, glued: String }> = [
+			{
+				name: 'lambda-tailed call (Bmfont.hx)',
+				glued: 'NPM.msdf_bmfont_xml(font.fullPath.first, {\n',
+				src: 'class Bm {\n\tprivate function f(): Void {\n\t\tNPM.msdf_bmfont_xml(font.fullPath.first, { filename: ofn, charset: '
+					+ 'charset, smartSize: true, pot: false, square: true, fontSize: size, fieldType: type, outputType: format, '
+					+ 'distanceRange: distance }, function(err: Any, textures: Array<{ filename: String, texture: Dynamic }>, font: {'
+					+ ' filename: String, data: String, options: Dynamic }): Void {\n\t\t\tlog(\'done\');\n\t\t});\n\t}\n}'
+			},
+			{
+				name: 'ctor call with a leading literal (PixiXmlUi.hx)',
+				glued: 'new HtmlVideoUIFS({\n',
+				src: 'class Px {\n\tprivate function f(): Void {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tfinal video: '
+					+ 'HtmlVideoUIFS = new HtmlVideoUIFS({ x: parseAndScale(attrs.x), y: parseAndScale(attrs.y), '
+					+ 'width: parseAndScale(attrs.w), height: parseAndScale(attrs.h) }, attrs.fsborder != null ? '
+					+ '(attrs.fsborder: Border<Float>) : null, fspos, attrs.css, attrs.fscss, attrs.transition, app, '
+					+ 'attrs.clicktimeout, attrs.ceil.isTrue(), attrs.fixed.isTrue());\n\t\t\t}\n\t\t}\n\t}\n}'
+			}
+		];
+		for (c in cases) {
+			final once: String = write(c.src, COMMITTED_BODY_PREFIX);
+			final twice: String = write(once, COMMITTED_BODY_PREFIX);
+			Assert.isTrue(twice.indexOf(c.glued) != -1, '${c.name}: the SETTLED shape must keep the list glued, got:\n<$twice>');
+			Assert.equals(once, twice, '${c.name}: one round trip must land on the fixed point');
+		}
+	}
+
+	/**
 	 * The three writer shapes of the convergence tail, PINNED AS STILL DIVERGENT
 	 * (ω-canonical-fixed-point). Each needs two writer rewrites under the config
-	 * beside it, and each is one of the seven files that still warn on Pony's
+	 * beside it, and each is one of the FIVE files that still warn on Pony's
 	 * committed `hxformat.json` — `tools/src/module/Unpack.hx` and
 	 * `src/pony/net/http/modules/mmodels/Builder.hx` (case body),
 	 * `src/pony/magic/builder/DIBuilder.hx` (value-`if` branch),
 	 * `src/pony/magic/builder/HasSignalBuilder.hx` (ternary under a sole-arg
-	 * call).
+	 * call). The fifth, `tools/nodesrc/module/Imagemin.hx`, is a method chain
+	 * whose receiver measures flat on pass 1 and hardline-bearing on pass 2; it
+	 * has no fixture here yet.
 	 *
 	 * ONE root cause under all three: a static measure reads a collection whose
 	 * break the RENDERER decides — `emitZeroThresholdAgree`'s `IfFirstLineExceeds`
@@ -252,20 +327,28 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * reads that newline, force-commits the list, and the same measure answers
 	 * `-1` (or `0`, behind the `BodyGroup`), so the enclosing shape flips.
 	 *
-	 * Four candidate fixes were measured on this tree and Pony's, and every one
-	 * that closes any file reformats anyparse's OWN tree, whose
-	 * `apq fmt src test --list` is otherwise EMPTY:
+	 * Candidate fixes measured on this tree and Pony's. The first one SHIPPED
+	 * (W17); the rest did not, and every one of those reformats anyparse's OWN
+	 * tree, whose `apq fmt src test --list` is otherwise EMPTY:
 	 *
-	 *  - `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s committed-
-	 *    `BodyGroup` answer (charge its first-line prefix, END the line): closes
-	 *    `PixiXmlUi.hx` and `Bmfont.hx`, suite and corpus unmoved, Pony drift
-	 *    unmoved at 80 — and reformats 6 files here, at least three of them worse
-	 *    (`for (candidate in candidatesOf(\n\tsource, plugin\n))`,
-	 *    `if (index.skippedFiles()\n\t.length == 0)`). Charging the prefix WITHOUT
-	 *    ending the line is free (0 files here, 0 on Pony) and closes nothing, so
-	 *    the line-ending half is the whole effect and the whole cost.
-	 *  - the same arm descending the group instead: identical outcome, 2 closed /
-	 *    6 reformatted.
+	 *  - SHIPPED (W17): `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s
+	 *    committed-`BodyGroup` answer (charge its first-line prefix, END the line)
+	 *    for the `IfFirstLineExceeds` consumer ONLY — `restNodeWidth`'s own
+	 *    committed-vs-movable classifier keeps the deferring answer, which is what
+	 *    the `bgPrefix` flag selects. Closed `PixiXmlUi.hx` and `Bmfont.hx`; suite
+	 *    and corpus byte-unmoved; Pony's drift set unmoved at 80, its OUTPUT moving
+	 *    for exactly those two files (both now settle on their pass-1 shape); three
+	 *    files reformatted here, each a call or ternary whose collection argument
+	 *    now glues instead of the head opening — the shape
+	 *    `testCallArgObjectLiteralGluesOnFirstPass` and
+	 *    `testTernaryBranchObjectLiteralHugsOnFirstPass` already pin as correct.
+	 *    Charging in BOTH walkers instead reformats 6 files here, 3 of them worse,
+	 *    because a nested body that is itself COMMITTED then reads as committed
+	 *    to the rest-of-stack lookahead too. That reading is what render does —
+	 *    the cond-wrap consumers are simply calibrated against the deferring
+	 *    answer, so `bgPrefix` DEFERS W16's recalibration verdict for them
+	 *    rather than retiring it. Charging the prefix WITHOUT ending the line is
+	 *    free (0 files here, 0 on Pony, Pony census still 7) and closes nothing.
 	 *  - `DocMeasure.flatTokenWidth` descending a `BodyGroup` (the measure
 	 *    `WrapList.measureItems` reads): closes three, opens `IRPC.hx`, reformats
 	 *    74 files here — and makes `src/anyparse/core/CollapsePass.hx` itself a
@@ -276,11 +359,15 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 *    whether the list's Star reflows source newlines and `HxExpr.ArrayExpr` is
 	 *    the ONLY Star in the Haxe grammar that does — every call-parameter list
 	 *    in this tree is in the same population as Pony's object literals.
+	 *  - `BodyFit.fitLineLayout` sending a body that does not fit ON ITS OWN LINE
+	 *    to the glue gate instead of the break shape (W17): closes ONE case-body
+	 *    file, reformats 10 here — every one of them a `for`/`if` body glued onto
+	 *    its header — and adds two files to Pony's drift set. Rejected.
 	 *
-	 * So the writer defect is left standing and reported (`apq fmt` warns), and
-	 * the CONSUMER that was silently harmed by it — `RefactorSupport.canonicalize`
-	 * — was fixed instead. When a fix does land, these three become `Assert.equals`
-	 * on `once` and `twice`; do not delete them.
+	 * So the writer defect is left standing for the remaining five and reported
+	 * (`apq fmt` warns), and the CONSUMER that was silently harmed by it —
+	 * `RefactorSupport.canonicalize` — was fixed instead. When a fix does land,
+	 * these three become `Assert.equals` on `once` and `twice`; do not delete them.
 	 */
 	public function testConvergenceTailStillNeedsTwoRewrites(): Void {
 		final cases: Array<{ name: String, src: String, config: String }> = [
@@ -292,20 +379,18 @@ class WrapFlatSourceFixedPointTest extends Test {
 			{
 				name: 'value-if branch (DIBuilder.hx)',
 				config: VALUE_IF_NESTED,
-				src: 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n'
-					+ '\t\t\t{ expr: EVars([\n\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', '
-					+ 'params: [TPType(t)] }), expr: macro null, isFinal: false }\n\t\t\t]), pos: Context.currentPos() }\n'
-					+ '\t\telse\n\t\t\tcheckExpr(x);\n\t}\n}'
+				src: 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n\t\t\t{ expr: EVars([\n'
+					+ '\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', params: [TPType(t)] '
+					+ '}), expr: macro null, isFinal: false }\n\t\t\t]), pos: Context.currentPos() }\n\t\telse\n\t\t\tcheckExpr(x);\n\t}\n}'
 			},
 			{
 				name: 'ternary under a sole-arg call (HasSignalBuilder.hx)',
 				config: CALL_TERNARY_NESTED,
 				src: 'class C {\n\tfunction f(): Void {\n\t\tfields.push({\n\t\t\tname: setterName,\n'
 					+ '\t\t\taccess: ast.concat([AInline, setterAccess]),\n\t\t\tmeta: null,\n\t\t\tpos: f.pos,\n'
-					+ '\t\t\tkind: FFun(setcontroll ? { args: [{ name: \'v\', type: null }], ret: null, expr: macro return '
-					+ 'evName == null || v != fName && !evName.dispatchWithFlag(v, fName, notsave) ? fName = v : fName } : '
-					+ '{ args: [{ name: \'v\', type: null }], ret: null, expr: macro { if (evName == null) '
-					+ '{ var prev = fName; } return fName; } })\n\t\t});\n\t}\n}'
+					+ '\t\t\tkind: FFun(setcontroll ? { args: [{ name: \'v\', type: null }], ret: null, expr: macro return evName == null '
+					+ '|| v != fName && !evName.dispatchWithFlag(v, fName, notsave) ? fName = v : fName } : { args: [{ name: \'v\', type: '
+					+ 'null }], ret: null, expr: macro { if (evName == null) { var prev = fName; } return fName; } })\n\t\t});\n\t}\n}'
 			}
 		];
 		for (c in cases) {

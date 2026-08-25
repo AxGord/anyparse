@@ -1756,12 +1756,10 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	): Null<{ renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span> }> {
 		final renameEdits: Array<{ span: Span, text: String }> = [];
 		final excludeSpans: Array<Span> = [];
-		return subtypeRefWalk(tree, field, owner, propName, index, source, ownerFileScan, null, false, false, renameEdits, excludeSpans)
-			? {
-				renameEdits: renameEdits,
-				excludeSpans: excludeSpans
-			}
-			: null;
+		return subtypeRefWalk(tree, field, owner, propName, index, source, ownerFileScan, null, false, false, renameEdits, excludeSpans) ? {
+			renameEdits: renameEdits,
+			excludeSpans: excludeSpans
+		} : null;
 	}
 
 	/**

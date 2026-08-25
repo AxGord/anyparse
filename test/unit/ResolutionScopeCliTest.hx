@@ -232,13 +232,10 @@ class ResolutionScopeCliTest extends Test {
 	 */
 	public function testResolutionScopeConfiguredStillFlagsPreferFinalPublicField(): Void {
 		#if (sys || nodejs)
-		Assert.equals(
-			1, lintWithLib('prefer-final-public-field', 'Owner.hx', OWNER, [
-				{ name: 'Unrelated.hx', source: UNRELATED },
-				{ name: 'Broken.hx', source: BROKEN }
-			]),
-			'a resolution scope with no offending subtype — skip-parsed library file included — still yields the finding'
-		);
+		Assert.equals(1, lintWithLib('prefer-final-public-field', 'Owner.hx', OWNER, [
+			{ name: 'Unrelated.hx', source: UNRELATED },
+			{ name: 'Broken.hx', source: BROKEN }
+		]), 'a resolution scope with no offending subtype — skip-parsed library file included — still yields the finding');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -271,13 +268,10 @@ class ResolutionScopeCliTest extends Test {
 	/** Regression guard: a resolution scope with a skip-parsed library file and no subtype still yields the normal finding. */
 	public function testResolutionScopeConfiguredStillFlagsPreferReadOnlyField(): Void {
 		#if (sys || nodejs)
-		Assert.equals(
-			1, lintWithLib('prefer-read-only-field', 'Box.hx', BOX, [
-				{ name: 'Unrelated.hx', source: UNRELATED },
-				{ name: 'Broken.hx', source: BROKEN }
-			]),
-			'a resolution scope with no offending subtype — skip-parsed library file included — still yields the finding'
-		);
+		Assert.equals(1, lintWithLib('prefer-read-only-field', 'Box.hx', BOX, [
+			{ name: 'Unrelated.hx', source: UNRELATED },
+			{ name: 'Broken.hx', source: BROKEN }
+		]), 'a resolution scope with no offending subtype — skip-parsed library file included — still yields the finding');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -394,13 +388,10 @@ class ResolutionScopeCliTest extends Test {
 	 */
 	public function testResolutionScopeAccessGrantOnSubtypeBlocksPreferFinalField(): Void {
 		#if (sys || nodejs)
-		Assert.equals(
-			0, lintWithLib('prefer-final-field', 'Vault.hx', VAULT, [
-				{ name: 'Sub.hx', source: subtypeOf('Vault', 'trace(this);') },
-				{ name: 'Poker.hx', source: grantOnSubtype('s._key = 9;') }
-			]),
-			'an @:access(Sub) grantee writing the inherited private field vetoes var -> final'
-		);
+		Assert.equals(0, lintWithLib('prefer-final-field', 'Vault.hx', VAULT, [
+			{ name: 'Sub.hx', source: subtypeOf('Vault', 'trace(this);') },
+			{ name: 'Poker.hx', source: grantOnSubtype('s._key = 9;') }
+		]), 'an @:access(Sub) grantee writing the inherited private field vetoes var -> final');
 		#else
 		Assert.pass('non-sys target');
 		#end
