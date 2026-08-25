@@ -295,12 +295,15 @@ file. Wrong-typed values INSIDE a rule's own options stay per-field lenient.
 A top-level `"resolutionRoots"` (array of directory paths, relative to the
 config file resolved to absolute) declares a separate RESOLUTION scope: the
 `.hx` under those roots join the cross-file `SymbolIndex` that the type /
-inheritance checks (`redundant-this`, `prefer-index-access`, `map-keys-lookup`)
-and the field-access checks (`prefer-final-field`, `prefer-final-public-field`,
+inheritance checks (`redundant-this`, `prefer-index-access`, `map-keys-lookup`),
+the field-access checks (`prefer-final-field`, `prefer-final-public-field`,
 `prefer-read-only-field` — a subtype declared in a root that WRITES an inherited
-field vetoes the rewrite, exactly as a report-scope one does)
-resolve against — so a class `extends openfl.display.Sprite` is seen to inherit
-`addChild` even though OpenFL is not being linted. The resolution scope is
+field vetoes the rewrite, exactly as a report-scope one does) and the REFLECTION
+gates (`inline-constant`, `static-constant`, `prefer-enum-abstract`,
+`orphan-accessor`, `unused-public-member` — each refuses its rewrite when a
+`Reflect` / `Type.resolveClass` string anywhere in scope spells the name it would
+erase) resolve against — so a class `extends openfl.display.Sprite` is seen to
+inherit `addChild` even though OpenFL is not being linted. The resolution scope is
 never reported and never edited by `--fix`; only the files named on the command
 line are. The roots are read lazily — a run whose checks demand no cross-file
 resolution never touches them.
@@ -317,8 +320,29 @@ demands the cross-file index (a `--rule prefer-single-quotes` run never spawns
 `haxelib`), and a name that does not resolve (a typo / uninstalled lib) is
 skipped with a stderr note while the lint proceeds. `resolutionLibs` and
 `resolutionRoots` coexist and union into the same scope — reach for
-`resolutionRoots` when the library is a sibling checkout not registered with
-haxelib, and `resolutionLibs` otherwise.
+`resolutionRoots` when the sources are a sibling checkout not registered with
+haxelib OR the project's own tree, and `resolutionLibs` otherwise.
+
+**A project's own sources are a legitimate root, and usually the important one.**
+Nothing about the key says "library": it declares the RESOLUTION scope, while the
+files named on the command line are the REPORT scope. Declare `["src", "test"]`
+and a one-file `hxq lint src/pkg/A.hx` still resolves over the whole project.
+That matters most to the reflection gates listed above, because their answer is
+UNSAFE in one direction: with no roots there is no scope over the project's own
+files, so the call answers "nothing in this project reflects that name" from the
+one file it was handed, and `--fix` acts on it — erasing a name a sibling file
+spells to `Reflect`, with the build still green. Declare the same paths the
+project's own gate lints — a narrower root leaves the hole one directory smaller
+— and declare them in EVERY `apqlint.json` a linted file resolves to, not only
+the root one: discovery stops at the first document above the file and takes it
+WHOLESALE, so a nested `test/apqlint.json` without the key leaves every file
+below it with no project scope at all. The cost is one read+parse of the declared
+tree per lint process, paid only when a check actually demands the index (a
+`--rule prefer-single-quotes` run never touches it) and skipped for a report
+scope that already contains the roots, since library entries dedupe against the
+report paths before their sources are read. anyparse's own numbers, dated and
+with the discriminating probe, are in its `docs/testing.md` § "The project
+declares its own sources as `resolutionRoots`".
 
 The installed Haxe **std** joins that same scope IMPLICITLY, with no key at all
 — discovered through `HAXE_STD_PATH`, the `which haxe` sibling, or a known

@@ -596,7 +596,11 @@ regression; re-run the suite alone before believing it.
 
 Lint is the battery's largest branch — about 70s of its own, both trees — and
 `apqlint.json` sets `"compilerOracleServer": false` on purpose. Measured
-2026-08-18 on this project:
+2026-08-18 on this project, BEFORE it declared `resolutionRoots` (2026-08-25).
+The comparison between the two arms still holds; the absolute seconds and the
+finding count do not. `lint src --all` does not contain the `test` root, so that
+root is no longer deduped away — it is read and parsed on every such run. See
+"The project declares its own sources as `resolutionRoots`" below.
 
 | | lint `src --all` |
 |---|---|
@@ -632,13 +636,35 @@ yourself, read the port out of `$TMPDIR/apq-oracle-*.json` and run
 ### `--no-oracle` for the edit loop
 
 What remains after that is the cold typecheck itself, and it is PROJECT-WIDE
-regardless of how narrow the lint scope is: **a single-file lint takes 18.7 s,
-of which 16.1 s is the oracle**. That is the largest single cost in the edit
-loop — the "lint the file I just touched" call, run dozens of times a slice.
+regardless of how narrow the lint scope is. It is the largest single cost in the
+edit loop — the "lint the file I just touched" call, run dozens of times a slice.
 
 ```sh
-hxq lint <file> --all --no-oracle    # 2.2s instead of 18.7s
+hxq lint <file> --all --no-oracle    # ~5s instead of ~25s
 ```
+
+Measured 2026-08-25 — this tree's sources at `0f931d2d`, its `apqlint.json`
+carrying the `resolutionRoots` the next section explains — on
+`src/anyparse/check/ReflectionScan.hx` (11 KB), medians of three interleaved
+runs:
+
+| | `--no-oracle` | oracle, cold | oracle, verdict reused |
+|---|---|---|---|
+| single-file lint | 5.1 s | 24.5 s | 5.5 s |
+
+`haxe test-js.hxml --no-output` on its own is 18.0 s / 17.9 s — 18.0 of the
+19.4 s difference, so nearly all of it. The "verdict reused" column is the
+`OracleCache` hit and it only survives while NOTHING on the classpath changed —
+in an edit loop every run after an edit is the cold column, so read the middle
+one as the real cost.
+
+Read the dateline as part of the table. Both halves moved since they were first
+written down, for unrelated reasons: the typecheck grew with the tree (16.1 s
+when the sections below measured it, 18.0 s here), and the lint half got slower
+on PURPOSE on 2026-08-25, when the project declared its own sources as
+`resolutionRoots` (1.05 s → 5.1 s — next section). The three figures this
+section used to quote — 2.2 s, 18.7 s, 16.1 s — are all stale, and only the
+first two are stale for the `resolutionRoots` reason.
 
 Findings are byte-identical (`lint-diff` over `src/anyparse/check`:
 `468 findings (base 468) — 0 added / 0 removed`); the flag changes what the run
@@ -664,6 +690,116 @@ force: never in a gate. The workaround the old behaviour forced — temporarily
 deleting `compilerOracle` from the project's own `apqlint.json` — is unnecessary now,
 and was always the worse spelling of the same thing: it edits a TRACKED file, so it
 outlives the one run that wanted it and shows up in the next `git status`.
+
+### The project declares its own sources as `resolutionRoots`
+
+`apqlint.json` declares `"resolutionRoots": ["src", "test"]` — the project's OWN
+tree, not a library. That reads like a no-op (those are the files the gate lints
+anyway) and is anything but: the roots are the RESOLUTION scope, and the report
+scope is whatever the caller typed on the command line. Five checks refuse a
+rewrite when a name could be spelled by a runtime `Reflect` / `Type.resolveClass`
+call, and that refusal is only as wide as the strings the run was given. Without
+the roots, `hxq lint <one-file>` answers "nothing in this project reflects that
+name" from ONE file.
+
+The two-file probe that shows it, run in this tree with the key removed and then
+restored (`Alpha.hx` declares `public static final PROBE_TOKEN`, `Beta.hx` calls
+`Reflect.field(o, "PROBE_TOKEN")`; `Gamma.hx` / `Delta.hx` are the same pair
+under `test/`, spelling `PROBE_TOKEN2`, so the nested config answers for them):
+
+| `--rule inline-constant` on | no `resolutionRoots` | roots declared |
+|---|---|---|
+| `src/t102probe/Alpha.hx` alone | reports the finding | silent |
+| `src/t102probe` (both files) | silent | silent |
+| `test/t102probe/Gamma.hx` alone | reports the finding | silent |
+| `test/t102probe` (both files) | silent | silent |
+| `--fix` on `Alpha.hx` alone | `fixed 1 issue(s)`, writes `inline` | `fixed 0 issue(s)` |
+
+The base column contradicts itself: the one-file answer is the opposite of the
+two-file answer over the same code. Changing `Beta.hx`'s literal to a name no
+constant carries makes BOTH columns report the finding, which is what pins the
+literal — rather than anything incidental about the config — as the
+discriminator. `test/unit/LintScopeGateTest` asserts the roots COVER the paths
+the gate lints, so the config cannot silently drift back.
+
+What it costs, interleaved base/roots arms, medians of three:
+
+| | no roots | roots | note |
+|---|---|---|---|
+| `lint ReflectionScan.hx --all --no-oracle` (11 KB) | 1.06 s | 4.85 s | a second round of the same pair read 1.05 / 5.13 |
+| `lint InlineConstant.hx --all --no-oracle` (41 KB) | 1.22 s | 5.18 s | |
+| `lint RefactorSupport.hx --all --no-oracle` (282 KB) | 2.51 s | 6.16 s | |
+| `lint test/unit/LintScopeGateTest.hx --all --no-oracle` | 0.69 s | 4.61 s | the nested config, below |
+| `lint <file> --rule prefer-single-quotes --no-oracle` | 0.12 s | 0.10 s | no whole-scope check runs |
+| `lint src test --all --no-oracle` | 92.97 s | 92.92 s | 2256 findings, `lint-diff` 0 added / 0 removed |
+| `refs` / `fmt --list` / `source` on one file | 0.10–0.13 s | 0.10–0.13 s | not a lint path |
+
+Run-to-run drift on the roots arm is a few per cent of a four-second number, so
+read the ratio (~4.5x) rather than the second decimal.
+
+So the tax is a flat ~4 s, flat because it is one thing: reading and parsing the
+1490 `.hx` the run is not already reporting on. A `--cpu-prof` of the roots arm
+puts ~40 % of its 4.9 s in the generated `parseHx*` atoms, 5.2 % in
+`ReflectionScan.collect` and 4.2 % in `unused-public-member`'s `countTokens` —
+nothing redundant to remove, and the scope stays LAZY, which is what the
+`--rule prefer-single-quotes` row proves.
+
+**What escapes the tax is not "project-wide runs", it is the exact `src test`
+spelling.** A library entry is deduped against the REPORT paths by absolute path
+before its source is read, so a report scope that already contains both roots
+pays nothing — and `lint src test` is the only such spelling this project uses
+(`tools/battery.sh`, `branch_lint`). Every narrower scope pays in full, directory
+scopes included: `lint src/anyparse/runtime --all --no-oracle` (15 files) is
+1.17 s → 5.60 s, and it drops the same class of false positive the single-file
+row does — three `unused-public-member` warnings on members the rest of the tree
+calls (`ParseReport.recordFail`, `ParseReport.recordUnknownField`,
+`Span.offsetOf`). `lint src --all` is in that group too, which is why the two
+`compilerOracleServer` / `OracleCache` sections above now carry a
+pre-`resolutionRoots` stamp.
+
+The single-file lint also gets more accurate, not just slower — the report-scope
+gates were producing false positives at the same time the reflection gates were
+producing false permissions. `lint RefactorSupport.hx --all` drops from 64
+findings to 15; all 49 are `unused-public-member` on members the rest of the tree
+calls. The roots arm's findings came back a strict SUBSET everywhere they were
+checked — 64 → 15 on that file, 12 → 9 on `src/anyparse/runtime`, 1 → 0 on
+`ReflectionScan.hx`, and 0 added in every arm-to-arm `lint-diff`. The mechanism
+guarantees that direction for the five reflection gates and for the whole-scope
+occurrence scans (`unused-public-member`, `unused-private`): a wider file set can
+only ADD evidence of use, hence only remove findings and add refusals. It is not
+a proof for the resolution scope's other consumers — `redundant-this`,
+`prefer-index-access`, `map-keys-lookup` — where more resolution could in
+principle let a check fire that used to bail; nothing was measured firing that
+way, but read the subset property as an observation there rather than a law.
+
+`["src"]` alone would cost 3.27 s instead of 5.13 s (both from the second round),
+and was rejected on measurement: with `test/` out of the resolution scope,
+`lint src --all` reports 3 `unused-public-member` findings that
+`lint src test --all` does not — deletion candidates whose only callers are
+tests. Half-closing the hole in exactly the shape being closed is not a saving.
+
+**`test/apqlint.json` has to declare them too, and that is not a detail.** Config
+discovery stops at the FIRST `apqlint.json` above the linted file and takes it
+WHOLESALE — a nested document does not inherit the root one. So the root key
+governs `src/` and nothing else: with it declared only there, the `Gamma.hx` /
+`Delta.hx` pair under `test/` still reported the finding for `Gamma.hx` alone and
+refused over both, and a one-file lint under `test/` ran in 0.69 s because it had
+no project scope at all. The nested document now carries
+`"resolutionRoots": ["../src", "../test"]`, which takes a one-file lint there to
+4.61 s. It also picks up the `"resolutionLibs"` the root declares and it never
+had — that half is PARITY rather than a measured defect: it moved no finding on
+the largest test files probed (0 added / 0 removed) and costs ~0.23 s, and it is
+there so the two spellings in the next paragraph resolve identically instead of
+differing by two libraries. `LintScopeGateTest` asserts BOTH documents, and
+reverting either one fails it by name.
+
+The same replacement rule has a second edge worth knowing while reading a lint
+result: discovery starts at the DIRECTORY of the path it is given, so the
+command-line argument `test` resolves the ROOT document (its directory is the
+repo root) while `test/unit/Foo.hx` resolves the nested one. Before this change
+that meant `hxq lint test` and `hxq lint test/unit/Foo.hx` answered the reflection
+gates over two different scopes; with both documents declaring the roots they now
+agree.
 
 ### The safe pass reverts the file the compiler blames, not the wave
 
@@ -988,7 +1124,8 @@ What the gates cannot decline they can at least stop paying twice. Before it
 compiles anything, `Cli.reportOracleVerdict` derives a CONTENT fingerprint of
 the whole compile input and reuses the recorded verdict only while that
 fingerprint still matches (`anyparse.check.OracleCache`). Interleaved, three
-rounds, `lint src --all`:
+rounds, `lint src --all` — again pre-`resolutionRoots` (2026-08-25), so the
+−37 % holds while the absolute seconds and the 699-file finding line do not:
 
 | | run |
 |---|---|
@@ -996,7 +1133,8 @@ rounds, `lint src --all`:
 | unchanged tree | 25.2 / 25.4 s |
 
 **−37 %**, and the cold arm is not measurably slower than the base — deriving
-the fingerprint costs ~0.28 s against a 16.1 s typecheck. Findings are
+the fingerprint costs ~0.28 s against a 16.1 s typecheck (18.0 s when
+re-measured 2026-08-25, so the ratio has only improved). Findings are
 byte-identical between the two arms (`0 errors, 54 warnings, 1356 infos in 699
 files`, same stdout to the byte).
 

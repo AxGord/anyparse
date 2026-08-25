@@ -1,6 +1,8 @@
 package unit;
 
 #if (sys || nodejs)
+import haxe.Exception;
+import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -68,6 +70,33 @@ final class CliFixture {
 				FileSystem.deleteFile(p);
 		}
 		FileSystem.deleteDirectory(dir);
+	}
+
+	/**
+	 * The repository root — the nearest ancestor of the process cwd holding `src/anyparse/check`.
+	 *
+	 * Here rather than in either caller because the on-disk drift guards need the same answer:
+	 * `BuildMacroMetaSeamTest` locates the layer sources it scans for spelled grammar tags,
+	 * `LintScopeGateTest` locates the `apqlint.json` documents whose resolution scope it asserts.
+	 * Two copies of a walk-up are two things to keep in step.
+	 *
+	 * THROWS rather than returning null, which is what let both call sites collapse to one line.
+	 * A `Null<String>` return is what the walk-up carried in `BuildMacroMetaSeamTest`, together
+	 * with an assert-and-bail prologue whose `return` is a drift guard passing while guarding
+	 * nothing — the one outcome a guard must not have, and it would have been copied here. The suite is documented to run with the cwd set to the tree it was built from
+	 * (`tools/worker-build.sh`), so a cwd that cannot see the tree is a broken invocation, not a
+	 * configuration to tolerate.
+	 */
+	public static function repoRoot(): String {
+		final cwd: String = Path.removeTrailingSlashes(Path.normalize(Sys.getCwd()));
+		var dir: String = cwd;
+		for (_ in 0...8) {
+			if (FileSystem.exists('$dir/src/anyparse/check')) return dir;
+			final up: String = Path.removeTrailingSlashes(Path.normalize('$dir/..'));
+			if (up == dir) break;
+			dir = up;
+		}
+		throw new Exception('src/anyparse/check is not above the cwd ($cwd) - run the suite from the tree it was built from');
 	}
 
 	private static inline function stripTrailingSlash(p: String): String {
