@@ -31,6 +31,11 @@ import utest.Test;
  * byte-for-byte on all of them. `CONFIG_NO_COND` is the same file with the `complexItemCount` rule
  * removed — which is what makes the D1 pairs discriminating (the counter is opt-in, so the same
  * source must stay flat there) and what proves D2 needs no configuration at all.
+ *
+ * One later fixture is not a D1/D2 shape at all: `THREE_CALLS_*` pins that the count also
+ * reaches the CONTINUATION INDENT, not just the wrap mode. It needs a config of its own
+ * because it has to pair `complexItemCount >= n` with a `defaultAdditionalIndent`, and no
+ * shipped config does.
  */
 @:nullSafety(Strict)
 final class HxComplexItemWrapTest extends Test {
@@ -59,6 +64,16 @@ final class HxComplexItemWrapTest extends Test {
 		+ '"type":"noWrap"}]}},"whitespace":{"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before"}}},'
 		+ '"sameLine":{"ifBody":"fitLine","functionBody":"fitLine","expressionIf":"next","expressionIfFit":true,'
 		+ '"comprehensionFor":"fitLine"},"emptyLines":{"classEmptyLines":{"beginType":1,"endType":1}}}';
+
+	/**
+	 * A cascade that pairs `complexItemCount >= n` with a `defaultAdditionalIndent`, so the
+	 * continuation INDENT depends on the same cascade answer the wrap MODE does. The only
+	 * config here that is not a reduction of a real project's `hxformat.json` — it exists to
+	 * put those two knobs in one cascade, which no shipped config does.
+	 */
+	private static final THREE_CALLS_CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},'
+		+ '"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"noWrap","defaultAdditionalIndent":1,'
+		+ '"rules":[{"conditions":[{"cond":"complexItemCount >= n","value":2}],"type":"onePerLine"}]}}}';
 
 	/** An argument list whose first argument is a `new` holding an array of three constructor calls. */
 	private static final CTORS_SRC: String = 'class S1 {\n\n\tpublic function new(frameWidth:Float, frameHeight:Float) {\n'
@@ -131,6 +146,12 @@ final class HxComplexItemWrapTest extends Test {
 	private static final LASTBIG_OUT: String = 'class S7 {\n\n\tstatic function main() {\n\t\treturn makeTimer(\'shell\', totalTime, [\n'
 		+ '\t\t\tmakeTimer(\'display call\', displayCallTime),\n\t\t\tmakeTimer(\'transmission\', transmissionTime),\n'
 		+ '\t\t\tmakeTimer(\'parsing\', parsingTime),\n\t\t\tmakeTimer(\'processing\', processingTime)\n\t\t]);\n\t}\n\n}';
+
+	/** Three calls on ONE source line — the condition fires, and nothing else in the cascade breaks it. */
+	private static final THREE_CALLS_SRC: String = 'class S8 {\n\tstatic var a = [f(1), g(2), h(3)];\n}';
+
+	/** `INDENT_SRC` under `INDENT_CONFIG` — one `defaultAdditionalIndent` unit, not two. */
+	private static final THREE_CALLS_OUT: String = 'class S8 {\n\tstatic var a = [\n\t\tf(1),\n\t\tg(2),\n\t\th(3)\n\t];\n}';
 
 	/** `CTORS_SRC` under `CONFIG_NO_COND`. */
 	private static final CTORS_OUT_NO_COND: String = 'class S1 {\n\n\tpublic function new(frameWidth:Float, frameHeight:Float) {\n'
@@ -244,6 +265,33 @@ final class HxComplexItemWrapTest extends Test {
 		Assert.equals(LASTBIG_OUT, write(LASTBIG_SRC, CONFIG));
 	}
 
+	/**
+	 * The wrap MODE and the continuation INDENT have to come out of the same cascade answer.
+	 * `continuationCols` re-runs the cascade to learn whether it forces a break, and it used to
+	 * hand that probe a hardcoded `complexItemCount` of 0 — so a `complexItemCount >= n` rule
+	 * selected `onePerLine` for the mode and then computed the indent as if the list held no
+	 * complex items, landing every element one unit deeper than the cascade's own
+	 * `defaultAdditionalIndent`.
+	 *
+	 * ONE write pass over a ONE-LINE source is what discriminates, and both halves of that
+	 * matter. Measured on the pre-fix writer with this exact config: pass 1 over the one-line
+	 * source gives three tabs, pass 2 over pass 1's output gives two, pass 3 reproduces pass 2.
+	 * So `fmt` reported the shape as "needed 2 rewrites to reach its fixed point" rather than as
+	 * wrong output — which is why no corpus run and no `fmt --list` gate ever saw it, and why a
+	 * fixture seeded with an already-broken list would prove nothing.
+	 *
+	 * What makes pass 2 land on the right indent is NOT source-multiline keeping: with the rule
+	 * removed, the already-broken list collapses back to one line, so nothing here is preserving
+	 * the source layout. The actual second-pass route is unidentified — recorded as measured
+	 * rather than guessed. Its consequence for this file: the `THREE_CALLS_OUT` line in
+	 * `testLayoutsAreIdempotent` is vacuous with respect to THIS fix (the pre-fix writer
+	 * satisfies it too, verified — reverting turns exactly this one test red, not two). It pins
+	 * the fixed point, which is still worth pinning.
+	 */
+	public function testComplexItemCountReachesTheContinuationIndent(): Void {
+		Assert.equals(THREE_CALLS_OUT, write(THREE_CALLS_SRC, THREE_CALLS_CONFIG));
+	}
+
 	/** Every produced layout is a fixed point — a second write reproduces it. */
 	public function testLayoutsAreIdempotent(): Void {
 		Assert.equals(CTORS_OUT, write(CTORS_OUT, CONFIG));
@@ -252,6 +300,7 @@ final class HxComplexItemWrapTest extends Test {
 		Assert.equals(MIDLIST_OUT, write(MIDLIST_OUT, CONFIG));
 		Assert.equals(MIDFIT_OUT, write(MIDFIT_OUT, CONFIG));
 		Assert.equals(LASTBIG_OUT, write(LASTBIG_OUT, CONFIG));
+		Assert.equals(THREE_CALLS_OUT, write(THREE_CALLS_OUT, THREE_CALLS_CONFIG));
 	}
 
 	private inline function write(src: String, config: String): String {

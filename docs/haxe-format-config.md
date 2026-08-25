@@ -99,7 +99,7 @@ read it as a POLARITY, `1` for "the signal holds" and `0` for "it does not". An 
 | `exceedsMaxLineLength` | the flat form would pass `maxLineLength` |
 | `lineLength >= n` | the line already reaches `n` chars at the open delimiter |
 | `hasMultilineItems` | some item is itself multi-line |
-| `complexItemCount >= n` | at least `n` items are "complex" (a call, a literal list, a lambda) |
+| `complexItemCount >= n` | at least `n` items are "complex" — see below the table |
 
 Item width is per-construct. For a delimited list (`arrayWrap`, `mapWrap`, `objectLiteral`,
 `callParameter`, `anonType`, …) it includes the separator and the space after it for every
@@ -107,6 +107,16 @@ item but the last, which is why `equalItemLengths` still holds for a list whose 
 is one separator shorter. The chain classes (`methodChain`, `opBoolChain`, `opAddSubChain`)
 measure differently and say so in `WrapItemMeasure`'s own doc — a method chain has no
 separator at all, and a binary chain compares `equalItemLengths` on the bare operands.
+
+**`complexItemCount >= n` counts SEMANTICALLY, and only in three classes.** An item is complex
+when it is a call or a `new`, or an object / array literal carrying a call or `new` anywhere in
+its subtree. Nothing else counts — a lambda does not, and neither does a container with no call
+in it, so `[{x: 1}, {x: 2}]` counts zero. The classification is supplied by the grammar at three
+sites only (array literal elements, call arguments, `new` arguments), so the condition can be
+non-zero for `arrayWrap`, `mapWrap` and `callParameter` and is inert — always false — in every
+other wrap class. It is deliberately not a width proxy: the same `arrayWrap` cascade also governs
+array PATTERNS in `case` arms and switch-subject arrays, which an `anyItemLength >= n` rule would
+mangle and this counter cannot reach.
 
 Capitalised enum spellings (`ItemCountLargerThan`, `ExceedsMaxLineLength`, …) are accepted
 too — including the fork's `HasMultiLineItems`, whose capital `L` differs from hxq's own
