@@ -341,6 +341,53 @@ class NewFileSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * ω-canonical-fixed-point: `createRaw` writes the writer's FIXED POINT.
+	 *
+	 * A created file is measured by the SAME one-pass gate every writer-emit op
+	 * puts on its input (`writeRoundTrip(s) == s`), and the writer does not always
+	 * land there in one pass — a wrap decision that reads the source line layout it
+	 * then rewrote needs two, which is why `apq fmt` loops and warns. Measured:
+	 * piping Pony's `tools/src/module/Unpack.hx` through `apq new --raw -` wrote a
+	 * file its own `fmt --list` immediately called drifted, after which the next
+	 * `add-member` on it refused with `file is not in canonical form`.
+	 *
+	 * The shape below is that file's, reduced: a `sameLine.caseBody: fitLine` case
+	 * body whose object literal breaks only at RENDER time. `unit.WrapFlatSourceFixedPointTest`
+	 * pins the writer divergence itself and records what closing it would cost.
+	 */
+	public function testCreateRawSettlesATwoRewriteSource(): Void {
+		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": true}, '
+			+ '"sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}, "wrapping": {"maxLineLength": 140, '
+			+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", '
+			+ '"value": 140}], "type": "noWrap"}]}}}';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final src: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n'
+			+ '\t\t\t\tcfg.zips.push({ path: try StringTools.trim(xml.innerData) catch (_: Any) \'\', file: xml.att.file, '
+			+ 'rm: xml.isTrue(\'rm\'), log: !xml.isFalse(\'log\') });\n\t\t\tcase _:\n\t\t\t\tsuper.readNode(xml);\n\t\t}\n\t}\n}';
+		// PRECONDITION, not decoration: this test discriminates only while `src`
+		// really is a shape the writer settles on its SECOND rewrite. The pin for
+		// that shape lives in another class, so without this assert an improved
+		// writer would turn this test silently vacuous — it would then pass with
+		// `createRaw` reverted to a single round trip — while the pin goes red
+		// somewhere else and nobody connects the two.
+		final once: Null<String> = plugin.writeRoundTrip(src, config);
+		Assert.notEquals(
+			once, once == null ? null : plugin.writeRoundTrip(once, config),
+			'this fixture no longer needs two rewrites, so it can no longer discriminate — re-source it from '
+			+ 'unit.WrapFlatSourceFixedPointTest\'s still-divergent set, or retire both together'
+		);
+		switch NewFile.createRaw(src, plugin, config) {
+			case Ok(text):
+				Assert.equals(
+					text, plugin.writeRoundTrip(text, config),
+					'a created file must pass the next op\'s one-pass canonical gate, got:\n<$text>'
+				);
+			case Err(message):
+				Assert.fail('expected Ok, got: $message');
+		}
+	}
+
 	/** `createRaw` rejects an unparseable whole file. */
 	public function testCreateRawUnparseable(): Void {
 		switch NewFile.createRaw('package p;\nclass C {', new HaxeQueryPlugin()) {

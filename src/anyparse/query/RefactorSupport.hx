@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
 import anyparse.query.CondBranchProjection.CondBranchRun;
+import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefHit;
@@ -1299,9 +1300,16 @@ final class RefactorSupport {
 	 *     caller's user can reach.
 	 *  2. Splice the caller's edits (raw text) into the source.
 	 *  3. Re-emit the WHOLE spliced file through `writeRoundTrip` (the
-	 *     trivia / comment-preserving pipeline). This BOTH validates (an
-	 *     unparseable splice throws → `Err`) AND canonically formats the
-	 *     inserted code together with the rest of the file.
+	 *     trivia / comment-preserving pipeline) until the output stops
+	 *     changing — `FormatFixedPoint.run`, the loop `apq fmt` owns. This
+	 *     BOTH validates (an unparseable splice throws → `Err`) AND
+	 *     canonically formats the inserted code together with the rest of
+	 *     the file. It is the FIXED POINT rather than one round trip because
+	 *     the gate in step 1 is a ONE-pass test and the next op applies it to
+	 *     what this one wrote; a spliced file the writer settles only on its
+	 *     second rewrite would pass out of here and be refused there. A file
+	 *     that never settles is a fourth `Err` — the bytes are left alone
+	 *     rather than churned.
 	 *
 	 * The caller supplies only the edit position + raw text; indentation
 	 * and layout of the result are the writer's job. Requires a grammar
@@ -1309,9 +1317,10 @@ final class RefactorSupport {
 	 * refused.
 	 *
 	 * `optsJson` is the project's writer-config JSON (an `hxformat.json`
-	 * discovered near the edited file); passed to BOTH `writeRoundTrip`
-	 * calls so the canonical gate and the result agree on the project
-	 * style. `null` → the plugin's compiled defaults.
+	 * discovered near the edited file); passed to EVERY `writeRoundTrip` call —
+	 * the canonical gate's one and each pass of the fixed-point loop — so the
+	 * gate and the result agree on the project style. `null` → the plugin's
+	 * compiled defaults.
 	 */
 	public static function canonicalize(
 		source: String, edits: Array<{ span: Span, text: String }>, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
@@ -1336,13 +1345,55 @@ final class RefactorSupport {
 		}
 
 		final spliced: String = applyEdits(source, edits);
-		final result: Null<String> =
-			try plugin.writeRoundTrip(spliced, optsJson) catch (exception: ParseError) return Err('result does not parse: $exception')
-			catch (exception: CommentLossException) return Err(
-				'the edit cannot be applied without losing the comment `${exception.comment}` (it may sit anywhere in the file)'
-			)
-			catch (exception: Exception) return Err('result does not parse: ${exception.message}');
-		return result == null ? Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result') : Ok(result);
+		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT
+		// writer-emit op puts on it, and that gate is `writeRoundTrip(s) == s`
+		// after ONE pass. The writer does not always land there in one: a wrap
+		// decision that reads the source line layout the writer itself rewrote
+		// needs two, which is why `apq fmt` loops and warns. A single round trip
+		// here therefore reported `wrote <file>` and left a file its own
+		// `fmt --list` immediately called drifted — measured on Pony's
+		// `tools/src/module/Unpack.hx` under its committed `hxformat.json`:
+		// `apq add-member --reformat` succeeded, and the very next `add-member`
+		// on the same file refused with `file is not in canonical form`.
+		//
+		// So the result goes through the SAME loop `fmt` uses, and refuses the same
+		// way: a result that never settles is an error, not a written file. What did
+		// NOT cross with the loop is `fmt`'s REPORTING — `fmt` warns on
+		// `rewrites > 1`, and this seam discards `FormatFixedPointResult.rewrites`
+		// because `EditResult` has nowhere to carry it, so every mutation op now
+		// absorbs the writer defect in silence. Plumbing it out to the CLI is the
+		// open half.
+		//
+		// BYTE-INERT, not free. The output is identical wherever the writer already
+		// converges, but the confirming pass is not skipped there: `run` short-cuts
+		// only when its input is ALREADY canonical, and the spliced text never is —
+		// that is what makes it spliced. Measured on this tree's 3 800-line
+		// `RefactorSupport.hx`, `apq add-member` went 700 ms to 850 ms, +21%. No
+		// cheap early-out exists, because the second pass IS the proof and the
+		// gate's own round trip above says nothing about the splice.
+		//
+		// The `!reformat` gate above stays ONE pass, and the reason is cost, not
+		// disagreement: a source that passes it is by definition a fixed point
+		// (`writeRoundTrip(source) == source` is exactly `run`'s pass-1 short-cut),
+		// so looping there would answer the same and buy a round trip.
+		final fixedPoint: FormatFixedPointResult = try FormatFixedPoint.run(
+			text -> plugin.writeRoundTrip(text, optsJson), spliced
+		) catch (exception: ParseError) return Err('result does not parse: $exception')
+		catch (exception: CommentLossException) return Err(
+			'the edit cannot be applied without losing the comment `${exception.comment}` (it may sit anywhere in the file)'
+		)
+		catch (exception: Exception) return Err('result does not parse: ${exception.message}');
+		final settled: Null<String> = fixedPoint.text;
+		if (settled == null) return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
+		// Names the WRITER, because the user has no move that fixes this: `apq fmt
+		// --write` refuses the same file for the same reason, so pointing at it —
+		// the remedy the gate above offers — would send them in a circle.
+		return fixedPoint.converged
+			? Ok(settled)
+			: Err(
+				'the writer cannot settle this file, so the edit was not written (${fixedPoint.failure})'
+				+ ' — edit it with ordinary tools and report the construct'
+			);
 	}
 
 	/**

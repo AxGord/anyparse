@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -89,9 +90,9 @@ final class NewFile {
 	/**
 	 * Assemble + canonicalise a new module from `spec`. Returns the canonical
 	 * source in `result` (`Ok`) plus the method names that received the
-	 * default stub (`stubbed`, for the caller to warn about), or an `Err`
-	 * describing a parse failure / a `@@` section naming an unknown method /
-	 * an option that does not apply to the chosen kind, with `stubbed` empty.
+	 * default stub (`stubbed`, for the caller to warn about), or an `Err` describing a parse failure / a `@@` section naming an unknown
+	 * method / an option that does not apply to the chosen kind / an assembled
+	 * source the writer cannot settle on a fixed point, with `stubbed` empty.
 	 */
 	public static function create(spec: NewFileSpec, plugin: GrammarPlugin, ?optsJson: String): NewFileResult {
 		final kind: String = spec.kind ?? 'class';
@@ -126,24 +127,44 @@ final class NewFile {
 			members.unshift('public function new() {}');
 
 		final source: String = assemble(spec, kind, extendsSimple, abstractClause, members, dedup(imports), classDoc);
-		final canonical: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: ParseError) {
+		// ω-canonical-fixed-point: the FIXED POINT, not one round trip — see
+		// `RefactorSupport.canonicalize`. A created file is measured by the same
+		// one-pass gate every writer-emit op puts on its input, so a file the
+		// writer settles only on the second rewrite would be written `wrote
+		// <path>` and then refused by the very next op on it.
+		final settled: FormatFixedPointResult = try FormatFixedPoint.run(
+			text -> plugin.writeRoundTrip(text, optsJson), source
+		) catch (exception: ParseError) {
 			return err('assembled source does not parse: ${exception.message}');
 		} catch (exception: CommentLossException) {
 			return err('the assembled source cannot be written without losing the comment `${exception.comment}`');
 		} catch (exception: Exception) {
 			return err('assembled source does not parse: ${exception.message}');
 		};
-		return canonical == null ? err('no writer for this grammar') : { result: EditResult.Ok(canonical), stubbed: stubbed };
+		final canonical: Null<String> = settled.text;
+		if (canonical == null) return err('no writer for this grammar');
+		return settled.converged
+			? { result: EditResult.Ok(canonical), stubbed: stubbed }
+			: err('the writer cannot settle the assembled source, so no file was created (${settled.failure})');
 	}
 
 	/**
 	 * Validate + canonicalise an arbitrary whole-file `content` — the validated,
 	 * atomic equivalent of a raw write (`apq new --raw`): parse-or-`Err`,
-	 * canonicalise, `Ok`. For files no `--kind` spec shape covers (multi-type
-	 * modules, free-form layouts) so creation can still go through the tooling.
+	 * canonicalise to the writer's FIXED POINT (a content the writer never
+	 * settles is its own `Err`, not a written file), `Ok`. For files no `--kind`
+	 * spec shape covers (multi-type modules, free-form layouts) so creation can
+	 * still go through the tooling.
 	 */
 	public static function createRaw(content: String, plugin: GrammarPlugin, ?optsJson: String): EditResult {
-		final canonical: Null<String> = try plugin.writeRoundTrip(content, optsJson) catch (exception: ParseError) {
+		// ω-canonical-fixed-point: the FIXED POINT, not one round trip. This is
+		// the site the defect was MEASURED on for the create side — piping Pony's
+		// `tools/src/module/Unpack.hx` through `apq new --raw -` wrote a file its
+		// own `fmt --list` immediately called drifted, so the next writer-emit op
+		// on it refused with `file is not in canonical form`.
+		final settled: FormatFixedPointResult = try FormatFixedPoint.run(
+			text -> plugin.writeRoundTrip(text, optsJson), content
+		) catch (exception: ParseError) {
 			return EditResult.Err('source does not parse: ${exception.message}');
 		} catch (exception: CommentLossException) {
 			return EditResult.Err(
@@ -153,7 +174,14 @@ final class NewFile {
 		} catch (exception: Exception) {
 			return EditResult.Err('source does not parse: ${exception.message}');
 		};
-		return canonical == null ? EditResult.Err('no writer for this grammar') : EditResult.Ok(canonical);
+		final canonical: Null<String> = settled.text;
+		if (canonical == null) return EditResult.Err('no writer for this grammar');
+		return settled.converged
+			? EditResult.Ok(canonical)
+			: EditResult.Err(
+				'the writer cannot settle this content, so no file was created (${settled.failure})'
+				+ ' — write it with ordinary tools and report the construct'
+			);
 	}
 
 	/** Wrap an error message as a stub-free `NewFileResult`. */
