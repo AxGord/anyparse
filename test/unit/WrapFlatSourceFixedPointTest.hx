@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.query.FormatFixedPoint;
 import anyparse.query.RefactorSupport;
 
 /**
@@ -342,6 +343,49 @@ class WrapFlatSourceFixedPointTest extends Test {
 					text, plugin.writeRoundTrip(text, CASE_BODY_OBJECT),
 					'the op must write a file the next op\'s one-pass canonical gate accepts, got:\n<$text>'
 				);
+			case Err(message):
+				Assert.fail('canonicalize refused: $message');
+		}
+	}
+
+	/**
+	 * The reporting half: the finalise now HANDS BACK the count it paid, so a
+	 * mutation op can say what `fmt` says.
+	 *
+	 * `EditResult.Ok` grew an optional `rewrites`, and `canonicalize` fills it.
+	 * Before that the loop above ran and its `FormatFixedPointResult.rewrites` went
+	 * nowhere — the op wrote the file, reported `wrote <path>`, and the user never
+	 * learned the writer had needed a second pass on it. `rewritesNote` is the one
+	 * sentence both `fmt` and the ops print, so a reader meeting it twice can tell
+	 * it is one finding.
+	 */
+	public function testCanonicalizeReportsTheRewriteCount(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		switch RefactorSupport.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_OBJECT) {
+			case Ok(_, rewrites):
+				Assert.equals(2, rewrites, 'the divergent shape costs two rewrites and the count must reach the caller');
+				Assert.notNull(FormatFixedPoint.rewritesNote(rewrites), 'a count above 1 has a note to print');
+			case Err(message):
+				Assert.fail('canonicalize refused: $message');
+		}
+	}
+
+	/**
+	 * The other half, and the reason the note is not printed off `converged`
+	 * alone: an ordinary file settles on the FIRST rewrite, and saying so would
+	 * make the note noise on every op.
+	 */
+	public function testCanonicalizeReportsNothingForAConvergingFile(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		// Deliberately NON-canonical spacing, so the first rewrite does real work rather
+		// than appending a trailing newline: `rewrites` must be exactly 1, which also
+		// pins that the loop RAN — a fixture the writer already agrees with takes `run`'s
+		// pass-1 short-cut and answers 0, and a `<= 1` assertion would not tell them apart.
+		final src: String = 'class C {\n\tfunction  f( ) :Void {\n\t\tvar p = {x:1,   y:2};\n\t}\n}\n';
+		switch RefactorSupport.canonicalize(src, [], true, plugin, null) {
+			case Ok(_, rewrites):
+				Assert.equals(1, rewrites, 'a normal file settles on the FIRST rewrite');
+				Assert.isNull(FormatFixedPoint.rewritesNote(rewrites), 'nothing to report for the healthy counts');
 			case Err(message):
 				Assert.fail('canonicalize refused: $message');
 		}

@@ -2114,6 +2114,10 @@ final class Cli {
 		// prior pass changed (a same-file fix exposes findings only where it edited; a cross-file fix would need a re-run).
 		var active: Array<{ file: String, source: String }> = files.copy();
 		final noted: Array<String> = [];
+		// SEPARATE from `noted`, which the summary counts as `N file(s) skipped`: a file that
+		// merely tripped the writer-rewrites note was fixed, not skipped, and sharing the set
+		// would inflate that count the first time the note ever fires.
+		final notedRewrites: Array<String> = [];
 		final changedFiles: Array<String> = [];
 		// File sets a cross-file fix committed as ONE unit — the safe-pass revert reverts them
 		// whole or not at all (`LintFixSafePass.implicated`).
@@ -2146,7 +2150,7 @@ final class Cli {
 				passes++;
 				final pass: LintPassResult = applyLintPass(
 					active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile,
-					passes, noted, changedFiles, ledger, coupled
+					passes, noted, notedRewrites, changedFiles, ledger, coupled
 				);
 				fixedCount += pass.fixedDelta;
 				active = pass.nextActive;
@@ -2231,7 +2235,7 @@ final class Cli {
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
 		// md5 snapshot before and after plus one run per candidate rule.
-		for (r in risky.reverts) stderr('apq lint --fix: risky-fix REVERTED ${r.file} (${r.rule})\n');
+		for (r in risky.reverts) stderr('apq lint --fix: risky-fix REVERTED ${r.file} (${r.rule}): ${revertCauseText(r.cause)}\n');
 		return EXIT_OK;
 	}
 
@@ -2884,13 +2888,15 @@ final class Cli {
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		final result: EditResult = AddImport.addImport(source, pathStr, isUsing, reformat, plugin, optsJson);
+		final op: String = 'add-import';
 		switch result {
-			case Ok(text):
+			case Ok(text, rewrites):
+				warnRewrites(op, filePath, rewrites);
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq add-import: wrote $filePath\n');
 				} else
-					previewEdit('add-import', filePath, text);
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq add-import: $message\n');
@@ -2987,10 +2993,33 @@ final class Cli {
 		stderr('apq $opName: $filePath NOT written — this is a preview on stdout$detail; re-run with --write to apply\n');
 	}
 
+	/**
+	 * Report a writer that needed more than one round trip to settle the content
+	 * an op is about to write, in `apq fmt`'s exact words.
+	 *
+	 * Silent for the healthy counts and for a `null` — an `EditResult.Ok` from a
+	 * producer that never ran the loop measured nothing, and inventing a "1" for it
+	 * would claim a measurement nobody made.
+	 *
+	 * Called on the FINALISE, not on the write, so it fires in preview mode too:
+	 * the finding is about the WRITER, and a preview is where a user is still
+	 * deciding. It also has to be said here rather than left for the user's next
+	 * `fmt --list`, which will say nothing — by then the file IS the fixed point.
+	 *
+	 * A caller that makes several passes over one file gates the call on its own
+	 * "already told them about this file" set — `FormatFixedPoint.rewritesNote` is
+	 * the same predicate, asked directly.
+	 */
+	private static function warnRewrites(opName: String, filePath: String, rewrites: Null<Int>): Void {
+		final note: Null<String> = FormatFixedPoint.rewritesNote(rewrites);
+		if (note != null) stderr('apq $opName: $filePath: $note\n');
+	}
+
 	/** Shared Ok/Err + write/preview tail for the single-result writer-emit ops. */
 	private static function finishEdit(opName: String, filePath: String, write: Bool, result: EditResult, ?detail: String): Int {
 		switch result {
-			case Ok(text):
+			case Ok(text, rewrites):
+				warnRewrites(opName, filePath, rewrites);
 				// `detail` reaches the PREVIEW too: a preview leaves no file to inspect, so it is
 				// the mode where "did all of them land?" has no other answer.
 				final tail: String = detail == null ? '' : ' ($detail)';
@@ -7775,7 +7804,8 @@ final class Cli {
 		if (loc == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		switch SetModifier.setModifier(source, loc.line, loc.col, changes, reformat, plugin, optsJson) {
-			case Ok(text):
+			case Ok(text, rewrites):
+				warnRewrites(op, filePath, rewrites);
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq set-modifier: wrote $filePath\n');
@@ -7851,7 +7881,8 @@ final class Cli {
 	/** Shared tail for `apq new`: report stub warnings, then write the file or emit to stdout. */
 	private static function emitNew(filePath: String, result: EditResult, stubbed: Array<String>, write: Bool): Int {
 		switch result {
-			case Ok(text):
+			case Ok(text, rewrites):
+				warnRewrites('new', filePath, rewrites);
 				for (m in stubbed) stderr('apq new: $m() left as a NotImplementedException stub\n');
 				if (write) {
 					writeFile(filePath, text);
@@ -8011,13 +8042,15 @@ final class Cli {
 		};
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final op: String = 'rewrite';
 		switch Rewrite.rewrite(source, pat, repl, reformat, plugin, optsJson) {
-			case Ok(text):
+			case Ok(text, rewrites):
+				warnRewrites(op, filePath, rewrites);
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq rewrite: wrote $filePath\n');
 				} else
-					previewEdit('rewrite', filePath, text);
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq rewrite: $message\n');
@@ -10201,13 +10234,15 @@ final class Cli {
 	 * sources, lint the active subset (active-scope checks) plus the full
 	 * set (cross-file checks), then per active file collect + canonicalize
 	 * its fixes. Returns the files changed this pass (eligible next pass)
-	 * and the count of edits applied. Mutates `changedFiles` / `noted`.
+	 * and the count of edits applied. Mutates `changedFiles`, `noted` (the
+	 * SKIPPED-file set the run summary counts) and `notedRewrites` (the
+	 * writer-rewrites note's own once-per-file set).
 	 */
 	private static function applyLintPass(
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>,
-		ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>
+		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, notedRewrites: Array<String>,
+		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>
 	): LintPassResult {
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
@@ -10255,7 +10290,15 @@ final class Cli {
 			);
 			if (disjoint.length == 0) continue;
 			switch RefactorSupport.canonicalize(entry.source, disjoint, false, cached, optsByFile[entry.file]) {
-				case Ok(text):
+				case Ok(text, rewrites):
+					// `notedRewrites`, NOT `noted`: --fix runs several passes and a writer that
+					// needs two rewrites on a file needs them on every pass that touches it, so
+					// the note needs a dedupe set — but `noted` is the SKIPPED-file set the run
+					// summary counts, and a file that merely tripped this note was fixed.
+					if (FormatFixedPoint.rewritesNote(rewrites) != null && !notedRewrites.contains(entry.file)) {
+						warnRewrites('lint --fix', entry.file, rewrites);
+						notedRewrites.push(entry.file);
+					}
 					if (text != entry.source) {
 						entry.source = text;
 						if (!changedFiles.contains(entry.file)) changedFiles.push(entry.file);
@@ -11181,12 +11224,10 @@ final class Cli {
 		}
 		// Converged, but not on the first rewrite: the file is formatted correctly
 		// and the WRITER is the defect. Reported rather than swallowed — a silent
-		// loop would hide it behind output that now looks stable.
-		if (fixedPoint.rewrites > 1)
-			stderr(
-				'apq fmt: $path: the writer needed ${fixedPoint.rewrites} rewrites to reach its fixed point'
-				+ ' — a wrap decision read the source line layout the writer itself rewrote\n'
-			);
+		// loop would hide it behind output that now looks stable. Same sentence the
+		// mutation ops now print off `EditResult.Ok`'s `rewrites`, from one copy, so
+		// a user who meets the note twice can tell it is one finding.
+		warnRewrites('fmt', path, fixedPoint.rewrites);
 		final isCanonical: Bool = formatted == source;
 		if (verify) {
 			// A file already at its fixed point cannot diverge, so the scan is skipped
@@ -11978,6 +12019,7 @@ final class Cli {
 		paths: Array<String>, findStr: String, replaceStr: String, plugin: GrammarPlugin, write: Bool, listMode: Bool, regex: Bool,
 		reformat: Bool
 	): { changed: Int, failed: Int } {
+		final op: String = 'comment-rewrite';
 		var changed: Int = 0;
 		var failed: Int = 0;
 		for (path in paths) {
@@ -11988,7 +12030,8 @@ final class Cli {
 			};
 			final optsJson: Null<String> = discoverFormatConfig(path);
 			switch CommentRewrite.rewrite(source, findStr, replaceStr, regex, reformat, plugin, optsJson) {
-				case Ok(text):
+				case Ok(text, rewrites):
+					warnRewrites(op, path, rewrites);
 					final isChanged: Bool = text != source;
 					if (write) {
 						if (isChanged) {
@@ -12001,7 +12044,7 @@ final class Cli {
 							changed++;
 						}
 					} else
-						previewEdit('comment-rewrite', path, text);
+						previewEdit(op, path, text);
 				case Err(message):
 					stderr('apq comment-rewrite: $path: $message\n');
 					failed++;
@@ -12722,7 +12765,14 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final result: MoveResult = ExtractInterface.extract(srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin);
+		// Discovered from the file being CREATED, not from the source: `--out` can put the
+		// interface under a different `hxformat.json`, and the file is judged by the config
+		// that governs where it LANDS. Passing null here styled it by compiled defaults, so
+		// `fmt --list` called it drifted the moment it was written.
+		final optsJson: Null<String> = discoverFormatConfig(ifaceFile);
+		final result: MoveResult = ExtractInterface.extract(
+			srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin, optsJson
+		);
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
@@ -12900,7 +12950,11 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final result: MoveResult = ExtractSuperclass.extract(srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin);
+		// Discovered from the file being CREATED — see `runExtractInterface`.
+		final optsJson: Null<String> = discoverFormatConfig(superFile);
+		final result: MoveResult = ExtractSuperclass.extract(
+			srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin, optsJson
+		);
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
@@ -13074,13 +13128,15 @@ final class Cli {
 		// style (space-after-colon, etc.), else a non-default-formatted file is wrongly rejected.
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		final result: EditResult = EncapsulateField.encapsulate(source, typeNameNN, fieldNameNN, reformat, plugin, optsJson);
+		final op: String = 'encapsulate-field';
 		switch result {
-			case Ok(text):
+			case Ok(text, rewrites):
+				warnRewrites(op, filePath, rewrites);
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq encapsulate-field: encapsulated "$fieldNameNN" in $filePath\n');
 				} else
-					previewEdit('encapsulate-field', filePath, text);
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq encapsulate-field: $message\n');
@@ -13549,6 +13605,19 @@ final class Cli {
 	}
 
 	/**
+	 * The one sentence naming WHY a risky edit set rolled back. Not the file, not
+	 * the rule — those are already on the line; this is the half that used to be
+	 * missing, and its absence let a writer refusal read as a compiler rejection.
+	 */
+	private static function revertCauseText(cause: FixRevertCause): String {
+		return switch cause {
+			case OracleRejected: 'the compiler rejected it';
+			case OracleUnavailable(reason): 'the compiler oracle could not run ($reason)';
+			case NotCanonical(message): 'nothing reached the compiler — $message';
+		};
+	}
+
+	/**
 	 * One-line summary of the per-edit (per-group, for a `GroupedFix` check) bisect activity
 	 * across every partially-applied file, appended to the risky-fix tail. Empty when nothing
 	 * was bisected. The counts are EDIT counts either way — `FixVerifyPartial` normalises the
@@ -13866,13 +13935,15 @@ final class Cli {
 		// non-default-formatted file is wrongly rejected and --reformat rewrites its style.
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 
+		final op: String = 'extract-constant';
 		switch ExtractConstant.extractConstant(source, typeStr, nameStr, literalStr, reformat, plugin, optsJson) {
-			case Ok(text):
+			case Ok(text, rewrites):
+				warnRewrites(op, filePath, rewrites);
 				if (write) {
 					writeFile(filePath, text);
 					stderr('apq extract-constant: wrote $filePath\n');
 				} else
-					previewEdit('extract-constant', filePath, text);
+					previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq extract-constant: $message\n');
@@ -16104,7 +16175,7 @@ final class Cli {
 		}
 		final cur: Null<SweepTotals> = loadSweepJson(filePath);
 		if (cur == null) {
-			stderr('apq sweep: cannot read $filePath (missing or unparseable)\n');
+			stderr(sweepNoSnapshot(filePath, savePath));
 			return EXIT_RUNTIME;
 		}
 		warnIfTestJsStale('sweep');
@@ -16116,7 +16187,7 @@ final class Cli {
 		if (prevPath != null) {
 			final prev: Null<SweepTotals> = loadSweepJson(prevPath);
 			if (prev == null) {
-				stderr('apq sweep: cannot read --prev $prevPath\n');
+				stderr(sweepNoSnapshot(prevPath, null, true));
 				return EXIT_RUNTIME;
 			}
 			sysPrint(
@@ -16366,6 +16437,43 @@ final class Cli {
 	}
 
 	/**
+	 * The "there is no snapshot to read" diagnostic for the totals path — the
+	 * sibling of `sweepDiffNoBaseline`, which the `--diff` path already had.
+	 *
+	 * `apq sweep` REPORTS a corpus run; it never performs one. The totals are
+	 * written by the corpus harness inside `bin/test.js`, which needs
+	 * `ANYPARSE_HXFORMAT_FORK`. So in a tree where that has not run yet EVERY sweep
+	 * form fails, `--save` included — there is nothing to copy — and running a
+	 * plain `sweep` first does not seed it either, because a plain `sweep` reads
+	 * the very same file. The old line named only the path, which reads as a
+	 * corrupt JSON rather than as a file nobody has written yet; a batch protocol
+	 * grew a "run a plain sweep first" step off that misreading, and it never
+	 * worked.
+	 */
+	private static function sweepNoSnapshot(path: String, savePath: Null<String>, prev: Bool = false): String {
+		final head: String = if (prev)
+			'apq sweep: --prev $path: '
+		else if (savePath == null)
+			'apq sweep: '
+		else
+			'apq sweep: --save $savePath has nothing to copy: ';
+		// A `--prev` path is a BASELINE the user named, not the harness's own snapshot, so the
+		// remedy is `--save`, never the corpus run. Pointing at `node bin/test.js` there both
+		// blamed the wrong thing and contradicted the totals printed one line above — which
+		// only print when the harness HAS run.
+		return if (sweepSnapshotExists(path))
+			'$head$path exists but is not a sweep snapshot — malformed JSON, or no pass / fail / skip-parse totals.'
+				+ ' Re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to rewrite it\n'
+		else if (prev)
+			'${head}no snapshot at $path — a `--prev` baseline is one you saved, not one the corpus harness writes.'
+				+ ' Create it with `apq sweep --save $path` on the tree you want to compare against\n'
+		else
+			'${head}no corpus snapshot at $path — this tree has not run the corpus harness yet, and `sweep` only READS what that'
+				+ ' run writes (a plain `sweep` first reads the same file, so it does not seed it). Run `node bin/test.js` under'
+				+ ' $$ANYPARSE_HXFORMAT_FORK, then re-run this command\n';
+	}
+
+	/**
 	 * Why `--diff` has no baseline, as the line the caller prints — and the remedy that
 	 * matches the actual cause.
 	 *
@@ -16448,7 +16556,10 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
 		sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
-		sysPrint('No corpus rerun — only reads JSON.\n');
+		sysPrint('No corpus rerun — only reads JSON, so a tree that has never run the\n');
+		sysPrint('corpus harness has nothing to read. `node bin/test.js` under\n');
+		sysPrint('$$ANYPARSE_HXFORMAT_FORK is what writes the snapshot; every sweep form,\n');
+		sysPrint('--save included, fails until it has.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
@@ -16462,6 +16573,8 @@ final class Cli {
 		sysPrint('                  fail, --save a baseline BEFORE the change and --diff it.\n');
 		sysPrint('  --save <path>   Copy the current snapshot to <path>. Use before a grammar\n');
 		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
+		sysPrint('                  Copies; it does not RUN anything, so it needs a snapshot\n');
+		sysPrint('                  already on disk.\n');
 		sysPrint('  -h, --help      Show this help\n');
 	}
 

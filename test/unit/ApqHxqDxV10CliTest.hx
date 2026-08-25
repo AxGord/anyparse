@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
+import anyparse.check.FixVerifier.FixRevertCause;
 
 using StringTools;
 
@@ -314,6 +315,91 @@ class ApqHxqDxV10CliTest extends Test {
 		final fixture: String = CliFixture.write('apq_lit_v10', 'class C { var foo:Int = 1; }');
 		Assert.equals(0, Cli.run(['lit', 'foo', fixture]));
 		FileSystem.deleteFile(fixture);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The TOTALS path's missing-snapshot line names the cause and the remedy, the
+	 * way the `--diff` path's already did.
+	 *
+	 * `apq sweep` only READS what the corpus harness inside `bin/test.js` writes,
+	 * so a tree where that has never run has nothing to read — and `--save` has
+	 * nothing to copy. The old line said `cannot read <path> (missing or
+	 * unparseable)`, which reads as a corrupt file rather than as one nobody has
+	 * written yet: a batch protocol grew a "run a plain `sweep` first" step off
+	 * that misreading, and it cannot work, because a plain `sweep` reads the very
+	 * same file.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testSweepMissingSnapshotNamesTheHarnessThatWritesIt(): Void {
+		#if sys
+		final gone: String = CliFixture.writeAs('apq_sweep_w23_absent', 'json', '');
+		FileSystem.deleteFile(gone);
+		final absent: String = Cli.sweepNoSnapshot(gone, null);
+		Assert.isTrue(absent.contains('no corpus snapshot'), 'names ABSENCE - got: $absent');
+		Assert.isTrue(absent.contains('node bin/test.js'), 'and the run that writes it - got: $absent');
+		Assert.isTrue(absent.contains('does not seed it'), 'and kills the plain-sweep-first workaround - got: $absent');
+		final present: String = CliFixture.writeAs('apq_sweep_w23_bad', 'json', 'not json');
+		final malformed: String = Cli.sweepNoSnapshot(present, null);
+		Assert.isTrue(malformed.contains('is not a sweep snapshot'), 'a PRESENT one names the format - got: $malformed');
+		Assert.isFalse(malformed.contains('no corpus snapshot'), 'and never absence - got: $malformed');
+		FileSystem.deleteFile(present);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** `--save` says it had nothing to COPY, so a two-command recipe names the half that failed. */
+	@:access(anyparse.query.Cli)
+	public function testSweepSaveMissingSnapshotBlamesTheSourceNotTheDestination(): Void {
+		#if sys
+		final gone: String = CliFixture.writeAs('apq_sweep_w23_save', 'json', '');
+		FileSystem.deleteFile(gone);
+		final save: String = Cli.sweepNoSnapshot(gone, '/tmp/base.json');
+		Assert.isTrue(save.contains('--save /tmp/base.json has nothing to copy'), 'names the save and its cause - got: $save');
+		final read: String = Cli.sweepNoSnapshot(gone, null);
+		Assert.isFalse(read.contains('--save'), 'a plain read never mentions --save - got: $read');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+
+	/**
+	 * The three risky-fix revert causes render as three DIFFERENT sentences, and
+	 * only one of them names the compiler.
+	 *
+	 * `FixVerifier` used to collapse every non-`Ok` from `canonicalize` into the
+	 * bisect's boolean `false`, which is the oracle's word for "the compiler
+	 * rejected this" — so a WRITER refusal was recorded, and reported, as a
+	 * compiler rejection. A reader chasing that reason goes looking in the check's
+	 * edit for a type error that is not there.
+	 */
+	@:access(anyparse.query.Cli)
+	public function testRevertCausesRenderDistinguishably(): Void {
+		final rejected: String = Cli.revertCauseText(OracleRejected);
+		final unavailable: String = Cli.revertCauseText(OracleUnavailable('no hxml'));
+		final uncanonical: String = Cli.revertCauseText(NotCanonical('the writer cannot settle this file'));
+		Assert.isTrue(rejected.contains('compiler rejected'), 'the oracle verdict names the compiler - got: $rejected');
+		Assert.isTrue(unavailable.contains('could not run'), 'an absent oracle says so - got: $unavailable');
+		Assert.isTrue(uncanonical.contains('nothing reached the compiler'), 'a writer refusal denies it - got: $uncanonical');
+		Assert.isFalse(uncanonical.contains('rejected'), 'and never claims a rejection that never happened - got: $uncanonical');
+		Assert.isTrue(uncanonical.contains('cannot settle'), 'carrying the writer\'s own words - got: $uncanonical');
+	}
+
+	/** A `--prev` baseline is one the USER saved, so its absence points at `--save`, never at the corpus harness. */
+	@:access(anyparse.query.Cli)
+	public function testSweepPrevMissingBaselinePointsAtSaveNotTheHarness(): Void {
+		#if sys
+		final gone: String = CliFixture.writeAs('apq_sweep_w23_prev', 'json', '');
+		FileSystem.deleteFile(gone);
+		final prev: String = Cli.sweepNoSnapshot(gone, null, true);
+		Assert.isTrue(prev.contains('--prev'), 'names the flag that failed - got: $prev');
+		Assert.isTrue(prev.contains('--save'), 'and the op that creates one - got: $prev');
+		Assert.isFalse(prev.contains('node bin/test.js'), 'never the harness, which does not write this path - got: $prev');
+		Assert.isFalse(prev.contains('has not run the corpus harness'), 'and never a claim the totals just disproved - got: $prev');
 		#else
 		Assert.pass('non-sys target');
 		#end
