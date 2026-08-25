@@ -706,6 +706,7 @@ import unit.HaxeFormatConfigDiagnosticsTest;
 import unit.HxWrapConditionVocabularyTest;
 import unit.LintScopeGateTest;
 import unit.FrameworkContractTest;
+import unit.HxContainerItemWrapTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -944,6 +945,7 @@ class RunTests {
 		addCase(new HxComprehensionCuddledOpenTest());
 		addCase(new HxSoleItemCuddledBracketsTest());
 		addCase(new HxComplexItemWrapTest());
+		addCase(new HxContainerItemWrapTest());
 		addCase(new HxComprehensionDeclRhsBracketWrapTest());
 		addCase(new HxExprParenObjectLitGlueTest());
 		addCase(new HxFitLineBodyGlueSliceTest());

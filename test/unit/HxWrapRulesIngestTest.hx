@@ -167,6 +167,31 @@ class HxWrapRulesIngestTest extends Test {
 		Assert.equals(2, rule.conditions[0].value);
 	}
 
+	/**
+	 * `hasContainerItems` ingests as a bare predicate — the JSON carries a `value` of 1 for the
+	 * positive polarity, like `hasMultilineItems` does. Its `callParameter` home is where the
+	 * condition earns its keep, so it ingests through that cascade rather than `arrayWrap`.
+	 */
+	public function testHasContainerItemsCondIngested(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"callParameter":{"rules":[{"type":"onePerLine","conditions":[{"cond":"hasContainerItems","value":1}]}]}}}'
+		);
+		Assert.equals(1, opts.callParameterWrap.rules.length);
+		final rule: WrapRule = opts.callParameterWrap.rules[0];
+		Assert.equals(WrapMode.OnePerLine, rule.mode);
+		Assert.equals(WrapConditionType.HasContainerItems, rule.conditions[0].cond);
+		Assert.equals(1, rule.conditions[0].value);
+	}
+
+	/** `hasMultilineLambdaItems` ingests as a bare predicate, like its two neighbours. */
+	public function testHasMultilineLambdaItemsCondIngested(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"callParameter":{"rules":[{"type":"onePerLine","conditions":[{"cond":"hasMultilineLambdaItems","value":1}]}]}}}'
+		);
+		Assert.equals(1, opts.callParameterWrap.rules.length);
+		Assert.equals(WrapConditionType.HasMultilineLambdaItems, opts.callParameterWrap.rules[0].conditions[0].cond);
+	}
+
 	public function testUnknownCondDropsRule(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"wrapping":{"methodChain":{"rules":[{"type":"onePerLineAfterFirst","conditions":[{"cond":"thisCondIsBogus >= '

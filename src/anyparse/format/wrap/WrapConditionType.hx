@@ -81,6 +81,26 @@ package anyparse.format.wrap;
  *    instead of relying on `total/maxLen` blowing past every threshold.
  *    Mapped from JSON `'hasMultilineItems'` (slice
  *    ω-flatlength-decouple-tokenwidth).
+ *  - `HasContainerItems` — "at least one element is a container literal"
+ *    `== (value != 0)`. Reads the SAME `complexItemKinds` array as
+ *    `ComplexItemCountLargerThan`, but the other half of it: both the
+ *    call-bearing container and the bare one answer true, while a call,
+ *    an identifier or a literal answers false. It exists because the two
+ *    questions genuinely differ — `complexItemCount` asks "does this element
+ *    carry work", this asks "is this element a brace construct" — and a
+ *    bare `{x: 1, y: 2}` argument answers only the second. Its motivating
+ *    consumer is `callParameter`: an argument list that mixes a container
+ *    with a multi-line one cannot start the multi-line argument on the
+ *    call line and stay readable. Mapped from JSON `'hasContainerItems'`.
+ *  - `HasMultilineLambdaItems` — "a MULTI-LINE element is a function literal"
+ *    `== (value != 0)`. The same kinds array crossed with each element's own
+ *    rendered Doc, because neither half answers alone: `HasMultilineItems`
+ *    says something here breaks but not WHICH element does, and the two
+ *    shapes it conflates want opposite layouts — an argument list whose
+ *    multi-line element is a CALLBACK should not start it on the call line,
+ *    while one whose multi-line element is the collection itself is exactly
+ *    what the multi-arg collection glue hugs to the head. Mapped from JSON
+ *    `'hasMultilineLambdaItems'`.
  *
  * Format-neutral — same conditions apply to any delimited list across
  * languages. Mirrors haxe-formatter's `WrapConditionType` enum
@@ -113,5 +133,9 @@ enum abstract WrapConditionType(Int) from Int to Int {
 	final AnyItemLengthLessThan = 11;
 
 	final EqualItemLengths = 12;
+
+	final HasContainerItems = 13;
+
+	final HasMultilineLambdaItems = 14;
 
 }

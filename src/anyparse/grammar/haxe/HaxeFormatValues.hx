@@ -118,7 +118,16 @@ final class HaxeFormatValues {
 			// enum spells it `HasMultilineItems`. Accept both, or a config
 			// serialised from the fork's enum drops the whole rule.
 			case 'hasMultilineItems', 'HasMultiLineItems', 'HasMultilineItems': WrapConditionType.HasMultilineItems;
-			case 'complexItemCount >= n', 'ComplexItemCountLargerThan': WrapConditionType.ComplexItemCountLargerThan;
+			case 'complexItemCount >= n', 'ComplexItemCountLargerThan':
+				WrapConditionType.ComplexItemCountLargerThan;
+			// The container half of the same `complexItemKinds` array — see
+			// `WrapConditionType.HasContainerItems`. No fork counterpart, so only
+			// hxq's own spelling and the enum identifier are accepted.
+			case 'hasContainerItems', 'HasContainerItems':
+				WrapConditionType.HasContainerItems;
+			// Same array again, crossed with each item's own rendered width — see
+			// `WrapConditionType.HasMultilineLambdaItems`.
+			case 'hasMultilineLambdaItems', 'HasMultilineLambdaItems': WrapConditionType.HasMultilineLambdaItems;
 			case _: null;
 		};
 	}

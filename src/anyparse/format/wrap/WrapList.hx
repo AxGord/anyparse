@@ -236,6 +236,24 @@ class WrapList {
 	public static inline final MAX_ITEM_LEN: Int = 9999;
 
 	/**
+	 * The `complexItemKinds` code protocol, shared with whatever grammar-side
+	 * classifier fills the array (`HxComplexItems` for Haxe). `0` is "neither":
+	 * an identifier, a literal, a lambda. The three named codes below are the
+	 * ones this file reads; a code it does not know counts as neither, which is
+	 * the layout-preserving direction.
+	 */
+	public static inline final KIND_CALL: Int = 1;
+
+	/** A container literal (object / array) carrying a call or `new` in its subtree. */
+	public static inline final KIND_CONTAINER: Int = 2;
+
+	/** A container literal with no call or `new` below it — a container, but not complex. */
+	public static inline final KIND_CONTAINER_PLAIN: Int = 3;
+
+	/** A function literal — an arrow lambda or an anonymous `function`. */
+	public static inline final KIND_LAMBDA: Int = 4;
+
+	/**
 	 * Emit the `Doc` for one delimited list. The positional arguments are the list's
 	 * IDENTITY — its delimiters and separator, the per-item Docs, the resolved
 	 * `WriteOptions`, the inside-delimiter padding and the rule set — and every one of
@@ -318,8 +336,17 @@ class WrapList {
 		// `continuationCols` because the continuation-indent probe re-runs the same
 		// cascade and has to see the same count the real decision does.
 		final complexCount: Int = countComplexItems(complexItemKinds);
+		// ω-container-item-cond: the `hasContainerItems` axis, read off the SAME
+		// per-element kinds array. Computed here beside the complex count so the
+		// continuation-indent probe and the real decision see one answer.
+		final containerItems: Bool = anyContainerItem(complexItemKinds);
+		// ω-container-item-cond: the `hasMultilineLambdaItems` axis — WHICH element carries
+		// the break, not merely that one does. Crosses the same kinds array with each item's
+		// own rendered Doc, so it has to be computed here rather than off `measure`.
+		final multilineLambda: Bool = anyMultilineLambdaItem(items, complexItemKinds);
 		final cols: Int = continuationCols(
-			rules, opt, items, measure, sourceMultilineKeep, compactContinuation, breakAsOnePerLine, complexCount
+			rules, opt, items, measure, sourceMultilineKeep, compactContinuation, breakAsOnePerLine, complexCount, containerItems,
+			multilineLambda
 		);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
@@ -352,7 +379,7 @@ class WrapList {
 				floorSourceMultiline(
 					decideWithLineLengthState(
 						rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
-						complexCount, minLen, equalLens
+						complexCount, minLen, equalLens, containerItems, multilineLambda
 					),
 					sourceMultilineKeep
 				),
@@ -668,8 +695,35 @@ class WrapList {
 	public static function countComplexItems(kinds: Null<Array<Int>>): Int {
 		if (kinds == null) return 0;
 		var n: Int = 0;
-		for (kind in kinds) if (kind != 0) n++;
+		for (kind in kinds) if (kind == KIND_CALL || kind == KIND_CONTAINER) n++;
 		return n;
+	}
+
+	/**
+	 * Whether any entry in a `complexItemKinds` array is a container literal — the
+	 * value the `HasContainerItems` condition tests. Both container codes answer
+	 * true: the question is "is one of these elements a brace construct", which a
+	 * call inside it neither creates nor removes. A null array (the axis omitted)
+	 * answers false, so a caller that supplies no kinds cannot fire the condition.
+	 */
+	public static function anyContainerItem(kinds: Null<Array<Int>>): Bool {
+		return kinds != null && kinds.exists(kind -> kind == KIND_CONTAINER || kind == KIND_CONTAINER_PLAIN);
+	}
+
+	/**
+	 * Whether a MULTI-LINE element is a function literal — the value the
+	 * `HasMultilineLambdaItems` condition tests. `HasMultilineItems` answers "is anything
+	 * here multi-line", which does not say WHICH element it is, and the two shapes it
+	 * conflates want opposite layouts: an argument list whose multi-line item is a callback
+	 * should not start it on the call line, while one whose multi-line item is the
+	 * collection itself is precisely what `shapeMultiArgCollection` hugs to the head. Both
+	 * halves are read where each is known — the kind off the grammar's classification, the
+	 * multi-line-ness off the item's own rendered Doc.
+	 */
+	public static function anyMultilineLambdaItem(items: Array<Doc>, kinds: Null<Array<Int>>): Bool {
+		if (kinds == null) return false;
+		for (i => item in items) if (i < kinds.length && kinds[i] == KIND_LAMBDA && flatLength(item) < 0) return true;
+		return false;
 	}
 
 	/**
@@ -688,12 +742,13 @@ class WrapList {
 	 */
 	public static function decideWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false,
+		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false
 	): WrapMode {
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
-				minItemLen, equalItemLengths
+				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems
 			))
 				return rule.mode;
 		}
@@ -762,13 +817,14 @@ class WrapList {
 	 */
 	public static function decideRuleWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false,
+		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false
 	): { mode: WrapMode, location: WrappingLocation } {
 		final fallback: WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
-				minItemLen, equalItemLengths
+				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems
 			))
 				return { mode: rule.mode, location: rule.location ?? fallback };
 		}
@@ -1672,7 +1728,7 @@ class WrapList {
 	 */
 	private static function continuationCols(
 		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, measure: WrapItemMeasure, sourceMultilineKeep: Bool,
-		compactContinuation: Bool, breakAsOnePerLine: Bool, complexItemCount: Int
+		compactContinuation: Bool, breakAsOnePerLine: Bool, complexItemCount: Int, hasContainerItems: Bool, hasMultilineLambdaItems: Bool
 	): Int {
 		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 		final additional: Int = rules.defaultAdditionalIndent ?? 0;
@@ -1680,7 +1736,7 @@ class WrapList {
 			floorSourceMultiline(
 				decideWithLineLengthState(
 					rules, items.length, measure.maxLen, measure.total, true, measure.anyHardline, _ -> false, complexItemCount,
-					measure.minLen, measure.equalLens
+					measure.minLen, measure.equalLens, hasContainerItems, hasMultilineLambdaItems
 				),
 				sourceMultilineKeep
 			),
@@ -1834,7 +1890,8 @@ class WrapList {
 	 */
 	private static function matchesWithLineLengthState(
 		rule: WrapRule, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false
+		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false,
+		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false
 	): Bool {
 		for (cond in rule.conditions) {
 			final ok: Bool = switch cond.cond {
@@ -1851,6 +1908,8 @@ class WrapList {
 				case LineLengthLargerThan: lineLengthFires(cond.value);
 				case HasMultilineItems: cond.value == 0 ? !hasMultilineItems : hasMultilineItems;
 				case ComplexItemCountLargerThan: complexItemCount >= cond.value;
+				case HasContainerItems: cond.value == 0 ? !hasContainerItems : hasContainerItems;
+				case HasMultilineLambdaItems: cond.value == 0 ? !hasMultilineLambdaItems : hasMultilineLambdaItems;
 			};
 			if (!ok) return false;
 		}
@@ -3210,7 +3269,7 @@ class WrapList {
 	 * call's own shape, not a chunk of the list.
 	 */
 	private static function isChunkContainer(kinds: Null<Array<Int>>, i: Int): Bool {
-		return kinds != null && i > 0 && i < kinds.length && kinds[i] == 2;
+		return kinds != null && i > 0 && i < kinds.length && kinds[i] == KIND_CONTAINER;
 	}
 
 	/**

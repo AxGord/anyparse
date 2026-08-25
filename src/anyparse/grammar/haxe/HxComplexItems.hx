@@ -9,8 +9,9 @@ using Lambda;
  * "Complex" has ONE definition across both consumers (the `complexItemCount >= n`
  * wrap condition and the `callParameter` chunk policy): a `new` expression, a
  * call, or a CONTAINER literal (object or array) carrying a call / `new` anywhere
- * in its subtree. A container WITHOUT one — `[{x: 1, y: 2}, {x: 3, y: 4}]` — is
- * NOT complex and keeps whatever layout width alone gives it.
+ * in its subtree. A container WITHOUT one — `[{x: 1, y: 2}, {x: 3, y: 4}]` — is NOT complex and
+ * keeps whatever layout width alone gives it; it answers `CONTAINER_PLAIN`, which
+ * only the separate `hasContainerItems` condition reads.
  *
  * The classification is deliberately SEMANTIC. The same `arrayWrap` cascade also
  * governs array PATTERNS in `case` arms and switch-subject arrays, whose elements
@@ -37,6 +38,27 @@ final class HxComplexItems {
 	public static inline final CONTAINER: Int = 2;
 
 	/**
+	 * Code for a container literal (object / array) with NO call or `new` below it.
+	 * Deliberately NOT counted as complex: the `complexItemCount >= n` condition and
+	 * the fill-mode chunk policy both ask "does this element carry work", and a bare
+	 * `{x: 1, y: 2}` does not. It is reported as its own code rather than as `NONE`
+	 * so the separate `hasContainerItems` condition can ask the other question —
+	 * "is one of these arguments a brace construct" — without widening `complexItemCount`,
+	 * whose semantics `arrayWrap` and the `case`-arm array patterns depend on.
+	 */
+	public static inline final CONTAINER_PLAIN: Int = 3;
+
+	/**
+	 * Code for a function literal — an arrow lambda in any of its spellings, or an
+	 * anonymous `function`. Not complex and not a container: it exists so a cascade can
+	 * ask which KIND of element is the multi-line one. "Some item is multi-line" cannot
+	 * answer that, and the difference decides layout: an argument list whose multi-line
+	 * item is a CALLBACK must not start it on the call line, while one whose multi-line
+	 * item is the collection itself is exactly the shape the collection glue hugs.
+	 */
+	public static inline final LAMBDA: Int = 4;
+
+	/**
 	 * Depth ceiling of the subtree walk. The Haxe AST is a finite tree with no
 	 * back-pointers (`Trivial<T>` carries only the node and its comment slots), so
 	 * the cap is not a cycle guard — it bounds the cost of a pathologically nested
@@ -45,7 +67,7 @@ final class HxComplexItems {
 	 */
 	private static inline final MAX_DEPTH: Int = 64;
 
-	/** One `NONE` / `CALL` / `CONTAINER` code per element, length-aligned with the writer's item Docs. */
+	/** One `NONE` / `CALL` / `CONTAINER` / `CONTAINER_PLAIN` / `LAMBDA` code per element, length-aligned with the writer's item Docs. */
 	public static function kinds(elements: Array<Any>): Array<Int> {
 		final out: Array<Int> = [];
 		for (element in elements) {
@@ -57,7 +79,8 @@ final class HxComplexItems {
 			}
 			final kind: Int = switch Type.enumConstructor(node) {
 				case 'Call', 'NewExpr': CALL;
-				case 'ArrayExpr', 'ObjectLit': subtreeHasCallOrNew(node, 0) ? CONTAINER : NONE;
+				case 'ArrayExpr', 'ObjectLit': subtreeHasCallOrNew(node, 0) ? CONTAINER : CONTAINER_PLAIN;
+				case 'ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'FnExpr': LAMBDA;
 				case _: NONE;
 			};
 			out.push(kind);

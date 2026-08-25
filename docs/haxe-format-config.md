@@ -81,7 +81,8 @@ source-flat three-item literal breaks one-per-line. The fork's `WrappingType` ha
 ### `rules[].conditions[].cond`
 
 The exact spellings. A condition whose name contains `n` reads `value` as that threshold;
-the three that do not — `exceedsMaxLineLength`, `hasMultilineItems`, `equalItemLengths` —
+the five that do not — `exceedsMaxLineLength`, `hasMultilineItems`, `equalItemLengths`,
+`hasContainerItems`, `hasMultilineLambdaItems` —
 read it as a POLARITY, `1` for "the signal holds" and `0` for "it does not". An omitted
 `value` reads as `1`.
 
@@ -100,6 +101,8 @@ read it as a POLARITY, `1` for "the signal holds" and `0` for "it does not". An 
 | `lineLength >= n` | the line already reaches `n` chars at the open delimiter |
 | `hasMultilineItems` | some item is itself multi-line |
 | `complexItemCount >= n` | at least `n` items are "complex" — see below the table |
+| `hasContainerItems` | some item is an object / array literal — see below the table |
+| `hasMultilineLambdaItems` | some MULTI-LINE item is a function literal — see below the table |
 
 Item width is per-construct. For a delimited list (`arrayWrap`, `mapWrap`, `objectLiteral`,
 `callParameter`, `anonType`, …) it includes the separator and the space after it for every
@@ -117,6 +120,39 @@ non-zero for `arrayWrap`, `mapWrap` and `callParameter` and is inert — always 
 other wrap class. It is deliberately not a width proxy: the same `arrayWrap` cascade also governs
 array PATTERNS in `case` arms and switch-subject arrays, which an `anyItemLength >= n` rule would
 mangle and this counter cannot reach.
+
+**`hasContainerItems` reads the other half of the same classification.** It holds when at least
+one item is an object or array literal, whether or not a call sits inside it — so it is true for
+both `{x: 1, y: 2}` and `{x: f()}`, and false for a call, a lambda, an identifier or a literal.
+The two conditions ask different questions: `complexItemCount` asks whether an item carries work,
+this asks whether an item is a brace construct. It is supplied at the same three sites and is
+inert everywhere else. Its motivating use is `callParameter`: an argument list that mixes a
+container with a multi-line argument cannot start that argument on the call line and stay
+readable, and a bare `{ UUID: uuid, DeviceTypeId: id }` — complex-count zero — is exactly the case
+`complexItemCount >= 1` misses:
+
+```json
+"callParameter": { "defaultWrap": "fillLineWithLeadingBreak", "rules": [
+  { "conditions": [ { "cond": "itemCount >= n", "value": 2 }, { "cond": "hasMultilineLambdaItems", "value": 1 },
+                    { "cond": "complexItemCount >= n", "value": 1 } ], "type": "onePerLine" },
+  { "conditions": [ { "cond": "itemCount >= n", "value": 2 }, { "cond": "hasMultilineLambdaItems", "value": 1 },
+                    { "cond": "hasContainerItems", "value": 1 } ], "type": "onePerLine" }
+] }
+```
+
+Two gates in that pair are not decoration. `itemCount >= 2` keeps a lone callback glued —
+without it `api.load(profile -> { … })` puts its own single argument on a separate line one
+indent deeper. And the multi-line half MUST be the lambda-specific condition: written as the
+plain `hasMultilineItems` it also fires when the multi-line element is the COLLECTION, which
+sends `new Row([` … `], w, h)` one-argument-per-line and takes the bracket off the head —
+measured over one real tree, that spelling changed 65 files where the correct one changes 13.
+There is no `containerItemCount >= n` — no cascade has needed to count them.
+
+**`hasMultilineLambdaItems` crosses the kinds array with the rendered items.** It holds when at
+least one element is a function literal — an arrow lambda in any spelling, or an anonymous
+`function` — AND that element renders multi-line. Neither half answers alone: the kind alone
+matches a one-line lambda, and `hasMultilineItems` alone cannot say WHICH element breaks, which
+is the whole distinction above.
 
 Capitalised enum spellings (`ItemCountLargerThan`, `ExceedsMaxLineLength`, …) are accepted
 too — including the fork's `HasMultiLineItems`, whose capital `L` differs from hxq's own
