@@ -1259,12 +1259,13 @@ class WrapList {
 				OptHardlineSkipBeforeHardline, Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
 				// Layout atoms bear no text. `Fill` is deliberately opaque here: its
 				// break-mode packing decides at render time WHICH item lands last, so
-				// there is no static last-visible token to report. Both consumers want a
-				// definite `}` and read `null` as "no" —
-				// `isHeadGluedBraceBodyComprehension` (shared by
+				// there is no static last-visible token to report. Every consumer reads
+				// `null` as "no" — whether it wants a definite `}`
+				// (`isHeadGluedBraceBodyComprehension`, shared by
 				// `isBlockBodyComprehensionItem` and, negated,
-				// `isCuddleableComprehensionItem`) and
-				// `BinaryChainEmit.ternaryHugCollectionBranchIndex`. The negating
+				// `isCuddleableComprehensionItem`; and
+				// `BinaryChainEmit.ternaryHugCollectionBranchIndex`) or a trailing `//`
+				// (`lastItemEndsWithLineComment`). The negating
 				// consumer therefore reads `null` as "cuddleable"; it stays honest
 				// through its own `firstVisibleText(item) == 'for'` conjunct, which is
 				// `null` for a `Fill` too. Enumerated rather than left to `case _` so a
@@ -2012,6 +2013,53 @@ class WrapList {
 	}
 
 	/**
+	 * ω-item-close-trail — does the LAST entry of `items` end in a line comment?
+	 *
+	 * A `//` runs to end of line, so the close delimiter that a GLUE shape puts
+	 * after the last item cannot share that item's line. The writer already
+	 * refuses to emit it there — `trailingCommentDocGuarded` parks an
+	 * `OptHardlineSkipBeforeHardline` behind the comment and the seam breaks —
+	 * but a break bought that way lands the closer ALONE on the next line, under
+	 * a list that is otherwise packed inline. That reads as a mistake and is one
+	 * editor join away from commenting out the call's terminator.
+	 *
+	 * Read by the two multi-arg glue intercepts and by
+	 * `shapeSoleItemCuddledBrackets`, which had already been spelling it inline.
+	 * What the three have in common is that they OVERRIDE a layout the cascade
+	 * had already settled, so declining costs nothing but the override. The
+	 * cascade's OWN answers are deliberately left alone: the same stranded closer
+	 * still comes out of a plain `FillLine`/`noWrap` shape, pinned by
+	 * `HxGroupTrailCommentWriteTest.testCallArgTrailingLineCommentKeepsCloser`
+	 * (fill) and `testSoleArgLayoutUnderNoWrap` (noWrap), which record it as fork
+	 * behaviour this project matches on purpose. Re-wrapping THERE would be a
+	 * policy change, not a fix.
+	 *
+	 * `shapeSingleArgGlue` builds the same seam and is NOT gated: every sole-arg
+	 * shape probed with a trailing `//` (long and short object literal, array
+	 * literal, block-lambda arrow) took the broken arm instead, so no reachable
+	 * case was found to gate — not a proof that none exists.
+	 *
+	 * The item's own `Trivial<T>.trailingComment` slot cannot answer this: it is
+	 * null exactly when the comment was captured by a NESTED construct's
+	 * close-trailing slot (`f(a, { … } // c)` parks it on the object literal),
+	 * which is why the per-element trivia scans never see it. `anyHardline` is
+	 * true here but says only that the item breaks SOMEWHERE — which is the
+	 * precondition of these intercepts, not a discriminator.
+	 *
+	 * One inherited blind spot: `lastVisibleText` is opaque over `Fill*` (which
+	 * item lands last is a render-time decision), so an item whose right spine
+	 * dead-ends in a `Fill` answers false and the glue fires. The trivia writer
+	 * splices a close-trailing comment outside any `Fill`, so no such item has
+	 * been observed. `MethodChainEmit.endsWithLineComment` asks the same question
+	 * with its own walker; it decides on the first non-transparent child where
+	 * this pair keeps scanning left, so it can only ever be the more eager of the
+	 * two to answer false — the safe direction for a refusal.
+	 */
+	private static function lastItemEndsWithLineComment(items: Array<Doc>): Bool {
+		return items.length > 0 && isLineCommentText(lastVisibleText(items[items.length - 1]));
+	}
+
+	/**
 	 * ω-render-pivot-collection-arg: `soleMultilineCollectionArg`'s answer for a
 	 * list where NO arg has committed to a break yet and exactly ONE is a
 	 * collection whose break the RENDERER decides.
@@ -2214,7 +2262,7 @@ class WrapList {
 		if (!enabled || open != '[' || close != ']' || items.length != 1 || isFlatMode(mode)) return null;
 		final item: Doc = items[0];
 		if (isArrowBodyMarker(item) || isMethodChainItem(item) || startsWithHardline(item)) return null;
-		if (isLineCommentText(firstVisibleText(item)) || isLineCommentText(lastVisibleText(item))) return null;
+		if (isLineCommentText(firstVisibleText(item)) || lastItemEndsWithLineComment(items)) return null;
 		if (!endsWithCloseDelim(item)) return null;
 		final glueShape: Doc = Concat([Text(open), openInside, item, closeInside, Text(close)]);
 		return IfNaturalFirstLineFitsOpenDelim(lineWidth, openShape, glueShape);
@@ -2407,7 +2455,10 @@ class WrapList {
 			hasBlockLambda = true;
 			break;
 		}
-		if (mode != FillLineWithLeadingBreak || items.length <= 1 || !hasBlockLambda) return null;
+		// ω-item-close-trail: same closer-on-the-comment-line refusal as
+		// `shapeMultiArgCollection` — the two share `multiArgBlockLambdaGlueShape`,
+		// so they share its seam.
+		if (mode != FillLineWithLeadingBreak || items.length <= 1 || !hasBlockLambda || lastItemEndsWithLineComment(items)) return null;
 		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 		final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
 		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
@@ -2466,6 +2517,13 @@ class WrapList {
 		if (mode != FillLine && mode != FillLineWithLeadingBreak || items.length <= 1) return null;
 		final collIdx: Int = soleMultilineCollectionArg(items);
 		if (collIdx < 0) return null;
+		// ω-item-close-trail: the glue shape ends `… lastItem <sep?> close`, so a
+		// last item ending in `//` would put the close delimiter on the comment's
+		// own line. Declining restores `openShape`, which the cascade had already
+		// chosen before this intercept ran. Last of the gates, after the cheap
+		// structural ones, so the right-spine walk runs only on lists that would
+		// otherwise have glued.
+		if (lastItemEndsWithLineComment(items)) return null;
 		// ω-complex-item-count (D2): the chunk policy deliberately does NOT
 		// pre-empt this glue. Declining here for a call-bearing collection with
 		// arguments after it was measured over anyparse's own tree and made 21
