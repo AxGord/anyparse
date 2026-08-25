@@ -781,6 +781,12 @@ final class HaxeFormat implements TextFormat {
 		objectLiteralWrap: HaxeFormat.defaultObjectLiteralWrap(),
 		callParameterWrap: HaxeFormat.defaultCallParameterWrap(),
 		arrayLiteralWrap: HaxeFormat.defaultArrayLiteralWrap(),
+		// A MAP literal (`[k => v, …]`) reads its own cascade, the way the fork
+		// splits `mapLiteralWrapping` off `arrayLiteralWrapping`. The fork's
+		// `wrapping.mapWrap` DEFAULT is character-for-character its `arrayWrap`
+		// default, so there is nothing to restate here — and the builder returns
+		// a fresh struct per call, so the two never share mutable state.
+		mapLiteralWrap: HaxeFormat.defaultArrayLiteralWrap(),
 		multiVarWrap: HaxeFormat.defaultMultiVarWrap(),
 		casePatternWrap: HaxeFormat.defaultCasePatternWrap(),
 		anonTypeWrap: HaxeFormat.defaultAnonTypeWrap(),
@@ -1040,8 +1046,12 @@ final class HaxeFormat implements TextFormat {
 					conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 }]
 				},
 				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }]
+					mode: WrapMode.FillLineWithLeadingBreak,
+					conditions: [
+						{ cond: WrapConditionType.EqualItemLengths, value: 1 },
+						{ cond: WrapConditionType.AllItemLengthsLessThan, value: 30 },
+						{ cond: WrapConditionType.ItemCountLargerThan, value: 10 }
+					]
 				},
 				{
 					mode: WrapMode.FillLineWithLeadingBreak,
@@ -1049,6 +1059,10 @@ final class HaxeFormat implements TextFormat {
 						{ cond: WrapConditionType.AllItemLengthsLessThan, value: 10 },
 						{ cond: WrapConditionType.ItemCountLargerThan, value: 10 }
 					]
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }]
 				},
 				{
 					mode: WrapMode.OnePerLine,

@@ -1,5 +1,6 @@
 package unit;
 
+import anyparse.format.wrap.WrapMode;
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.grammar.haxe.HaxeFormatConfigIssues;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
@@ -19,9 +20,10 @@ import utest.Test;
  * it, so both drop paths — an unknown key, and a wrap rule naming an
  * unmodelled predicate — are correct at runtime and must stay silent in
  * their EFFECT. What these tests pin is the other half: that the drop is
- * observable. Measured on the three real configs this project touches,
- * the silent surface was 12 / 19 / 19 keys plus three of the fork's own
- * shipped condition strings.
+ * observable. Measured on the three real configs this project touches, the
+ * silent surface was 12 / 19 / 19 keys plus three of the fork's own
+ * shipped condition strings; implementing those three predicates and
+ * `wrapping.mapWrap` took it to 12 / 18 / 18 keys and no wrap settings.
  *
  * The collection itself is grammar-agnostic — it lives on
  * `anyparse.runtime.Parser` and is emitted by the ByName struct
@@ -80,25 +82,30 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 	}
 
 	/**
-	 * `mapWrap` is a REAL haxe-formatter knob hxq has not wired, not a
-	 * misspelling of `arrayWrap` — measured 2026-08-25, map literals are
-	 * governed entirely by `arrayWrap`. Suggesting a neighbour here would
-	 * tell the author to break their haxe-formatter config; the honest
-	 * answer is that hxq does not implement the key.
+	 * `mapWrap` used to be reported here as a real fork knob hxq had not
+	 * wired. It IS wired now — a map literal reads `wrapping.mapWrap` and an
+	 * array literal `wrapping.arrayWrap` — so the pin flips: naming it must
+	 * produce NO issue, and the cascade must reach `opt.mapLiteralWrap`
+	 * rather than silently landing nowhere. Reporting a key hxq now honours
+	 * would send the author looking for a problem that is not there.
 	 */
-	public function testUnimplementedForkKeyDrawsNoSuggestion(): Void {
-		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose('{"wrapping": {"mapWrap": {"defaultWrap": "noWrap"}}}');
-		Assert.equals(1, issues.keys.length);
-		Assert.equals('mapWrap (l.1)', issues.keys[0]);
+	public function testMapWrapIsModelled(): Void {
+		final json: String = '{"wrapping": {"mapWrap": {"defaultWrap": "keep", "rules": []}}}';
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(json);
+		Assert.equals(0, issues.keys.length);
+		Assert.equals(0, issues.wrapValues.length);
+		final opt: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		Assert.equals(WrapMode.Keep, opt.mapLiteralWrap.defaultMode);
+		Assert.notEquals(WrapMode.Keep, opt.arrayLiteralWrap.defaultMode);
 	}
 
 	public function testUnknownWrapConditionIsReported(): Void {
 		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
-			'{"wrapping": {"arrayWrap": {"rules": [{"type": "onePerLine", "conditions": [{"cond": "equalItemLengths", "value": 1}]}]}}}'
+			'{"wrapping": {"arrayWrap": {"rules": [{"type": "onePerLine", "conditions": [{"cond": "lineLength <= n", "value": 80}]}]}}}'
 		);
 		Assert.equals(0, issues.keys.length);
 		Assert.equals(1, issues.wrapValues.length);
-		Assert.equals('cond "equalItemLengths" (the rule is dropped)', issues.wrapValues[0]);
+		Assert.equals('cond "lineLength <= n" (the rule is dropped)', issues.wrapValues[0]);
 	}
 
 	public function testUnknownWrapTypeAndDefaultWrapAreReported(): Void {
@@ -113,8 +120,8 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 	/** The same predicate appears in several cascades; the author needs the string once, not once per site. */
 	public function testRepeatedWrapConditionIsReportedOnce(): Void {
 		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
-			'{"wrapping": {"arrayWrap": {"rules": [{"type": "onePerLine", "conditions": [{"cond": "anyItemLength <= n", "value": 5}]}]},'
-			+ ' "anonType": {"rules": [{"type": "onePerLine", "conditions": [{"cond": "anyItemLength <= n", "value": 5}]}]}}}'
+			'{"wrapping": {"arrayWrap": {"rules": [{"type": "onePerLine", "conditions": [{"cond": "lineLength <= n", "value": 80}]}]},'
+			+ ' "anonType": {"rules": [{"type": "onePerLine", "conditions": [{"cond": "lineLength <= n", "value": 80}]}]}}}'
 		);
 		Assert.equals(1, issues.wrapValues.length);
 	}
@@ -196,6 +203,7 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 	public function testEveryWrapCascadeIsSurveyed(): Void {
 		final cascadeKeys: Array<String> = [
 			'arrayWrap',
+			'mapWrap',
 			'multiVar',
 			'casePattern',
 			'anonType',
@@ -225,12 +233,13 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 	/** The stderr wording is the whole user-facing product; pin it here rather than by reading a terminal. */
 	public function testMessageNamesTheFileTheClassesAndTheEscapeHatch(): Void {
 		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
-			'{"wrapping": {"mapWrap": {"defaultWrap": "noWrap"}, "arrayWrap": {"defaultWrap": "bogusMode"}}}'
+			'{"wrapping": {"totallyBogusKnob": 1, "arrayWrap": {"defaultWrap": "bogusMode"}}}'
 		);
 		final line: Null<String> = HaxeFormatConfigDiagnostics.message('/p/hxformat.json', issues);
 		Assert.equals(
-			'apq: /p/hxformat.json: 1 key(s) hxq does not implement, so they have no effect: mapWrap (l.1); 1 wrap setting(s) hxq does '
-			+ 'not implement: defaultWrap "bogusMode" (the cascade keeps its built-in default) [silence with APQ_NO_CONFIG_WARN=1]\n',
+			'apq: /p/hxformat.json: 1 key(s) hxq does not implement, so they have no effect: totallyBogusKnob (l.1); 1 wrap setting(s) '
+			+ 'hxq does not implement: defaultWrap "bogusMode" (the cascade keeps its built-in default) '
+			+ '[silence with APQ_NO_CONFIG_WARN=1]\n',
 			line
 		);
 	}

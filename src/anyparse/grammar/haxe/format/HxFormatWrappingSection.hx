@@ -191,6 +191,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var arrayWrap: HxFormatWrapRules;
 
+	@:optional var mapWrap: HxFormatWrapRules;
+
 	@:optional var multiVar: HxFormatWrapRules;
 
 	@:optional var casePattern: HxFormatWrapRules;

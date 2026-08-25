@@ -12,12 +12,29 @@ package anyparse.format.wrap;
  *    when at least one item is wider than `n` columns in flat layout.
  *  - `AllItemLengthsLessThan` — `max(itemFlatLength) <= n`. Triggers
  *    when every item fits within `n` columns.
+ *  - `AllItemLengthsLargerThan` — `min(itemFlatLength) >= n`. Triggers
+ *    when EVERY item is at least `n` columns wide.
+ *  - `AnyItemLengthLessThan` — `min(itemFlatLength) <= n`. Triggers
+ *    when at least one item is `n` columns or narrower.
+ *  - `EqualItemLengths` — `equalItemLengths == (value != 0)`. A
+ *    predicate over the WHOLE item set rather than a threshold: every
+ *    item must measure the same flat width. Which width that is, is the
+ *    measuring emitter's business — a delimited list charges every item
+ *    but the last for its trailing separator and lets the last one come
+ *    out that much narrower, a chain measures its operands bare. Mirrors the fork's `hasEqualItemLenghts` loop in
+ *    `MarkWrappingBase.determineWrapType2`, whose `(length + 2) ==
+ *    itemLength` allowance is the same correction for a two-character
+ *    separator — and is a literal 2, so an emitter whose per-item charge
+ *    is any other width has to spell its own (`BinaryChainEmit` does,
+ *    and says why). Mapped from JSON `'equalItemLengths'`.
  *  - `TotalItemLengthLargerThan` / `TotalItemLengthLessThan` — same
  *    inequality against the sum of all item flat widths.
  *  - `ExceedsMaxLineLength` — pseudo-condition asking whether the list
- *    in `NoWrap` mode would exceed `WriteOptions.lineWidth`. The
- *    condition's `value` field is unused (haxe-formatter passes `1`
- *    by convention). The writer evaluates the cascade twice — once
+ *    in `NoWrap` mode would exceed `WriteOptions.lineWidth`. `value: 1`
+ *    matches when it would, `value: 0` when it would not — the fork
+ *    ships rules of BOTH polarities (`itemCount <= 3` paired with
+ *    `exceedsMaxLineLength: 0` is its standard "short and it fits" noWrap
+ *    arm), so the field is read, not decoration. The writer evaluates the cascade twice — once
  *    with `exceeds=false`, once with `exceeds=true` — and emits a
  *    runtime `Doc.Group(IfBreak(brkDoc, flatDoc))` shape when the two
  *    runs disagree, so the renderer's flat/break decision picks the
@@ -87,5 +104,11 @@ enum abstract WrapConditionType(Int) from Int to Int {
 	final HasMultilineItems = 8;
 
 	final ComplexItemCountLargerThan = 9;
+
+	final AllItemLengthsLargerThan = 10;
+
+	final AnyItemLengthLessThan = 11;
+
+	final EqualItemLengths = 12;
 
 }
