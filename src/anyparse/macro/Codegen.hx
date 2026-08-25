@@ -1173,10 +1173,9 @@ class Codegen {
 	 * line comment is `#` or `;` gets the same guarantee for free.
 	 */
 	private static function collectTrailingBlockField(formatInfo: FormatReader.FormatInfo): Field {
-		return
-			trailingFullField('collectTrailingBlock', [for (p in formatInfo.commentPatterns) if (!p.lineTerminated) trailingFullAttemptBlock(
-				p
-			)]);
+		return trailingFullField('collectTrailingBlock', [
+			for (p in formatInfo.commentPatterns) if (!p.lineTerminated) trailingFullAttemptBlock(p)
+		]);
 	}
 
 	/** The shared body of the verbatim-trailing helpers: skip horizontal ws, try each `attempts` block, rewind to null on a miss. */

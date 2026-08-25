@@ -14249,7 +14249,9 @@ final class Cli {
 	 * just before, so these are cache hits rather than a second parse of the tree.
 	 */
 	private static function unparseableFiles(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
-		return [for (entry in files) if (CheckScan.parseOrNull(plugin, entry.source) == null) entry.file];
+		return [
+			for (entry in files) if (CheckScan.parseOrNull(plugin, entry.source) == null) entry.file
+		];
 	}
 
 	#if (sys || nodejs)

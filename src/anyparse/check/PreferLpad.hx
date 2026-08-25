@@ -187,9 +187,11 @@ final class PreferLpad implements Check implements DefaultOff {
 			final span: Null<Span> = v.span;
 			if (span != null) wanted['${span.from}:${span.to}'] = true;
 		}
-		final edits: Array<{ span: Span, text: String }> = [for (site in sitesOf(tree, seams, source)) if (
-			site.proven && wanted.exists('${site.span.from}:${site.span.to}')
-		) { span: site.span, text: replacement(site.ladder) }];
+		final edits: Array<{ span: Span, text: String }> = [
+			for (site in sitesOf(
+				tree, seams, source
+			)) if (site.proven && wanted.exists('${site.span.from}:${site.span.to}')) { span: site.span, text: replacement(site.ladder) }
+		];
 		if (edits.length == 0) return edits;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;

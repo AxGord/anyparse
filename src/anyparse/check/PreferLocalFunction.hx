@@ -129,7 +129,9 @@ final class PreferLocalFunction implements Check {
 			final span: Null<Span> = v.span;
 			if (span != null) wanted['${span.from}:${span.to}'] = true;
 		}
-		return [for (m in collectMatches(tree, source, s)) if (wanted.exists('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e];
+		return [
+			for (m in collectMatches(tree, source, s)) if (wanted.exists('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e
+		];
 	}
 
 	/**

@@ -1071,10 +1071,16 @@ final class TriviaSepLowering {
 				// sole for-expr item past ~80 chars regardless of maxLineLength), AND drop
 				// source-multiline-keep so an already-wrapped but fitting comprehension
 				// reflows flat (fork parity) rather than staying pinned open.
-				// ω-comprehension-fit-measure: the same flag also rides into
-				// `WrapList.emit` as `comprehensionFitMeasure`, which re-tags the sole
-				// item's hardline-free `BodyGroup`s as `Group` so the fit cascade's
-				// width question sees the generator body it would otherwise defer to 0.
+				// ω-comprehension-fit-measure: `_comprehensionFit` also rides into
+				// `WrapList.emit` as `comprehensionFitMeasure`, which charges the fit
+				// decision the same-line tail after `]`.
+				// ω-comprehension-body-measure: `_isComprehension` rides in SEPARATELY as
+				// `comprehensionBodyMeasure`, which re-tags each item's hardline-free
+				// `BodyGroup`s as `Group` so a width-only cascade sees the generator body it
+				// would otherwise defer to 0. That under-measure belongs to every cascade, not
+				// to the fit one — `wrapping.arrayWrap`'s `totalItemLength <= n` is just as
+				// width-blind — so it rides on the WIDER flag. `_comprehensionFit` implies
+				// `_isComprehension` by the line below, so that is a strict widening.
 				final _isComprehension: Bool = $v{c.reflowSourceMultiline} && _arr.length > 0
 					&& anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_arr[0]);
 				final _comprehensionFit: Bool = _isComprehension && opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After;
@@ -1110,6 +1116,7 @@ final class TriviaSepLowering {
 						breakAsOnePerLine: _breakAsOnePerLine,
 						flatTrailingComma: $flatTrailingCommaExpr,
 						comprehensionFitMeasure: _comprehensionFit,
+						comprehensionBodyMeasure: _isComprehension,
 						complexItemKinds: _complexKinds
 					}
 				);

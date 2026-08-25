@@ -106,7 +106,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			// project as fields of a plain abstract, where the FIELD naming rule governs them — and an
 			// enum value is PascalCase by convention, so each one reads as a violation.
 			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
-			final decls: Array<NamedDecl> = [for (d in support.project(tree)) if (!EnumAbstractForms.isValue(d.span, guarded)) d];
+			final decls: Array<NamedDecl> = [
+				for (d in support.project(tree)) if (!EnumAbstractForms.isValue(d.span, guarded)) d
+			];
 			final byStart: Map<Int, NamedDecl> = [];
 			for (decl in decls) {
 				final span: Null<Span> = decl.span;
@@ -929,7 +931,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// it also holds reads bound to a local of the same name (see `inheritedFieldRefSpans`), and here
 		// `renameOccurrences` is the authority on which bare reads are references. Deduped by offset
 		// against `covered` anyway — two edits over one span leave `applyEdits` no defined winner.
-		final ownerBound: Array<Span> = [for (s in attributed.typedBound) if (!RefactorSupport.offsetWithinAny(s.from, covered)) s];
+		final ownerBound: Array<Span> = [
+			for (s in attributed.typedBound) if (!RefactorSupport.offsetWithinAny(s.from, covered)) s
+		];
 		// A receiver that is a TYPE, not a value: `Event.ACTIVATE` beside a parameter named `Event`
 		// projects the same `IdentExpr` as a read of that parameter, so the resolver leaves it
 		// unattributed and the gate refuses. Discount it when BOTH hold — the identifier binds to no

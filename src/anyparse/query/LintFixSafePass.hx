@@ -192,7 +192,9 @@ final class LintFixSafePass {
 		var text: String = errors;
 		var probes: Int = 0;
 		for (round in 1...maxRounds + 1) {
-			final next: Array<String> = [for (file in implicated(text, changed, coupled)) if (!reverted.contains(file)) file];
+			final next: Array<String> = [
+				for (file in implicated(text, changed, coupled)) if (!reverted.contains(file)) file
+			];
 			if (next.length == 0)
 				return WholeWave(
 					round == 1 ? 'the compiler blames no file this run wrote' : 'the remaining errors blame no further file this run wrote',

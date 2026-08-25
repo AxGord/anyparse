@@ -126,7 +126,9 @@ class ApqRefsTest extends Test {
 			// Each read binds to the decl in its OWN arm — the nearer one, textually before it.
 			if (binding != null) Assert.isTrue(decls.exists(d -> d.span.from == binding.from && d.span.from < h.span.from));
 		}
-		final boundTo: Array<Int> = [for (h in hits) if (h.kind == RefKind.Read && h.bindingSpan != null) h.bindingSpan.from];
+		final boundTo: Array<Int> = [
+			for (h in hits) if (h.kind == RefKind.Read && h.bindingSpan != null) h.bindingSpan.from
+		];
 		Assert.equals(2, boundTo.length);
 		Assert.notEquals(boundTo[0], boundTo[1]);
 	}

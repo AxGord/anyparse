@@ -326,8 +326,9 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final byPath: Map<String, Int> = [];
 		for (group => importEdit in importEdits) for (importPath in importEdit.paths) byPath[importPath] = group;
 		final edits: Array<GroupedEdit> = [
-			for (path in plan.plans) if (path.proven) for (target in path.targets) if (wanted.contains(spanKey(target)))
-				{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
+			for (path in plan.plans) if (path.proven)
+				for (target in path.targets) if (wanted.contains(spanKey(target)))
+					{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
 		];
 		// Every promised import belongs to a path that contributed rewrites above: `planFor` was
 		// handed `wanted`, so it only promised one for a path with at least `IMPORT_THRESHOLD`

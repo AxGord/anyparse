@@ -282,7 +282,9 @@ class CondBranchSplitTest extends Test {
 	/** Every declaration offset of `name` in `tree`, in walk order. */
 	private static function declsIn(tree: QueryNode, name: String): Array<Int> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return [for (h in Refs.find(name, tree, plugin.refShape())) if (h.kind == RefKind.Decl) h.span.from];
+		return [
+			for (h in Refs.find(name, tree, plugin.refShape())) if (h.kind == RefKind.Decl) h.span.from
+		];
 	}
 
 	/** The binding offset each non-`Decl` hit for `name` resolves to in the branch-aware tree, in source order. */
@@ -293,7 +295,9 @@ class CondBranchSplitTest extends Test {
 	/** The binding offset each non-`Decl` hit for `name` resolves to in `tree` (-1 when unresolved). */
 	private static function bindingsOf(tree: QueryNode, src: String, name: String): Array<Int> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return [for (h in Refs.find(name, tree, plugin.refShape())) if (h.kind != RefKind.Decl) h.bindingSpan?.from ?? -1];
+		return [
+			for (h in Refs.find(name, tree, plugin.refShape())) if (h.kind != RefKind.Decl) h.bindingSpan?.from ?? -1
+		];
 	}
 
 	/** The runs of the first `Conditional` in `src`, or `[]` when the splitter bailed. */

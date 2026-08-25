@@ -191,7 +191,9 @@ final class ModuleScan {
 	 * guarded set (`guardedImportDecls`) is deliberately not merged in here.
 	 */
 	private static function usingModulesOf(root: QueryNode): Array<String> {
-		return [for (c in root.children) if (c.kind == 'UsingDecl' && c.name != null) (c.name: String)];
+		return [
+			for (c in root.children) if (c.kind == 'UsingDecl' && c.name != null) (c.name: String)
+		];
 	}
 
 	/**

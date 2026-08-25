@@ -254,7 +254,9 @@ final class UnnecessarySwitch implements Check {
 		final statementKinds: Array<String> = shape.switchStatementKinds ?? [];
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (statementKinds.length == 0 || support == null) return null;
-		final armKinds: Array<String> = [for (k in [resolved.caseBranchKind, resolved.defaultBranchKind]) if (k != null) k];
+		final armKinds: Array<String> = [
+			for (k in [resolved.caseBranchKind, resolved.defaultBranchKind]) if (k != null) k
+		];
 		final collectionKinds: Array<String> = [
 			for (k in [shape.arrayLiteralKind, shape.objectLiteralKind, shape.objectFieldKind]) if (k != null) k
 		];

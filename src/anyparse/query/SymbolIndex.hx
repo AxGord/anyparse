@@ -852,8 +852,8 @@ final class SymbolIndex {
 	 */
 	public function memberDeclarationsOf(typeName: String, memberName: String): Array<{ type: TypeDeclInfo, member: MemberInfo }> {
 		return [
-			for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName)
-				{ type: t, member: m }
+			for (fi in _files) for (t in fi.types) if (t.name == typeName)
+				for (m in t.members) if (m.name == memberName) { type: t, member: m }
 		];
 	}
 
@@ -1227,7 +1227,9 @@ final class SymbolIndex {
 	 * modifier, so a keyword check does not see it either.
 	 */
 	public function declaringAncestorOf(typeName: String, member: String): Null<String> {
-		final declarers: Array<String> = [for (fi in _files) for (t in fi.types) if (t.members.exists(m -> m.name == member)) t.name];
+		final declarers: Array<String> = [
+			for (fi in _files) for (t in fi.types) if (t.members.exists(m -> m.name == member)) t.name
+		];
 		return declarers.find(n -> n != typeName && isSubtype(typeName, n));
 	}
 
@@ -1238,11 +1240,10 @@ final class SymbolIndex {
 	 * declaration matches.
 	 */
 	public function declarationsOf(typeName: String, member: String): Array<OverrideFamilyMember> {
-		return [for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == member) {
-			file: fi.file,
-			typeName: t.name,
-			declFrom: m.declFrom
-		}];
+		return [
+			for (fi in _files) for (t in fi.types) if (t.name == typeName)
+				for (m in t.members) if (m.name == member) { file: fi.file, typeName: t.name, declFrom: m.declFrom }
+		];
 	}
 
 	/**
@@ -2039,7 +2040,9 @@ final class SymbolIndex {
 	/** Every indexed decl named `typeName` (simple name), each paired with its declaring file. */
 
 	private function resolvedDeclsNamed(typeName: String): Array<ResolvedType> {
-		return [for (fi in _files) for (t in fi.types) if (t.name == typeName) { file: fi, type: t }];
+		return [
+			for (fi in _files) for (t in fi.types) if (t.name == typeName) { file: fi, type: t }
+		];
 	}
 
 	/** Recursive supertype walk for `supertypeDeclaresMember`, cycle-guarded by `seen`. */

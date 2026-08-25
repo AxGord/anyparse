@@ -4077,10 +4077,9 @@ class WriterLowering {
 
 	private function collectBlockShapeEquivalentPatterns(bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = _shape.rules[bodyTypePath];
-		return
-			rule == null || rule.kind != Alt ? [] : [for (branch in rule.children) if (isBlockShapeEquivalentBranch(branch)) branchCtorPattern(
-				bodyTypePath, branch
-			)];
+		return rule == null || rule.kind != Alt ? [] : [
+			for (branch in rule.children) if (isBlockShapeEquivalentBranch(branch)) branchCtorPattern(bodyTypePath, branch)
+		];
 	}
 
 	/**

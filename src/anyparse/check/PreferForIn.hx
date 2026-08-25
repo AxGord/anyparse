@@ -197,7 +197,9 @@ final class PreferForIn implements Check implements DefaultOff {
 	 */
 	private static function readScopeKinds(plugin: GrammarPlugin): Array<String> {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		return support == null ? [] : [for (k in support.blockKinds()) if (k != CondBranchProjection.COND_BRANCH_KIND) k];
+		return support == null ? [] : [
+			for (k in support.blockKinds()) if (k != CondBranchProjection.COND_BRANCH_KIND) k
+		];
 	}
 
 	/** Walk `tree` and return every qualifying loop, each with its replacement span and text. */

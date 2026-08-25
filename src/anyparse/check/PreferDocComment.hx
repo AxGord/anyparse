@@ -210,9 +210,9 @@ final class PreferDocComment implements Check implements DefaultOff {
 		collectAnchors(source, tree, seams, new Span(-1, source.length), anchors);
 		final docEnds: Map<Int, Bool> = CheckScan.docBlockEnds(source);
 		// What ends a section: the next label, or the next separately-documented sibling.
-		final stops: Array<CommentTok> = [for (tok in comments) if (
-			ownsItsLine(source, tok) || RefactorSupport.isDocBlock(source, tok)
-		) tok];
+		final stops: Array<CommentTok> = [
+			for (tok in comments) if (ownsItsLine(source, tok) || RefactorSupport.isDocBlock(source, tok)) tok
+		];
 		final headings: Array<Int> = headingConventionOwners(source, anchors, owned, stops);
 		final out: Array<DocCommentRewrite> = [];
 		for (run in runsOf(source, owned)) {

@@ -35,7 +35,24 @@ package anyparse.grammar.haxe;
  */
 final class HxComprehension {
 
-	/** `HxExpr` constructors that make a bracketed list a comprehension rather than an array literal. */
+	/**
+	 * `HxExpr` constructors that make a bracketed list a comprehension rather than an array literal.
+	 *
+	 * `ForReifExpr` — the reified twin, projected only when the loop HEAD carries reification
+	 * metavariables (`macro [for ($i{n} in $e{xs}) if (c) n]`; a `for` written with a literal head
+	 * inside `macro { … }` is a plain `ForExpr`) — is DELIBERATELY absent, and the measurement is
+	 * the reason. Adding it is one token and it does answer a real gap: a wide reified filter
+	 * comprehension keeps its bracket shut and breaks inside the filter's `if (` where the fork
+	 * opens the bracket. But it also turns `other/for_with_macro_reification.hxtest` PASS -> FAIL.
+	 * That fixture is a MAP comprehension (`[for (key => $i{…} in $i{r}) key => ${…}]`), which the
+	 * fork calls a map LITERAL — it scans for any `=>` at bracket depth 0, where `arrayBracketKind`
+	 * only asks whether the FIRST ELEMENT is an `Arrow`. Today that first element is neither, so the
+	 * predicate answers 0, array literal, which happens to render exactly what the fork's 1 does;
+	 * a 2 would not. The divergence is recorded in `HxAstPredLowering.arrayBracketKindField` as
+	 * costing nothing — the append is what makes it cost. And it buys nothing measurable: byte-inert
+	 * across the Pony tree (868 files) and this one (1493). Land it with the depth-0 `=>` scan, not
+	 * before.
+	 */
 	public static final GENERATOR_CTORS: Array<String> = ['ForExpr', 'WhileExpr'];
 
 }

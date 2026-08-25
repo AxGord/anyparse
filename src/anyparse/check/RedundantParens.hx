@@ -409,7 +409,9 @@ final class RedundantParens implements Check implements ConfigAware {
 			condLastChild: shape.conditionLastChildKinds ?? [],
 			greedy: shape.separatorGreedyExprKinds ?? [],
 			splice: shape.spliceSensitiveExprKinds ?? [],
-			spliceHost: [for (k in [shape.callKind, shape.arrayLiteralKind, shape.newExprKind]) if (k != null) k],
+			spliceHost: [
+				for (k in [shape.callKind, shape.arrayLiteralKind, shape.newExprKind]) if (k != null) k
+			],
 			atoms: armVocabulary(shape.atomExprKinds, atomArm),
 			atomChains: armVocabulary(shape.atomChainKinds, atomArm),
 			families: armVocabulary(shape.leftAssociativeBinaryFamilies, familyArm),
