@@ -1,8 +1,10 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
@@ -59,6 +61,15 @@ using StringTools;
  * the file (`collectExternTypes` names its enclosing type); an `abstract` member is a contract implemented by
  * subclasses, reachable through every implementor.
  *
+ * A FOURTH exemption is not a modifier at all: a member a FRAMEWORK reaches by name, with no call
+ * written anywhere. The grammar's `NamingSupport.frameworkReachable` answers that, over the
+ * frameworks the language ships (utest's `test` / `spec` / `setup` / `teardown` prefixes on a `Test`
+ * subclass) UNIONED with the contracts the project declares in `apqlint.json` (`frameworks`).
+ * `unused-public-member` reads that roster through the same predicate and `naming` through the
+ * narrower `frameworkOwnsName` (a prefix reaches a member without owning its spelling, unless no
+ * rename could keep the fragment), so a project that declares a framework cannot get the carve-out
+ * from one rule and not its siblings.
+ *
  * ## Autofix
  *
  * Deletion is CONSERVATIVE: the report stays broad (a member is flagged as soon as
@@ -83,7 +94,7 @@ using StringTools;
  * per file by the caller.
  */
 @:nullSafety(Strict)
-final class UnusedPrivate implements Check {
+final class UnusedPrivate implements Check implements ConfigAware {
 
 	/**
 	 * Cross-file string-literal contents gathered by the last `run`, consulted by
@@ -92,7 +103,14 @@ final class UnusedPrivate implements Check {
 	 */
 	private var _reflectedContents: Null<Array<String>> = null;
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'unused-private';
@@ -116,6 +134,7 @@ final class UnusedPrivate implements Check {
 		if (support == null) return [];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final scopeIndex: SymbolIndex = widestScopeIndex(plugin, index) ?? index;
+		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		final reflected: Array<String> = [];
 		final violations: Array<Violation> = [];
@@ -131,7 +150,7 @@ final class UnusedPrivate implements Check {
 			// is public API. Left in, the check deleted 15 of one real file's 17 colour constants.
 			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
 			for (decl in support.project(tree)) if (!EnumAbstractForms.isValue(decl.span, guarded)) {
-				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, scopeIndex, support, externTypes);
+				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, scopeIndex, support, externTypes, contracts);
 				if (v != null) violations.push(v);
 			}
 			collectCtorCandidates(plugin, tree, entry.file, ctorCandidates);
@@ -333,15 +352,20 @@ final class UnusedPrivate implements Check {
 	 */
 	private static function violationFor(
 		file: String, source: String, decl: NamedDecl, index: SymbolIndex, scopeIndex: SymbolIndex, support: NamingSupport,
-		externTypes: Array<String>
+		externTypes: Array<String>, contracts: Array<FrameworkContract>
 	): Null<Violation> {
 		final category: NamingCategory = decl.category;
 		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return null;
 		// An `abstract` member is a contract implemented by subclasses — reachable
 		// through every implementor, so never dead from the declaring class alone.
+		// The framework question goes to the WIDEST index for the reason the supertype question
+		// below does: the closure to a contract's root can run through a base declared in a
+		// resolution library, and the report index stops at the first supertype it cannot name —
+		// measured, a driver `extends GameBase extends MonoBehaviour` with only `GameBase` outside
+		// the report scope had its declared `Start` proposed for deletion.
 		if (
 			decl.mods.contains('public') || decl.mods.contains('override') || decl.mods.contains('abstract') || decl.implicitReach != null
-			|| support.frameworkReachable(decl, index)
+			|| support.frameworkReachable(decl, () -> scopeIndex, contracts)
 		)
 			return null;
 		final owner: Null<String> = decl.enclosingType;

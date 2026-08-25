@@ -24,6 +24,12 @@ import anyparse.grammar.json.JValue;
  * value stays the raw JSON tree. `LintConfig.parse` walks each entry,
  * lifting `enabled` / `severity` out and keeping every other key verbatim
  * for the owning check to read through the typed option accessors.
+ *
+ * `frameworks` declares which frameworks drive this project's types — each entry a root type plus
+ * the member names that framework reaches by name with no call written in source. Entries stay raw
+ * `JValue` for the same reason `rules` does: `LintConfig` maps them onto the neutral
+ * `FrameworkContract` the naming layer speaks, and a per-entry typo must degrade that one entry
+ * rather than the document.
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef ApqLintConfig = {
@@ -41,4 +47,6 @@ typedef ApqLintConfig = {
 	@:optional var resolutionStd: Bool;
 
 	@:optional var languageVersion: String;
+
+	@:optional var frameworks: Array<JValue>;
 };

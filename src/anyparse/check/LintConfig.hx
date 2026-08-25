@@ -4,6 +4,7 @@ import anyparse.check.config.ApqLintConfig;
 import anyparse.check.config.ApqLintConfigParser;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
+import anyparse.query.NamingPolicy.FrameworkContract;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -70,9 +71,16 @@ final class LintConfig {
 	/** The language version the project targets (`languageVersion`), or null when unset — see `Check.VersionGated`. */
 	private final _languageVersion: Null<String>;
 
+	/** The declared framework contracts (`frameworks`), already mapped off raw JSON; an empty array when the key is absent. */
+	private final _frameworks: Array<FrameworkContract>;
+
+	/** Ready diagnostic lines for the per-ENTRY drops this document survived — see `drops`. */
+	private final _drops: Array<String>;
+
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracle: String, ?compilerOracleDir: String, ?resolutionRoots: Array<String>,
-		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String
+		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String,
+		?frameworks: Array<FrameworkContract>, ?drops: Array<String>
 	) {
 		_rules = rules;
 		_compilerOracle = compilerOracle;
@@ -82,6 +90,8 @@ final class LintConfig {
 		_resolutionLibs = resolutionLibs ?? [];
 		_resolutionStd = resolutionStd ?? true;
 		_languageVersion = languageVersion;
+		_frameworks = frameworks ?? [];
+		_drops = drops ?? [];
 	}
 
 	/**
@@ -222,11 +232,7 @@ final class LintConfig {
 		final raw: Null<Array<JValue>> = arrayOption(id, key);
 		if (raw == null) return null;
 		final out: Array<String> = [];
-		for (item in raw) switch item {
-			case JString(v):
-				out.push(v);
-			case _:
-		}
+		collectStrings(raw, out);
 		return out;
 	}
 
@@ -247,6 +253,26 @@ final class LintConfig {
 	/** The declared `languageVersion`, or null when the project states no floor. */
 	public function languageVersion(): Null<String> {
 		return _languageVersion;
+	}
+
+	/**
+	 * The framework contracts the project declares (`frameworks`) — see `FrameworkContract`. The
+	 * roster is ADDITIVE: a grammar's own built-in framework still applies, so declaring Unity here
+	 * never switches utest off. An empty array when the key is absent, which is every existing config.
+	 */
+	public function frameworks(): Array<FrameworkContract> {
+		return _frameworks;
+	}
+
+	/**
+	 * One ready diagnostic line per `frameworks` entry this document declared and the mapping DROPPED —
+	 * an entry that is not an object, names no `root`, or nominates nothing. `discover` prints them once
+	 * per config file; `parse` returns them without printing, because it cannot tell a probe from a real
+	 * config file. A dropped entry that says nothing is indistinguishable from one that works, which is
+	 * the whole hazard of a per-entry-lenient reader.
+	 */
+	public function drops(): Array<String> {
+		return _drops;
 	}
 
 	/** The raw prop `key` of rule `id`, or null when the rule is unconfigured or lacks the key — the base for the typed option accessors. */
@@ -271,7 +297,17 @@ final class LintConfig {
 		final found: Null<{ content: String, path: String }> = ConfigFinder.findUpFile(path, 'apqlint.json');
 		if (found == null) return new LintConfig([]);
 		final config: Null<LintConfig> = parseOrNull(found.content, Path.directory(found.path));
-		if (config != null) return config;
+		if (config != null) {
+			// A per-ENTRY drop degrades silently in exactly the way the wholesale one below does not:
+			// the document parses, every other key applies, and the entry the project wrote simply is
+			// not there. Same once-per-file-per-process ledger, for the same reason.
+			final drops: Array<String> = config.drops();
+			if (drops.length > 0 && !warnedConfigs.contains(found.path)) {
+				warnedConfigs.push(found.path);
+				for (drop in drops) stderr('apq: ${found.path}: $drop\n');
+			}
+			return config;
+		}
 		// A REAL config file that the schema rejects must not degrade
 		// silently — the wholesale fallback quietly collapses the
 		// resolution scope and every rule toggle. Once per file per
@@ -292,6 +328,23 @@ final class LintConfig {
 	 */
 	public static function resolveWith(resolve: Null<(String) -> LintConfig>, path: String): LintConfig {
 		return resolve != null ? resolve(path) : discover(path);
+	}
+
+	/**
+	 * The framework roster for a whole lint RUN over `files`, resolved through `resolve` — the one
+	 * question every framework-aware check asks, so they cannot disagree about a member by reading
+	 * the config differently.
+	 *
+	 * Resolved ONCE, from the first file. A scope spanning two roots with different `apqlint.json`
+	 * files therefore applies the first one's roster throughout; that is deliberate, because the
+	 * rules sharing this answer do not all have a per-file seam to resolve at (`unused-public-member`
+	 * builds one whole-scope context before it sees a file), and a roster that differed between two
+	 * of them would spare a member from one rule and delete it with its sibling.
+	 */
+	public static function frameworksFor(
+		resolve: Null<(String) -> LintConfig>, files: Array<{ file: String, source: String }>
+	): Array<FrameworkContract> {
+		return files.length == 0 ? [] : resolveWith(resolve, files[0].file).frameworks();
 	}
 
 	/**
@@ -349,9 +402,11 @@ final class LintConfig {
 		final oracle: Null<String> = declaredOracle == null ? null : resolveAgainstConfigDir(baseDir, declaredOracle);
 		final oracleDir: Null<String> = oracle == null || baseDir == null ? null : hxmlCompileDir(oracle, baseDir);
 		final roots: Array<String> = (config.resolutionRoots ?? []).map(resolveAgainstConfigDir.bind(baseDir));
+		final drops: Array<String> = [];
+		final frameworks: Array<FrameworkContract> = parseFrameworks(config.frameworks, drops);
 		return new LintConfig(
 			rules, oracle, oracleDir, roots, config.resolutionLibs, config.resolutionStd, config.compilerOracleServer,
-			config.languageVersion
+			config.languageVersion, frameworks, drops
 		);
 	}
 
@@ -384,6 +439,66 @@ final class LintConfig {
 				{ enabled: enabled, severity: severity, props: props };
 			case _: null;
 		};
+	}
+
+	/**
+	 * The `frameworks` entries → their `FrameworkContract`s. An entry that is not an object, names no
+	 * `root`, or reaches no name at all is dropped: a contract with no root can be tested against no
+	 * type and one that names nothing nominates nothing, so keeping either would be a half-applied
+	 * declaration the project could not tell from a working one. Per-ENTRY leniency, like `rules` — the
+	 * whole-document rejection stays the schema's job.
+	 *
+	 * But a dropped entry that says NOTHING is indistinguishable from one that works, so every drop
+	 * appends a diagnostic line to `drops`, which `discover` prints once per config file.
+	 */
+	private static function parseFrameworks(raw: Null<Array<JValue>>, drops: Array<String>): Array<FrameworkContract> {
+		if (raw == null) return [];
+		final entries: Array<JValue> = raw;
+		final out: Array<FrameworkContract> = [];
+		for (i in 0...entries.length) switch entries[i] {
+			case JObject(fields):
+				var declaredRoot: Null<String> = null;
+				final names: Array<String> = [];
+				final prefixes: Array<String> = [];
+				for (field in fields) switch [field.key, field.value] {
+					case ['root', JString(v)]:
+						declaredRoot = v;
+					case ['names', JArray(items)]:
+						collectStrings(items, names);
+					case ['prefixes', JArray(items)]:
+						collectStrings(items, prefixes);
+					case _:
+				}
+				final root: Null<String> = declaredRoot;
+				if (root == null) {
+					drops.push('frameworks[$i] declares no "root" — dropped');
+					continue;
+				}
+				// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
+				final rootName: String = root;
+				// An EMPTY fragment would claim every method of every subtype, so a stray "" is dropped
+				// here rather than read as a universal claim; an entry left with nothing then falls into
+				// the drop below and says so.
+				final claimedNames: Array<String> = names.filter(s -> s != '');
+				final claimedPrefixes: Array<String> = prefixes.filter(s -> s != '');
+				if (claimedNames.length == 0 && claimedPrefixes.length == 0) {
+					drops.push('frameworks[$i] ("$rootName") declares neither "names" nor "prefixes" — dropped');
+					continue;
+				}
+				out.push({ root: rootName, names: claimedNames, prefixes: claimedPrefixes });
+			case _:
+				drops.push('frameworks[$i] is not an object — dropped');
+		}
+		return out;
+	}
+
+	/** Append every `JString` of `items` to `out`, dropping any other element — the loop `stringListOption` runs one level up, shared with it. */
+	private static function collectStrings(items: Array<JValue>, out: Array<String>): Void {
+		for (item in items) switch item {
+			case JString(v):
+				out.push(v);
+			case _:
+		}
 	}
 
 	/** Resolve a config-relative path (a `resolutionRoots` entry, the `compilerOracle` hxml) to absolute against the config dir; an absolute path (or one parsed without a base) is kept as-is. */

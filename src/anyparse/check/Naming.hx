@@ -1,10 +1,12 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
@@ -54,9 +56,14 @@ using Lambda;
  * reported at all: the project does not own that name, so there is nothing to correct. Distinct
  * from `renameUnsafe` (an accessor-backed property, an `@:rtti` member), which IS the project's
  * own name and stays reported — only the autofix keeps away from it.
+ *
+ * A THIRD suppression is the PROJECT's rather than the grammar's: a member a framework reaches BY
+ * NAME — its enclosing type extends a root declared in `apqlint.json` (`frameworks`), and that
+ * contract names it — carries the framework's spelling, not a name the project chose, so `run`
+ * drops the finding too.
  */
 @:nullSafety(Strict)
-final class Naming implements Check implements CrossFileFix {
+final class Naming implements Check implements CrossFileFix implements ConfigAware {
 
 	/**
 	 * A lowercase head over an all-uppercase / digit tail of four or more characters - see `normalizerArtifactName`.
@@ -69,7 +76,14 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private final _runClaims: RenameClaims = new RenameClaims();
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'naming';
@@ -82,6 +96,8 @@ final class Naming implements Check implements CrossFileFix {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return [];
+		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
+		final indexOf: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -91,7 +107,13 @@ final class Naming implements Check implements CrossFileFix {
 			// enum value is PascalCase by convention, so each one reads as a violation.
 			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
 			final decls: Array<NamedDecl> = [for (d in support.project(tree)) if (!EnumAbstractForms.isValue(d.span, guarded)) d];
-			for (v in violationsFor(entry.file, decls, support.policyFor(entry.file))) violations.push(v);
+			final byStart: Map<Int, NamedDecl> = [];
+			for (decl in decls) {
+				final span: Null<Span> = decl.span;
+				if (span != null) byStart[span.from] = decl;
+			}
+			final reported: Array<Violation> = violationsFor(entry.file, decls, support.policyFor(entry.file));
+			for (v in reported) if (!frameworkOwned(v, byStart, support, indexOf, contracts)) violations.push(v);
 		}
 		return violations;
 	}
@@ -347,6 +369,37 @@ final class Naming implements Check implements CrossFileFix {
 	 */
 	private static inline function isBodyScopedCategory(category: NamingCategory): Bool {
 		return category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar;
+	}
+
+	/**
+	 * Whether the declaration `v` reports carries a FRAMEWORK's name rather than one the project chose —
+	 * its enclosing type extends a declared contract's root and the contract claims its whole spelling.
+	 * `Start` spelled anything else is a method Unity never calls, so the finding is wrong rather than
+	 * merely unfixable, and the check drops it exactly as it drops a `contractName`. Dropping it in `run`
+	 * also settles the autofix for free — `fix` is only ever handed findings `run` reported.
+	 *
+	 * Asked as `frameworkOwnsName` and NOT as `frameworkReachable`, which is the wider question the
+	 * unused-* rules ask: a prefix contract can reach a member without owning its name. No correction the
+	 * Haxe grammar ships can eat utest's `test` / `spec` / `setup` / `teardown`, so what follows one is
+	 * the project's to choose and a finding there is right — where a prefix no correction can keep
+	 * (Godot's `_`) owns the spelling like an exact name does. That is also what keeps this gate inert
+	 * for every project that declares nothing: the only built-in contract is utest's, and its fragments
+	 * are of the surviving kind.
+	 *
+	 * Asked of the FINDING and not of every projected declaration, which is what keeps it cheap: the
+	 * answer can cost a whole-scope supertype closure, and a name the policy already accepts never
+	 * needed one.
+	 */
+	private static function frameworkOwned(
+		v: Violation, byStart: Map<Int, NamedDecl>, support: NamingSupport, index: () -> Null<SymbolIndex>,
+		contracts: Array<FrameworkContract>
+	): Bool {
+		final span: Null<Span> = v.span;
+		if (span == null) return false;
+		final decl: Null<NamedDecl> = byStart[span.from];
+		if (decl == null) return false;
+		final named: NamedDecl = decl;
+		return support.frameworkOwnsName(named, index, contracts);
 	}
 
 	/** The first rule in `policy` applicable to `decl` (category + modifier filters), or null. */
