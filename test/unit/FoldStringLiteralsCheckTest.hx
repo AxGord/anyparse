@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.Linter;
@@ -8,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
 
 using StringTools;
 

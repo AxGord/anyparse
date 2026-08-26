@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice ω-incr-decr — pre/post increment & decrement (`++a`, `--a`,

@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HxModule;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω₄c — compile-time verification that `TriviaTypeSynth` synthesises a

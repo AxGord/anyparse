@@ -1,11 +1,11 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.ParseError;
+import anyparse.runtime.Severity;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
-import anyparse.runtime.ParseError;
-import anyparse.runtime.Span;
-import anyparse.runtime.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
  * Tests for `ParseError` — construction, defaults, throwability, and

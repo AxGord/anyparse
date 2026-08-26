@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan;
 import anyparse.check.Linter;
@@ -10,6 +8,8 @@ import anyparse.check.TailMerge;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `tail-merge` check: a branch of an `if` chain whose trailing statements

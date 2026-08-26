@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumCtor;
@@ -11,9 +10,10 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HxParamBody;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.runtime.ParseError;
-import anyparse.grammar.haxe.HxParamBody;
+import utest.Assert;
 
 /**
  * Tests for slice lambda_1: for statement, enum ctor parameters, and void return.

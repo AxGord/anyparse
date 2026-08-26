@@ -1,18 +1,17 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
-
-using StringTools;
-
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
+
+using StringTools;
 
 /**
  * The `unused-private` check: a `private` field / method with no reference is flagged.

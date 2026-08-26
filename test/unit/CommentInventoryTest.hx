@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.format.comment.CommentInventory;
 import utest.Assert;
 import utest.Test;
-import anyparse.format.comment.CommentInventory;
 
 /**
  * The comment scan and the whitespace-loose comparison behind the writer's

@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice apq-P5-L (tail): macro `: Type` type-reification expression.

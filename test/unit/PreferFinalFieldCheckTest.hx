@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferFinalField;
 import anyparse.check.Linter;
+import anyparse.check.PreferFinalField;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-final-field` check: a private `var` field is flagged `Info` and `var`

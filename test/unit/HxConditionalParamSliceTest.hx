@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxConditionalParam;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxParam;
 import anyparse.grammar.haxe.HxParamBody;
+import utest.Assert;
 
 /**
  * Slice 18a: cond-comp `#if … #end` inside a function-parameter list.

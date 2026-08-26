@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRule;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω-peg-byname-array — unit tests for the `wrapping.<construct>.rules`

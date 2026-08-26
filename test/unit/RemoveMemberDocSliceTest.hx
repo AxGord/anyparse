@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RemoveElement;
 import anyparse.query.RemoveImport;
 import anyparse.query.RemoveMember;
+import utest.Assert;
+import utest.Test;
 
 /**
  * A removed declaration takes its documentation with it.

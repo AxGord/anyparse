@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -9,6 +7,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.query.FormatFixedPoint;
 import anyparse.query.RefactorSupport;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω-flat-source-fixed-point — ONE writer round trip must land where every

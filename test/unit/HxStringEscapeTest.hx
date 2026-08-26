@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxStringEscape;
 import anyparse.query.QueryNode;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The escape DECODER (`HxStringEscape`), the query-tree model built on it

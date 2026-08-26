@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
@@ -9,6 +8,7 @@ import anyparse.grammar.haxe.HxIfStmt;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Tests for slice κ₁: ??= operator, if/else, while, and block statements.

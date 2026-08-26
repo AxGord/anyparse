@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxClassDecl;
@@ -9,6 +8,7 @@ import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeArg;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice A + Slice 0 — class-notation `var` / `final` fields in

@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CommentRewrite;
 import anyparse.query.RefactorSupport.EditResult;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 

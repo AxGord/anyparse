@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxAnonFieldBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
+import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice `ω-hxtype-anon` — anonymous-structure type variant on `HxType`.

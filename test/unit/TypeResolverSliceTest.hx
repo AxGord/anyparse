@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -9,8 +7,10 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.Span;
 import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Type-resolver MVP (getter-purity): `unused-local`'s autofix now deletes a

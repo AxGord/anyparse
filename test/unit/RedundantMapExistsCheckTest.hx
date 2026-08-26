@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check;
 import anyparse.check.RedundantMapExists;
 import anyparse.check.Severity;
@@ -9,6 +7,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `redundant-map-exists` check: `m.exists(k) ? m[k] : d` is flagged `Info` and — where

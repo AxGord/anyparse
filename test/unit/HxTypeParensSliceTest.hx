@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxType;
-import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypeParamDecl;
+import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice `ω-hxtype-parens` — parenthesised-type atom on `HxType`.

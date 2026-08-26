@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchStmtBare;
+import utest.Assert;
 
 /**
  * Tests for slice ω-switch-bare: switch with no parens around the

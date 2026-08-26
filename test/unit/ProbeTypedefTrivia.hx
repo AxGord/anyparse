@@ -1,8 +1,8 @@
 package unit;
 
-import utest.Test;
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Regression guard for the typedef-trivia cluster

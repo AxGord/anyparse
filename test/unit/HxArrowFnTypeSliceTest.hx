@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
@@ -16,6 +15,7 @@ import anyparse.grammar.haxe.HxTypeArg;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice ω-arrow-fn-type — new-form (Haxe 4) arrow function type

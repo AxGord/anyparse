@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.runtime.ParseError;
+import utest.Assert;
 
 /**
  * Phase 3 multi-declaration tests for the macro-generated Haxe module

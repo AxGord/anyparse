@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.Suppression;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Probe for `anyparse.check.Suppression` — inline `// noqa` matched against a

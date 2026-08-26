@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
-import haxe.Exception;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.format.Text;
+import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 #if nodejs
 import js.Node;
 #end

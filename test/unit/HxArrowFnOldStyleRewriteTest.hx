@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeTypeRewrites;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxType;
+import utest.Assert;
 
 /**
  * ω-fmt-prewrite-hook + ω-arrow-fn-old-style — unit coverage for

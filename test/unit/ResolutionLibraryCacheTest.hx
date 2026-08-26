@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.SharedParseTier;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;

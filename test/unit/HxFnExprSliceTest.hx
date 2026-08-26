@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnExpr;
 import anyparse.grammar.haxe.HxFnExprBody;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
 
 /**
  * Tests for slice ω-anon-fn-expr-body — adds anonymous function

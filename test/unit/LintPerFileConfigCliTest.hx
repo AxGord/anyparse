@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
-import anyparse.query.Cli;
+import anyparse.check.Check.Violation;
 import anyparse.check.Complexity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.check.Check.Violation;
+import anyparse.query.Cli;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.io.File;
 #end

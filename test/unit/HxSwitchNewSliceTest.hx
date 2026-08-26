@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
-import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxSwitchStmt;
+import anyparse.grammar.haxe.HxType;
+import utest.Assert;
 
 /**
  * Tests for slice mu_1: switch statement and new expression.

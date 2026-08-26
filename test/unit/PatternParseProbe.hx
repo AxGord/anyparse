@@ -1,11 +1,11 @@
 package unit;
 
-import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
+import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Slice 2C probe — verifies `HaxeQueryPlugin.parsePattern` correctly:

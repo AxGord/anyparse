@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.NewFile;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;

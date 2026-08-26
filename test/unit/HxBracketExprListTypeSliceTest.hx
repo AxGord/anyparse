@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
+import utest.Assert;
 
 /**
  * Phase 3 Slice 23 — macro-expression bracket list in a type-parameter

@@ -1,7 +1,7 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * Tests for slice ω-vardecl-trailOpt — flips `HxStatement.VarStmt` and

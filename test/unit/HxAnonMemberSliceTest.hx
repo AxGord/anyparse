@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
+import utest.Assert;
 
 /**
  * Slice apq-P5-C: anon-structure-type field-level metadata.

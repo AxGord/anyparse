@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxCaseBranch;
 import anyparse.grammar.haxe.HxCasePattern;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchCase;
 import anyparse.grammar.haxe.HxSwitchStmt;
+import utest.Assert;
 
 /**
  * Slice apq-P5-M: switch-guard `case P if (cond):`.

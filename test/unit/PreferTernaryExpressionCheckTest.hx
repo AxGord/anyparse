@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
 import anyparse.check.PreferTernaryExpression;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
-import anyparse.check.Linter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-ternary-expression` check: a 2-branch `if`-EXPRESSION in value position is

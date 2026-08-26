@@ -1,8 +1,8 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
+import utest.Assert;
 
 /**
  * Tests for a MULTI-param `#else` body in `HxConditionalParam` — the

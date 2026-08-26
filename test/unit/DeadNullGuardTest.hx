@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
+import anyparse.check.Check;
 import anyparse.check.DeadNullGuard;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
-import anyparse.check.Check;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `dead-null-guard` check: a null comparison whose operand is already

@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.runtime.Trivial;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω₄d — end-to-end Trivia-mode parse tests. Exercises the generated

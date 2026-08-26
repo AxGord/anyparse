@@ -1,15 +1,15 @@
 package unit;
 
-import utest.Assert;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Naming;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.grammar.haxe.HaxeNamingSupport;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.NamingPolicy.NamedDecl;
+import anyparse.query.NamingPolicy.NamingPolicy;
+import utest.Assert;
 
 using StringTools;
 

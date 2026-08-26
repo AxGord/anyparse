@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
+import utest.Assert;
 
 /**
  * Slice apq-P5-L (tail): macro `$`-reification expression escapes.

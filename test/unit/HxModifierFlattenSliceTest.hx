@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Slice 45 — `@:fmt(forceInlineSep)` on modifier Stars.

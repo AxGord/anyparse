@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.query.Cli;
 import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;

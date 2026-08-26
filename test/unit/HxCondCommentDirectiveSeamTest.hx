@@ -1,12 +1,12 @@
 package unit;
 
-import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Trivia-mode round-trip tests for the conditional-compilation seam: a

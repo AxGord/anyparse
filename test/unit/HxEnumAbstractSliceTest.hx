@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.runtime.ParseError;
+import utest.Assert;
 
 using StringTools;
 

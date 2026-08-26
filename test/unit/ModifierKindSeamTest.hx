@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.CheckScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxCondModPrefix;
 import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxModifier;
 import anyparse.query.GrammarPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The drift guard between the Haxe modifier ENUMS and the seams that publish them.

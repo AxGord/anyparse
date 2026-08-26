@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.core.Doc;
 import anyparse.format.wrap.MethodChainEmit;
 import anyparse.format.wrap.WrapConditionType;
@@ -10,6 +8,8 @@ import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * omega-methodchain-all-or-nothing: a method chain is laid out as ONE unit.

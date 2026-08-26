@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `avoid-dynamic` DynamicAccess bag FIX (`fixWithOracle`, D4). A `Dynamic` LOCAL /

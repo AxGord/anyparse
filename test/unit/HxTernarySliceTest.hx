@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
-import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
+import utest.Assert;
 
 /**
  * Phase 3 ternary + null-coalescing slice tests for the macro-generated

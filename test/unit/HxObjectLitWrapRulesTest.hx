@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.core.Doc;
 import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapList;
@@ -12,6 +10,8 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Slice ω-wraprules-objlit — per-construct wrap-rules cascade engine

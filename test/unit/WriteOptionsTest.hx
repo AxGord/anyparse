@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.ConditionalIndentationPolicy;
+import anyparse.format.IndentChar;
+import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.WriteOptions;
 import anyparse.format.text.JsonFormat;
 import anyparse.grammar.haxe.HaxeFormat;
@@ -15,8 +15,8 @@ import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueWriteOptions;
 import anyparse.grammar.json.JValueWriter;
-import anyparse.format.IndentChar;
-import anyparse.format.TrailingCommaPolicy;
+import utest.Assert;
+import utest.Test;
 
 /**
  * σ infrastructure regression: confirm the generated `write()` entry

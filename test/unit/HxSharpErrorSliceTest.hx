@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
@@ -9,6 +8,7 @@ import anyparse.grammar.haxe.HxConditionalMember;
 import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * Slice ω-sharp-error: the `#error "msg"` / `#error 'msg'` preprocessor

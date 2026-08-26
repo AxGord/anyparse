@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
+import utest.Assert;
 
 /**
  * Phase 3 parens-slice tests for the macro-generated Haxe parser.

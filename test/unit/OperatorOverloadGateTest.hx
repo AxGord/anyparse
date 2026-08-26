@@ -1,16 +1,16 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
+import anyparse.check.Check;
 import anyparse.check.Check.Violation;
 import anyparse.check.DoubleNegation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.InvertNegatedIfElse;
+import anyparse.check.JoinStringAppend;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
-import anyparse.check.Check;
-import anyparse.check.JoinStringAppend;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 

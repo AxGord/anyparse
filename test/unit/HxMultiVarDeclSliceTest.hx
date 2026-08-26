@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.grammar.haxe.HxVarMore;
+import utest.Assert;
 
 /**
  * Tests for slice 2 (Phase 3 skip-parse drill) — multi-variable

@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxExpr;
+import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.HxMemberDecl;
+import utest.Assert;
 
 /**
  * Tests for `@:overload(function...)` metadata args going through the

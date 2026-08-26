@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExtractVar;
 import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `ExtractVar.extractVar` — scope-correct, format-preserving

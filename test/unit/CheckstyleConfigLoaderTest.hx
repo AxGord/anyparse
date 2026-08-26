@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
 import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.runtime.ParseError;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `CheckstyleConfigLoader.loadOverrides` — maps a `checkstyle.json` onto the

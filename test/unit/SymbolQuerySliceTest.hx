@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolQuery;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `SymbolQuery` — the CLI-facing reporting layer over `SymbolIndex`

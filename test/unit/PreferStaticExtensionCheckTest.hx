@@ -1,18 +1,18 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.query.CachingGrammarPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-static-extension` check: a static utility call on a configured

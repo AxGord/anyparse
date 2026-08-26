@@ -1,11 +1,11 @@
 package unit;
 
-import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
+import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Slice ω-typedef-trailOpt — `@:trailOpt(';')` on `HxDecl.TypedefDecl`.

@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.OptionalParamShorthand;
 import anyparse.check.Linter;
+import anyparse.check.OptionalParamShorthand;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `optional-param-shorthand` check, three arms. (1) `name:Null<T> = null` / `name:T = null`

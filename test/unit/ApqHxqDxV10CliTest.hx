@@ -1,9 +1,9 @@
 package unit;
 
+import anyparse.check.FixVerifier.FixRevertCause;
+import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Cli;
-import anyparse.check.FixVerifier.FixRevertCause;
 
 using StringTools;
 

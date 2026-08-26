@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
 import anyparse.check.Check.Violation;
+import anyparse.check.LintConfig;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.check.LintConfig;
 import anyparse.runtime.Span;
+import utest.Assert;
 
 /**
  * The accessor-shape collapses of `trivial-getter`, and the subtype/cross-file and

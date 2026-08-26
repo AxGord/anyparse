@@ -1,9 +1,9 @@
-import haxe.Exception;
-import sys.FileSystem;
-import unit.HxFormatterCorpusHelpers;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span.Position;
+import haxe.Exception;
+import sys.FileSystem;
+import unit.HxFormatterCorpusHelpers;
 
 using StringTools;
 

@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
@@ -11,6 +9,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.StdResolver;
 import haxe.io.Path;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-typed-throw` check: `throw '<string>'` is flagged `Info` and — when the

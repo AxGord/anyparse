@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.runtime.ParseError;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Expression-position ident atom is keyword-guarded (`HxExprIdentLit`):

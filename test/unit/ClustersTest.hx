@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.query.CallGraph;
 import anyparse.query.Clusters;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Partition analytics behind `apq clusters`: connected components over

@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Dump-order regression test for the `apq ast` S-expr view of

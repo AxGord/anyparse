@@ -1,23 +1,22 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
+import anyparse.check.DeadCode;
+import anyparse.check.DuplicateImport;
 import anyparse.check.Linter;
+import anyparse.check.SelfAssignment;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
+import anyparse.check.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
+import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
-
-import anyparse.check.UnusedLocal;
-import anyparse.check.DuplicateImport;
-import anyparse.query.format.LintFormat;
-import anyparse.check.DeadCode;
-import anyparse.check.SelfAssignment;
 
 /**
  * The analysis/check layer — the generic `Linter` framework and its first

@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.TrailingCommaPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
@@ -9,6 +7,8 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Wrapped list-literal emission — the three TM-driven policies that share

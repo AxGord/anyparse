@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.query.CallGraph;
 import anyparse.query.Reach;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The approximate call graph behind `apq callees` / `callers` / `reach` and

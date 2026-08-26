@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.HxModuleAst;
+import anyparse.grammar.haxe.HxExprIdentLit;
 import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxIntLit;
-import anyparse.grammar.haxe.HxExprIdentLit;
+import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HxModuleAst;
+import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Coverage for the macro-generated DEEP multi-type transform over the

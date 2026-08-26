@@ -1,15 +1,15 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitType;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
 import sys.io.File;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `explicit-type` check: a member field with no `:Type`, a function parameter

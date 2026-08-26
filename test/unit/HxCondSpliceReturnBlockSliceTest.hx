@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.HxStatement;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * A SELF-TERMINATING `#if … ; #end` region that is the value of a `return`, spelled over SEVERAL

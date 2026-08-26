@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.SafeDelete;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 

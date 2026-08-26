@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.query.FormatConfigDiscovery;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `FormatConfigDiscovery.discover` walks UP from a file's own directory to the

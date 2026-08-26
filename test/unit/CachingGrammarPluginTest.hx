@@ -1,15 +1,15 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
+import anyparse.query.QueryNode;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import sys.io.File;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `CachingGrammarPlugin` memoizes `parseFile` / `parseFileTypeRefs` by source

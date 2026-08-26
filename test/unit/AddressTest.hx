@@ -1,15 +1,15 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Address;
-import anyparse.query.QueryNode;
-import anyparse.runtime.Span;
-import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.Engine;
+import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.QueryNode;
 import anyparse.query.Selector;
+import anyparse.runtime.Span;
 import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 

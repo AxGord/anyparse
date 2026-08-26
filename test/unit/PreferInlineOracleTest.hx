@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.PreferInline;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 

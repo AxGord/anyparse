@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxConditionalType;
 import anyparse.grammar.haxe.HxConditionalTypeElse;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
+import utest.Assert;
 
 /**
  * Slice ω-cond-comp-type: preprocessor-guarded conditional compilation

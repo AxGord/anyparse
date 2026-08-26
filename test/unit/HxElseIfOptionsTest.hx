@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.BodyPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
@@ -10,6 +8,8 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ψ₈ — runtime-switchable `elseIf` keyword placement for the nested

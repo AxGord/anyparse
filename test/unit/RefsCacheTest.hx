@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.RefsCache;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `RefsCache` memoizes `Refs.find` per tree: `CachingGrammarPlugin.refShape`

@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxIntersectionClause;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypedefDecl;
+import utest.Assert;
 
 /**
  * Slice ω-type-intersection — intersection type `A & B` on a typedef

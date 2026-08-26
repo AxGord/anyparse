@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RemoveImport;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `RemoveImport.removeImport` — remove an `import` / `using` by its exposed

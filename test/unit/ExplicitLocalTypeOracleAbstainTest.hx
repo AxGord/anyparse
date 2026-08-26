@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.ExplicitLocalType;
-import anyparse.query.Cli;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;

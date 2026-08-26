@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.FixVerifier;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Unit coverage of `FixVerifier.unitsOf` — the partition the bisect walks now that a

@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `explicit-local-type` oracle autofix riding on the shared `TypeRefPrinter`: a compiler

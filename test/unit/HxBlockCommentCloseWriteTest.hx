@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
  * A multi-line block comment whose CONTENT-BEARING close line (`}*\/`,

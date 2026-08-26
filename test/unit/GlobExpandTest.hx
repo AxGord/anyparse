@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.query.Glob;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Glob;
 #if sys
 import sys.io.File;
 import sys.FileSystem;

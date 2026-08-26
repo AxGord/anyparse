@@ -1,10 +1,10 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import haxe.Exception;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 
 using StringTools;
 

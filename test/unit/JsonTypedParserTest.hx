@@ -3,9 +3,9 @@ package unit;
 import anyparse.runtime.ParseError;
 import unit.JsonTypedFixtures.TestConfig;
 import unit.JsonTypedFixtures.TestConfigParser;
+import unit.JsonTypedFixtures.TestPolicy;
 import utest.Assert;
 import utest.Test;
-import unit.JsonTypedFixtures.TestPolicy;
 
 /**
  * τ₄ — exercises the ByName struct lowering: JSON object →

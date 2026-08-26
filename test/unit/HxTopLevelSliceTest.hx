@@ -1,16 +1,16 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
+import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
-import anyparse.grammar.haxe.HxModifier;
+import utest.Assert;
 
 /**
  * Phase 3 top-level forms tests for the macro-generated Haxe parser.

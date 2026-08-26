@@ -1,11 +1,11 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
+import anyparse.query.RemoveMember;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RemoveMember;
-import anyparse.query.RefactorSupport;
-import anyparse.query.QueryNode;
 
 /**
  * `RemoveMember.removeMember` — remove a field / method by its type and

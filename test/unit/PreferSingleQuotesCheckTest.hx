@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferSingleQuotes;
@@ -11,6 +9,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 

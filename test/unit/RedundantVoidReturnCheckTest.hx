@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.RedundantVoidReturn;
 import anyparse.check.Linter;
+import anyparse.check.RedundantVoidReturn;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `redundant-void-return` check: a value-less `return;` as the last statement

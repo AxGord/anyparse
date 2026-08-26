@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxLambdaParam;
 import anyparse.grammar.haxe.HxLambdaParamBody;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice fn-param-C — per-parameter DEFAULT VALUE in a function

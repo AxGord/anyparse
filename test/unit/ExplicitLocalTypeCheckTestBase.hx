@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.CachingGrammarPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Fixture scaffolding shared by the `explicit-local-type` check test parts: the

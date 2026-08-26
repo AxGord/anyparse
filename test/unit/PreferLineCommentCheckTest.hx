@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
-import anyparse.check.Check.Violation;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferLineComment;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-line-comment` check: a `/* … *\/` block comment sitting in a STATEMENT

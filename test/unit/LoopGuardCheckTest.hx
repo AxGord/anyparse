@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.LoopGuard;
 import anyparse.check.Linter;
+import anyparse.check.LoopGuard;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `loop-guard` check in both arms. LIFT: a `for` / `while` whose braced body opens with a

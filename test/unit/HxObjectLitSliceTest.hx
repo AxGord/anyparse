@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxObjectLit;
 import anyparse.grammar.haxe.HxObjectFieldBody;
+import anyparse.grammar.haxe.HxObjectLit;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Tests for slice χ₃: anonymous object literals `{name: value, ...}`.

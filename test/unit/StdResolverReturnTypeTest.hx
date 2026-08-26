@@ -1,8 +1,8 @@
 package unit;
 
-import anyparse.query.SymbolIndex;
-import anyparse.query.StdResolver;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.StdResolver;
+import anyparse.query.SymbolIndex;
 import utest.Assert;
 import utest.Test;
 #if (sys || nodejs)

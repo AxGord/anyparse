@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxHeritageClause;
@@ -8,6 +7,7 @@ import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxType;
 import anyparse.runtime.ParseError;
+import utest.Assert;
 
 /**
  * Slice ω-heritage: `extends`/`implements` clauses on class and

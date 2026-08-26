@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferCaseWildcard;
 import anyparse.check.Linter;
+import anyparse.check.PreferCaseWildcard;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-case-wildcard` check: a `default:` switch branch is flagged `Info`

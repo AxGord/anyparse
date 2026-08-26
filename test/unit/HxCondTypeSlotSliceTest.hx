@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -8,8 +7,8 @@ import anyparse.grammar.haxe.HxAbstractClause;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxConditionalAnonField;
 import anyparse.grammar.haxe.HxConditionalAbstractClause;
+import anyparse.grammar.haxe.HxConditionalAnonField;
 import anyparse.grammar.haxe.HxConditionalDecl;
 import anyparse.grammar.haxe.HxConditionalType;
 import anyparse.grammar.haxe.HxConditionalTypeElse;
@@ -18,6 +17,7 @@ import anyparse.grammar.haxe.HxHeritageClause;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxParamBody;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Conditional-compilation regions that open in a TYPE or DECLARATION

@@ -1,8 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
-import haxe.Exception;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Engine;
 import anyparse.query.QueryNode;
@@ -10,6 +7,9 @@ import anyparse.query.Selector;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
+import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 #if sys
 import sys.FileSystem;
 import sys.io.File;

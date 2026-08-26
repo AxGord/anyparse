@@ -1,14 +1,14 @@
 package unit;
 
+import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
+import anyparse.check.ModifierOrder;
+import anyparse.check.Severity;
+import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.HxModuleWriter;
 import utest.Assert;
 import utest.Test;
-import anyparse.check.Check.Violation;
-import anyparse.check.ModifierOrder;
-import anyparse.check.Linter;
-import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
  * The `modifier-order` check: a member whose modifier keywords are not in the

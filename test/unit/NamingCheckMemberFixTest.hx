@@ -1,18 +1,17 @@
 package unit;
 
-import utest.Assert;
 import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
+import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.check.UnusedPrivate;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+import utest.Assert;
 
 using StringTools;
-
-import anyparse.query.RefactorSupport;
-import anyparse.runtime.Span;
-import anyparse.query.SymbolIndex;
-import anyparse.query.CachingGrammarPlugin;
 
 /**
  * The `naming` autofix on a class-level DECLARATION — a private field, a private

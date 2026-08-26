@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxCondSpliceOpExpr;
@@ -8,6 +7,7 @@ import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxVarSemiCondInitDecl;
+import utest.Assert;
 
 /**
  * Expression-position `#if`: which regions carry NODES and which stay a

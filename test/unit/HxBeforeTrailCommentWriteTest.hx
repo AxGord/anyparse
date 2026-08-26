@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
  * A block comment in the gap between a mandatory `@:trail` Ref field's last token and its own

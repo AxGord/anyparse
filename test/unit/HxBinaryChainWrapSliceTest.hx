@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
 
 /**
  * Slice ω-binop-wraprules — `||` / `&&` (haxe-formatter `opBoolChain`)

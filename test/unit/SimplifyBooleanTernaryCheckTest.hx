@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
+import anyparse.check.Severity;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
-import anyparse.check.Severity;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `simplify-boolean-ternary` check: a ternary with a boolean-literal branch

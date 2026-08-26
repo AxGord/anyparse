@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ExtractMethod;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.EditResult;
 import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `ExtractMethod.extractMethod` — extract a run of statements into a local
