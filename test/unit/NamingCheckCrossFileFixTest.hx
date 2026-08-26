@@ -841,6 +841,59 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	}
 
 	/**
+	 * The unresolvable-hierarchy gate has TWO causes, and it used to answer both with ONE sentence
+	 * naming them joined by `or` — so a reader could not tell which had fired, and went looking for
+	 * an `@:allow` that a duplicate type name had actually caused.
+	 *
+	 * The two reasons being DIFFERENT is the whole assertion: each half's own wording only pins the
+	 * spelling, and either half alone stays green under the merged sentence that made the two
+	 * indistinguishable.
+	 */
+	public function testUnresolvableHierarchyTellsItsTwoCausesApart(): Void {
+		final grant: String = refusalFor([
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\n@:allow(pkg.X)\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}'
+			},
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
+		], 'pkg/C.hx', true);
+		final ambiguous: String = refusalFor([
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}'
+			},
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' },
+			{ file: 'other/C.hx', source: 'package other;\nclass C {\n\tpublic function h():Int { return 0; }\n}' }
+		], 'pkg/C.hx', true);
+		Assert.notEquals(grant, ambiguous, 'one sentence for two causes tells a reader neither');
+		Assert.stringContains('`@:allow`', grant);
+		Assert.stringContains('2 file(s) this run can read declare a type named "C"', ambiguous);
+		Assert.stringContains('other/C.hx', ambiguous);
+	}
+
+	/**
+	 * Precedence, and it is not a preference. The `@:allow` half is a raw substring scan a COMMENT
+	 * satisfies; the duplicate half is a thing the index knows exactly. Asked grant-first, this
+	 * fixture claimed metadata the file does not carry and buried the cause a reader could act on —
+	 * the split had turned the old sentence\'s hedging `or` into a categorical assertion.
+	 *
+	 * The comment is the whole fixture: it must mention `@:allow` and the file must carry none.
+	 */
+	public function testAPhantomAllowInACommentDoesNotOutrankARealDuplicateOwner(): Void {
+		final reason: String = refusalFor([
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\n// One day, consider @:allow(pkg.X) here.\nclass C {\n\tprivate var shape:Int;\n'
+				+ '\tpublic function f() { return this.shape; }\n}'
+			},
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' },
+			{ file: 'other/C.hx', source: 'package other;\nclass C {\n\tpublic function h():Int { return 0; }\n}' }
+		], 'pkg/C.hx', true);
+		Assert.stringContains('other/C.hx', reason);
+		Assert.isFalse(reason.indexOf('`@:allow`') >= 0, 'a commented-out grant must not answer for a real duplicate, got: $reason');
+	}
+
+	/**
 	 * The two-file scope every skip-parse fixture here renames over — `pkg/C.hx` declaring a
 	 * non-confined private `shape` and `pkg/D.hx` reading it through inheritance — plus `brokenSrc`
 	 * as `pkg/Broken.hx`.

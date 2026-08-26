@@ -248,18 +248,6 @@ import utest.Test;
 
 	// --- robustness ---
 
-	public function testSkipParseInScopeYieldsNothing(): Void {
-		// A file the parser could not read may hold the only call — the whole run reports nothing.
-		final owner: String = 'class C {\n\tpublic function orphaned():Void {}\n}';
-		Assert.equals(1, violations(owner).length);
-		Assert.equals(
-			0, violationsOf([
-				{ file: 'C.hx', source: owner },
-				{ file: 'Bad.hx', source: 'class Bad { public function f() {' }
-			]).length
-		);
-	}
-
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { public function orphaned():Void {').length);
 	}
@@ -384,6 +372,64 @@ import utest.Test;
 		final src: String = 'class C {\n\t#if cpp\n\tpublic function zqxwvA():Void {}\n\tpublic function zqxwvB():Void {}\n\t#end\n}';
 		Assert.equals(2, violations(src).length);
 		Assert.equals(src, applyFix(src));
+	}
+
+	// --- an unreadable file in scope ---
+
+	/**
+	 * A file the grammar cannot read no longer silences the RULE. `run` used to open with
+	 * `if (index.skippedFiles().length != 0) return [];`, so one unparseable file anywhere in scope
+	 * returned zero findings for every other file — indistinguishable from a clean tree, and with
+	 * no `declineReason` anywhere to say otherwise.
+	 *
+	 * The caution it was standing in for is in the reference proof itself: both mechanisms are raw
+	 * text over the RETAINED sources, which include the skipped file. This test and its twin below
+	 * differ ONLY in what that unreadable file contains.
+	 */
+	public function testUnreadableFileNotSpellingTheMemberLeavesTheRuleReporting(): Void {
+		final vs: Array<Violation> = violationsOf([
+			{ file: 'C.hx', source: 'class C {\n\tpublic function orphaned():Void {}\n}' },
+			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n}\n' }
+		]);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('unused public orphaned: no reference to it anywhere in scope', vs[0].message);
+	}
+
+	/** The twin: the same unreadable file, now spelling the member — the textual proof reads it and refuses. */
+	public function testUnreadableFileSpellingTheMemberStillSuppresses(): Void {
+		Assert.equals(
+			0, violationsOf([
+				{ file: 'C.hx', source: 'class C {\n\tpublic function orphaned():Void {}\n}' },
+				{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n\tc.orphaned();\n}\n' }
+			]).length
+		);
+	}
+
+	/** And the DELETION follows the report: an unreadable file naming nothing does not withhold the edit either. */
+	public function testUnreadableFileNotSpellingTheMemberLeavesTheDeletionAvailable(): Void {
+		final owner: String = 'class C {\n\tpublic function orphaned():Void {}\n}';
+		Assert.equals(1, fixEditCount(owner, [
+			{ file: 'C.hx', source: owner },
+			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n}\n' }
+		]));
+	}
+
+	/**
+	 * The narrowing this rule KNOWINGLY takes, pinned so it stays the only one. An INTERPOLATED
+	 * reflection name contributes a static fragment that `runtimeNameFragment` matches against the
+	 * method name — from a PARSED file. A skipped file contributes no fragment, so the deletion
+	 * proceeds. The two arms differ ONLY in whether the reflecting file parses.
+	 */
+	public function testInterpolatedReflectionNameBlocksTheDeletionOnlyWhenItsFileParses(): Void {
+		// The fragment must be a PROPER substring of the method name: were it the whole name, the
+		// skipped file would spell it and the textual proof would suppress the finding outright,
+		// leaving nothing for the fragment gate to be the difference on.
+		final owner: String = 'class C {\n\tpublic function orphanedThing():Void {}\n}';
+		final parsed: String = 'class B {\n\tfunction q(o:Dynamic, n:String):Dynamic return Reflect.field(o, \'orphaned$${n}\');\n}';
+		final skipped: String = 'class B {\n\tfunction q(: {{{ Reflect.field(o, \'orphaned$${n}\');\n}\n';
+		Assert.equals(0, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'B.hx', source: parsed }]));
+		Assert.equals(1, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'B.hx', source: skipped }]));
 	}
 
 	/** Findings over `C.hx` plus a second file whose `main` (implicitly reachable, never flagged) carries `body`. */

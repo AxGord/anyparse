@@ -40,9 +40,12 @@ using StringTools;
  * scan over EVERY file in report UNION resolution scope finds ZERO occurrences of
  * the name outside its own declaration (`provablyDeadProjectWide`). A subtype /
  * `@:access` grantee / `@:allow`ed type can only reach the member by NAMING it, so
- * a name that appears nowhere is dead regardless of structure. The one arm that
- * stays coarse is skip-parse: a skip-parsed report file could hide a reference the
- * scan cannot see, so any skip-parse in report scope keeps structural confinement.
+ * a name that appears nowhere is dead regardless of structure.
+ * Neither arm is coarse about skip-parse any more: the confinement
+ * gate asks `skippedMayReference` per MEMBER, and the cross-file proof needs no gate at all,
+ * since `nameOccursOutside` walks the index's RETAINED sources — skipped files included — with
+ * the same word-boundary test. What an unreadable file still costs is a FRAMEWORK contract whose
+ * chain root lives in it: that cannot be proven, the member is reported, and `--fix` declines it.
  *
  * ## Implicitly-reachable members are skipped
  *
@@ -156,8 +159,22 @@ final class UnusedPrivate implements Check implements ConfigAware {
 			collectCtorCandidates(plugin, tree, entry.file, ctorCandidates);
 		}
 		_reflectedContents = reflected;
-		if (index.skippedFiles().length == 0) for (c in ctorCandidates) if (
-			!index.hasSubtype(c.className) && !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
+		// TWO of the three proofs below need a file the parser could read — `hasSubtype` is
+		// structural and `mentionedInStrings` reads literals off parsed trees, while
+		// `isInstantiatedAnywhere` already scans the raw `files` array and so sees a `new C()`
+		// inside an unparseable one by itself. Both of the two are refuted only by a file that
+		// spells the CLASS, which is the handle a CONSTRUCTOR gives and the only one it gives, so
+		// the question is asked per class rather than per run: as `skippedFiles().length == 0` one
+		// unreadable file anywhere silenced this arm for every other.
+		//
+		// Keying on a TYPE name is the alias hole `skippedMayReference`'s own doc warns about — a
+		// file extending a `typedef` of the owner never spells it. That is not a narrowing taken
+		// here: `hasSubtype` does not resolve typedef aliases either, so a PARSEABLE file in that
+		// shape already produces the same finding, and this gate is no weaker than the path beside
+		// it.
+		for (c in ctorCandidates) if (
+			!index.skippedMayReference(c.className) && !index.hasSubtype(c.className) && !isInstantiatedAnywhere(c.className, files)
+			&& !mentionedInStrings(c.className, reflected)
 		) violations.push({
 			file: c.file,
 			span: c.span,
@@ -390,22 +407,32 @@ final class UnusedPrivate implements Check implements ConfigAware {
 	}
 
 	/**
-	 * The unconfined-member usage test: whether `name` is provably dead across the whole
-	 * project — zero word-boundary occurrences outside its own declaration `span` in EVERY
-	 * file of report UNION resolution scope. A private member is reachable only from its own
-	 * class or a subtype / `@:access` grantee / `@:allow`ed type; if the raw scan (which sees
-	 * inside `#if` regions and comments) finds the name nowhere but its declaration, none of
-	 * those name it. The report index must be fully parsed (`skippedFiles == 0`) — a
-	 * skip-parsed report file could hide the reference, so any skip in report scope keeps the
-	 * structural confinement gate. A cheap own-file pre-scan short-circuits the common
-	 * referenced case before the cross-file walk; the library scan runs only for a name
-	 * already unique in report scope.
+		 * The unconfined-member usage test: whether `name` is provably dead across the whole
+		 * project — zero word-boundary occurrences outside its own declaration `span` in EVERY
+		 * file of report UNION resolution scope. A private member is reachable only from its own
+		 * class or a subtype / `@:access` grantee / `@:allow`ed type; if the raw scan (which sees
+		 * inside `#if` regions and comments) finds the name nowhere but its declaration, none of
+		 * those name it.
+		 *
+		 * That scan needs no parse and gets none: `nameOccursOutside` walks the index's RETAINED
+		 * sources, which include every skip-parsed file, with the same word-boundary test
+		 * `skippedMayReference` uses plus the interpolation escape. So a reference hiding in an
+		 * unreadable file already fails this proof by itself, and the `skippedFiles().length == 0`
+		 * this used to open with only put every OTHER member in the scope back on the structural
+		 * confinement gate. A cheap own-file pre-scan short-circuits the common referenced case
+		 * before the cross-file walk; the library scan runs only for a name already unique in
+	report scope.
+
+	What an unreadable file still costs here is a FRAMEWORK contract whose chain root lives in it:
+	that cannot be proven, so a member the contract reaches is now reported where the run-wide
+	clause used to hide it. The CONFINED arm has behaved that way since it went per-name, so the
+	two arms agree, and `--fix` declines the member on the unresolvable `extends`.
 	 */
 	private static function provablyDeadProjectWide(
 		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex
 	): Bool {
-		return index.skippedFiles().length == 0 && !RefactorSupport.referencedInRange(source, name, 0, source.length, [span])
-			&& !index.nameOccursOutside(name, file, span) && (scopeIndex == index || !scopeIndex.nameOccursOutside(name, file, span));
+		return !RefactorSupport.referencedInRange(source, name, 0, source.length, [span]) && !index.nameOccursOutside(name, file, span)
+			&& (scopeIndex == index || !scopeIndex.nameOccursOutside(name, file, span));
 	}
 
 	/**

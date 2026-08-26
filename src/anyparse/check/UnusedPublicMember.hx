@@ -101,9 +101,10 @@ using StringTools;
  *   doubtful chain yields NOTHING. (`OrphanAccessor`'s speculative unique-simple-name
  *   fallback is deliberately not reused — it exists to let a resolved slot SILENCE a finding
  *   while keeping the link marked unresolved, and here an unresolved link already silences.)
- * - ANY report file that skip-parses. The parser could not read it, so it may hold the only
- *   call; the whole run then reports nothing. The RESOLUTION scope needs no such gate: its
- *   tokens are counted from RAW SOURCE, which a skip-parse does not withhold.
+ * - (No skip-parse gate, in either scope. Both mechanisms count from RAW SOURCE, and the index
+ *   RETAINS a skipped file's bytes, so a call hiding in one fails the test above like any other
+ *   — while a file that spells the name nowhere no longer silences the rest of the run. A
+ *   skipped file's DECLARATIONS are covered by the unresolvable-supertype bullet above.)
  *
  * There is deliberately NO separate "a supertype / interface / subtype declares this name"
  * query: the text scan SUBSUMES all three. A same-named declaration anywhere in scope — above,
@@ -192,11 +193,22 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	];
 
 	/**
-	 * `<file>#<from>:<to>` of every flagged method whose deletion `run` PROVED safe. Every gate
-	 * is whole-project (the token map, the occurrence confirm, the chain walk, skip-parse
-	 * completeness) and `fix` sees ONE file — so the verdict is computed once where the whole
-	 * file set is in hand and read back by span. A finding with no entry here is report-only;
-	 * `fix` called without a preceding `run` therefore edits nothing (fail-closed).
+	 * `<file>#<from>:<to>` of every flagged method whose deletion `run` PROVED safe. Every gate is
+	 * whole-project (the token map, the occurrence confirm, the chain walk, the reflection surface)
+	 * and `fix` sees ONE file — so the verdict is computed once where the whole file set is in hand
+	 * and read back by span. A finding with no entry here is report-only; `fix` called without a
+	 * preceding `run` therefore edits nothing (fail-closed).
+	 *
+	 * Skip-parse is NOT one of them any more. The TWO textual mechanisms read a skipped file's
+	 * retained source, so a name that file SPELLS is proven referenced there and no finding survives
+	 * to be deleted. What they cannot read is the INTERPOLATED reflection surface: a parsed `Reflect.field(o, 'unused$n')` contributes the fragment `unused`, which
+	 * `runtimeNameFragment` matches against a method named `unusedThing` and blocks its deletion,
+	 * while a skipped file contributes no fragment at all. The fragment has to be a PROPER substring
+	 * of the name for this to be the difference: were it the whole name, the skipped file would spell
+	 * it and the two mechanisms above would suppress the finding by themselves. That one shape is the narrowing this rule takes for an unreadable file, in
+	 * exchange for not going silent on the whole run. CONCATENATION (`'unused' + n`) is NOT part of
+	 * it — no fragment is collected for that shape from a PARSED file either, and the class doc owns
+	 * that hole above.
 	 */
 	private var _deletable: Array<String> = [];
 
@@ -219,15 +231,17 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 
 	/**
 	 * Report every provably unreferenced public method across `files`, and record the ones whose
-	 * deletion is proven safe. A single skip-parsed REPORT file aborts the whole run: the parser
-	 * could not read it, so it may hold the only call to any candidate. A skip-parsed RESOLUTION
-	 * file needs no such gate — `tokenCounts` reads that scope's raw bytes, which parse status
-	 * does not withhold.
+	 * deletion is proven safe. NEITHER scope carries a skip-parse gate. The reference proof is
+	 * textual on both of its mechanisms and `SymbolIndexBuilder` RETAINS a skipped file's raw
+	 * source, so `tokenCounts` counts that file's tokens like any other and `nameOccursOutside`
+	 * walks it — a call hiding in an unreadable file still fails the proof, and one that is not
+	 * there does not silence the rule for every other file. What a skipped file could otherwise
+	 * invalidate is its DECLARATIONS, and `walkChain` answers that per class: a supertype it
+	 * cannot resolve leaves the chain unresolved and the class is left alone.
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		_deletable = [];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		if (index.skippedFiles().length != 0) return [];
 		// Names resolve over report UNION resolution scope: a call from a configured library is a
 		// real reference, and reading it as absent would report every method a library reaches.
 		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;

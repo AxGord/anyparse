@@ -523,7 +523,15 @@ final class MoveSymbol {
 		plugin: GrammarPlugin
 	): MovePrep {
 		// 1. Refuse on any skip-parse — a file we cannot read cannot be proven
-		//    free of references to the type.
+		//    free of references to the type. Whole-scope on purpose, unlike the
+		//    check layer's per-name gates: moving a type between modules changes
+		//    the path every importer spells, and `buildImporterEdits` walks
+		//    `filesImportingModule`, which sees PARSED files only — so a skipped
+		//    importer would be left pointing at the old module path, silently.
+		//    Unlike `MoveMember`'s twin gate there is NO later parse loop to
+		//    catch it: this one is load-bearing, and removing it corrupts rather
+		//    than merely widens. Single-subject and it names the files, which is
+		//    what makes the refusal actionable.
 		final skipped: Array<String> = index.skippedFiles();
 		if (skipped.length > 0) return PErr('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
 

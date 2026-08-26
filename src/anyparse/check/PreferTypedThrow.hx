@@ -47,8 +47,10 @@ using StringTools;
  * reaches. So the gate scans the report files UNION the configured library roots (via
  * `RefactorSupport.resolutionIndexOf`): if ANY `catch` clause there is typed one of those
  * names, the rule DEGRADES WHOLESALE to report-only — every finding keeps its diagnostic, no
- * finding gets an edit. A source the index could not PARSE is unreadable rather than absent, so
- * a skipped project file degrades too, and the `Cli` fixed-point loop lists this rule in
+ * finding gets an edit. A source the index could not PARSE is scanned like any
+ * other — the gate is textual and the index retains its bytes — so a skipped project file
+ * degrades only when its own text carries such a clause. The `Cli` fixed-point loop lists this
+ * rule in
  * `fullScopeIds` so a later pass sees every file rather than the changed subset. With NO
  * resolution scope at all (a direct `check.run`) the gate can only answer for the files it is
  * handed — its proof is only as wide as the run.
@@ -227,16 +229,26 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 	 * configured library roots — is scanned after, skipping the sources already seen AND every
 	 * file the auto-discovered std contributed (`StdResolver.isStdFile`; the class doc has the
 	 * reachability argument). True degrades the whole rule to report-only.
+	 *
+	 * A SKIP-PARSED source is scanned like any other. The gate is textual by design, so parse
+	 * status withholds nothing from it — asked as `skippedFiles().length > 0` it degraded the rule
+	 * run-wide for one unreadable file that may hold no `catch` at all.
 	 */
 	private static function catchAllInScope(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, seams: Seams): Bool {
 		for (entry in files) if (sourceHasBlockingCatch(entry.source, seams.blockingCatchTypes)) return true;
 		final index: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);
 		if (index == null) return false;
-		// A source the index could not PARSE never enters `allFiles`, so its clauses are
-		// unreadable here. Unreadable is not absent: degrade rather than assume — except for a
-		// std source, whose clauses this gate would not have read even had it parsed.
-		for (skipped in index.skippedFiles()) if (!StdResolver.isStdFile(skipped)) return true;
 		final scanned: Map<String, Bool> = [for (entry in files) entry.file => true];
+		// A source the index could not PARSE never enters `allFiles` — but this gate never wanted a
+		// parse. `sourceHasBlockingCatch` is a text scan and the builder RETAINS a skipped file's raw
+		// source, so the clause question is asked of it exactly as of every other file. The `null`
+		// arm is the builder's contract restated, not a live case: `extract` stores the source before
+		// its `tree == null` bail, so a retained-nowhere source cannot occur. A std source is out of
+		// reach either way, and a skipped REPORT file was already read by the loop at the top.
+		for (skipped in index.skippedFiles()) if (!scanned.exists(skipped) && !StdResolver.isStdFile(skipped)) {
+			final skippedSource: Null<String> = index.sourceOf(skipped);
+			if (skippedSource == null || sourceHasBlockingCatch(skippedSource, seams.blockingCatchTypes)) return true;
+		}
 		for (info in index.allFiles()) if (!scanned.exists(info.file) && !StdResolver.isStdFile(info.file)) {
 			final src: Null<String> = index.sourceOf(info.file);
 			if (src != null && sourceHasBlockingCatch(src, seams.blockingCatchTypes)) return true;

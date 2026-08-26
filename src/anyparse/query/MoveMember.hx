@@ -495,6 +495,13 @@ final class MoveMember {
 		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin
 	): PrepResult {
 		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		// Whole-scope on purpose, and NOT the per-name question the check layer asks. What makes it
+		// right here is the loop below: it re-parses EVERY scope file and returns `PErr` on the same
+		// thrown exception the index skipped on, so a skipped file refuses a few lines later whether
+		// or not this gate exists. This one only gets there first and names them all at once — so it
+		// is the OPTIONAL of the two move gates (`MoveSymbol`'s has no such backstop). The narrowing
+		// question does not arise: the op REWRITES call sites, so an unreadable importer is a file it
+		// cannot edit rather than one it cannot prove things about.
 		final skipped: Array<String> = index.skippedFiles();
 		if (skipped.length > 0) return PErr('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
 		final sourceOf: Map<String, String> = [for (entry in scopeFiles) entry.file => entry.source];
