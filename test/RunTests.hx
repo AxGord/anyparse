@@ -408,6 +408,7 @@ import unit.HxSemicolonBeforeElseSliceTest;
 import unit.HxSepStarCloseTrailCommentTest;
 import unit.HxSharpErrorSliceTest;
 import unit.HxSingleStmtBracesSliceTest;
+import unit.HxSoleArgGluedCloseDedentTest;
 import unit.HxSoleItemCuddledBracketsTest;
 import unit.HxSourceBlankPreserveSliceTest;
 import unit.HxSpreadSliceTest;
@@ -971,6 +972,7 @@ class RunTests {
 		addCase(new HxComprehensionCloserSliceTest());
 		addCase(new HxCallParamNestedArrayHugSliceTest());
 		addCase(new HxCallParamOuterFirstWrapSliceTest());
+		addCase(new HxSoleArgGluedCloseDedentTest());
 		addCase(new HxChainOuterOperatorWrapSliceTest());
 		addCase(new HxTernaryCollectionHugSliceTest());
 		addCase(new HxCondWrapFitLineSliceTest());

@@ -613,6 +613,38 @@ final class DocMeasure {
 		return scanTail(d) == TailBreak;
 	}
 
+	/**
+	 * The `Nest` depth at which `d`'s BROKEN tail closing line starts, or `-1`
+	 * when the broken tail is not a BRACE-opened closing line at all.
+	 *
+	 * Sister of `endsWithForcedCloseLine` over the same walk (`scanTailAt`),
+	 * differing in what its consumer needs. It resolves an `If*` ctor to the BREAK
+	 * slot for the nodes whose flat slot carries a forced hardline and therefore
+	 * cannot be the one-line shape that slot promises; it reports WHERE the closing
+	 * line starts rather than merely that one exists; and it requires the LEFTMOST
+	 * closer opening that line to be a brace.
+	 *
+	 * That last requirement is folded in here rather than asked separately of
+	 * `endsWithCloseBrace` on purpose: that walk resolves every `If*` to the flat
+	 * slot, so a caller combining the two would bound its decision on one rendering
+	 * while measuring the depth on another.
+	 *
+	 * The number decides whether a caller may glue its own closing delimiter
+	 * directly after `d`. Zero means `d`'s tail closers land at the indent of the
+	 * line `d` itself started on, so a glued closer lands under its own opener: an
+	 * object literal and a nested call both emit their close delimiter OUTSIDE
+	 * their content `Nest` and answer zero. A POSITIVE depth means the tail closed
+	 * on a continuation line one or more levels deeper — a ternary or value-`if`
+	 * branch closing inside the construct's own `? :` nest — so a closer glued
+	 * there would sit BELOW its opener. `-1` covers both a tail that is not a run
+	 * of closers at all (`a &&\n\tb` ends on content) and one opened by a bracket,
+	 * which owns its own multi-line layout and dedents to the caller's indent.
+	 */
+	public static function breakTailCloseNest(d: Doc): Int {
+		final out: TailOut = { nest: 0, braceCloser: false };
+		return scanTailAt(d, 0, true, out) == TailBreak && out.braceCloser ? out.nest : -1;
+	}
+
 	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
 	private static inline function isIdentStart(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
@@ -653,11 +685,40 @@ final class DocMeasure {
 		};
 	}
 
+	/** The verdict-only, flat-slot reading of `scanTailAt` — the shape `endsWithForcedCloseLine` asks for. */
+	private static inline function scanTail(d: Doc): DocTailScan {
+		return scanTailAt(d, 0, false, null);
+	}
+
+	/** The leftmost visible character of `s`, or `-1` when `s` holds only whitespace. */
+	private static function firstVisibleChar(s: String): Int {
+		for (i in 0...s.length) {
+			final c: Int = s.fastCodeAt(i);
+			if (c != ' '.code && c != '\t'.code) return c;
+		}
+		return -1;
+	}
+
 	/**
-	 * Tri-state right-to-left walker behind `endsWithForcedCloseLine`:
-	 * `TailCloses` while only close delimiters and whitespace have been seen,
-	 * `TailBreak` once a forced hardline is reached with such a tail,
-	 * `TailOther` as soon as substantive content appears.
+	 * Tri-state right-to-left walker behind `endsWithForcedCloseLine` and
+	 * `breakTailCloseNest`: `TailCloses` while only close delimiters and
+	 * whitespace have been seen, `TailBreak` once a forced hardline is reached
+	 * with such a tail, `TailOther` as soon as substantive content appears. What a non-null `out` records is the accumulated `Nest` depth AT the hardline
+	 * that opened the closing line, plus whether the LEFTMOST of that line's
+	 * closers is a brace. Passing `null` skips both and keeps the walk
+	 * allocation-free. The depth is what fixes the line's indent — which is what fixes that line's indent, so
+	 * it is read at the `Line`, never at the closers to its right.
+	 *
+	 * `resolveForcedBreaks` picks which slot every `If*` ctor resolves to.
+	 * `false` — the `scanTail` reading — always takes the flat slot, because its
+	 * cuddled-chain consumer asks about a shape it may ride on and must not turn
+	 * on a render-time width decision. `true` takes the BREAK slot for the nodes
+	 * whose flat slot carries a forced hardline (`hasForcedBreak`) and therefore
+	 * cannot be the one-line shape that slot promises, and the flat slot
+	 * everywhere else. Reading the break slot unconditionally instead over-reports
+	 * badly: a nested call that renders flat (`… else fromDays(1)`) has a broken
+	 * slot ending `(\n\t1\n)`, and taking it claims a closing line the output does
+	 * not have.
 	 *
 	 * Arms are grouped as in `endsWithCloseBrace` (its right-spine model) and
 	 * enumerate every `Doc` ctor with no catch-all, so a new ctor breaks
@@ -671,7 +732,7 @@ final class DocMeasure {
 	 * renders after the last item. Skipping it can only UNDER-report (a
 	 * hardline separator is not seen), never manufacture a false `TailBreak`.
 	 */
-	private static function scanTail(d: Doc): DocTailScan {
+	private static function scanTailAt(d: Doc, nest: Int, resolveForcedBreaks: Bool, out: Null<TailOut>): DocTailScan {
 		return switch d {
 			// No visible tail content. A trailing `OptHardline*` is treated as
 			// transparent rather than as a break — no emitter produces one in
@@ -680,21 +741,32 @@ final class DocMeasure {
 			case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
 				TailCloses;
 			case Line(flat) if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code):
+				if (out != null) out.nest = nest;
 				TailBreak;
 			case Text(s), OptSpace(s), Line(s):
-				closesOnly(s) ? TailCloses : TailOther;
+				if (closesOnly(s)) {
+					// Right-to-left, so each closers-only leaf overwrites the last:
+					// when the hardline is finally reached the recorded character is
+					// the LEFTMOST closer, the one that opens the closing line.
+					final c: Int = firstVisibleChar(s);
+					if (out != null && c >= 0) out.braceCloser = c == '}'.code;
+					TailCloses;
+				} else
+					TailOther;
 			case Concat(items), Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
-				scanTailItems(items);
-			case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
+				scanTailItemsAt(items, nest, resolveForcedBreaks, out);
+			case Nest(n, inner):
+				scanTailAt(inner, nest + n, resolveForcedBreaks, out);
+			case Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
+				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
 				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
-				scanTail(inner);
-			case IfBreak(_, flatDoc), IfWidthExceeds(_, _, flatDoc), IfFirstLineExceeds(_, _, flatDoc), IfLineExceeds(_, _, flatDoc),
-				IfResidualLineExceeds(_, _, flatDoc), IfFullLineExceeds(_, _, flatDoc), IfNaturalFirstLineExceeds(_, _, flatDoc),
-				IfNaturalFirstLineExceedsWithRest(_, _, flatDoc), IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc),
-				IfArrowContinuationFits(_, _, _, _, flatDoc), IfIndentWidthExceeds(_, _, _, flatDoc),
-				IfGluedFirstLineExceeds(_, _, _, flatDoc):
-				scanTail(flatDoc);
+				scanTailAt(inner, nest, resolveForcedBreaks, out);
+			case IfBreak(breakDoc, flatDoc), IfWidthExceeds(_, breakDoc, flatDoc), IfFirstLineExceeds(_, breakDoc, flatDoc),
+				IfLineExceeds(_, breakDoc, flatDoc), IfResidualLineExceeds(_, breakDoc, flatDoc), IfFullLineExceeds(_, breakDoc, flatDoc),
+				IfNaturalFirstLineExceeds(_, breakDoc, flatDoc), IfNaturalFirstLineExceedsWithRest(_, breakDoc, flatDoc),
+				IfNaturalFirstLineFitsOpenDelim(_, breakDoc, flatDoc), IfArrowContinuationFits(_, _, _, breakDoc, flatDoc),
+				IfIndentWidthExceeds(_, _, breakDoc, flatDoc), IfGluedFirstLineExceeds(_, _, breakDoc, flatDoc):
+				scanTailAt(resolveForcedBreaks && hasForcedBreak(flatDoc) ? breakDoc : flatDoc, nest, resolveForcedBreaks, out);
 		};
 	}
 
@@ -703,10 +775,10 @@ final class DocMeasure {
 	 * that is not `TailCloses` — that child's own verdict is the container's. A
 	 * container whose every child is closes-only is itself closes-only.
 	 */
-	private static function scanTailItems(items: Array<Doc>): DocTailScan {
+	private static function scanTailItemsAt(items: Array<Doc>, nest: Int, resolveForcedBreaks: Bool, out: Null<TailOut>): DocTailScan {
 		var i: Int = items.length - 1;
 		while (i >= 0) {
-			final r: DocTailScan = scanTail(items[i]);
+			final r: DocTailScan = scanTailAt(items[i], nest, resolveForcedBreaks, out);
 			if (r != TailCloses) return r;
 			i--;
 		}
@@ -847,4 +919,22 @@ private enum abstract DocTailScan(Int) {
 	/** Substantive content sits to the right of any hardline — the tail is not a closing line. */
 	final TailOther = 2;
 
+}
+
+/**
+ * The two facts `DocMeasure.scanTailAt` records about the closing line it
+ * finds, when a caller asks for them: the `Nest` depth that line starts at,
+ * and whether the LEFTMOST closer opening it is a brace. Both are meaningful
+ * only alongside a `TailBreak` verdict.
+ *
+ * A mutable carrier rather than a return value, on purpose. The walk visits
+ * every node of the tail spine, and `endsWithForcedCloseLine` — the
+ * cuddled-chain gate on the writer's per-link path — wants neither fact, so it
+ * passes `null` and the walk allocates nothing at all. Returning a struct from
+ * every node instead cost a measured 1.5% of a whole 870-file format pass
+ * (interleaved medians 3.759s vs 3.817s).
+ */
+private typedef TailOut = {
+	var nest: Int;
+	var braceCloser: Bool;
 }
