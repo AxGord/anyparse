@@ -215,6 +215,13 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * A parameter needs no entry of its own: a function frame pre-collects only its own params
 	 * (the walk stops at the body's `BlockBody`), so they stay visible to the whole body while
 	 * the body's own declarations become position-scoped.
+	 *
+	 * `ThinArrow` is the bare `arg -> body` lambda, and it belongs here for the same reason the
+	 * two parenthesised forms and `FnExpr` do: it binds a parameter, and that parameter dies at
+	 * the body's end. The grammar spells it as a Pratt infix ctor rather than a lambda ctor, so
+	 * its parameter reaches the tree as an `IdentExpr` - `HxArrowParamProjection` re-labels it
+	 * `Required` before any consumer sees it. Without BOTH halves the parameter was a read of
+	 * whatever enclosed the lambda: `refs` mis-bound it, and `rename` rewrote the two together.
 	 */
 	private static final POSITION_SCOPED_SCOPE_KINDS: Array<String> = [
 		'FnDecl',
@@ -225,6 +232,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'LocalInlineFnStmt',
 		'ThinParenLambdaExpr',
 		'ParenLambdaExpr',
+		'ThinArrow',
 		'BlockBody',
 		'BlockExpr',
 		'BlockStmt',
@@ -1496,6 +1504,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	public function treeFromRoot(root: Null<Any>, source: String, withTypeRefs: Bool): QueryNode {
 		final tree: QueryNode = new QueryNode('module', null, HaxeQueryWalker.walkRoot(cast root, withTypeRefs));
 		HxInterpProjection.reproject(tree, source);
+		HxArrowParamProjection.reproject(tree, source);
 		return tree;
 	}
 
