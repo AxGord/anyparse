@@ -138,17 +138,19 @@ class LintScopeGateTest extends Test {
 	 * span what the project's own gate lints (`tools/battery.sh` runs
 	 * `hxq lint --format json --all src test`), since a narrower root leaves the same hole one
 	 * directory smaller — dropping `test` measured 3 `unused-public-member` false positives across
-	 * `src/` that the full scope suppresses, and declaring the roots only in the ROOT document left
-	 * all 739 files under `test/` blind, since a nested `apqlint.json` replaces its parent rather
-	 * than extending it.
+	 * `src/` that the full scope suppresses. Declaring the roots only in the ROOT
+	 * document once left all 741 files under `test/` blind, because a nested
+	 * `apqlint.json` REPLACED its parent; it now extends it, so one declaration
+	 * covers both trees and this assertion covers the fold.
 	 */
 	public function testTheProjectDeclaresItsOwnLintScopeAsResolutionRoots(): Void {
 		final root: String = CliFixture.repoRoot();
-		// BOTH configs, because discovery stops at the FIRST apqlint.json above the linted file and
-		// takes it WHOLESALE — `test/apqlint.json` does not inherit the root document, so declaring
-		// the roots only at the root leaves every one-file lint under `test/` exactly as blind as
-		// before. Measured: the same two-file probe under `test/` reported the finding for the file
-		// alone and refused over both, until the nested config declared the roots too.
+		// BOTH probes, because the ANSWER has to hold for a file under either tree — but only the
+		// ROOT document declares the key now. `test/apqlint.json` used to need its own copy, since
+		// discovery stopped at the FIRST apqlint.json above the linted file and took it WHOLESALE;
+		// measured then, the same two-file probe under `test/` reported the finding for the file
+		// alone and refused over both. `LintConfig.discover` now folds the whole chain, so this
+		// asserts INHERITANCE: revert it and the `test/` probe answers an empty scope again.
 		for (probe in [
 			'$root/src/anyparse/check/ReflectionScan.hx',
 			'$root/test/unit/LintScopeGateTest.hx'

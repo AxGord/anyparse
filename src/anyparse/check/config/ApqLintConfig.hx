@@ -13,6 +13,12 @@ import anyparse.grammar.json.JValue;
  * scope). Keys this schema does not model are dropped by the `UnknownPolicy.Skip`
  * inherited from `JsonFormat`.
  *
+ * `inherit` is the one key about the DOCUMENT rather than about the lint: false
+ * makes this document the end of the chain `LintConfig.discover` folds, so it
+ * stands alone instead of extending the `apqlint.json` files above it. Absent
+ * means true — a nested document extends its ancestors, which is what every
+ * nested document written before the chain existed already meant.
+ *
  * `languageVersion` is the version of the LANGUAGE the project targets, as a
  * dotted string (`"4.0"`). A rule whose fix emits syntax newer than that is
  * dropped — see `Check.VersionGated`. Absent means no constraint, which is the
@@ -33,6 +39,8 @@ import anyparse.grammar.json.JValue;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef ApqLintConfig = {
+
+	@:optional var inherit: Bool;
 
 	@:optional var rules: Map<String, JValue>;
 
