@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * Slice 39 — `stmtExprNoSemi` direct-returns true on `ArrayExpr`.

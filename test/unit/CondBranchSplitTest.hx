@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.runtime.Span;
 import anyparse.query.Refs;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 

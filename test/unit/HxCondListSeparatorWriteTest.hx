@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
  * A conditional-compilation region is one ELEMENT of the list it sits in, and the list separator

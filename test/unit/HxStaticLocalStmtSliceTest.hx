@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice 37 — `static var` / `static final` local-statement declarations

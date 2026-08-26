@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Cli;
 #if sys
 import sys.FileSystem;
 #end
@@ -59,7 +59,7 @@ class ApqStripDryRunCliTest extends Test {
 			'BOGUS',
 			'--with',
 			'',
-			'--dry-run',
+			'--dry-run'
 		]));
 		FileSystem.deleteFile(input);
 		#else

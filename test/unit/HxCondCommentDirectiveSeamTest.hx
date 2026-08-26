@@ -1,12 +1,12 @@
 package unit;
 
-import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Trivia-mode round-trip tests for the conditional-compilation seam: a
@@ -83,7 +83,7 @@ class HxCondCommentDirectiveSeamTest extends Test {
 		DOC_PLUS_LINE_MEMBER,
 		SAME_LINE_MEMBER,
 		SAME_LINE_MODIFIER,
-		SAME_LINE_STMT,
+		SAME_LINE_STMT
 	];
 
 	// --- 1. empty arm, comment only ------------------------------------

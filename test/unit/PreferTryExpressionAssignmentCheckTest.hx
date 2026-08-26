@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
 import anyparse.check.PreferTryExpressionAssignment;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
-import anyparse.check.Linter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-try-expression-assignment` check: a statement-position `try` assigning the SAME

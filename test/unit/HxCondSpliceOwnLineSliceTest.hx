@@ -1,8 +1,8 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * Slice F1 -- the OWN-LINE gate on word-like postfix operators

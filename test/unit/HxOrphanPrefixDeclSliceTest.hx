@@ -1,15 +1,15 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxAnonMember;
+import anyparse.grammar.haxe.HxConditionalMeta;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxEnumMember;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTopLevelDecl;
 import anyparse.runtime.ParseError;
-import anyparse.grammar.haxe.HxConditionalMeta;
+import utest.Assert;
 
 /**
  * A declaration that is nothing but its own `#if X #end` prefix, at the three

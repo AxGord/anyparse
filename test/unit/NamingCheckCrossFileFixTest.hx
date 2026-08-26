@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
+import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
-import anyparse.runtime.Span;
-import anyparse.query.SymbolIndex;
-import anyparse.check.Check.CrossFileEdits;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+import utest.Assert;
 
 /**
  * The `naming` autofix crossing FILE boundaries: a private field renamed in its

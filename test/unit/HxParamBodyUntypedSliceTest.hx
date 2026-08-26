@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxParamBody;
+import utest.Assert;
 
 /**
  * Slice O (apq-P5 self-parse tail): untyped function-declaration

@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.HxMemberDecl;
+import utest.Assert;
 
 /**
  * Tests for dot-path metadata names — Haxe's metadata tag is a dotted

@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferTernaryAssignment;
 import anyparse.check.Linter;
+import anyparse.check.PreferTernaryAssignment;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-ternary-assignment` check: an `if (cond) lhs = a; else lhs = b;`

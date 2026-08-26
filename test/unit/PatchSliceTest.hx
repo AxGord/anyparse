@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.Patch;
 import anyparse.query.ReplaceNode.ReplaceTarget;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `Patch.patchNode` — replace ONE unique fragment inside an addressed node,

@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferReadOnlyField;
-import anyparse.check.PreferFinalPublicField;
 import anyparse.check.Linter;
+import anyparse.check.PreferFinalPublicField;
+import anyparse.check.PreferReadOnlyField;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-read-only-field` check: a PUBLIC `var` field written only inside its

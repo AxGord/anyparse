@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
+import anyparse.format.CommentStyle;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.format.CommentStyle;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω₅ — end-to-end Trivia-mode write tests. Validates that the writer

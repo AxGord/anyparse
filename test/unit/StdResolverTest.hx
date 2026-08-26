@@ -1,7 +1,7 @@
 package unit;
 
-import anyparse.query.StdResolver;
 import anyparse.query.Glob;
+import anyparse.query.StdResolver;
 import utest.Assert;
 import utest.Test;
 

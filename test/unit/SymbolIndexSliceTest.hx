@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 
@@ -149,7 +149,7 @@ class SymbolIndexSliceTest extends Test {
 	public function testFinalClassIndexed(): Void {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/pkg/sub/Foo.hx', source: 'package pkg.sub;\nfinal class Foo {\n\tpublic var x:Int = 1;\n}' },
-			{ file: 'src/pkg/sub/User.hx', source: 'package pkg.sub;\nimport pkg.sub.Foo;\nclass User {}' },
+			{ file: 'src/pkg/sub/User.hx', source: 'package pkg.sub;\nimport pkg.sub.Foo;\nclass User {}' }
 		], plugin());
 
 		final info: Null<FileInfo> = index.fileInfo('src/pkg/sub/Foo.hx');
@@ -177,7 +177,7 @@ class SymbolIndexSliceTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}' },
 			{ file: 'src/pkg/B.hx', source: 'package pkg;\nclass B {}' },
-			{ file: 'src/pkg/Dup.hx', source: 'package pkg;\nclass Dup {}\ntypedef A = Int;' },
+			{ file: 'src/pkg/Dup.hx', source: 'package pkg;\nclass Dup {}\ntypedef A = Int;' }
 		], plugin());
 
 		// Zero declarers.
@@ -199,7 +199,7 @@ class SymbolIndexSliceTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/pkg/Rename.hx', source: 'package pkg;\nclass Rename {}\ntypedef RenameResult = Int;' },
 			{ file: 'src/pkg/Dup.hx', source: 'package pkg;\nclass Dup {}\ntypedef Rename = Int;' },
-			{ file: 'src/pkg/Solo.hx', source: 'package pkg;\nclass Solo {}' },
+			{ file: 'src/pkg/Solo.hx', source: 'package pkg;\nclass Solo {}' }
 		], plugin());
 
 		// Unique main type -> the module path.
@@ -223,7 +223,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/pkg/UsesModule.hx', source: 'package pkg;\nimport pkg.Refs;\nclass UsesModule {}' },
 			{ file: 'src/pkg/UsesSub.hx', source: 'package pkg;\nimport pkg.Refs.RefHit;\nclass UsesSub {}' },
 			{ file: 'src/pkg/UsesUsing.hx', source: 'package pkg;\nusing pkg.Refs;\nclass UsesUsing {}' },
-			{ file: 'src/pkg/Unrelated.hx', source: 'package pkg;\nimport pkg.Other;\nclass Unrelated {}' },
+			{ file: 'src/pkg/Unrelated.hx', source: 'package pkg;\nimport pkg.Other;\nclass Unrelated {}' }
 		], plugin());
 
 		final importers: Array<String> = index.filesImportingModule('pkg.Refs').map(f -> f.file);
@@ -247,7 +247,7 @@ class SymbolIndexSliceTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/pkg/Good.hx', source: 'package pkg;\nclass Good {}' },
 			// Unbalanced braces — the parser throws.
-			{ file: 'src/pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' },
+			{ file: 'src/pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
 		], plugin());
 
 		final skipped: Array<String> = index.skippedFiles();
@@ -907,7 +907,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'src/Base.hx', source: 'class Base {}' },
 			{ file: 'src/Mid.hx', source: 'class Mid extends Base {}' },
 			{ file: 'src/Leaf.hx', source: 'class Leaf extends Mid {}' },
-			{ file: 'src/Free.hx', source: 'class Free extends SomethingExternal {}' },
+			{ file: 'src/Free.hx', source: 'class Free extends SomethingExternal {}' }
 		], plugin());
 		Assert.isTrue(index.supertypeChainResolved('Leaf'));
 		Assert.isFalse(index.supertypeChainResolved('Free'));

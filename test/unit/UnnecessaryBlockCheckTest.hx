@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.UnnecessaryBlock;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
+import anyparse.check.UnnecessaryBlock;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `unnecessary-block` check: a bare `{ … }` statement block nested in another statement list is flagged

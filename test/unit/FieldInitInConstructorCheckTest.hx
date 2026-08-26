@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.FieldInitInConstructor;
@@ -10,8 +8,10 @@ import anyparse.check.PreferFinalField;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
-import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `field-init-in-constructor` check: a private instance field whose CONSTANT declaration

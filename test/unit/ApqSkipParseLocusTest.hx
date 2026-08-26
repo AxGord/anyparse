@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Cli;
 #if sys
 import sys.FileSystem;
 #end
@@ -84,7 +84,7 @@ class ApqSkipParseLocusTest extends Test {
 	private static function writeMixedDir(): String {
 		return CliFixture.writeDir('apq_skip_parse_locus', [
 			{ name: 'Good.hx', source: 'class Good { var y:Int = 0; }' },
-			{ name: 'Bad.hx', source: 'class Bad { var z:' },
+			{ name: 'Bad.hx', source: 'class Bad { var z:' }
 		]);
 	}
 	#end

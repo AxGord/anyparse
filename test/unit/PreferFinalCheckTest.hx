@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferFinal;
 import anyparse.check.Linter;
+import anyparse.check.PreferFinal;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-final` check: a local `var` never reassigned is flagged `Info` and

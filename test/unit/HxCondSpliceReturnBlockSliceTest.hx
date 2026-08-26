@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.HxStatement;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * A SELF-TERMINATING `#if … ; #end` region that is the value of a `return`, spelled over SEVERAL
@@ -44,8 +44,8 @@ class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 
 	/** A deeper region keeps its own relative structure: the base is a common PREFIX, not a width. */
 	public function testRelativeIndentationInsideTheRegionSurvives(): Void {
-		final src: String =
-			'class M {\n\tstatic function f():Int {\n\t\treturn #if a\n\t\t\tg({\n\t\t\t\tx: 1\n\t\t\t});\n\t\t#else\n\t\t\t0;\n\t\t#end\n\t}\n}';
+		final src: String = 'class M {\n\tstatic function f():Int {\n\t\treturn #if a\n\t\t\tg({\n\t\t\t\tx: 1\n\t\t\t});\n\t\t#else\n'
+			+ '\t\t\t0;\n\t\t#end\n\t}\n}';
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
 	}
 
@@ -85,8 +85,8 @@ class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 
 	/** The member after the region is the container's own child, not a node inside the function above it. */
 	public function testNextMemberIsNotSwallowed(): Void {
-		final src: String = 'class C {\n\n\tprivate static inline function get_touchScreen(): Bool return #if ios\n\t\ttrue;\n\t#else\n\t\tfalse;\n\t#end\n\n'
-			+ '\tpublic static final NAME: String = \'x\';\n\n}';
+		final src: String = 'class C {\n\n\tprivate static inline function get_touchScreen(): Bool return #if ios\n\t\ttrue;\n\t#else\n'
+			+ '\t\tfalse;\n\t#end\n\n\tpublic static final NAME: String = \'x\';\n\n}';
 		final root: QueryNode = new HaxeQueryPlugin().parseFile(src);
 		final container: QueryNode = root.children.length > 0 ? root.children[0] : root;
 		final at: Int = src.indexOf('public static final');

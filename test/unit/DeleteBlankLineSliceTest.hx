@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveElement;
 import anyparse.query.RemoveMember;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 

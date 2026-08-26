@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.DeadSafeNav;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `dead-safe-nav` check: a null-safe access `a?.b` whose receiver is already

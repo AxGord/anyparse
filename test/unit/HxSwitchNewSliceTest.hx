@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
-import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxSwitchStmt;
+import anyparse.grammar.haxe.HxType;
+import utest.Assert;
 
 /**
  * Tests for slice mu_1: switch statement and new expression.
@@ -683,7 +683,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		final body: Array<HxStatement> = parseBody(source);
 		Assert.equals(1, body.length);
 		return switch body[0] {
-			case ReturnStmt(expr) | ExprStmt(expr):
+			case ReturnStmt(expr), ExprStmt(expr):
 				switch expr {
 					case SwitchExpr(stmt): stmt;
 					case null, _: throw 'expected SwitchExpr rhs';

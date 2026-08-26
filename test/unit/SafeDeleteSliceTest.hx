@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.SafeDelete;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 
@@ -21,7 +21,7 @@ class SafeDeleteSliceTest extends Test {
 	public function testDeadMethodRemoved(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n\tpublic function used():Int return 1;\n'
 			+ '\tpublic function dead():Int return 2;\n}';
-		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'dead', [{ file: 'pkg/Svc.hx', source: svc },]);
+		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'dead', [{ file: 'pkg/Svc.hx', source: svc }]);
 		Assert.isFalse(text.contains('function dead'), 'dead is gone');
 		Assert.isTrue(text.contains('function used'), 'used stays');
 	}
@@ -30,7 +30,7 @@ class SafeDeleteSliceTest extends Test {
 	public function testDeadFieldRemoved(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic var live:Int = 0;\n\tpublic var junk:Int = 0;\n'
 			+ '\tpublic function new() {}\n\tpublic function f():Int return live;\n}';
-		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'junk', [{ file: 'pkg/Svc.hx', source: svc },]);
+		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'junk', [{ file: 'pkg/Svc.hx', source: svc }]);
 		Assert.isFalse(text.contains('junk'), 'junk is gone');
 	}
 
@@ -41,7 +41,7 @@ class SafeDeleteSliceTest extends Test {
 			'package pkg;\n\nclass Client {\n\tpublic function new() {}\n\tpublic function go(s:Svc):Int return s.used();\n}';
 		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'used', false, [
 			{ file: 'pkg/Svc.hx', source: svc },
-			{ file: 'pkg/Client.hx', source: client },
+			{ file: 'pkg/Client.hx', source: client }
 		], plugin(), refShape()));
 	}
 
@@ -49,7 +49,7 @@ class SafeDeleteSliceTest extends Test {
 	public function testRecursiveRemoved(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n'
 			+ '\tpublic function loop(n:Int):Int return n <= 0 ? 0 : loop(n - 1);\n}';
-		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'loop', [{ file: 'pkg/Svc.hx', source: svc },]);
+		final text: String = okRemove('pkg/Svc.hx', 'Svc', 'loop', [{ file: 'pkg/Svc.hx', source: svc }]);
 		Assert.isFalse(text.contains('function loop'), 'recursive dead method removed');
 	}
 
@@ -57,22 +57,20 @@ class SafeDeleteSliceTest extends Test {
 	public function testThisAccessBlocks(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n'
 			+ '\tpublic function bump():Void this.count = this.count + 1;\n}';
-		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'count', false, [{ file: 'pkg/Svc.hx', source: svc },], plugin(), refShape()));
+		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'count', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape()));
 	}
 
 	/** A bare in-type reference blocks the deletion. */
 	public function testBareReferenceBlocks(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n\tpublic function helper():Int return 1;\n'
 			+ '\tpublic function calc():Int return helper() + 1;\n}';
-		assertErr(
-			SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'helper', false, [{ file: 'pkg/Svc.hx', source: svc },], plugin(), refShape())
-		);
+		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'helper', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape()));
 	}
 
 	/** A missing member is refused. */
 	public function testNoSuchMemberRefused(): Void {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
-		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'nope', false, [{ file: 'pkg/Svc.hx', source: svc },], plugin(), refShape()));
+		assertErr(SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'nope', false, [{ file: 'pkg/Svc.hx', source: svc }], plugin(), refShape()));
 	}
 
 	private function okRemove(

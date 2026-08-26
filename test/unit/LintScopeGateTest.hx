@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
+import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.ReflectionScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
-import anyparse.check.LintConfig;
 import haxe.io.Path;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The SCOPE half of the reflection gate — the one input that decides whether a "nothing

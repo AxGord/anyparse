@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.query.CallGraph;
 import anyparse.query.Clusters;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Partition analytics behind `apq clusters`: connected components over
@@ -30,7 +30,7 @@ class ClustersTest extends Test {
 
 	public function testTwoIslandsSplitWithoutHubs(): Void {
 		final r: Null<ClusterReport> = analyzeOf([
-			'class A { function a():Void b(); function b():Void {} function c():Void d(); function d():Void {} }',
+			'class A { function a():Void b(); function b():Void {} function c():Void d(); function d():Void {} }'
 		], 'A');
 		Assert.notNull(r);
 		if (r == null) return;
@@ -102,7 +102,7 @@ class ClustersTest extends Test {
 	 */
 	public function testLambdaCondensesToEnclosingMember(): Void {
 		final r: Null<ClusterReport> = analyzeOf([
-			'class A { function a():Void { final f = () -> b(); f(); } function b():Void {} }',
+			'class A { function a():Void { final f = () -> b(); f(); } function b():Void {} }'
 		], 'A');
 		Assert.notNull(r);
 		if (r == null) return;
@@ -116,7 +116,7 @@ class ClustersTest extends Test {
 	 * the resolved bare call still counts as a resolved site.
 	 */
 	public function testCoverageCountsUnresolvedInsideMembers(): Void {
-		final r: Null<ClusterReport> = analyzeOf(['class A { function a():Void get().run(); function get():Thing return null; }',], 'A');
+		final r: Null<ClusterReport> = analyzeOf(['class A { function a():Void get().run(); function get():Thing return null; }'], 'A');
 		Assert.notNull(r);
 		if (r == null) return;
 		Assert.equals(1, r.unresolvedSites);

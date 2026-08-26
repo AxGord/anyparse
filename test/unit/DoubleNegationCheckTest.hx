@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.DoubleNegation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `double-negation` check: a not-node wrapping another (`!!x`, and `!(!x)` through any

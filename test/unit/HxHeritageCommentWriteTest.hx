@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
  * Comments inside a class / interface HERITAGE list survive the writer round trip.

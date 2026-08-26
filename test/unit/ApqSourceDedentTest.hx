@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Cli;
 
 /**
  * `apq source` dedent: by default the common leading-whitespace prefix

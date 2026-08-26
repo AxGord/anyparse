@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferInterpolation;
+import anyparse.check.FoldStringLiterals;
 import anyparse.check.Linter;
+import anyparse.check.PreferInterpolation;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
-import anyparse.check.FoldStringLiterals;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-interpolation` check: a single-argument `Std.string(x)` is flagged `Info`

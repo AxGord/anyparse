@@ -1,17 +1,17 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
-import anyparse.check.PreferFind;
+import anyparse.check.Check;
 import anyparse.check.Linter;
+import anyparse.check.PreferFinal;
+import anyparse.check.PreferFind;
+import anyparse.check.PreferSafeNav;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
-import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
-import anyparse.check.Check;
-import anyparse.check.PreferFinal;
-import anyparse.check.PreferSafeNav;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-find` check: a manual first-match `for` loop — Form A

@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
-import anyparse.check.FixVerifier;
 import anyparse.check.Check.GroupedEdit;
+import anyparse.check.FixVerifier;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 using StringTools;

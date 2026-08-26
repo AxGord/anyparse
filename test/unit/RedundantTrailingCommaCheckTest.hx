@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.check.RedundantTrailingComma;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `redundant-trailing-comma` check: a `,` between the last element of a

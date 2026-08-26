@@ -1,11 +1,11 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.RemoveElement;
+import haxe.Exception;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RemoveElement;
-import anyparse.query.RefactorSupport.EditResult;
-import haxe.Exception;
 
 /**
  * `RemoveElement.removeElement` — remove the sibling element a cursor points

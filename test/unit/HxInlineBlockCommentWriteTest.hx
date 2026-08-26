@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `writeRoundTrip` must never hand back source whose comments it dropped.

@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxForExpr;
 import anyparse.grammar.haxe.HxForStmt;
-import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxKeyValueBinder;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.HxStatement;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import utest.Assert;
 
 /**
  * Slice apq-P5-K2: map key-value `for (k => v in m)` iteration.

@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxConditionalObjectField;
 import anyparse.grammar.haxe.HxObjectField;
 import anyparse.grammar.haxe.HxObjectLit;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice 18: cond-comp `#if … #end` inside an object-literal field list.

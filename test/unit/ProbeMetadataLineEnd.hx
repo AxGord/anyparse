@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Test;
-import utest.Assert;
 import anyparse.format.MetadataLineEndPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Slice ω-metadata-line-end-function — verify each

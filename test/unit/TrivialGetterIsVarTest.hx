@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.check.Check.Violation;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
+import utest.Assert;
 
 /**
  * The SELF-BACKED arm of `trivial-getter`: a property whose trivial getter returns the property's

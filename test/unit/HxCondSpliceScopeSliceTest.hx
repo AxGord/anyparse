@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchStmt;
+import utest.Assert;
 
 /**
  * Slice D -- conditional-compilation splices in STATEMENT and CASE scope.

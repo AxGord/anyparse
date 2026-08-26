@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddElement;
 import anyparse.query.RefactorSupport.EditResult;
 import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `AddElement.addElement` — insert a sibling element (statement / `case` /

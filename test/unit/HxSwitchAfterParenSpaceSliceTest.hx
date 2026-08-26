@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω-switch-after-paren: a `switch` expression directly after an open `(` —
@@ -45,7 +45,7 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 		super();
 	}
 
-	// `switchPolicy: around` → a `switch` as the sole call argument spaces `(`.
+	/** `switchPolicy: around` → a `switch` as the sole call argument spaces `(`. */
 	public function testCallArgSwitchSpacesOpenParen(): Void {
 		final input: String = 'class C {\n\tfunction f() {\n\t\tfinal a = pick(switch mode { case One: alpha; case _: beta; });\n\t}\n}';
 		final expected: String = 'class C {\n\tfunction f() {\n\t\tfinal a = pick( switch mode {\n\t\t\tcase One: alpha;\n'
@@ -53,7 +53,7 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 		Assert.equals(expected, triviaWriteAround(input));
 	}
 
-	// `switchPolicy: around` → a parenthesised `switch` expression spaces `(`.
+	/** `switchPolicy: around` → a parenthesised `switch` expression spaces `(`. */
 	public function testParenSwitchSpacesOpenParen(): Void {
 		final input: String = 'class C {\n\tfunction f() {\n\t\tfinal b = (switch mode { case One: alpha; case _: beta; });\n\t}\n}';
 		final expected: String =
@@ -61,16 +61,20 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 		Assert.equals(expected, triviaWriteAround(input));
 	}
 
-	// Guard: with `switchPolicy: around`, a non-switch paren and a non-switch
-	// call argument stay tight — the space is switch-only.
+	/**
+	 * Guard: with `switchPolicy: around`, a non-switch paren and a non-switch
+	 * call argument stay tight — the space is switch-only.
+	 */
 	public function testNonSwitchStaysTight(): Void {
 		final input: String = 'class C {\n\tfunction f() {\n\t\tfinal d = (alpha + beta);\n\t\tfinal c = pick(alpha);\n\t}\n}';
 		final expected: String = 'class C {\n\tfunction f() {\n\t\tfinal d = (alpha + beta);\n\t\tfinal c = pick(alpha);\n\t}\n}\n';
 		Assert.equals(expected, triviaWriteAround(input));
 	}
 
-	// Guard: the DEFAULT policy (no leading space) keeps `(` tight for both the
-	// call-arg and paren switch — the space is policy-gated, not on by default.
+	/**
+	 * Guard: the DEFAULT policy (no leading space) keeps `(` tight for both the
+	 * call-arg and paren switch — the space is policy-gated, not on by default.
+	 */
 	public function testDefaultPolicyStaysTight(): Void {
 		final input: String = 'class C {\n\tfunction f() {\n\t\tfinal a = pick(switch mode { case One: alpha; case _: beta; });\n'
 			+ '\t\tfinal b = (switch mode { case One: alpha; case _: beta; });\n\t}\n}';

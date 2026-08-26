@@ -1,9 +1,9 @@
 package unit;
 
 import anyparse.check.Check;
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
 
 /**
  * Shared in-memory harness for the analysis-check test suites.

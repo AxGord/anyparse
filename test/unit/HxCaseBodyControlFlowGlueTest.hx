@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * omega-case-body-controlflow-glue — a non-flat case body whose single
@@ -258,7 +258,7 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 			{ name: 'LOOPS_SRC', src: LOOPS_SRC },
 			{ name: 'SOLE_CASE_SRC', src: SOLE_CASE_SRC },
 			{ name: 'COND_REGION_SRC', src: COND_REGION_SRC },
-			{ name: 'META_CONTROL_FLOW_SRC', src: META_CONTROL_FLOW_SRC },
+			{ name: 'META_CONTROL_FLOW_SRC', src: META_CONTROL_FLOW_SRC }
 		];
 		for (f in fixtures) {
 			final pass1: String = write(f.src, j);

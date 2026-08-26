@@ -1,8 +1,8 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
+import utest.Assert;
 
 /**
  * Tests for slice ω-toplevel-var-fn — adds `HxDecl.VarDecl` and

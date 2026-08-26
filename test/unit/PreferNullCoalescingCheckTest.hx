@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferNullCoalescing;
 import anyparse.check.Linter;
+import anyparse.check.PreferNullCoalescing;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-null-coalescing` check: a null-guard ternary in any of the four shapes

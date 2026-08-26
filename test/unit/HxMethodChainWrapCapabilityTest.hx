@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω-methodchain-wraprules-capability — capability/parity unit tests for

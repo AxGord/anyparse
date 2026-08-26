@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddParam;
 import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `AddParam.addParam` — add a backward-compatible parameter to a

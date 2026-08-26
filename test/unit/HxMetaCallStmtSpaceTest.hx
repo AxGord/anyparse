@@ -1,8 +1,8 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
 
 /**
  * A paren-bearing meta (`@:name(args)`) prefixing an unbraced `if`
@@ -33,11 +33,13 @@ class HxMetaCallStmtSpaceTest extends HxTestHelpers {
 		);
 	}
 
-	// Non-empty `rest` guard — only the meta→stmt boundary is pinned.
-	// The `first`→`rest` inter-meta separator (`@:a(b) @:c`) is a
-	// separate pre-existing gap: the inter-Star separator after a
-	// mandatory Ref stays quiet because trivia Stars that emit their
-	// own leading hardline would get a doubled break.
+	/**
+	 * Non-empty `rest` guard — only the meta→stmt boundary is pinned.
+	 * The `first`→`rest` inter-meta separator (`@:a(b) @:c`) is a
+	 * separate pre-existing gap: the inter-Star separator after a
+	 * mandatory Ref stays quiet because trivia Stars that emit their
+	 * own leading hardline would get a doubled break.
+	 */
 	public function testMetaCallPlusBareMetaBeforeUnbracedIfKeepsStmtSpace(): Void {
 		final written: String = HxModuleWriter.write(HaxeModuleParser.parse(
 			'class C {\n\tfunction f():Void {\n\t\t@:a(b) @:c if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n'

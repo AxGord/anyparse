@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferIfExpressionReturn;
 import anyparse.check.Linter;
+import anyparse.check.PreferIfExpressionReturn;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-if-expression-return` check: an `if / else if / … / else` CHAIN whose every

@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Slice D3: `;` glue inside `#if … #end` body Star.
@@ -47,7 +47,7 @@ class HxCondCompStmtTrailOptSliceTest extends Test {
 		);
 	}
 
-	// Slice D4 — single-stmt elseBody.
+	/** Slice D4 — single-stmt elseBody. */
 	public inline function testElseBodyKeepsSemiTight(): Void {
 		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}');
 	}

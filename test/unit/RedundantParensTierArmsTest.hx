@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.check.LintConfig;
-import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
 
 /**
  * The two PRECEDENCE-TIER operand arms of `redundant-parens`, plus the postfix

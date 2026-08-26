@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Engine;
 import anyparse.query.Matcher;
@@ -9,6 +7,8 @@ import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.Selector;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 

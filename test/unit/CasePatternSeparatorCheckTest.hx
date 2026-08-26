@@ -1,16 +1,16 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.CasePatternSeparator;
-import anyparse.check.Check.Violation;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `case-pattern-separator` check: a switch case label whose top-level pattern

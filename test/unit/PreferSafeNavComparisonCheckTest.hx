@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferSafeNavComparison;
 import anyparse.check.Linter;
+import anyparse.check.PreferSafeNavComparison;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-safe-nav-comparison` check: a null-check conjunction

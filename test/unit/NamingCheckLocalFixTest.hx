@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
-import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+import utest.Assert;
 
 /**
  * The `naming` autofix on a LOCAL binding — a local `var` / `final`, a parameter, or

@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * Slice 44 (ω-slice-X3) — `ExprStmt` trail-`;` peek-`}` disjunct.

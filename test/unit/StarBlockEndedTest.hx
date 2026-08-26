@@ -215,9 +215,9 @@ class StarBlockEndedTest extends Test {
 			Block([
 				Atom('inner1'),
 				Block([Atom('deep')]),
-				Atom('inner2'),
+				Atom('inner2')
 			]),
-			Atom('tail'),
+			Atom('tail')
 		]));
 	}
 

@@ -1,19 +1,18 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Complexity;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-
-using StringTools;
-
-import anyparse.check.Check.NoAutofix;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import sys.FileSystem;
 import sys.io.File;
+import utest.Assert;
+import utest.Test;
+
+using StringTools;
 
 /**
  * The `complexity` check: a function whose cyclomatic complexity (1 + decision

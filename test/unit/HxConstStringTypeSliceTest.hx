@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxDoubleStringLit;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
+import utest.Assert;
 
 /**
  * Phase 3 Slice 21 — string-literal const type parameter (`HxType.ConstStringType`).

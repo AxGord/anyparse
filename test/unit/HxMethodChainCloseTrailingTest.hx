@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
-import anyparse.format.wrap.WrapMode;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω-postfix-call-trailing — `Call(operand, args)` postfix Star-suffix

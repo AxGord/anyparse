@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check;
 import anyparse.check.CollapseNestedSwitch;
 import anyparse.check.Linter;
@@ -9,6 +7,8 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 
@@ -307,6 +307,11 @@ class CollapseNestedSwitchCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/** An outer arm labelled `case <label>:` whose ONLY statement is `switch <binder> { <arms> }`. */
+	private inline function nest(label: String, binder: String, arms: String): String {
+		return nestWith(label, '\n\t\t\t\t', binder, arms);
+	}
+
 	/** The `macros/Lang.hx` shape this check was written for: two constant arms under an empty inner wildcard. */
 	private function canary(): String {
 		final arms: String = 'case CString(s, kind): tKey = s;${INNER_LABEL}case CInt(i): tKey = i;${INNER_LABEL}case _:';
@@ -321,11 +326,6 @@ class CollapseNestedSwitchCheckTest extends Test {
 	/** `sw()` with the outer switch in EXPRESSION position, where every arm must yield a value. */
 	private function swExpr(branches: String): String {
 		return 'class C {\n\tfunction f(s: String): Void {\n\t\tfinal v = switch s {\n\t\t\t$branches\n\t\t};\n\t}\n}';
-	}
-
-	/** An outer arm labelled `case <label>:` whose ONLY statement is `switch <binder> { <arms> }`. */
-	private function nest(label: String, binder: String, arms: String): String {
-		return nestWith(label, '\n\t\t\t\t', binder, arms);
 	}
 
 	/** `nest()` with an explicit `gap` between the label's `:` and the nested `switch`. */

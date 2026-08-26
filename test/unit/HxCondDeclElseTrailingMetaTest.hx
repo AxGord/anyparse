@@ -1,8 +1,8 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
+import utest.Assert;
 
 /**
  * Metadata dangling off an ALTERNATIVE branch of a module-level `#if` region.

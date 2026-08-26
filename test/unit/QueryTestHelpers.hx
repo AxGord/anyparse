@@ -1,7 +1,7 @@
 package unit;
 
-import anyparse.query.CallGraph;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CallGraph;
 
 /**
  * Shared fixture builders for the query-layer test suites.

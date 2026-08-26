@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.runtime.ParseError;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Covers the farthest-failure tracker (`Parser.maxFailPos`,

@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 

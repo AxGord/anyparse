@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.WhileTrueCondition;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `while-true-condition` check: a `while (true)` whose ONLY exit is a `break` dominating the

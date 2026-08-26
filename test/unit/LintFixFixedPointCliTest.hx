@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Cli;
 #if (sys || nodejs)
 import sys.io.File;
 #end

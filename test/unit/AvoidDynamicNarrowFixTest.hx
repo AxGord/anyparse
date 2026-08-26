@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check.Violation;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `avoid-dynamic` usage-inference autofix (D3). It narrows a WHOLE-type

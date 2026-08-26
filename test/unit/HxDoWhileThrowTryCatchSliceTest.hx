@@ -1,16 +1,16 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxCatchClause;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxDoWhileStmt;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxTryCatchStmt;
+import utest.Assert;
 
 /**
  * Tests for slice mu_2: throw, do-while, and try-catch statements.

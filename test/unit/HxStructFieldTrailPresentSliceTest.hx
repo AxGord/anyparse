@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.runtime.Trivial;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Session 14 Phase 3 — struct-field `@:trailOpt(LIT)` parser capture.

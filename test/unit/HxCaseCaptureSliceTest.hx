@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxCaseBranch;
 import anyparse.grammar.haxe.HxCasePattern;
 import anyparse.grammar.haxe.HxCasePatternBody;
@@ -9,6 +8,7 @@ import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchCase;
 import anyparse.grammar.haxe.HxSwitchStmt;
 import anyparse.grammar.haxe.HxVarNameLit;
+import utest.Assert;
 
 /**
  * Slice 34: `case var <ident>:` capture pattern, plus the nested

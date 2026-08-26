@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxForExpr;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxWhileExpr;
+import utest.Assert;
 
 /**
  * Tests for the ω-array-comp slice — `for` and `while` as expression-

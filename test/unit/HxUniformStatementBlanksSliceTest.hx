@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `uniformStatementBlanks` collapse policy — "separators that separate
@@ -28,19 +28,19 @@ class HxUniformStatementBlanksSliceTest extends Test {
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	// onNextMonthClick shape: guard; blank; A; blank; B (uniform, 2/2 gaps blank).
+	/** onNextMonthClick shape: guard; blank; A; blank; B (uniform, 2/2 gaps blank). */
 	private static final UNIFORM: String = 'class C {\n\tfunction f() {\n\t\tguard();\n\n\t\ta();\n\n\t\tb();\n\t}\n}\n';
 
-	// onDateClick shape: A; blank; B (uniform, single gap blank).
+	/** onDateClick shape: A; blank; B (uniform, single gap blank). */
 	private static final TWO: String = 'class C {\n\tfunction f() {\n\t\ta();\n\n\t\tb();\n\t}\n}\n';
 
-	// onPreviousMonthClick shape: guard; blank; A; B (selective, 1/2 gaps blank).
+	/** onPreviousMonthClick shape: guard; blank; A; B (selective, 1/2 gaps blank). */
 	private static final SELECTIVE: String = 'class C {\n\tfunction f() {\n\t\tguard();\n\n\t\ta();\n\t\tb();\n\t}\n}\n';
 
 	// A; blank; //header; B; blank; C — uniform gaps but a comment between statements.
 	private static final COMMENT: String = 'class C {\n\tfunction f() {\n\t\ta();\n\n\t\t// header\n\t\tb();\n\n\t\tc();\n\t}\n}\n';
 
-	// Outer fn body uniform (a; if; b); inner if-body mixed (p; q; blank; r).
+	/** Outer fn body uniform (a; if; b); inner if-body mixed (p; q; blank; r). */
 	private static final NESTED: String =
 		'class C {\n\tfunction f() {\n\t\ta();\n\n\t\tif (x) {\n\t\t\tp();\n\t\t\tq();\n\n\t\t\tr();\n\t\t}\n\n\t\tb();\n\t}\n}\n';
 
@@ -52,10 +52,10 @@ class HxUniformStatementBlanksSliceTest extends Test {
 	// annotates the statement instead of heading a group.
 	private static final LEAD_NOTE: String = 'class C {\n\tfunction f() {\n\t\t// note\n\n\t\ta();\n\t}\n}\n';
 
-	// Same glued note over a uniform two-statement body.
+	/** Same glued note over a uniform two-statement body. */
 	private static final LEAD_NOTE_UNIFORM: String = 'class C {\n\tfunction f() {\n\t\t// note\n\n\t\ta();\n\n\t\tb();\n\t}\n}\n';
 
-	// Same glued note over a selective body (a; b share no blank).
+	/** Same glued note over a selective body (a; b share no blank). */
 	private static final LEAD_NOTE_SELECTIVE: String = 'class C {\n\tfunction f() {\n\t\t// note\n\n\t\ta();\n\t\tb();\n\t}\n}\n';
 
 	public inline function testDefaultOptionKeepsUniformBlanks(): Void {

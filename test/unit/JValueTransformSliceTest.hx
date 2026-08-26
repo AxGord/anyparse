@@ -60,7 +60,7 @@ class JValueTransformSliceTest extends Test {
 		// entry AND the string value — a Terminal-rule hook is a valid
 		// rewrite site reached at any depth.
 		final ast: JValue = JObject([{ key: 'a', value: JString('x') }]);
-		final out: JValue = JValueAst.transform(ast, { jStringLit: (s: JStringLit) -> bang(s) });
+		final out: JValue = JValueAst.transform(ast, { jStringLit: bang });
 		final expected: JValue = JObject([{ key: 'a!', value: JString('x!') }]);
 		Assert.isTrue(JValueTools.equals(expected, out), 'jStringLit hook missed nested string terminals');
 	}
@@ -76,7 +76,7 @@ class JValueTransformSliceTest extends Test {
 					case JNumber(n): JNumber((n: Float) * 2);
 					case _: v;
 				};
-			},
+			}
 		});
 		final expected: JValue = JObject([{ key: 'a', value: JNumber(10) }]);
 		Assert.isTrue(JValueTools.equals(expected, out), 'object-entry value not deep-transformed');
@@ -113,20 +113,20 @@ class JValueTransformSliceTest extends Test {
 				key: 'items',
 				value: JArray([
 					JObject([{ key: 'id', value: JNumber(1) }]),
-					JObject([{ key: 'id', value: JNumber(2) }]),
+					JObject([{ key: 'id', value: JNumber(2) }])
 				])
 			},
-			{ key: 'count', value: JNumber(2) },
+			{ key: 'count', value: JNumber(2) }
 		]);
 		final expected: JValue = JObject([
 			{
 				key: 'items',
 				value: JArray([
 					JObject([{ key: 'id', value: JNumber(2) }]),
-					JObject([{ key: 'id', value: JNumber(4) }]),
+					JObject([{ key: 'id', value: JNumber(4) }])
 				])
 			},
-			{ key: 'count', value: JNumber(4) },
+			{ key: 'count', value: JNumber(4) }
 		]);
 		assertTransform(input, expected, deepDouble, '{"items":[{"id":2.0}, {"id":4.0}], "count":4.0}', 'double nested');
 	}
@@ -137,12 +137,12 @@ class JValueTransformSliceTest extends Test {
 		final input: JValue = JObject([
 			{ key: 'name', value: JString('john') },
 			{ key: 'tags', value: JArray([JString('a'), JString('bc')]) },
-			{ key: 'age', value: JNumber(30) },
+			{ key: 'age', value: JNumber(30) }
 		]);
 		final expected: JValue = JObject([
 			{ key: 'name', value: JString('JOHN') },
 			{ key: 'tags', value: JArray([JString('A'), JString('BC')]) },
-			{ key: 'age', value: JNumber(30) },
+			{ key: 'age', value: JNumber(30) }
 		]);
 		assertTransform(input, expected, deepUpper, '{"name":"JOHN", "tags":["A", "BC"], "age":30.0}', 'upper nested');
 	}
@@ -167,13 +167,12 @@ class JValueTransformSliceTest extends Test {
 					key: 'items',
 					value: JArray([
 						JObject([{ key: 'id', value: JNumber(1) }]),
-						JObject([{ key: 'id', value: JNumber(2) }]),
+						JObject([{ key: 'id', value: JNumber(2) }])
 					])
-				},
-			]),
+				}
+			])
 		];
-		for (i in 0...cases.length) {
-			final ast: JValue = cases[i];
+		for (i => ast in cases) {
 			final out: JValue = deepIdentity(ast);
 			Assert.isTrue(JValueTools.equals(ast, out), 'identity changed the tree for case[$i]');
 			// And the identity-transformed tree writes byte-identically.
@@ -213,7 +212,7 @@ class JValueTransformSliceTest extends Test {
 					case JNumber(n): JNumber((n: Float) * 2);
 					case _: v;
 				};
-			},
+			}
 		});
 	}
 
@@ -225,7 +224,7 @@ class JValueTransformSliceTest extends Test {
 					case JString(s): JString((s: String).toUpperCase());
 					case _: v;
 				};
-			},
+			}
 		});
 	}
 

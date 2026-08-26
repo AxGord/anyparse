@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.RefsCache;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `RefsCache` memoizes `Refs.find` per tree: `CachingGrammarPlugin.refShape`
@@ -28,12 +28,14 @@ import anyparse.query.RefsCache;
  */
 class RefsCacheTest extends Test {
 
-	// Exercises: shadowed locals across nested blocks, a `for` iterator
-	// (self-scope), a catch clause, a lambda param, writes (`x = 1`,
-	// `x++`), a `macro { … }` opaque subtree, a forward-declared same-scope
-	// binding, class members + a this-less member read, a braceless `$shared`
-	// string-interpolation read, and an unresolved
-	// (cross-file) name via `externalCall()`.
+	/**
+	 * Exercises: shadowed locals across nested blocks, a `for` iterator
+	 * (self-scope), a catch clause, a lambda param, writes (`x = 1`,
+	 * `x++`), a `macro { … }` opaque subtree, a forward-declared same-scope
+	 * binding, class members + a this-less member read, a braceless `$shared`
+	 * string-interpolation read, and an unresolved
+	 * (cross-file) name via `externalCall()`.
+	 */
 	private static final FIXTURE: String = '
 		class X {
 			var shared: Int = 0;
@@ -91,8 +93,7 @@ class RefsCacheTest extends Test {
 			Assert.equals(
 				expected.length, actual.length, 'name "$name": hit count mismatch — bare ${expected.length}, cached ${actual.length}'
 			);
-			for (i in 0...expected.length) {
-				final e: RefHit = expected[i];
+			for (i => e in expected) {
 				final a: RefHit = actual[i];
 				Assert.equals(e.kind, a.kind, 'name "$name" hit $i: kind mismatch');
 				Assert.equals(e.name, a.name, 'name "$name" hit $i: name mismatch');

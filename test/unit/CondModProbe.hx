@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Regression guard for slice ω-if-modifier — `#if COND <modifiers> #end`

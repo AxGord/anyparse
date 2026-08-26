@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 
 /**
  * Regression guard — Allman brace (next-line `{`) parses on the

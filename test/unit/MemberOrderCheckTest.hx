@@ -1,17 +1,17 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
-import anyparse.check.MemberOrder;
 import anyparse.check.Linter;
+import anyparse.check.MemberOrder;
+import anyparse.check.MemberSpacing;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
-import anyparse.check.MemberSpacing;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 using StringTools;

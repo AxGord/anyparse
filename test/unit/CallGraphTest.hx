@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.query.CallGraph;
 import anyparse.query.Reach;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The approximate call graph behind `apq callees` / `callers` / `reach` and
@@ -33,7 +33,7 @@ class CallGraphTest extends Test {
 	public function testAnnotatedReceiverResolvesAcrossFiles(): Void {
 		final g: CallGraph = graphOf([
 			'class A { private final _w:Worker; function a():Void _w.run(); }',
-			'class Worker { public function run():Void {} }',
+			'class Worker { public function run():Void {} }'
 		]);
 		Assert.equals(1, edges(g, 'A.a', 'Worker.run', Call).length);
 	}
@@ -41,7 +41,7 @@ class CallGraphTest extends Test {
 	public function testNullWrappedReceiverUnwraps(): Void {
 		final g: CallGraph = graphOf([
 			'class A { private var _w:Null<Worker>; function a():Void _w.run(); }',
-			'class Worker { public function run():Void {} }',
+			'class Worker { public function run():Void {} }'
 		]);
 		Assert.equals(1, edges(g, 'A.a', 'Worker.run', Call).length);
 	}
@@ -49,7 +49,7 @@ class CallGraphTest extends Test {
 	public function testStaticCallOnKnownType(): Void {
 		final g: CallGraph = graphOf([
 			'class A { function a():Void Util.go(); }',
-			'class Util { public static function go():Void {} }',
+			'class Util { public static function go():Void {} }'
 		]);
 		Assert.equals(1, edges(g, 'A.a', 'Util.go', Call).length);
 	}
@@ -65,7 +65,7 @@ class CallGraphTest extends Test {
 	public function testInheritedBareCallResolvesThroughSupertype(): Void {
 		final g: CallGraph = graphOf([
 			'class Sub extends Base { function f():Void parentMethod(); }',
-			'class Base { public function parentMethod():Void {} }',
+			'class Base { public function parentMethod():Void {} }'
 		]);
 		Assert.equals(1, edges(g, 'Sub.f', 'Base.parentMethod', Call).length);
 	}
@@ -74,7 +74,7 @@ class CallGraphTest extends Test {
 		final g: CallGraph = graphOf([
 			'class A { private final _b:Base; function a():Void _b.run(); }',
 			'class Base { public function run():Void {} }',
-			'class Sub extends Base { override public function run():Void {} }',
+			'class Sub extends Base { override public function run():Void {} }'
 		]);
 		Assert.equals(1, edges(g, 'A.a', 'Base.run', Call).length);
 		Assert.equals(1, edges(g, 'A.a', 'Sub.run', Virtual).length);
@@ -83,7 +83,7 @@ class CallGraphTest extends Test {
 	public function testLambdaArgGetsRefEdgeWithVia(): Void {
 		final g: CallGraph = graphOf([
 			'class A { function a():Void Runner.create(() -> work()); function work():Void {} }',
-			'class Runner { public static function create(fn:()->Void):Void {} }',
+			'class Runner { public static function create(fn:()->Void):Void {} }'
 		]);
 		final refs: Array<CallEdge> = [for (e in g.outEdges('A.a')) if (e.kind == Ref) e];
 		Assert.equals(1, refs.length);
@@ -93,7 +93,7 @@ class CallGraphTest extends Test {
 
 	public function testMethodValueArgGetsRefEdge(): Void {
 		final g: CallGraph = graphOf([
-			'class A { function a():Void listen(handler); function listen(fn:()->Void):Void {} function handler():Void {} }',
+			'class A { function a():Void listen(handler); function listen(fn:()->Void):Void {} function handler():Void {} }'
 		]);
 		final refs: Array<CallEdge> = edges(g, 'A.a', 'A.handler', Ref);
 		Assert.equals(1, refs.length);
@@ -102,7 +102,7 @@ class CallGraphTest extends Test {
 
 	public function testBindArgGetsRefEdgeWithVia(): Void {
 		final g: CallGraph = graphOf([
-			'class A { function a():Void Timer.delay(tick.bind(1), 10); function tick(n:Int):Void {} }',
+			'class A { function a():Void Timer.delay(tick.bind(1), 10); function tick(n:Int):Void {} }'
 		]);
 		final refs: Array<CallEdge> = edges(g, 'A.a', 'A.tick', Ref);
 		Assert.equals(1, refs.length);
@@ -112,7 +112,7 @@ class CallGraphTest extends Test {
 	public function testNewEdge(): Void {
 		final g: CallGraph = graphOf([
 			'class A { function a():Void { final w:Worker = new Worker(); } }',
-			'class Worker { public function new() {} }',
+			'class Worker { public function new() {} }'
 		]);
 		Assert.equals(1, edges(g, 'A.a', 'Worker.new', New).length);
 	}
@@ -126,7 +126,7 @@ class CallGraphTest extends Test {
 	public function testResolveTargetBareAndQualified(): Void {
 		final g: CallGraph = graphOf([
 			'class A { function run():Void {} }',
-			'class B { function run():Void {} }',
+			'class B { function run():Void {} }'
 		]);
 		Assert.equals(2, g.resolveTarget('run').length);
 		Assert.equals(1, g.resolveTarget('A.run').length);
@@ -139,7 +139,7 @@ class CallGraphTest extends Test {
 	}
 
 	public function testReachFindsShortestPath(): Void {
-		final g: CallGraph = graphOf(['class A { function a():Void b(); function b():Void Sys.sleep(1); }',]);
+		final g: CallGraph = graphOf(['class A { function a():Void b(); function b():Void Sys.sleep(1); }']);
 		final paths: Array<Array<CallEdge>> = Reach.paths(g, ['A.a'], ['Sys.sleep'], 10, [Call, Ref, New, Virtual]);
 		Assert.equals(1, paths.length);
 		Assert.equals(2, paths[0].length);
@@ -162,7 +162,7 @@ class CallGraphTest extends Test {
 	public function testSuperCtorCallResolves(): Void {
 		final g: CallGraph = graphOf([
 			'class Sub extends Base { public function new() super(); }',
-			'class Base { public function new() {} }',
+			'class Base { public function new() {} }'
 		]);
 		Assert.equals(1, edges(g, 'Sub.new', 'Base.new', Call).length);
 		Assert.equals(0, [for (u in g.unresolved) if (u.reason.indexOf('super') != -1) u].length);

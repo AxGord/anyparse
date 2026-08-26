@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -27,9 +27,11 @@ import sys.io.File;
 final class AvoidDynamicRiskyFixE2ETest extends Test {
 
 	#if (sys || nodejs)
-	// A local `Dynamic` provably holding a `Good` (typed init) with a corroborating typed
-	// sink — the narrowing to `Good` typechecks and is applied.
-	// Trivia-writer-canonical (blank line between members) so RefactorSupport.canonicalize accepts it.
+	/**
+	 * A local `Dynamic` provably holding a `Good` (typed init) with a corroborating typed
+	 * sink — the narrowing to `Good` typechecks and is applied.
+	 * Trivia-writer-canonical (blank line between members) so RefactorSupport.canonicalize accepts it.
+	 */
 	private static final APPLIES: String = 'class Good {\n\tpublic function new() {}\n\n\tstatic function main() {\n\t\tfinal a:Good = new '
 		+ 'Good();\n\t\tvar x:Dynamic = a;\n\t\tvar y:Good = x;\n\t\ttrace(y);\n\t}\n}\n';
 

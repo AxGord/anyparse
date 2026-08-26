@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.PreferInline;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.io.File;
 #end

@@ -1,9 +1,9 @@
-import haxe.Exception;
-import sys.FileSystem;
-import unit.HxFormatterCorpusHelpers;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span.Position;
+import haxe.Exception;
+import sys.FileSystem;
+import unit.HxFormatterCorpusHelpers;
 
 using StringTools;
 
@@ -31,8 +31,10 @@ typedef ReconCluster = {
 	var rawSample: String;
 };
 
-// Deliberate recon fixture: the leading-underscore type name mirrors a skip-parse
-// probe subject and is intentional, not a real naming-convention violation.
+/**
+ * Deliberate recon fixture: the leading-underscore type name mirrors a skip-parse
+ * probe subject and is intentional, not a real naming-convention violation.
+ */
 final class _ReconSkipParse { // noqa: naming
 
 	private static inline final HXTEST_EXT: String = '.hxtest';
@@ -43,7 +45,7 @@ final class _ReconSkipParse { // noqa: naming
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final SUBDIRS: Array<String> = [
 		'sameline', 'whitespace', 'indentation',        'wrapping', 'emptylines',
-		'lineends',      'other', 'formatrange', 'expressionlevel',    'missing',
+		'lineends',      'other', 'formatrange', 'expressionlevel',    'missing'
 	];
 
 	// Recon driver: the dense arg-parse + per-bucket sweep loop is intentional for a
@@ -234,9 +236,7 @@ final class _ReconSkipParse { // noqa: naming
 	}
 
 	private static function normalize(message: Null<String>): String {
-		return message == null || message == ''
-			? '<no message>'
-			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
+		return message == null || message == '' ? '<no message>' : StringTools.replace(message, '\n', '\\n').replace('\t', '\\t');
 	}
 
 	private static function head(input: String): String {

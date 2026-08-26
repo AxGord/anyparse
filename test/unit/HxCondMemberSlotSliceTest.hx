@@ -1,7 +1,9 @@
 package unit;
 
-import utest.Assert;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
@@ -10,11 +12,9 @@ import anyparse.grammar.haxe.HxConditionalFnBody;
 import anyparse.grammar.haxe.HxConditionalFnName;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxVarSemiCondInitDecl;
+import utest.Assert;
 
 /**
  * Slice C - conditional-compilation regions occupying whole MEMBER

@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.ExplicitLocalType;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Pure-part coverage of the `explicit-local-type` compiler-oracle TAIL — the display

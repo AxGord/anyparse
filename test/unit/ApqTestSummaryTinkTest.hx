@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Cli;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -56,7 +56,7 @@ class ApqTestSummaryTinkTest extends Test {
 			'',
 			summaryLine(4, 4, 0, 0),
 			'',
-			'Tests completed - watchdog thread will exit gracefully',
+			'Tests completed - watchdog thread will exit gracefully'
 		];
 		final r: TestSummaryResult = Cli.parseTestSummary(lines.join('\n'));
 		Assert.equals(4, r.assertions);
@@ -81,7 +81,7 @@ class ApqTestSummaryTinkTest extends Test {
 			suiteHeader('SampleWatcherTest', 'src/tests/unit/SampleWatcherTest.hx', 17),
 			caseHeader('locks are released after update', 'src/tests/unit/SampleWatcherTest.hx', 43),
 			assertRow(true, 'src/tests/unit/SampleWatcherTest.hx', 55, 'Expected exactly one record'),
-			summaryLine(1, 1, 0, 0),
+			summaryLine(1, 1, 0, 0)
 		];
 		final plain: String = esc.replace(lines.join('\n'), '');
 		// Sanity: the ESC bytes are really gone.
@@ -125,7 +125,7 @@ class ApqTestSummaryTinkTest extends Test {
 			assertRow(true, 'src/tests/unit/SampleGateTest.hx', 14, 'setup ok'),
 			assertRow(false, 'src/tests/unit/SampleGateTest.hx', 16, 'value should be rejected'),
 			failDetail('expected false but got true'),
-			summaryLine(2, 1, 1, 0),
+			summaryLine(2, 1, 1, 0)
 		];
 		final r: TestSummaryResult = Cli.parseTestSummary(lines.join('\n'));
 		Assert.equals(2, r.assertions);
@@ -159,7 +159,7 @@ class ApqTestSummaryTinkTest extends Test {
 			caseHeader('case two', 'src/tests/unit/SampleGateTest.hx', 20),
 			assertRow(false, 'src/tests/unit/SampleGateTest.hx', 22, 'second failure'),
 			failDetail('boom two'),
-			summaryLine(2, 0, 2, 0),
+			summaryLine(2, 0, 2, 0)
 		];
 		final r: TestSummaryResult = Cli.parseTestSummary(lines.join('\n'));
 		Assert.equals(2, r.failures);
@@ -184,7 +184,7 @@ class ApqTestSummaryTinkTest extends Test {
 			suiteHeader('SampleSetupTest', 'src/tests/unit/SampleSetupTest.hx', 3),
 			caseHeader('throws before any assertion', 'src/tests/unit/SampleSetupTest.hx', 6),
 			caseThrow('Null Object Reference'),
-			summaryLine(0, 0, 0, 1),
+			summaryLine(0, 0, 0, 1)
 		];
 		final r: TestSummaryResult = Cli.parseTestSummary(lines.join('\n'));
 		Assert.equals(0, r.failures);
@@ -233,7 +233,7 @@ class ApqTestSummaryTinkTest extends Test {
 			suiteHeader('SampleCliTest', 'src/tests/unit/SampleCliTest.hx', 1),
 			caseHeader('case', 'src/tests/unit/SampleCliTest.hx', 2),
 			assertRow(true, 'src/tests/unit/SampleCliTest.hx', 3, 'ok'),
-			summaryLine(1, 1, 0, 0),
+			summaryLine(1, 1, 0, 0)
 		];
 		final path: String = CliFixture.writeAs('apq_test_summary_tink', 'log', lines.join('\n'));
 		Assert.equals(0, Cli.run(['test-summary', path]));

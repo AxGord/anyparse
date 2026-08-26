@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxMemberModifier;
-import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModifier;
+import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
 
 /**
  * Slice 29 — `abstract class` top-level form + member-level

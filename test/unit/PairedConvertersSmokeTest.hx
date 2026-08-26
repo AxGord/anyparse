@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxModule;
+import utest.Assert;
 
 /**
  * ω-paired-converters (Phase A1) smoke test.

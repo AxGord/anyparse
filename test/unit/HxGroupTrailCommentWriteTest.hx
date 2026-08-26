@@ -1,12 +1,12 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import haxe.Exception;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * Trivia-mode round-trip tests for the group-closer seam: a same-line

@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.RedundantParens;
 import anyparse.check.Linter;
+import anyparse.check.RedundantParens;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `redundant-parens` check. Two arms: a parenthesized expression wrapped

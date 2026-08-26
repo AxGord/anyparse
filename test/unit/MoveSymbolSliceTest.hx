@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveSymbol;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 
@@ -46,7 +46,7 @@ class MoveSymbolSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]);
 		// All three files change.
 		Assert.equals(3, changes.length);
@@ -82,7 +82,7 @@ class MoveSymbolSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 13, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]);
 		Assert.equals(3, changes.length);
 
@@ -111,7 +111,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('import ext.Ext;'), 'B should gain the carried dependency import');
@@ -130,7 +130,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('import ext.Ext;'), 'B should gain the import the anon field type needs');
@@ -148,7 +148,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -168,7 +168,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -183,7 +183,7 @@ class MoveSymbolSliceTest extends Test {
 		// Line 4: the field name `field` at col 6 — a value decl, not a type.
 		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 4, 6, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
@@ -200,7 +200,7 @@ class MoveSymbolSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'other/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'other/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]);
 		Assert.isFalse(StringTools.contains(changeFor(changes, 'pkg/A.hx').newSource, 'class Foo'), 'Foo left A');
 		Assert.isTrue(StringTools.contains(changeFor(changes, 'other/B.hx').newSource, 'class Foo'), 'Foo landed in B');
@@ -216,7 +216,7 @@ class MoveSymbolSliceTest extends Test {
 		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'other/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'other/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
@@ -232,7 +232,7 @@ class MoveSymbolSliceTest extends Test {
 		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/Broken.hx', source: broken },
+			{ file: 'pkg/Broken.hx', source: broken }
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
@@ -248,7 +248,7 @@ class MoveSymbolSliceTest extends Test {
 		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/Dup.hx', source: dup },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
@@ -257,7 +257,7 @@ class MoveSymbolSliceTest extends Test {
 	public function testSameFileRefused(): Void {
 		final a: String = 'package pkg;\n\nclass Foo {}';
 		final result: MoveResult = MoveSymbol.moveType(
-			'pkg/A.hx', 3, 7, 'pkg/A.hx', [{ file: 'pkg/A.hx', source: a },], plugin(), typeRefShape()
+			'pkg/A.hx', 3, 7, 'pkg/A.hx', [{ file: 'pkg/A.hx', source: a }], plugin(), typeRefShape()
 		);
 		assertErr(result);
 	}
@@ -266,7 +266,7 @@ class MoveSymbolSliceTest extends Test {
 	public function testDestNotInScopeRefused(): Void {
 		final a: String = 'package pkg;\n\nclass Foo {}';
 		final result: MoveResult = MoveSymbol.moveType(
-			'pkg/A.hx', 3, 7, 'pkg/Missing.hx', [{ file: 'pkg/A.hx', source: a },], plugin(), typeRefShape()
+			'pkg/A.hx', 3, 7, 'pkg/Missing.hx', [{ file: 'pkg/A.hx', source: a }], plugin(), typeRefShape()
 		);
 		assertErr(result);
 	}
@@ -316,7 +316,7 @@ class MoveSymbolSliceTest extends Test {
 		// `typedef Foo` on line 3; `Foo` at col 9.
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -344,7 +344,7 @@ class MoveSymbolSliceTest extends Test {
 		// `private typedef Priv` on line 3; `Priv` at col 17.
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 17, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -364,7 +364,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -382,7 +382,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		Assert.equals('package pkg;\n\n', changeFor(changes, 'pkg/A.hx').newSource);
 		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}', changeFor(changes, 'pkg/B.hx').newSource);
@@ -399,7 +399,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}\n';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		Assert.equals('package pkg;\n\n', changeFor(changes, 'pkg/A.hx').newSource);
 		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n', changeFor(changes, 'pkg/B.hx').newSource);
@@ -420,7 +420,7 @@ class MoveSymbolSliceTest extends Test {
 		// `private final class Hidden` on line 4; `Hidden` at col 21.
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 21, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		Assert.equals(
 			'package pkg;\n\n/** the keeper */\nfinal class Keeper {\n\tpublic function new() {}\n}\n',
@@ -443,7 +443,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}\n';
 		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 17, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], plugin(), typeRefShape());
 		switch result {
 			case Ok(changes, _):

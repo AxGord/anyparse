@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * Slice 32: named function expression `function NAME(…)` in

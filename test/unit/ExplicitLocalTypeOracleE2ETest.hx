@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
@@ -10,6 +8,11 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
+
+using StringTools;
+
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -173,7 +176,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 	 */
 	private function fixedPacked(scope: String, target: String): String {
 		Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', scope]);
-		return StringTools.replace(File.getContent(target), ' ', '');
+		return File.getContent(target).replace(' ', '');
 	}
 
 	private function oracleWorks(): Bool {

@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.Suppression;
@@ -10,6 +8,8 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω-line-comment-indent — the writer knob

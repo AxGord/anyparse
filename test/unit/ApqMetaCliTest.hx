@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Cli;
 #if sys
 import sys.FileSystem;
 #end
@@ -112,7 +112,7 @@ class ApqMetaCliTest extends Test {
 		// abort, no non-zero exit).
 		final dir: String = CliFixture.writeDir('apq_meta', [
 			{ name: 'good.hx', source: 'class G { @:foo var n:Int; }' },
-			{ name: 'bad.hx', source: 'class {' },
+			{ name: 'bad.hx', source: 'class {' }
 		]);
 		Assert.equals(0, Cli.run(['meta', '@:foo', dir]));
 		CliFixture.removeDir(dir);

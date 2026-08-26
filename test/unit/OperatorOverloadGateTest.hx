@@ -1,16 +1,16 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
-import anyparse.check.Check.Violation;
+import anyparse.check.Check;
 import anyparse.check.DoubleNegation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.InvertNegatedIfElse;
+import anyparse.check.JoinStringAppend;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
-import anyparse.check.Check;
-import anyparse.check.JoinStringAppend;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 
@@ -49,8 +49,8 @@ class OperatorOverloadGateTest extends Test {
 		+ '\t@:op(A == B) public inline function eq(b: Flag): Bool return this == cast b;\n\n'
 		+ '\t@:op(!A) public inline function inv(): Bool return this;\n\n}\n';
 
-	private static final NEGATION_PLAIN: String = 'abstract Flag(Bool) from Bool to Bool {\n\n'
-		+ '\tpublic inline function eq(b: Flag): Bool return this == cast b;\n\n}\n';
+	private static final NEGATION_PLAIN: String =
+		'abstract Flag(Bool) from Bool to Bool {\n\n\tpublic inline function eq(b: Flag): Bool return this == cast b;\n\n}\n';
 
 	/** A negated comparison, a double negation and a negated if-else, all over the abstract. */
 	private static final NEGATION_USE: String = 'class Use2 {\n\n\tpublic static function a(f: Flag, g: Flag): Bool {\n'
@@ -170,7 +170,7 @@ class OperatorOverloadGateTest extends Test {
 			{ file: 'Use.hx', source: use }
 		], plugin);
 		return found.exists(v -> {
-			final span = v.span;
+			final span: Null<Span> = v.span;
 			return v.file == 'Use.hx' && span != null && span.from <= at && at < span.to
 			&& v.message.indexOf('overloads the concatenation operator') == -1;
 		});

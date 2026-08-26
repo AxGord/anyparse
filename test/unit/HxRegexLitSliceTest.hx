@@ -1,8 +1,8 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice apq-P5-L2: EReg regex literal `~/pattern/flags`.

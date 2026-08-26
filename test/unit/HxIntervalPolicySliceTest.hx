@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
 
 /**
  * Interval operator (`...`) whitespace under `opt.intervalPolicy`.

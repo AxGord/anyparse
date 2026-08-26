@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleSpanParser;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Slice 2.5 probe — verifies the in-AST span mechanism.

@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxArrowFnType;
 import anyparse.grammar.haxe.HxArrowParamBody;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice fn-param-I — OPTIONAL NAMED argument in a function TYPE:
@@ -177,7 +177,7 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 			'(string:String, ?radix:Int) -> Float',
 			'(Int, ?name:String, Bool) -> Void',
 			'(?allocate:(size:Int) -> Buffer) -> Void',
-			'(?opts:{?foo:Bool, ?bar:Int}) -> Void',
+			'(?opts:{?foo:Bool, ?bar:Int}) -> Void'
 		]) {
 			final source: String = 'class Foo { var f:$t; }';
 			final module: HxModule = HaxeModuleParser.parse(source);

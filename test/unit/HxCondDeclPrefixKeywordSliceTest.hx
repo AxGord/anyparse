@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxCondDeclPrefix;
+import anyparse.grammar.haxe.HxModule;
+import utest.Assert;
 
 /**
  * Tests for the `AbstractKw` / `FinalKw` arms of `HxCondDeclPrefix` —

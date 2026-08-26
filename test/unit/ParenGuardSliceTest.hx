@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.Rewrite;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 
@@ -164,7 +164,7 @@ class ParenGuardSliceTest extends Test {
 		return switch res {
 			case Ok(text): text;
 			case Err(message):
-				Assert.fail("expected Ok, got Err: $message");
+				Assert.fail('expected Ok, got Err: $message');
 				'';
 		};
 	}

@@ -43,16 +43,20 @@ final class HxReturnCallOpenParenSliceTest extends Test {
 		super();
 	}
 
-	// The fix: a single-argument call value (its sole arg is a nested binary
-	// chain) opens the OUTER call paren instead of breaking after `return`.
+	/**
+	 * The fix: a single-argument call value (its sole arg is a nested binary
+	 * chain) opens the OUTER call paren instead of breaking after `return`.
+	 */
 	public function testReturnSingleArgCallOpensParen(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\treturn check(\n\t\t\tstore.validate("name.txt", false, ACTION_UPLOADED, '
 			+ '12345, 1, extraPaddingArgumentValue, morePaddingArgumentsHereNow) == false\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
-	// Regression guard: a multi-argument call value keeps its already-correct
-	// open-paren wrap (`return`stays glued).
+	/**
+	 * Regression guard: a multi-argument call value keeps its already-correct
+	 * open-paren wrap (`return`stays glued).
+	 */
 	public function testReturnMultiArgCallOpensParen(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\treturn lookupByIdentifierWithAModeratelyLongMethodName(\n'
 			+ '\t\t\tfirstArgumentValue, secondArgumentValue, thirdArgumentValue, fourthArgumentValue\n\t\t);\n\t}\n}';
@@ -68,9 +72,11 @@ final class HxReturnCallOpenParenSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
-	// Narrowing guard: a bare expression statement whose value is a single-arg
-	// call opens the OUTER paren (not a nested inner one) — the RHS-only resolve
-	// gate must leave this expr-paren-open decision untouched.
+	/**
+	 * Narrowing guard: a bare expression statement whose value is a single-arg
+	 * call opens the OUTER paren (not a nested inner one) — the RHS-only resolve
+	 * gate must leave this expr-paren-open decision untouched.
+	 */
 	public function testBareNestedCallOpensOuterParen(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tcontainer.append(\n\t\t\tnew Wrapper(new Inner(widthValueHere, '
 			+ 'heightValueHere, 0x6E6F70, 0xF3F3F3, 0xacacac, 0x000000, firstFlagValueHere))\n\t\t);\n\t}\n}';

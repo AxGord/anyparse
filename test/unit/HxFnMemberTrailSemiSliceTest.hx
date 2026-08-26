@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 
 /**
  * Stray `;` after a member function body — legal Haxe

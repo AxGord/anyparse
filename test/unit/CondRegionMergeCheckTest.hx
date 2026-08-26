@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.CondRegionMerge;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `cond-region-merge` check: two adjacent conditional-compilation regions saying the same thing

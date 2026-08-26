@@ -1,18 +1,18 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.query.CachingGrammarPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-static-extension` check: a static utility call on a configured
@@ -166,8 +166,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	 * index can name, so the receiver stays unresolved and the site report-only.
 	 */
 	public function testLocalClosureReceiverReportedOnly(): Void {
-		final source: String = 'using Ext;\n\nclass C {\n\tfunction f():Void {\n\t\tfinal make = () -> new Widget();\n'
-			+ '\t\tExt.deco(make(), 1);\n\t}\n}\n';
+		final source: String =
+			'using Ext;\n\nclass C {\n\tfunction f():Void {\n\t\tfinal make = () -> new Widget();\n\t\tExt.deco(make(), 1);\n\t}\n}\n';
 		assertUnresolvedReceiver(fileSet(source));
 	}
 

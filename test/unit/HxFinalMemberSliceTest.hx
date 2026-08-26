@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
@@ -12,6 +11,7 @@ import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
+import utest.Assert;
 
 /**
  * Tests for the ω-final-member slice — class / interface / abstract

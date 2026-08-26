@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.format.Text;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 

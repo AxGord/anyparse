@@ -1,18 +1,18 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
+import anyparse.check.CheckScan;
+import anyparse.check.StaticConstant;
 import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MemberWriteScan;
-import anyparse.check.StaticConstant;
+import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
-import anyparse.check.CheckScan;
-import anyparse.query.QueryNode;
-import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 

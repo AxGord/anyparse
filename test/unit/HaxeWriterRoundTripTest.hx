@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.HxModuleWriter;
+import utest.Assert;
 
 /**
  * Idempotency round-trip tests for the macro-generated writer.

@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.query.Cli;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `apq lint --list-rules` — the machine-consumable check listing review

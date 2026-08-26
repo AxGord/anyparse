@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.RedundantThis;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `redundant-this` check must not strip `this.` from a `using` static-extension
@@ -20,37 +20,43 @@ import anyparse.runtime.Span;
  */
 class RedundantThisUsingExtensionTest extends Test {
 
-	// (1) A `using`-extension call `this.ext()` must NOT be flagged: `getClass` is not
-	// a member of `Widget`, so `this.` is load-bearing (resolves via `using Type`).
+	/**
+	 * (1) A `using`-extension call `this.ext()` must NOT be flagged: `getClass` is not
+	 * a member of `Widget`, so `this.` is load-bearing (resolves via `using Type`).
+	 */
 	public function testUsingExtensionCallNotFlagged(): Void {
 		Assert.equals(0, violations('using Type; class Widget { function m():Class<Dynamic> { return this.getClass(); } }').length);
 	}
 
-	// (1b) Same, with an `extends` clause and a second stdlib extension module.
+	/** (1b) Same, with an `extends` clause and a second stdlib extension module. */
 	public function testUsingExtensionCallWithExtendsNotFlagged(): Void {
 		Assert.equals(0, violations('using Reflect; class Widget extends Base { function m():Void { this.setField("a", 1); } }').length);
 	}
 
-	// The fix must LEAVE the receiver on an extension call — stripping it breaks compile.
+	/** The fix must LEAVE the receiver on an extension call — stripping it breaks compile. */
 	public function testUsingExtensionFixLeavesReceiver(): Void {
 		final src: String = 'using Type; class Widget { function m():Class<Dynamic> { return this.getClass(); } }';
 		final out: String = applyFix(src);
 		Assert.isTrue(out.indexOf('this.getClass()') != -1, 'this.getClass() must survive, got: $out');
 	}
 
-	// A name not declared in this type but reachable via `extends` is AMBIGUOUS
-	// (inherited member OR extension) — the conservative gate stays silent.
+	/**
+	 * A name not declared in this type but reachable via `extends` is AMBIGUOUS
+	 * (inherited member OR extension) — the conservative gate stays silent.
+	 */
 	public function testInheritedMemberAmbiguityNotFlagged(): Void {
 		Assert.equals(0, violations('class Widget extends Base { function m():Int { return this.inherited(); } }').length);
 	}
 
-	// (2) A genuine member in a no-extends class is STILL flagged — the rule stays useful.
+	/** (2) A genuine member in a no-extends class is STILL flagged — the rule stays useful. */
 	public function testGenuineMemberStillFlagged(): Void {
 		Assert.equals(1, violations('class Widget { function own():Void {} function m():Void { this.own(); } }').length);
 	}
 
-	// The gate is membership-based, NOT "bail whenever a `using` is present": a real
-	// member field is flagged even with `using Type;` in the file.
+	/**
+	 * The gate is membership-based, NOT "bail whenever a `using` is present": a real
+	 * member field is flagged even with `using Type;` in the file.
+	 */
 	public function testMemberFlaggedEvenWithUsingPresent(): Void {
 		Assert.equals(1, violations('using Type; class Widget { var f:Int; function m():Int { return this.f; } }').length);
 	}

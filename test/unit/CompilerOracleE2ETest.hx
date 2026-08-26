@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.CompilerOracle;
+import anyparse.check.CompilerServer;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
-import anyparse.check.CompilerServer;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import haxe.io.Path;
 import sys.FileSystem;

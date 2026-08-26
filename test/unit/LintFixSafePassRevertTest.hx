@@ -1,9 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.query.LintFixSafePass;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `lint --fix`'s safe-pass revert net, as a pure decision over two oracle measurements.

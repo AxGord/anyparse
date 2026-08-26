@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HxCondDeclPrefix;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.HxCondDeclPrefix;
+import utest.Assert;
 
 /**
  * Tests for `#if` regions sitting in declaration-prefix position whose

@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.InlineConstant;
 import anyparse.check.PreferFinalField;
@@ -13,6 +11,8 @@ import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.MakeFinal;
 import anyparse.query.RefactorSupport.EditResult;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `@:coreApi` — the one member pin no scope here can ever hold. A `@:coreApi` class replaces a

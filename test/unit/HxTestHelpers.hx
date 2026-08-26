@@ -1,15 +1,15 @@
 package unit;
 
-import haxe.Exception;
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxAnonFieldBody;
-import anyparse.grammar.haxe.HxAnonVarBody;
 import anyparse.grammar.haxe.HxAnonMember;
+import anyparse.grammar.haxe.HxAnonVarBody;
+import anyparse.grammar.haxe.HxArrowFnType;
+import anyparse.grammar.haxe.HxArrowParam;
+import anyparse.grammar.haxe.HxArrowParamBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxConditionalDecl;
@@ -27,7 +27,6 @@ import anyparse.grammar.haxe.HxErrorMsg;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
-import anyparse.grammar.haxe.HxVarSemiCondInitDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxLambdaParam;
 import anyparse.grammar.haxe.HxLambdaParamBody;
@@ -43,9 +42,10 @@ import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
-import anyparse.grammar.haxe.HxArrowFnType;
-import anyparse.grammar.haxe.HxArrowParam;
-import anyparse.grammar.haxe.HxArrowParamBody;
+import anyparse.grammar.haxe.HxVarSemiCondInitDecl;
+import haxe.Exception;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Shared test helpers for Phase 3 Haxe grammar tests.
@@ -342,7 +342,7 @@ class HxTestHelpers extends Test {
 	 */
 	private function paramBody(param: HxParam): HxParamBody {
 		return switch param {
-			case Required(body) | Optional(body) | Rest(body): body;
+			case Required(body), Optional(body), Rest(body): body;
 			case Conditional(_): throw 'expected HxParam.Required/Optional/Rest, got Conditional';
 		};
 	}

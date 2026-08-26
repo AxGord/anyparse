@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * omega-case-trail-comment-inline — an ORPHAN TRAIL comment must not
@@ -206,7 +206,7 @@ final class HxCaseBodyTrailCommentInlineTest extends Test {
 			{ name: 'TRAIL_BLANK_AFTER_SRC', src: TRAIL_BLANK_AFTER_SRC },
 			{ name: 'TRAIL_BLANK_BEFORE_SRC', src: TRAIL_BLANK_BEFORE_SRC },
 			{ name: 'LAST_CASE_BLANK_BEFORE_SRC', src: LAST_CASE_BLANK_BEFORE_SRC },
-			{ name: 'FOLLOWS_TRIGGER_SRC', src: FOLLOWS_TRIGGER_SRC },
+			{ name: 'FOLLOWS_TRIGGER_SRC', src: FOLLOWS_TRIGGER_SRC }
 		];
 		for (f in fixtures) {
 			final pass1: String = write(f.src, j);

@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Test;
-import utest.Assert;
+import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.KeepEmptyLinesPolicy;
+import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
-import anyparse.format.KeepEmptyLinesPolicy;
-import anyparse.format.CommentEmptyLinesPolicy;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Regression guard for `emptylines/issue_147_between_fields_with_comments`

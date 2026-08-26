@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 using StringTools;
 
@@ -27,7 +27,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tvar x: ModExtra;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(0, vs.length);
@@ -39,7 +39,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tfunction f(): ModAction return Go;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(0, vs.length);
@@ -51,7 +51,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tvar x: ModKind;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(0, vs.length);
@@ -63,7 +63,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(1, vs.length);
@@ -81,7 +81,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod.ModExtra;\n\nclass C {\n\tvar x: ModOther;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(1, vs.length);
@@ -106,7 +106,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tvar x = Go;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(0, vs.length);
@@ -118,7 +118,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod.Kind;\n\nclass C {\n\tvar x = First;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(0, vs.length);
@@ -130,7 +130,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(1, vs.length);
@@ -152,7 +152,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\n#if js\nimport a.b.Mod;\n#end\n\nclass C {}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(1, vs.length);
@@ -165,7 +165,7 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String = 'package pkg;\n\n#if js\nimport a.b.Mod;\n#end\n\nclass C {\n\tvar x: Mod;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], plugin());
 
 		Assert.equals(0, vs.length);

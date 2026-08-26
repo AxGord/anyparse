@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.query.FormatConfigDiscovery;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import utest.Assert;
+import utest.Test;
 
 /**
  * `FormatConfigDiscovery.discover` walks UP from a file's own directory to the
@@ -20,7 +20,7 @@ import sys.io.File;
  */
 class FormatConfigDiscoveryTest extends Test {
 
-	// Every directory `makeTree` built, removed in `teardown` so a suite run leaves none behind.
+	/** Every directory `makeTree` built, removed in `teardown` so a suite run leaves none behind. */
 	private final _made: Array<String> = [];
 
 	public function testFindsNearestAncestorConfig(): Void {

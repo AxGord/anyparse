@@ -1,16 +1,16 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.GuardReturn;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
-import anyparse.runtime.Span;
-import anyparse.query.SymbolIndex;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `guard-return` check: a block whose LAST TWO statements are a bare

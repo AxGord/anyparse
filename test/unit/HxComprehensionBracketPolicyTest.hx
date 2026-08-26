@@ -1,16 +1,18 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.WhitespacePolicy;
+import anyparse.grammar.haxe.AstPreds;
+import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxModuleWriteOptions;
-import anyparse.grammar.haxe.AstPreds;
-import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HxComprehension;
 import anyparse.grammar.haxe.HxExpr;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
+
+using Lambda;
 
 /**
  * Bracket-whitespace parity for array comprehensions vs plain array /
@@ -108,7 +110,7 @@ class HxComprehensionBracketPolicyTest extends Test {
 			'ForExpr' => Type.createEnum(HxExpr, 'ForExpr', [null]),
 			'WhileExpr' => Type.createEnum(HxExpr, 'WhileExpr', [null])
 		];
-		Assert.equals(HxComprehension.GENERATOR_CTORS.length, Lambda.count(samples), 'the sample set and GENERATOR_CTORS have diverged');
+		Assert.equals(HxComprehension.GENERATOR_CTORS.length, samples.count(), 'the sample set and GENERATOR_CTORS have diverged');
 		for (ctor in HxComprehension.GENERATOR_CTORS) {
 			final sample: Null<HxExpr> = samples[ctor];
 			if (sample == null) {

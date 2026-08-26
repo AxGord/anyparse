@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxModule;
+import utest.Assert;
 
 /**
  * Slice 33: `...` placeholder as a class-body member.

@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.runtime.ParseError;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Phase 3 skeleton tests for the macro-generated Haxe parser.

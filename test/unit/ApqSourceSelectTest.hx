@@ -1,8 +1,8 @@
 package unit;
 
+import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-import anyparse.query.Cli;
 
 /**
  * `apq source --select <sel>` / `--at <line>:<col>` — resolve a node address to

@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
+import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedParameter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.check.LintConfig;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `unused-parameter` check: a function parameter never referenced in its

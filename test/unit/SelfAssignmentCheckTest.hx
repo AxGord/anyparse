@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.SelfAssignment;
 import anyparse.check.Linter;
+import anyparse.check.SelfAssignment;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `self-assignment` check: a LOCAL variable assigned to itself (`x = x`) is

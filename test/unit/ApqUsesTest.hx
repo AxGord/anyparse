@@ -1,11 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Uses;
+import utest.Assert;
+import utest.Test;
 
 using Lambda;
 

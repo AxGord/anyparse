@@ -1,17 +1,18 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxCondDeclPrefix;
 import anyparse.grammar.haxe.HxConditionalMember;
+import anyparse.grammar.haxe.HxConditionalMeta;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxMemberDecl;
+import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.runtime.ParseError;
-import anyparse.grammar.haxe.HxConditionalMeta;
-import anyparse.grammar.haxe.HxMetadata;
+import utest.Assert;
 
 /**
  * Slice apq-P5-J: member-scope `#if` conditional compilation.
@@ -146,7 +147,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 		Assert.isNull(cls.members[0].member);
 		final region: HxConditionalMeta = expectConditionalMeta(cls.members[0].meta[0]);
 		Assert.equals(0, region.body.length);
-		final elseBody = region.elseBody;
+		final elseBody: Null<Array<HxCondDeclPrefix>> = region.elseBody;
 		if (elseBody == null)
 			Assert.fail('expected an #else clause');
 		else

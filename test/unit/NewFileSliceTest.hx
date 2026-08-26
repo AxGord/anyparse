@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.NewFile;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -357,10 +357,9 @@ class NewFileSliceTest extends Test {
 	 * pins the writer divergence itself and records what closing it would cost.
 	 */
 	public function testCreateRawSettlesATwoRewriteSource(): Void {
-		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": true}, '
-			+ '"sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}, "wrapping": {"maxLineLength": 140, '
-			+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", '
-			+ '"value": 140}], "type": "noWrap"}]}}}';
+		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": true}, "sameLine": {'
+			+ '"caseBody": "fitLine", "expressionCase": "fitLine"}, "wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": '
+			+ '"onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final src: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n'
 			+ '\t\t\t\tcfg.zips.push({ path: try StringTools.trim(xml.innerData) catch (_: Any) \'\', file: xml.att.file, '

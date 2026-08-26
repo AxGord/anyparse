@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxMemberModifier;
-import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Slice apq-P5 (macro-modifier + hex bundle) — the last clean

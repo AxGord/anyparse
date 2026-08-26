@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.PreferCaseGuard;
@@ -9,6 +7,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -34,9 +34,11 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 	/** `maxLineLength` 140 and nothing else -- the config both fixtures below are canonical under. */
 	private static final HXFORMAT: String = '{"wrapping": {"maxLineLength": 140}}\n';
 
-	// A statement switch over a plain constant class: the guard conversion typechecks, so
-	// the oracle applies it. Writer-canonical under HXFORMAT, which is what lets the
-	// production fix path run with `reformat` OFF.
+	/**
+	 * A statement switch over a plain constant class: the guard conversion typechecks, so
+	 * the oracle applies it. Writer-canonical under HXFORMAT, which is what lets the
+	 * production fix path run with `reformat` OFF.
+	 */
 	private static final APPLIES: String = 'class Codes {\n\tpublic static inline final DOWN:Int = 1;\n'
 		+ '\tpublic static inline final UP:Int = 2;\n'
 		+ '\n\tprivate function new() {}\n}\n\nclass Good {\n\tpublic static var hit:Int = 0;\n\n\tpublic static function main():Void {\n'
@@ -44,8 +46,10 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 		+ '\t\t\t\tif (hit == 0) {\n\t\t\t\t\thit = 1;\n\t\t\t\t\ttrace(hit);\n\t\t\t\t}\n\t\t\tcase Codes.UP:\n\t\t\t\ttrace(hit);\n'
 		+ '\t\t}\n\t}\n}\n';
 
-	// The same shape over an `enum abstract` the report scope cannot see: the check accepts
-	// the dotted head, the guard makes the arm list non-exhaustive, and the build breaks.
+	/**
+	 * The same shape over an `enum abstract` the report scope cannot see: the check accepts
+	 * the dotted head, the guard makes the arm list non-exhaustive, and the build breaks.
+	 */
 	private static final REVERTS: String = 'class Bad {\n\tpublic static var hit:Int = 0;\n\n\tpublic static function main():Void {\n'
 		+ '\t\trun(Ek.A);\n\t}\n\n\tprivate static function run(code:Ek):Void {\n\t\tswitch code {\n\t\t\tcase Ek.A:\n'
 		+ '\t\t\t\tif (hit == 0) {\n\t\t\t\t\thit = 1;\n\t\t\t\t\ttrace(hit);\n\t\t\t\t}\n\t\t\tcase Ek.B:\n\t\t\t\ttrace(hit);\n'

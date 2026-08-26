@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnreachableCatch;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `unreachable-catch` check: a `catch` clause that can never run because an earlier

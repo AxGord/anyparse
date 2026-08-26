@@ -1,10 +1,10 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω-case-sibling-symmetry — per-SWITCH placement for `FitLine` case bodies.
@@ -298,7 +298,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 			{ name: 'MULTI_STMT_SRC', src: MULTI_STMT_SRC },
 			{ name: 'REFUSED_FLAT_SRC', src: REFUSED_FLAT_SRC },
 			{ name: 'GLUED_UNDER_TRIGGER_SRC', src: GLUED_UNDER_TRIGGER_SRC },
-			{ name: 'COND_MULTI_SRC', src: COND_MULTI_SRC },
+			{ name: 'COND_MULTI_SRC', src: COND_MULTI_SRC }
 		];
 		for (f in fixtures) {
 			final pass1: String = write(f.src, j);

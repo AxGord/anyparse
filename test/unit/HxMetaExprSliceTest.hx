@@ -1,18 +1,18 @@
 package unit;
 
-import utest.Assert;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxMetaExpr;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * Expression-level metadata wrapper tests — covers the `MetaExpr`

@@ -71,7 +71,7 @@ final class HxFormatterCorpusHelpers {
 		return parts.length != EXPECTED_SECTIONS ? null : {
 			config: StringTools.trim(parts[0]),
 			input: stripPadNewlines(parts[1]),
-			expected: stripPadNewlines(parts[2]),
+			expected: stripPadNewlines(parts[2])
 		};
 		#else
 		return null;
@@ -86,8 +86,7 @@ final class HxFormatterCorpusHelpers {
 	private static function stripPadNewlines(s: String): String {
 		var r: String = s;
 		if (r.length > 0 && r.charAt(0) == '\n') r = r.substr(1);
-		if (r.length > 0 && r.charAt(r.length - 1) == '\n') r = r.substr(0, r.length - 1);
-		return r;
+		return r.length > 0 && r.charAt(r.length - 1) == '\n' ? r.substr(0, r.length - 1) : r;
 	}
 
 }

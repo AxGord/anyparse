@@ -1,14 +1,14 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferSwitch;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-switch` check: a STATEMENT-position `if` / `else if` chain testing one

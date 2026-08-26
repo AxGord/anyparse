@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
-import anyparse.check.PreferFinalClass;
 import anyparse.check.Linter;
+import anyparse.check.PreferFinalClass;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The `prefer-final-class` check: a class declaration carrying the `@:final` meta is flagged

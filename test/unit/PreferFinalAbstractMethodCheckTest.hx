@@ -1,12 +1,12 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * A `var` of an `abstract` type mutated through a method that reassigns `this`

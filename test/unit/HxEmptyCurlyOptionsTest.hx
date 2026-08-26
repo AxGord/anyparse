@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.BracePlacement;
 import anyparse.format.EmptyCurly;
 import anyparse.grammar.haxe.HaxeFormat;
@@ -9,6 +7,8 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * ω-empty-curly-break — empty class / function bodies break to two

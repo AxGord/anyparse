@@ -1,6 +1,5 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
@@ -12,12 +11,13 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxIntersectionClause;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxType;
-import anyparse.grammar.haxe.HxTypeParamDecl;
 import anyparse.grammar.haxe.HxTypeArg;
+import anyparse.grammar.haxe.HxTypeParamDecl;
 import anyparse.grammar.haxe.HxTypeRef;
+import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
+import utest.Assert;
 
 /**
  * Phase 3 type-parameter tests for `HxTypeRef`.

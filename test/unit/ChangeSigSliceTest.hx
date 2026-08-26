@@ -1,11 +1,11 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ChangeSig;
+import anyparse.query.GrammarPlugin.RefShape;
+import haxe.Exception;
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.ChangeSig;
-import haxe.Exception;
 
 /**
  * `ChangeSig.changeSig` — scope-correct, format-preserving

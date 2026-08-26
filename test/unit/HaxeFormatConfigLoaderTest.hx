@@ -1,10 +1,9 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.CommentStyle;
 import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
@@ -18,7 +17,8 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.format.CommentStyle;
+import utest.Assert;
+import utest.Test;
 
 /**
  * τ₃ — first consumer of the `WriteOptions` infrastructure: parses a

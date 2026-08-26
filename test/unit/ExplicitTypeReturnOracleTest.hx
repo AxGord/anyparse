@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
@@ -10,6 +8,11 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
+
+using StringTools;
+
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -132,7 +135,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 			{ name: 'apqlint.json', source: apqlint }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'explicit-type', '$dir/Main.hx']);
-		final packed: String = StringTools.replace(File.getContent('$dir/Main.hx'), ' ', '');
+		final packed: String = File.getContent('$dir/Main.hx').replace(' ', '');
 		Assert.isTrue(packed.indexOf('label(n:Int):String') != -1, 'the oracle-assisted return type reached the file');
 		Assert.isTrue(packed.indexOf('shout(n:Int):Void') != -1, 'the Void return type reached the file');
 		// The oracle pass only ever edits FUNCTION nodes, so a field annotated from its literal
@@ -158,7 +161,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 			{ name: 'apqlint.json', source: apqlint }
 		]);
 		Cli.run(['lint', '--fix', '--rule', 'explicit-type', dir]);
-		final packed: String = StringTools.replace(File.getContent('$dir/Box.hx'), ' ', '');
+		final packed: String = File.getContent('$dir/Box.hx').replace(' ', '');
 		// The compiler prints these as `Box.T` / `pair.U`, which do not compile — without the
 		// strip the whole file is reverted, so EITHER assertion failing means nothing landed.
 		Assert.isTrue(packed.indexOf('get():T') != -1, 'the class type parameter is annotated bare');

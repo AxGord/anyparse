@@ -1,10 +1,11 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.MisplacedTypeDoc;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
 
 /**
  * A `#if … #end` region holding nothing but declaration PREFIX material — metadata, modifiers,
@@ -42,10 +43,8 @@ class MisplacedTypeDocGuardedMetaTest extends Test {
 		// The doc has to land above `#if`, not between the region and the class: the compiler
 		// attaches a type's doc only when nothing but whitespace separates the two.
 		final source: String = 'package p;\n\n/**\n * Doc\n */\nimport p.Other;\n\n#if !macro\n@:keep\n#end\nclass C {}\n';
-		final edits: Array<{ span: anyparse.runtime.Span, text: String }> = new MisplacedTypeDoc().fix(
-			source, run(source), new HaxeQueryPlugin()
-		);
-		final insertion: Null<{ span: anyparse.runtime.Span, text: String }> = edits.length == 2 ? edits[1] : null;
+		final edits: Array<{ span: Span, text: String }> = new MisplacedTypeDoc().fix(source, run(source), new HaxeQueryPlugin());
+		final insertion: Null<{ span: Span, text: String }> = edits.length == 2 ? edits[1] : null;
 		Assert.notNull(insertion);
 		if (insertion != null) Assert.equals(source.indexOf('#if !macro'), insertion.span.from);
 	}
@@ -81,10 +80,8 @@ class MisplacedTypeDocGuardedMetaTest extends Test {
 		final source: String = 'package p;\n\n/**\n * Doc\n */\nimport p.Other;\n\n${ENUM_REGION}abstract A(Int) {}\n';
 		final violations: Array<Violation> = run(source);
 		Assert.equals(1, violations.length);
-		final edits: Array<{ span: anyparse.runtime.Span, text: String }> = new MisplacedTypeDoc().fix(
-			source, violations, new HaxeQueryPlugin()
-		);
-		final insertion: Null<{ span: anyparse.runtime.Span, text: String }> = edits.length == 2 ? edits[1] : null;
+		final edits: Array<{ span: Span, text: String }> = new MisplacedTypeDoc().fix(source, violations, new HaxeQueryPlugin());
+		final insertion: Null<{ span: Span, text: String }> = edits.length == 2 ? edits[1] : null;
 		Assert.notNull(insertion);
 		if (insertion != null) Assert.equals(source.indexOf('#if'), insertion.span.from);
 	}

@@ -1,7 +1,5 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.TrailingCommaPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
@@ -9,6 +7,8 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import utest.Assert;
+import utest.Test;
 
 /**
  * Wrapped list-literal emission — the three TM-driven policies that share
@@ -80,31 +80,33 @@ class HxListLiteralEmissionSliceTest extends Test {
 		+ '"wrapping":{"maxLineLength":140},"whitespace":{"commaPolicy":"after"},'
 		+ '"trailingCommas":{"arrayLiteralDefault":"yes","callArgumentDefault":"yes","objectLiteralDefault":"yes"}}';
 
-	// --- item (a): array-literal uniform element blanks ---
-	// TM `TextAreaFormGroup.createCustomLabel` shape: two elements, one gap, blank.
+	/**
+	 * --- item (a): array-literal uniform element blanks ---
+	 * TM `TextAreaFormGroup.createCustomLabel` shape: two elements, one gap, blank.
+	 */
 	private static final ARR_TWO: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
 
-	// Three elements, BOTH interior gaps blank — uniform.
+	/** Three elements, BOTH interior gaps blank — uniform. */
 	private static final ARR_UNIFORM: String =
 		'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\tbeta,\n\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
 
-	// Three elements, only the FIRST gap blank — selective, deliberate grouping.
+	/** Three elements, only the FIRST gap blank — selective, deliberate grouping. */
 	private static final ARR_SELECTIVE: String =
 		'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\tbeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
 
-	// Uniform gaps but a `//` header on an element — grouping intent unclear.
+	/** Uniform gaps but a `//` header on an element — grouping intent unclear. */
 	private static final ARR_COMMENT: String =
 		'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\t// header\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
 
-	// Edge blank right after `[` plus a uniform interior gap.
+	/** Edge blank right after `[` plus a uniform interior gap. */
 	private static final ARR_EDGE_OPEN: String =
 		'class C {\n\tfunction f() {\n\t\tvar a = [\n\n\t\t\talpha,\n\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
 
-	// Uniform interior gap plus an edge blank before `]`.
+	/** Uniform interior gap plus an edge blank before `]`. */
 	private static final ARR_EDGE_CLOSE: String =
 		'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\n\t\t\tbeta\n\n\t\t];\n\t}\n}\n';
 
-	// Object literal with a uniform gap — NOT opted into the policy.
+	/** Object literal with a uniform gap — NOT opted into the policy. */
 	private static final OBJ_TWO: String = 'class C {\n\tfunction f() {\n\t\tvar o = {\n\t\t\talpha: 1,\n\n\t\t\tbeta: 2\n\t\t};\n\t}\n}\n';
 
 	// --- item (b): multiline trailing comma ---
@@ -132,8 +134,10 @@ class HxListLiteralEmissionSliceTest extends Test {
 	private static final ARR_NO_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talphaAlphaAlphaAlpha,\n'
 		+ '\t\t\tbetaBetaBetaBetaBeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
 
-	// --- item (c): matrix rows ---
-	// TM `PitchArea.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
+	/**
+	 * --- item (c): matrix rows ---
+	 * TM `PitchArea.mouseDownLinePen` shape: 3 rows of 2, ragged cell widths.
+	 */
 	private static final MATRIX: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
 		+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';
 
@@ -301,6 +305,10 @@ class HxListLiteralEmissionSliceTest extends Test {
 		return write(source, REMOVE_OVER_ADD_JSON);
 	}
 
+	private static inline function remove(source: String): String {
+		return write(source, REMOVE_JSON);
+	}
+
 	// --- helpers ---
 
 	private static function opts(json: String): HxModuleWriteOptions {
@@ -313,10 +321,6 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	private static function base(source: String): String {
 		return write(source, BASE_JSON);
-	}
-
-	private static function remove(source: String): String {
-		return write(source, REMOVE_JSON);
 	}
 
 }

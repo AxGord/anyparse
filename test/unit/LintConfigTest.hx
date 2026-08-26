@@ -1,13 +1,13 @@
 package unit;
 
-import utest.Assert;
-import utest.Test;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import utest.Assert;
+import utest.Test;
 
 /**
  * The project-level `apqlint.json` config: the pure `LintConfig.parse`

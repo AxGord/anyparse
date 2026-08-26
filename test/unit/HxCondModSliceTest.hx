@@ -1,7 +1,8 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxCondModPrefix;
@@ -9,8 +10,7 @@ import anyparse.grammar.haxe.HxConditionalMod;
 import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import utest.Assert;
 
 /**
  * Tests for `#else` / `#elseif` arms and widened entries in a

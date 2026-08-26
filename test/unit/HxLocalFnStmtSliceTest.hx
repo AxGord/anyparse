@@ -1,8 +1,8 @@
 package unit;
 
-import utest.Assert;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
+import utest.Assert;
 
 /**
  * Slice apq-P5-K1: named local function statement.
@@ -104,7 +104,7 @@ class HxLocalFnStmtSliceTest extends HxTestHelpers {
 	public function testAnonFnExprAssignedStaysVarStmt(): Void {
 		final body: Array<HxStatement> = parseBody('class C { function f():Void { var h = function() { return 1; }; h(); } }');
 		switch body[0] {
-			case LocalFnStmt(_) | LocalInlineFnStmt(_):
+			case LocalFnStmt(_), LocalInlineFnStmt(_):
 				Assert.fail('anonymous fn assigned to var must not parse as a local-fn statement');
 			case VarStmt(_):
 				Assert.pass();
@@ -117,7 +117,7 @@ class HxLocalFnStmtSliceTest extends HxTestHelpers {
 		final body: Array<HxStatement> = parseBody('class C { function f(xs:Array<Int>):Void { xs.map(function(x) return x); } }');
 		Assert.equals(1, body.length);
 		switch body[0] {
-			case LocalFnStmt(_) | LocalInlineFnStmt(_):
+			case LocalFnStmt(_), LocalInlineFnStmt(_):
 				Assert.fail('anonymous fn call arg must not parse as a local-fn statement');
 			case ExprStmt(_):
 				Assert.pass();
