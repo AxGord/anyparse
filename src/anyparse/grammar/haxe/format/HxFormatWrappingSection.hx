@@ -189,6 +189,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var soleItemCuddledBrackets: Bool;
 
+	@:optional var ternaryCuddledBraces: Bool;
+
 	@:optional var arrayWrap: HxFormatWrapRules;
 
 	@:optional var mapWrap: HxFormatWrapRules;

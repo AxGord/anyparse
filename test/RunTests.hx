@@ -428,6 +428,7 @@ import unit.HxTernaryBranchChainIndentTest;
 import unit.HxTernaryCallArgRestAwareTest;
 import unit.HxTernaryCollectionHugSliceTest;
 import unit.HxTernaryCommentWriteTest;
+import unit.HxTernaryCuddledBracesTest;
 import unit.HxTernaryDeclInitRestAwareTest;
 import unit.HxTernarySliceTest;
 import unit.HxThinArrowIfElseBreakSliceTest;
@@ -975,6 +976,7 @@ class RunTests {
 		addCase(new HxSoleArgGluedCloseDedentTest());
 		addCase(new HxChainOuterOperatorWrapSliceTest());
 		addCase(new HxTernaryCollectionHugSliceTest());
+		addCase(new HxTernaryCuddledBracesTest());
 		addCase(new HxCondWrapFitLineSliceTest());
 		addCase(new HxHeaderWrapLadderSliceTest());
 		addCase(new HxCondForContainerGlueSliceTest());

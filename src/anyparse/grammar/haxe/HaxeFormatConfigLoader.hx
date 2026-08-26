@@ -119,6 +119,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingTrailingCommaPolicy;
  *   element's natural first line fits and ends at an open delimiter — i.e. the
  *   element already owns the wrap point the leading break would have supplied.
  *   Default `false` (absent) is byte-inert.
+ * - `wrapping.ternaryCuddledBraces` (ω-ternary-cuddled-braces):
+ *   bool → `ternaryCuddledBraces`. A BROKEN ternary whose then branch has a
+ *   closing line to ride and whose else branch opens a delimited body puts
+ *   `} : {` on that closing line instead of spending a continuation line on
+ *   `: {`. Declines when the glue would push the else past the limit and cost
+ *   lines. Default `false` (absent) is byte-inert.
  * - `wrapping.arrayWrap` (ω-arraylit-wraprules + ω-peg-byname-array):
  *   `WrapRules` cascade → `arrayLiteralWrap`. `defaultWrap:String` sets
  *   the cascade's `defaultMode`; `rules:Array<HxFormatWrapRule>` is
@@ -718,6 +724,7 @@ final class HaxeFormatConfigLoader {
 			comprehensionCuddledOpen: base.comprehensionCuddledOpen,
 			methodChainCuddledLinks: base.methodChainCuddledLinks,
 			soleItemCuddledBrackets: base.soleItemCuddledBrackets,
+			ternaryCuddledBraces: base.ternaryCuddledBraces,
 			conditionalPolicy: base.conditionalPolicy,
 			alignInlineSwitchCaseBody: base.alignInlineSwitchCaseBody,
 			addLineCommentSpace: base.addLineCommentSpace,
@@ -1257,6 +1264,7 @@ final class HaxeFormatConfigLoader {
 		if (section.comprehensionCuddledOpen != null) opt.comprehensionCuddledOpen = section.comprehensionCuddledOpen;
 		if (section.methodChainCuddledLinks != null) opt.methodChainCuddledLinks = section.methodChainCuddledLinks;
 		if (section.soleItemCuddledBrackets != null) opt.soleItemCuddledBrackets = section.soleItemCuddledBrackets;
+		if (section.ternaryCuddledBraces != null) opt.ternaryCuddledBraces = section.ternaryCuddledBraces;
 	}
 
 	private static function applyWrappingRulesA(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {

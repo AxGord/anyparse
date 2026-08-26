@@ -47,7 +47,24 @@ one of them is where the difference shows.
 
 Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (String),
 `trailingComma`, `comprehensionCuddledOpen` (Bool), `methodChainCuddledLinks` (Bool),
-`soleItemCuddledBrackets` (Bool).
+`soleItemCuddledBrackets` (Bool), `ternaryCuddledBraces` (Bool).
+
+All four cuddle keys are **anyparse extensions** — the fork has no such concept
+(`grep -i cuddl` over the whole fork returns nothing), so their shapes were derived
+here, not copied. `ternaryCuddledBraces` lets a broken ternary's `:` and its else
+branch's opening delimiter ride on the then branch's own closing line (`} : {`) instead of opening a
+continuation line that would hold nothing but `: {`; the `?` gap is untouched. It
+fires only when the then branch has a closing line to ride — a forced or
+renderer-decided break whose closing brace lands at the indent of the line the
+branch started on. A flat then branch has no closing line to ride, so a ternary whose
+branches both fit is never rebuilt onto one line, and the else branch must itself open a
+delimited body for the `} : {` shape to be legible at all. It also declines when the glue
+would COST lines: gluing shifts the else right by the then branch's whole closing-line
+closer run plus a space (two columns for a bare `}`, four for a `}))`), so an else that
+fits its own separator line but not the line it would ride keeps the separator. That
+width guard reserves ONE column for the statement terminator it cannot see, which is
+exact for `x = cond ? {…} : {…};` and off by the difference for any other host — see
+`BinaryChainEmit.cuddleShape` for the limit that leaves. Default `false`.
 
 A rules object holds `defaultWrap`, `defaultLocation`, `defaultAdditionalIndent` (Int),
 `rules` (an array of `{type, location, conditions}`) and `itemsAfterCloseParenOnly` (Bool,
