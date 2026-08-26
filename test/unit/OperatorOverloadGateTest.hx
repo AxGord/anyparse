@@ -9,6 +9,7 @@ import anyparse.check.JoinStringAppend;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
@@ -170,7 +171,7 @@ class OperatorOverloadGateTest extends Test {
 			{ file: 'Use.hx', source: use }
 		], plugin);
 		return found.exists(v -> {
-			final span = v.span;
+			final span: Null<Span> = v.span;
 			return v.file == 'Use.hx' && span != null && span.from <= at && at < span.to
 			&& v.message.indexOf('overloads the concatenation operator') == -1;
 		});

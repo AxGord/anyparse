@@ -717,7 +717,7 @@ import unit.WriteOptionsTest;
 class RunTests {
 
 	public static function main(): Void {
-		final runner = new utest.Runner();
+		final runner: utest.Runner = new utest.Runner();
 
 		// Optional test-class filter for a fast dev inner-loop: APQ_TEST is a
 		// comma-separated list of substrings; only test classes whose fully
