@@ -200,6 +200,22 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(0, violations('class C { private var _x:Int = 0; function s():Void { _x /* c */ = 5; } }').length);
 	}
 
+	/**
+	 * An `@:allow` in the field's OWN file hands its privates to a type no bounded scan can
+	 * enumerate — left alone. Its twin below is the discriminator: the gate was a raw
+	 * `source.indexOf('@:allow')`, so a file merely TALKING about the tag lost the finding too, and
+	 * a negative arm alone stays green under that scan. This is the WRITING consumer of the shared
+	 * `@:allow` question (`--fix` rewrites `var` to `final`), which is why it is pinned here as well
+	 * as on `static-constant`.
+	 */
+	public function testAllowGrantNotFlaggedButAPhantomOneIs(): Void {
+		Assert.equals(0, violations('@:allow(W)\nclass C { private var _x:Int = 0; }').length, 'a real grant');
+		Assert.equals(
+			1, violations('// One day, consider @:allow(W) here.\nclass C { private var _x:Int = 0; }').length,
+			'a comment mentioning the tag is not metadata'
+		);
+	}
+
 	/** An `@:access` grant in another file makes the type non-confined — left alone. */
 	public function testAccessGrantNotFlagged(): Void {
 		final files: Array<{ file: String, source: String }> = [

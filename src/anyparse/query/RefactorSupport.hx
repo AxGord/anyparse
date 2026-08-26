@@ -693,16 +693,20 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * The part of `isPrivateMemberConfined` that NO precise gate can refine: no file
-	 * skip-parsed (one could hide any writer at all) and no `@:allow` in the member's own
-	 * file (which hands its privates to a type the index cannot name from here). The other
-	 * two vetoes — subtype and `@:access` grant — name a REACHABLE file each, so a caller
+	 * The two file-wide vetoes `isPrivateMemberConfined` pairs with its per-type ones: no skipped
+	 * file spells `member` (an unreadable one could hide any writer at all) and the member's own
+	 * file carries no `@:allow`, which hands its privates to a type the index cannot name from
+	 * here. Both are per-SUBJECT, not per-run — the earlier wording called this "the part … that
+	 * NO precise gate can refine", which stopped being true when the skip-parse half became
+	 * `skippedMayReference(member)` and was never true of the grant half.
+	 *
+	 * The other two vetoes — subtype and `@:access` grant — name a REACHABLE file each, so a caller
 	 * that can scan those files for what it actually fears pairs this with its own gates
 	 * instead: `prefer-final-field` asks only whether such a file WRITES the member, since
 	 * a read survives `final`.
 	 */
 	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex, member: String): Bool {
-		return !index.skippedMayReference(member) && source.indexOf('@:allow') < 0;
+		return !index.skippedMayReference(member) && !carriesAllowGrant(source);
 	}
 
 	/**
@@ -1988,6 +1992,44 @@ final class RefactorSupport {
 	 */
 	public static function isPrivateMemberConfined(owner: String, member: String, source: String, index: SymbolIndex): Bool {
 		return privateMemberScanIsSound(source, index, member) && !index.hasSubtype(owner) && !index.hasAccessGrant(owner);
+	}
+
+	/**
+	 * Whether `source` carries an `@:allow` grant IN CODE — the one place this project asks that
+	 * question. It had two readers spelling the same `indexOf` scan (`privateMemberScanIsSound` and
+	 * `Naming`s `CROSS_ALLOW_GRANT` gate), which is how a scan and the sentence describing it drift
+	 * apart.
+	 *
+	 * Comment, string and regex regions are masked, and that is a CORRECTNESS fix rather than a
+	 * tightening: a comment is not metadata, and no string literal becomes metadata on its own
+	 * file's declarations. The raw scan reported a grant for 22 of anyparse's own 1501 files while
+	 * `apq meta '@:allow' src test` finds ZERO real ones — every hit was a doc comment or a test
+	 * fixture's source-code literal. Withheld findings read exactly like a clean tree, and in
+	 * `Naming` the same hit wrote a refusal sentence naming metadata the file did not carry (T159
+	 * could only reorder that sentence behind a more precise cause; masking removes it).
+	 *
+	 * COST, since consumers call this once per MEMBER: a file that does not mention the tag pays one
+	 * `indexOf` exactly as before, and a file that does pays a full lex per call — the answer is a
+	 * property of the FILE and is not memoised, because a process-scoped cache is what this project's
+	 * first invariant forbids and the run-scoped place for one is the consumer's own file loop. The
+	 * bound is (files mentioning the tag) x (their members): 22 files here, and the project lint gate
+	 * does not move (90.4s -> 91.4s over 1502 files, inside the run-to-run spread). Do not reuse this
+	 * in a hotter loop without hoisting it out of one.
+	 *
+	 * The one shape this cannot see is a `@:allow` a BUILD MACRO adds; a check whose action depends
+	 * on that gates on the macro separately (`SymbolIndex.transitivelyCarriesBuildMacro`,
+	 * `MemberWriteScan.carriesBuildMacro`), which is the right place for it — a text scan of the
+	 * carrier file could never have seen it either.
+	 */
+	public static function carriesAllowGrant(source: String): Bool {
+		var at: Int = source.indexOf('@:allow');
+		if (at < 0) return false;
+		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		while (at >= 0) {
+			if (regionAt(at, regions) == null) return true;
+			at = source.indexOf('@:allow', at + 1);
+		}
+		return false;
 	}
 
 	/**
@@ -4157,11 +4199,16 @@ final class RefactorSupport {
 	 * interpolated inside one stays eligible.
 	 */
 	private static function offsetWithinComment(offset: Int, regions: Array<LexRegion>): Bool {
-		for (region in regions) if (offset >= region.from && offset < region.to) return switch region.kind {
+		final region: Null<LexRegion> = regionAt(offset, regions);
+		return region != null && switch region.kind {
 			case LineComment, BlockComment: true;
 			case StringLit, RegexLit: false;
 		};
-		return false;
+	}
+
+	/** The lexically-scanned non-code region containing `offset`, or null when `offset` is code. */
+	private static function regionAt(offset: Int, regions: Array<LexRegion>): Null<LexRegion> {
+		return regions.find(region -> offset >= region.from && offset < region.to);
 	}
 
 	/** The scan behind `referencedInRange` / `referencedUnqualifiedInRange`; a non-null `commentRegions` drops dot-qualified occurrences. */

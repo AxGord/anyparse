@@ -241,6 +241,30 @@ class StaticConstantCheckTest extends Test {
 	}
 
 	/**
+	 * …but only a REAL one. The gate was `source.indexOf('@:allow') >= 0`, so a file merely TALKING
+	 * about the tag — its own doc comment, a fixture literal — silently lost every finding this rule
+	 * and five others would have made. Measured on anyparse itself: 22 of its 1501 files tripped the
+	 * raw scan and `apq meta '@:allow' src test` finds ZERO real grants, so every one of them was this.
+	 *
+	 * The arms have to be a PAIR: the negative one alone stays green under the raw scan, which is
+	 * exactly how the defect survived. String and comment are separate arms because the masking runs
+	 * over the whole lexical region set, comments and literals alike — a comment-only fixture would
+	 * leave the literal half unpinned.
+	 */
+	public function testAPhantomAllowInACommentOrALiteralIsNotAGrant(): Void {
+		Assert.equals(
+			1,
+			violations('// One day, consider @:allow(D) here.\nclass C {\n\tprivate final _n:Int = 5;\n\tfunction f():Int return _n;\n}')
+				.length,
+			'a comment mentioning the tag is not metadata'
+		);
+		Assert.equals(
+			1, violations("class C {\n\tprivate final _n:Int = 5;\n\tfunction f():String return '@:allow(D) $_n';\n}").length,
+			'nor is a string literal spelling it'
+		);
+	}
+
+	/**
 	 * The composition the rule is designed for: `static-constant` promotes the field, and
 	 * `inline-constant` — whose input is exactly this rule's output — then makes it inline. Asserted
 	 * on one string so neither half can satisfy it alone.

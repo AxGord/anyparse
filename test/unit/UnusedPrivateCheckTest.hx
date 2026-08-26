@@ -507,6 +507,23 @@ class UnusedPrivateCheckTest extends Test {
 	}
 
 	/**
+	 * Empty-ctor arm: a SUBTYPE reaches the private constructor through `super()`, and it reaches it
+	 * whether the supertype clause spells the class or a `typedef` of it. `hasSubtype` used to key on
+	 * the WRITTEN name only, so `class Sub extends Alias` — with every file parseable — answered
+	 * "never subtyped": `--fix` deleted the constructor and the tree stopped compiling with
+	 * `Util does not have a constructor` (verified against Haxe 4.3.7).
+	 *
+	 * The direct-`extends` arm is the CONTROL: it was already silent, so a fixture without it cannot
+	 * tell "the alias is followed" from "this whole shape stopped being reported".
+	 */
+	public function testEmptyCtorKeptWhenSubtypeExtendsATypedefOfIt(): Void {
+		Assert.equals(0, ctorViolationsWithSubtypeVia('typedef Alias = Util;', 'Alias'), 'a typedef alias of the owner');
+		Assert.equals(0, ctorViolationsWithSubtypeVia('typedef Mid = Util;\ntypedef Head = Mid;', 'Head'), 'a two-hop alias chain');
+		Assert.equals(0, ctorViolationsWithSubtypeVia('typedef Alias = Util;', 'Util'), 'control: a direct `extends`');
+		Assert.equals(1, ctorViolationsWithSubtypeVia('typedef Alias = Other;', 'Alias'), 'control: an alias of something else');
+	}
+
+	/**
 	 * Empty-ctor arm: the whole-file `#if` veto still applies to the constructor arm
 	 * (unlike the member arm's zero-occurrence refinement) — a utility class in a
 	 * conditionally-compiled file yields no constructor deletion. The `#if` region carries
@@ -778,6 +795,24 @@ class UnusedPrivateCheckTest extends Test {
 			},
 			{ file: 'pkg/User.hx', source: 'package pkg;\nclass User {\n\tpublic function f():Int return Util.helper();\n}' },
 			{ file: 'pkg/Bad.hx', source: badSrc }
+		];
+		return violations(files).filter(v -> v.file == 'pkg/Util.hx').length;
+	}
+
+	/**
+	 * Findings on `pkg/Util.hx`s never-instantiated private constructor, in a scope where `aliasSrc`
+	 * declares a typedef and `pkg/Sub.hx` extends `extendsName` and calls `super()`.
+	 */
+	private function ctorViolationsWithSubtypeVia(aliasSrc: String, extendsName: String): Int {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/Util.hx',
+				source: 'package pkg;\nclass Util {\n\tpublic static function helper():Int return 1;\n\tprivate function new() {}\n}'
+			},
+			{ file: 'pkg/Other.hx', source: 'package pkg;\nclass Other {\n\tpublic function new() {}\n}' },
+			{ file: 'pkg/Alias.hx', source: 'package pkg;\n$aliasSrc' },
+			{ file: 'pkg/Sub.hx', source: 'package pkg;\nclass Sub extends $extendsName {\n\tpublic function new() { super(); }\n}' },
+			{ file: 'pkg/User.hx', source: 'package pkg;\nclass User {\n\tpublic function f():Int return Util.helper();\n}' }
 		];
 		return violations(files).filter(v -> v.file == 'pkg/Util.hx').length;
 	}

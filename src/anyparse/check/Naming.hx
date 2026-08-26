@@ -693,17 +693,17 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// Unresolvable hierarchy, and the two causes answer separately: one sentence for both sent a
 		// reader looking for an `@:allow` that a duplicate type name had actually caused.
 		//
-		// The DUPLICATE is asked first, and that order is the point rather than a preference. It is
-		// the cause the index knows EXACTLY, and the one a reader can act on; the grant is a raw
-		// substring scan (`privateMemberScanIsSound`'s, shared with it) that a `@:allow` in a
-		// comment or a string literal satisfies. Asked first, the grant sentence claimed metadata a
-		// file did not carry AND buried the real duplicate — the split had turned the old sentence's
-		// hedging `or` into a categorical assertion. Asked second, an imprecise scan only ever
-		// over-refuses a declaration nothing more precise had anything to say about.
+		// The DUPLICATE is asked first, and that order is the point rather than a preference: it is
+		// the cause the index knows EXACTLY, and the one a reader can act on. T159 chose the order
+		// because the grant half was a raw `indexOf` that a `@:allow` in a comment satisfied, so
+		// asked first it claimed metadata a file did not carry AND buried the real duplicate. That
+		// scan is now `RefactorSupport.carriesAllowGrant` — the single reader, comment- and
+		// literal-masked — so the sentence is true when it is written; the order still stands on its
+		// own, since a duplicate type name is the more actionable of two real causes.
 		final declarers: Array<FileInfo> = index.declaringFiles(ownerName);
 		if (declarers.length != 1)
 			return RenameRefusal.candidate(v, RenameRefusal.crossOwnerNotUnique(ownerName, declarers.map(f -> f.file)));
-		if (source.indexOf('@:allow') >= 0) return RenameRefusal.candidate(v, RenameRefusal.CROSS_ALLOW_GRANT);
+		if (RefactorSupport.carriesAllowGrant(source)) return RenameRefusal.candidate(v, RenameRefusal.CROSS_ALLOW_GRANT);
 		// Every refusal from here down belongs to THIS path: the gates above either hand the
 		// declaration to the single-file rename or are not about it at all, and speaking for those
 		// would overwrite the more accurate sentence that path is about to write. The category gate is

@@ -447,6 +447,9 @@ final class SymbolIndex {
 	 * naming it in `supertypes`, in file / declaration order. The index is immutable after
 	 * construction, so one build per instance is safe; it replaces a full `_files` x `types`
 	 * rescan per closure level in the subtype walks.
+	 *
+	 * A subtype is filed under every name that DENOTES its supertype, not only the one written —
+	 * see `subtypesOf`.
 	 */
 	private var _subtypeAdjacency: Null<Map<String, Array<ResolvedType>>>;
 
@@ -613,6 +616,9 @@ final class SymbolIndex {
 	 * Does any indexed type extend / implement `typeName` (matched by simple
 	 * name)? The first gate of a cross-file-safe private-member rename — a
 	 * subtype could reference the member.
+	 *
+	 * A supertype written as a TYPEDEF ALIAS of `typeName` counts; two alias shapes still do not,
+	 * and `subtypesOf` names them.
 	 */
 	public function hasSubtype(typeName: String): Bool {
 		return subtypesOf(typeName).length > 0;
@@ -2380,31 +2386,90 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Every indexed type directly extending / implementing `parent` (matched by simple name),
-	 * paired with its declaring file — the memoised form of a full `_files` x `types` scan, in
-	 * the same order that scan visited. Empty when nothing names `parent`. The whole adjacency
-	 * is built on first use; the index is immutable after construction, so one build per
+	 * Every indexed type extending / implementing `parent` — under that name or under any TYPEDEF
+	 * ALIAS of it — paired with its declaring file. The memoised form of a full `_files` x `types`
+	 * scan, in the same order that scan visited. Empty when nothing names `parent`. The whole
+	 * adjacency is built on first use; the index is immutable after construction, so one build per
 	 * instance is sound. The returned array is the LIVE bucket, not a copy — read it, never
 	 * mutate it, or the memo is corrupted for every later caller.
+	 *
+	 * The alias walk is not a refinement, it is the difference between an answer and a wrong one.
+	 * `class Bad extends U` where `typedef U = Util` writes `U` in `supertypes`, so keying on the
+	 * WRITTEN name alone reported `Util` as having no subtype — on a fully parseable tree, no
+	 * skip-parse involved — and every consumer of that answer is a VETO: `unused-private` then
+	 * proposed deleting `Util`'s private constructor, which `Bad`'s `super()` calls (measured:
+	 * `--fix` deleted it, and the tree stopped compiling with `Util does not have a constructor`).
+	 * Filing the subtype under both names is the conservative direction for all four consumers —
+	 * `hasSubtype`, `subtypeDeclMatches`, `subtypeMemberNames`, `familyDeclaresEveryMember` — so
+	 * the change can only ever WITHHOLD, never propose.
+	 *
+	 * Three alias shapes are closed and the walk is transitive over all of them: one hop
+	 * (`typedef U = Util`), a chain (`typedef A = B; typedef B = Util`), and a target written
+	 * QUALIFIED or living in another module (`typedef C = pkg.Util`), since `aliasTargetNominal`
+	 * is already the simple name. Two are NOT, each for a stated reason:
+	 *
+	 *  - `import pkg.Util as U;` — an alias the index cannot follow at all, because `ImportInfo`
+	 *    records only the alias NAME (the grammar puts nothing else in an `ImportAliasDecl`'s name
+	 *    slot) and never the path it points at. Closing it needs the builder to slice that path out
+	 *    of the declaration's source, which is a decoder `ModuleScan` and `MapScopeScan` already
+	 *    hold a copy of each; adding a third here is the defect this walk exists to stop.
+	 *  - a `#if`-GUARDED `typedef` — `aliasTargetNominal` is deliberately null for one, because
+	 *    every branch projects under one `Conditional` and following the indexed branch would
+	 *    commit to whichever happened to be first and be wrong for the other compilation.
+	 *
+	 * An ABSTRACT over the type (`abstract A(Util)`) is not a gap: Haxe gives it no `extends`, no
+	 * `super()` and no access to the underlying type's privates, so the ctor really is dead there
+	 * (verified — deleting it compiles).
 	 */
 	private function subtypesOf(parent: String): Array<ResolvedType> {
 		var adjacency: Null<Map<String, Array<ResolvedType>>> = _subtypeAdjacency;
 		if (adjacency == null) {
 			adjacency = [];
+			final aliases: Map<String, Array<String>> = aliasEdges();
 			for (fi in _files) for (t in fi.types) {
 				// A type naming one simple name TWICE (two differently-qualified supertypes reducing to
 				// it) lands in that bucket once — `supertypes.contains` reported it once per scan too.
+				// `named` doubles as the alias walk's worklist AND its cycle guard: a `typedef A = B;
+				// typedef B = A` pair stops when the closure comes back round to a name already filed.
 				final named: Array<String> = [];
-				for (sup in t.supertypes) if (!named.contains(sup)) {
-					named.push(sup);
-					final bucket: Array<ResolvedType> = adjacency[sup] ?? [];
-					bucket.push({ file: fi, type: t });
-					adjacency[sup] = bucket;
+				for (sup in t.supertypes) {
+					var pending: Int = named.length;
+					if (!named.contains(sup)) named.push(sup);
+					while (pending < named.length) {
+						final denoted: String = named[pending++];
+						final bucket: Array<ResolvedType> = adjacency[denoted] ?? [];
+						bucket.push({ file: fi, type: t });
+						adjacency[denoted] = bucket;
+						for (target in aliases[denoted] ?? []) if (!named.contains(target)) named.push(target);
+					}
 				}
 			}
 			_subtypeAdjacency = adjacency;
 		}
 		return adjacency[parent] ?? [];
+	}
+
+	/**
+	 * Typedef ALIAS edges across the whole index: an alias declaration's simple name -> every
+	 * simple name it re-points at. NOT memoised, and does not need to be — its one caller is inside
+	 * `subtypesOf`'s `adjacency == null` block, which runs at most once per instance.
+	 *
+	 * A name maps to an ARRAY because the index is keyed by simple name and two packages may each
+	 * declare `U`; unioning their targets over-approximates in the same direction the rest of the
+	 * index does, and every consumer of the adjacency reads it as a veto.
+	 */
+	private function aliasEdges(): Map<String, Array<String>> {
+		final edges: Map<String, Array<String>> = [];
+		for (fi in _files) for (t in fi.types) {
+			// Null for every non-alias declaration, for an anon-struct typedef (its fields ARE its
+			// members) and for an alias the builder could not read as a nominal path.
+			final target: Null<String> = t.aliasTargetNominal;
+			if (target == null || target == t.name) continue;
+			final bucket: Array<String> = edges[t.name] ?? [];
+			if (!bucket.contains(target)) bucket.push(target);
+			edges[t.name] = bucket;
+		}
+		return edges;
 	}
 
 	/**

@@ -100,9 +100,10 @@ class BuildMacroMetaSeamTest extends Test {
 	 *    `testSeamAndTextScanAgreeOnEveryProbeTag` compare the seam with itself, so the drift guard
 	 *    that caught `@:genericBuild` would pass on any disagreement. Its `@:coreApi` is the same
 	 *    shape and has no second reader.
-	 *  - NOT SEAMED YET. `@:allow` (the privacy waiver that BREAKS a confinement proof — two
-	 *    spellings of one question, `Naming` and `RefactorSupport.privateMemberScanIsSound`, whose
-	 *    consumers are called once per member and would need a `RefShape` threaded to them);
+	 *  - NOT SEAMED YET. `@:allow` (the privacy waiver that BREAKS a confinement proof — now ONE
+	 *    spelling, `RefactorSupport.carriesAllowGrant`, whose consumers are called once per member
+	 *    and would need a `RefShape` threaded to them; it was two, in `Naming` as well, until they
+	 *    drifted apart in what a hit meant);
 	 *    `@:isVar` / `@:bypassAccessor` (accessor physics — which annotation gives a property real
 	 *    storage, which one writes past its setter); and `prefer-inline`'s inline-neutral SET, which
 	 *    is not a tag but a MEANING — "these annotations describe visibility, documentation or
@@ -115,7 +116,6 @@ class BuildMacroMetaSeamTest extends Test {
 		'src/anyparse/query/EncapsulateField.hx' => ['@:isVar'],
 		'src/anyparse/query/NewFile.hx' => ['@:nullSafety'],
 		'src/anyparse/query/MemberWriteScan.hx' => ['@:build', '@:autoBuild', '@:genericBuild', '@:coreApi'],
-		'src/anyparse/check/Naming.hx' => ['@:allow'],
 		'src/anyparse/query/RefactorSupport.hx' => ['@:allow'],
 		'src/anyparse/check/TrivialGetter.hx' => ['@:isVar', '@:bypassAccessor'],
 		'src/anyparse/check/RedundantBypassAccessor.hx' => ['@:bypassAccessor'],
