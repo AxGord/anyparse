@@ -188,6 +188,76 @@ import utest.Test;
 		Assert.equals(0, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]));
 	}
 
+	/**
+	 * A file the grammar cannot read no longer withholds EVERY deletion. `Ctx.scanComplete` was
+	 * `skippedFiles().length == 0` — one run-wide flag computed once and read at each member — so
+	 * one unparseable file anywhere in scope left every orphan report-only, with nothing written on
+	 * any finding to say why. The three scans it stood in for are all built from parsed trees; what
+	 * they cannot answer is per NAME, and a skipped file's retained text answers exactly that.
+	 */
+	public function testUnreadableFileNotSpellingTheAccessorLeavesTheDeletionAvailable(): Void {
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
+		Assert.equals(1, fixEditCount(owner, [
+			{ file: 'C.hx', source: owner },
+			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n}\n' }
+		]));
+	}
+
+	/** The twin, differing ONLY in what the unreadable file spells: no edit, and the finding names the file. */
+	public function testUnreadableFileSpellingTheAccessorDeclinesAndNamesIt(): Void {
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: owner },
+			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n\tc.get_data();\n}\n' }
+		];
+		Assert.equals(0, fixEditCount(owner, files));
+		final vs: Array<Violation> = violationsOf(files);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		final reason: Null<String> = vs[0].declineReason;
+		Assert.notNull(reason, 'an unreadable file that could hold the reference must say so');
+		if (reason == null) return;
+		Assert.isTrue(reason.indexOf('B.hx') != -1, 'the reason NAMES the file, got: $reason');
+		Assert.isTrue(reason.indexOf('get_data') != -1, 'the reason names the subject, got: $reason');
+	}
+
+	/**
+	 * The fact the run-wide flag was REALLY carrying, and the one a probe on the accessor name alone
+	 * misses: `subtypeDeclaresMember` is structural, so an unreadable file declaring a SUBTYPE that
+	 * declares the property makes this accessor live. Such a file spells the PROPERTY (it has to, to
+	 * declare it) and need not spell the accessor at all — with `[name]` as the probe set this
+	 * deleted `get_data` and left `D` uncompilable.
+	 */
+	public function testUnreadableSubtypeDeclaringThePropertyBlocksTheDeletion(): Void {
+		final owner: String = 'class C {\n\tpublic function get_data():Int return 0;\n}';
+		Assert.equals(0, fixEditCount(owner, [
+			{ file: 'C.hx', source: owner },
+			{ file: 'D.hx', source: 'class D extends C {\n\tpublic var data(get, never):Int;\n\tfunction q(: {{{\n}\n' }
+		]));
+	}
+
+	/**
+	 * The fragment surface, which `runtimeNameFragment` reads off PARSED files and no whole-name probe
+	 * can see: a computed accessor name spells the PREFIX and nothing else. The prefix is in the probe
+	 * set for exactly this, and a whole-word `get_` does not match an ordinary `get_other` declaration.
+	 */
+	public function testUnreadableComputedAccessorNameBlocksTheDeletion(): Void {
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
+		Assert.equals(0, fixEditCount(owner, [
+			{ file: 'C.hx', source: owner },
+			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n\tReflect.field(o, \'get_\' + p);\n}\n' }
+		]));
+	}
+
+	/** The control for the prefix probe: an unreadable file whose only `get_` is an ordinary declaration does NOT block. */
+	public function testUnreadablePlainAccessorDeclarationDoesNotBlockTheDeletion(): Void {
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
+		Assert.equals(1, fixEditCount(owner, [
+			{ file: 'C.hx', source: owner },
+			{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n\tfunction get_other():Int return 0;\n}\n' }
+		]));
+	}
+
 	public function testKeepClassFlaggedButNotFixed(): Void {
 		// `@:keep` members are reached by machinery no scan models — reported, never deleted.
 		final src: String = '@:keep class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction get_data():Int return data;\n}';
@@ -253,20 +323,6 @@ import utest.Test;
 	public function testAbstractClassAccessorFlagged(): Void {
 		final src: String = 'abstract class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction get_data():Int return data;\n}';
 		Assert.equals(1, violations(src).length);
-	}
-
-	public function testSkipParseInScopeBlocksFix(): Void {
-		// An unparseable report file could hold a call the scans cannot see.
-		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tpublic function get_data():Int return data;\n}';
-		final broken: String = 'class Bad { function f() {';
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: owner }, { file: 'Bad.hx', source: broken }];
-		final check: Null<Check> = Linter.byId('orphan-accessor');
-		Assert.notNull(check);
-		if (check == null) return;
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final vs: Array<Violation> = check.run(files, plugin);
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(owner, vs, plugin).length);
 	}
 
 	public function testFixWithoutRunEditsNothing(): Void {

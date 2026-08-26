@@ -77,16 +77,18 @@ using StringTools;
  * ## Autofix
  *
  * The fix DELETES the method (with its modifier / metadata run and its leading doc comment, via
- * `docExtendedSpan`), and only for arms 1 and 2, when four further gates hold: no report file
- * skip-parses (a file the parser could not read might hold a call); neither the class nor the
- * member carries `@:keep` (they are reached by machinery no scan models); the method name has ZERO
- * direct call or value references — no `IdentExpr` / `FieldAccess` / string-interpolation ident
- * carries it anywhere in REPORT SCOPE; and no string literal in that scope names it, a possible
- * `Reflect.field` target whose breakage is SILENT at runtime rather than a compile error. An
- * INTERPOLATED string is matched the other way round — `literalOf` answers null for one by
- * contract, so its static `Literal` fragments are collected and a fragment CONTAINED IN the method
- * name blocks the deletion (`'get_$suffix'` may name it at runtime); fragments shorter than an
- * accessor prefix carry no intent and are ignored.
+ * `docExtendedSpan`), and only for arms 1 and 2, when four further gates hold: no unparseable
+ * file in scope spells the accessor, the property, or an accessor PREFIX (one that did could
+ * hold a call, a subtype declaring the property, or a computed name — asked per name, never
+ * per run); neither the class nor the member carries `@:keep` (they are reached by machinery
+ * no scan models); the method name has ZERO direct call or value references — no `IdentExpr` /
+ * `FieldAccess` / string-interpolation ident carries it anywhere in REPORT SCOPE; and no string
+ * literal in that scope names it, a possible `Reflect.field` target whose breakage is SILENT at
+ * runtime rather than a compile error. An INTERPOLATED string is matched the other way round —
+ * `literalOf` answers null for one by contract, so its static `Literal` fragments are collected
+ * and a fragment CONTAINED IN the method name blocks the
+ * deletion (`'get_$suffix'` may name it at runtime); fragments shorter than an accessor
+ * prefix carry no intent and are ignored.
  *
  * The zero-reference gate is NOT the orphan test: a REAL accessor is invoked through property
  * access and shows zero textual calls too, which is exactly why the orphan test is the
@@ -108,11 +110,11 @@ using StringTools;
 final class OrphanAccessor implements Check implements DefaultOff {
 
 	/**
-	 * `<file>#<from>:<to>` of every flagged accessor whose deletion `run` PROVED safe. The
-	 * deletion gates (chain resolution, project-wide call scan, skip-parse completeness) are all
-	 * whole-project, and `fix` sees one file — so the verdict is computed once where the whole
-	 * file set is in hand and read back by span. A finding with no entry here is report-only;
-	 * `fix` called without a preceding `run` therefore edits nothing (fail-closed).
+	 * `<file>#<from>:<to>` of every flagged accessor whose deletion `run` PROVED safe. The deletion
+	 * gates (chain resolution, project-wide call scan, the per-name unreadable-file probe) all need
+	 * the whole file set and `fix` sees one file — so the verdict is computed once where that set is
+	 * in hand and read back by span. A finding with no entry here is report-only; `fix` called
+	 * without a preceding `run` therefore edits nothing (fail-closed).
 	 */
 	private var _deletable: Array<String> = [];
 
@@ -141,7 +143,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			referenced: referencedAccessorNames(files, plugin),
 			reflected: reflection.whole,
 			fragments: reflection.fragments,
-			scanComplete: index.skippedFiles().length == 0,
+			reportIndex: index,
 			retainedMeta: plugin.refShape().retainedDeclMetaName
 		};
 		for (entry in files) {
@@ -162,8 +164,9 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * Delete each flagged accessor `run` proved deletable — the method with its modifier /
 	 * metadata run (`declGroupSpan`) and its leading doc comment (`docExtendedSpan`), then the
 	 * whole line (`lineExtendedSpan`), so no orphaned doc comment or blank modifier line is left
-	 * behind. A finding absent from `_deletable` (arm 3, a live call, a skip-parse in scope)
-	 * yields no edit.
+	 * behind. A finding absent from `_deletable` (arm 3, a live call, an unparseable file
+	 * whose text spells the accessor, its property or an accessor prefix) yields no edit; the last of
+	 * those writes its reason on the finding.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -226,8 +229,18 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			// needs the check: a declaration found at or above this class forbids a subtype
 			// redeclaring the same field, so arm 1 cannot be reached this way.
 			if (!found.declared && scope.subtypeDeclaresMember(owner, prop)) return;
-			if (!reportOrphan(out, file, span, name, prop, owner, wantGetter, found)) return;
-			if (deletable(ctx, decl.hasKeep || memberKept, name)) deleting.push(child);
+			final reported: Null<Violation> = reportOrphan(out, file, span, name, prop, owner, wantGetter, found);
+			if (reported == null) return;
+			// AFTER `deletable`, so the reason below names the gate that actually closed: asked
+			// first, a `@:keep` accessor got the skip-parse sentence for a refusal its own metadata
+			// had already earned.
+			if (!deletable(ctx, decl.hasKeep || memberKept, name)) return;
+			final decline: Null<String> = unreadableDecline(ctx.reportIndex, name, prop, wantGetter);
+			if (decline != null) {
+				reported.declineReason = decline;
+				return;
+			}
+			deleting.push(child);
 		});
 		// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
 		// re-parse gate would then drop EVERY edit the pass had for this file — so the question is
@@ -250,17 +263,38 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Whether the flagged accessor `name` may be DELETED: the report scan must be complete (no
-	 * skip-parse file could hide a use), the owning class must not be `@:keep` (its members are
-	 * reached by machinery no scan sees), the name must have no direct call / value reference,
-	 * and it must appear in no string literal in scope — a possible `Reflect.field` target, whose
-	 * breakage is SILENT at runtime rather than a compile error.
+	 * Why an unreadable file in scope forbids deleting `name`, or null when none can.
+	 *
+	 * The unreadable half of the FOUR parsed-tree facts the deletion rests on, asked per NAME rather
+	 * than per RUN — as `skippedFiles().length == 0` it refused every deletion in a scope holding one
+	 * unparseable file, however unrelated, and wrote nothing on any finding to say so.
+	 *
+	 * Three names, because three different facts can be refuted. `name` covers a written call and a
+	 * whole reflective literal. `prop` covers the one the run-wide flag was really carrying:
+	 * `subtypeDeclaresMember` is structural, so a skipped file declaring a SUBTYPE that declares the
+	 * property makes this accessor live — and it has to spell the property to declare it, while it may
+	 * reach the owner through an intermediate type and never spell the OWNER at all, which is why the
+	 * owner is not in the set. The accessor PREFIX covers the fragment surface `runtimeNameFragment`
+	 * reads off parsed files: a whole-word `get_` matches a computed name and does NOT match an
+	 * ordinary `get_other` declaration, since there the prefix is followed by a word char.
 	 */
+	private static function unreadableDecline(reportIndex: SymbolIndex, name: String, prop: String, wantGetter: Bool): Null<String> {
+		final unreadable: Array<String> = reportIndex.skippedFilesMentioning([
+			name,
+			prop,
+			wantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX
+		]);
+		return unreadable.length == 0
+			? null
+			: 'the deletion is unproven: ${unreadable.length} file(s) in scope did not parse, and their text cannot be shown free of a '
+				+ 'reference to \'$name\', of a subtype declaring \'$prop\', or of a computed accessor name: ' + unreadable.join(', ');
+	}
+
 	private static function deletable(ctx: Ctx, kept: Bool, name: String): Bool {
 		// A LITERAL FRAGMENT of an interpolated string (`Reflect.field(o, 'get_$suffix')`) is only
 		// ever part of the runtime name, so containment is asked the other way round — the shared
 		// `runtimeNameFragment`, which also owns the floor below which a fragment carries no intent.
-		return ctx.scanComplete && !kept && !ctx.referenced.contains(name) && !ctx.reflected.exists(content -> content.indexOf(name) >= 0)
+		return !kept && !ctx.referenced.contains(name) && !ctx.reflected.exists(content -> content.indexOf(name) >= 0)
 			&& !ReflectionScan.runtimeNameFragment(ctx.fragments, name);
 	}
 
@@ -398,23 +432,24 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 */
 	private static function reportOrphan(
 		out: Array<Violation>, file: String, span: Span, name: String, prop: String, owner: String, wantGetter: Bool, found: Resolution
-	): Bool {
+	): Null<Violation> {
 		if (!found.declared && found.unresolved) {
 			out.push(violation(
 				file, span, Severity.Info,
 				'$name may have no property to serve: no $prop is declared in $owner'
 				+ ' or in the supertypes that resolved, and an unresolvable supertype leaves it unproven'
 			));
-			return false;
+			return null;
 		}
 		final slot: String = wantGetter ? 'get' : 'set';
-		out.push(violation(
+		final reported: Violation = violation(
 			file, span, Severity.Warning,
 			found.declared
 				? '$name has no property to serve: $prop declares no $slot accessor'
 				: '$name has no property to serve: neither $owner nor its supertypes declare $prop'
-		));
-		return true;
+		);
+		out.push(reported);
+		return reported;
 	}
 
 }
@@ -448,8 +483,13 @@ private typedef Ctx = {
 	/** The static text FRAGMENTS of every interpolated string in scope — a partially computed reflection name. */
 	var fragments: Array<String>;
 
-	/** Whether every report file parsed, so the two scans above saw the whole scope. */
-	var scanComplete: Bool;
+	/**
+	 * The REPORT index, carried for its SKIPPED-file set alone. The three scans above — and the
+	 * fourth fact the deletion rests on, `subtypeDeclaresMember` — are all built from parsed
+	 * trees, so a file that did not parse contributes to none of them; its retained raw source is
+	 * the only thing left that can say whether it could carry any of the four.
+	 */
+	var reportIndex: SymbolIndex;
 
 	/**
 	 * `RefShape.retainedDeclMetaName` — the tag that pins a member against removal, because its

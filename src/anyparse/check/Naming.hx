@@ -690,10 +690,20 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// removed, `Reflect.field(x, '__size')` in the declaring file AND in another file both still
 		// refuse. A second mechanism answering the same question would only add a disk read per candidate
 		// and a gate no in-memory test can reach.
-		// Unresolvable hierarchy: an `@:allow` grants an unenumerable type; a non-unique owner makes
-		// the subtype match ambiguous.
-		if (source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1)
-			return RenameRefusal.candidate(v, RenameRefusal.CROSS_HIERARCHY_UNPROVABLE);
+		// Unresolvable hierarchy, and the two causes answer separately: one sentence for both sent a
+		// reader looking for an `@:allow` that a duplicate type name had actually caused.
+		//
+		// The DUPLICATE is asked first, and that order is the point rather than a preference. It is
+		// the cause the index knows EXACTLY, and the one a reader can act on; the grant is a raw
+		// substring scan (`privateMemberScanIsSound`'s, shared with it) that a `@:allow` in a
+		// comment or a string literal satisfies. Asked first, the grant sentence claimed metadata a
+		// file did not carry AND buried the real duplicate — the split had turned the old sentence's
+		// hedging `or` into a categorical assertion. Asked second, an imprecise scan only ever
+		// over-refuses a declaration nothing more precise had anything to say about.
+		final declarers: Array<FileInfo> = index.declaringFiles(ownerName);
+		if (declarers.length != 1)
+			return RenameRefusal.candidate(v, RenameRefusal.crossOwnerNotUnique(ownerName, declarers.map(f -> f.file)));
+		if (source.indexOf('@:allow') >= 0) return RenameRefusal.candidate(v, RenameRefusal.CROSS_ALLOW_GRANT);
 		// Every refusal from here down belongs to THIS path: the gates above either hand the
 		// declaration to the single-file rename or are not about it at all, and speaking for those
 		// would overwrite the more accurate sentence that path is about to write. The category gate is
@@ -1832,9 +1842,9 @@ private class RenameRefusal {
 	/** The file did not re-parse for the fix pass. */
 	public static inline final NO_TREE: String = 'the file did not re-parse in the fix pass, so no declaration could be located in it';
 
-	/** The cross-file path's unresolvable-hierarchy gate, over the files the index COULD read. */
-	public static inline final CROSS_HIERARCHY_UNPROVABLE: String =
-		'the cross-file rename cannot enumerate who reaches the owner — the declaring file carries an `@:allow` granting an unenumerable type, or the owner\'s simple name is not declared in exactly one file';
+	/** The declaring file hands its privates to a type the index cannot name from here. */
+	public static inline final CROSS_ALLOW_GRANT: String =
+		'the cross-file rename cannot enumerate who reaches the owner — the declaring file carries an `@:allow`, which grants its private members to a type this index cannot enumerate';
 
 	/** A member of the override family sits outside the files the rename would edit. */
 	public static inline final CROSS_FAMILY_UNREACHABLE: String =
@@ -1894,6 +1904,26 @@ private class RenameRefusal {
 		return 'the cross-file rename cannot enumerate who reaches the owner — the file(s) below did not parse, and each either '
 			+ 'spells this member\'s name, its owner\'s, or the corrected name, or was not retained to be read at all, so one may '
 			+ 'hold a reference, an override, or a declaration the rename cannot see: ${files.join(', ')}';
+	}
+
+	/**
+	 * The other half of the unresolvable-hierarchy gate: the owner's simple name does not resolve to
+	 * exactly one declaration, so no subtype match can be attributed to THIS owner.
+	 *
+	 * It shared one sentence with `CROSS_ALLOW_GRANT` and the sentence listed both causes with an
+	 * `or` — a reader could not tell which had fired, and went looking for an `@:allow` a duplicate
+	 * type name had actually caused. This half is the one the index knows exactly, so it is asked
+	 * FIRST and it names the files.
+	 *
+	 * The empty-`files` arm is DEFENSIVE, not a case seen in this codebase: both callers build the
+	 * index over the same file set the declaration came from, so the declaring file is always in it.
+	 * `crossFileFix` takes its index as a public parameter, which is the only way a caller could hand
+	 * in one that does not contain it.
+	 */
+	public static function crossOwnerNotUnique(owner: String, files: Array<String>): String {
+		return 'the cross-file rename cannot enumerate who reaches the owner — ${files.length} file(s) this run can read declare a type '
+			+ 'named "$owner", not exactly one, so a subtype match cannot be attributed to this declaration'
+			+ (files.length == 0 ? '' : ': ${files.join(', ')}');
 	}
 
 	/**

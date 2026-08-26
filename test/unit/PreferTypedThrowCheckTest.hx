@@ -31,6 +31,12 @@ class PreferTypedThrowCheckTest extends Test {
 	private static inline final STRING_CATCH: String =
 		'class H {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:String) {}\n\t}\n\n}\n';
 
+	/** A source the grammar cannot read, carrying NO catch clause. */
+	private static inline final UNREADABLE: String = 'class B {\n\tfunction q(: {{{\n}\n';
+
+	/** The same unreadable source, differing in ONE thing: it carries the blocking clause. */
+	private static inline final UNREADABLE_CATCH: String = 'class B {\n\tfunction q(: {{{\n\ttry h() catch (e:String) {}\n}\n';
+
 	// --- what is flagged ---
 
 	public function testStringThrowFlagged(): Void {
@@ -220,6 +226,23 @@ class PreferTypedThrowCheckTest extends Test {
 		Assert.equals(0, check.fix(THROWER, vs, scoped).length, 'a degraded finding yields no edit');
 	}
 
+	/**
+	 * An UNREADABLE library file degrades nothing on its own. The clause gate is a text scan and
+	 * the index retains a skipped file's bytes, so parse status withholds nothing from it — asked
+	 * as `skippedFiles().length > 0` one unparseable file anywhere put the whole rule on
+	 * report-only, whatever it contained.
+	 */
+	public function testUnreadableLibraryFileWithoutAClauseDoesNotDegrade(): Void {
+		final message: String = unreadableLibraryOutcome(UNREADABLE);
+		Assert.isTrue(message.indexOf('report-only') == -1, 'no clause in the unreadable file, got: $message');
+	}
+
+	/** The twin of the test above, differing ONLY in the clause inside the unreadable file: it degrades. */
+	public function testUnreadableLibraryFileCarryingAClauseDegrades(): Void {
+		final message: String = unreadableLibraryOutcome(UNREADABLE_CATCH);
+		Assert.isTrue(message.indexOf('report-only') != -1, 'the clause is read out of the unreadable file, got: $message');
+	}
+
 	/** Excluding std must not MASK a project clause sitting in the same scope alongside it. */
 	public function testStdExclusionDoesNotMaskAProjectCatch(): Void {
 		final std: Null<String> = StdResolver.stdDir();
@@ -353,6 +376,22 @@ class PreferTypedThrowCheckTest extends Test {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(library) } });
 		return scoped;
+	}
+
+	/**
+	 * The report message for `THROWER` with `unreadable` as the one library file, after asserting the
+	 * fix arm agrees with it: one finding, and an edit exactly when the message is not degraded.
+	 */
+	private function unreadableLibraryOutcome(unreadable: String): String {
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
+		final scoped: CachingGrammarPlugin = scopedPlugin(report, [{ file: 'vendor/broken/B.hx', source: unreadable }]);
+		final check: PreferTypedThrow = new PreferTypedThrow();
+		final vs: Array<Violation> = check.run(report, scoped);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return '';
+		final degraded: Bool = vs[0].message.indexOf('report-only') != -1;
+		Assert.equals(degraded, check.fix(THROWER, vs, scoped).length == 0, 'the fix arm follows the message');
+		return vs[0].message;
 	}
 
 	private function violations(src: String): Array<Violation> {

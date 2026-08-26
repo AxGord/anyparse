@@ -124,6 +124,28 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(1, skipParseViolations('package pkg;\nclass Bad { function f() { other = 1;'));
 	}
 
+	/**
+	 * The UNCONFINED branch takes the same per-name answer. A subtype in scope makes the member
+	 * unconfined, so the verdict comes from `provablyDeadProjectWide` — which opened with
+	 * `skippedFiles().length == 0` and therefore refused every such member for one unreadable file
+	 * anywhere in scope. Its own `nameOccursOutside` already walks the RETAINED sources, skipped
+	 * ones included, so the caution never lived in that clause and the clause only lost findings.
+	 */
+	public function testUnconfinedMemberSkipParseIsAlsoPerName(): Void {
+		Assert.equals(1, subtypedSkipParseViolations('package pkg;\nclass Bad { function f() { other = 1;'));
+		Assert.equals(0, subtypedSkipParseViolations('package pkg;\nclass Bad { function f() { _x = 1;'));
+	}
+
+	/**
+	 * The private-constructor arm asks about the CLASS. Its three proofs — no subtype, no `new C`,
+	 * no reflective mention — each need a file the parser could read, and each is refuted only by a
+	 * file that SPELLS the class; run-wide the arm went silent for any unparseable file at all.
+	 */
+	public function testPrivateCtorArmSkipParseIsPerClass(): Void {
+		Assert.equals(1, utilCtorSkipParseViolations('package pkg;\nclass Bad { function f() { other = 1;'));
+		Assert.equals(0, utilCtorSkipParseViolations('package pkg;\nclass Bad extends Util { function f() { q = 1;'));
+	}
+
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations([{ file: 'Bad.hx', source: 'class Bad { function f() { ' }]).length);
 	}
@@ -735,6 +757,29 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'pkg/Bad.hx', source: badSrc }
 		];
 		return violations(files).filter(v -> v.file == 'pkg/C.hx').length;
+	}
+
+	/** The same shape with a SUBTYPE in scope, which is what makes `_x` unconfined. */
+	private function subtypedSkipParseViolations(badSrc: String): Int {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}' },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n}' },
+			{ file: 'pkg/Bad.hx', source: badSrc }
+		];
+		return violations(files).filter(v -> v.file == 'pkg/C.hx').length;
+	}
+
+	/** Findings on a never-instantiated all-static `Util` with a private constructor. */
+	private function utilCtorSkipParseViolations(badSrc: String): Int {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/Util.hx',
+				source: 'package pkg;\nclass Util {\n\tpublic static function helper():Int return 1;\n\tprivate function new() {}\n}'
+			},
+			{ file: 'pkg/User.hx', source: 'package pkg;\nclass User {\n\tpublic function f():Int return Util.helper();\n}' },
+			{ file: 'pkg/Bad.hx', source: badSrc }
+		];
+		return violations(files).filter(v -> v.file == 'pkg/Util.hx').length;
 	}
 
 	private function one(source: String): Array<Violation> {
