@@ -814,18 +814,21 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * (`ForStmt` / `ForExpr` — the array-comprehension form is a `ForExpr`) and the `KeyValueBinder`
 	 * carrying the VALUE of a key-value `for (k => v in m)`, whose KEY is the loop node's own name.
 	 *
-	 * Two shapes carry no named binding node and are recovered here: a single-parameter thin arrow
-	 * `v -> ...` projects its parameter as a bare child-0 `IdentExpr`; and a case PATTERN (`Plain`)
+	 * One shape carries no named binding node and is recovered here: a case PATTERN (`Plain`)
 	 * projects its captures as bare identifiers, so ANY mention of `name` inside one counts (a
 	 * constructor name that happens to match only over-qualifies).
+	 *
+	 * A single-parameter thin arrow `v -> ...` used to need a second recovery arm here, reading
+	 * child-0 of a `ThinArrow` for a bare `IdentExpr`. It no longer does:
+	 * `HxArrowParamProjection` re-labels that child `Required` in the query tree, so the
+	 * parameter arrives through the first arm like every other parameter. That private arm was
+	 * the tell — four `Refs`-based checks were one gap away from needing their own copy.
 	 */
 	private static function bindsNameHere(node: QueryNode, name: String): Bool {
 		return switch node.kind {
 			case 'Required', 'Optional', 'Rest', 'LambdaParam', 'VarStmt', 'FinalStmt', 'VarExpr', 'FinalExpr', 'VarMore',
 				'StaticVarStmt', 'StaticFinalStmt', 'LocalFnStmt', 'LocalInlineFnStmt', 'NamedFnExpr', 'CatchClause', 'ForStmt',
 				'ForExpr', 'KeyValueBinder', 'Capture': node.name == name;
-			case 'ThinArrow':
-				node.children.length > 0 && node.children[0].kind == 'IdentExpr' && node.children[0].name == name;
 			case 'Plain': mentionsField(node, name);
 			case _: false;
 		}

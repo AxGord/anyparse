@@ -685,6 +685,7 @@ import unit.SwallowedExceptionCheckTest;
 import unit.SymbolIndexSliceTest;
 import unit.SymbolQuerySliceTest;
 import unit.TailMergeCheckTest;
+import unit.ThinArrowParamBindingSliceTest;
 import unit.ThreadSafetyCheckTest;
 import unit.TriviaScanSliceTest;
 import unit.TrivialGetterCheckTest;
@@ -1220,6 +1221,7 @@ class RunTests {
 		addCase(new PreferKeyValueLoopCheckTest());
 		addCase(new DeadBinderCounterLoopCheckTest());
 		addCase(new RedundantReplaceLoopCheckTest());
+		addCase(new ThinArrowParamBindingSliceTest());
 		addCase(new TrivialGetterCheckTest());
 		addCase(new TrivialGetterIsVarTest());
 		addCase(new TrivialGetterShapeCollapseTest());
