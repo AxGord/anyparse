@@ -690,9 +690,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// removed, `Reflect.field(x, '__size')` in the declaring file AND in another file both still
 		// refuse. A second mechanism answering the same question would only add a disk read per candidate
 		// and a gate no in-memory test can reach.
-		// Unresolvable hierarchy: a skip-parse file could hide a subtype / grant we never see; an
-		// `@:allow` grants an unenumerable type; a non-unique owner makes the subtype match ambiguous.
-		if (index.skippedFiles().length > 0 || source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1)
+		// Unresolvable hierarchy: an `@:allow` grants an unenumerable type; a non-unique owner makes
+		// the subtype match ambiguous.
+		if (source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1)
 			return RenameRefusal.candidate(v, RenameRefusal.CROSS_HIERARCHY_UNPROVABLE);
 		// Every refusal from here down belongs to THIS path: the gates above either hand the
 		// declaration to the single-file rename or are not about it at all, and speaking for those
@@ -701,22 +701,31 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// more accurate is coming and the sentence it writes is the same one `RenameRefusal.of` holds
 		// for the same declaration.
 		final correction: Array<String> = [];
-		final targetName: Null<String> = correctedFieldName(
+		final corrected: Null<String> = correctedFieldName(
 			decl, support.policyFor(declFile), ownerName, resolutionIndex, declFile, reason -> correction.push(reason)
 		);
-		return
-			targetName == null ? RenameRefusal.candidate(v, correction.length == 0 ? RenameRefusal.NORMALIZER_DECLINED : correction[0]) : {
-				declFile: declFile,
-				source: source,
-				tree: tree,
-				declFrom: vspan.from,
-				oldName: decl.name,
-				targetName: targetName,
-				ownerName: ownerName,
-				distinctive: isDistinctiveName(decl.name),
-				isPublic: isPublic,
-				family: overrides
-			};
+		if (corrected == null)
+			return RenameRefusal.candidate(v, correction.length == 0 ? RenameRefusal.NORMALIZER_DECLINED : correction[0]);
+		// Re-bound: a narrowed local does not stay narrowed inside an anonymous structure literal.
+		final targetName: String = corrected;
+		// The skip-parse arm of the same unresolvable-hierarchy question, and the last gate because it
+		// needs `targetName` - the identifier the rename INTRODUCES, whose only unreadable hazard is a
+		// file already declaring it under this owner. Asked as `skippedFiles().length > 0` this refused
+		// EVERY cross-file rename in any scope holding one unparseable file, however unrelated; asked
+		// per NAME it refuses the renames a skipped file could actually invalidate, and names it.
+		final unreadable: Array<String> = index.skippedFilesMentioning([decl.name, ownerName, targetName]);
+		return unreadable.length > 0 ? RenameRefusal.candidate(v, RenameRefusal.crossSkipParse(unreadable)) : {
+			declFile: declFile,
+			source: source,
+			tree: tree,
+			declFrom: vspan.from,
+			oldName: decl.name,
+			targetName: targetName,
+			ownerName: ownerName,
+			distinctive: isDistinctiveName(decl.name),
+			isPublic: isPublic,
+			family: overrides
+		};
 	}
 
 	/**
@@ -1823,9 +1832,9 @@ private class RenameRefusal {
 	/** The file did not re-parse for the fix pass. */
 	public static inline final NO_TREE: String = 'the file did not re-parse in the fix pass, so no declaration could be located in it';
 
-	/** The cross-file path's one three-part unresolvable-hierarchy gate. */
+	/** The cross-file path's unresolvable-hierarchy gate, over the files the index COULD read. */
 	public static inline final CROSS_HIERARCHY_UNPROVABLE: String =
-		'the cross-file rename cannot enumerate who reaches the owner — the scope holds a file the grammar could not parse, or the declaring file carries an `@:allow` granting an unenumerable type, or the owner\'s simple name is not declared in exactly one file';
+		'the cross-file rename cannot enumerate who reaches the owner — the declaring file carries an `@:allow` granting an unenumerable type, or the owner\'s simple name is not declared in exactly one file';
 
 	/** A member of the override family sits outside the files the rename would edit. */
 	public static inline final CROSS_FAMILY_UNREACHABLE: String =
@@ -1872,6 +1881,19 @@ private class RenameRefusal {
 			case ImplicitReach.Annotation: CARRIES_METADATA;
 			case ImplicitReach.TypeRegistry: TYPE_REGISTRY;
 		}
+	}
+
+	/**
+	 * The unresolvable-hierarchy sentence for the files the grammar could not read, NAMING them.
+	 *
+	 * Every other refusal here is a constant, and that is exactly what the gate this serves used to
+	 * be able to afford: it answered `skippedFiles().length > 0` for the whole RUN, so there was no
+	 * subject to name and no file for a reader to go and look at. A per-declaration gate has both.
+	 */
+	public static function crossSkipParse(files: Array<String>): String {
+		return 'the cross-file rename cannot enumerate who reaches the owner — the file(s) below did not parse, and each either '
+			+ 'spells this member\'s name, its owner\'s, or the corrected name, or was not retained to be read at all, so one may '
+			+ 'hold a reference, an override, or a declaration the rename cannot see: ${files.join(', ')}';
 	}
 
 	/**

@@ -726,9 +726,10 @@ final class RefactorSupport {
 
 	/**
 	 * The resolution scope's RAW sources (report UNION the library roots) when `plugin` hosts one, else
-	 * null. The text counterpart of `resolutionIndexOf`, for a scan that needs no parse: the index drops
-	 * a skip-parsed file from both `allFiles` and `sourceOf`, so a whole-scope TEXT proof read off the
-	 * index would treat that file as holding nothing at all.
+	 * null. The text counterpart of `resolutionIndexOf`, for a scan that needs no parse: the index
+	 * drops a skip-parsed file from `allFiles` (it keeps the raw source, which is what
+	 * `skippedFilesMentioning` reads), so a whole-scope proof walking `allFiles` would treat that
+	 * file as holding nothing at all.
 	 */
 	public static inline function resolutionSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;

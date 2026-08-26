@@ -1551,12 +1551,23 @@ final class SymbolIndex {
 	 * source was not retained answers true.
 	 */
 	public function skippedMayReference(name: String): Bool {
-		if (name.length == 0) return _skipped.length > 0;
-		for (file in _skipped) {
-			final source: Null<String> = _sources[file];
-			if (source == null || mentionsWord(source, name)) return true;
-		}
-		return false;
+		return name.length == 0 ? _skipped.length > 0 : _skipped.exists(file -> skippedSourceMentions(_sources[file], name));
+	}
+
+	/**
+	 * The same question in the shape a REFUSAL needs: WHICH skipped files may reference any of
+	 * `names`, rather than whether one does.
+	 *
+	 * A gate that only refuses needs the `Bool`; a gate that must TELL the user why needs the
+	 * subject. `naming`'s cross-file rename is the second kind — it asks about three identifiers at
+	 * once (the member's current name, its owner's, and the corrected name it would introduce) and
+	 * writes the answer into `Violation.declineReason`, where "some file did not parse" with no file
+	 * named is barely better than the whole-run veto it replaced.
+	 *
+	 * An empty name means the same here as there — every skipped file, since nothing was asked.
+	 */
+	public function skippedFilesMentioning(names: Array<String>): Array<String> {
+		return _skipped.filter(file -> names.exists(name -> name.length == 0 || skippedSourceMentions(_sources[file], name)));
 	}
 
 	/**
@@ -2562,6 +2573,16 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether a skip-parsed file whose retained `source` this is may reference `name` — the one
+	 * predicate `skippedMayReference` and `skippedFilesMentioning` both answer with, so neither can
+	 * drift from the other. A file whose source was not retained answers true: unreadable is not
+	 * absent.
+	 */
+	private static inline function skippedSourceMentions(source: Null<String>, name: String): Bool {
+		return source == null || mentionsWord(source, name);
+	}
+
+	/**
 	 * Whether the MODULE of `fi` can be named by its own simple name from `fromFile` — the
 	 * visibility a module-relative `Mod.Sub` reference needs, which is NOT the one a bare TYPE
 	 * name needs, so `simpleRefInScope` cannot stand in for it. Compiled on 4.3.7: same package
@@ -2610,7 +2631,6 @@ final class SymbolIndex {
 		return found;
 	}
 
-	/** Whether `source` holds `name` bounded by non-identifier characters — the raw-text half of `skippedMayReference`. */
 	private static function mentionsWord(source: String, name: String): Bool {
 		var at: Int = source.indexOf(name);
 		while (at >= 0) {

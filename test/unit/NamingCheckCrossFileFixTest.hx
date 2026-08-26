@@ -777,6 +777,104 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		Assert.isFalse(reason.indexOf('a public member is reachable') >= 0, 'the gate that declined is the one that speaks');
 	}
 
+	/**
+	 * ONE unparseable file anywhere in the scope refused EVERY cross-file rename of the run: the
+	 * gate read `index.skippedFiles().length > 0`, a question about the RUN asked of a decision
+	 * about one declaration. Nothing in the tree exercised it, and `apq self-status` exists because
+	 * skip-parse happens — a project with a single generated or exotic file lost the whole feature
+	 * and was told only that some hierarchy was unprovable.
+	 *
+	 * `pkg/Broken.hx` spells neither `shape` nor `C`, so it can hold no reference to the member, no
+	 * subtype of its owner and no second declaration of that owner: it has no way to invalidate this
+	 * rename, and must not veto it.
+	 */
+	public function testAnUnrelatedSkipParseFileDoesNotBlockACrossFileRename(): Void {
+		final files: Array<{ file: String, source: String }> = scopeWithBroken('package pkg;\nclass Broken { var x = ((( ; }');
+		// The file really does skip-parse, or the rename below would say nothing about the gate.
+		Assert.equals(1, SymbolIndex.build(files, new HaxeQueryPlugin()).skippedFiles().length);
+		final rename: Array<CrossFileEdits> = crossFileRename(files);
+		Assert.equals(2, rename.length);
+		assertRenameSlice(rename, 'pkg/C.hx', files[0].source, 'private var _shape', 'var shape');
+		assertRenameSlice(rename, 'pkg/D.hx', files[1].source, 'return _shape', 'return shape');
+	}
+
+	/**
+	 * The caution the gate was built on, kept at its honest width: `pkg/Broken.hx` did not parse AND
+	 * spells `shape`, so it may hold a reference the rename would have to rewrite and cannot be read.
+	 * That rename stays refused — and the refusal NAMES the file, which is the half a user could not
+	 * get before: fewer findings, and a sentence about an unprovable hierarchy pointing at no file.
+	 *
+	 * The fixture spells `shape` and NOTHING else the gate asks about: an `extends C` here would let
+	 * the owner arm carry the test and the member arm could be deleted with it still green.
+	 */
+	public function testASkipParseFileSpellingTheMemberRefusesAndNamesTheFile(): Void {
+		Assert.stringContains(
+			'pkg/Broken.hx', crossFileRefusalNaming('package pkg;\nclass Broken {\n\tpublic function g():Int { return shape + ((( ; }\n}')
+		);
+	}
+
+	/**
+	 * The second name the gate asks about: this file never spells `shape`, but it does spell `C` — so
+	 * it may declare a subtype of the owner, or a SECOND type carrying that simple name, which is the
+	 * very ambiguity `declaringFiles(ownerName).length != 1` refuses on for files the index could
+	 * read. Unreadable, it must refuse the same way. The fixture aliases rather than extends, because
+	 * the gate reads BYTES and the alias is the shape that proves it.
+	 */
+	public function testASkipParseFileSpellingTheOwnerRefusesAndNamesTheFile(): Void {
+		Assert.stringContains('pkg/Broken.hx', crossFileRefusalNaming('package pkg;\ntypedef Alias = C;\nclass Broken { var x = ((( ; }'));
+	}
+
+	/**
+	 * The third name, and the one a member-and-owner rule leaks: an INDIRECT subtype declaring the
+	 * CORRECTED name. `affectedFiles` walks the subtype closure over indexed files by SIMPLE supertype
+	 * name, so a skipped `Deep extends Mid` spells neither `shape` nor `C` — and `_shape` is what
+	 * `haxe` then rejects as "Redefinition of variable _shape in subclass". The readable path has this
+	 * gate (`nameBoundInRange` -> `CROSS_COLLISION`); the unreadable one needs the rename's OWN target
+	 * in the question, which is why the gate sits below `correctedFieldName` rather than beside its
+	 * two siblings.
+	 */
+	public function testASkipParseFileSpellingTheCorrectedNameRefusesAndNamesTheFile(): Void {
+		final files: Array<{ file: String, source: String }> =
+			scopeWithBroken('package pkg;\nclass Deep extends Mid {\n\tprivate var _shape:Int = ((( ;\n}');
+		files.push({ file: 'pkg/Mid.hx', source: 'package pkg;\nclass Mid extends C {\n\tpublic function m():Int { return 0; }\n}' });
+		Assert.stringContains('pkg/Broken.hx', refusalNamingIn(files));
+	}
+
+	/**
+	 * The two-file scope every skip-parse fixture here renames over — `pkg/C.hx` declaring a
+	 * non-confined private `shape` and `pkg/D.hx` reading it through inheritance — plus `brokenSrc`
+	 * as `pkg/Broken.hx`.
+	 */
+	private function scopeWithBroken(brokenSrc: String): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}'
+			},
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' },
+			{ file: 'pkg/Broken.hx', source: brokenSrc }
+		];
+	}
+
+	/**
+	 * The `declineReason` the cross-file rename of `pkg/C.hx`'s `shape` writes when `brokenSrc` joins
+	 * the scope as `pkg/Broken.hx` — asserting first that the file really does skip-parse and that
+	 * the rename really is refused, so the sentence returned is a refusal's and not an absence.
+	 */
+	private function crossFileRefusalNaming(brokenSrc: String): String {
+		return refusalNamingIn(scopeWithBroken(brokenSrc));
+	}
+
+	/**
+	 * `crossFileRefusalNaming` over an already-assembled scope, for a fixture that needs a file the
+	 * two-file base does not carry. Asserts first that exactly one file skip-parses — a fixture that
+	 * quietly parses would take its refusal from some entirely different gate and prove nothing.
+	 */
+	private function refusalNamingIn(files: Array<{ file: String, source: String }>): String {
+		Assert.equals(1, SymbolIndex.build(files, new HaxeQueryPlugin()).skippedFiles().length);
+		return refusalFor(files, 'pkg/C.hx', true);
+	}
+
 	/** The single cross-file rename `files` yields, as its per-file slices. */
 	private function crossFileRename(files: Array<{ file: String, source: String }>): Array<CrossFileEdits> {
 		final renames: Array<Array<CrossFileEdits>> = crossFileRenames(files);
