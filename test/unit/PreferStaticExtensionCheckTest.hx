@@ -166,8 +166,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	 * index can name, so the receiver stays unresolved and the site report-only.
 	 */
 	public function testLocalClosureReceiverReportedOnly(): Void {
-		final source: String = 'using Ext;\n\nclass C {\n\tfunction f():Void {\n\t\tfinal make = () -> new Widget();\n'
-			+ '\t\tExt.deco(make(), 1);\n\t}\n}\n';
+		final source: String =
+			'using Ext;\n\nclass C {\n\tfunction f():Void {\n\t\tfinal make = () -> new Widget();\n\t\tExt.deco(make(), 1);\n\t}\n}\n';
 		assertUnresolvedReceiver(fileSet(source));
 	}
 

@@ -50,8 +50,8 @@ class OperatorOverloadGateTest extends Test {
 		+ '\t@:op(A == B) public inline function eq(b: Flag): Bool return this == cast b;\n\n'
 		+ '\t@:op(!A) public inline function inv(): Bool return this;\n\n}\n';
 
-	private static final NEGATION_PLAIN: String = 'abstract Flag(Bool) from Bool to Bool {\n\n'
-		+ '\tpublic inline function eq(b: Flag): Bool return this == cast b;\n\n}\n';
+	private static final NEGATION_PLAIN: String =
+		'abstract Flag(Bool) from Bool to Bool {\n\n\tpublic inline function eq(b: Flag): Bool return this == cast b;\n\n}\n';
 
 	/** A negated comparison, a double negation and a negated if-else, all over the abstract. */
 	private static final NEGATION_USE: String = 'class Use2 {\n\n\tpublic static function a(f: Flag, g: Flag): Bool {\n'

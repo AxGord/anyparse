@@ -41,8 +41,8 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 	 * redeclaration `t` (whose type is declared in this very module, so the compiler's repo-rooted
 	 * path is the only spelling on offer), and `loose`, whose `Reflect.field` answer is `Dynamic`.
 	 */
-	private static final MAIN: String = 'package pkg;\n\nclass Main {\n\n' + '\tpublic static function run():Void {\n'
-		+ '\t\tfinal winmap:Map<String, String> = [\n' + '\t\t\tfor (e in [\'a@1\', \'b@2\']) {\n' + '\t\t\t\tfinal a = e.split(\'@\');\n'
+	private static final MAIN: String = 'package pkg;\n\nclass Main {\n\n\tpublic static function run():Void {\n'
+		+ '\t\tfinal winmap:Map<String, String> = [\n\t\t\tfor (e in [\'a@1\', \'b@2\']) {\n' + '\t\t\t\tfinal a = e.split(\'@\');\n'
 		+ '\t\t\t\ta[0] => a[1];\n\t\t\t}\n\t\t];\n' + '\t\tfinal t = new Thing(1);\n\t\tfinal t = t.next();\n'
 		+ '\t\tfinal bag:Dynamic = {n: 1};\n' + '\t\tfinal loose = Reflect.field(bag, \'n\');\n'
 		+ '\t\tfinal mapped = [\'a\', \'b\'].map(s -> s.length);\n' + '\t\ttrace(winmap, t, loose, mapped);\n\t}\n\n}\n\n'
@@ -110,8 +110,8 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 
 	/** The defect-1 shape: the answer describes lines ABOVE the queried one, so it is not about this local. */
 	public function testRejectsEnclosingLineRange(): Void {
-		final source: String =
-			'class C {\n\tfunction f() {\n\t\tvar m = [\n\t\t\tfor (e in xs) {\n\t\t\t\tvar a = e.split(\'@\');\n\t\t\t\ta[0] => a[1];\n\t\t\t}\n\t\t];\n\t}\n}\n';
+		final source: String = 'class C {\n\tfunction f() {\n\t\tvar m = [\n\t\t\tfor (e in xs) {\n\t\t\t\tvar a = e.split(\'@\');\n'
+			+ '\t\t\t\ta[0] => a[1];\n\t\t\t}\n\t\t];\n\t}\n}\n';
 		final at: Int = source.indexOf('a = e.split');
 		Assert.isFalse(CompilerDisplayOracle.replyCovers(source, {
 			file: 'C.hx',
