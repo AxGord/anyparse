@@ -1343,6 +1343,37 @@ class WriterCodegen {
 	}
 
 	/**
+	 * ω-pattern-rest-probe — opt-fanout shim marking a case-PATTERN body
+	 * (`@:fmt(suppressPatternRestProbe)`), so no construct below it rest-probes the
+	 * line on the TRIVIA write path. Idempotent (returns `o` unchanged when already
+	 * set). Sister to `_setSuppressComplexItems`, and deliberately NOT the same flag:
+	 * that one a switch SUBJECT also sets, and a subject is a real expression whose
+	 * call must keep wrapping. Gated on `_suppressPatternRestProbe:Bool`.
+	 *
+	 * The PLAIN struct-Star path does not read the flag — see the backlog note on
+	 * `WriterLowering`'s plain `groupRestProbe` site; `writeRoundTrip` and every
+	 * canonical gate are trivia-only, so the gap is reachable only through
+	 * `--writer-output-plain`.
+	 */
+	private static function setSuppressPatternRestProbeField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setSuppressPatternRestProbe',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
+				ret: optionsCT,
+				expr: macro {
+					if (o._suppressPatternRestProbe) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c._suppressPatternRestProbe = true;
+					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
 	 * ω-expr-paren-in-condition — sister reset helper to
 	 * `_setParenInCondition`. Returns `o` unchanged when `_parenInCondition`
 	 * is already `false`; otherwise returns a `_copyOpt(o)` with the flag
@@ -2556,6 +2587,11 @@ class WriterCodegen {
 		// `_setSuppressComplexItems`.
 		if (optionsHasField(optionsTypePath, '_suppressComplexItems')) {
 			fields.push(setSuppressComplexItemsField(optionsCT));
+		}
+		// ω-pattern-rest-probe: same one-field-per-block gate for
+		// `_setSuppressPatternRestProbe`.
+		if (optionsHasField(optionsTypePath, '_suppressPatternRestProbe')) {
+			fields.push(setSuppressPatternRestProbeField(optionsCT));
 		}
 		// ω-keep-kw-newline (increment 1b): opt-fanout helper pair for the
 		// VarStmt-family `@:fmt(captureKwNewline)` ctors. `_setVarKwNewline`

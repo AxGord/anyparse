@@ -905,15 +905,27 @@ class WrapList {
 	 * Resolving the arm is legal only for a host that has ALREADY committed to a
 	 * break: the item cannot be on one line there, so its pivot is certain to
 	 * fire. Each caller states which fact gives it that certainty.
+	 *
+	 * `fitPivot` (ω-fit-pivot-collection-arg) admits a SECOND pivot shape —
+	 * `Group(IfBreak(brk, flat))` / `GroupWithRestProbe(…)`, what the
+	 * `exceedsMaxLineLength` two-run cascade emits — and it carries a STRICTER
+	 * contract than the sentence above, because a committed host does NOT make a
+	 * fit pivot certain to fire: that one is decided by `fitsFlat` at the running
+	 * column, not by a width threshold. A caller passing `true` must therefore
+	 * gate the resolved shape on the collection FITTING at its own continuation
+	 * indent (`shapeMultiArgCollection` does, via `IfArrowContinuationFits`).
+	 * Without that gate the writer commits a break the renderer would not have
+	 * taken — measured: ungated it cost `wrapping/issue_116_multipass` and two
+	 * `HxComplexItemWrapTest` D2 pins.
 	 */
-	public static function renderPivotBreakArm(d: Doc): Null<Doc> {
+	public static function renderPivotBreakArm(d: Doc, fitPivot: Bool = false): Null<Doc> {
 		// An item that ALREADY breaks needs no resolution, and resolving one
 		// would be wrong: its pivot may legitimately pick the FLAT arm, whose
 		// hardline comes from a nested item rather than from this list's own
 		// cascade — substituting the break arm there re-lays out a shape both
 		// passes already agree on (measured: it opened the call paren on the
 		// nested-array hug fixtures).
-		return flatLength(d) < 0 ? null : pivotBreakArm(d);
+		return flatLength(d) < 0 ? null : pivotBreakArm(d, fitPivot);
 	}
 
 	/**
@@ -2028,19 +2040,21 @@ class WrapList {
 	}
 
 	/** `renderPivotBreakArm`'s spine walk, past the wrappers the writer adds. */
-	private static function pivotBreakArm(d: Doc): Null<Doc> {
+	private static function pivotBreakArm(d: Doc, fitPivot: Bool): Null<Doc> {
 		switch (d) {
 			case IfFirstLineExceeds(_, brk, _):
+				return flatLength(brk) < 0 ? brk : null;
+			case Group(IfBreak(brk, _)), GroupWithRestProbe(IfBreak(brk, _)) if (fitPivot):
 				return flatLength(brk) < 0 ? brk : null;
 			// The recursion re-enters HERE, not the guarded entry: `flatLength` is
 			// invariant under these three wrappers (it descends `WrapBoundary` /
 			// `Nest` unchanged, and returns `-1` on a `Concat`'s FIRST negative
 			// part), so the entry's check already answered for every subterm.
 			case WrapBoundary(inner):
-				final arm: Null<Doc> = pivotBreakArm(inner);
+				final arm: Null<Doc> = pivotBreakArm(inner, fitPivot);
 				return arm == null ? null : WrapBoundary(arm);
 			case Nest(n, inner):
-				final arm: Null<Doc> = pivotBreakArm(inner);
+				final arm: Null<Doc> = pivotBreakArm(inner, fitPivot);
 				return arm == null ? null : Nest(n, arm);
 			case Concat(parts):
 				// The writer hands a wrapped construct down as a one-element
@@ -2051,7 +2065,7 @@ class WrapList {
 				var idx: Int = -1;
 				var found: Null<Doc> = null;
 				for (i in 0...parts.length) {
-					final part: Null<Doc> = pivotBreakArm(parts[i]);
+					final part: Null<Doc> = pivotBreakArm(parts[i], fitPivot);
 					if (part == null) continue;
 					if (idx >= 0) return null;
 					idx = i;
@@ -2175,8 +2189,33 @@ class WrapList {
 	 * renderer has not taken yet.
 	 */
 	private static function solePivotCollectionArg(items: Array<Doc>): Int {
+		final strict: Int = pivotCollectionArgScan(items, false);
+		return strict >= 0 ? strict : pivotCollectionArgScan(items, true);
+	}
+
+	/**
+	 * One pass of `solePivotCollectionArg`'s scan. `fitLast` admits the ω-fit-pivot
+	 * shape (`Group(IfBreak(…))`, the `exceedsMaxLineLength` two-run answer) at the
+	 * LAST index only.
+	 *
+	 * TWO passes rather than one widened predicate, and that is the whole point of
+	 * the split: the scan bails on a SECOND candidate, so a widened predicate could
+	 * DISQUALIFY an earlier threshold pivot that already had the list to itself —
+	 * `f([ … ], { … })` with an `IfFirstLineExceeds` array cascade beside an
+	 * `exceedsMaxLineLength` object one loses a hug it had before. Running the
+	 * strict pass first and only retrying when it found NOTHING keeps the "a pivot
+	 * may nominate, never disqualify" property this scan's doc rests on.
+	 *
+	 * A `-1` from the strict pass is one of three things — no candidate, two
+	 * candidates, or an arrow/chain bail — and the retry re-derives all three
+	 * identically except that the last item may now qualify, so only the
+	 * no-candidate case can change its answer.
+	 */
+	private static function pivotCollectionArgScan(items: Array<Doc>, fitLast: Bool): Int {
 		var collIdx: Int = -1;
-		for (i in 0...items.length) if (renderPivotBreakArm(items[i]) != null && startsWithCollectionDelim(items[i])) {
+		for (i in 0...items.length) if (
+			renderPivotBreakArm(items[i], fitLast && i == items.length - 1) != null && startsWithCollectionDelim(items[i])
+		) {
 			if (collIdx >= 0) return -1;
 			if (isArrowBodyMarker(items[i]) || isMethodChainItem(items[i])) return -1;
 			collIdx = i;
@@ -2636,7 +2675,20 @@ class WrapList {
 		// after which this same glue fires and the two passes disagree.
 		// `openShape` keeps the unresolved item: on that path the arg sits at a
 		// shallower column and may legitimately stay on one line.
-		final collArm: Null<Doc> = renderPivotBreakArm(items[collIdx]);
+		final thresholdArm: Null<Doc> = renderPivotBreakArm(items[collIdx]);
+		// ω-fit-pivot-collection-arg: the FIT sibling of the threshold pivot above
+		// — a collection whose cascade resolved to `Group(IfBreak(…))` (the
+		// `exceedsMaxLineLength` two-run shape) rather than to an
+		// `IfFirstLineExceeds` threshold. It nominates only the LAST item, and
+		// that restriction is not re-tested here because BOTH routes into a
+		// non-last `collIdx` already exclude it, by different mechanisms:
+		// `soleMultilineCollectionArg`'s own scan nominates only an arg with a
+		// COMMITTED hardline, which `renderPivotBreakArm` refuses outright; and
+		// `pivotCollectionArgScan`'s strict pass nominates a non-last index only
+		// when the THRESHOLD arm is non-null, which the `thresholdArm != null`
+		// short-circuit below then answers.
+		final fitArm: Null<Doc> = thresholdArm != null ? null : renderPivotBreakArm(items[collIdx], true);
+		final collArm: Null<Doc> = thresholdArm ?? fitArm;
 		final glueItems: Array<Doc> = collArm == null ? items : [for (i in 0...items.length) i == collIdx ? collArm : items[i]];
 		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, glueItems, openInside, closeInside, sepBeforeFlags);
 		final openShape: Doc = mode == FillLineWithLeadingBreak
@@ -2657,7 +2709,28 @@ class WrapList {
 		// exploded. Gate that population on the fit the caller did not test.
 		// `openShape` IS `shapeByMode(mode, …)` for both modes this intercept
 		// admits, so the fits arm is the pre-slice shape verbatim.
-		return collArm == null ? probe : IfLineExceeds(lineWidth + 1, probe, openShape);
+		final gated: Doc = collArm == null ? probe : IfLineExceeds(lineWidth + 1, probe, openShape);
+		// ω-fit-pivot-collection-arg: a FIT pivot says only that the RENDERER may
+		// break the collection, not that it must. When the collection's flat width
+		// fits on its own continuation line inside `openShape`, that is the shape
+		// the fork writes (`wrapping/issue_116_multipass`) and the D2 chunk policy
+		// asks for (`HxComplexItemWrapTest`'s
+		// `testTrailingContainerTakesItsOwnLineWithoutAnyCondition`) — the
+		// collection never breaks there, so hugging it would COMMIT a break
+		// nothing had decided. `IfArrowContinuationFits` measures exactly that,
+		// with the SLOT INVERSION its stanza documents: fits → `flatDoc`, the
+		// pre-slice `openShape`; else `breakDoc`, the glue gate.
+		//
+		// THRESHOLD, copied from the ω-outer-first-wrap sibling above along with
+		// its reason: the produced line is `indent + cols + flatWidth` wide and
+		// FITS when it lands ON the limit, so the strict `<` needs `lineWidth + 1`
+		// — and a `wrapping.trailingComma` config puts a `,` after this last item
+		// in the broken shape, which is one more column of that same line.
+		//
+		// A THRESHOLD pivot needs no such test — its `IfFirstLineExceeds` already
+		// fired on width — so it keeps the plain gate.
+		final fitWidth: Int = flatLength(items[collIdx]) + (appendTrailingComma ? sep.length : 0);
+		return fitArm == null ? gated : IfArrowContinuationFits(cols, fitWidth, lineWidth + 1, gated, openShape);
 	}
 
 	/**

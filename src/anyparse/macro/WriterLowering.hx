@@ -2229,6 +2229,19 @@ class WriterLowering {
 		// at Group layer. Plain-path `groupRestProbe` option of `WrapList.emit`;
 		// trivia path mirror lives in `triviaSepStarExpr` (dual-dispatch
 		// per [[feedback-wraprules-dispatch-dual-path]]).
+		// ω-pattern-rest-probe BACKLOG — this PLAIN-path site is NOT gated on
+		// `opt._suppressPatternRestProbe`, while its trivia mirror is. Measured
+		// gap, with a ready fixture: widen the object literal in
+		// `case FVar(t, { expr: ENew(tp, _), meta: mm, name: nn, pos: pp }) if (…):`
+		// and the two writers disagree — trivia keeps the pattern flat and wraps
+		// the guard, plain explodes the literal one-per-line and leaves the guard
+		// flat. Left open on purpose: `writeRoundTrip`, `fmt` and every
+		// canonical-gate consumer are trivia-only, so the plain writer is reached
+		// only through `--writer-output-plain` / `writer-probe` / `writer-equals
+		// --plain`, and this call already passes 3 of the ~14 options its trivia
+		// mirror does (`complexItemKinds` has the same asymmetry). Closing it means
+		// threading the flag here too — and re-measuring, since no fixture covers
+		// the plain writer's wrap output.
 		final groupRestProbe: Bool = starNode.fmtHasFlag('groupRestProbe');
 		final listCall: Expr = if (wrapRulesField != null) {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
@@ -6494,7 +6507,9 @@ class WriterLowering {
 			// and a `??` operand keeps pristine plain-Group wrapping (the fork packs
 			// the chain, not the operand args). Every non-`groupRestProbe` postfix
 			// sep-list ctor passes a constant `false` -- byte-inert.
-			final groupRestProbeExpr: Expr = c.branch.fmtHasFlag('groupRestProbe') ? (macro !opt._suppressCallRestProbe) : (macro false);
+			final groupRestProbeExpr: Expr = c.branch.fmtHasFlag('groupRestProbe')
+				? (macro !opt._suppressCallRestProbe && !opt._suppressPatternRestProbe)
+				: (macro false);
 			// ω-complex-item-count (D2): postfix-Star reader for
 			// `@:fmt(complexItems)` (`HxExpr.Call`). Classifies each ARGUMENT so
 			// the fill-mode chunk policy can give a call-bearing container
@@ -10880,21 +10895,32 @@ class WriterLowering {
 	}
 
 	/**
-	 * Apply the two SUB-POSITION suppress flags a mandatory-Ref child can carry, in
-	 * the order the descendant opt expects them.
+	 * Apply the three SUB-POSITION suppress flags a mandatory-Ref child can carry.
 	 *
 	 * `@:fmt(suppressCallRestProbe)` (omega-call-grouprestprobe-subposition) marks a
 	 * `Call` subtree that is not in statement/expression position — a ctor pattern
 	 * (`case Nest(_, _) | Concat(_):`) must not wrap its args, the fork breaks the
-	 * `|` chain instead. `@:fmt(suppressComplexItems)` (ω-complex-item-count) marks
-	 * a case-pattern body or a switch subject so an array literal below it skips the
-	 * per-element complexity classification — an enum-constructor pattern parses as
-	 * a `Call` and would otherwise be counted. Neither is cleared on descent, so a
-	 * nested construct inherits both.
+	 * `|` chain instead. `@:fmt(suppressPatternRestProbe)` (ω-pattern-rest-probe)
+	 * widens that to the WHOLE pattern subtree: nothing below it rest-probes the
+	 * line, so the guard rather than the pattern absorbs the overflow.
+	 * `@:fmt(suppressComplexItems)` (ω-complex-item-count) marks a case-pattern body
+	 * or a switch subject so an array literal below it skips the per-element
+	 * complexity classification — an enum-constructor pattern parses as a `Call` and
+	 * would otherwise be counted.
+	 *
+	 * The two ω-flags are never cleared on descent, so a nested construct inherits
+	 * both. `suppressCallRestProbe` IS cleared, by the collection-literal element arm
+	 * in `TriviaSepLowering` (a nested call in a field VALUE must still wrap) — which
+	 * is exactly the hole `suppressPatternRestProbe` exists to close, and the reason
+	 * the two are separate flags rather than one.
+	 *
+	 * Application order is inert: each shim early-returns on its own flag and the
+	 * `_b` chain base makes the copy happen once whichever call reaches it first.
 	 */
 	private function subPositionSuppressOpt(child: ShapeNode, e: Expr): Expr {
 		var out: Expr = e;
 		if (child.fmtHasFlag('suppressCallRestProbe')) out = macro _setSuppressCallRestProbe($out, true, opt);
+		if (child.fmtHasFlag('suppressPatternRestProbe')) out = macro _setSuppressPatternRestProbe($out, opt);
 		return child.fmtHasFlag('suppressComplexItems') ? macro _setSuppressComplexItems($out, opt) : out;
 	}
 
