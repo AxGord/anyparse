@@ -85,6 +85,34 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '"onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, '
 		+ '"callParameter": {"defaultWrap": "fillLine", "rules": []}}}';
 
+	/**
+	 * Pony's OWN `objectLiteral` cascade — `defaultWrap: ignore` plus a single
+	 * `exceedsMaxLineLength → onePerLine` rule. The two cascade runs DISAGREE, so
+	 * the literal reaches its host as `Group(IfBreak(brk, flat))`: a break the
+	 * renderer decides by FIT, not by an `IfFirstLineExceeds` threshold. That is
+	 * the pivot shape `pivotBreakArm` did not recognise, which is why every
+	 * compact `f(a, {` … `});` hug was unreachable under this config.
+	 */
+	private static final CALL_ARG_EXCEEDS_OBJECT: String = '{"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": '
+		+ '"ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}]}, '
+		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, '
+		+ '{"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+
+	/**
+	 * The exceeds cascade for object literals beside a THRESHOLD one for arrays
+	 * (`onePerLine` shadowed by a `totalItemLength <= 140` `noWrap`, the shape
+	 * that emits `IfFirstLineExceeds`). One call, two collection arguments, one
+	 * pivot of each kind — the population where widening the pivot scan in place
+	 * would DE-NOMINATE the earlier arg instead of nominating the later one.
+	 */
+	private static final TWO_COLLECTION_ARGS: String = '{"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": '
+		+ '"ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}]}, '
+		+ '"arrayWrap": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", '
+		+ '"value": 140}], "type": "noWrap"}]}, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": '
+		+ '[{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
+		+ '"itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+
 	/** The same literal cascade under a ternary host instead of a call host. */
 	private static final TERNARY_ARG_OBJECT: String = '{"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": '
 		+ '"onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, '
@@ -248,6 +276,89 @@ class WrapFlatSourceFixedPointTest extends Test {
 		final once: String = write(src, CALL_ARG_FILL_LINE);
 		Assert.isTrue(once.indexOf('f(a, b, {x: 1, y: 2});') != -1, 'expected the fitting call left on one line, got:\n<$once>');
 		Assert.equals(once, write(once, CALL_ARG_FILL_LINE), 'a call that fits was already a fixed point');
+	}
+
+	/**
+	 * ω-fit-pivot-collection-arg — the same glue under the cascade Pony actually
+	 * ships. `exceedsMaxLineLength` resolves to `Group(IfBreak(…))`, not to the
+	 * `IfFirstLineExceeds` threshold the pivot scan knew, so
+	 * `soleMultilineCollectionArg` answered -1 and the whole multi-arg glue was
+	 * unreachable — the call opened its paren and gave the literal a THIRD line
+	 * of its own. The real site is `DIVerifier.addProducer(diSummary, { … })` in
+	 * Pony's `DIBuilder.hx`.
+	 */
+	public function testCallArgObjectLiteralHugsUnderAnExceedsCascade(): Void {
+		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\tDIVerifier.addProducer(diSummary, { fieldName: field.name, '
+			+ 'producerTypeNames: producerTypeNames, childDITypeName: childDITypeName, kindOfProducer: kind, pos: field.pos });\n\t}\n}';
+		final once: String = write(src, CALL_ARG_EXCEEDS_OBJECT);
+		Assert.isTrue(
+			once.indexOf('DIVerifier.addProducer(diSummary, {\n\t\t\tfieldName: field.name,') != -1,
+			'expected the compact hug, got:\n<$once>'
+		);
+		// The closing half separately: a shape that hugged the `{` and then gave
+		// the `})` a line of its own would satisfy the anchor above.
+		Assert.isTrue(once.indexOf('\n\t\t\tpos: field.pos\n\t\t});') != -1, 'expected the closer glued to the literal, got:\n<$once>');
+		Assert.equals(once, write(once, CALL_ARG_EXCEEDS_OBJECT), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * The FIT pivot may NOMINATE a collection; it must never DISQUALIFY one. The
+	 * scan bails on a second candidate, so admitting the fit shape inside the
+	 * existing pass turned `f([ … ], { … })` — an array whose threshold pivot had
+	 * the list to itself, plus a newly-visible object — into a two-candidate
+	 * bail, and the array LOST a hug it had before the slice. Running the strict
+	 * pass first and retrying only when it found nothing is what keeps this
+	 * green; a single widened pass opens the call paren instead.
+	 */
+	public function testEarlierThresholdPivotCollectionKeepsItsHug(): Void {
+		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\tregister([alphaHandler, betaHandler, gammaHandler, '
+			+ 'deltaHandler], { fieldName: field.name, producerTypeNames: names, kindOfProducer: kind });\n\t}\n}';
+		final once: String = write(src, TWO_COLLECTION_ARGS);
+		Assert.isTrue(once.indexOf('register([\n\t\t\talphaHandler,') != -1, 'expected the array to keep its hug, got:\n<$once>');
+		Assert.isTrue(
+			once.indexOf('\n\t\t], {fieldName: field.name, producerTypeNames: names, kindOfProducer: kind});') != -1,
+			'expected the object literal left flat on the bracket-close line, got:\n<$once>'
+		);
+		Assert.equals(once, write(once, TWO_COLLECTION_ARGS), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * The FIT pivot's own must-not-fire half. A fit pivot says the renderer MAY
+	 * break the collection, not that it will: when the literal's flat width fits
+	 * on its own continuation line inside the opened paren, it never breaks
+	 * there, and hugging it would COMMIT a break nothing decided. That is the
+	 * shape the fork writes (`wrapping/issue_116_multipass`) and the one the D2
+	 * chunk policy asks for; without the `IfArrowContinuationFits` gate this call
+	 * hugged and both went red.
+	 */
+	public function testFittingCallArgObjectLiteralKeepsTheOpenParen(): Void {
+		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\tdeclaringFileRenameSpans(source, tree, declFrom, name, '
+			+ 'shape, plugin, isDistinctive, true, { index: resolutionIndex, file: firstFile });\n\t}\n}';
+		final once: String = write(src, CALL_ARG_EXCEEDS_OBJECT);
+		Assert.isTrue(
+			once.indexOf('true, {index: resolutionIndex, file: firstFile}\n\t\t);') != -1,
+			'expected the literal left flat on its own continuation line, got:\n<$once>'
+		);
+		Assert.equals(once, write(once, CALL_ARG_EXCEEDS_OBJECT), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * The other gate on the fit pivot: it nominates only the LAST argument. With
+	 * an argument AFTER the literal the glue's closer lands as `}, tail)` on the
+	 * literal's closing line — a shape the opened paren already says better, and
+	 * the one that made `Naming.hx` and `DuplicateCase.hx` drift when the pivot
+	 * was unrestricted (the latter into a TWO-rewrite convergence tail).
+	 */
+	public function testCallArgObjectLiteralBeforeAnotherArgumentKeepsTheOpenParen(): Void {
+		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\tDIVerifier.addProducer(diSummary, { fieldName: field.name, '
+			+ 'producerTypeNames: producerTypeNames, childDITypeName: childDITypeName, kindOfProducer: kind, pos: field.pos }, '
+			+ 'tail);\n\t}\n}';
+		final once: String = write(src, CALL_ARG_EXCEEDS_OBJECT);
+		Assert.isTrue(
+			once.indexOf('DIVerifier.addProducer(\n\t\t\tdiSummary,\n\t\t\t{\n') != -1,
+			'expected the opened paren with the literal on its own lines, got:\n<$once>'
+		);
+		Assert.equals(once, write(once, CALL_ARG_EXCEEDS_OBJECT), 'one round trip must land on the fixed point');
 	}
 
 	/**

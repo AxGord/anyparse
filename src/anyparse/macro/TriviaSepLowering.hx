@@ -1110,7 +1110,13 @@ final class TriviaSepLowering {
 						trailBreak: $wrapTrailBreakDoc,
 						forceMode: $forceModeExpr,
 						compactContinuation: $compactContExpr,
-						groupRestProbe: $v{c.groupRestProbe},
+						// ω-pattern-rest-probe: gated at RUNTIME, unlike its macro-time
+						// sibling at `WriterLowering`'s postfix-Star `Call` site, because
+						// the flag is a property of the descent and not of the Star. A
+						// case-PATTERN subtree declines the rest-of-line fit bias entirely,
+						// so an object-literal pattern is not charged the trailing
+						// `if (guard)` and the guard breaks instead.
+						groupRestProbe: $v{c.groupRestProbe} && !opt._suppressPatternRestProbe,
 						sepBeforeFlags: _sepBeforeFlags,
 						sourceMultilineKeep: _effSmlKeep,
 						breakAsOnePerLine: _breakAsOnePerLine,

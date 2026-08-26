@@ -767,6 +767,7 @@ final class HaxeFormatConfigLoader {
 			_inTernaryCond: base._inTernaryCond,
 			_suppressCallRestProbe: base._suppressCallRestProbe,
 			_suppressComplexItems: base._suppressComplexItems,
+			_suppressPatternRestProbe: base._suppressPatternRestProbe,
 			_varKwNewline: base._varKwNewline,
 			_inFieldLevelVar: base._inFieldLevelVar,
 			_ssbSuppress: base._ssbSuppress,

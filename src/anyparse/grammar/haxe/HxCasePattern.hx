@@ -53,6 +53,16 @@ typedef HxCasePattern = {
 	// `groupRestProbe` rest-of-line fit bias -- the fork breaks the `|` (BitOr)
 	// chain, not the ctor args. Not applied to `guard` (a genuine
 	// expression-position condition where calls should wrap normally).
-	@:fmt(suppressCallRestProbe, suppressComplexItems) var expr: HxCasePatternBody;
+	//
+	// `@:fmt(suppressPatternRestProbe)` (ω-pattern-rest-probe) widens that from
+	// the top-level ctor to the WHOLE pattern subtree. The call flag alone does
+	// not reach an object-literal pattern (`{ expr: ENew(tp, _) }` carries an
+	// ungated `groupRestProbe` of its own, and its element arm CLEARS the call
+	// flag for the field values), so the pattern was charged the trailing
+	// guard's whole flat width and broke to make room for a condition that can
+	// wrap perfectly well on its own. A pattern is a matching shape, not a
+	// value: it never owns the line's overflow, so the guard breaks instead.
+	// Also not applied to `guard`, for the same reason as above.
+	@:fmt(suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe) var expr: HxCasePatternBody;
 	@:optional @:kw('if') var guard: Null<HxExpr>;
 };

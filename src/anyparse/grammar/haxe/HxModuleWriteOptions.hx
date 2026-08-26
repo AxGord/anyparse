@@ -1368,6 +1368,20 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// `HxSwitchStmt(Bare).expr`; not cleared on descent, so a nested pattern
 	// inherits it. Default false → every value-position array classifies.
 	_suppressComplexItems: Bool,
+	// ω-pattern-rest-probe: the subtree is a case PATTERN body, so NOTHING inside
+	// it rest-probes the line. Distinct from `_suppressCallRestProbe`, which the
+	// object-literal / array-literal element arm deliberately CLEARS so a nested
+	// call in a field VALUE can still wrap, and from `_suppressComplexItems`,
+	// which a switch SUBJECT also sets — a subject is a real expression and must
+	// keep its rest probe (dropping it left a 141-column `switch f(…) {` header).
+	// A pattern is a matching shape, not a value: it never owns the overflow of
+	// the line it sits on, and charging it for the trailing `if (guard)` made a
+	// 22-column object literal break so a 122-column guard could stay flat. Set
+	// via `_setSuppressPatternRestProbe` from `@:fmt(suppressPatternRestProbe)` on
+	// `HxCasePattern.expr`; not cleared on descent, so a collection literal and
+	// the calls inside it inherit it. Default false → every value-position
+	// construct keeps its rest probe.
+	_suppressPatternRestProbe: Bool,
 	_varKwNewline: Bool,
 	_inFieldLevelVar: Bool,
 	// ω-single-stmt-braces: dangling-else suppress frame. Set (via
