@@ -282,15 +282,37 @@ registration order and exits — the machine-consumable listing (review tooling
 subtracts linter-owned rules from manual checklists by it; the check table below is
 the prose counterpart).
 
-An `apqlint.json` is discovered by walking up from each linted file (per-file, directory-memoized — a `test/apqlint.json` governs only the files beside and below it, like a nested `hxformat.json`) and configures that file's checks: per
+An `apqlint.json` is discovered by walking up from each linted file (per-file, directory-memoized — a `test/apqlint.json` governs the files beside and below it, and unlike a nested `hxformat.json` it EXTENDS the documents above rather than replacing the nearest one; see below) and configures that file's checks: per
 rule it can disable the rule (`"enabled": false`, dropped from the default set — an
 explicit `--rule` still runs it), override its reported severity (`"severity":
 "error|warning|info"`, applied before `--fail-on` and the report), or set a
 rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 `checkstyle.json` threshold). A missing file is a no-op; a malformed one (invalid
 JSON, or a wrong-typed top-level key — the file is read through a declared typed
-schema) degrades to defaults wholesale and reports one stderr line naming the
-file. Wrong-typed values INSIDE a rule's own options stay per-field lenient.
+schema) is skipped with one stderr line naming it, and the documents ABOVE it
+still apply. Wrong-typed values INSIDE a rule's own options stay per-field lenient.
+
+**A nested document EXTENDS the ones above it; it does not replace them.** The
+whole chain from the linted file's directory to the filesystem root is folded,
+nearest first, and a document overrides only the keys it names — per key at the
+top level, per rule inside `rules`, and per key inside one rule entry, so
+`{"oversized-type": {"maxMembers": 100}}` raises that threshold without
+re-enabling a rule an ancestor disabled or dropping the options it set. ARRAYS
+replace wholesale (there is no element-wise union, because a union has no way to
+spell a removal), and every relative path — a `resolutionRoots` entry, the
+`compilerOracle` hxml — resolves against the directory of the document that
+DECLARED it, not the nested one. A document that wants to stand alone says
+`"inherit": false`, which ends the chain at itself. The walk also STOPS at a project
+root — the first ancestor directory holding a `.git` or a `haxelib.json`, that
+directory's own document included. Without that bound any writable ancestor
+(`/tmp`, `$HOME`) would join every project's config, and `compilerOracle` names an
+hxml the oracle EXECUTES. A document that exists and cannot be READ is reported on
+stderr rather than dropped, because the ancestor's answer would otherwise apply
+silently to a question the project already answered. Discovery used to stop at the
+first document and take it wholesale, which is silent in the worst way: a nested
+file naming four relaxations inherited neither the resolution scope nor the
+oracle nor the rules the root opted into, and a rule that is not in the set does
+not fail — it finds nothing.
 
 A top-level `"resolutionRoots"` (array of directory paths, relative to the
 config file resolved to absolute) declares a separate RESOLUTION scope: the
@@ -333,10 +355,12 @@ files, so the call answers "nothing in this project reflects that name" from the
 one file it was handed, and `--fix` acts on it — erasing a name a sibling file
 spells to `Reflect`, with the build still green. Declare the same paths the
 project's own gate lints — a narrower root leaves the hole one directory smaller
-— and declare them in EVERY `apqlint.json` a linted file resolves to, not only
-the root one: discovery stops at the first document above the file and takes it
-WHOLESALE, so a nested `test/apqlint.json` without the key leaves every file
-below it with no project scope at all. The cost is one read+parse of the declared
+— and declare them ONCE, in the outermost `apqlint.json`: a nested document
+inherits the key, so a `test/apqlint.json` that says nothing about roots resolves
+over the same project scope, with the paths still read relative to the ROOT
+document's own directory. (Before the chain existed, discovery stopped at the
+first document and took it wholesale, and a nested config without the key left
+every file below it with no project scope at all.) The cost is one read+parse of the declared
 tree per lint process, paid only when a check actually demands the index (a
 `--rule prefer-single-quotes` run never touches it) and skipped for a report
 scope that already contains the roots, since library entries dedupe against the

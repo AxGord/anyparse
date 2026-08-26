@@ -25,6 +25,33 @@ typedef RuleConfig = {
 }
 
 /**
+ * ONE `apqlint.json` document, as DECLARED — the intermediate a chain of them is
+ * folded through before it becomes a `LintConfig`.
+ *
+ * Two things separate it from the finished config. Every key is optional, so
+ * "the document did not say" stays distinguishable from "the document said the
+ * default" — a merge has no other way to know whether a nearer document meant to
+ * override. And every path is ALREADY resolved against the directory of the
+ * document that declared it, so folding a chain never has to remember which
+ * `apqlint.json` a relative `"../src"` was written next to.
+ */
+typedef LintDocument = {
+	var rules: Map<String, RuleConfig>;
+	var ?compilerOracle: String;
+	var ?compilerOracleDir: String;
+	var ?compilerOracleServer: Bool;
+	var ?resolutionRoots: Array<String>;
+	var ?resolutionLibs: Array<String>;
+	var ?resolutionStd: Bool;
+	var ?languageVersion: String;
+	var ?frameworks: Array<FrameworkContract>;
+
+	/** Read off the document as PARSED, never off a merged one — a fold has already decided where the chain ends. */
+	var ?inherit: Bool;
+	var drops: Array<String>;
+}
+
+/**
  * Project-level lint configuration, read from an `apqlint.json` discovered by
  * walking up from a linted file's directory (the apq-native counterpart of the
  * `checkstyle.json` compat config). Grammar-agnostic — it keys rules by their
@@ -45,7 +72,7 @@ typedef RuleConfig = {
 @:nullSafety(Strict)
 final class LintConfig {
 
-	/** Config paths already reported by `discover`'s reject diagnostic — one line per file per process. */
+	/** Config paths `discover` has already diagnosed — each config file reports at most once per process, whatever it reported. */
 	private static final warnedConfigs: Array<String> = [];
 
 	private final _rules: Map<String, RuleConfig>;
@@ -265,10 +292,8 @@ final class LintConfig {
 	}
 
 	/**
-	 * One ready diagnostic line per `frameworks` entry this document declared and the mapping DROPPED —
-	 * an entry that is not an object, names no `root`, or nominates nothing. `discover` prints them once
-	 * per config file; `parse` returns them without printing, because it cannot tell a probe from a real
-	 * config file. A dropped entry that says nothing is indistinguishable from one that works, which is
+	 * One ready diagnostic line per `frameworks` entry a document in this config's chain\n\t * declared and the mapping DROPPED —
+	 * an entry that is not an object, names no `root`, or nominates nothing. `discover` prints them once per config file, attributed to the document that declared it; the merged list here carries no attribution, so it is a count rather than a report. `parse` returns one document's lines without printing, because it cannot tell a probe from a real config file. A dropped entry that says nothing is indistinguishable from one that works, which is
 	 * the whole hazard of a per-entry-lenient reader.
 	 */
 	public function drops(): Array<String> {
@@ -290,35 +315,64 @@ final class LintConfig {
 	}
 
 	/**
-	 * Discover an `apqlint.json` by walking up from `path`'s directory and parse
-	 * it; an empty config (every rule enabled, no overrides) when none is found.
+	 * Discover the `apqlint.json` CHAIN above `path` — every one from its own directory
+	 * up to the filesystem root, nearest first — and fold it into one config; an empty
+	 * config (every rule enabled, no overrides) when the chain is empty.
+	 *
+	 * A nested document EXTENDS its ancestors and overrides only the keys it names.
+	 * It used to replace the nearest ancestor wholesale, which is a silent loss: a
+	 * document written as four exemptions for test code inherited neither the
+	 * project's resolution scope, nor its oracle, nor the 38 rules the root opted
+	 * into — and a missing rule does not fail, it finds nothing. This project's own
+	 * history is the evidence: `test/apqlint.json` was created as four relaxations
+	 * and then had `compilerOracle`, `compilerOracleServer` and
+	 * `resolutionRoots`/`resolutionLibs` copied down into it one commit at a time,
+	 * each time somebody noticed another absence, while the 38 opt-in rules were
+	 * never noticed at all.
+	 *
+	 * The merge is per KEY at the top level and per RULE inside `rules`, because
+	 * "disable magic-number for tests" has to keep meaning that and nothing else;
+	 * per-key again inside one rule entry, so an options-only override
+	 * (`{"oversized-type": {"maxMembers": 100}}`) neither re-enables a rule an
+	 * ancestor disabled nor drops the options it set. ARRAYS replace wholesale —
+	 * there is no element-wise union, because a union has no way to spell a removal.
+	 * A document declaring `"inherit": false` ends the chain at itself.
+	 *
+	 * A document the schema rejects is skipped with a diagnostic and the REST of the
+	 * chain still applies: the nearest config being broken must not also throw away
+	 * the project's.
 	 */
 	public static function discover(path: String): LintConfig {
-		final found: Null<{ content: String, path: String }> = ConfigFinder.findUpFile(path, 'apqlint.json');
-		if (found == null) return new LintConfig([]);
-		final config: Null<LintConfig> = parseOrNull(found.content, Path.directory(found.path));
-		if (config != null) {
-			// A per-ENTRY drop degrades silently in exactly the way the wholesale one below does not:
-			// the document parses, every other key applies, and the entry the project wrote simply is
-			// not there. Same once-per-file-per-process ledger, for the same reason.
-			final drops: Array<String> = config.drops();
-			if (drops.length > 0 && !warnedConfigs.contains(found.path)) {
-				warnedConfigs.push(found.path);
-				for (drop in drops) stderr('apq: ${found.path}: $drop\n');
+		final chain: ConfigChain = ConfigFinder.findUpAll(path, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS);
+		var merged: Null<LintDocument> = null;
+		// A document that EXISTS and cannot be read is the one outcome with no other
+		// symptom: the ancestor's answer applies to a question this document already
+		// answered, and nothing else says so.
+		for (path in chain.unreadable) warnOnce(path, 'apq: $path could not be read — ignored, the rest of the chain still applies\n');
+		for (entry in chain.documents) {
+			final doc: Null<LintDocument> = parseDocument(entry.content, Path.directory(entry.path));
+			if (doc == null) {
+				// A REAL config file that the schema rejects must not degrade silently — a
+				// wholesale fallback quietly collapses the resolution scope and every rule
+				// toggle. Once per file per process: `discover` re-runs for every linted
+				// directory (the CLI memoises per directory, not per config), so an
+				// unde-duplicated line would repeat N times per run.
+				warnOnce(entry.path, 'apq: ${entry.path} failed to parse — ignored, the rest of the chain still applies\n');
+				continue;
 			}
-			return config;
+			// A per-ENTRY drop degrades silently in exactly the way the wholesale rejection
+			// above does not: the document parses, every other key applies, and the entry the
+			// project wrote simply is not there. Same once-per-file-per-process ledger, and
+			// attributed to the document that declared it, since a chain has several.
+			if (doc.drops.length > 0) {
+				final lines: Array<String> = [for (drop in doc.drops) 'apq: ${entry.path}: $drop\n'];
+				warnOnce(entry.path, lines.join(''));
+			}
+			merged = merged == null ? doc : mergeDocuments(merged, doc);
+			if (doc.inherit == false) break;
 		}
-		// A REAL config file that the schema rejects must not degrade
-		// silently — the wholesale fallback quietly collapses the
-		// resolution scope and every rule toggle. Once per file per
-		// process: `discover` re-runs for every linted directory
-		// (the CLI memoises per directory, not per config), so an
-		// unde-duplicated line would repeat N times per run.
-		if (!warnedConfigs.contains(found.path)) {
-			warnedConfigs.push(found.path);
-			stderr('apq: ${found.path} failed to parse — using defaults\n');
-		}
-		return new LintConfig([]);
+		final folded: Null<LintDocument> = merged;
+		return folded == null ? new LintConfig([]) : fromDocument(folded);
 	}
 
 	/**
@@ -359,7 +413,8 @@ final class LintConfig {
 	 * survives inside `rules`, whose entries stay raw JSON on purpose.
 	 */
 	public static function parse(content: String, ?baseDir: String): LintConfig {
-		return parseOrNull(content, baseDir) ?? new LintConfig([]);
+		final doc: Null<LintDocument> = parseDocument(content, baseDir);
+		return doc == null ? new LintConfig([]) : fromDocument(doc);
 	}
 
 	/** `dir`, or `/` for the empty string `Path.directory` yields at the filesystem root. */
@@ -374,14 +429,71 @@ final class LintConfig {
 		#end
 	}
 
+	/** Write `message` to stderr the first time `configPath` reports anything — the once-per-file-per-process ledger `discover`'s two diagnostics share. */
+	private static function warnOnce(configPath: String, message: String): Void {
+		if (warnedConfigs.contains(configPath)) return;
+		warnedConfigs.push(configPath);
+		stderr(message);
+	}
+
 	/**
-	 * `parse`'s worker: the typed parse and mapping, or null when the
-	 * schema rejects the document. `parse` folds the null into the
-	 * silent empty config (it cannot tell a probe from a real config
-	 * file, so it never prints); `discover` turns the same null into
-	 * the user-facing diagnostic, because it knows the file path.
+	 * `near` layered over `far` — the nearer document's declared keys win, and every
+	 * key it did not name falls through. `compilerOracle` and its probed compile
+	 * directory travel as a PAIR: a document that names its own oracle brings its own
+	 * compile dir with it, and one that names no oracle must not keep a dir belonging
+	 * to somebody else's hxml.
 	 */
-	private static function parseOrNull(content: String, ?baseDir: String): Null<LintConfig> {
+	private static function mergeDocuments(near: LintDocument, far: LintDocument): LintDocument {
+		final rules: Map<String, RuleConfig> = [];
+		for (id => rc in far.rules) rules[id] = rc;
+		for (id => rc in near.rules) rules[id] = mergeRule(rc, far.rules[id]);
+		return {
+			rules: rules,
+			compilerOracle: near.compilerOracle ?? far.compilerOracle,
+			compilerOracleDir: near.compilerOracle != null ? near.compilerOracleDir : far.compilerOracleDir,
+			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
+			resolutionRoots: near.resolutionRoots ?? far.resolutionRoots,
+			resolutionLibs: near.resolutionLibs ?? far.resolutionLibs,
+			resolutionStd: near.resolutionStd ?? far.resolutionStd,
+			languageVersion: near.languageVersion ?? far.languageVersion,
+			frameworks: near.frameworks ?? far.frameworks,
+			drops: near.drops.concat(far.drops)
+		};
+	}
+
+	/**
+	 * One rule entry layered over the ancestor's entry of the same id: `enabled` and
+	 * `severity` fall through when the nearer document leaves them unsaid, and the
+	 * option bags merge per key. So a nested `{"oversized-type": {"maxMembers": 100}}`
+	 * raises exactly that threshold and changes nothing else about the rule.
+	 */
+	private static function mergeRule(near: RuleConfig, far: Null<RuleConfig>): RuleConfig {
+		if (far == null) return near;
+		final props: Map<String, JValue> = [];
+		for (key => value in far.props) props[key] = value;
+		for (key => value in near.props) props[key] = value;
+		return { enabled: near.enabled ?? far.enabled, severity: near.severity ?? far.severity, props: props };
+	}
+
+	/** The finished config for a folded document — the one place the "absent" nulls collapse into the defaults. */
+	private static function fromDocument(doc: LintDocument): LintConfig {
+		return new LintConfig(
+			doc.rules, doc.compilerOracle, doc.compilerOracleDir, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd,
+			doc.compilerOracleServer, doc.languageVersion, doc.frameworks, doc.drops
+		);
+	}
+
+	/**
+	 * The typed parse and mapping of ONE `apqlint.json` document, or null when the
+	 * schema rejects it. Stops at `LintDocument` rather than at `LintConfig` so a
+	 * caller folding a chain can still tell an unsaid key from a defaulted one, and
+	 * so every relative path is resolved here — against THIS document's directory,
+	 * the only place that knows it. `parse` folds the null into the silent empty
+	 * config (it cannot tell a probe from a real config file, so it never prints);
+	 * `discover` turns the same null into the user-facing diagnostic, because it
+	 * knows the file path.
+	 */
+	private static function parseDocument(content: String, ?baseDir: String): Null<LintDocument> {
 		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) null;
 		if (config == null) return null;
 		final rules: Map<String, RuleConfig> = [];
@@ -401,13 +513,27 @@ final class LintConfig {
 		final declaredOracle: Null<String> = config.compilerOracle;
 		final oracle: Null<String> = declaredOracle == null ? null : resolveAgainstConfigDir(baseDir, declaredOracle);
 		final oracleDir: Null<String> = oracle == null || baseDir == null ? null : hxmlCompileDir(oracle, baseDir);
-		final roots: Array<String> = (config.resolutionRoots ?? []).map(resolveAgainstConfigDir.bind(baseDir));
+		final declaredRoots: Null<Array<String>> = config.resolutionRoots;
+		// Absence has to survive the mapping: `null` is "this document said nothing about
+		// roots, ask the one above", where `[]` is "this document declares none". Collapsing
+		// the two here is what would make an inheriting document silently claim an empty scope.
+		final roots: Null<Array<String>> = declaredRoots?.map(resolveAgainstConfigDir.bind(baseDir));
 		final drops: Array<String> = [];
-		final frameworks: Array<FrameworkContract> = parseFrameworks(config.frameworks, drops);
-		return new LintConfig(
-			rules, oracle, oracleDir, roots, config.resolutionLibs, config.resolutionStd, config.compilerOracleServer,
-			config.languageVersion, frameworks, drops
-		);
+		final declaredFrameworks: Null<Array<JValue>> = config.frameworks;
+		final frameworks: Null<Array<FrameworkContract>> = declaredFrameworks == null ? null : parseFrameworks(declaredFrameworks, drops);
+		return {
+			rules: rules,
+			compilerOracle: oracle,
+			compilerOracleDir: oracleDir,
+			compilerOracleServer: config.compilerOracleServer,
+			resolutionRoots: roots,
+			resolutionLibs: config.resolutionLibs,
+			resolutionStd: config.resolutionStd,
+			languageVersion: config.languageVersion,
+			frameworks: frameworks,
+			inherit: config.inherit,
+			drops: drops
+		};
 	}
 
 	/**

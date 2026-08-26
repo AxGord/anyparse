@@ -778,28 +778,58 @@ and was rejected on measurement: with `test/` out of the resolution scope,
 `lint src test --all` does not — deletion candidates whose only callers are
 tests. Half-closing the hole in exactly the shape being closed is not a saving.
 
-**`test/apqlint.json` has to declare them too, and that is not a detail.** Config
-discovery stops at the FIRST `apqlint.json` above the linted file and takes it
-WHOLESALE — a nested document does not inherit the root one. So the root key
-governs `src/` and nothing else: with it declared only there, the `Gamma.hx` /
-`Delta.hx` pair under `test/` still reported the finding for `Gamma.hx` alone and
-refused over both, and a one-file lint under `test/` ran in 0.69 s because it had
-no project scope at all. The nested document now carries
-`"resolutionRoots": ["../src", "../test"]`, which takes a one-file lint there to
-4.61 s. It also picks up the `"resolutionLibs"` the root declares and it never
-had — that half is PARITY rather than a measured defect: it moved no finding on
-the largest test files probed (0 added / 0 removed) and costs ~0.23 s, and it is
-there so the two spellings in the next paragraph resolve identically instead of
-differing by two libraries. `LintScopeGateTest` asserts BOTH documents, and
-reverting either one fails it by name.
+**`test/apqlint.json` USED to have to declare them too, and the reason it no
+longer does is the interesting half.** Config discovery once stopped at the FIRST
+`apqlint.json` above the linted file and took it WHOLESALE — a nested document
+inherited nothing — so the root key governed `src/` and nothing else: with it
+declared only there, the `Gamma.hx` / `Delta.hx` pair under `test/` still reported
+the finding for `Gamma.hx` alone and refused over both, and a one-file lint under
+`test/` ran in 0.69 s because it had no project scope at all. Declaring
+`"resolutionRoots": ["../src", "../test"]` in the nested document closed it and
+took a one-file lint there to 4.61 s.
 
-The same replacement rule has a second edge worth knowing while reading a lint
-result: discovery starts at the DIRECTORY of the path it is given, so the
-command-line argument `test` resolves the ROOT document (its directory is the
-repo root) while `test/unit/Foo.hx` resolves the nested one. Before this change
-that meant `hxq lint test` and `hxq lint test/unit/Foo.hx` answered the reflection
-gates over two different scopes; with both documents declaring the roots they now
-agree.
+It was the fourth key copied down into that document in six weeks
+(`compilerOracle`, `compilerOracleServer`, then the two resolution keys), each
+added the day somebody noticed another absence, and the root's 38 opt-in RULES
+were never noticed at all — a missing rule does not fail, it silently finds
+nothing, so 741 files under `test/` were linted by a reduced set from 2026-07-14
+to 2026-08-26. `discover` now folds the whole CHAIN of documents, nearest first,
+and a nested one overrides only the keys it names (per key at the top level, per
+rule inside `rules`, per key inside one rule entry; arrays replace wholesale;
+`"inherit": false` ends the chain at that document). The walk also stops at a
+PROJECT ROOT — the first ancestor holding `.git` or `haxelib.json`, that
+directory's own document included: a nearest-only lookup reaches a stray
+`apqlint.json` in `/tmp` or `$HOME` only when the project ships none of its own,
+but a CHAIN folds it in regardless, and `compilerOracle` names an hxml
+`CompilerOracle.typecheck` EXECUTES. `test/apqlint.json` is back to the four
+relaxations it was written as, and `LintScopeGateTest` +
+`LintConfigInheritanceTest` assert that both documents still answer the same
+resolution scope — now because it is inherited, not because it was copied.
+
+Turning the 38 rules on over `test/` moved the finding count there from 740 to
+2102 (`hxq lint --format json --all test --no-oracle`), the bulk of it
+`import-order` 620, `redundant-trailing-comma` 388 and `prefer-typed-throw` 223 —
+all genuine and all mechanically fixable, none of them a false positive on test
+code. Fixing them is not this slice's business; knowing that the number moved
+because a rule set arrived, not because the code changed, is.
+
+A second edge that turns out NOT to exist, since a stated mechanism outlived its
+code: discovery starts at the DIRECTORY of the path it is given, so the
+command-line argument `test` looks like it should resolve the ROOT document (its
+directory is the repo root) while `test/unit/Foo.hx` resolves the nested one. It
+does not. `Cli.runLint` expands every spec to `.hx` FILES first and resolves a
+config per file, so `hxq lint test`, `hxq lint test/unit`, `hxq lint 'test/**/*.hx'`
+and `hxq lint src test` all answer `test/apqlint.json` for a file under `test/` —
+measured by rule histogram, where `magic-number` / `doc-coverage` /
+`string-literal-dup` (disabled only by the nested document) are absent from every
+spelling. What IS still spelling-dependent is narrower and worth knowing: the
+whole-run project settings — `compilerOracle`, its compile dir, and
+`compilerOracleServer` — come from `resolveConfig(paths[0])`, the config of the
+FIRST expanded path. Two commands over the same files can therefore differ in
+which oracle transport they use if a nested document overrides those keys. With
+the chain in place this project's nested document overrides none of them, so
+every spelling agrees; a project whose nested document DOES override an oracle
+key would still see it.
 
 ### The safe pass reverts the file the compiler blames, not the wave
 

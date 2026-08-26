@@ -1,8 +1,4 @@
 {
-    "compilerOracle": "../test-js.hxml",
-    "compilerOracleServer": true,
-    "resolutionRoots": ["../src", "../test"],
-    "resolutionLibs": ["hxnodejs", "utest"],
     "rules": {
         "magic-number": { "enabled": false },
         "string-literal-dup": { "enabled": false },
