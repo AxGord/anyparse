@@ -236,9 +236,7 @@ final class _ReconSkipParse { // noqa: naming
 	}
 
 	private static function normalize(message: Null<String>): String {
-		return message == null || message == ''
-			? '<no message>'
-			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
+		return message == null || message == '' ? '<no message>' : StringTools.replace(message, '\n', '\\n').replace('\t', '\\t');
 	}
 
 	private static function head(input: String): String {

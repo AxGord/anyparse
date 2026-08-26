@@ -4,6 +4,9 @@ import anyparse.query.Cli;
 import haxe.Exception;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
+
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -196,7 +199,7 @@ class ApqDxTier5CliTest extends Test {
 			// disk. The cache write fires regardless of recon's own success.
 			Cli.run(['recon', '--top', '1']);
 			Assert.isTrue(FileSystem.exists(cachePath), 'cache file written');
-			final cached: String = StringTools.trim(File.getContent(cachePath));
+			final cached: String = File.getContent(cachePath).trim();
 			Assert.equals(trimmed, cached, 'cache holds the env-supplied path verbatim');
 		} catch (exception: Exception) {
 			raised = exception;

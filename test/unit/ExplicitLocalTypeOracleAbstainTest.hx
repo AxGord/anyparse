@@ -7,6 +7,9 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
+
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -188,7 +191,7 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 			return;
 		}
 		Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', dir]);
-		final packed: String = StringTools.replace(File.getContent('$dir/tests/pkg/Main.hx'), ' ', '');
+		final packed: String = File.getContent('$dir/tests/pkg/Main.hx').replace(' ', '');
 		Assert.isTrue(packed.indexOf('finalmapped:Array<Int>') != -1, 'the oracle pass ran over this file');
 		Assert.isTrue(packed.indexOf('finala=e.split') != -1, 'the comprehension-body local keeps no enclosing type');
 		Assert.isTrue(packed.indexOf('finalt=t.next()') != -1, 'the redeclaration keeps no repo-rooted path');
