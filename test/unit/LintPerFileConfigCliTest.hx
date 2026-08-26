@@ -21,11 +21,13 @@ import sys.io.File;
  */
 class LintPerFileConfigCliTest extends Test {
 
-	// Content producing exactly one finding: an unused-import Warning. Written
-	// in writer-canonical form so the `--fix` delete re-canonicalises cleanly.
+	/**
+	 * Content producing exactly one finding: an unused-import Warning. Written
+	 * in writer-canonical form so the `--fix` delete re-canonicalises cleanly.
+	 */
 	private static final UNUSED: String = 'package p;\n\nimport a.b.Unused;\n\nclass C {}\n';
 
-	// A function of cyclomatic score 2 (one `&&`) — flagged only when complexity.max is tightened to 1.
+	/** A function of cyclomatic score 2 (one `&&`) — flagged only when complexity.max is tightened to 1. */
 	private static final SCORE_TWO: String =
 		'package p;\n\nclass C {\n\tpublic function f(a:Bool, b:Bool):Bool {\n\t\treturn a && b;\n\t}\n}\n';
 

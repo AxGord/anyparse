@@ -20,7 +20,7 @@ import utest.Test;
  */
 class FormatConfigDiscoveryTest extends Test {
 
-	// Every directory `makeTree` built, removed in `teardown` so a suite run leaves none behind.
+	/** Every directory `makeTree` built, removed in `teardown` so a suite run leaves none behind. */
 	private final _made: Array<String> = [];
 
 	public function testFindsNearestAncestorConfig(): Void {

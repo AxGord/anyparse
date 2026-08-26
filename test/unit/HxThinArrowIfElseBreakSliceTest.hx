@@ -16,12 +16,14 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxThinArrowIfElseBreakSliceTest extends Test {
 
-	// A single-arg `noWrap` rule (`itemCount <= 1 && totalItemLength <= 100`) is
-	// added on top of the plain `exceedsMaxLineLength` rule so a sole short arg
-	// resolves to `noWrap` (HUG) even when its body carries an internal hardline.
-	// This makes the block / switch / for / while / plain-if negatives HUG, so the
-	// if-else positives — which break after `->` REGARDLESS of the resolved wrap
-	// mode — stand out as the only shape that leading-breaks.
+	/**
+	 * A single-arg `noWrap` rule (`itemCount <= 1 && totalItemLength <= 100`) is
+	 * added on top of the plain `exceedsMaxLineLength` rule so a sole short arg
+	 * resolves to `noWrap` (HUG) even when its body carries an internal hardline.
+	 * This makes the block / switch / for / while / plain-if negatives HUG, so the
+	 * if-else positives — which break after `->` REGARDLESS of the resolved wrap
+	 * mode — stand out as the only shape that leading-breaks.
+	 */
 	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "callParameter": {'
 		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
 		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '

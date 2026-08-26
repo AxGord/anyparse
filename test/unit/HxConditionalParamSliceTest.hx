@@ -39,7 +39,7 @@ import utest.Assert;
  */
 class HxConditionalParamSliceTest extends HxTestHelpers {
 
-	// -- Sole Conditional elem, single Optional inner (issue_345 surface, type simplified for structural focus) --
+	/** -- Sole Conditional elem, single Optional inner (issue_345 surface, type simplified for structural focus) -- */
 	public function testSingleConditionalOnly(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if openfl ?vector:Int #end) {} }');
 		Assert.equals(1, params.length);
@@ -50,16 +50,18 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('vector', (inner.name: String));
 	}
 
-	// -- Conditional first, Required follows (comma-separated, plain-mode safe).
-	//
-	// The no-comma adjacency form `(#if X bar:Int #end foobar:Int)` from
-	// fork fixture issue_397 is exercised by the corpus, NOT here. That
-	// form requires trivia-mode parsing (the `Trivial.sepAfter` per-element
-	// flag set by `matchLit(',')` failing → writer's `_emitSep` suppresses
-	// the comma); the `HaxeParser` entry used by `parseSingleFnDecl` is
-	// the PLAIN parser, whose `@:sep+@:trail` Star strictly requires a
-	// comma between elements. Both modes accept the comma-separated form
-	// below, so this slice-test stays plain-parser-friendly.
+	/**
+	 * -- Conditional first, Required follows (comma-separated, plain-mode safe).
+	 *
+	 * The no-comma adjacency form `(#if X bar:Int #end foobar:Int)` from
+	 * fork fixture issue_397 is exercised by the corpus, NOT here. That
+	 * form requires trivia-mode parsing (the `Trivial.sepAfter` per-element
+	 * flag set by `matchLit(',')` failing → writer's `_emitSep` suppresses
+	 * the comma); the `HaxeParser` entry used by `parseSingleFnDecl` is
+	 * the PLAIN parser, whose `@:sep+@:trail` Star strictly requires a
+	 * comma between elements. Both modes accept the comma-separated form
+	 * below, so this slice-test stays plain-parser-friendly.
+	 */
 	public function testConditionalFirstRequiredFollows(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if false bar:Int #end, foobar:Int) {} }');
 		Assert.equals(2, params.length);
@@ -70,7 +72,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('foobar', (expectRequiredParam(params[1]).name: String));
 	}
 
-	// -- Required first, Conditional follows (comma-separated, plain-mode safe; see above for no-comma rationale).
+	/** -- Required first, Conditional follows (comma-separated, plain-mode safe; see above for no-comma rationale). */
 	public function testRequiredFirstConditionalFollows(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(a:Int, #if x b:Int #end) {} }');
 		Assert.equals(2, params.length);
@@ -80,7 +82,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('b', (expectRequiredParam(cond.body[0]).name: String));
 	}
 
-	// -- Multi-element body inside `#if … #end` (drives Slice 18 Lowering branch via comma sep) --
+	/** -- Multi-element body inside `#if … #end` (drives Slice 18 Lowering branch via comma sep) -- */
 	public function testMultiElementBody(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if x a:Int, b:Int #end) {} }');
 		Assert.equals(1, params.length);
@@ -90,7 +92,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('b', (expectRequiredParam(cond.body[1]).name: String));
 	}
 
-	// -- `#if … #else …` — single-element bodies (elseBody no-sep limitation) --
+	/** -- `#if … #else …` — single-element bodies (elseBody no-sep limitation) -- */
 	public function testConditionalElseSingleField(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if x a:Int #else b:Int #end) {} }');
 		Assert.equals(1, params.length);
@@ -104,7 +106,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('b', (expectRequiredParam(elseBody[0]).name: String));
 	}
 
-	// -- `#elseif` chained clause, single-elem bodies --
+	/** -- `#elseif` chained clause, single-elem bodies -- */
 	public function testConditionalElseifSingleField(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if x a:Int #elseif y b:Int #else c:Int #end) {} }');
 		Assert.equals(1, params.length);
@@ -119,7 +121,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		if (elseBody != null) Assert.equals('c', (expectRequiredParam(elseBody[0]).name: String));
 	}
 
-	// -- Nested `#if` inside the body --
+	/** -- Nested `#if` inside the body -- */
 	public function testNestedConditional(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if outer #if inner a:Int #end #end) {} }');
 		Assert.equals(1, params.length);
@@ -131,7 +133,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('a', (expectRequiredParam(inner.body[0]).name: String));
 	}
 
-	// -- Empty body `#if X #end` accepted (HxParam is bare sum-type, like HxObjectField) --
+	/** -- Empty body `#if X #end` accepted (HxParam is bare sum-type, like HxObjectField) -- */
 	public function testEmptyConditionalBodyAccepted(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if x #end) {} }');
 		Assert.equals(1, params.length);
@@ -140,7 +142,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals(0, cond.body.length);
 	}
 
-	// -- Regression: a normal fn with NO `#if` parses unchanged --
+	/** -- Regression: a normal fn with NO `#if` parses unchanged -- */
 	public function testNoConditionalRegression(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(a:Int, b:String, ?c:Bool) {} }');
 		Assert.equals(3, params.length);
@@ -149,7 +151,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('c', (expectOptionalParam(params[2]).name: String));
 	}
 
-	// -- Trailing comma BEFORE the closing `#end` tolerated by Slice 18's Lowering branch --
+	/** -- Trailing comma BEFORE the closing `#end` tolerated by Slice 18's Lowering branch -- */
 	public function testTrailingSepBeforeEnd(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if x a:Int, b:Int, #end) {} }');
 		Assert.equals(1, params.length);
@@ -159,13 +161,15 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('b', (expectRequiredParam(cond.body[1]).name: String));
 	}
 
-	// -- Slice 18f: leading comma INSIDE body, single element (issue_582 surface, type simplified) --
-	//
-	// Outer comma before `#if` is REQUIRED for plain-parser parity — the plain
-	// HaxeParser entry strictly enforces `@:sep+@:trail` Star sep between fn-
-	// params (see file-level testConditionalFirstRequiredFollows rationale).
-	// The trivia parser would tolerate the no-comma adjacency form via
-	// `Trivial.sepAfter`, but this slice-test stays plain-parser-friendly.
+	/**
+	 * -- Slice 18f: leading comma INSIDE body, single element (issue_582 surface, type simplified) --
+	 *
+	 * Outer comma before `#if` is REQUIRED for plain-parser parity — the plain
+	 * HaxeParser entry strictly enforces `@:sep+@:trail` Star sep between fn-
+	 * params (see file-level testConditionalFirstRequiredFollows rationale).
+	 * The trivia parser would tolerate the no-comma adjacency form via
+	 * `Trivial.sepAfter`, but this slice-test stays plain-parser-friendly.
+	 */
 	public function testLeadingSepBodySingle(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(a:Int, #if x, b:Int #end) {} }');
 		Assert.equals(2, params.length);
@@ -176,7 +180,7 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('b', (expectRequiredParam(cond.body[0]).name: String));
 	}
 
-	// -- Slice 18f: leading comma INSIDE body, multi-element (full issue_582 shape) --
+	/** -- Slice 18f: leading comma INSIDE body, multi-element (full issue_582 shape) -- */
 	public function testLeadingSepBodyMulti(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(a:Int, #if x, b:Int, c:Int #end) {} }');
 		Assert.equals(2, params.length);

@@ -68,14 +68,16 @@ class HxFormatterCorpusTest extends Test {
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	// ω-sweep-fixture-status: per-fixture status map for `apq recon
-	// --regression-probe`. Each runCategory iteration appends one entry
-	// per `.hxtest` it inspects. Path format is `<subdir>/<name>` (e.g.
-	// `whitespace/issue_195_macro_do_while.hxtest`), matching what
-	// `Cli.collectReconSkipRecords` reports — so the diff machinery can
-	// look up "what was this fixture's status last sweep?" by path alone.
-	// Status enum is restricted to the six categories runCategory emits:
-	// PASS / FAIL / SKIP_PARSE / SKIP_WRITE / SKIP_CONFIG / MALFORMED.
+	/**
+	 * ω-sweep-fixture-status: per-fixture status map for `apq recon
+	 * --regression-probe`. Each runCategory iteration appends one entry
+	 * per `.hxtest` it inspects. Path format is `<subdir>/<name>` (e.g.
+	 * `whitespace/issue_195_macro_do_while.hxtest`), matching what
+	 * `Cli.collectReconSkipRecords` reports — so the diff machinery can
+	 * look up "what was this fixture's status last sweep?" by path alone.
+	 * Status enum is restricted to the six categories runCategory emits:
+	 * PASS / FAIL / SKIP_PARSE / SKIP_WRITE / SKIP_CONFIG / MALFORMED.
+	 */
 	private static final sweepFixtures: Array<{ path: String, status: String }> = [];
 
 	// ω-sweep-delta — process-wide accumulator across every per-category

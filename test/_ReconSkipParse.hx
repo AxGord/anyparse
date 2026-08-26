@@ -31,8 +31,10 @@ typedef ReconCluster = {
 	var rawSample: String;
 };
 
-// Deliberate recon fixture: the leading-underscore type name mirrors a skip-parse
-// probe subject and is intentional, not a real naming-convention violation.
+/**
+ * Deliberate recon fixture: the leading-underscore type name mirrors a skip-parse
+ * probe subject and is intentional, not a real naming-convention violation.
+ */
 final class _ReconSkipParse { // noqa: naming
 
 	private static inline final HXTEST_EXT: String = '.hxtest';

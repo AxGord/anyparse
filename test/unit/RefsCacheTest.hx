@@ -28,12 +28,14 @@ import utest.Test;
  */
 class RefsCacheTest extends Test {
 
-	// Exercises: shadowed locals across nested blocks, a `for` iterator
-	// (self-scope), a catch clause, a lambda param, writes (`x = 1`,
-	// `x++`), a `macro { … }` opaque subtree, a forward-declared same-scope
-	// binding, class members + a this-less member read, a braceless `$shared`
-	// string-interpolation read, and an unresolved
-	// (cross-file) name via `externalCall()`.
+	/**
+	 * Exercises: shadowed locals across nested blocks, a `for` iterator
+	 * (self-scope), a catch clause, a lambda param, writes (`x = 1`,
+	 * `x++`), a `macro { … }` opaque subtree, a forward-declared same-scope
+	 * binding, class members + a this-less member read, a braceless `$shared`
+	 * string-interpolation read, and an unresolved
+	 * (cross-file) name via `externalCall()`.
+	 */
 	private static final FIXTURE: String = '
 		class X {
 			var shared: Int = 0;
