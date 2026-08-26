@@ -392,6 +392,15 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	 * right-hand side, so cutting the whole declaration would flag a live binding and the autofix
 	 * would delete it. Excluding only the binder token leaves that read counted, exactly as the
 	 * loop model leaves the iterated expression counted.
+	 *
+	 * That is the whole of this rule's opinion on "does the initializer read the shadowed name" —
+	 * a region left out of an exclusion set, not a predicate. `shadowing-local` reaches the same
+	 * verdict for the same input through `Refs`, and the two are NOT one question wearing two
+	 * implementations: this one asks whether the FIRST binding is dead and reports THAT declaration,
+	 * with silence as its conservative direction; the other asks whether the SECOND declaration
+	 * consumes what it hides and reports the second, with reporting as its conservative direction.
+	 * On `var a = 1; var a = 2; return a;` both fire, on two lines, and each says something the other
+	 * does not. Do not fold them together.
 	 */
 	private static function appendRedeclaredRegion(ctx: ScanCtx, redecl: QueryNode, name: String, scopeSpan: Span, out: Array<Span>): Bool {
 		final span: Null<Span> = redecl.span;
