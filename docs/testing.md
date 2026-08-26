@@ -1303,16 +1303,41 @@ own JSON parser.
 
 `apq lint-diff --old A.json --new B.json [--root <prefix>] [--label <name>]`
 compares two `apq lint --format json` reports as multisets of
-`(file, rule, message)`. Line, column and address are deliberately not part of
-the key — they move under any edit above them, so keying on them would report
-half the tree after a one-line insertion. Two normalizations come from measured
-false positives rather than anticipation: `--root` strips a path prefix from
-whichever side carries it (a relative and an absolute snapshot of one tree
-otherwise disagreed on 1812 of 2954 findings), and it reaches the paths a
-message quotes as well as the `file` field, because `duplicate-code` names its
-partner block by path and line — whose digits are additionally masked to `#`,
-so a shift in the partner file is not a finding while a genuinely new duplicate
-still is.
+`(file, rule, severity, message)`. Line, column and address are deliberately not
+part of the key — they move under any edit above them, so keying on them would
+report half the tree after a one-line insertion. Two normalizations come from
+measured false positives rather than anticipation.
+
+`--root` strips a path prefix from whichever side carries it (a relative and an
+absolute snapshot of one tree otherwise disagreed on 1812 of 2954 findings), and
+it reaches the paths a message quotes as well as the `file` field, because
+`duplicate-code` names its partner block by path.
+
+The second is the same hazard one field over: a rule that writes a source
+MEASUREMENT into its own prose re-keys on an edit that changed no finding.
+`oversized-type` quotes the type's line extent, and one writer slice therefore
+printed eight moves — `WrapList` 4184 against 4194, plus `WriterLowering`, `Cli`
+and `SymbolIndex` — with total findings 2256 against a base of 2256. Every writer
+slice in that campaign waived the blast gate for this reason alone, and a gate
+waived by reflex has stopped being a gate.
+
+The fix is a declaration a check makes about ITSELF (`Check.VolatileMessage`,
+one method returning the message with its volatile parts masked), collected by
+`Linter.messageIdentities` and handed to `lint-diff`. `lint-diff` holds no list
+of rules: a new rule that quotes a coordinate joins by writing that method, and
+the consumer never changes. The masks are ANCHORED on a literal fragment the
+check itself wrote (`MessageMask.maskAfter` / `maskBefore`), so exactly one
+number leaves the key — `oversized-type`'s line extent goes, its member count
+stays, because that one moves only when a member is written. The blanket
+digit mask this replaced could not express that split at all, and on
+`duplicate-code` it also ate the statement count and any digit in the partner
+filename: 57% (anyparse) and 78% (tm) of that rule's findings shared a key with a
+sibling, where a substitution was invisible. The message keeps every number
+either way — identity and prose come apart, the numbers do not leave the report.
+
+Both snapshots are normalized at COMPARE time, so a baseline cached before a
+declaration existed still compares clean against a run made after it: adding a
+`VolatileMessage` needs no re-snapshot.
 
 Its two non-zero exits are different on purpose, and the battery treats them
 differently: **1** means the comparison ran and the snapshots disagree, which

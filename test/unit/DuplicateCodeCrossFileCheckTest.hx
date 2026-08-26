@@ -262,6 +262,45 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 		Assert.equals(1, [for (id in ids) if (id == 'duplicate-code') id].length);
 	}
 
+	/**
+	 * The cross-file half of the `VolatileMessage` pin. The partner FILENAME and the statement
+	 * COUNT stay in the key — a blanket digit mask ate both, which is how a substitution
+	 * against the same partner became invisible to the gate.
+	 */
+	public function testMessageIdentityMasksThePartnerLineOnly(): Void {
+		final check: DuplicateCode = new DuplicateCode();
+		final message: String = check.run([
+			file('A.hx', [
+				'class A {',
+				'\tfunction f():Void {',
+				'\t\ttrace(alpha, beta);',
+				'\t\ttrace(gamma, delta);',
+				'\t\ttrace(epsilon, zeta);',
+				'\t}',
+				'}'
+			]),
+			file('B.hx', [
+				'class B {',
+				'\tfunction g():Void {',
+				'\t\ttrace(alpha, beta);',
+				'\t\ttrace(gamma, delta);',
+				'\t\ttrace(epsilon, zeta);',
+				'\t}',
+				'}'
+			])
+		], new HaxeQueryPlugin())[0].message;
+		final identity: String = check.messageIdentity(message);
+		Assert.equals('3 statements duplicated from A.hx:# — extract a shared helper (report-only, cross-file)', identity);
+		Assert.equals(identity, check.messageIdentity(identity), 'the normalization is idempotent');
+		// The mask reads BACKWARDS from the tail and stops at the first non-digit, so a partner
+		// whose name ends in a digit keeps it. Two clones against different origins must not
+		// collapse onto one key — that would be a finding disappearing from the gate.
+		final tail: String = ' — extract a shared helper (report-only, cross-file)';
+		final withDigit: String = check.messageIdentity('4 statements duplicated from src/v2.hx:9$tail');
+		Assert.equals('4 statements duplicated from src/v2.hx:#$tail', withDigit);
+		Assert.notEquals(withDigit, check.messageIdentity('4 statements duplicated from src/v3.hx:9$tail'));
+	}
+
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
 		return new DuplicateCode().run(files, new HaxeQueryPlugin());
 	}

@@ -523,6 +523,7 @@ import unit.MapKeysLookupCheckTest;
 import unit.MemberOrderCheckTest;
 import unit.MemberOrderMessageTest;
 import unit.MemberOrderModifierSpanSliceTest;
+import unit.MessageMaskTest;
 import unit.MisplacedTypeDocCheckTest;
 import unit.MisplacedTypeDocGuardedMetaTest;
 import unit.MissingVisibilityCheckTest;
@@ -1415,6 +1416,7 @@ class RunTests {
 		addCase(new FarthestFailTest());
 		addCase(new ApqTextRenderTest());
 		addCase(new LintDiffTest());
+		addCase(new MessageMaskTest());
 		addCase(new MutationVerdictTest());
 		addCase(new ApqSearchCliTest());
 		addCase(new ApqAtCliTest());

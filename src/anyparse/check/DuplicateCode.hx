@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.check.CheckScan.NormalizedSpan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
@@ -68,7 +69,7 @@ import anyparse.runtime.Span;
  * findings.
  */
 @:nullSafety(Strict)
-final class DuplicateCode implements Check implements NoAutofix {
+final class DuplicateCode implements Check implements NoAutofix implements VolatileMessage {
 
 	/** The shortest run of consecutive statements considered a clone. */
 	private static inline final MIN_STATEMENTS: Int = 3;
@@ -83,6 +84,19 @@ final class DuplicateCode implements Check implements NoAutofix {
 	private static inline final GRAM_SEP: String = '\x1e';
 
 	private static inline final RULE_ID: String = 'duplicate-code';
+
+	/**
+	 * The fragment that precedes the ORIGINAL's line in a same-file message, and the one that
+	 * follows it in a cross-file message. Shared by the message builders and by
+	 * `messageIdentity`, so an anchor cannot drift away from the wording it points at.
+	 */
+	private static inline final SAME_FILE_ORIGIN: String = ' statements duplicated from line ';
+
+	/**
+	 * Anchors the OTHER direction: the cross-file message writes its coordinate before this
+	 * tail, so the mask reads backwards from it while the same-file one reads forwards.
+	 */
+	private static inline final CROSS_FILE_TAIL: String = ' — extract a shared helper (report-only, cross-file)';
 
 	public function new() {}
 
@@ -129,6 +143,22 @@ final class DuplicateCode implements Check implements NoAutofix {
 	}
 
 	/**
+	 * The ORIGINAL's line is masked; the statement COUNT and the partner FILENAME are not.
+	 *
+	 * Both message shapes name a position in the file the clone was copied FROM, so any edit
+	 * above that position renames every finding pointing at it — a shift in one file re-keys
+	 * clones reported in others. The count and the partner path move only when the code moves.
+	 *
+	 * The masks are anchored rather than blanket. `lint-diff` used to mask every digit run in
+	 * this rule's messages, which also ate the count and any digit in the partner filename:
+	 * 57% (anyparse) and 78% (tm) of this rule's findings shared a key with a sibling, and a
+	 * substitution inside such a group was invisible to the gate.
+	 */
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskBefore(MessageMask.maskAfter(message, SAME_FILE_ORIGIN), CROSS_FILE_TAIL);
+	}
+
+	/**
 	 * The same-file pass: hash this file's own block statement three-grams to find clone
 	 * starts, extend each to its maximal run, drop overlapping and sub-window runs, and emit
 	 * one `Info` per surviving later occurrence WITHIN the file. `blocks` was collected once by
@@ -146,7 +176,7 @@ final class DuplicateCode implements Check implements NoAutofix {
 			span: f.span,
 			rule: RULE_ID,
 			severity: Severity.Info,
-			message: '${f.count} statements duplicated from line ${f.origLine} — extract a helper (hxq extract-method)'
+			message: '${f.count}$SAME_FILE_ORIGIN${f.origLine} — extract a helper (hxq extract-method)'
 		});
 	}
 
@@ -287,7 +317,7 @@ final class DuplicateCode implements Check implements NoAutofix {
 			span: f.span,
 			rule: RULE_ID,
 			severity: Severity.Info,
-			message: '${f.count} statements duplicated from ${f.origFile}:${f.origLine} — extract a shared helper (report-only, cross-file)'
+			message: '${f.count} statements duplicated from ${f.origFile}:${f.origLine}$CROSS_FILE_TAIL'
 		});
 	}
 
