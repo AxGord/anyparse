@@ -305,6 +305,10 @@ class HxListLiteralEmissionSliceTest extends Test {
 		return write(source, REMOVE_OVER_ADD_JSON);
 	}
 
+	private static inline function remove(source: String): String {
+		return write(source, REMOVE_JSON);
+	}
+
 	// --- helpers ---
 
 	private static function opts(json: String): HxModuleWriteOptions {
@@ -317,10 +321,6 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	private static function base(source: String): String {
 		return write(source, BASE_JSON);
-	}
-
-	private static function remove(source: String): String {
-		return write(source, REMOVE_JSON);
 	}
 
 }

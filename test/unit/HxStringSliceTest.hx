@@ -275,7 +275,7 @@ class HxStringSliceTest extends HxTestHelpers {
 	public function testStringInFunctionArg(): Void {
 		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f("hello"); }');
 		switch decl.init {
-			case Call(operand, args):
+			case Call(_, args):
 				Assert.equals(1, args.length);
 				assertDoubleString(args[0], 'hello');
 			case null, _:

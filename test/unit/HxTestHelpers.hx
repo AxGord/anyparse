@@ -342,7 +342,7 @@ class HxTestHelpers extends Test {
 	 */
 	private function paramBody(param: HxParam): HxParamBody {
 		return switch param {
-			case Required(body) | Optional(body) | Rest(body): body;
+			case Required(body), Optional(body), Rest(body): body;
 			case Conditional(_): throw 'expected HxParam.Required/Optional/Rest, got Conditional';
 		};
 	}

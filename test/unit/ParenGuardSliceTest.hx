@@ -164,7 +164,7 @@ class ParenGuardSliceTest extends Test {
 		return switch res {
 			case Ok(text): text;
 			case Err(message):
-				Assert.fail("expected Ok, got Err: $message");
+				Assert.fail('expected Ok, got Err: $message');
 				'';
 		};
 	}

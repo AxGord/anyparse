@@ -709,6 +709,7 @@ import unit.WhileTrueConditionCheckTest;
 import unit.WhitespaceInvariantTest;
 import unit.WrapFlatSourceFixedPointTest;
 import unit.WriteOptionsTest;
+import utest.Runner;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -717,7 +718,7 @@ import unit.WriteOptionsTest;
 class RunTests {
 
 	public static function main(): Void {
-		final runner: utest.Runner = new utest.Runner();
+		final runner: Runner = new Runner();
 
 		// Optional test-class filter for a fast dev inner-loop: APQ_TEST is a
 		// comma-separated list of substrings; only test classes whose fully

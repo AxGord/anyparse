@@ -60,7 +60,7 @@ class JValueTransformSliceTest extends Test {
 		// entry AND the string value — a Terminal-rule hook is a valid
 		// rewrite site reached at any depth.
 		final ast: JValue = JObject([{ key: 'a', value: JString('x') }]);
-		final out: JValue = JValueAst.transform(ast, { jStringLit: (s: JStringLit) -> bang(s) });
+		final out: JValue = JValueAst.transform(ast, { jStringLit: bang });
 		final expected: JValue = JObject([{ key: 'a!', value: JString('x!') }]);
 		Assert.isTrue(JValueTools.equals(expected, out), 'jStringLit hook missed nested string terminals');
 	}
@@ -172,8 +172,7 @@ class JValueTransformSliceTest extends Test {
 				}
 			])
 		];
-		for (i in 0...cases.length) {
-			final ast: JValue = cases[i];
+		for (i => ast in cases) {
 			final out: JValue = deepIdentity(ast);
 			Assert.isTrue(JValueTools.equals(ast, out), 'identity changed the tree for case[$i]');
 			// And the identity-transformed tree writes byte-identically.

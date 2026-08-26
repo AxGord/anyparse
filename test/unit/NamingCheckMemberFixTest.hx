@@ -868,116 +868,6 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		assertRenamedIn('pkg/C.hx', src, '_headline1Format', 'HEADLINE_1_FORMAT');
 	}
 
-	/** The `Naming` fix edits for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */
-	private function fixCount(cSrc: String, badSrc: String): Int {
-		final files: Array<{ source: String, file: String }> = [
-			{ file: 'pkg/C.hx', source: cSrc },
-			{ file: 'pkg/Bad.hx', source: badSrc }
-		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
-		return check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length;
-	}
-
-	/** The member names `src` reaches through a reflection call, via the grammar's own projection. */
-	private function reflectionNames(src: String): Array<String> {
-		final support: HaxeNamingSupport = new HaxeNamingSupport();
-		return support.reflectionMemberNames(new HaxeQueryPlugin().parseFile(src), src);
-	}
-
-	private function cleanupNamingDir(dir: String, names: Array<String>): Void {
-		#if (sys || nodejs)
-		for (n in names) if (sys.FileSystem.exists('$dir/$n')) sys.FileSystem.deleteFile('$dir/$n');
-		if (sys.FileSystem.exists(dir)) sys.FileSystem.deleteDirectory(dir);
-		#end
-	}
-
-	/** `src` plus a sibling `pkg.Rect` that carries its own `bottom`, fixed and asserted. */
-	private function assertRenamedWithRect(src: String, present: String, absent: String): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: src },
-			{ file: 'pkg/Rect.hx', source: 'package pkg;\n\nclass Rect {\n\tpublic var bottom:Int = 0;\n\n\tpublic function new() {}\n}' }
-		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
-		Assert.isTrue(vs.length >= 1);
-		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
-	}
-
-	/** `assertNotRenamed`'s single-file setup, asserting on the fixed TEXT instead of a refusal. */
-	private function assertRenamedSingle(src: String, present: String, absent: String): Void {
-		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
-		Assert.isTrue(vs.length >= 1);
-		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
-	}
-
-	/**
-	 * Run naming's field fix on `subSrc` (the sole report file) with `libSrc` as the
-	 * only resolution-scope library file. Confinement uses the report-only index; the
-	 * field inheritance proof uses the host's resolution index (report UNION library).
-	 */
-	private function fixWithResolutionScope(subSrc: String, libSrc: String): Array<{ span: Span, text: String }> {
-		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
-		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
-		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
-		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(report, scoped).filter(v -> v.file == 'pkg/Sub.hx');
-		Assert.equals(1, vs.length);
-		return check.fix(subSrc, vs, scoped, reportIndex);
-	}
-
-	#if (sys || nodejs)
-	/** A private field another file reads via `Reflect.getProperty(o, 'shape')` stays report-only. */
-	public inline function testFixSkipsPrivateFieldNamedByReflectionInAnotherFile(): Void {
-		assertReflectionGuard(
-			"package pkg;\nclass E {\n\tpublic function f(o:Dynamic) {\n\t\ttrace(Reflect.getProperty(o, 'shape'));\n\t}\n}", false
-		);
-	}
-
-	/** The same spelling as a plain action id is NOT a reference — the rename must land. */
-	public inline function testFixRenamesPrivateFieldOnlySpelledByAStringInAnotherFile(): Void {
-		assertReflectionGuard("package pkg;\nclass E {\n\tpublic function f(a:String) {\n\t\tif (a == 'shape') trace(a);\n\t}\n}", true);
-	}
-
-	/** A comment mentioning the name in quotes is text, not a reflection call. */
-	public inline function testFixRenamesPrivateFieldMentionedInAnotherFilesComment(): Void {
-		assertReflectionGuard("package pkg;\nclass E {\n\t// reads 'shape' from the model\n\tpublic function f() {}\n}", true);
-	}
-
-	/**
-	 * Whether `C.shape`'s rename survives `otherSource` sitting beside it. Both files go to
-	 * DISK because the guard reads its sources through the index's paths (`SymbolIndex` keeps
-	 * none), so an in-memory pair would leave the guard with nothing to look at and pass
-	 * vacuously.
-	 */
-	private function assertReflectionGuard(otherSource: String, expectRenamed: Bool): Void {
-		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\n\tpublic function f():Void {\n\t\tshape = 1;\n\t}\n}';
-		final dir: String = CliFixture.writeDir('namingrefl', [
-			{ name: 'C.hx', source: cSrc },
-			{ name: 'E.hx', source: otherSource }
-		]);
-		final files: Array<{ file: String, source: String }> = [
-			{ file: '$dir/C.hx', source: cSrc },
-			{ file: '$dir/E.hx', source: otherSource }
-		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == '$dir/C.hx');
-		Assert.isTrue(vs.length >= 1);
-		final edits: Array<{ span: Span, text: String }> = check.fix(cSrc, vs, new HaxeQueryPlugin(), index);
-		Assert.equals(expectRenamed, edits.length > 0);
-		cleanupNamingDir(dir, ['C.hx', 'E.hx']);
-	}
-	#end
-
-
 	/**
 	 * `@:rtti` before a conditional-compilation region belongs to the TYPE the region holds, not to
 	 * the type that follows it. The run-ender test asked only about MEMBERS, so a region holding a
@@ -990,7 +880,6 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			+ '\tpublic function f() { return this.shape; }\n}';
 		assertRenamedIn('pkg/C.hx', src, 'var _shape', 'var shape');
 	}
-
 
 	/**
 	 * The twin the seam is FOR: a region holding no declaration at all is transparent, so `@:rtti`
@@ -1047,7 +936,6 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		Assert.isNull(vs[0].declineReason, 'a rename that landed declined nothing');
 	}
 
-
 	/**
 	 * The gate `testEveryRefusedRenameNamesItsGate` measured the largest share of, now open. 198 of
 	 * that run's 231 declines were one sentence — the policy came from a `checkstyle.json`, which
@@ -1076,27 +964,6 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		#else
 		Assert.pass('non-sys target');
 		#end
-	}
-
-	/** The naming fix edit count for `dir/C.hx`, with whatever config `dir` itself carries governing it. */
-	private function discoveredPolicyFixCount(dir: String, src: String): Int {
-		final run: { edits: Int, findings: Array<Violation> } = fixedFindingsIn(dir, src);
-		Assert.equals(1, run.findings.length);
-		return run.edits;
-	}
-
-	/**
-	 * `dir/C.hx`'s naming findings after `fix` has been asked for each — so a caller can assert on
-	 * the EDIT COUNT or on the `declineReason` the refusals wrote, from one run. `dir`'s own config
-	 * governs, whatever it is: `Naming.fix` resolves its policy through `NamingSupport.policyFor`,
-	 * which walks up from the FILE.
-	 */
-	private function fixedFindingsIn(dir: String, src: String): { edits: Int, findings: Array<Violation> } {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final files: Array<{ file: String, source: String }> = [{ file: '$dir/C.hx', source: src }];
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, plugin);
-		return { edits: check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length, findings: vs };
 	}
 
 	/**
@@ -1172,6 +1039,92 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		for (src in [field, constant]) Assert.stringContains('the member carries metadata', declineReasonsIn('pkg', src)[0]);
 	}
 
+	/** The `Naming` fix edits for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */
+	private function fixCount(cSrc: String, badSrc: String): Int {
+		final files: Array<{ source: String, file: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/Bad.hx', source: badSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		return check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length;
+	}
+
+	/** The member names `src` reaches through a reflection call, via the grammar's own projection. */
+	private function reflectionNames(src: String): Array<String> {
+		final support: HaxeNamingSupport = new HaxeNamingSupport();
+		return support.reflectionMemberNames(new HaxeQueryPlugin().parseFile(src), src);
+	}
+
+	private function cleanupNamingDir(dir: String, names: Array<String>): Void {
+		#if (sys || nodejs)
+		for (n in names) if (sys.FileSystem.exists('$dir/$n')) sys.FileSystem.deleteFile('$dir/$n');
+		if (sys.FileSystem.exists(dir)) sys.FileSystem.deleteDirectory(dir);
+		#end
+	}
+
+	/** `src` plus a sibling `pkg.Rect` that carries its own `bottom`, fixed and asserted. */
+	private function assertRenamedWithRect(src: String, present: String, absent: String): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: src },
+			{ file: 'pkg/Rect.hx', source: 'package pkg;\n\nclass Rect {\n\tpublic var bottom:Int = 0;\n\n\tpublic function new() {}\n}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.isTrue(vs.length >= 1);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
+	}
+
+	/** `assertNotRenamed`'s single-file setup, asserting on the fixed TEXT instead of a refusal. */
+	private function assertRenamedSingle(src: String, present: String, absent: String): Void {
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.isTrue(vs.length >= 1);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
+	}
+
+	/**
+	 * Run naming's field fix on `subSrc` (the sole report file) with `libSrc` as the
+	 * only resolution-scope library file. Confinement uses the report-only index; the
+	 * field inheritance proof uses the host's resolution index (report UNION library).
+	 */
+	private function fixWithResolutionScope(subSrc: String, libSrc: String): Array<{ span: Span, text: String }> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
+		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
+		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(report, scoped).filter(v -> v.file == 'pkg/Sub.hx');
+		Assert.equals(1, vs.length);
+		return check.fix(subSrc, vs, scoped, reportIndex);
+	}
+
+	/** The naming fix edit count for `dir/C.hx`, with whatever config `dir` itself carries governing it. */
+	private function discoveredPolicyFixCount(dir: String, src: String): Int {
+		final run: { edits: Int, findings: Array<Violation> } = fixedFindingsIn(dir, src);
+		Assert.equals(1, run.findings.length);
+		return run.edits;
+	}
+
+	/**
+	 * `dir/C.hx`'s naming findings after `fix` has been asked for each — so a caller can assert on
+	 * the EDIT COUNT or on the `declineReason` the refusals wrote, from one run. `dir`'s own config
+	 * governs, whatever it is: `Naming.fix` resolves its policy through `NamingSupport.policyFor`,
+	 * which walks up from the FILE.
+	 */
+	private function fixedFindingsIn(dir: String, src: String): { edits: Int, findings: Array<Violation> } {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = [{ file: '$dir/C.hx', source: src }];
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, plugin);
+		return { edits: check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length, findings: vs };
+	}
+
 	/** The `unused-private` findings a one-file `pkg/C.hx` fixture carries — the OTHER reader of `implicitReach`. */
 	private function unusedPrivateCount(src: String): Int {
 		return new UnusedPrivate().run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin()).length;
@@ -1183,5 +1136,49 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		Assert.equals(0, run.edits, 'every rename is refused');
 		return [for (v in run.findings) v.declineReason ?? ''];
 	}
+
+	#if (sys || nodejs)
+	/** A private field another file reads via `Reflect.getProperty(o, 'shape')` stays report-only. */
+	public inline function testFixSkipsPrivateFieldNamedByReflectionInAnotherFile(): Void {
+		assertReflectionGuard(
+			"package pkg;\nclass E {\n\tpublic function f(o:Dynamic) {\n\t\ttrace(Reflect.getProperty(o, 'shape'));\n\t}\n}", false
+		);
+	}
+
+	/** The same spelling as a plain action id is NOT a reference — the rename must land. */
+	public inline function testFixRenamesPrivateFieldOnlySpelledByAStringInAnotherFile(): Void {
+		assertReflectionGuard("package pkg;\nclass E {\n\tpublic function f(a:String) {\n\t\tif (a == 'shape') trace(a);\n\t}\n}", true);
+	}
+
+	/** A comment mentioning the name in quotes is text, not a reflection call. */
+	public inline function testFixRenamesPrivateFieldMentionedInAnotherFilesComment(): Void {
+		assertReflectionGuard("package pkg;\nclass E {\n\t// reads 'shape' from the model\n\tpublic function f() {}\n}", true);
+	}
+
+	/**
+	 * Whether `C.shape`'s rename survives `otherSource` sitting beside it. Both files go to
+	 * DISK because the guard reads its sources through the index's paths (`SymbolIndex` keeps
+	 * none), so an in-memory pair would leave the guard with nothing to look at and pass
+	 * vacuously.
+	 */
+	private function assertReflectionGuard(otherSource: String, expectRenamed: Bool): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\n\tpublic function f():Void {\n\t\tshape = 1;\n\t}\n}';
+		final dir: String = CliFixture.writeDir('namingrefl', [
+			{ name: 'C.hx', source: cSrc },
+			{ name: 'E.hx', source: otherSource }
+		]);
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$dir/C.hx', source: cSrc },
+			{ file: '$dir/E.hx', source: otherSource }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == '$dir/C.hx');
+		Assert.isTrue(vs.length >= 1);
+		final edits: Array<{ span: Span, text: String }> = check.fix(cSrc, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(expectRenamed, edits.length > 0);
+		cleanupNamingDir(dir, ['C.hx', 'E.hx']);
+	}
+	#end
 
 }

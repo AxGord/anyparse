@@ -1,7 +1,6 @@
 package unit;
 
 import anyparse.check.Check;
-import anyparse.check.Check.Violation;
 import anyparse.check.DoubleNegation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.InvertNegatedIfElse;

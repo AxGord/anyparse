@@ -347,6 +347,15 @@ class TypeResolverSliceTest extends Test {
 		Assert.isTrue(nonNull(src), 'the guard precedes the shadow, so the Int declaration is the one in scope');
 	}
 
+	private inline function nonNull(src: String): Bool {
+		return proveNonNull(src, false);
+	}
+
+	/** `nonNull`'s twin over the null-COMPARISON entry point — the same fixture, the other predicate. */
+	private inline function nonNullAtNullComparison(src: String): Bool {
+		return proveNonNull(src, true);
+	}
+
 	private function wrap(param: String, body: String): String {
 		return 'typedef Ctx = { var f:Int; }; class C { static function m($param):Void { $body } }';
 	}
@@ -358,15 +367,6 @@ class TypeResolverSliceTest extends Test {
 		final violations: Array<Violation> = check.run(files, plugin);
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		return check.fix(src, violations, plugin, index);
-	}
-
-	private function nonNull(src: String): Bool {
-		return proveNonNull(src, false);
-	}
-
-	/** `nonNull`'s twin over the null-COMPARISON entry point — the same fixture, the other predicate. */
-	private function nonNullAtNullComparison(src: String): Bool {
-		return proveNonNull(src, true);
 	}
 
 	/** The `… != null` operand of `src`, put to whichever `TypeResolver` entry point is asked for. */

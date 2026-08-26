@@ -561,14 +561,6 @@ class UnusedPrivateCheckTest extends Test {
 		);
 	}
 
-	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
-	private function assertReportedButNotDeleted(src: String): Void {
-		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length, 'the member is still reported');
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'and not deleted');
-	}
-
 	/**
 	 * Gate 3 (@:keep on the class): all members are retained for reflection / DCE — a
 	 * private member is reported but never deleted.
@@ -702,6 +694,40 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(1, fixEdits(src).length);
 	}
 
+	/**
+	 * A region's `#else` branch is covered by the annotation before the region too. The projection
+	 * flattens every branch into ONE child list with no branch marker, so `b` reads as a member
+	 * PRECEDED by `a` inside the region - and treating that as the run's end left the `#else` twin of
+	 * an `@:keep`-ed member unannotated, after which `--fix` deleted it. Inside a region nothing ends
+	 * the run: it runs out and continues in the region's own leading run.
+	 */
+	public function testElseBranchMemberOfAnnotatedRegionExempt(): Void {
+		Assert.equals(0, one('class C {\n\t@:keep #if js private function a():Void {} #else private function b():Void {} #end\n}').length);
+	}
+
+	/**
+	 * The class-level `@:keep` deletion guard reaches its members across a member-free
+	 * conditional-compilation region, the same seam the member-level run crosses. Its own walk had no
+	 * seam at all and stopped at the region, so `#if js @:native("C") #end` between the annotation and
+	 * the class dropped the whole class's protection and `--fix` deleted its privates. Report-only,
+	 * like the region-free twin above.
+	 */
+	public function testFixKeepsKeepClassMemberAcrossMemberFreeRegion(): Void {
+		final src: String = '@:keep #if js @:native("C") #end\nclass C {\n\tprivate function dead() {}\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
+	private function assertReportedButNotDeleted(src: String): Void {
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length, 'the member is still reported');
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'and not deleted');
+	}
+
 	/** `unused-private` findings for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */
 	private function skipParseViolations(badSrc: String): Int {
 		final files: Array<{ file: String, source: String }> = [
@@ -722,34 +748,6 @@ class UnusedPrivateCheckTest extends Test {
 	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
 		final check: UnusedPrivate = new UnusedPrivate();
 		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
-	}
-
-
-	/**
-	 * A region's `#else` branch is covered by the annotation before the region too. The projection
-	 * flattens every branch into ONE child list with no branch marker, so `b` reads as a member
-	 * PRECEDED by `a` inside the region - and treating that as the run's end left the `#else` twin of
-	 * an `@:keep`-ed member unannotated, after which `--fix` deleted it. Inside a region nothing ends
-	 * the run: it runs out and continues in the region's own leading run.
-	 */
-	public function testElseBranchMemberOfAnnotatedRegionExempt(): Void {
-		Assert.equals(0, one('class C {\n\t@:keep #if js private function a():Void {} #else private function b():Void {} #end\n}').length);
-	}
-
-
-	/**
-	 * The class-level `@:keep` deletion guard reaches its members across a member-free
-	 * conditional-compilation region, the same seam the member-level run crosses. Its own walk had no
-	 * seam at all and stopped at the region, so `#if js @:native("C") #end` between the annotation and
-	 * the class dropped the whole class's protection and `--fix` deleted its privates. Report-only,
-	 * like the region-free twin above.
-	 */
-	public function testFixKeepsKeepClassMemberAcrossMemberFreeRegion(): Void {
-		final src: String = '@:keep #if js @:native("C") #end\nclass C {\n\tprivate function dead() {}\n}';
-		final check: UnusedPrivate = new UnusedPrivate();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
 }

@@ -93,8 +93,7 @@ class RefsCacheTest extends Test {
 			Assert.equals(
 				expected.length, actual.length, 'name "$name": hit count mismatch — bare ${expected.length}, cached ${actual.length}'
 			);
-			for (i in 0...expected.length) {
-				final e: RefHit = expected[i];
+			for (i => e in expected) {
 				final a: RefHit = actual[i];
 				Assert.equals(e.kind, a.kind, 'name "$name" hit $i: kind mismatch');
 				Assert.equals(e.name, a.name, 'name "$name" hit $i: name mismatch');

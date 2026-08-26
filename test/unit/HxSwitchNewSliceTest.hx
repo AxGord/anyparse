@@ -683,7 +683,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		final body: Array<HxStatement> = parseBody(source);
 		Assert.equals(1, body.length);
 		return switch body[0] {
-			case ReturnStmt(expr) | ExprStmt(expr):
+			case ReturnStmt(expr), ExprStmt(expr):
 				switch expr {
 					case SwitchExpr(stmt): stmt;
 					case null, _: throw 'expected SwitchExpr rhs';
