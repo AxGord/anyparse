@@ -67,15 +67,16 @@ final class HxSoleArgGluedCloseDedentTest extends Test {
 	 * `fillLineWithLeadingBreak`, the `objectLiteral` explode rule, and the brace
 	 * spacing the expectations are written in.
 	 */
-	private static final CFG: String = '{"indentation": {}, "emptyLines": {"classEmptyLines": {"beginType": 1, "endType": 1}}, "wrapping": {'
-		+ '"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"condi'
-		+ 'tions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
-		+ '"itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]},'
-		+ ' "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength'
-		+ '", "value": 1}], "type": "onePerLine"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"'
-		+ 'openingPolicy": "after", "closingPolicy": "before"}, "anonTypeBraces": {"openingPolicy": "after", "c'
-		+ 'losingPolicy": "before"}, "typedefBraces": {"openingPolicy": "after", "closingPolicy": "before"}, "b'
-		+ 'lockBraces": {"openingPolicy": "around", "closingPolicy": "before"}, "unknownBraces": {"openingPolic'
+	private static final CFG: String = '{"indentation": {}, "emptyLines": {"classEmptyLines": {"beginType": 1, "endType": 1}}, '
+		+ '"wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", '
+		+ '"rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {'
+		+ '"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": '
+		+ '100}], "type": "noWrap"}]}, "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}]}}, "whitespace": {'
+		+ '"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}, '
+		+ '"anonTypeBraces": {"openingPolicy": "after", "closingPolicy": "before"}, "typedefBraces": {'
+		+ '"openingPolicy": "after", "closingPolicy": "before"}, "blockBraces": {'
+		+ '"openingPolicy": "around", "closingPolicy": "before"}, "unknownBraces": {"openingPolic'
 		+ 'y": "after", "closingPolicy": "before"}}}}';
 
 	public function new(): Void {
@@ -97,13 +98,12 @@ final class HxSoleArgGluedCloseDedentTest extends Test {
 			+ ' ret: null, expr: macro {\n\t\t\t\tif (v != prev) {\n\t\t\t\t\tvar q = prev;\n\t\t\t\t\tdispatchWith'
 			+ 'Flag(prev = v, q, true);\n\t\t\t\t}\n\t\t\t\treturn prev;\n\t\t\t} })\n\t\t});\n\t}\n}';
 		final expected: String = 'class P {\n\n\tfunction f() {\n\t\tfields.push({\n\t\t\tname: \'set_\' + n,\n\t\t\taccess: ast.conca'
-			+ 't([AInline, setterAccess]),\n\t\t\tmeta: null,\n\t\t\tpos: f.pos,\n\t\t\tkind: FFun(setcontroll\n\t'
-			+ '\t\t\t? {\n\t\t\t\t\targs: [{ name: \'v\', type: null }],\n\t\t\t\t\tret: null,\n\t\t\t\t\texpr: mac'
-			+ 'ro return aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-			+ 'aa\n\t\t\t\t}\n\t\t\t\t: {\n\t\t\t\t\targs: [{ name: \'v\', type: null }],\n\t\t\t\t\tret: null,\n\t'
-			+ '\t\t\t\texpr: macro {\n\t\t\t\t\t\tif (v != prev) {\n\t\t\t\t\t\t\tvar q = prev;\n\t\t\t\t\t\t\tdisp'
-			+ 'atchWithFlag(prev = v, q, true);\n\t\t\t\t\t\t}\n\t\t\t\t\t\treturn prev;\n\t\t\t\t\t}\n\t\t\t\t}\n'
-			+ '\t\t\t)\n\t\t});\n\t}\n\n}';
+			+ 't([AInline, setterAccess]),\n\t\t\tmeta: null,\n\t\t\tpos: f.pos,\n\t\t\tkind: FFun(setcontroll\n\t\t\t\t? {\n'
+			+ '\t\t\t\t\targs: [{ name: \'v\', type: null }],\n\t\t\t\t\tret: null,\n\t\t\t\t\texpr: mac'
+			+ 'ro return aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\t\t\t\t}\n'
+			+ '\t\t\t\t: {\n\t\t\t\t\targs: [{ name: \'v\', type: null }],\n\t\t\t\t\tret: null,\n\t\t\t\t\texpr: macro {\n'
+			+ '\t\t\t\t\t\tif (v != prev) {\n\t\t\t\t\t\t\tvar q = prev;\n\t\t\t\t\t\t\tdispatchWithFlag(prev = v, q, true);\n'
+			+ '\t\t\t\t\t\t}\n\t\t\t\t\t\treturn prev;\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t)\n\t\t});\n\t}\n\n}';
 		assertWrite(expected, src);
 	}
 
@@ -141,9 +141,9 @@ final class HxSoleArgGluedCloseDedentTest extends Test {
 	 * red on.
 	 */
 	public function testSoleArgClosingOnContentKeepsTheGluedClose(): Void {
-		final src: String = 'class ContentTail {\n\tfunction f() {\n\t\treturn MathTools.cabs(if (ms != 0) {\n\t\t\tif (ms % 10 !'
-			+ '= 0) 1;\n\t\t\telse if (ms % 100 != 0) 10;\n\t\t\telse 100;\n\t\t} else if (seconds != 0) fromSecond'
-			+ 's(1); else if (minutes != 0) fromMinutes(1); else if (hours != 0) fromHours(1); else fromDays(1));\n' + '\t}\n}';
+		final src: String = 'class ContentTail {\n\tfunction f() {\n\t\treturn MathTools.cabs(if (ms != 0) {\n\t\t\tif (ms % 10 != 0) 1;\n'
+			+ '\t\t\telse if (ms % 100 != 0) 10;\n\t\t\telse 100;\n\t\t} else if (seconds != 0) fromSecond'
+			+ 's(1); else if (minutes != 0) fromMinutes(1); else if (hours != 0) fromHours(1); else fromDays(1));\n\t}\n}';
 		final expected: String = 'class ContentTail {\n\n\tfunction f() {\n\t\treturn MathTools.cabs(if (ms != 0) {\n\t\t\tif (ms % 10'
 			+ ' != 0) 1; else if (ms % 100 != 0) 10; else 100;\n\t\t} else if (seconds != 0) fromSeconds(1); else i'
 			+ 'f (minutes != 0) fromMinutes(1); else if (hours != 0) fromHours(1); else fromDays(1));\n\t}\n\n}';
