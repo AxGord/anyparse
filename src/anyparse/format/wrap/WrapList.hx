@@ -2512,7 +2512,68 @@ class WrapList {
 	): Null<Doc> {
 		if (mode != FillLineWithLeadingBreak || items.length != 1 || isArrowBodyMarker(items[0]) || isMethodChainItem(items[0]))
 			return null;
-		final glued: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
+		// ω-glued-close-opener-line (T173): a closer glued straight after the sole
+		// argument lands wherever the argument's last rendered line left the pen.
+		// For a collection literal or a nested call that is the head line's own
+		// indent — they emit their close delimiter OUTSIDE their content `Nest` —
+		// so `f({\n\t…\n})` and `f(g(\n\t…\n))` are right. A ternary or value-`if`
+		// closes its last branch INSIDE its own `? :` continuation nest, one level
+		// deeper, and a `)` glued onto that `}` sits below its own `(`. The rule
+		// being enforced: a line-leading run of closers may only be glued when the
+		// delimiters it closes were opened on the same line.
+		//
+		// `DocMeasure.breakTailCloseNest` answers that structurally, never by
+		// width, so no render-time decision can move a call's shape. It reports
+		// `-1` when the broken tail is not a closing line at all (`f(a &&\n\tb)`
+		// ends on content — no line-leading closer run exists, and the invariant
+		// has nothing to say), which is why a ternary with scalar branches keeps
+		// its glued `)`.
+		//
+		// BRACE-DELIMITED closing lines only, and that is a scope, not a
+		// shortcut. Whether a construct breaks at its `? :` at all is a WIDTH
+		// decision the cascade defers to the renderer, so a structural walk
+		// necessarily reads a slot the output may not have taken. A `[`-led
+		// branch is where that misreads: this function's own `[` arm below states
+		// the policy — a bracket-delimited collection owns its multi-line layout,
+		// its `[` IS its wrap point and the head line hugs it — so
+		// `f(c ? [] : [\n\t…\n])` closes at the CALL's indent and its glued `)`
+		// was already right. Measured: without the brace bound that exact shape in
+		// `QueryWalkerLowering` lost its glue for nothing.
+		//
+		// The AUTHORITATIVE brace test lives INSIDE `breakTailCloseNest`, off the
+		// same walk that measures the depth, so bound and measure describe ONE
+		// rendering. `endsWithCloseBrace` in front of it is a COST filter, not the
+		// bound: it resolves every `If*` to the flat slot, so on a shape whose two
+		// slots close on different delimiters it can disagree with the walk — but
+		// only ever by rejecting early, which forfeits a fix rather than making a
+		// wrong one. It earns its place: it is a right-spine walk that stops at
+		// the first visible text, while `breakTailCloseNest` asks `hasForcedBreak`
+		// about a whole subtree per `If*` on the tail path. Interleaved medians
+		// over an 870-file tree, against this slice's base: +1.7% without the
+		// filter, +0.3-0.6% (inside the run-to-run noise) with it.
+		//
+		// `flatLength(items[0]) < 0` is a COST GUARD, not a filter — it is
+		// implied, since a `TailBreak` needs a hardline on the resolved spine and
+		// that spine is a subset of the flat one wherever the flat slot carries no
+		// forced break. It stays for two reasons: it short-circuits a full Doc
+		// walk in the overwhelmingly common flat case, and the implication rests
+		// on `flatLength`, `hasForcedBreak` and `scanTailAt` agreeing about which
+		// containers they descend — this is the belt if one of the three drifts.
+		//
+		// `closeInside` is dropped on the own-line side for the reason
+		// `shapeFillLineWithLeadingBreak` spells out: an inside-of-delimiter space
+		// Doc would land after the forced break and emit a stray ` )`. Only that
+		// HALF of its reasoning transfers — `openInside` is deliberately KEPT
+		// here, because this shape does not break after the open delimiter, so its
+		// padding still belongs on the head line.
+		//
+		// SCOPE, deliberate: sole-argument lists only, because this shaper is only
+		// reached for one. A MULTI-argument list ending on a trailing lambda or
+		// object hug (`f(a, e -> {\n\t…\n})`, `if (c && f(… ->\n\t…\n))`) glues a
+		// closer below its opener too, and that shape is wanted — nine corpus
+		// fixtures pin it. A renderer-wide reading of the same invariant, tried
+		// first, broke every one of them.
+		final hugGlue: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
 		final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
 		// ω-callparam-single-objectlit: a sole OBJECT-LITERAL arg (`f({...})`)
 		// leading-breaks with the object kept FLAT on its own indented line iff
@@ -2520,7 +2581,7 @@ class WrapList {
 		// own line it stays brace-hugged and its fields wrap (fork `({`-glued +
 		// explode). Arrays / nested calls keep the open-delim-glue path below.
 		if (DocMeasure.firstVisibleTextStartsWith(items[0], '{'.code))
-			return IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken);
+			return IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, hugGlue, broken);
 		// ω-outer-first-wrap (T20) SCOPE: a `[`-leading sole arg — array literal
 		// or `for`/`while`/map comprehension — is excluded. A bracket-delimited
 		// collection owns its own multi-line layout: its `[` IS its wrap point,
@@ -2529,7 +2590,7 @@ class WrapList {
 		// pinned by `HxComprehensionDeclRhsBracketWrapTest`; the outer-first
 		// priority governs where a CALL-level wrap competes with a nested
 		// PAREN group, not collection literals.
-		if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
+		if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, hugGlue);
 		// ω-outer-first-wrap (T20): OUTER boundaries win over inner ones. When
 		// breaking at THIS list's own delimiters already yields an argument that
 		// renders as one flat line at its continuation indent, take that shape —
@@ -2548,7 +2609,14 @@ class WrapList {
 		// limit, so the threshold must be one past it (the width+1 off-by-one
 		// class this land is prone to — both edges are pinned in
 		// `HxCallParamOuterFirstWrapSliceTest`).
+		// Computed HERE, below the two early returns, so the `{`- and `[`-led
+		// paths — by far the commonest sole arguments — keep paying nothing for
+		// this decision. Both would answer `false` anyway: a brace-led argument
+		// closes at nest 0, a bracket-led one does not close on a brace at all.
 		final argFlat: Int = flatLength(items[0]);
+		final glued: Doc = argFlat < 0 && DocMeasure.endsWithCloseBrace(items[0]) && DocMeasure.breakTailCloseNest(items[0]) > 0
+			? Concat([Text(open), openInside, items[0], Line('\n'), Text(close)])
+			: hugGlue;
 		final innerGlue: Doc = IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
 		return argFlat < 0
 			? innerGlue
