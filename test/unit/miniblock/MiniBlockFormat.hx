@@ -81,7 +81,7 @@ final class MiniBlockFormat {
 		methodChainCuddledLinks: false,
 		addLineCommentSpace: true,
 		normalizeLineCommentIndent: false,
-		compressSuccessiveParenthesis: true,
+		compressSuccessiveParenthesis: true
 	};
 
 	private function new() {}

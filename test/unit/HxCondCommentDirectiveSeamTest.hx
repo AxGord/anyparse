@@ -83,7 +83,7 @@ class HxCondCommentDirectiveSeamTest extends Test {
 		DOC_PLUS_LINE_MEMBER,
 		SAME_LINE_MEMBER,
 		SAME_LINE_MODIFIER,
-		SAME_LINE_STMT,
+		SAME_LINE_STMT
 	];
 
 	// --- 1. empty arm, comment only ------------------------------------

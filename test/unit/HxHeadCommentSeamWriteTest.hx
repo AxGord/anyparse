@@ -144,7 +144,7 @@ class HxHeadCommentSeamWriteTest extends Test {
 			'class Foo {\n\tfunction bar() {\n\t\tswitch (v) // pick\n\t\t{\n\t\t\tcase 1:\n\t\t\t\ta();\n\t\t}\n\t}\n}',
 			'class Foo {\n\tfunction bar() // sig\n\t{\n\t\ta();\n\t}\n}',
 			'abstract A(Int) // under\n{}',
-			'class Foo {\n\tfunction bar() {\n\t\tif (c) // yes\n\t\t{\n\t\t\ta();\n\t\t}\n\t}\n}',
+			'class Foo {\n\tfunction bar() {\n\t\tif (c) // yes\n\t\t{\n\t\t\ta();\n\t\t}\n\t}\n}'
 		];
 		for (source in sources) {
 			final once: String = roundTrip(source);

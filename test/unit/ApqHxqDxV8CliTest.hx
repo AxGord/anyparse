@@ -132,7 +132,7 @@ class ApqHxqDxV8CliTest extends Test {
 			'NOOP_NOPE',
 			'--with',
 			'X',
-			'--per-pattern',
+			'--per-pattern'
 		]));
 		FileSystem.deleteFile(input);
 		#else
@@ -157,7 +157,7 @@ class ApqHxqDxV8CliTest extends Test {
 			'f() : {',
 			'--with',
 			'f() {',
-			'--per-pattern',
+			'--per-pattern'
 		]));
 		FileSystem.deleteFile(input);
 		#else
@@ -181,7 +181,7 @@ class ApqHxqDxV8CliTest extends Test {
 			'f() : {',
 			'--with',
 			'f() : {',
-			'--per-pattern',
+			'--per-pattern'
 		]));
 		FileSystem.deleteFile(input);
 		#else
@@ -201,7 +201,7 @@ class ApqHxqDxV8CliTest extends Test {
 			'var',
 			'--with',
 			'final',
-			'--per-pattern',
+			'--per-pattern'
 		]));
 		FileSystem.deleteFile(input);
 		#else
@@ -227,7 +227,7 @@ class ApqHxqDxV8CliTest extends Test {
 			'B',
 			'--with',
 			'Y',
-			'--per-pattern',
+			'--per-pattern'
 		]));
 		FileSystem.deleteFile(f1);
 		FileSystem.deleteFile(f2);
@@ -251,7 +251,7 @@ class ApqHxqDxV8CliTest extends Test {
 			'--with',
 			'y',
 			'--per-pattern',
-			'--dry-run',
+			'--dry-run'
 		]));
 		FileSystem.deleteFile(input);
 		#else

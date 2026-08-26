@@ -59,7 +59,7 @@ class ApqStripDryRunCliTest extends Test {
 			'BOGUS',
 			'--with',
 			'',
-			'--dry-run',
+			'--dry-run'
 		]));
 		FileSystem.deleteFile(input);
 		#else

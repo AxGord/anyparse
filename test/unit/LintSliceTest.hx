@@ -143,7 +143,7 @@ class LintSliceTest extends Test {
 	public function testSkipParseExcluded(): Void {
 		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/Good.hx', source: 'package pkg;\nimport a.b.Unused;\nclass Good {}' },
-			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' },
+			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
 		];
 		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
 		Assert.equals(1, vs.length);
@@ -790,7 +790,7 @@ class LintSliceTest extends Test {
 			{ file: 'a/b/Unused.hx', source: 'package a.b;\nclass Unused {}' },
 			{ file: 'a/b/Foo.hx', source: 'package a.b;\nclass Foo {}' },
 			{ file: 'a/b/Bar.hx', source: 'package a.b;\nclass Bar {}' },
-			{ file: 'a/b/Gone.hx', source: 'package a.b;\nclass Gone {}' },
+			{ file: 'a/b/Gone.hx', source: 'package a.b;\nclass Gone {}' }
 		];
 	}
 

@@ -252,12 +252,12 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 				rules: {
 					rules: [
 						{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }] },
-						{ mode: WrapMode.NoWrap, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }] },
+						{ mode: WrapMode.NoWrap, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }] }
 					],
 					defaultMode: WrapMode.OnePerLine
 				},
 				leadingBreak: false
-			},
+			}
 		];
 	}
 

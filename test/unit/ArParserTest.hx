@@ -69,7 +69,7 @@ class ArParserTest extends utest.Test {
 			ownerId: 0,
 			groupId: 0,
 			mode: MODE_REGULAR_FILE,
-			data: Bytes.ofString('foobar'),
+			data: Bytes.ofString('foobar')
 		};
 		final archive: ArArchive = { entries: [entry] };
 		final written: Bytes = ArArchiveWriter.write(archive);

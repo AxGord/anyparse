@@ -328,7 +328,7 @@ class HxFormatterCorpusTest extends Test {
 				skipWrite: sweepSkipWrite,
 				skipConfig: sweepSkipConfig,
 				skipMalformed: sweepSkipMalformed,
-				fixtures: sweepFixtures,
+				fixtures: sweepFixtures
 			});
 			// Auto-rotate: before overwriting the current snapshot, copy
 			// the previous one to `bin/.prev-sweep.json` so the next

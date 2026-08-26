@@ -25,7 +25,7 @@ class InheritanceMoveSliceTest extends Test {
 			+ '\tpublic function describe():String return name + \' dog\';\n}';
 		final changes: Array<MoveChange> = okChanges(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'describe', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
-			{ file: 'pkg/Dog.hx', source: dog },
+			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
 		Assert.equals(2, changes.length);
 		Assert.isTrue(StringTools.contains(changeFor(changes, 'pkg/Animal.hx').newSource, 'function describe'), 'lands on Animal');
@@ -38,7 +38,7 @@ class InheritanceMoveSliceTest extends Test {
 			+ '\tpublic function new(n:String) { super(n); }\n}';
 		final changes: Array<MoveChange> = okChanges(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'breed', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
-			{ file: 'pkg/Dog.hx', source: dog },
+			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
 		Assert.isTrue(StringTools.contains(changeFor(changes, 'pkg/Animal.hx').newSource, 'var breed'), 'field lands on Animal');
 	}
@@ -49,7 +49,7 @@ class InheritanceMoveSliceTest extends Test {
 			+ '\tpublic function bark():String return \'woof\';\n\tpublic function describe():String return bark();\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'describe', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
-			{ file: 'pkg/Dog.hx', source: dog },
+			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
 	}
 
@@ -59,7 +59,7 @@ class InheritanceMoveSliceTest extends Test {
 		final sub: String = 'package pkg;\n\nclass Sub extends Sup {\n\tpublic function new() { super(); }\n}';
 		final changes: Array<MoveChange> = okChanges(InheritanceMove.pushDown('pkg/Sup.hx', 'Sup', 'only', 'Sub', [
 			{ file: 'pkg/Sup.hx', source: sup },
-			{ file: 'pkg/Sub.hx', source: sub },
+			{ file: 'pkg/Sub.hx', source: sub }
 		], plugin()));
 		Assert.isTrue(StringTools.contains(changeFor(changes, 'pkg/Sub.hx').newSource, 'function only'), 'lands on Sub');
 		Assert.isFalse(StringTools.contains(changeFor(changes, 'pkg/Sup.hx').newSource, 'function only'), 'leaves Sup');
@@ -71,7 +71,7 @@ class InheritanceMoveSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		assertErr(InheritanceMove.pullUp('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], plugin()));
 	}
 
@@ -81,7 +81,7 @@ class InheritanceMoveSliceTest extends Test {
 			+ '\tpublic static function make():Dog return new Dog(\'x\');\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'make', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
-			{ file: 'pkg/Dog.hx', source: dog },
+			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
 	}
 
@@ -93,7 +93,7 @@ class InheritanceMoveSliceTest extends Test {
 			+ '\toverride public function speak():String return \'woof\';\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'speak', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: animal },
-			{ file: 'pkg/Dog.hx', source: dog },
+			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
 	}
 
@@ -102,7 +102,7 @@ class InheritanceMoveSliceTest extends Test {
 		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'new', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
-			{ file: 'pkg/Dog.hx', source: dog },
+			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
 	}
 
@@ -114,7 +114,7 @@ class InheritanceMoveSliceTest extends Test {
 			+ '\tpublic function tag():String return \'d\';\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'tag', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: animal },
-			{ file: 'pkg/Dog.hx', source: dog },
+			{ file: 'pkg/Dog.hx', source: dog }
 		], plugin()));
 	}
 
@@ -122,7 +122,7 @@ class InheritanceMoveSliceTest extends Test {
 	public function testNoSuchTargetRefused(): Void {
 		final dog: String =
 			'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic function d():Void {}\n}';
-		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'd', 'Missing', [{ file: 'pkg/Dog.hx', source: dog },], plugin()));
+		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'd', 'Missing', [{ file: 'pkg/Dog.hx', source: dog }], plugin()));
 	}
 
 	private function okChanges(result: MoveResult): Array<MoveChange> {

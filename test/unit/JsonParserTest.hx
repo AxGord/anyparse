@@ -102,7 +102,7 @@ class JsonParserTest extends Test {
 	public function testObjectMultipleFields(): Void {
 		parseEq('{"name":"John","age":30}', JObject([
 			{ key: 'name', value: JString('John') },
-			{ key: 'age', value: JNumber(30) },
+			{ key: 'age', value: JNumber(30) }
 		]));
 	}
 
@@ -112,9 +112,9 @@ class JsonParserTest extends Test {
 				key: 'items',
 				value: JArray([
 					JNumber(1),
-					JObject([{ key: 'x', value: JString('y') }]),
-				]),
-			},
+					JObject([{ key: 'x', value: JString('y') }])
+				])
+			}
 		]));
 	}
 
@@ -126,7 +126,7 @@ class JsonParserTest extends Test {
 			JNumber(42),
 			JString('s'),
 			JArray([]),
-			JObject([]),
+			JObject([])
 		]));
 	}
 
@@ -172,14 +172,14 @@ class JsonParserTest extends Test {
 	public function testObjectTrailingCommaAccepted(): Void {
 		parseEq('{"x":1,"y":2,}', JObject([
 			{ key: 'x', value: JNumber(1) },
-			{ key: 'y', value: JNumber(2) },
+			{ key: 'y', value: JNumber(2) }
 		]));
 	}
 
 	public function testObjectTrailingCommaWithSpaces(): Void {
 		parseEq('{"x":1, "y":2, }', JObject([
 			{ key: 'x', value: JNumber(1) },
-			{ key: 'y', value: JNumber(2) },
+			{ key: 'y', value: JNumber(2) }
 		]));
 	}
 

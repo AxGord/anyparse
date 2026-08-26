@@ -99,7 +99,7 @@ final class HxObjectLitWrapRulesTest extends Test {
 	public function testDecideRespectsCustomDefaultMode(): Void {
 		final rules: WrapRules = {
 			rules: [],
-			defaultMode: WrapMode.FillLine,
+			defaultMode: WrapMode.FillLine
 		};
 		Assert.equals(WrapMode.FillLine, decide(rules, 99, 99, 999, true));
 	}
@@ -109,14 +109,14 @@ final class HxObjectLitWrapRulesTest extends Test {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }]
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }],
-				},
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }]
+				}
 			],
-			defaultMode: WrapMode.NoWrap,
+			defaultMode: WrapMode.NoWrap
 		};
 		Assert.equals(WrapMode.FillLine, decide(rules, 5, 5, 25, false));
 	}

@@ -37,7 +37,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]);
 		Assert.equals(3, changes.length);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
@@ -55,7 +55,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -70,7 +70,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('A.scale(x) * 2'), 'sibling call should qualify to A');
@@ -83,7 +83,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('A.scale(x)'), 'sibling call should qualify to A');
@@ -96,7 +96,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final result: MoveResult = move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		switch result {
 			case Ok(changes, advisory):
@@ -113,7 +113,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('private static function util'), 'visibility should be kept');
@@ -125,7 +125,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -140,7 +140,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('import haxe.io.Bytes;'), 'dependency import should carry to B');
@@ -157,7 +157,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('import haxe.io.Bytes;'), 'the anon field type dependency should carry to B');
@@ -171,7 +171,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'app/User.hx', source: user },
+			{ file: 'app/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		Assert.isTrue(newUser.contains('B.util(1)'), 'cross-package caller should repoint');
@@ -186,7 +186,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
 		Assert.isTrue(newUser.contains('go(A:Dynamic):Int return A.util(1)'), 'shadowed receiver stays');
@@ -198,7 +198,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic static function util(x:Int):Int return x * 9;\n}';
 		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]));
 	}
 
@@ -209,7 +209,7 @@ class MoveMemberSliceTest extends Test {
 		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]));
 	}
 
@@ -220,7 +220,7 @@ class MoveMemberSliceTest extends Test {
 		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'app/User.hx', source: user },
+			{ file: 'app/User.hx', source: user }
 		]));
 	}
 
@@ -229,7 +229,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package other;\n\nclass B {}';
 		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'other/B.hx', source: b },
+			{ file: 'other/B.hx', source: b }
 		]));
 	}
 
@@ -240,7 +240,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'other/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]);
 		final newB: String = changeFor(changes, 'other/B.hx').newSource;
 		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
@@ -254,7 +254,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErr(move('pkg/A.hx', 'A', 'nope', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]));
 	}
 
@@ -269,7 +269,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErrContains(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'conditional-compilation region');
 	}
 
@@ -289,7 +289,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'LIMIT', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -302,7 +302,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'norm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -317,7 +317,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'norm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -331,7 +331,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErrContains(move('pkg/A.hx', 'A', 'norm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'no field of type "B"');
 	}
 
@@ -341,7 +341,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final scope: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		];
 		assertErrContains(move('pkg/A.hx', 'A', 'norm', 'B', scope), 'multiple fields of type "B"');
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'norm', 'B', scope, '_q');
@@ -354,7 +354,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tprivate final _k:Int;\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('return _k + 1'), 'final-field read should stay bare');
@@ -365,12 +365,12 @@ class MoveMemberSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tfunction m():Int return _k + 1;\n}';
 		final scope: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
 		];
 		assertErr(move('pkg/A.hx', 'A', 'm', 'B', scope));
 		final scopeVar: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {\n\tprivate var _k:Int;\n}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {\n\tprivate var _k:Int;\n}' }
 		];
 		assertErr(move('pkg/A.hx', 'A', 'm', 'B', scopeVar));
 	}
@@ -380,7 +380,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tprivate var _n:Int;\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'mutable instance field(s) "_n"');
 	}
 
@@ -390,7 +390,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'instance member(s) "helper"');
 	}
 
@@ -400,7 +400,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('A.scale(x) * 2'), 'static sibling call should qualify to A');
@@ -412,7 +412,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tprivate final _k:Int;\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'references "this"');
 	}
 
@@ -422,7 +422,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'even,odd', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -438,7 +438,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util,m', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -453,7 +453,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'second,first', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		final firstAt: Int = newB.indexOf('function first');
@@ -468,7 +468,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErrContains(move('pkg/A.hx', 'A', 'new', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'cannot move a constructor');
 	}
 
@@ -477,7 +477,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErrContains(move('pkg/A.hx', 'A', 'util,util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'listed twice');
 	}
 
@@ -489,12 +489,12 @@ class MoveMemberSliceTest extends Test {
 		// Without --closure: moving only `top` refuses on `mid` staying behind.
 		assertErrContains(move('pkg/A.hx', 'A', 'top', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'instance member(s) "mid"');
 		// With --closure: `top` pulls in mid + leaf transitively.
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'top', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, true);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -512,7 +512,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, true);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('static function util'), 'lone static member moves unchanged under --closure');
@@ -525,7 +525,7 @@ class MoveMemberSliceTest extends Test {
 		// Closure pulls in `helper`, but the surviving `this` still refuses.
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, true), 'references "this"');
 	}
 
@@ -535,7 +535,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, null, true);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
@@ -557,7 +557,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], '_helper', null, true);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		Assert.isTrue(newA.contains('private final _helper: B;'), '--via name should be honored');
@@ -572,7 +572,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, null, true);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('private final _k: Int;'), 'dest with no ctor still gets the field');
@@ -585,7 +585,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tvar n:Int;\n\tpublic function new() {\n\t\tn = 5;\n\t}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, null, true), 'already has a constructor');
 	}
 
@@ -595,7 +595,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]), 'or pass --scaffold');
 	}
 
@@ -606,7 +606,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, null, true), 'already declares a member');
 	}
 
@@ -618,7 +618,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, null, true), 'read before it is initialized');
 	}
 
@@ -630,7 +630,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {\n\t\t// IMPORTANT: keep\n\t}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		], null, null, true), 'already has a constructor');
 	}
 
@@ -641,7 +641,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
 		Assert.isTrue(newUser.contains('B.util(1) + B.util(2)'), 'both same-line callers should repoint');
@@ -653,7 +653,7 @@ class MoveMemberSliceTest extends Test {
 		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/Broken.hx', source: 'class {{{' },
+			{ file: 'pkg/Broken.hx', source: 'class {{{' }
 		]));
 	}
 
@@ -668,7 +668,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]));
 	}
 
@@ -682,7 +682,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('@:keep public static function util'), 'public should follow the meta');
@@ -695,7 +695,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('@:nowarn("x") public static function util'), 'public should follow the MetaCall meta: $newB');
@@ -708,7 +708,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'app/User.hx', source: user },
+			{ file: 'app/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		Assert.isTrue(newUser.contains('pkg.B.util(1)'), 'fully-qualified caller should repoint');
@@ -721,7 +721,7 @@ class MoveMemberSliceTest extends Test {
 		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]));
 	}
 
@@ -734,7 +734,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic static function go():Int return A.util(5);\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('B.util(5)'), 'dest-file caller should repoint');
@@ -748,7 +748,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'other/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
 		Assert.isTrue(
@@ -771,7 +771,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'TAG', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		Assert.isTrue(newA.contains('\'[$${B.TAG}] $${B.TAG}b $$$$TAG\''), 'braced qualification expected:\n$newA');
@@ -783,7 +783,7 @@ class MoveMemberSliceTest extends Test {
 		final palette: String = 'package pal;\n\nclass Palette {\n\tpublic static var COUNT = 0;\n}';
 		assertErrContains(move('pal/Colour.hx', 'Colour', 'RED', 'Palette', [
 			{ file: 'pal/Colour.hx', source: colour },
-			{ file: 'pal/Palette.hx', source: palette },
+			{ file: 'pal/Palette.hx', source: palette }
 		]), 'carries no `static` modifier yet is static anyway');
 	}
 
@@ -794,7 +794,7 @@ class MoveMemberSliceTest extends Test {
 		assertErrContains(move('pal/Colour.hx', 'Colour', 'RED', 'Palette', [
 			{ file: 'pal/Colour.hx', source: colour },
 			{ file: 'pal/Palette.hx', source: palette },
-			{ file: 'pal/User.hx', source: user },
+			{ file: 'pal/User.hx', source: user }
 		]), 'carries no `static` modifier yet is static anyway');
 	}
 
@@ -804,7 +804,7 @@ class MoveMemberSliceTest extends Test {
 		final box: String = 'package pkg;\n\nclass Box {}';
 		assertErrContains(move('pkg/Meters.hx', 'Meters', 'length', 'Box', [
 			{ file: 'pkg/Meters.hx', source: meters },
-			{ file: 'pkg/Box.hx', source: box },
+			{ file: 'pkg/Box.hx', source: box }
 		]), 'carries no `static` modifier yet is static anyway');
 	}
 
@@ -816,7 +816,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pal/Colour.hx', 'Colour', 'hue', 'Palette', [
 			{ file: 'pal/Colour.hx', source: colour },
 			{ file: 'pal/Palette.hx', source: palette },
-			{ file: 'pal/User.hx', source: user },
+			{ file: 'pal/User.hx', source: user }
 		]);
 		final newPalette: String = changeFor(changes, 'pal/Palette.hx').newSource;
 		Assert.isTrue(newPalette.contains('public static function hue'), 'hue should land in Palette:\n$newPalette');
@@ -833,7 +833,7 @@ class MoveMemberSliceTest extends Test {
 			{ file: 'pkg/Boxes.hx', source: boxes },
 			{ file: 'pkg/Dest.hx', source: dest },
 			{ file: 'pkg/Main.hx', source: main },
-			{ file: 'other/Boxes.hx', source: foreign },
+			{ file: 'other/Boxes.hx', source: foreign }
 		]);
 		final newMain: String = changeFor(changes, 'pkg/Main.hx').newSource;
 		Assert.isTrue(newMain.contains('pkg.Dest.tag()'), 'the declaring module should repoint:\n$newMain');
@@ -851,7 +851,7 @@ class MoveMemberSliceTest extends Test {
 			{ file: 'pkg/Boxes.hx', source: boxes },
 			{ file: 'dst/Dest.hx', source: dest },
 			{ file: 'app/Main.hx', source: main },
-			{ file: 'other/Boxes.hx', source: foreign },
+			{ file: 'other/Boxes.hx', source: foreign }
 		]);
 		final newMain: String = changeFor(changes, 'app/Main.hx').newSource;
 		Assert.isTrue(newMain.contains('Dest.tag()'), 'the bare caller should repoint:\n$newMain');
@@ -865,7 +865,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'pkg/Dest.hx', source: dest },
-			{ file: 'app/User.hx', source: user },
+			{ file: 'app/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		Assert.isTrue(newUser.contains('pkg.Dest.tag()'), 'the whole receiver path must become the destination path:\n$newUser');
@@ -880,7 +880,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'pkg/Dest.hx', source: dest },
-			{ file: 'pkg/Near.hx', source: near },
+			{ file: 'pkg/Near.hx', source: near }
 		]);
 		final newNear: String = changeFor(changes, 'pkg/Near.hx').newSource;
 		Assert.isTrue(newNear.contains('pkg.Dest.tag()'), 'the short module spelling must repoint to the destination path:\n$newNear');
@@ -894,7 +894,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'pkg/Dest.hx', source: dest },
-			{ file: 'app/User.hx', source: user },
+			{ file: 'app/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		Assert.isTrue(newUser.contains('Dest.tag()'), 'a bare receiver should repoint to the bare destination name:\n$newUser');
@@ -909,7 +909,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Mod', 'tag', 'Dest', [
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'pkg/Box.hx', source: box },
-			{ file: 'pkg/Near.hx', source: near },
+			{ file: 'pkg/Near.hx', source: near }
 		]);
 		final newNear: String = changeFor(changes, 'pkg/Near.hx').newSource;
 		Assert.isTrue(newNear.contains('pkg.Box.Dest.tag()'), 'a sub-module destination needs its module segment:\n$newNear');
@@ -921,7 +921,7 @@ class MoveMemberSliceTest extends Test {
 		final user: String = 'package app;\n\nclass User {\n\tstatic function go():Int return pkg.Mod.Helper.tag();\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Mod', [
 			{ file: 'pkg/Mod.hx', source: mod },
-			{ file: 'app/User.hx', source: user },
+			{ file: 'app/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		Assert.isTrue(newUser.contains('pkg.Mod.tag()'), 'the module main type is spelled by the module path alone:\n$newUser');
@@ -934,7 +934,7 @@ class MoveMemberSliceTest extends Test {
 		final user: String = 'package app;\n\nclass User {\n\tstatic function go():Int return pkg.Mod.Helper.tag();\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Other', [
 			{ file: 'pkg/Mod.hx', source: mod },
-			{ file: 'app/User.hx', source: user },
+			{ file: 'app/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		Assert.isTrue(newUser.contains('pkg.Mod.Other.tag()'), 'a sibling sub-module destination keeps the module path:\n$newUser');
@@ -951,7 +951,7 @@ class MoveMemberSliceTest extends Test {
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'pkg/Dest.hx', source: dest },
 			{ file: 'app/User.hx', source: user },
-			{ file: 'other/Mod.hx', source: foreign },
+			{ file: 'other/Mod.hx', source: foreign }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		Assert.isTrue(newUser.contains('pkg.Dest.tag()'), 'the declaring module should repoint:\n$newUser');
@@ -966,7 +966,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('Mod.hx', 'Helper', 'tag', 'Dest', [
 			{ file: 'Mod.hx', source: mod },
 			{ file: 'Dest.hx', source: dest },
-			{ file: 'app/User.hx', source: user },
+			{ file: 'app/User.hx', source: user }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		Assert.isTrue(newUser.contains('Dest.tag()'), 'a root-package module is named by its basename alone:\n$newUser');
@@ -983,7 +983,7 @@ class MoveMemberSliceTest extends Test {
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'pkg/Box.hx', source: box },
 			{ file: 'pkg/Near.hx', source: near },
-			{ file: 'other/Box.hx', source: foreign },
+			{ file: 'other/Box.hx', source: foreign }
 		]);
 		final newNear: String = changeFor(changes, 'pkg/Near.hx').newSource;
 		Assert.isTrue(newNear.contains('Dest.tag()'), 'a bare receiver repoints to the bare destination name:\n$newNear');
@@ -1000,7 +1000,7 @@ class MoveMemberSliceTest extends Test {
 		final box: String = 'package pkg;\n\nclass Box {}\n\nclass Dest {}';
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Mod', 'tag', 'Dest', [
 			{ file: 'pkg/Mod.hx', source: mod },
-			{ file: 'pkg/Box.hx', source: box },
+			{ file: 'pkg/Box.hx', source: box }
 		]);
 		final newMod: String = changeFor(changes, 'pkg/Mod.hx').newSource;
 		Assert.isTrue(newMod.contains('Dest.tag()'), 'the remaining caller is qualified with the destination:\n$newMod');
@@ -1017,7 +1017,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'pkg/Dest.hx', source: dest },
-			{ file: 'other/Mod.hx', source: foreign },
+			{ file: 'other/Mod.hx', source: foreign }
 		]);
 		final newDest: String = changeFor(changes, 'pkg/Dest.hx').newSource;
 		Assert.isTrue(newDest.contains('Helper.other()'), 'the moved body qualifies the sibling it left behind:\n$newDest');
@@ -1036,7 +1036,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Mod', 'tag', 'Dest', [
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'pkg/Dest.hx', source: dest },
-			{ file: 'pkg/Near.hx', source: near },
+			{ file: 'pkg/Near.hx', source: near }
 		]);
 		final newNear: String = changeFor(changes, 'pkg/Near.hx').newSource;
 		final newMod: String = changeFor(changes, 'pkg/Mod.hx').newSource;
@@ -1063,7 +1063,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/Mod.hx', 'Helper', 'tag', 'Dest', [
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'far/Box.hx', source: box },
-			{ file: 'pkg/Near.hx', source: near },
+			{ file: 'pkg/Near.hx', source: near }
 		]);
 		final newNear: String = changeFor(changes, 'pkg/Near.hx').newSource;
 		final newBox: String = changeFor(changes, 'far/Box.hx').newSource;
@@ -1081,7 +1081,7 @@ class MoveMemberSliceTest extends Test {
 			{ file: 'pkg/Mod.hx', source: mod },
 			{ file: 'Dest.hx', source: dest },
 			{ file: 'app/User.hx', source: user },
-			{ file: 'Root.hx', source: root },
+			{ file: 'Root.hx', source: root }
 		]);
 		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
 		final newRoot: String = changeFor(changes, 'Root.hx').newSource;
@@ -1101,7 +1101,7 @@ class MoveMemberSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('Src.hx', 'Src', 'tag', 'Dest', [
 			{ file: 'Src.hx', source: src },
 			{ file: 'app/Src.hx', source: shadow },
-			{ file: 'app/Dest.hx', source: dest },
+			{ file: 'app/Dest.hx', source: dest }
 		]);
 		final newDest: String = changeFor(changes, 'app/Dest.hx').newSource;
 		Assert.isTrue(newDest.contains('Src.other()'), 'the moved body qualifies the sibling it left behind:\n$newDest');
@@ -1116,7 +1116,7 @@ class MoveMemberSliceTest extends Test {
 		final b: String = 'package other;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'other/B.hx', source: b },
+			{ file: 'other/B.hx', source: b }
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		Assert.isTrue(newA.contains('other.B.util(3)'), 'the dotted caller takes the whole destination path:\n$newA');
@@ -1129,7 +1129,7 @@ class MoveMemberSliceTest extends Test {
 		final box: String = 'package pkg;\n\nclass Box {}\n\nclass Dest {\n\tpublic function new() {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'Dest', [
 			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/Box.hx', source: box },
+			{ file: 'pkg/Box.hx', source: box }
 		], null, null, true);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		Assert.isTrue(newA.contains('private final _dest: Dest;'), 'the scaffolded via field is typed by the destination:\n$newA');

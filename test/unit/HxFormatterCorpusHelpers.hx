@@ -71,7 +71,7 @@ final class HxFormatterCorpusHelpers {
 		return parts.length != EXPECTED_SECTIONS ? null : {
 			config: StringTools.trim(parts[0]),
 			input: stripPadNewlines(parts[1]),
-			expected: stripPadNewlines(parts[2]),
+			expected: stripPadNewlines(parts[2])
 		};
 		#else
 		return null;

@@ -29,7 +29,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 		// `(Int->Int) -> Int` → `Arrow(Parens(Arrow(Int,Int)), Int)`.
 		final input: HxType = ArrowFn({
 			args: [Positional(Arrow(named('Int'), named('Int')))],
-			ret: named('Int'),
+			ret: named('Int')
 		});
 		final out: Null<HxType> = HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts());
 		Assert.notNull(out);
@@ -47,7 +47,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 		// ArrowFn emission, around-spaced).
 		final input: HxType = ArrowFn({
 			args: [Positional(named('Int'))],
-			ret: named('Int'),
+			ret: named('Int')
 		});
 		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
@@ -55,7 +55,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 	public function testRewriteSingleNamedReturnsNull(): Void {
 		final input: HxType = ArrowFn({
 			args: [NamedParam({ name: 'x', type: named('String') })],
-			ret: named('Void'),
+			ret: named('Void')
 		});
 		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
@@ -63,7 +63,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 	public function testRewriteMultiArgReturnsNull(): Void {
 		final input: HxType = ArrowFn({
 			args: [Positional(named('Int')), Positional(named('String'))],
-			ret: named('Bool'),
+			ret: named('Bool')
 		});
 		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}

@@ -52,16 +52,16 @@ class JsonRoundTripTest extends Test {
 			JObject([
 				{ key: 'name', value: JString('John') },
 				{ key: 'age', value: JNumber(30) },
-				{ key: 'active', value: JBool(true) },
+				{ key: 'active', value: JBool(true) }
 			]),
 			JObject([
 				{
 					key: 'items',
 					value: JArray([
 						JObject([{ key: 'id', value: JNumber(1) }]),
-						JObject([{ key: 'id', value: JNumber(2) }]),
-					]),
-				},
+						JObject([{ key: 'id', value: JNumber(2) }])
+					])
+				}
 			]),
 			JArray([
 				JNull,
@@ -70,8 +70,8 @@ class JsonRoundTripTest extends Test {
 				JNumber(42),
 				JString('s'),
 				JArray([]),
-				JObject([]),
-			]),
+				JObject([])
+			])
 		];
 		for (i in 0...cases.length) roundTrip(cases[i], 'case[$i]');
 	}

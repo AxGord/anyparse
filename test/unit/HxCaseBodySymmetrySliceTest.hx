@@ -298,7 +298,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 			{ name: 'MULTI_STMT_SRC', src: MULTI_STMT_SRC },
 			{ name: 'REFUSED_FLAT_SRC', src: REFUSED_FLAT_SRC },
 			{ name: 'GLUED_UNDER_TRIGGER_SRC', src: GLUED_UNDER_TRIGGER_SRC },
-			{ name: 'COND_MULTI_SRC', src: COND_MULTI_SRC },
+			{ name: 'COND_MULTI_SRC', src: COND_MULTI_SRC }
 		];
 		for (f in fixtures) {
 			final pass1: String = write(f.src, j);

@@ -52,7 +52,7 @@ class WriteOptionsTest extends Test {
 			methodChainCuddledLinks: false,
 			addLineCommentSpace: true,
 			normalizeLineCommentIndent: false,
-			compressSuccessiveParenthesis: true,
+			compressSuccessiveParenthesis: true
 		};
 		final out: String = JValueWriter.write(ast, opts);
 		Assert.equals(JValueWriter.write(ast), out);

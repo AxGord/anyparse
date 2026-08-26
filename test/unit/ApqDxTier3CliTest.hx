@@ -38,7 +38,7 @@ class ApqDxTier3CliTest extends Test {
 			'--replace',
 			'new ([A-Z]\\w*)<[^>]+>\\(',
 			'--with',
-			'new $1(',
+			'new $1('
 		]);
 		Assert.equals(0, exit);
 		FileSystem.deleteFile(input);
@@ -70,7 +70,7 @@ class ApqDxTier3CliTest extends Test {
 		);
 		final exit: Int = Cli.run([
 			    'strip',               input, '--regex', '--dry-run',
-			'--replace', 'new \\w+<\\w+>\\(',  '--with',          '',
+			'--replace', 'new \\w+<\\w+>\\(',  '--with',          ''
 		]);
 		Assert.equals(0, exit);
 		FileSystem.deleteFile(input);

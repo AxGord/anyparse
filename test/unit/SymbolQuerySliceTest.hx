@@ -24,7 +24,7 @@ class SymbolQuerySliceTest extends Test {
 	public function testSymbolsListing(): Void {
 		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};' },
-			{ file: 'src/pkg/B.hx', source: 'package pkg;\nclass B {}' },
+			{ file: 'src/pkg/B.hx', source: 'package pkg;\nclass B {}' }
 		];
 		final rows: Array<SymbolRow> = SymbolQuery.symbols(files, plugin());
 
@@ -51,7 +51,7 @@ class SymbolQuerySliceTest extends Test {
 	/** `--kind` keeps only decls of one grammar kind. */
 	public function testKindFilter(): Void {
 		final files: Array<{ source: String, file: String }> = [
-			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};\ninterface I {}' },
+			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};\ninterface I {}' }
 		];
 		final classes: Array<SymbolRow> = SymbolQuery.symbols(files, plugin(), 'ClassDecl');
 		Assert.equals(1, classes.length);
@@ -71,7 +71,7 @@ class SymbolQuerySliceTest extends Test {
 			{ file: 'src/pkg/Refs.hx', source: 'package pkg;\nclass Refs {}\ntypedef RefHit = Int;' },
 			{ file: 'src/pkg/UsesModule.hx', source: 'package pkg;\nimport pkg.Refs;\nclass UsesModule {}' },
 			{ file: 'src/pkg/UsesSub.hx', source: 'package pkg;\nimport pkg.Refs.RefHit;\nclass UsesSub {}' },
-			{ file: 'src/pkg/Unrelated.hx', source: 'package pkg;\nimport pkg.Other;\nclass Unrelated {}' },
+			{ file: 'src/pkg/Unrelated.hx', source: 'package pkg;\nimport pkg.Other;\nclass Unrelated {}' }
 		];
 		final hits: Array<String> = SymbolQuery.importers(files, plugin(), 'pkg.Refs');
 		Assert.equals(2, hits.length);
@@ -101,7 +101,7 @@ class SymbolQuerySliceTest extends Test {
 	public function testSkipParseExcluded(): Void {
 		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/pkg/Good.hx', source: 'package pkg;\nclass Good {}' },
-			{ file: 'src/pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' },
+			{ file: 'src/pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
 		];
 		final rows: Array<SymbolRow> = SymbolQuery.symbols(files, plugin());
 		Assert.equals(1, rows.length);
@@ -116,7 +116,7 @@ class SymbolQuerySliceTest extends Test {
 	public function testDeclares(): Void {
 		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};' },
-			{ file: 'src/pkg/B.hx', source: 'package pkg;\nclass B {}' },
+			{ file: 'src/pkg/B.hx', source: 'package pkg;\nclass B {}' }
 		];
 		// Simple-name match resolves the unique decl.
 		final byName: Array<SymbolRow> = SymbolQuery.declares(files, plugin(), 'A');
@@ -137,7 +137,7 @@ class SymbolQuerySliceTest extends Test {
 	public function testDeclaresAmbiguous(): Void {
 		final files: Array<{ source: String, file: String }> = [
 			{ file: 'src/one/Dup.hx', source: 'package one;\nclass Dup {}' },
-			{ file: 'src/two/Dup.hx', source: 'package two;\nclass Dup {}' },
+			{ file: 'src/two/Dup.hx', source: 'package two;\nclass Dup {}' }
 		];
 		final rows: Array<SymbolRow> = SymbolQuery.declares(files, plugin(), 'Dup');
 		Assert.equals(2, rows.length);

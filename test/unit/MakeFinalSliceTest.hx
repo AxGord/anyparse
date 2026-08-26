@@ -28,14 +28,14 @@ class MakeFinalSliceTest extends Test {
 	public function testDeclInitToFinal(): Void {
 		final src: String =
 			'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 5;\n\tpublic function new() {}\n\tpublic function read():Int return x;\n}';
-		final text: String = okFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src },]);
+		final text: String = okFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }]);
 		Assert.isTrue(text.contains('public final x:Int = 5'), 'var became final');
 	}
 
 	/** A field assigned only in the constructor becomes final. */
 	public function testCtorInitToFinal(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var name:String;\n\tpublic function new(n:String) { name = n; }\n}';
-		final text: String = okFinal('pkg/Cfg.hx', 'Cfg', 'name', [{ file: 'pkg/Cfg.hx', source: src },]);
+		final text: String = okFinal('pkg/Cfg.hx', 'Cfg', 'name', [{ file: 'pkg/Cfg.hx', source: src }]);
 		Assert.isTrue(text.contains('public final name:String;'), 'ctor-assigned var became final');
 	}
 
@@ -43,14 +43,14 @@ class MakeFinalSliceTest extends Test {
 	public function testReassignedRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass Cfg {\n\tpublic var n:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void n = n + 1;\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src },], plugin()));
+		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
 	}
 
 	/** A compound-assign counts as a reassignment. */
 	public function testCompoundAssignRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass Cfg {\n\tpublic var n:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void n += 1;\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src },], plugin()));
+		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
 	}
 
 	/** A cross-file `obj.field = …` write is refused. */
@@ -59,32 +59,32 @@ class MakeFinalSliceTest extends Test {
 		final user: String = 'package pkg;\n\nclass User {\n\tpublic function new() {}\n\tpublic function set(c:Cfg):Void c.v = 9;\n}';
 		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'v', [
 			{ file: 'pkg/Cfg.hx', source: src },
-			{ file: 'pkg/User.hx', source: user },
+			{ file: 'pkg/User.hx', source: user }
 		], plugin()));
 	}
 
 	/** A field never assigned (no init, no ctor write) is refused. */
 	public function testNeverAssignedRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var loose:Int;\n\tpublic function new() {}\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'loose', [{ file: 'pkg/Cfg.hx', source: src },], plugin()));
+		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'loose', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
 	}
 
 	/** A field assigned both at its declaration and in the constructor is refused. */
 	public function testDoubleInitRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 1;\n\tpublic function new() { x = 2; }\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src },], plugin()));
+		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
 	}
 
 	/** A field that is already final is not a plain var and is refused. */
 	public function testAlreadyFinalRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic final x:Int = 1;\n\tpublic function new() {}\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src },], plugin()));
+		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
 	}
 
 	/** A missing field is refused. */
 	public function testNoSuchFieldRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 1;\n\tpublic function new() {}\n}';
-		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'nope', [{ file: 'pkg/Cfg.hx', source: src },], plugin()));
+		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'nope', [{ file: 'pkg/Cfg.hx', source: src }], plugin()));
 	}
 
 	/**
@@ -94,8 +94,7 @@ class MakeFinalSliceTest extends Test {
 	 */
 	public function testStructuralIteratorMemberRefused(): Void {
 		assertErrContaining(
-			MakeFinal.makeFinal('pkg/It.hx', 'It', 'hasNext', [{ file: 'pkg/It.hx', source: ITERATOR_SHAPE },], plugin()),
-			'structural type'
+			MakeFinal.makeFinal('pkg/It.hx', 'It', 'hasNext', [{ file: 'pkg/It.hx', source: ITERATOR_SHAPE }], plugin()), 'structural type'
 		);
 	}
 
@@ -107,7 +106,7 @@ class MakeFinalSliceTest extends Test {
 	public function testHalfIteratorShapeStillFinal(): Void {
 		final src: String =
 			'package pkg;\n\nclass Half {\n\tpublic var hasNext:Void->Bool;\n\tpublic function new(h:Void->Bool) { hasNext = h; }\n}';
-		final text: String = okFinal('pkg/Half.hx', 'Half', 'hasNext', [{ file: 'pkg/Half.hx', source: src },]);
+		final text: String = okFinal('pkg/Half.hx', 'Half', 'hasNext', [{ file: 'pkg/Half.hx', source: src }]);
 		Assert.isTrue(text.contains('public final hasNext:Void->Bool;'), 'var became final');
 	}
 
@@ -115,7 +114,7 @@ class MakeFinalSliceTest extends Test {
 	public function testOptionalShorthandStructuralMemberRefused(): Void {
 		assertErrContaining(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [
 			{ file: 'pkg/Cfg.hx', source: DECL_INIT_FIELD },
-			{ file: 'pkg/S.hx', source: 'package pkg;\n\ntypedef S = { ?x:Int }' },
+			{ file: 'pkg/S.hx', source: 'package pkg;\n\ntypedef S = { ?x:Int }' }
 		], plugin()), 'structural type');
 	}
 
@@ -123,7 +122,7 @@ class MakeFinalSliceTest extends Test {
 	public function testStructuralTypedefMemberRefused(): Void {
 		assertErrContaining(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'x', [
 			{ file: 'pkg/Cfg.hx', source: DECL_INIT_FIELD },
-			{ file: 'pkg/S.hx', source: 'package pkg;\n\ntypedef S = { var x:Int; }' },
+			{ file: 'pkg/S.hx', source: 'package pkg;\n\ntypedef S = { var x:Int; }' }
 		], plugin()), 'structural type');
 	}
 
@@ -131,7 +130,7 @@ class MakeFinalSliceTest extends Test {
 	public function testUnsatisfiedStructuralTypedefStillFinal(): Void {
 		final text: String = okFinal('pkg/Cfg.hx', 'Cfg', 'x', [
 			{ file: 'pkg/Cfg.hx', source: DECL_INIT_FIELD },
-			{ file: 'pkg/S.hx', source: 'package pkg;\n\ntypedef S = { var x:Int; var y:Int; }' },
+			{ file: 'pkg/S.hx', source: 'package pkg;\n\ntypedef S = { var x:Int; var y:Int; }' }
 		]);
 		Assert.isTrue(text.contains('public final x:Int = 5'), 'var became final');
 	}

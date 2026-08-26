@@ -136,7 +136,7 @@ class LintUnusedImportDottedSliceTest extends Test {
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tpublic var x: a.b.Mod.ModExtra;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], new HaxeQueryPlugin());
 
 		Assert.equals(1, vs.length);
@@ -180,7 +180,7 @@ class LintUnusedImportDottedSliceTest extends Test {
 			{ file: 'a/b/Ctx.hx', source: ctx },
 			{ file: 'a/b/Limit.hx', source: limit },
 			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use },
+			{ file: 'pkg/C.hx', source: use }
 		], new HaxeQueryPlugin());
 	}
 

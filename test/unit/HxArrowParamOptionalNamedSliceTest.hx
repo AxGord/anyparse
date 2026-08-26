@@ -177,7 +177,7 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 			'(string:String, ?radix:Int) -> Float',
 			'(Int, ?name:String, Bool) -> Void',
 			'(?allocate:(size:Int) -> Buffer) -> Void',
-			'(?opts:{?foo:Bool, ?bar:Int}) -> Void',
+			'(?opts:{?foo:Bool, ?bar:Int}) -> Void'
 		]) {
 			final source: String = 'class Foo { var f:$t; }';
 			final module: HxModule = HaxeModuleParser.parse(source);

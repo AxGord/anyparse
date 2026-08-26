@@ -181,7 +181,7 @@ class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
 			'class C { var f:Int = (a) -> a; }',
 			'class C { var f:Int = (?a:Int) -> a; }',
 			'class C { var f:Int = x -> x; }',
-			'class C { function m(a:Int = 1) {} }',
+			'class C { function m(a:Int = 1) {} }'
 		]) roundTrip(src, src);
 	}
 

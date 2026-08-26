@@ -60,7 +60,7 @@ class ApqPrefilterCliTest extends Test {
 		final dir: String = writeDir([
 			{ name: 'A.hx', source: 'class A { var unrelated:Int = 0; }' },
 			{ name: 'B.hx', source: 'class HxVarDecl { var n:Int = 0; }' },
-			{ name: 'C.hx', source: 'class C { function f():Void {} }' },
+			{ name: 'C.hx', source: 'class C { function f():Void {} }' }
 		]);
 		Assert.equals(0, Cli.run(['refs', 'HxVarDecl', dir]));
 		Assert.equals(0, Cli.run(['uses', 'HxVarDecl', dir]));
@@ -80,7 +80,7 @@ class ApqPrefilterCliTest extends Test {
 		// and must not treat a pre-filter skip as a parse failure.
 		final dir: String = writeDir([
 			{ name: 'A.hx', source: 'class A { var n:Int = 0; }' },
-			{ name: 'B.hx', source: 'class B { var m:Int = 0; }' },
+			{ name: 'B.hx', source: 'class B { var m:Int = 0; }' }
 		]);
 		Assert.equals(0, Cli.run(['refs', 'TotallyAbsentName', dir]));
 		Assert.equals(0, Cli.run(['cases', 'TotallyAbsentName', dir]));

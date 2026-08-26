@@ -23,7 +23,7 @@ using StringTools;
 class HxInlineBlockCommentGapTest extends Test {
 
 	/** Captured seams outside a function body — same contract, other hosts. */
-	private static final CAPTURED_DECLS: Array<Array<String>> = [['meta_arg', 'class Foo {\n\t@:meta(/* m */ 1) var x: Int;\n}\n'],];
+	private static final CAPTURED_DECLS: Array<Array<String>> = [['meta_arg', 'class Foo {\n\t@:meta(/* m */ 1) var x: Int;\n}\n']];
 
 	/** Seams the Trivia parser captures — the round trip keeps the comment. */
 	private static final CAPTURED: Array<Array<String>> = [
@@ -72,7 +72,7 @@ class HxInlineBlockCommentGapTest extends Test {
 		[
 			'catch_param_trail',
 			'try {\n\t\t\trun();\n\t\t} catch (e: Dynamic /* c */) {\n\t\t\trun();\n\t\t}'
-		],
+		]
 	];
 
 	/** Seams with no capture slot — the parser drops the comment, so the round trip refuses. */
@@ -107,7 +107,7 @@ class HxInlineBlockCommentGapTest extends Test {
 		['cast_lead', 'var v = cast(/* c */ x, Int);'],
 		['arrow_body', 'var f = () -> /* b */ 1;'],
 		['untyped_lead', 'var v = untyped /* u */ x;'],
-		['macro_lead', 'var v = macro /* m */ x;'],
+		['macro_lead', 'var v = macro /* m */ x;']
 	];
 
 	/** Slot-less seams outside a function body — same contract, other hosts. */
@@ -117,7 +117,7 @@ class HxInlineBlockCommentGapTest extends Test {
 		['return_type', 'class Foo {\n\tfunction bar(): /* r */ Void {}\n}\n'],
 		['extends_lead', 'class Foo extends /* e */ Bar {}\n'],
 		['enum_ctor_arg', 'enum Foo {\n\tA(/* c */ x: Int);\n}\n'],
-		['anon_field', 'typedef T = {\n\ta: /* a */ Int,\n}\n'],
+		['anon_field', 'typedef T = {\n\ta: /* a */ Int,\n}\n']
 	];
 
 	/**
