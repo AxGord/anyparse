@@ -4,6 +4,7 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle.OracleOutcome;
+import anyparse.check.OracleCoverage;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -28,6 +29,21 @@ typedef FixVerifyResult = {
 	var appliedEdits: Int;
 	var reverted: Array<FixVerifyRevert>;
 	var partials: Array<FixVerifyPartial>;
+
+	/**
+	 * The (file, rule) pairs whose risky edits were never WRITTEN, because the configured
+	 * oracle does not compile that file — see `FixVerifyDecline`. Kept apart from
+	 * `reverted`: a revert is a candidate the compiler read and refused, a decline is a
+	 * candidate no compiler would ever have read.
+	 */
+	var declined: Array<FixVerifyDecline>;
+
+	/**
+	 * Why the oracle's COMPILED SET could not be established, or null when it could. A
+	 * non-null value means no risky fix was verified this run and every list above is
+	 * empty — an oracle whose coverage is unknown proves nothing about any file.
+	 */
+	var coverageUnknown: Null<String>;
 }
 
 /**
@@ -49,6 +65,26 @@ typedef FixVerifyRevert = {
 
 	/** Which of the two failures rolled it back — see `FixRevertCause`. */
 	var cause: FixRevertCause;
+}
+
+/**
+ * One risky edit set the verifier DECLINED without ever writing it: the FILE it
+ * targeted, the RULE that proposed it, how many edits went unapplied, and the
+ * coverage answer that refused them.
+ *
+ * A decline is not a revert, and the two must not be counted as one. A revert says
+ * the compiler read a candidate and rejected it — the verdict a `compilerOracle`
+ * exists to give. A decline says the compiler never reads this file at all, so no
+ * candidate for it could ever have failed: an exit-0 typecheck after writing it is
+ * a control that cannot fire, and the run has nothing to report but that.
+ */
+typedef FixVerifyDecline = {
+	var file: String;
+	var rule: String;
+	var edits: Int;
+
+	/** Why the oracle could say nothing about this file — ready for the summary line. */
+	var reason: String;
 }
 
 /**
@@ -111,6 +147,14 @@ typedef FixVerifyPartial = {
 private enum EntryVerdict {
 	NoChange;
 	Applied;
+
+	/**
+	 * A candidate WAS produced and then not written: the file sits outside the oracle's
+	 * compiled set, so no typecheck could have judged it. Reached only after the
+	 * canonicalise, which is what keeps the reported count honest — a rule whose edits the
+	 * writer would have refused anyway is `NoChange`, not a decline.
+	 */
+	Declined;
 	Reverted(cause: FixRevertCause);
 	Partial(appliedEdits: Int, revertedEdits: Int, oracleInvocations: Int, cause: FixRevertCause);
 }
@@ -122,6 +166,15 @@ private enum EntryVerdict {
  * risky check and each file it applies that check's edits speculatively, writes the
  * candidate, runs the compiler oracle, and KEEPS it on `Confirmed` or reconciles
  * otherwise — the report-only fallback.
+ *
+ * That promise carries a precondition the oracle cannot state for itself: the file
+ * must be one the hxml actually COMPILES. An hxml routinely compiles a subset of the
+ * tree a lint run walks, and for a file outside it the post-write typecheck cannot
+ * fail whatever the edit did. So `verify` asks `OracleCoverage` before it writes
+ * anything, and DECLINES an edit set whose file the oracle never reads
+ * (`FixVerifyDecline`) instead of spending a compile to obtain a green verdict no edit
+ * could have turned red. An oracle whose compiled set cannot be established at all
+ * stops the phase outright (`coverageUnknown`).
  *
  * Rollback granularity is PER-EDIT by default, and per-GROUP for a check that opts
  * into `GroupedFix`: when the full set fails, the edits are bisected
@@ -150,11 +203,12 @@ final class FixVerifier {
 
 	public static function verify(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracleHxml: String,
-		oracleDir: Null<String>, write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>
+		oracleDir: Null<String>, write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: OracleCoverage
 	): FixVerifyResult {
 		final applied: Array<String> = [];
 		final reverted: Array<FixVerifyRevert> = [];
 		final partials: Array<FixVerifyPartial> = [];
+		final declined: Array<FixVerifyDecline> = [];
 		var appliedEdits: Int = 0;
 		final baseline: OracleOutcome = CompilerOracle.typecheck(oracleHxml, oracleDir);
 		switch baseline {
@@ -165,8 +219,28 @@ final class FixVerifier {
 					applied: applied,
 					appliedEdits: appliedEdits,
 					reverted: reverted,
-					partials: partials
+					partials: partials,
+					declined: declined,
+					coverageUnknown: null
 				};
+		}
+		// LAZY on purpose: the probe is a compile, and a run whose risky checks find nothing
+		// must not pay for one. It is asked the moment the FIRST candidate edit set exists,
+		// which is also the first moment an answer could matter.
+		//
+		// One probe per RUN, so MEMBERSHIP is a snapshot even though knownness is not: a fix
+		// that removes the last reference to a module can drop it out of the compiled set
+		// afterwards, and a later candidate there would then be judged by a compile that no
+		// longer reads it. The common direction is the safe one — a fix that ADDS a reference
+		// only leaves the snapshot conservative — and re-probing per file would cost one
+		// compile each, which is the whole expense this gate exists to avoid.
+		var coverageMemo: Null<OracleCoverage> = coverage;
+		function compiledSet(): OracleCoverage {
+			final memo: Null<OracleCoverage> = coverageMemo;
+			if (memo != null) return memo;
+			final probed: OracleCoverage = OracleCoverage.probe(oracleHxml, oracleDir);
+			coverageMemo = probed;
+			return probed;
 		}
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		// One WHOLE-SET run per check, findings then grouped per file: a risky check's
@@ -195,9 +269,34 @@ final class FixVerifier {
 						for (e in check.fix(entry.source, own, plugin, index)) { span: e.span, text: e.text, group: null }
 					];
 				if (edits.length == 0) continue;
+				// The coverage question, asked BEFORE anything is written. `compiledSet` memoises,
+				// so its knownness cannot change mid-loop: an unknown answer is therefore always the
+				// first one, and returning here can never abandon an already-applied candidate.
+				final compiled: OracleCoverage = compiledSet();
+				if (!compiled.known) return {
+					baseline: baseline,
+					applied: applied,
+					appliedEdits: appliedEdits,
+					reverted: reverted,
+					partials: partials,
+					declined: declined,
+					coverageUnknown: compiled.reason
+				};
 				final opts: Null<String> = optsByFile == null ? null : optsByFile[entry.file];
-				switch verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write) {
+				switch verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write, compiled) {
 					case NoChange:
+					case Declined:
+						// The whole point of this class: a file the oracle never compiles cannot be
+						// typechecked into safety. Writing the candidate would spend a full compile to
+						// obtain an exit 0 that no edit could have changed, and then report it as
+						// `verified`. Say which file, which rule, and how much went unapplied instead.
+						declined.push({
+							file: entry.file,
+							rule: check.id(),
+							edits: edits.length,
+							reason: 'the compiler oracle does not compile this file'
+							+ ' (its hxml reads ${compiled.size} source file(s), this one not among them)'
+						});
 					case Applied:
 						applied.push(entry.file);
 						appliedEdits += edits.length;
@@ -232,13 +331,18 @@ final class FixVerifier {
 			applied: applied,
 			appliedEdits: appliedEdits,
 			reverted: reverted,
-			partials: partials
+			partials: partials,
+			declined: declined,
+			coverageUnknown: null
 		};
 	}
 
 	/**
-	 * Speculatively apply `edits` to one file and reconcile with the oracle. The
-	 * full set is written and typechecked first: `Confirmed` keeps it (`Applied`);
+	 * Speculatively apply `edits` to one file and reconcile with the oracle. A candidate
+	 * whose FILE the oracle does not compile is `Declined` the moment it exists — asked
+	 * after the canonicalise so the verdict distinguishes "no candidate" from "a candidate
+	 * nothing can judge". Otherwise the full set is written and typechecked first:
+	 * `Confirmed` keeps it (`Applied`);
 	 * `Unavailable` (the oracle cannot run) or a `Rejected` with fewer than two
 	 * UNITS reverts the whole file (`Reverted`). A multi-unit `Rejected` is
 	 * BISECTED — `isolateFailers` isolates the failing UNITS by binary search (each
@@ -257,7 +361,7 @@ final class FixVerifier {
 	 */
 	private static function verifyEntry(
 		entry: { file: String, source: String }, edits: Array<GroupedEdit>, plugin: GrammarPlugin, opts: Null<String>, oracleHxml: String,
-		oracleDir: Null<String>, write: (String, String) -> Void
+		oracleDir: Null<String>, write: (String, String) -> Void, coverage: OracleCoverage
 	): EntryVerdict {
 		final before: String = entry.source;
 		final full: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
@@ -278,6 +382,10 @@ final class FixVerifier {
 			case Ok(_): return NoChange;
 			case Err(message): return isWriterCanonical(before, plugin, opts) ? Reverted(NotCanonical(message)) : NoChange;
 		};
+		// The candidate exists; whether anything could ever JUDGE it is a separate question,
+		// and it is asked here rather than earlier so that the decline count means what it says:
+		// an edit set the writer would have refused is `NoChange` above, never a decline.
+		if (!coverage.covers(entry.file)) return Declined;
 		write(entry.file, fullText);
 		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
 			case Confirmed:

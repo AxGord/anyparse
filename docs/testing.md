@@ -1103,6 +1103,80 @@ file(s) applied, 3 reverted to report-only (compiler rejected)` count the files
 the compiler could SEE. Nothing there is false; it simply does not extend to a
 subtree the compile never entered.
 
+**The risky-fix path now MEASURES that set instead of assuming it.**
+`anyparse.check.OracleCoverage` runs one `haxe -v --no-output --each <hxml>` from
+the oracle's own directory and reads its `Parsed <path>` lines. That is the
+compiled set, named by the compiler itself — across `--next` arms, through
+include chains, through a `--macro include(…)` ignore list and through whatever
+a future hxml invents, none of which the engine has to model. `--each` is what
+makes it whole: without it exactly one arm answers — on Pony's two-arm hxml a
+leading `-v` reported 175 distinct `src` files and a trailing one 196 (194 and
+215 raw `Parsed` lines; a module is parsed again for the macro context), and
+which arm you get depends on where the flag sits rather than on what the oracle
+compiles. `FixVerifier` then DECLINES a risky edit set whose file falls outside
+the set — before writing anything — and the summary says which:
+
+    apq lint --fix: fixed 20 issue(s) in 11 file(s) over 2 pass(es), risky-fix verified: 11 file(s) applied, 0 reverted to report-only, 28 file(s) DECLINED unverifiable (40 edit(s) outside the oracle's compiled set)
+    apq lint --fix: risky-fix DECLINED src/pony/net/http/WebServer.hx (prefer-null-coalescing): the compiler oracle does not compile this file (its hxml reads 915 source file(s), this one not among them) — 1 edit(s) left report-only
+
+(915 is every source the compile READS — std and haxelibs included. The
+project's own share of it is 196, which is the number that matters against the
+679 files under `src`.)
+
+Measured on Pony `b6b94e37`, `--rule prefer-null-coalescing` over the whole
+`src`, same tree both arms: the base binary wrote 39 files and reported all 39
+as `risky-fix verified`; the gated one writes 11. The 28 files it stops writing
+are EXACTLY the 28 the oracle never compiles, and the difference in the other
+direction is 0 — the gate does not buy its honesty by refusing everything. It
+is also 2.9x faster (141.0 s -> 48.0 s), because those 28 whole-project
+typechecks are no longer spawned: here the honest answer is the cheap one. The
+probe costs one compile (17.45 s against 17.37 s for the plain oracle typecheck
+of this project — `-v` is a print flag, not extra work) and is taken lazily,
+only once some risky check actually has a candidate. It also needs a spawn
+buffer far past Node's 1 MiB default: 815 KB of `-v` output for Pony's two arms,
+2.1 MB for this project's own `test-js.hxml`. An overflow costs the whole risky
+phase, not a wrong decline — node reports it as a spawn error with a null status,
+which the probe reads as an unknown compiled set.
+
+The PREMISE is measured too, in `OracleCoverageTest`, because everything above
+rests on it: the identical `var x:Int = "not an int"` leaves
+`haxe lint-oracle.hxml --no-output` at exit 0 from `src/pony/unity3d/UTools.hx`
+and fails it from `src/pony/Byte.hx`. One variable, opposite verdicts.
+
+The limits, stated in full because a gate that overstates its own reach is the
+thing this section is about.
+
+- **Coverage the probe cannot establish is not coverage.** A `haxe -v` that will
+  not run, exits non-zero, or names no parsed file stops the whole risky phase
+  and puts its reason on the summary line — the same outcome as a project with
+  no `compilerOracle` key at all, which is the honest reading of an oracle whose
+  reach is unknown.
+- **The granularity is the FILE, not the REGION.** A `#if` branch the oracle's
+  defines exclude is skipped at lex time, so the file still earns its `Parsed`
+  line while that branch is typechecked by nothing. A risky fix landing inside
+  one is covered and still unverified — the same vacuity one level down, and it
+  reaches this repo (the oracle here is `test-js.hxml`, so no native-sys `#else`
+  branch in `src/` is ever compiled). Closing it means comparing an edit's span
+  against the file's active regions, which is a slice of its own. It is the
+  file-scoped twin of "the deleted code COMPILED" below: the exit code is 0 and
+  the edit was never looked at.
+- **`--each` changes the compile the probe runs**, pushing `--no-output` into
+  every arm where the plain oracle passes it only to the last. An hxml whose
+  later arm consumes an earlier arm's OUTPUT can therefore fail the probe while
+  passing the oracle. That is fail-safe — the phase declines and names its
+  reason — but it is new behaviour for such a project.
+- **The set is a snapshot**, probed once per run. A fix that removes the last
+  reference to a module can drop it out of the compiled set afterwards; the
+  common direction (a fix that adds a reference) only leaves the snapshot
+  conservative.
+- **The oracle-assisted path is deliberately NOT gated this way.** It annotates
+  files the compile never enters on purpose (the display server answers for
+  them, and does so correctly), its safety resting on the annotator's own
+  abstentions instead — `ExplicitLocalTypeOracleAbstainTest` is that scenario end
+  to end, over a file outside the hxml's `-cp`. Its `oracle-assisted: N file(s)
+  applied, M reverted` line therefore still counts only what the compiler could
+  see, exactly as described above.
+
 **A second, sharper instance: the deleted code COMPILED.** The oracle's blind
 spot above is a subtree it never entered. This one is inside the subtree it did
 enter, and the exit code is still 0 — because the rewrite is a behaviour change
@@ -1135,7 +1209,10 @@ Two consequences worth carrying to any project, not just this one:
   tree with per-target packages — flash-only, cpp-only, an engine binding — has
   the same shape, and the excluded packages are usually the ones with the most
   foreign coupling, which is to say the ones where a bad rewrite is least likely
-  to be a compile error.
+  to be a compile error. `OracleCoverage` now reads that list for you on the
+  risky-fix path, and by asking the compiler rather than by parsing the hxml —
+  but it is one consumer of the exit code, not all of them, so the reflex still
+  belongs to anyone quoting a green oracle at a file.
 - **A rule whose failure mode inside such a subtree is SILENT has to gate
   itself.** A rewrite the compiler would reject is caught eventually, in the
   worst case by the next real build; a rewrite that compiles and changes what

@@ -2188,7 +2188,8 @@ final class Cli {
 		final risky: {
 			tail: String,
 			appliedCount: Int,
-			reverts: Array<FixVerifyRevert>
+			reverts: Array<FixVerifyRevert>,
+			declines: Array<FixVerifyDecline>
 		} = verifyRiskyFixes(files, split.risky, cached, oracleHxml, oracleDir, optsByFile, changedFiles);
 		fixedCount += risky.appliedCount;
 		final riskyTail: String = risky.tail;
@@ -2237,6 +2238,21 @@ final class Cli {
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
 		// md5 snapshot before and after plus one run per candidate rule.
 		for (r in risky.reverts) stderr('apq lint --fix: risky-fix REVERTED ${r.file} (${r.rule}): ${revertCauseText(r.cause)}\n');
+		// And WHICH files the oracle cannot speak for at all. The count alone would leave the
+		// reader to guess which of hundreds of files this hxml never compiles — the same search
+		// the revert lines above exist to remove. CAPPED, unlike the reverts above: a revert is
+		// rare by construction, while a decline is the COMMON case on a partially-covered tree
+		// (483 of 679 files on the tree that motivated this), and an uncapped list would bury
+		// the summary it belongs to.
+		final declineCap: Int = 20;
+		for (i in 0...risky.declines.length) {
+			final d: FixVerifyDecline = risky.declines[i];
+			if (i >= declineCap) {
+				stderr('apq lint --fix: … and ${risky.declines.length - declineCap} more risky-fix decline(s) not listed\n');
+				break;
+			}
+			stderr('apq lint --fix: risky-fix DECLINED ${d.file} (${d.rule}): ${d.reason} — ${d.edits} edit(s) left report-only\n');
+		}
 		return EXIT_OK;
 	}
 
@@ -13573,25 +13589,54 @@ final class Cli {
 	private static function verifyRiskyFixes(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracleHxml: Null<String>,
 		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>
-	): { tail: String, appliedCount: Int, reverts: Array<FixVerifyRevert> } {
-		if (riskyChecks.length == 0) return { tail: '', appliedCount: 0, reverts: [] };
+	): {
+		tail: String,
+		appliedCount: Int,
+		reverts: Array<FixVerifyRevert>,
+		declines: Array<FixVerifyDecline>
+	} {
+		if (riskyChecks.length == 0) return {
+			tail: '',
+			appliedCount: 0,
+			reverts: [],
+			declines: []
+		};
 		if (oracleHxml == null) return {
 			tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only (no compiler oracle for this run)',
 			appliedCount: 0,
-			reverts: []
+			reverts: [],
+			declines: []
 		};
 		final verified: FixVerifyResult = FixVerifier.verify(files, riskyChecks, cached, oracleHxml, oracleDir, writeFile, optsByFile);
 		switch verified.baseline {
 			case Confirmed:
+				final unknownCoverage: Null<String> = verified.coverageUnknown;
+				// An oracle whose COMPILED SET could not be established can verify nothing, so the
+				// phase declines whole — the same outcome, and nearly the same sentence, as a run
+				// with no `compilerOracle` at all. Reported here rather than as N identical
+				// per-file lines: it is one fact about the oracle, not one per candidate.
+				if (unknownCoverage != null) return {
+					tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only'
+						+ ' (the oracle\'s compiled set is unknown: $unknownCoverage)',
+					appliedCount: 0,
+					reverts: [],
+					declines: []
+				};
 				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
 				return {
 					tail: ', risky-fix verified: ${verified.applied.length} file(s) applied, ${verified.reverted.length}'
-						+ ' reverted to report-only${bisectTail(verified.partials)}',
+						+ ' reverted to report-only${declinedTail(verified.declined)}${bisectTail(verified.partials)}',
 					appliedCount: verified.appliedEdits,
-					reverts: verified.reverted
+					reverts: verified.reverted,
+					declines: verified.declined
 				};
 			case Unavailable(reason):
-				return { tail: ', risky-fix skipped (oracle unavailable: $reason)', appliedCount: 0, reverts: [] };
+				return {
+					tail: ', risky-fix skipped (oracle unavailable: $reason)',
+					appliedCount: 0,
+					reverts: [],
+					declines: []
+				};
 			case Rejected(_):
 				// NOT "the baseline is red": `FixVerifier` measures its baseline AFTER the safe
 				// writes, so this arm is reached both by a tree that was already broken and by
@@ -13600,7 +13645,8 @@ final class Cli {
 				return {
 					tail: ', risky-fix skipped (the tree does not typecheck — see the note above)',
 					appliedCount: 0,
-					reverts: []
+					reverts: [],
+					declines: []
 				};
 		}
 	}
@@ -13635,6 +13681,29 @@ final class Cli {
 			probes += partial.oracleInvocations;
 		}
 		return ' (bisect: ${partials.length} file(s), $kept edit(s) kept, $reverted reverted, $probes oracle run(s))';
+	}
+
+	/**
+	 * One-line summary of the risky edit sets DECLINED for want of oracle coverage, appended to
+	 * the risky-fix tail ahead of the bisect clause. Empty when nothing was declined, so a run
+	 * over a fully-compiled tree keeps the bytes every gate and doc quotes.
+	 *
+	 * Kept OUT of the reverted count on purpose. A revert is the compiler having read a candidate
+	 * and refused it; a decline is a candidate no compiler ever read. Adding them together would
+	 * let a run that verified nothing read exactly like a run that verified and rejected.
+	 */
+	private static function declinedTail(declined: Array<FixVerifyDecline>): String {
+		if (declined.length == 0) return '';
+		var edits: Int = 0;
+		// DISTINCT files, because the word on the line is "file(s)": `declined` holds one entry
+		// per (file, RULE), and with 13 risky rules in the registry one uncovered file tripping
+		// three of them would otherwise read as three.
+		final files: Array<String> = [];
+		for (entry in declined) {
+			edits += entry.edits;
+			if (!files.contains(entry.file)) files.push(entry.file);
+		}
+		return ', ${files.length} file(s) DECLINED unverifiable ($edits edit(s) outside the oracle\'s compiled set)';
 	}
 
 	/**

@@ -76,6 +76,10 @@ final class FixVerifierScopeE2ETest extends Test {
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — otherwise these negatives are vacuous');
 		Assert.equals(0, result.applied.length, 'an override in a sibling file vetoes the candidate — the oracle cannot see it');
 		Assert.equals(0, result.reverted.length, 'vetoed at candidate time, not applied-then-reverted');
+		// The counters above are also 0 for a coverage DECLINE, so without this the assertion
+		// would stop pinning the mechanism it names the day this fixture's files fell outside
+		// the oracle's compiled set.
+		Assert.equals(0, result.declined.length, 'and vetoed by the rule, not declined for want of oracle coverage');
 		Assert.equals(-1, File.getContent('$dir/Base.hx').indexOf('inline'), 'disk keeps hook physical');
 		CliFixture.removeDir(dir);
 		#else
