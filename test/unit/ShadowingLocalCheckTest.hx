@@ -95,6 +95,44 @@ class ShadowingLocalCheckTest extends Test {
 		);
 	}
 
+	public function testRebindGateRejectsContinuationOfOwnDeclaration(): Void {
+		// `var q = 2, r = q;` — the continuation reads the SECOND binding (verified: `r` is 2), not
+		// the shadowed one, so nothing the statement hides is consumed. An identifier walk over the
+		// whole declaration subtree counts it and suppresses a genuine shadow.
+		Assert.equals(1, violations('class C { function f() { var q:Int = 1; var q:Int = 2, r:Int = q; } }').length);
+	}
+
+	public function testRebindGateRejectsReadOfNestedDeclaration(): Void {
+		// The only same-named read sits in a nested declaration inside the initializer and binds to IT,
+		// so the outer parameter is hidden by accident after all. BOTH declarations shadow it; an
+		// identifier walk over the whole subtree counts that read and reports only the inner one.
+		Assert.equals(
+			2, violations('class C { function f(q:Int, v:Int) { var q:Int = switch v { case 1: var q:Int = 2; q; case _: 0; }; } }').length
+		);
+	}
+
+	public function testRebindGateSeesInterpolationRead(): Void {
+		// A braceless `$q` binds like a bare identifier; `RefShape.identKind` does not name it, so an
+		// identifier walk misses the read and reports a deliberate re-bind.
+		Assert.equals(0, violations("class C { function f() { var q:Int = 1; var q:String = '$q!'; } }").length);
+	}
+
+	public function testRebindGateAcceptsShadowedLoopIterator(): Void {
+		// `for (q in xs) { var q = h(q); }` — the read binds to the ITERATOR, which the declaration
+		// also hides. What the enclosing-frame walk happens to NAME as the shadowed binding is the
+		// outer `q` (it does not model self-scoped binders), so gating on THAT identity would report a
+		// declaration that consumes what it hides. Unlike its three neighbours this one does NOT flip
+		// when the gate is reverted — the identifier walk is silent here too, for its own reason. It
+		// pins the choice of `bindsOutside` over binding identity, nothing else.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function h(v:Int):Int return v; function f(xs:Array<Int>) { var q:Int = 1; for (q in xs) {'
+				+ ' var q:Int = h(q); } } }'
+			).length
+		);
+	}
+
 	public function testDistinctNamesNotFlagged(): Void {
 		Assert.equals(0, violations('class C { function f() { var q:Int = 1; { var r:Int = 2; } } }').length);
 	}

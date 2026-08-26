@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -54,10 +55,13 @@ using Lambda;
  *
  * ## What is not reported
  *
- * A declaration whose INITIALIZER reads the name it shadows is skipped: `final x:T = x;`,
- * `final o:ONotNull = setDefaults(o);`. See `rebindsShadowed` — the outer binding is being
- * CONSUMED there on purpose, not hidden by accident. Measured over an 805-file tree, that gate
- * turned 49 findings into 34, and every one it removed was one of those two idioms.
+ * A declaration that CONSUMES a binding it hides is skipped: `final x:T = x;`,
+ * `final o:ONotNull = setDefaults(o);`. The outer binding is not hidden by accident there, it is
+ * being re-derived under its own name on purpose. `rebindsShadowed` asks `Refs` — the same lexical
+ * resolver `apq refs` runs — whether a read inside the declaration binds to something declared
+ * OUTSIDE it; a walk over identifier nodes gets that backwards for a multi-declarator continuation
+ * and for a braceless `$name` interpolation, and cannot see either. Nested functions are the one
+ * region the resolver is not trusted in, because it does not model an unannotated arrow parameter.
  *
  * A declaration inside a conditional-compilation region (`RefShape.conditionalMemberKind`) is
  * skipped: two mutually exclusive `#if` arms may each declare the name, and only one of them is
@@ -91,7 +95,7 @@ final class ShadowingLocal implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) scan(tree, [], false, resolved, entry.file, violations);
+			if (tree != null) scan(tree, tree, [], false, resolved, entry.file, violations);
 		}
 		return violations;
 	}
@@ -103,20 +107,36 @@ final class ShadowingLocal implements Check {
 		return [];
 	}
 
+	/** Whether `span` lies wholly inside `outer`. */
+	private static inline function within(span: Span, outer: Span): Bool {
+		return span.from >= outer.from && span.to <= outer.to;
+	}
+
+	/**
+	 * Whether `binding` is a declaration the local declaration at `declSpan` HIDES — anything not
+	 * declared by that statement itself. A read resolving to the statement's own continuation, or to
+	 * a declaration nested inside its initializer, binds WITHIN `declSpan` and consumes nothing the
+	 * statement hides.
+	 */
+	private static inline function bindsOutside(binding: Null<Span>, declSpan: Span): Bool {
+		return binding != null && !within(binding, declSpan);
+	}
+
 	/**
 	 * Walk `node`'s subtree carrying its ANCESTOR chain, reporting every local declaration whose
 	 * name a frame on that chain already binds. `ancestors` is mutated in place and restored on the
 	 * way out — one array for the whole file rather than a path lookup per declaration.
 	 */
 	private static function scan(
-		node: QueryNode, ancestors: Array<QueryNode>, inConditional: Bool, seams: ScopeSeams, file: String, out: Array<Violation>
+		root: QueryNode, node: QueryNode, ancestors: Array<QueryNode>, inConditional: Bool, seams: ScopeSeams, file: String,
+		out: Array<Violation>
 	): Void {
 		if (seams.opaqueKinds.contains(node.kind)) return;
 		final span: Null<Span> = node.span;
 		final name: Null<String> = node.name;
 		if (!inConditional && seams.localDeclKinds.contains(node.kind) && name != null && span != null) {
 			final hidden: Null<String> = shadowedBinding(node, ancestors, seams);
-			if (hidden != null && !rebindsShadowed(node, name, seams)) out.push({
+			if (hidden != null && !rebindsShadowed(root, node, name, seams)) out.push({
 				file: file,
 				span: span,
 				rule: RULE_ID,
@@ -126,7 +146,7 @@ final class ShadowingLocal implements Check {
 		}
 		final nested: Bool = inConditional || node.kind == seams.conditionalKind;
 		ancestors.push(node);
-		for (child in node.children) scan(child, ancestors, nested, seams, file, out);
+		for (child in node.children) scan(root, child, ancestors, nested, seams, file, out);
 		ancestors.pop();
 	}
 
@@ -173,39 +193,83 @@ final class ShadowingLocal implements Check {
 	}
 
 	/**
-	 * Whether `decl`'s initializer READS the name it declares — `final x:T = x;`,
+	 * Whether a read inside `decl` resolves to a binding `decl` HIDES — `final x:T = x;`,
 	 * `final o:ONotNull = setDefaults(o);`, `final p:String = isVirtual(p) ? p.substr(1) : p;`.
 	 *
 	 * The author is re-deriving that value under the same name on purpose: a null-safety narrowing
 	 * re-bind (`Null<T>` to `T`, which is what the language's own guidance prescribes), or a
 	 * parameter normalised once at the top of a function because Haxe has no `final` parameter to
 	 * assign into. The outer binding is not hidden by accident there, it is CONSUMED, and the name
-	 * is the point. Measured over an 805-file tree: 11 of 49 findings were this shape.
+	 * is the point.
 	 *
-	 * An initializer that reads nothing of the kind — `var displayObject:Sprite = new Sprite();`
-	 * over an enclosing `displayObject` — is exactly the shape this check exists for and is
-	 * unaffected.
+	 * The question goes to `Refs` — the lexical resolver `apq refs` itself runs, and the one three
+	 * sibling checks already ask — rather than to a walk over identifier nodes, because a walk gets
+	 * two shapes backwards and the resolver gets both right (each verified by running it):
+	 *
+	 * - `var a = 1; var a = 2, r = a;` — the read is in the CONTINUATION of a multi-declarator
+	 *   chain, where the NEW binding is already in effect (`r` is 2). A subtree walk counts it and
+	 *   suppresses a genuine shadow. Same class, one level up: a read inside a nested declaration in
+	 *   the initializer (`var e = switch v { case 1: var e = 2; e; … }`) belongs to that declaration.
+	 * - `var n = 1; var n = '$n!';` — a braceless interpolation read binds like a bare identifier,
+	 *   and `RefShape.identKind` does not name it, so a walk does not see the read at all.
+	 *
+	 * `bindsOutside` is what carries both: a read resolving to something declared INSIDE `decl` —
+	 * its own continuation, a nested declaration, a lambda parameter — consumes nothing `decl`
+	 * hides. The containment test does the other half, keeping a read BETWEEN the two declarations
+	 * (`var a = 1; trace(a); var a = 2;`) from counting.
+	 *
+	 * Note this asks nothing about WHICH binding `shadowedBinding` named. `for (q in xs) { var q =
+	 * h(q); }` consumes the loop iterator, and the enclosing-frame walk names the outer `q` instead
+	 * because it does not model self-scoped binders; gating on that identity would report a
+	 * declaration whose whole shape is the deliberate re-bind.
+	 *
+	 * Nested functions are the one region the resolver is not trusted in — see
+	 * `collectNestedFnSpans`.
+	 *
+	 * The SIBLING mechanism, which is not this one: `unused-local` reaches the same verdict for
+	 * `var a = 1; var a = a + 1;` by leaving the re-declaration's initializer OUT of the regions it
+	 * excludes from a raw text scan. That is a different question (is the FIRST binding dead) with a
+	 * different subject (the first declaration, not the second), a different conservative direction,
+	 * and no predicate to share. Do not fold the two together.
 	 */
-	private static function rebindsShadowed(decl: QueryNode, name: String, seams: ScopeSeams): Bool {
-		final identKind: Null<String> = seams.identKind;
-		return identKind != null && decl.children.exists(child -> readsName(child, identKind, name, seams));
+	private static function rebindsShadowed(root: QueryNode, decl: QueryNode, name: String, seams: ScopeSeams): Bool {
+		final declSpan: Null<Span> = decl.span;
+		if (declSpan == null) return false;
+		final nested: Array<Span> = [];
+		collectNestedFnSpans(decl, nested, seams);
+		return Refs.find(name, root, seams.shape).exists(
+			hit ->
+				hit.kind == RefKind.Read && within(hit.span, declSpan) && !nested.exists(fn -> within(hit.span, fn))
+				&& bindsOutside(hit.bindingSpan, declSpan)
+		);
 	}
 
 	/**
-	 * Whether `node`'s subtree holds an identifier read of `name`, NOT descending into a nested
-	 * function or lambda. A same-named binding inside one is a THIRD declaration, not the shadowed
-	 * one — `final item:Null<T> = folders.find((item:T) -> …item.filePath…);` reads the lambda's own
-	 * parameter, so counting it would suppress a real finding on a coincidence of spelling.
+	 * The spans of the nested functions and lambdas directly under `decl` — the regions where this
+	 * check does not consult the resolver, because it cannot see an UNANNOTATED arrow parameter.
+	 *
+	 * `(q: Int) -> q > 0` and `function(q) return q > 0` both surface their parameter as a
+	 * declaration, and a read in the body binds to it. `q -> q > 0` surfaces the parameter as a
+	 * plain identifier, so BOTH it and the body read resolve to whatever the enclosing scope binds
+	 * — which for `var q = 0; final q = xs.filter(q -> q > 0);` is the very declaration being
+	 * hidden. Trusting that would call the accident a deliberate re-bind and lose the finding. The
+	 * outer regions carry no such ambiguity, so the resolver is trusted everywhere else.
 	 */
-	private static function readsName(node: QueryNode, identKind: String, name: String, seams: ScopeSeams): Bool {
-		return (node.kind == identKind && node.name == name)
-			|| (!seams.nestedFnKinds.contains(node.kind) && node.children.exists(child -> readsName(child, identKind, name, seams)));
+	private static function collectNestedFnSpans(node: QueryNode, out: Array<Span>, seams: ScopeSeams): Void {
+		for (child in node.children) {
+			final span: Null<Span> = child.span;
+			if (span != null && seams.nestedFnKinds.contains(child.kind))
+				out.push(span);
+			else
+				collectNestedFnSpans(child, out, seams);
+		}
 	}
 
 	/** The scope vocabulary this check reads, or null when the grammar names no local declaration. */
 	private static function seamsOf(shape: RefShape): Null<ScopeSeams> {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		return localDeclKinds.length == 0 ? null : {
+			shape: shape,
 			localDeclKinds: localDeclKinds,
 			declHostKinds: shape.declHostKinds,
 			positionScopedKinds: (shape.positionScopedKinds ?? []).concat(shape.branchScopeKinds ?? []),
@@ -213,7 +277,6 @@ final class ShadowingLocal implements Check {
 			paramKinds: shape.paramKinds ?? [],
 			opaqueKinds: shape.opaqueKinds ?? [],
 			conditionalKind: shape.conditionalMemberKind,
-			identKind: shape.identKind,
 			nestedFnKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? [])
 		};
 	}
@@ -222,6 +285,7 @@ final class ShadowingLocal implements Check {
 
 /** The scope vocabulary `ShadowingLocal` walks with — resolved once per run, never per node. */
 private typedef ScopeSeams = {
+	final shape: RefShape;
 	final localDeclKinds: Array<String>;
 	final declHostKinds: Array<String>;
 	final positionScopedKinds: Array<String>;
@@ -229,6 +293,5 @@ private typedef ScopeSeams = {
 	final paramKinds: Array<String>;
 	final opaqueKinds: Array<String>;
 	final conditionalKind: Null<String>;
-	final identKind: Null<String>;
 	final nestedFnKinds: Array<String>;
 };
