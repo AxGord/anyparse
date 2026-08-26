@@ -398,3 +398,55 @@ interface NoAutofix {
 	public function noAutofixReason(): String;
 
 }
+
+/**
+ * Opt-in declaration that part of this check's MESSAGE is a source MEASUREMENT — a
+ * position or an extent that moves under an edit which is not a finding — and how to
+ * blank it out for the purpose of IDENTITY.
+ *
+ * `apq lint-diff` keys a finding on `(file, rule, severity, message)`: line and column
+ * are already excluded because they re-key every finding below an insertion. The message
+ * carries the same hazard one field over, for the rules that quote a coordinate INSIDE it.
+ * `duplicate-code` names its partner block `<path>:<line>`; `unused-local` names the
+ * re-declaration that took a binding over; `oversized-type` quotes the type's line extent.
+ * All three re-key on an edit that changed no finding, and the blast-radius gate then
+ * reports movement where nothing moved — measured on one writer slice as eight moves
+ * (`WrapList` / `WriterLowering` / `Cli` / `SymbolIndex`, 4184 lines against 4194) with
+ * total findings 2256 against a base of 2256. A gate waived by reflex has stopped being a
+ * gate, so the identity must not carry the drifting quantity.
+ *
+ * The MESSAGE keeps it. "This type is too big" without a size is useless, and the reader who
+ * wants 4184 -> 4194 finds it in the two REPORTS — so identity and message come apart here
+ * rather than the numbers coming out of the prose. `lint-diff` itself prints the KEY as its
+ * example line, masked digits and all, because that is what it compared; a raw number there
+ * would contradict the verdict beside it.
+ *
+ * The check declares this about ITSELF, and `lint-diff` holds no list of rules: the
+ * registry is asked which of its checks implement this interface (`Linter.messageIdentities`),
+ * so a new rule that quotes a coordinate is covered by writing this one method — never by
+ * editing the consumer. That inversion is the point; the hard-coded pair of rule ids it
+ * replaced could only ever be right for the rules someone had already tripped over.
+ *
+ * What must NOT be masked: a quantity that IS the finding. `oversized-type`'s member count,
+ * `string-literal-dup`'s repetition count and `complexity`'s score all change only when the
+ * code changes, and masking them would turn the gate off for exactly the movement it exists
+ * to catch. `MessageMask`'s anchored primitives are narrow for that reason.
+ */
+@:nullSafety(Strict)
+interface VolatileMessage {
+
+	/**
+	 * `message` — one this check's own `run` produced — with every source MEASUREMENT in it
+	 * masked, and everything else left byte-identical. Must be idempotent, must be derived
+	 * from `message` alone — not from instance state, which is why the registry may bind this
+	 * method on a check it never configured — and must keep every quantity a reader would call
+	 * a finding.
+	 *
+	 * Build it with `MessageMask.maskAfter` / `maskBefore`, anchored on the SAME constant the
+	 * message was built from, so the two cannot drift apart; and pin it in the check's own
+	 * test against a message `run` produced, never against a hand-written one — a missing
+	 * anchor is a silent no-op that restores the false movement.
+	 */
+	public function messageIdentity(message: String): String;
+
+}

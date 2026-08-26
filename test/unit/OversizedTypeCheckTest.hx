@@ -114,6 +114,26 @@ class OversizedTypeCheckTest extends Test {
 		FileSystem.deleteDirectory(dir);
 	}
 
+	/**
+	 * The anti-drift pin for `VolatileMessage`: the mask is anchored on a literal fragment of
+	 * this rule's own wording, so a reworded message would turn it into a silent no-op and the
+	 * blast-radius gate would go back to reporting a reflow as movement. The input here is a
+	 * message `run` PRODUCED, never a hand-written one — that is the whole point of the case.
+	 */
+	public function testMessageIdentityMasksItsOwnLineExtentAndKeepsItsMemberCount(): Void {
+		final blanks: String = [for (_ in 0...2001) '\n'].join('');
+		final check: OversizedType = new OversizedType();
+		final message: String = check.run(
+			[{ file: 'C.hx', source: classWithMembers(51).replace('\n}', '$blanks\n}') }], new HaxeQueryPlugin()
+		)[0].message;
+		Assert.isTrue(message.contains('51 members (max 50)'), 'the message states both measurements');
+		Assert.isTrue(message.contains('lines (max 2000)'));
+		final identity: String = check.messageIdentity(message);
+		Assert.isTrue(identity.contains('51 members (max 50)'), 'the member count stays in the key - it IS the finding');
+		Assert.isTrue(identity.contains('# lines (max 2000)'), 'the line extent leaves it - it drifts under any edit');
+		Assert.equals(identity, check.messageIdentity(identity), 'and the normalization is idempotent');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new OversizedType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

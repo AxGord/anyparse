@@ -34,51 +34,44 @@ using StringTools;
  * `duplicate-code` names its partner block by path — so a relative and an
  * absolute snapshot of the same tree compare equal.
  *
- * Normalization 2 — `duplicate-code`. Its message names the PARTNER block by
- * line (`4 statements duplicated from <file>:501 — …`), so any shift anywhere
- * in the partner file renames the finding. Digit runs in those messages are
- * masked to `#`. Masking rather than dropping the rule is deliberate: drop it
- * and a genuinely NEW duplicate becomes invisible, which is precisely the
- * finding the gate exists to catch. The COST is real and measured: masking
- * every digit run also eats the statement count and any digit in the partner
- * FILENAME, so two duplicates against one partner that differ only in digits
- * share a key — 57% (anyparse) and 78% (tm) of duplicate-code findings sit in
- * such a merged key, and a substitution inside one is invisible. Narrowing the
- * mask to the line number alone is the open improvement;
- * `LintDiffTest.testDuplicateCodeSubstitutionWithinOneFileIsMaskedAway` pins
- * the current behaviour so the change announces itself.
+ * Normalization 2 — the MEASUREMENTS a message quotes, and the checks own it.
+ * A rule that writes a source coordinate into its own prose re-keys on an edit
+ * that changed no finding: `duplicate-code` names its partner block
+ * `<path>:<line>`, `unused-local` the re-declaration that took a binding over,
+ * `oversized-type` the type's line extent. The last one made the gate cry wolf
+ * on exactly the work this project does — a writer slice moved four types by a
+ * few lines each (`WrapList` 4184 -> 4194, plus `WriterLowering` / `Cli` /
+ * `SymbolIndex`) and the gate printed eight moves against total findings 2256
+ * versus a base of 2256. Waiving it became reflex, and a gate waived by reflex
+ * has stopped being a gate.
  *
- * The list of masked rules is `POSITION_BEARING_RULES`, and it grows when a rule starts
- * naming a position in its own message — `unused-local` did, when it learned to name the
- * re-declaration that took a binding over.
+ * So a check declares its own volatile parts (`Check.VolatileMessage`) and
+ * `identities` — built by `Linter.messageIdentities` — maps rule id to that
+ * declaration. This module holds NO list of rules: a new rule that quotes a
+ * coordinate joins by writing one method on itself, and nothing here changes.
+ * The list it replaced was two ids long and could say only "mask every digit in
+ * this rule's messages", which is both too coarse (it ate `duplicate-code`'s
+ * statement count and any digit in a partner filename — 57% of that rule's
+ * findings on anyparse and 78% on tm shared a key with a sibling, and a
+ * substitution inside such a group was invisible) and unable to express the
+ * oversized-type case at all, where one number in the message drifts and the
+ * one beside it IS the finding.
  *
- * What is deliberately NOT normalized: every other rule whose message carries
- * digits — `oversized-type` quotes a member and line count, `string-literal-dup`
- * a repetition count, `complexity` a score. Those digits ARE the finding, so a
- * file crossing from 2492 to 2501 lines reports one added and one removed, and
- * that is the gate working rather than noise. The list of instabilities above
- * is therefore two entries long on purpose, not for want of looking.
+ * What is still deliberately NOT normalized: `string-literal-dup`'s repetition
+ * count, `complexity`'s score, `anon-type-dup`'s occurrence tally,
+ * `oversized-type`'s MEMBER count. Those digits move only when the code moves,
+ * so a file crossing from 50 to 51 members reports one added and one removed,
+ * and that is the gate working rather than noise. Masking them would turn the
+ * gate off for the movement it exists to catch — which is the failure mode to
+ * watch for in any future `VolatileMessage`.
  *
- * Everything here is pure — the CLI layer reads the files, calls `parseReport`
- * / `tally` / `compare` / `render` and prints. That split is what lets the
- * suite test both normalizations directly rather than through a process.
+ * Everything here is pure — the CLI layer reads the files, builds the identity
+ * map, calls `parseReport` / `tally` / `compare` / `render` and prints. That
+ * split is what lets the suite test both normalizations directly rather than
+ * through a process.
  */
 @:nullSafety(Strict)
 final class LintDiff {
-
-	/**
-	 * The rules whose message carries a POSITION, and whose digits are therefore masked.
-	 *
-	 * `duplicate-code` names its partner block `<path>:<line>`; `unused-local` names the
-	 * re-declaration that took the binding over, and without the mask an unrelated edit above
-	 * such a finding turns one stable record into 1 removed + 1 added — a DISAPPEARING finding,
-	 * which is the direction the blast-radius gate exists to catch.
-	 *
-	 * A rule joins this list by carrying a position in its own message; the list is not a policy
-	 * about digits. `oversized-type`'s member and line count, `string-literal-dup`'s repetition
-	 * count and `complexity`'s score are all digits that ARE the finding, and they stay unmasked.
-	 */
-	private static final POSITION_BEARING_RULES: Array<String> = ['duplicate-code', 'unused-local'];
 
 	/**
 	 * Print order for the severity breakdown, most severe first. A severity
@@ -122,13 +115,13 @@ final class LintDiff {
 	 * the report — so the examples a run prints are stable across runs and
 	 * two invocations on the same inputs produce byte-identical output.
 	 */
-	public static function tally(findings: Array<LintFindingJson>, root: String): LintDiffTally {
+	public static function tally(findings: Array<LintFindingJson>, root: String, identities: LintMessageIdentities): LintDiffTally {
 		final counts: Map<String, Int> = [];
 		final rows: Map<String, LintDiffRow> = [];
 		final order: Array<String> = [];
 		for (f in findings) {
 			final file: String = normalizePath(f.file, root);
-			final message: String = normalizeMessage(f.rule, f.message, root);
+			final message: String = normalizeMessage(f.rule, f.message, root, identities);
 			final key: String = keyOf(file, f.rule, f.severity, message);
 			final seen: Null<Int> = counts[key];
 			if (seen == null) {
@@ -214,9 +207,13 @@ final class LintDiff {
 	}
 
 	/**
-	 * Normalize a finding's message for keying: apply the SAME path
-	 * normalization to every path the message quotes, then mask digits when the
-	 * rule is `duplicate-code`.
+	 * Normalize a finding's message for keying: apply the SAME path normalization to
+	 * every path the message quotes, then hand the result to the rule's OWN
+	 * `messageIdentity` when it declared one.
+	 *
+	 * The rule lookup is a map, not a branch: `lint-diff` never learns a rule id, and
+	 * a rule with no declaration passes through byte-identical — the state of every
+	 * builtin but three.
 	 *
 	 * The path work is not a `file`-field concern that leaked in here. A check
 	 * pointing at a SECOND location spells it in the message — `duplicate-code`
@@ -228,40 +225,10 @@ final class LintDiff {
 	 * Whatever the file field forgives, the message has to forgive too, or
 	 * `--root` is true by half.
 	 */
-	public static function normalizeMessage(rule: String, message: String, root: String): String {
+	public static function normalizeMessage(rule: String, message: String, root: String, identities: LintMessageIdentities): String {
 		final rooted: String = normalizeQuotedPaths(message, rootPrefix(root));
-		return POSITION_BEARING_RULES.contains(rule) ? maskDigits(rooted) : rooted;
-	}
-
-	/**
-	 * Collapse every run of decimal digits to a single `#`.
-	 *
-	 * Written as a scan rather than an `EReg` on purpose: a shared `EReg`
-	 * would be exactly the module-level mutable state this project refuses,
-	 * and building one per message would pay for a regex object on every
-	 * duplicate-code finding in the report.
-	 *
-	 * Non-digit stretches are copied with `addSub` rather than re-encoded one
-	 * code unit at a time. That is not only cheaper: a `charCodeAt`/`addChar`
-	 * round trip reads ONE BYTE of a multi-byte character on a byte-string
-	 * target (neko, hxcpp) and re-emits it as a character, so an em dash in a
-	 * real lint message would print as mojibake there. The digit test itself is
-	 * byte-safe either way — every UTF-8 continuation byte is >= 0x80, so it can
-	 * never be mistaken for an ASCII digit.
-	 */
-	public static function maskDigits(text: String): String {
-		final out: StringBuf = new StringBuf();
-		var runStart: Int = 0;
-		var inDigits: Bool = false;
-		for (i in 0...text.length) {
-			final digit: Bool = isDigit(text.fastCodeAt(i));
-			if (digit == inDigits) continue;
-			flushRun(out, text, runStart, i, inDigits);
-			runStart = i;
-			inDigits = digit;
-		}
-		flushRun(out, text, runStart, text.length, inDigits);
-		return out.toString();
+		final identity: Null<(String) -> String> = identities[rule];
+		return identity == null ? rooted : identity(rooted);
 	}
 
 	/**
@@ -285,19 +252,6 @@ final class LintDiff {
 	 */
 	public static function keyOf(file: String, rule: String, severity: String, message: String): String {
 		return '${file.length}:$file${rule.length}:$rule${severity.length}:$severity$message';
-	}
-
-	/** Whether `code` is an ASCII decimal digit. Byte-safe: UTF-8 continuation bytes are all >= 0x80. */
-	private static inline function isDigit(code: Int): Bool {
-		return code >= '0'.code && code <= '9'.code;
-	}
-
-	/** Emit one homogeneous run of `text` into `out`: a single `#` for digits, the bytes verbatim otherwise. */
-	private static inline function flushRun(out: StringBuf, text: String, from: Int, to: Int, digits: Bool): Void {
-		if (digits)
-			out.add('#');
-		else
-			out.addSub(text, from, to - from);
 	}
 
 	/**
@@ -417,6 +371,19 @@ final class LintDiff {
 	}
 
 }
+
+/**
+ * Rule id -> the check's own `messageIdentity`, as `Linter.messageIdentities` builds it by
+ * asking the registry which of its checks declare a `Check.VolatileMessage`.
+ *
+ * Passed in rather than looked up here for a dependency reason, not a testing one: `LintDiff`
+ * lives in `anyparse.query` and the registry in `anyparse.check`, so looking it up would drag
+ * every builtin check into every consumer of the query module. The suite exercises the REAL
+ * registry through this parameter (no stub exists — all three call sites pass the same
+ * expression). It is required rather than defaulted for the reason `--root` is not: a caller
+ * that forgot it would get a gate reporting movement nothing made, silently.
+ */
+typedef LintMessageIdentities = Map<String, (String) -> String>;
 
 /** The readable half of a tallied key: what to print as an example. */
 typedef LintDiffRow = {

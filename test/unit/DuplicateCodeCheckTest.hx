@@ -236,6 +236,38 @@ class DuplicateCodeCheckTest extends Test {
 		Assert.isTrue(ids.contains('duplicate-code'));
 	}
 
+	/**
+	 * The anti-drift pin for `VolatileMessage`: the mask is anchored on a literal fragment of
+	 * this rule's own wording, so a reworded message turns it into a silent no-op and the
+	 * blast-radius gate goes back to re-keying every clone whose ORIGINAL moved a line. The
+	 * input is a message `run` PRODUCED, never a hand-written one.
+	 */
+	public function testMessageIdentityMasksItsOwnOriginalLine(): Void {
+		final check: DuplicateCode = new DuplicateCode();
+		final message: String = check.run([
+			{
+				file: 'C.hx',
+				source: src([
+					'class C {',
+					'\tfunction f():Void {',
+					'\t\ttrace(alpha, beta);',
+					'\t\ttrace(gamma, delta);',
+					'\t\ttrace(epsilon, zeta);',
+					'\t}',
+					'\tfunction g():Void {',
+					'\t\ttrace(alpha, beta);',
+					'\t\ttrace(gamma, delta);',
+					'\t\ttrace(epsilon, zeta);',
+					'\t}',
+					'}'
+				])
+			}
+		], new HaxeQueryPlugin())[0].message;
+		final identity: String = check.messageIdentity(message);
+		Assert.equals('3 statements duplicated from line # — extract a helper (hxq extract-method)', identity);
+		Assert.equals(identity, check.messageIdentity(identity), 'the normalization is idempotent');
+	}
+
 	private function violations(source: String): Array<Violation> {
 		return new DuplicateCode().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
 	}

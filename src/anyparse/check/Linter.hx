@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.query.CachingGrammarPlugin;
@@ -334,6 +335,30 @@ final class Linter {
 	/** The built-in check whose `id()` equals `id`, or null. */
 	public static function byId(id: String): Null<Check> {
 		return builtins().find(c -> c.id() == id);
+	}
+
+	/**
+	 * Every registered check that declares a `VolatileMessage`, as rule id -> its
+	 * `messageIdentity`. The map `apq lint-diff` keys its findings through.
+	 *
+	 * Built by ASKING the registry, never by naming rules: a rule whose message quotes a
+	 * source coordinate joins by implementing the interface, and no consumer is edited. The
+	 * seam replaces a hand-maintained pair of rule ids inside `LintDiff`, which could only
+	 * ever list the rules someone had already been burned by — and which had no way to say
+	 * that ONE number in a message drifts while its neighbour is the finding.
+	 *
+	 * A fresh `builtins()` per call rather than a cached map: a process-scoped cache is the
+	 * global mutable state this project refuses, and a `lint-diff` run calls this ONCE —
+	 * `Cli.runLintDiff` hoists the map above both `tally` calls, so the cost is one registry
+	 * construction per process.
+	 */
+	public static function messageIdentities(): Map<String, (String) -> String> {
+		final out: Map<String, (String) -> String> = [];
+		for (check in builtins()) if (check is VolatileMessage) {
+			final volatileMessage: VolatileMessage = cast check;
+			out[check.id()] = volatileMessage.messageIdentity;
+		}
+		return out;
 	}
 
 	/**

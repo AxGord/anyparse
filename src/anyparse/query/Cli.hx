@@ -68,6 +68,7 @@ import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.LintDiff.LintDiffResult;
+import anyparse.query.LintDiff.LintMessageIdentities;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.SweepFixture;
 import anyparse.query.format.json.SweepSnapshot;
@@ -16274,7 +16275,12 @@ final class Cli {
 		try {
 			final before: Array<LintFindingJson> = LintDiff.parseReport(readFile(oldFile));
 			final after: Array<LintFindingJson> = LintDiff.parseReport(readFile(newFile));
-			result = LintDiff.compare(LintDiff.tally(before, root), LintDiff.tally(after, root));
+			// The rule -> `messageIdentity` map is asked of the check registry, so a rule that
+			// quotes a source coordinate is covered by declaring it on ITSELF. Both snapshots go
+			// through the same map, which is what lets a baseline cached before a declaration
+			// existed still compare clean against a run made after it.
+			final identities: LintMessageIdentities = Linter.messageIdentities();
+			result = LintDiff.compare(LintDiff.tally(before, root, identities), LintDiff.tally(after, root, identities));
 		} catch (exception: Exception) {
 			// EXIT_USAGE, not EXIT_RUNTIME: "could not compare" must not look like
 			// "compared, and things moved". A half-read baseline UNDERSTATES the

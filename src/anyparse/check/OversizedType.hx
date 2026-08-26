@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -35,7 +36,7 @@ using StringTools;
  * configures `maxMembers` / `maxLines` on the `oversized-type` rule.
  */
 @:nullSafety(Strict)
-final class OversizedType implements Check implements ConfigAware {
+final class OversizedType implements Check implements ConfigAware implements VolatileMessage {
 
 	/**
 	 * The member count above which a type is flagged — generous enough that only
@@ -48,6 +49,13 @@ final class OversizedType implements Check implements ConfigAware {
 	 * genuine god-files trip it; used unless an `apqlint.json` configures `maxLines`.
 	 */
 	private static inline final DEFAULT_MAX_LINES: Int = 2000;
+
+	/**
+	 * The fragment that follows the LINE EXTENT in the message — shared by the message
+	 * builder and by `messageIdentity`, so the anchor cannot drift away from the wording it
+	 * points at.
+	 */
+	private static inline final LINES_UNIT: String = ' lines (max ';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -96,6 +104,22 @@ final class OversizedType implements Check implements ConfigAware {
 	}
 
 	/**
+	 * The line EXTENT is masked; the member COUNT is not.
+	 *
+	 * A type's line count moves whenever the file is reformatted or edited at all — the
+	 * blast-radius gate saw 4184 against 4194 on a slice whose findings had not moved — while
+	 * its member count moves only when a member is written or deleted, which IS the finding
+	 * this rule reports. Both numbers stay in the message; only the first leaves the key.
+	 *
+	 * Crossing a threshold is still reported, in both directions: a type not previously over
+	 * either limit gains a finding, and one already over on members gains the `and N lines`
+	 * clause, which no mask can turn back into the shorter text.
+	 */
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskBefore(message, LINES_UNIT);
+	}
+
+	/**
 	 * Walk `node`; for every type-body descendant emit a `Warning` when either
 	 * size threshold is exceeded.
 	 */
@@ -114,7 +138,7 @@ final class OversizedType implements Check implements ConfigAware {
 		final lines: Int = lineExtent(source, span);
 		final over: Array<String> = [];
 		if (members > cfg.maxMembers) over.push('$members members (max ${cfg.maxMembers})');
-		if (lines > cfg.maxLines) over.push('$lines lines (max ${cfg.maxLines})');
+		if (lines > cfg.maxLines) over.push('$lines$LINES_UNIT${cfg.maxLines})');
 		if (over.length == 0) return;
 		final name: String = type.name ?? '<anonymous>';
 		final headerEnd: Int = source.indexOf('\n', span.from);

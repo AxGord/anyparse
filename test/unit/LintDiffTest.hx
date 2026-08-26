@@ -1,5 +1,6 @@
 package unit;
 
+import anyparse.check.Linter;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
 import utest.Assert;
@@ -18,9 +19,14 @@ import utest.Test;
  * The normalization cases are written as PAIRS — the same inputs with and
  * without the flag — because an assertion that a diff is empty passes just as
  * well when the two reports were never different. Asserting the un-normalized
- * arm is non-empty is what makes the normalized arm mean something. Two cases
- * are deliberately not pairs and say so in place: an over-reach guard, and a
- * pin on a known blind spot of the digit mask.
+ * arm is non-empty is what makes the normalized arm mean something. One case is
+ * deliberately not a pair and says so in place: an over-reach guard for --root.
+ *
+ * The message normalization is NOT configured here — it is asked of the check registry
+ * (`Linter.messageIdentities`), so these cases exercise the REAL declarations the builtins
+ * make about their own messages. A fixture must therefore spell a message the way its check
+ * writes it; the helpers at the bottom do that, and the pin that they still MATCH lives in
+ * each check test, which feeds `messageIdentity` a message the check itself produced.
  */
 @:nullSafety(Strict)
 class LintDiffTest extends Test {
@@ -91,12 +97,8 @@ class LintDiffTest extends Test {
 		// spellings, in the file field AND in the partner path a duplicate-code
 		// message quotes. Measured on a real pair before this was handled: 269 of
 		// 468 findings read as added-and-removed.
-		final before: String = reportOf([
-			record('./src/A.hx', 'info', 'duplicate-code', '4 statements duplicated from ./src/B.hx:501 - extract a shared helper')
-		]);
-		final after: String = reportOf([
-			record('src/A.hx', 'info', 'duplicate-code', '4 statements duplicated from src/B.hx:501 - extract a shared helper')
-		]);
+		final before: String = reportOf([record('./src/A.hx', 'info', 'duplicate-code', crossDup(4, './src/B.hx', 501))]);
+		final after: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(4, 'src/B.hx', 501))]);
 		final result: LintDiffResult = diff(before, after, '');
 		Assert.equals(0, result.addedTotal, 'a ./-spelled scope is the same tree');
 		Assert.equals(0, result.removedTotal);
@@ -115,15 +117,24 @@ class LintDiffTest extends Test {
 	}
 
 	public function testDuplicateCodeLineShiftIsMaskedAway(): Void {
-		final before: String = reportOf([
-			record('src/A.hx', 'info', 'duplicate-code', '4 statements duplicated from src/B.hx:501 - extract a shared helper')
-		]);
-		final after: String = reportOf([
-			record('src/A.hx', 'info', 'duplicate-code', '4 statements duplicated from src/B.hx:612 - extract a shared helper')
-		]);
+		final before: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(4, 'src/B.hx', 501))]);
+		final after: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(4, 'src/B.hx', 612))]);
 		final result: LintDiffResult = diff(before, after, '');
 		Assert.equals(0, result.addedTotal, 'a partner-block line shift is not a finding');
 		Assert.equals(0, result.removedTotal);
+	}
+
+	public function testDuplicateCodeSameFileLineShiftIsMaskedAway(): Void {
+		// The same-file message spells the original as `from line N` rather than
+		// `<path>:N`, so it needs its own anchor — and its own case, since a mask
+		// written for one shape is a silent no-op on the other.
+		final before: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', sameDup(4, 226))]);
+		final after: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', sameDup(4, 241))]);
+		final result: LintDiffResult = diff(before, after, '');
+		Assert.equals(0, result.addedTotal, 'an original-block line shift is not a finding');
+		Assert.equals(0, result.removedTotal);
+		final grown: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', sameDup(7, 226))]);
+		Assert.equals(1, diff(before, grown, '').addedTotal, 'while the statement COUNT still moves the key');
 	}
 
 	public function testDuplicateCodeIsNotDroppedFromTheReport(): Void {
@@ -131,35 +142,30 @@ class LintDiffTest extends Test {
 		// partner file is still a finding. This does not exercise the mask itself
 		// (the added key differs in `file`, so it survives either way); it pins
 		// that nobody "fixes" the line-shift noise by dropping the rule.
-		final before: String = reportOf([
-			record('src/A.hx', 'info', 'duplicate-code', '4 statements duplicated from src/B.hx:501 - extract a shared helper')
-		]);
+		final before: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(4, 'src/B.hx', 501))]);
 		final after: String = reportOf([
-			record('src/A.hx', 'info', 'duplicate-code', '4 statements duplicated from src/B.hx:501 - extract a shared helper'),
-			record('src/C.hx', 'info', 'duplicate-code', '9 statements duplicated from src/D.hx:12 - extract a shared helper')
+			record('src/A.hx', 'info', 'duplicate-code', crossDup(4, 'src/B.hx', 501)),
+			record('src/C.hx', 'info', 'duplicate-code', crossDup(9, 'src/D.hx', 12))
 		]);
 		final result: LintDiffResult = diff(before, after, '');
 		Assert.equals(1, result.addedTotal, 'duplicate-code findings still reach the diff');
 		Assert.equals(0, result.removedTotal);
 	}
 
-	public function testDuplicateCodeSubstitutionWithinOneFileIsMaskedAway(): Void {
-		// The documented COST of masking every digit run rather than only the
-		// partner line: two duplicate-code findings against the same partner that
-		// differ solely in digits share one key, so swapping one for the other
-		// reports nothing. Measured over the cached baselines, 57% (anyparse) and
-		// 78% (tm) of duplicate-code findings sit in such a merged key. This is a
-		// pin on the current behaviour, not an endorsement — narrowing the mask to
-		// the line number alone is the fix, and this test is what will flip.
-		final before: String = reportOf([
-			record('src/A.hx', 'info', 'duplicate-code', '3 statements duplicated from src/B.hx:110 - extract a shared helper')
-		]);
-		final after: String = reportOf([
-			record('src/A.hx', 'info', 'duplicate-code', '7 statements duplicated from src/B.hx:134 - extract a shared helper')
-		]);
+	public function testDuplicateCodeSubstitutionWithinOneFileIsReported(): Void {
+		// This case READ 0/0 until the mask became anchored. `lint-diff` used to blank every
+		// digit run in a duplicate-code message, which ate the statement count and any digit in
+		// the partner filename as well as the line — 57% (anyparse) and 78% (tm) of that rule's
+		// findings sat in a key shared with a sibling, and swapping one for the other was
+		// invisible to the gate. Anchoring the mask on the message's own tail leaves the count
+		// and the path in the key, which is what makes this pair move.
+		final before: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(3, 'src/B.hx', 110))]);
+		final after: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(7, 'src/B.hx', 134))]);
 		final result: LintDiffResult = diff(before, after, '');
-		Assert.equals(0, result.addedTotal, 'known blind spot: a different duplicate against the same partner is invisible');
-		Assert.equals(0, result.removedTotal);
+		Assert.equals(1, result.addedTotal, 'a different duplicate against the same partner is a different finding');
+		Assert.equals(1, result.removedTotal);
+		final sameCount: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(3, 'src/B.hx', 134))]);
+		Assert.equals(0, diff(before, sameCount, '').addedTotal, 'and the line alone still moves nothing');
 	}
 
 	/**
@@ -170,21 +176,66 @@ class LintDiffTest extends Test {
 	 * that shifted a line.
 	 */
 	public function testUnusedLocalRedeclarationPositionIsMaskedAway(): Void {
-		final before: String = reportOf([
-			record(
-				'src/A.hx', 'warning', 'unused-local',
-				"unused local 'a' - re-declared at 5:3, and every read past that belongs to the second binding"
-			)
-		]);
-		final after: String = reportOf([
-			record(
-				'src/A.hx', 'warning', 'unused-local',
-				"unused local 'a' - re-declared at 8:3, and every read past that belongs to the second binding"
-			)
-		]);
+		final before: String = reportOf([record('src/A.hx', 'warning', 'unused-local', redeclared('a', 5, 3))]);
+		final after: String = reportOf([record('src/A.hx', 'warning', 'unused-local', redeclared('a', 8, 3))]);
 		final result: LintDiffResult = diff(before, after, '');
 		Assert.equals(0, result.addedTotal, 'an edit above the finding must not report it as new');
 		Assert.equals(0, result.removedTotal, 'nor as removed - a disappearing finding is what the gate is for');
+		final renamed: String = reportOf([record('src/A.hx', 'warning', 'unused-local', redeclared('a2', 5, 3))]);
+		Assert.equals(1, diff(before, renamed, '').addedTotal, 'while the local NAME is not a coordinate - v1 and v2 are two findings');
+	}
+
+	/**
+	 * The case this seam was built for: a type's LINE EXTENT drifts under any edit to the
+	 * file, so the gate reported movement on a writer slice whose findings had not moved
+	 * (`WrapList` 4184 -> 4194, and three more, against a total of 2256 versus a base of
+	 * 2256). Both arms are here — the extent alone must not move the key, and the member
+	 * count must.
+	 */
+	public function testOversizedTypeLineExtentIsMaskedAwayButMembersAreNot(): Void {
+		final before: String = reportOf([
+			record('src/W.hx', 'warning', 'oversized-type', oversized('WrapList', '108 members (max 50) and 4184 lines (max 2000)'))
+		]);
+		final reflowed: String = reportOf([
+			record('src/W.hx', 'warning', 'oversized-type', oversized('WrapList', '108 members (max 50) and 4194 lines (max 2000)'))
+		]);
+		final reflow: LintDiffResult = diff(before, reflowed, '');
+		Assert.equals(0, reflow.addedTotal, 'a line-extent drift is not a finding');
+		Assert.equals(0, reflow.removedTotal);
+		final grown: String = reportOf([
+			record('src/W.hx', 'warning', 'oversized-type', oversized('WrapList', '109 members (max 50) and 4184 lines (max 2000)'))
+		]);
+		final growth: LintDiffResult = diff(before, grown, '');
+		Assert.equals(1, growth.addedTotal, 'a member the type gained IS the finding this rule reports');
+		Assert.equals(1, growth.removedTotal);
+	}
+
+	public function testOversizedTypeCrossingTheLineThresholdIsReported(): Void {
+		// The half a mask could silently swallow: a type already over on members that grows
+		// past the LINE limit gains a whole clause, and no amount of digit masking turns the
+		// longer message back into the shorter one. Same for a type that had no finding at
+		// all — it simply appears.
+		final overMembers: String = reportOf([
+			record('src/W.hx', 'warning', 'oversized-type', oversized('WrapList', '108 members (max 50)'))
+		]);
+		final overBoth: String = reportOf([
+			record('src/W.hx', 'warning', 'oversized-type', oversized('WrapList', '108 members (max 50) and 2001 lines (max 2000)'))
+		]);
+		final crossed: LintDiffResult = diff(overMembers, overBoth, '');
+		Assert.equals(1, crossed.addedTotal, 'crossing the line threshold is still reported');
+		Assert.equals(1, crossed.removedTotal);
+		Assert.equals(1, diff(reportOf([]), overBoth, '').addedTotal, 'and a type that was quiet before simply appears');
+	}
+
+	public function testTheIdentityMapIsAskedOfTheRegistryNotOfAList(): Void {
+		// The seam, not the masking: `lint-diff` holds no rule ids at all, so a rule joins by
+		// declaring `VolatileMessage` on itself. Assert both directions — the three declaring
+		// rules are in the map, and a rule that quotes digits which ARE the finding is not.
+		final identities: LintMessageIdentities = Linter.messageIdentities();
+		for (rule in ['duplicate-code', 'unused-local', 'oversized-type'])
+			Assert.notNull(identities[rule], 'a declaring check must reach lint-diff through the registry');
+		for (rule in ['complexity', 'string-literal-dup', 'anon-type-dup', 'magic-number'])
+			Assert.isNull(identities[rule], 'a rule whose digits are the finding must not be normalized');
 	}
 
 	public function testASeverityFlipIsReported(): Void {
@@ -220,7 +271,7 @@ class LintDiffTest extends Test {
 		Assert.equals(2, result.addedTotal);
 	}
 
-	public function testDigitMaskingIsScopedToDuplicateCode(): Void {
+	public function testMaskingIsScopedToDeclaringRules(): Void {
 		final before: String = reportOf([record('src/A.hx', 'warning', 'complexity', 'cyclomatic complexity 21 (max 20)')]);
 		final after: String = reportOf([record('src/A.hx', 'warning', 'complexity', 'cyclomatic complexity 34 (max 20)')]);
 		final result: LintDiffResult = diff(before, after, '');
@@ -230,11 +281,9 @@ class LintDiffTest extends Test {
 
 	public function testRootAlsoStripsThePartnerPathInsideADuplicateCodeMessage(): Void {
 		final before: String = reportOf([
-			record('/repo/src/A.hx', 'info', 'duplicate-code', '4 statements duplicated from /repo/src/B.hx:501 - extract a shared helper')
+			record('/repo/src/A.hx', 'info', 'duplicate-code', crossDup(4, '/repo/src/B.hx', 501))
 		]);
-		final after: String = reportOf([
-			record('src/A.hx', 'info', 'duplicate-code', '4 statements duplicated from src/B.hx:612 - extract a shared helper')
-		]);
+		final after: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(4, 'src/B.hx', 612))]);
 		Assert.equals(1, diff(before, after, '').addedTotal, 'the absolute partner path re-keys the finding without --root');
 		final rooted: LintDiffResult = diff(before, after, '/repo');
 		Assert.equals(0, rooted.addedTotal, '--root reaches the path the message quotes, not only the file field');
@@ -286,7 +335,10 @@ class LintDiffTest extends Test {
 	}
 
 	private static function diff(before: String, after: String, root: String): LintDiffResult {
-		return LintDiff.compare(LintDiff.tally(LintDiff.parseReport(before), root), LintDiff.tally(LintDiff.parseReport(after), root));
+		final identities: LintMessageIdentities = Linter.messageIdentities();
+		return LintDiff.compare(
+			LintDiff.tally(LintDiff.parseReport(before), root, identities), LintDiff.tally(LintDiff.parseReport(after), root, identities)
+		);
 	}
 
 	private static function record(file: String, severity: String, rule: String, message: String): String {
@@ -296,6 +348,34 @@ class LintDiffTest extends Test {
 
 	private static function reportOf(records: Array<String>): String {
 		return '[\n' + records.join(',\n') + '\n]';
+	}
+
+	/**
+	 * The CROSS-FILE `duplicate-code` message, spelled exactly as `DuplicateCode` writes it —
+	 * em dash and full tail included, because the mask is anchored on that tail and a
+	 * paraphrased fixture would silently exercise nothing.
+	 *
+	 * The pin that the wording here still MATCHES the check lives in
+	 * `DuplicateCodeCrossFileCheckTest`, which feeds a message the check itself produced
+	 * through `messageIdentity`; this helper only keeps the plumbing cases realistic.
+	 */
+	private static function crossDup(count: Int, partner: String, line: Int): String {
+		return '$count statements duplicated from $partner:$line — extract a shared helper (report-only, cross-file)';
+	}
+
+	/** The SAME-FILE `duplicate-code` message, spelled as `DuplicateCode` writes it. */
+	private static function sameDup(count: Int, line: Int): String {
+		return '$count statements duplicated from line $line — extract a helper (hxq extract-method)';
+	}
+
+	/** The `unused-local` message with its re-declaration note, spelled as `UnusedLocal` writes it. */
+	private static function redeclared(name: String, line: Int, col: Int): String {
+		return 'unused local \'$name\' — re-declared at $line:$col, and every read past that belongs to the second binding';
+	}
+
+	/** The `oversized-type` message, spelled as `OversizedType` writes it. */
+	private static function oversized(name: String, over: String): String {
+		return 'type \'$name\' has $over — a decomposition candidate (see hxq clusters)';
 	}
 
 }

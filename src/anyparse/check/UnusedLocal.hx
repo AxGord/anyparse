@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
@@ -139,7 +140,14 @@ private typedef ScanCtx = {
  * initializer is reported but left for the author to resolve.
  */
 @:nullSafety(Strict)
-final class UnusedLocal implements Check {
+final class UnusedLocal implements Check implements VolatileMessage {
+
+	/**
+	 * The fragment that precedes the RE-DECLARATION's position in the message — shared by
+	 * `redeclarationNote` and by `messageIdentity`, so the anchor cannot drift away from the
+	 * wording it points at.
+	 */
+	private static inline final REDECLARED_AT: String = ' — re-declared at ';
 
 	public function new() {}
 
@@ -228,6 +236,19 @@ final class UnusedLocal implements Check {
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;
+	}
+
+	/**
+	 * The RE-DECLARATION's position is masked; the local's NAME is not.
+	 *
+	 * The note names where the second binding starts, so any edit above it renames the
+	 * finding while nothing about the finding changed. The mask is anchored on the note's own
+	 * lead-in rather than run over every digit in the message, which is what `lint-diff` did
+	 * before: a blanket mask also collapsed `v1` and `v2` onto one key, so a rename between
+	 * two digit-suffixed locals passed the gate as no movement at all.
+	 */
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskAfter(message, REDECLARED_AT);
 	}
 
 	/**
@@ -387,7 +408,7 @@ final class UnusedLocal implements Check {
 		final span: Null<Span> = redecl.span;
 		if (span == null) return '';
 		final at: Position = span.lineCol(ctx.source);
-		return ' — re-declared at ${at.line}:${at.col}, and every read past that belongs to the second binding';
+		return '$REDECLARED_AT${at.line}:${at.col}, and every read past that belongs to the second binding';
 	}
 
 	/**

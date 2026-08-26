@@ -371,6 +371,21 @@ class UnusedLocalShadowTest extends Test {
 		Assert.isTrue(vs[0].message.contains('re-declared at 4:3'));
 	}
 
+	/**
+	 * The anti-drift pin for `VolatileMessage`: the mask is anchored on the note's own lead-in,
+	 * so a reworded note turns it into a silent no-op and every such finding re-keys on an edit
+	 * ABOVE it — a DISAPPEARING finding, the direction the blast-radius gate exists to catch.
+	 * The input is a message `run` PRODUCED, never a hand-written one.
+	 */
+	public function testMessageIdentityMasksItsOwnRedeclarationPosition(): Void {
+		final check: UnusedLocal = new UnusedLocal();
+		final source: String = 'class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n}';
+		final message: String = check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin())[0].message;
+		final identity: String = check.messageIdentity(message);
+		Assert.equals("unused local 'a' — re-declared at #, and every read past that belongs to the second binding", identity);
+		Assert.equals(identity, check.messageIdentity(identity), 'the normalization is idempotent');
+	}
+
 	/** The autofix deletes the FIRST declaration; the second binding and its read stay. */
 	public function testSameBlockRedeclarationFixDeletesFirst(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = 2;\n\t\treturn a;\n\t}\n}';
