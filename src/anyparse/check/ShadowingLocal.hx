@@ -50,6 +50,13 @@ using Lambda;
  * a local that shares its name with a FIELD is the ordinary Haxe idiom, not a mistake, and
  * reporting it would bury the finding above in noise.
  *
+ * A frame that binds a name into ITSELF — a `for` iterator, a catch exception
+ * (`RefShape.selfScopeDeclKinds`) — is asked too, and asked first. Such a binder is the frame
+ * node's own `name`, not one of its children, so the direct-children walk alone could not see it:
+ * `for (p in xs) { var p = …; }` reported the outer `p` two frames up, and with no outer `p` at
+ * all reported nothing. The message names which one it found — `loop iterator` / `catch binding`
+ * rather than `local` — because that is the information a reader of the finding needs.
+ *
  * A same-block redeclaration (`var q = 1; … var q = 2;` in one statement list) IS reported: the
  * second takes over from its own position, which is the same trap one indent shallower.
  *
@@ -122,6 +129,11 @@ final class ShadowingLocal implements Check {
 		return binding != null && !within(binding, declSpan);
 	}
 
+	/** What to call a binder of `kind` in the message — the two self-scoped families read differently. */
+	private static inline function binderLabel(kind: String, seams: ScopeSeams): String {
+		return kind == seams.catchKind ? 'catch binding' : 'loop iterator';
+	}
+
 	/**
 	 * Walk `node`'s subtree carrying its ANCESTOR chain, reporting every local declaration whose
 	 * name a frame on that chain already binds. `ancestors` is mutated in place and restored on the
@@ -151,10 +163,11 @@ final class ShadowingLocal implements Check {
 	}
 
 	/**
-	 * What `decl`'s name is ALREADY bound to on the ancestor chain — `'parameter'` or `'local'` —
-	 * or null when nothing binds it. Walks inward-out: at every position-scoped frame the frame's
-	 * DIRECT declaration-host children are the candidates, minus the one the walk arrived from, and
-	 * a candidate counts only when it starts before `decl` does. Stops at the first class-like
+	 * What `decl`'s name is ALREADY bound to on the ancestor chain — `'parameter'`, `'local'`,
+	 * `'loop iterator'` or `'catch binding'` — or null when nothing binds it. Walks inward-out: at
+	 * every position-scoped frame the frame's own SELF-SCOPED binder is asked first (`bindsItself`),
+	 * then its DIRECT declaration-host children, minus the one the walk arrived from, and a
+	 * candidate counts only when it starts before `decl` does. Stops at the first class-like
 	 * container, so a field of the same name is never a finding.
 	 */
 	private static function shadowedBinding(decl: QueryNode, ancestors: Array<QueryNode>, seams: ScopeSeams): Null<String> {
@@ -167,6 +180,7 @@ final class ShadowingLocal implements Check {
 			final frame: QueryNode = ancestors[at];
 			if (seams.classLikeKinds.contains(frame.kind)) return null;
 			if (seams.positionScopedKinds.contains(frame.kind)) {
+				if (bindsItself(frame, name, declSpan.from, seams)) return binderLabel(frame.kind, seams);
 				final hidden: Null<String> = declaredIn(frame, arrivedFrom, name, declSpan.from, seams);
 				if (hidden != null) return hidden;
 			}
@@ -174,6 +188,28 @@ final class ShadowingLocal implements Check {
 			at--;
 		}
 		return null;
+	}
+
+	/**
+	 * Whether `frame` is a SELF-SCOPED binder (`RefShape.selfScopeDeclKinds` — a `for` iterator, a
+	 * catch exception) whose own name is `name` and is in effect at `before`.
+	 *
+	 * These bind into the frame they OPEN, so the name sits in the frame node's own `name` slot
+	 * and never appears among its children — which is why the enclosing-frame walk could not see
+	 * one and, in `for (p in xs) { var p = …; }`, named an outer `p` two frames up or, with no
+	 * outer `p` at all, reported nothing. The asymmetry was visible inside ONE construct:
+	 * `for (k => v in m)` puts the VALUE binder in a child node, so `var v` was reported and
+	 * `var k` was not.
+	 *
+	 * `Refs.selfScopeBinderFloor` is the same seam the resolver builds its scope frame from, so the
+	 * two cannot disagree about where the binding starts: it covers the BODY, not the header, and
+	 * `<=` rather than `<` because a brace-less body (`for (p in xs) var p = 1;`) IS the
+	 * declaration and still sits inside the binding. The kind test is NOT redundant with the one
+	 * inside that function: its `0` means both "no such binding" and "from the first byte", and
+	 * `0 <= before` holds for every declaration in the file.
+	 */
+	private static function bindsItself(frame: QueryNode, name: String, before: Int, seams: ScopeSeams): Bool {
+		return frame.name == name && seams.selfScopeKinds.contains(frame.kind) && Refs.selfScopeBinderFloor(frame, seams.shape) <= before;
 	}
 
 	/**
@@ -187,7 +223,15 @@ final class ShadowingLocal implements Check {
 	): Null<String> {
 		for (child in frame.children) if (child != arrivedFrom && child.name == name && seams.declHostKinds.contains(child.kind)) {
 			final span: Null<Span> = child.span;
-			if (span != null && span.from < before) return seams.paramKinds.contains(child.kind) ? 'parameter' : 'local';
+			if (span == null || span.from >= before) continue;
+			// A loop's VALUE binder is a child node while its KEY binder is the frame's own name;
+			// both are the same kind of binding to a reader, so both answer the same word.
+			return if (seams.valueBinderKinds.contains(child.kind))
+				binderLabel(frame.kind, seams);
+			else if (seams.paramKinds.contains(child.kind))
+				'parameter';
+			else
+				'local';
 		}
 		return null;
 	}
@@ -218,10 +262,14 @@ final class ShadowingLocal implements Check {
 	 * hides. The containment test does the other half, keeping a read BETWEEN the two declarations
 	 * (`var a = 1; trace(a); var a = 2;`) from counting.
 	 *
-	 * Note this asks nothing about WHICH binding `shadowedBinding` named. `for (q in xs) { var q =
-	 * h(q); }` consumes the loop iterator, and the enclosing-frame walk names the outer `q` instead
-	 * because it does not model self-scoped binders; gating on that identity would report a
-	 * declaration whose whole shape is the deliberate re-bind.
+	 * Note this asks nothing about WHICH binding `shadowedBinding` named. That was FORCED when the
+	 * gate was written: `for (q in xs) { var q = h(q); }` consumes the loop iterator, and the
+	 * enclosing-frame walk named an outer `q` instead, so identity gating would have reported a
+	 * declaration whose whole shape is the deliberate re-bind — 8 of 9 haxelib findings, measured.
+	 * `bindsItself` closes that gap, so identity gating is no longer unsound for this shape. It is
+	 * still not what runs here: swapping a containment test for an identity one is its own
+	 * decision with its own measurement, and `testRebindGateAcceptsShadowedLoopIterator` pins the
+	 * current answer rather than the reason it was reached.
 	 *
 	 * Nested functions are the one region the resolver is not trusted in — see
 	 * `collectNestedFnSpans`.
@@ -275,6 +323,9 @@ final class ShadowingLocal implements Check {
 			positionScopedKinds: (shape.positionScopedKinds ?? []).concat(shape.branchScopeKinds ?? []),
 			classLikeKinds: RefactorSupport.classLikeContainerKinds(shape),
 			paramKinds: shape.paramKinds ?? [],
+			selfScopeKinds: shape.selfScopeDeclKinds,
+			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
+			catchKind: shape.catchClauseKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			conditionalKind: shape.conditionalMemberKind,
 			nestedFnKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? [])
@@ -291,6 +342,9 @@ private typedef ScopeSeams = {
 	final positionScopedKinds: Array<String>;
 	final classLikeKinds: Array<String>;
 	final paramKinds: Array<String>;
+	final selfScopeKinds: Array<String>;
+	final valueBinderKinds: Array<String>;
+	final catchKind: Null<String>;
 	final opaqueKinds: Array<String>;
 	final conditionalKind: Null<String>;
 	final nestedFnKinds: Array<String>;

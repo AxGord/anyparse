@@ -1188,8 +1188,9 @@ typedef RefShape = {
 	 *
 	 * The opposite direction — a declaration handing its OWN privates to another type (Haxe
 	 * `@:allow`) — is deliberately NOT seamed here yet. It is a different question with a different
-	 * consumer shape: its arguments are unenumerable, so its two readers (`Naming` and
-	 * `RefactorSupport.privateMemberScanIsSound`) only ask whether it is PRESENT, and reaching them
+	 * consumer shape: its arguments are unenumerable, so its ONE reader
+	 * (`RefactorSupport.carriesAllowGrant`, which `Naming` and `privateMemberScanIsSound` both call
+	 * since they drifted apart in what a hit meant) only asks whether it is PRESENT, and reaching it
 	 * means threading a `RefShape` through predicates called once per member. Optional; unset → a
 	 * declaration takes no access it does not already have.
 	 */

@@ -845,7 +845,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `@:keep`, which only keeps the member alive.
 			reflectedDeclMetaName: '@:rtti',
 			// `@:access(T)` lets the CARRIER read T's privates. The mirror tag `@:allow(T)`, which lets T
-			// read the carrier's, is a different question and still spelled by its two readers.
+			// read the carrier's, is a different question and is spelled by its ONE reader,
+			// `RefactorSupport.carriesAllowGrant` — it was two until they drifted apart in what they
+			// claimed about a hit. It has no seam here, and there is no hook to override either: that
+			// function takes a source STRING and hardcodes the literal, so a grammar spelling the tag
+			// differently gets Haxe's. Seaming it is the open item `RefShape` states; the literal in that
+			// function is where the change goes, not this table.
 			takesPrivateAccessMetaName: '@:access',
 			forwardingDeclMetaName: '@:forward',
 			implicitConstructorDeclMetaName: '@:structInit',

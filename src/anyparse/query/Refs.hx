@@ -123,6 +123,33 @@ final class Refs {
 	}
 
 	/**
+	 * The offset from which a SELF-SCOPED binder's own name is in scope: the start of the BODY the
+	 * construct opens, or `0` when `node` opens no such binding.
+	 *
+	 * The constructs are exactly the `selfScopeDeclKinds` ones — a `for`, a catch clause: they
+	 * bind into the frame they open, so `visibleFrom` answers their own span start and would put
+	 * the binding in scope across the header too. Measured against the compiler: `for (i in 0...i)`
+	 * iterates over the OUTER `i`, and renaming that outer binding must therefore rewrite the
+	 * `0...i` operand. A catch clause carries no expression in its header today, which is why it
+	 * never showed the defect; the floor makes that safety structural instead of incidental.
+	 *
+	 * The body is the LAST child in all three projections (`ForStmt` / `ForExpr` / `CatchClause`) —
+	 * the key-value binder and the iterable precede it.
+	 *
+	 * PUBLIC because `shadowing-local` decides from it whether a nested declaration hides the binder,
+	 * and the resolver and that check must not disagree about where the binding starts. `0` is
+	 * OVERLOADED — it means both "no such binding" and "from the very first byte" — so a caller
+	 * comparing against it has to test the kind itself rather than read `0` as a refusal.
+	 */
+	public static function selfScopeBinderFloor(node: QueryNode, shape: RefShape): Int {
+		if (!shape.selfScopeDeclKinds.contains(node.kind)) return 0;
+		final children: Array<QueryNode> = node.children;
+		if (children.length == 0) return 0;
+		final body: Null<Span> = children[children.length - 1].span;
+		return body == null ? 0 : body.from;
+	}
+
+	/**
 	 * Whether `kind` is a member-access slot — `expr.name`, `expr?.name`, `expr!.name`.
 	 * The name there denotes a member of the RECEIVER's type, so a lexical walk has
 	 * nothing to bind it to; every one of these is an occurrence `find` cannot report.
@@ -294,25 +321,12 @@ final class Refs {
 	}
 
 	/**
-	 * `ScopeFrame.visibleFloor` for the frame `node` opens: the start of its BODY when the
-	 * construct both binds a name and spells a HEADER inside its own span, else `0`.
-	 *
-	 * The constructs are exactly the `selfScopeDeclKinds` ones — a `for`, a catch clause: they
-	 * bind into the frame they open, so `visibleFrom` answers their own span start and would put
-	 * the binding in scope across the header too. Measured against the compiler: `for (i in 0...i)`
-	 * iterates over the OUTER `i`, and renaming that outer binding must therefore rewrite the
-	 * `0...i` operand. A catch clause carries no expression in its header today, which is why it
-	 * never showed the defect; the floor makes that safety structural instead of incidental.
-	 *
-	 * The body is the LAST child in all three projections (`ForStmt` / `ForExpr` / `CatchClause`) —
-	 * the key-value binder and the iterable precede it.
+	 * `ScopeFrame.visibleFloor` for the frame `node` opens — `selfScopeBinderFloor` for a
+	 * position-scoped frame, else `0`. A HOISTING frame puts its declarations in scope across its
+	 * whole span by definition, so it has no floor to answer.
 	 */
 	private static function headerFloor(node: QueryNode, shape: RefShape, positionScoped: Bool): Int {
-		if (!positionScoped || !shape.selfScopeDeclKinds.contains(node.kind)) return 0;
-		final children: Array<QueryNode> = node.children;
-		if (children.length == 0) return 0;
-		final body: Null<Span> = children[children.length - 1].span;
-		return body == null ? 0 : body.from;
+		return positionScoped ? selfScopeBinderFloor(node, shape) : 0;
 	}
 
 	private static function collectDeclsMulti(

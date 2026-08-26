@@ -44,6 +44,67 @@ class ShadowingLocalCheckTest extends Test {
 		Assert.equals(1, violations('class C { function f() { var q:Int = 1; function g() { var q:Int = 2; } } }').length);
 	}
 
+	/**
+	 * A `for` iterator binds into the frame it OPENS, so the name sits in the `ForStmt`s own slot
+	 * and never among its children — which the direct-children walk could not see. With no outer
+	 * binding at all this was silence, not a wrong message: the shadow went entirely unreported.
+	 */
+	public function testLoopIteratorShadowFlagged(): Void {
+		final found: Array<Violation> = violations('class C { function f(xs:Array<Int>) { for (q in xs) { var q:Int = 1; trace(q); } } }');
+		Assert.equals(1, found.length);
+		Assert.isTrue(found[0].message.indexOf('loop iterator') != -1, 'expected a loop-iterator finding, got: ${found[0].message}');
+	}
+
+	/** The same for a catch clause, the other self-scoped binder. */
+	public function testCatchBinderShadowFlagged(): Void {
+		final found: Array<Violation> = violations(
+			'class C { function f() { try { g(); } catch (e:String) { var e:Int = 1; trace(e); } } function g() {} }'
+		);
+		Assert.equals(1, found.length);
+		Assert.isTrue(found[0].message.indexOf('catch binding') != -1, 'expected a catch-binding finding, got: ${found[0].message}');
+	}
+
+	/**
+	 * With an outer local of the same name the finding was already reported — it named the WRONG
+	 * binding. The iterator is the one in effect where the declaration sits, and it is nearer, so
+	 * the walk must reach it first. This is the shape T95 measured: 9 haxelib findings gated on
+	 * binding identity, 8 of them this misattribution.
+	 */
+	public function testLoopIteratorOutranksTheOuterLocalItAlsoHides(): Void {
+		final found: Array<Violation> = violations(
+			'class C { function f(xs:Array<Int>) { var q:Int = 1; for (q in xs) { var q:Int = 2; trace(q); } trace(q); } }'
+		);
+		Assert.equals(1, found.length);
+		Assert.isTrue(found[0].message.indexOf('loop iterator') != -1, 'the nearer binding names the finding, got: ${found[0].message}');
+	}
+
+	/**
+	 * One construct held both answers: `for (k => v in m)` puts the VALUE binder in a child node
+	 * and the KEY binder in the frame's own name slot, so `var v` was reported (as a `local`) and
+	 * `var k` was not reported at all. Both are loop binders and both now say so.
+	 */
+	public function testBothLoopBindersOfAKeyValueLoopAreFound(): Void {
+		final found: Array<Violation> = violations(
+			'class C { function f(m:Map<String,Int>) { for (k => v in m) { var k:Int = 1; var v:Int = 2; trace(k + v); } } }'
+		);
+		Assert.equals(2, found.length);
+		for (v in found) Assert.isTrue(v.message.indexOf('loop iterator') != -1, 'both binders answer alike, got: ${v.message}');
+	}
+
+	/**
+	 * The binder covers the BODY, not the header — `for (i in 0...i)` iterates the OUTER `i`,
+	 * measured against the compiler, and `RefactorSupport.selfScopeBinderFloor` is the seam the
+	 * resolver builds its own scope frame from. A declaration in the ITERABLE is outside it.
+	 */
+	public function testLoopBinderIsNotInScopeInItsOwnHeader(): Void {
+		Assert.equals(0, violations('class C { function f() { for (q in { var q:Int = 1; [q]; }) trace(q); } }').length);
+	}
+
+	/** …and the floor is inclusive: a brace-less body IS the declaration, and IS inside the binding. */
+	public function testBracelessLoopBodyIsInsideTheBinding(): Void {
+		Assert.equals(1, violations('class C { function f(xs:Array<Int>) { for (q in xs) var q:Int = 1; } }').length);
+	}
+
 	public function testFinalDeclarationFlagged(): Void {
 		Assert.equals(1, violations('class C { function f() { final q:Int = 1; { final q:Int = 2; } } }').length);
 	}
@@ -119,11 +180,12 @@ class ShadowingLocalCheckTest extends Test {
 
 	public function testRebindGateAcceptsShadowedLoopIterator(): Void {
 		// `for (q in xs) { var q = h(q); }` — the read binds to the ITERATOR, which the declaration
-		// also hides. What the enclosing-frame walk happens to NAME as the shadowed binding is the
-		// outer `q` (it does not model self-scoped binders), so gating on THAT identity would report a
-		// declaration that consumes what it hides. Unlike its three neighbours this one does NOT flip
-		// when the gate is reverted — the identifier walk is silent here too, for its own reason. It
-		// pins the choice of `bindsOutside` over binding identity, nothing else.
+		// also hides. When T95 wrote this the enclosing-frame walk NAMED the outer `q` instead, so
+		// gating on that identity would have reported a declaration that consumes what it hides;
+		// `bindsItself` has since closed that gap and the walk names the iterator. What the gate
+		// asks is unchanged, and so is the answer: a containment test, not an identity one. Unlike
+		// its three neighbours this one does NOT flip when the gate is reverted — the identifier
+		// walk is silent here too, for its own reason.
 		Assert.equals(
 			0,
 			violations(

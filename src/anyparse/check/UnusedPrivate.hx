@@ -168,10 +168,11 @@ final class UnusedPrivate implements Check implements ConfigAware {
 		// unreadable file anywhere silenced this arm for every other.
 		//
 		// Keying on a TYPE name is the alias hole `skippedMayReference`'s own doc warns about — a
-		// file extending a `typedef` of the owner never spells it. That is not a narrowing taken
-		// here: `hasSubtype` does not resolve typedef aliases either, so a PARSEABLE file in that
-		// shape already produces the same finding, and this gate is no weaker than the path beside
-		// it.
+		// file extending a `typedef` of the owner never spells it. `hasSubtype` beside it USED to
+		// share that hole, which is what made the pair look balanced; it now walks the typedef alias
+		// chain (`SymbolIndex.subtypesOf`), so this half is the weaker of the two and the residue is
+		// exact: an UNREADABLE file that extends an alias of the owner. What is left needs the
+		// skipped file's own supertype clause, which is precisely what not parsing it withholds.
 		for (c in ctorCandidates) if (
 			!index.skippedMayReference(c.className) && !index.hasSubtype(c.className) && !isInstantiatedAnywhere(c.className, files)
 			&& !mentionedInStrings(c.className, reflected)

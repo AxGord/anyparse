@@ -872,10 +872,13 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	}
 
 	/**
-	 * Precedence, and it is not a preference. The `@:allow` half is a raw substring scan a COMMENT
-	 * satisfies; the duplicate half is a thing the index knows exactly. Asked grant-first, this
-	 * fixture claimed metadata the file does not carry and buried the cause a reader could act on —
-	 * the split had turned the old sentence\'s hedging `or` into a categorical assertion.
+	 * Precedence, and it is not a preference. The duplicate half is a thing the index knows exactly,
+	 * so it is the cause a reader can act on. When T159 wrote this the `@:allow` half was a raw
+	 * substring scan a COMMENT satisfied, and asked grant-first this fixture claimed metadata the
+	 * file does not carry and buried the actionable cause — the split had turned the old sentence\'s
+	 * hedging `or` into a categorical assertion. The scan is now masked
+	 * (`RefactorSupport.carriesAllowGrant`), so the phantom is gone at the source as well; the order
+	 * still stands, and the assertion below still discriminates it.
 	 *
 	 * The comment is the whole fixture: it must mention `@:allow` and the file must carry none.
 	 */
@@ -891,6 +894,36 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		], 'pkg/C.hx', true);
 		Assert.stringContains('other/C.hx', reason);
 		Assert.isFalse(reason.indexOf('`@:allow`') >= 0, 'a commented-out grant must not answer for a real duplicate, got: $reason');
+	}
+
+	/**
+	 * …and with no duplicate to hide behind, the phantom grant used to be the ONLY answer: an
+	 * otherwise-renameable declaration was refused because its file's own comment spelled the tag.
+	 * A withheld rename reads exactly like a clean tree, so nothing said so.
+	 *
+	 * The REAL grant is the control arm — masking must not stop the gate from firing on metadata that
+	 * is actually there — and a fixture with only the comment arm stays green under either scan.
+	 */
+	public function testAPhantomAllowInACommentDoesNotRefuseACrossFileRename(): Void {
+		final commented: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\n// One day, consider @:allow(pkg.X) here.\nclass C {\n\tprivate var shape:Int;\n'
+					+ '\tpublic function f() { return this.shape; }\n}'
+			},
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
+		];
+		final rename: Array<CrossFileEdits> = crossFileRename(commented);
+		assertRenameSlice(rename, 'pkg/C.hx', commented[0].source, '_shape', 'var shape');
+		assertRenameSlice(rename, 'pkg/D.hx', commented[1].source, '_shape', 'return shape');
+		final real: String = refusalFor([
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\n@:allow(pkg.X)\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}'
+			},
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
+		], 'pkg/C.hx', true);
+		Assert.stringContains('`@:allow`', real);
 	}
 
 	/**

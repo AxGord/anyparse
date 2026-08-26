@@ -682,6 +682,7 @@ import unit.StringLiteralDupCheckTest;
 import unit.StructuralMembershipTest;
 import unit.SuppressionSliceTest;
 import unit.SwallowedExceptionCheckTest;
+import unit.SymbolIndexAliasSliceTest;
 import unit.SymbolIndexSliceTest;
 import unit.SymbolQuerySliceTest;
 import unit.TailMergeCheckTest;
@@ -1138,6 +1139,7 @@ class RunTests {
 		addCase(new MakeFinalSliceTest());
 		addCase(new IntroduceParameterObjectSliceTest());
 		addCase(new SymbolIndexSliceTest());
+		addCase(new SymbolIndexAliasSliceTest());
 		addCase(new StructuralMembershipTest());
 		addCase(new SpanTypeInfoPinTest());
 		addCase(new StdlibDupScanTest());
