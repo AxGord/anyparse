@@ -180,7 +180,8 @@ final class MoveSymbol {
 		//     moved type after the cut, it now needs an import of the new
 		//     path (the type left the file). Destination-file import: if it
 		//     previously imported the type through the old path, that import
-		//     is now redundant (the type is local) and is removed.
+		//     is now redundant (the type is local) and is removed — unless it
+		//     is an ALIAS, whose binding the destination still needs.
 		if (oldImportPath != null) {
 			if (sourceStillUsesType(cursorSource, cut, plugin, typeRefShape, typeName)) {
 				// A module-`private` type is invisible outside its own module, so the
@@ -194,8 +195,24 @@ final class MoveSymbol {
 				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, plugin, newImportPath);
 				if (insert != null) editsFor(editsByFile, cursorFile).push(insert);
 			}
-			for (imp in destInfo.imports) if (imp.raw == oldImportPath)
-				editsFor(editsByFile, destFile).push({ span: removeImportSpan(destSource, imp), text: '' });
+			for (imp in destInfo.imports) if (SymbolIndex.pathImportedBy(imp) == oldImportPath) {
+				// An ALIAS import is not made redundant by the type becoming local — the
+				// destination's own code names it through the ALIAS, and nothing else binds that
+				// name — so it is repointed at the new path rather than deleted. Compiled on
+				// 4.3.7: a module may alias its own sub-type (`import pkg.B.Foo as F;` in
+				// `pkg/B.hx`) and its own MAIN type (`import pkg.B as F;` there).
+				//
+				// A SELF-alias is the exception: `import pkg.A.Foo as Foo;` binds the name the
+				// moved declaration itself now binds, so it is redundant in exactly the way a
+				// plain import is, and repointing it leaves the destination importing its own
+				// type under its own name. It compiles and no rule reports it — which is why it
+				// has to be decided here rather than left to one.
+				final redundant: Bool = imp.kind != ImportKind.Alias || imp.alias == typeName;
+				editsFor(editsByFile, destFile).push(redundant ? { span: removeImportSpan(destSource, imp), text: '' } : {
+					span: imp.span,
+					text: importStatementText(imp, newImportPath, destSource.substring(imp.span.from, imp.span.to))
+				});
+			}
 		}
 
 		// 8-9. Apply edits per file, atomically re-parse, collect changed files.
@@ -450,16 +467,30 @@ final class MoveSymbol {
 
 	/**
 	 * Rewrite an importer's import-statement text to point at
-	 * `newImportPath`, preserving the statement's kind (`import` vs.
-	 * `using`) and its leading keyword spacing. The whole statement span
-	 * is replaced — the original `raw` path is swapped for the new path.
+	 * `newImportPath`, preserving the statement's kind (`import` vs. `using`) and its `as` / `in` alias
+	 * suffix. The whole statement span is replaced and re-emitted with single-space
+	 * separators, so the source's own spacing does NOT survive — only its meaning does.
+	 * `statementText` is that file's own bytes for the span, which is the only place the
+	 * alias spelling is recorded (both forms share one `ImportKind`).
 	 */
-	private static function importStatementText(imp: ImportInfo, newImportPath: String): String {
+	private static function importStatementText(imp: ImportInfo, newImportPath: String, statementText: String): String {
 		final keyword: String = imp.kind == ImportKind.Using ? 'using' : 'import';
-		return '$keyword $newImportPath;';
+		final alias: Null<String> = imp.alias;
+		if (alias == null) return '$keyword $newImportPath;';
+		// The two spellings are interchangeable to the compiler but not to the file's author, and
+		// this rewrite is a repoint, not a restyle — so the statement's own keyword is re-emitted.
+		// `''` means the text did not decode as an alias import; every caller gates on
+		// `pathImportedBy(imp)` matching a path, which an undecodable statement never does, so it
+		// cannot arrive here — `as` is what it would fall back on.
+		final spelling: String = ModuleScan.aliasKeywordOf(statementText);
+		return '$keyword $newImportPath ${spelling == '' ? 'as' : spelling} $alias;';
 	}
 
-	/** `import <path>;` / `using <path>;` text for a carried import. */
+	/** `import <path>;` / `using <path>;` text for a carried import. `raw` IS the path here only
+	 * because `dependencyImportsToCarry` keeps `Import` / `Using` kinds and drops `Alias` — for
+	 * an alias `raw` is the ALIAS, and this would emit `import D;`. A slice that lets an alias
+	 * dependency be carried owes this line `SymbolIndex.pathImportedBy` and the suffix
+	 * `importStatementText` already knows how to write. */
 	private static function importLineFor(imp: ImportInfo): String {
 		final keyword: String = imp.kind == ImportKind.Using ? 'using' : 'import';
 		return '$keyword ${imp.raw};';
@@ -609,8 +640,11 @@ final class MoveSymbol {
 
 	/**
 	 * Repoint every cross-file importer of the moved type: a file (other than the
-	 * destination, which is handled separately) whose import `raw` equals the old
-	 * import path is rewritten to the new path. A no-op when the type had no
+	 * destination, which is handled separately) whose import points at the old
+	 * import path is rewritten to the new path — an `import p.T as U;` among
+	 * them, matched on the path its alias binds and re-emitted with that
+	 * binding intact, since dropping it strands the file on a module that no
+	 * longer defines the type. A no-op when the type had no
 	 * import path or the path is unchanged. Edits are accumulated into
 	 * `editsByFile`.
 	 */
@@ -623,8 +657,14 @@ final class MoveSymbol {
 		for (importer in index.filesImportingModule(oldModule)) if (importer.file != destFile) { // dest handled separately.
 			final importerSource: Null<String> = sourceOf[importer.file];
 			if (importerSource == null) continue;
-			for (imp in importer.imports) if (imp.raw == oldImportPath)
-				editsFor(editsByFile, importer.file).push({ span: imp.span, text: importStatementText(imp, newImportPath) });
+			final src: String = importerSource;
+			// The path an alias statement names is not its `raw` (which is the ALIAS), and the
+			// statement's own text is what tells `as` from `in`.
+			for (imp in importer.imports) if (SymbolIndex.pathImportedBy(imp) == oldImportPath) editsFor(editsByFile, importer.file)
+				.push({
+					span: imp.span,
+					text: importStatementText(imp, newImportPath, src.substring(imp.span.from, imp.span.to))
+				});
 		}
 	}
 
@@ -687,7 +727,13 @@ final class MoveSymbol {
 				final afterIdx: Int = at + path.length;
 				final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(afterIdx));
 				if (!beforeOk || !afterOk) continue;
-				final inImport: Bool = infoNN.imports.exists(imp -> imp.raw == path && at >= imp.span.from && at < imp.span.to);
+				// An ALIAS statement's `raw` is the alias, so the path it spells is `aliasTarget` —
+				// read `raw` here and the statement's own `p.Thing` reads as a fully-qualified CODE
+				// reference, refusing a move over a file that only ever names the type through the
+				// alias, with a message telling its author to add the import they already wrote.
+				final inImport: Bool = infoNN.imports.exists(imp ->
+					SymbolIndex.pathImportedBy(imp) == path && at >= imp.span.from && at < imp.span.to
+				);
 				if (!inImport)
 					return 'cross-package move: "$file" references "$path" by its fully-qualified path — repointing it is unsafe; '
 						+ 'convert it to a bare "$typeName" (with an import) first';

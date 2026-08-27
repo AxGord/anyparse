@@ -138,30 +138,48 @@ class SymbolIndexAliasSliceTest extends Test {
 	}
 
 	/**
-	 * The residue this slice leaves, pinned in the direction it errs. A `#if` region whose
-	 * branches bind ONE alias name to DIFFERENT targets keeps only the FIRST:
-	 * `SymbolIndexBuilder.importDedupKey` keys an alias statement as `alias|<the alias NAME>`,
-	 * so the second branch is dropped as a duplicate, and `importAliasEdges` maps one alias to
-	 * one target rather than to an array. Either mechanism alone would lose it.
+	 * A `#if` region whose branches bind ONE alias name to DIFFERENT targets: every branch is
+	 * followed, not just the first. Two mechanisms used to keep only one of them —
+	 * `SymbolIndexBuilder.importDedupKey` keyed an alias statement as `alias|<the alias NAME>`,
+	 * so the second branch was dropped as a duplicate, and `importAliasEdges` mapped one alias
+	 * to one target rather than to an array. Either alone would still lose it, so the key now
+	 * carries the PATH the statement binds and the edges are an ARRAY.
 	 *
-	 * This is the UNSAFE direction — the other compilation's target is left with no subtype, so
-	 * a private member it reaches is offered for deletion — and it is NOT a regression: before
-	 * `ImportInfo.aliasTarget` existed neither branch was followed. Pinned rather than fixed
-	 * because closing it needs a target-bearing dedup key AND multi-valued edges. A slice that
-	 * closes it should DELETE the `isFalse`, never weaken it.
+	 * The direction that gap erred in was the DELETING one, and it is compile-proved: with
+	 * `#if js import p.First as U; #else import p.Second as U; #end class Both extends U`, the
+	 * non-js compilation is `Both extends Second`, `Second` was reported as having no subtype,
+	 * and `unused-private --fix` removed its private constructor — Haxe 4.3.7 then refused the
+	 * tree with `p.Second does not have a constructor`. The deletion arm of that is pinned in
+	 * `UnusedPrivateCheckTest`; this one pins the index answer both orders round.
 	 */
-	public function testGuardedImportAliasFollowsOnlyTheFirstBranch(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/First.hx', source: 'package pkg;\nclass First {}' },
-			{ file: 'pkg/Second.hx', source: 'package pkg;\nclass Second {}' },
-			{
-				file: 'pkg/Both.hx',
-				source: 'package pkg;\n#if js\nimport pkg.First as U;\n#else\nimport pkg.Second as U;\n#end\nclass Both extends U {}'
-			}
-		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.isTrue(index.hasSubtype('First'), 'the first branch is followed');
-		Assert.isFalse(index.hasSubtype('Second'), 'the second binding of the same alias name is dropped');
+	public function testGuardedImportAliasFollowsEveryBranch(): Void {
+		guardedBranchesBothFollowed('First', 'Second');
+		guardedBranchesBothFollowed('Second', 'First');
+	}
+
+	/**
+	 * Both targets of a `#if` region binding ONE alias name, with `first` in the `#if` branch and
+	 * `second` in the `#else`. Called with the two orders swapped, so a pass cannot come from
+	 * whichever branch happens to be indexed first. The control keeps the whole region and drops
+	 * the `extends`, which leaves a file that binds `U` twice and extends nothing: neither target
+	 * may be reported as subtyped, so a green run cannot come from `hasSubtype` answering true
+	 * for everything.
+	 */
+	private function guardedBranchesBothFollowed(first: String, second: String): Void {
+		final region: String = '#if js\nimport pkg.$first as U;\n#else\nimport pkg.$second as U;\n#end\n';
+		inline function index(bothBody: String): SymbolIndex {
+			return SymbolIndex.build([
+				{ file: 'pkg/First.hx', source: 'package pkg;\nclass First {}' },
+				{ file: 'pkg/Second.hx', source: 'package pkg;\nclass Second {}' },
+				{ file: 'pkg/Both.hx', source: 'package pkg;\n$region$bothBody' }
+			], new HaxeQueryPlugin());
+		}
+		final extending: SymbolIndex = index('class Both extends U {}');
+		Assert.isTrue(extending.hasSubtype(first), '$first (the #if branch) is followed');
+		Assert.isTrue(extending.hasSubtype(second), '$second (the #else branch) is followed');
+		final plain: SymbolIndex = index('class Both {}');
+		Assert.isFalse(plain.hasSubtype(first), '$first is not subtyped without the extends');
+		Assert.isFalse(plain.hasSubtype(second), '$second is not subtyped without the extends');
 	}
 
 }

@@ -625,6 +625,48 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	}
 
 	/**
+	 * A subtype that reaches its supertype through `import p.Owner as O;` must not be left
+	 * reading a backing field the collapse deleted. `affectedSubtypeFiles` ran its own
+	 * `supertypes.contains(parent)` scan over `allFiles()` instead of the index's subtype
+	 * adjacency, so an alias supertype was not a subtype to IT — while `subtypeBlocks` /
+	 * `subtypeFieldBlocks`, which do go through the index, saw the same subtype perfectly well on
+	 * the same tree. The collapse rewrote only the owner and the tree stopped compiling with
+	 * `Unknown identifier : _v` (Haxe 4.3.7); through a written `extends` the same fixture
+	 * rewrote both files and compiled, which is what placed the defect in this check rather than
+	 * in the index.
+	 *
+	 * The invariant asserted is the one the compiler enforces — the subtype may keep its `_active`
+	 * read only while the owner still declares the field — because it holds for BOTH acceptable
+	 * outcomes: rewriting the subtype too, and withholding the collapse. The written-`extends`
+	 * control pins the rewriting one, so a green run cannot come from the check going silent
+	 * everywhere.
+	 */
+	public function testAliasImportedSupertypeLeavesNoDanglingBackingRead(): Void {
+		assertNoDanglingBackingRead(crossFixApply(aliasSubtypeFiles('import p.Owner as O;\n', 'O')));
+		assertNoDanglingBackingRead(crossFixApply(aliasSubtypeFiles('import p.Owner in O;\n', 'O')));
+		final plain: Map<String, String> = crossFixApply(aliasSubtypeFiles('', 'Owner'));
+		assertNoDanglingBackingRead(plain);
+		Assert.isTrue((plain['p/Owner.hx'] ?? '').indexOf('active(default, null):Bool = false') >= 0, 'the control collapses');
+		Assert.isTrue((plain['p/Sub.hx'] ?? '').indexOf('return active;') >= 0, 'the control rewrites the subtype read');
+	}
+
+	/**
+	 * The residue, pinned in the direction it errs. Through an alias the collapse now WITHHOLDS
+	 * rather than rewriting both files, because `classifyOwnerBinding` asks `index.isSubtype`,
+	 * whose `closureContains` walks UP from the subtype's written supertype name and cannot
+	 * resolve an import alias — the mirror of the DOWNWARD gap `subtypesOf` closed. The
+	 * occurrence is then neither renamed nor excluded, so the completeness gate blocks the whole
+	 * collapse. That is the safe direction and not a regression (it used to emit a fix that broke
+	 * the build), but it is not parity with the written-`extends` control above. A slice closing
+	 * the upward alias gap should REPLACE this assertion with the rewrite the control pins, never
+	 * weaken it.
+	 */
+	public function testAliasImportedSupertypeWithholdsRatherThanRewriting(): Void {
+		Assert.equals(0, new TrivialGetter().run(aliasSubtypeFiles('import p.Owner as O;\n', 'O'), new HaxeQueryPlugin()).length);
+		Assert.equals(1, new TrivialGetter().run(aliasSubtypeFiles('', 'Owner'), new HaxeQueryPlugin()).length);
+	}
+
+	/**
 	 * Run the check + `crossFileFix` over `files`, apply every rename's per-file edits (unioned,
 	 * canonicalized), and return the resulting source per file — the in-test equivalent of `apq lint
 	 * --fix`'s cross-file commit. A file with no edits keeps its source.
@@ -655,6 +697,37 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * An owner whose trivial getter bridges `_active`, and a subtype in ANOTHER file that reads
+	 * that field directly. `subImports` is the subtype file's import line (empty for the written
+	 * control) and `superName` the name its `extends` clause spells.
+	 */
+	private function aliasSubtypeFiles(subImports: String, superName: String): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'p/Owner.hx',
+				source: 'package p;\nclass Owner {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+					+ '\tfunction get_active():Bool return _active;\n}'
+			},
+			{
+				file: 'p/Sub.hx',
+				source: 'package p;\n${subImports}class Sub extends $superName {\n\tpublic function peek():Bool return _active;\n}'
+			}
+		];
+	}
+
+	/**
+	 * The subtype may still read `_active` only while the owner still declares it — the shape
+	 * the compiler refuses otherwise.
+	 */
+	private function assertNoDanglingBackingRead(out: Map<String, String>): Void {
+		final owner: String = out['p/Owner.hx'] ?? '';
+		final sub: String = out['p/Sub.hx'] ?? '';
+		Assert.isTrue(
+			sub.indexOf('_active') < 0 || owner.indexOf('_active') >= 0, 'the subtype reads a backing field the owner no longer declares'
+		);
 	}
 
 }

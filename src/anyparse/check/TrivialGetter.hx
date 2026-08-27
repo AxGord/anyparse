@@ -1626,21 +1626,22 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * Every report file that may reference `owner`'s backing field through inheritance: the
-	 * declaring file of each TRANSITIVE subtype of `owner`, plus every file granting itself
-	 * `@:access(owner)`. Deduped, in discovery order.
+			 * Every report file that may reference `owner`'s backing field through inheritance: the
+			 * declaring file of each TRANSITIVE subtype of `owner` (`SymbolIndex.subtypeFiles`), plus
+			 * every file granting itself `@:access(owner)`. Deduped, in discovery order.
+			 *
+			 * The closure is the index's own subtype adjacency, not a `supertypes.contains(parent)` scan
+		of its own. Asking the same question a second way is what broke this: the private
+			 * scan could not follow an `import p.Owner as O;` supertype alias, so `class Child extends O`
+	 * was not an affected file, only the owner was rewritten, and the collapse left the subtype
+	 * naming a field that no longer existed (`Unknown identifier : _v`) — while `subtypeBlocks` /
+	 * `subtypeFieldBlocks`, which go through the index, saw that subtype perfectly well on the
+	 * same tree. Reaching the file is not the same as rewriting it: the occurrence there is
+	 * attributed through `isSubtype`, whose UPWARD walk cannot resolve the alias either, so the
+	 * completeness gate now refuses the collapse instead of half-applying it.
 	 */
 	private static function affectedSubtypeFiles(owner: String, index: SymbolIndex): Array<String> {
-		final out: Array<String> = [];
-		final closure: Array<String> = [owner];
-		var i: Int = 0;
-		while (i < closure.length) {
-			final parent: String = closure[i++];
-			for (fi in index.allFiles()) for (t in fi.types) if (t.supertypes.contains(parent) && !closure.contains(t.name)) {
-				closure.push(t.name);
-				if (!out.contains(fi.file)) out.push(fi.file);
-			}
-		}
+		final out: Array<String> = index.subtypeFiles(owner);
 		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
 		return out;
 	}
