@@ -12,9 +12,9 @@ using Lambda;
  * because the kind carries no associated data.
  *
  *  - `Import` — `import pkg.Module;` / `import pkg.Module.SubType;`.
- *  - `Alias`  — `import pkg.Module as U;` (the original path is NOT
- *    exposed by the grammar — only the alias is in the node's name
- *    slot, a known limitation; `raw` therefore holds the alias).
+ *  - `Alias`  — `import pkg.Module as U;` (the grammar puts only the ALIAS in
+ *    the node's name slot, so `raw` holds the alias; the aliased path is
+ *    decoded out of the statement source into `ImportInfo.aliasTarget`).
  *  - `Wild`   — `import pkg.*;` (the `raw` slot holds `pkg.*`).
  *  - `Using`  — `using pkg.Module;`.
  */
@@ -34,6 +34,17 @@ enum abstract ImportKind(Int) {
  * is the bound alias when the kind is `Alias`, else null; `span` is the
  * statement's source range.
  *
+ * `aliasTarget` is the DOTTED PATH an `Alias` statement binds that alias to —
+ * the half `raw` cannot carry, decoded from the statement source by the one
+ * decoder that reads it (`ModuleScan.aliasTargetOf`). Null for every other
+ * kind and for an alias statement that does not decode. Without it the index
+ * cannot tell that `class C extends U` under `import pkg.Base as U;` is a
+ * subtype of `Base`, and `hasSubtype` answering false is a licence SIX autofix
+ * consumers take to delete or rewrite: `prefer-inline` and `prefer-enum-abstract` read
+ * it directly, and `unused-private` (both arms), `naming` and `unused-parameter` read it
+ * through `RefactorSupport.isPrivateMemberConfined`. Count the seam, not the list — a
+ * new reader of either one inherits the answer.
+ *
  * `guarded` is true when the statement was LIFTED out of a `#if ... #end`
  * region rather than written at the file top level. It participates in type
  * resolution like any other import (it genuinely brings a name into scope
@@ -47,6 +58,7 @@ typedef ImportInfo = {
 	var raw: String;
 	var kind: ImportKind;
 	var alias: Null<String>;
+	var aliasTarget: Null<String>;
 	var span: Span;
 	var guarded: Bool;
 }
@@ -2386,12 +2398,12 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Every indexed type extending / implementing `parent` — under that name or under any TYPEDEF
-	 * ALIAS of it — paired with its declaring file. The memoised form of a full `_files` x `types`
-	 * scan, in the same order that scan visited. Empty when nothing names `parent`. The whole
-	 * adjacency is built on first use; the index is immutable after construction, so one build per
-	 * instance is sound. The returned array is the LIVE bucket, not a copy — read it, never
-	 * mutate it, or the memo is corrupted for every later caller.
+	 * Every indexed type extending / implementing `parent` — under that name or under any
+	 * TYPEDEF or IMPORT alias of it — paired with its declaring file. The memoised form of a
+	 * full `_files` x `types` scan, in the same order that scan visited. Empty when nothing
+	 * names `parent`. The whole adjacency is built on first use; the index is immutable after
+	 * construction, so one build per instance is sound. The returned array is the LIVE bucket,
+	 * not a copy — read it, never mutate it, or the memo is corrupted for every later caller.
 	 *
 	 * The alias walk is not a refinement, it is the difference between an answer and a wrong one.
 	 * `class Bad extends U` where `typedef U = Util` writes `U` in `supertypes`, so keying on the
@@ -2403,19 +2415,33 @@ final class SymbolIndex {
 	 * `hasSubtype`, `subtypeDeclMatches`, `subtypeMemberNames`, `familyDeclaresEveryMember` — so
 	 * the change can only ever WITHHOLD, never propose.
 	 *
-	 * Three alias shapes are closed and the walk is transitive over all of them: one hop
-	 * (`typedef U = Util`), a chain (`typedef A = B; typedef B = Util`), and a target written
-	 * QUALIFIED or living in another module (`typedef C = pkg.Util`), since `aliasTargetNominal`
-	 * is already the simple name. Two are NOT, each for a stated reason:
+	 * Four alias shapes are closed and the walk is transitive over all of them, in either
+	 * order: one hop (`typedef U = Util`), a chain (`typedef A = B; typedef B = Util`), a
+	 * target written QUALIFIED or living in another module (`typedef C = pkg.Util`), since
+	 * `aliasTargetNominal` is already the simple name — and an IMPORT alias
+	 * (`import pkg.Util as U;`), whose path the grammar keeps out of the node entirely and
+	 * which `ImportInfo.aliasTarget` now carries, decoded from the statement source by
+	 * `ModuleScan.aliasTargetOf`. That decoder was already the ONLY one reading an alias
+	 * import's path (the same-named `MapScopeScan.aliasTargetOf` answers about a TYPEDEF's
+	 * underlying, from the AST), so this is its second caller rather than a second copy.
+	 * Import aliases are per-FILE, so the hop is read from the file the SUBTYPE is declared
+	 * in. It is applied to every name in the closure, not only the written one, so a name
+	 * that arrived through ANOTHER file's typedef edge is also offered to this file's
+	 * aliases — an over-approximation, in the withholding direction the paragraph above
+	 * describes. Two shapes are NOT closed:
 	 *
-	 *  - `import pkg.Util as U;` — an alias the index cannot follow at all, because `ImportInfo`
-	 *    records only the alias NAME (the grammar puts nothing else in an `ImportAliasDecl`'s name
-	 *    slot) and never the path it points at. Closing it needs the builder to slice that path out
-	 *    of the declaration's source, which is a decoder `ModuleScan` and `MapScopeScan` already
-	 *    hold a copy of each; adding a third here is the defect this walk exists to stop.
 	 *  - a `#if`-GUARDED `typedef` — `aliasTargetNominal` is deliberately null for one, because
 	 *    every branch projects under one `Conditional` and following the indexed branch would
 	 *    commit to whichever happened to be first and be wrong for the other compilation.
+	 *  - a `#if`-GUARDED IMPORT alias whose branches bind ONE name to DIFFERENT targets
+	 *    (`#if js import pkg.Other as U; #else import pkg.Util as U; #end`). Two mechanisms
+	 *    keep only one of them: `SymbolIndexBuilder.importDedupKey` keys an alias statement
+	 *    as `alias|<the alias NAME>`, so the second branch is dropped as a duplicate, and
+	 *    `importAliasEdges` maps one alias to one target rather than to an array. First
+	 *    branch wins, and the other compilation's target is left with no subtype — measured,
+	 *    swapping the two branches flips the finding. This is the UNSAFE direction and is not
+	 *    a regression: before `aliasTarget` existed NEITHER branch was followed. Closing it
+	 *    means a target-bearing dedup key and multi-valued edges, both out of this walk.
 	 *
 	 * An ABSTRACT over the type (`abstract A(Util)`) is not a gap: Haxe gives it no `extends`, no
 	 * `super()` and no access to the underlying type's privates, so the ctor really is dead there
@@ -2426,21 +2452,30 @@ final class SymbolIndex {
 		if (adjacency == null) {
 			adjacency = [];
 			final aliases: Map<String, Array<String>> = aliasEdges();
-			for (fi in _files) for (t in fi.types) {
-				// A type naming one simple name TWICE (two differently-qualified supertypes reducing to
-				// it) lands in that bucket once — `supertypes.contains` reported it once per scan too.
-				// `named` doubles as the alias walk's worklist AND its cycle guard: a `typedef A = B;
-				// typedef B = A` pair stops when the closure comes back round to a name already filed.
-				final named: Array<String> = [];
-				for (sup in t.supertypes) {
-					var pending: Int = named.length;
-					if (!named.contains(sup)) named.push(sup);
-					while (pending < named.length) {
-						final denoted: String = named[pending++];
-						final bucket: Array<ResolvedType> = adjacency[denoted] ?? [];
-						bucket.push({ file: fi, type: t });
-						adjacency[denoted] = bucket;
-						for (target in aliases[denoted] ?? []) if (!named.contains(target)) named.push(target);
+			for (fi in _files) {
+				// An `import pkg.Util as U;` binds `U` in THIS file and nowhere else, so its hop is
+				// read off the file's own imports rather than from the project-wide `aliasEdges` a
+				// `typedef` earns. It is consulted inside the walk, not only on the written name, so
+				// the two alias kinds compose in either order.
+				final importAliases: Map<String, String> = importAliasEdges(fi);
+				for (t in fi.types) {
+					// A type naming one simple name TWICE (two differently-qualified supertypes reducing to
+					// it) lands in that bucket once — `supertypes.contains` reported it once per scan too.
+					// `named` doubles as the alias walk's worklist AND its cycle guard: a `typedef A = B;
+					// typedef B = A` pair stops when the closure comes back round to a name already filed.
+					final named: Array<String> = [];
+					for (sup in t.supertypes) {
+						var pending: Int = named.length;
+						if (!named.contains(sup)) named.push(sup);
+						while (pending < named.length) {
+							final denoted: String = named[pending++];
+							final bucket: Array<ResolvedType> = adjacency[denoted] ?? [];
+							bucket.push({ file: fi, type: t });
+							adjacency[denoted] = bucket;
+							for (target in aliases[denoted] ?? []) if (!named.contains(target)) named.push(target);
+							final imported: Null<String> = importAliases[denoted];
+							if (imported != null && !named.contains(imported)) named.push(imported);
+						}
 					}
 				}
 			}
@@ -2451,8 +2486,10 @@ final class SymbolIndex {
 
 	/**
 	 * Typedef ALIAS edges across the whole index: an alias declaration's simple name -> every
-	 * simple name it re-points at. NOT memoised, and does not need to be — its one caller is inside
-	 * `subtypesOf`'s `adjacency == null` block, which runs at most once per instance.
+	 * simple name it re-points at, its target's own IMPORT alias in the declaring file included
+	 * (`typedef Hop = L;` beside `import pkg.Leaf as L;` re-points at `Leaf`). NOT memoised,
+	 * and does not need to be — its one caller is inside `subtypesOf`'s `adjacency == null`
+	 * block, which runs at most once per instance.
 	 *
 	 * A name maps to an ARRAY because the index is keyed by simple name and two packages may each
 	 * declare `U`; unioning their targets over-approximates in the same direction the rest of the
@@ -2460,14 +2497,22 @@ final class SymbolIndex {
 	 */
 	private function aliasEdges(): Map<String, Array<String>> {
 		final edges: Map<String, Array<String>> = [];
-		for (fi in _files) for (t in fi.types) {
-			// Null for every non-alias declaration, for an anon-struct typedef (its fields ARE its
-			// members) and for an alias the builder could not read as a nominal path.
-			final target: Null<String> = t.aliasTargetNominal;
-			if (target == null || target == t.name) continue;
-			final bucket: Array<String> = edges[t.name] ?? [];
-			if (!bucket.contains(target)) bucket.push(target);
-			edges[t.name] = bucket;
+		for (fi in _files) {
+			// A `typedef Hop = L;` whose `L` is an `import pkg.Leaf as L;` re-points at `Leaf`. The
+			// alias binds per FILE, so the hop is read where the typedef is WRITTEN — not where its
+			// name is later extended, which is a different file with different imports.
+			final importAliases: Map<String, String> = importAliasEdges(fi);
+			for (t in fi.types) {
+				// Null for every non-alias declaration, for an anon-struct typedef (its fields ARE its
+				// members) and for an alias the builder could not read as a nominal path.
+				final target: Null<String> = t.aliasTargetNominal;
+				if (target == null || target == t.name) continue;
+				final bucket: Array<String> = edges[t.name] ?? [];
+				if (!bucket.contains(target)) bucket.push(target);
+				final imported: Null<String> = importAliases[target];
+				if (imported != null && imported != t.name && !bucket.contains(imported)) bucket.push(imported);
+				edges[t.name] = bucket;
+			}
 		}
 		return edges;
 	}
@@ -2645,6 +2690,29 @@ final class SymbolIndex {
 	 */
 	private static inline function skippedSourceMentions(source: Null<String>, name: String): Bool {
 		return source == null || mentionsWord(source, name);
+	}
+
+	/**
+	 * ONE file's import-alias edges: the alias a `import pkg.Util as U;` statement binds -> the
+	 * SIMPLE name of the path it points at. The import twin of `aliasEdges`, and per-FILE rather
+	 * than project-wide because that is the scope such an alias actually has — a `U` bound in one
+	 * module says nothing about a `U` written in another.
+	 *
+	 * Simple names on both sides: `supertypes` is already reduced that way, and so is every name
+	 * `subtypesOf` is asked about. An alias whose path did not decode carries no edge; a
+	 * self-alias (`import pkg.U as U`, which Haxe accepts) carries none either, since the walk
+	 * already holds that name.
+	 */
+	private static function importAliasEdges(fi: FileInfo): Map<String, String> {
+		final edges: Map<String, String> = [];
+		for (imp in fi.imports) if (imp.kind == ImportKind.Alias) {
+			final alias: Null<String> = imp.alias;
+			final target: Null<String> = imp.aliasTarget;
+			if (alias == null || target == null) continue;
+			final simple: String = RefactorSupport.lastSegment(target);
+			if (simple != alias) edges[alias] = simple;
+		}
+		return edges;
 	}
 
 	/**

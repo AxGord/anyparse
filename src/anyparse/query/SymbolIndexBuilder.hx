@@ -251,16 +251,22 @@ final class SymbolIndexBuilder {
 						raw: name,
 						kind: ImportKind.Import,
 						alias: null,
+						aliasTarget: null,
 						span: span,
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
 					pendingExtern = false;
 				case 'ImportAliasDecl', 'ImportAliasInDecl':
+					// The grammar's name slot for these two kinds is the ALIAS; the aliased path is
+					// only in the statement text, so it is decoded there — through the project's one
+					// decoder of that text, rather than a second spelling of the same scan.
+					final target: String = ModuleScan.aliasTargetOf(source.substring(span.from, span.to));
 					imports.push({
 						raw: name,
 						kind: ImportKind.Alias,
 						alias: name,
+						aliasTarget: target == '' ? null : target,
 						span: span,
 						guarded: gn.guarded
 					});
@@ -271,6 +277,7 @@ final class SymbolIndexBuilder {
 						raw: name,
 						kind: ImportKind.Wild,
 						alias: null,
+						aliasTarget: null,
 						span: span,
 						guarded: gn.guarded
 					});
@@ -281,6 +288,7 @@ final class SymbolIndexBuilder {
 						raw: name,
 						kind: ImportKind.Using,
 						alias: null,
+						aliasTarget: null,
 						span: span,
 						guarded: gn.guarded
 					});
