@@ -96,8 +96,9 @@ private enum LastEmit {
 	`s.length` when it ends in neither. `0` means the whole string is blank.
 
 	A String scan rather than a rendering step, so it sits at module level
-	instead of on `Renderer` — where it would also be the member that pushes
-	the type past its size cap.
+	instead of on `Renderer` — which is already at the 50-member cap
+	`oversized-type` enforces, so a 51st would report on top of the
+	line-count warning that type has carried for a while.
 **/
 private function trailBlankStart(s: String): Int {
 	var i: Int = s.length;
@@ -2546,44 +2547,54 @@ class Renderer {
 	 * flushing any pending indent. A no-op when nothing is pending.
 	 */
 	private static function flushOptSpace(ctx: RenderCtx): Void {
-		if (ctx.pendingOptSpace == null) return;
+		// Captured, not re-read: a field does not stay narrowed across the call
+		// below, and Strict is right to say so.
+		final space: Null<String> = ctx.pendingOptSpace;
+		if (space == null) return;
 		// A held trailing blank run was emitted BEFORE this optional space, so it
 		// has to reach the buffer first. Every path that commits an optional space
 		// goes through here, which is what keeps the two slots ordered without each
 		// caller knowing about both.
-		flushTrailBlank(ctx);
+		commitTrailBlank(ctx, space);
 		if (ctx.pendingIndent >= 0) {
 			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 			ctx.pendingIndent = -1;
 		}
-		ctx.buf.add(ctx.pendingOptSpace);
-		ctx.col += ctx.pendingOptSpace.length;
+		ctx.buf.add(space);
+		ctx.col += space.length;
 		ctx.pendingOptSpace = null;
 		ctx.lastEmit = Other;
 	}
 
 	/**
-	 * Commit the blank run held back from the last non-verbatim `Text`.
+	 * Commit — or drop — the blank run held back from the last non-verbatim
+	 * `Text`, deciding by `next`: the bytes about to follow it.
 	 *
-	 * Called by every path that is about to append real content to the
-	 * buffer, so the held bytes land in their original position; the line
-	 * breaks call `ctx.pendingTrailBlank = null` instead, which is the whole
-	 * mechanism — a trailing space only disappears when a newline is what
-	 * follows it.
+	 * `next` opening with a newline ENDS the line the run sits on, so the run
+	 * goes, exactly as it goes at the four sites that write `ctx.lineEnd`.
+	 * Keeping that test here rather than at each caller is what stops a fifth
+	 * line end being invented without it: a flat `Line('\n')` emits its own
+	 * newline as ordinary text, and a conditional-compilation splice arrives
+	 * as a `Text` that opens with one. Anything else puts the bytes back
+	 * exactly where they were.
+	 *
+	 * A caller that appends NOTHING must not call this at all — the run stays
+	 * held for the next break to decide.
 	 *
 	 * The indent flush mirrors `flushOptSpace`: a run held from a leaf that
 	 * committed no visible body (an all-blank `Text`) leaves `pendingIndent`
 	 * standing, so the indent still has to precede these bytes.
 	 */
-	private static function flushTrailBlank(ctx: RenderCtx): Void {
+	private static function commitTrailBlank(ctx: RenderCtx, next: String): Void {
 		final held: Null<String> = ctx.pendingTrailBlank;
 		if (held == null) return;
+		ctx.pendingTrailBlank = null;
+		if (next.fastCodeAt(0) == '\n'.code) return;
 		if (ctx.pendingIndent >= 0) {
 			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 			ctx.pendingIndent = -1;
 		}
 		ctx.buf.add(held);
-		ctx.pendingTrailBlank = null;
 	}
 
 	/**
@@ -2651,7 +2662,7 @@ class Renderer {
 		// the writer reproduces it, it is not the writer's to trim.
 		final bodyEnd: Int = verbatim ? s.length : trailBlankStart(s);
 		if (bodyEnd > 0) {
-			flushTrailBlank(ctx);
+			commitTrailBlank(ctx, s);
 			flushOptSpace(ctx);
 			if (ctx.pendingIndent >= 0) {
 				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
@@ -2681,10 +2692,12 @@ class Renderer {
 	private static function emitLine(ctx: RenderCtx, f: Frame, flat: String): Void {
 		if (f.forceFlat || f.mode == MFlat) {
 			flushPendingHardline(ctx);
-			// Only real bytes commit the held run: a zero-width flat `Line` writes
-			// nothing, so a blank held before it stays held and the next break can
-			// still drop it.
-			if (flat.length > 0) flushTrailBlank(ctx);
+			// Zero-width flat text writes nothing, so a run held before it stays
+			// held for the next break to decide — but a pending optional space
+			// still commits it, because `flushOptSpace` goes through the same
+			// helper. A flat `Line('\n')` lands here too, and `commitTrailBlank`
+			// is what recognises its own text as a line end.
+			if (flat.length > 0) commitTrailBlank(ctx, flat);
 			flushOptSpace(ctx);
 			if (flat.length > 0 && ctx.pendingIndent >= 0) {
 				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);

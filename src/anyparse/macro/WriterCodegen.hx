@@ -411,6 +411,11 @@ class WriterCodegen {
 	private static function docHelperFields(): Array<Field> {
 		return [
 			docHelper('_dt', [{ name: 's', type: macro :String }], macro anyparse.core.Doc.Text(s)),
+			// `_dt`'s VERBATIM sibling — the bytes are the author's, so the
+			// renderer may not trim a trailing blank off them. The comment
+			// helpers below emit through it; every other generated `_dt` is
+			// writer syntax by construction.
+			docHelper('_dtv', [{ name: 's', type: macro :String }], macro anyparse.core.Doc.Text(s, true)),
 			docHelper('_dop', [{ name: 's', type: macro :String }], macro anyparse.core.Doc.OptSpace(s)),
 			docHelper('_dc', [{ name: 'items', type: macro :Array<anyparse.core.Doc> }], macro anyparse.core.Doc.Concat(items)),
 			docHelper('_dn', [
@@ -1977,11 +1982,11 @@ class WriterCodegen {
 	private static function leadingCommentDocRunField(): Field {
 		final body: Expr = macro {
 			final content: String = run[index];
-			if (StringTools.startsWith(content, '//')) return _dt(lineCommentStr(run, index, opt));
-			if (!StringTools.startsWith(content, '/*')) return _dt(content);
-			if (content.indexOf('\n') < 0) return _dt(content);
+			if (StringTools.startsWith(content, '//')) return _dtv(lineCommentStr(run, index, opt));
+			if (!StringTools.startsWith(content, '/*')) return _dtv(content);
+			if (content.indexOf('\n') < 0) return _dtv(content);
 			final _block = opt.blockCommentAdapter;
-			return _block == null ? _dt(content) : _block(content, opt);
+			return _block == null ? _dtv(content) : _block(content, opt);
 		};
 		return {
 			name: 'leadingCommentDocRun',
@@ -2012,7 +2017,7 @@ class WriterCodegen {
 	 * rewrite the leading and verbatim variants apply.
 	 */
 	private static function trailingCommentDocField(): Field {
-		final body: Expr = macro return _dt(' ' + lineCommentStr(['//' + content], 0, opt));
+		final body: Expr = macro return _dtv(' ' + lineCommentStr(['//' + content], 0, opt));
 		return {
 			name: 'trailingCommentDoc',
 			access: [APrivate, AStatic],
@@ -2046,7 +2051,7 @@ class WriterCodegen {
 	 * style trailing (`/* foo *\/`) passes through unchanged.
 	 */
 	private static function trailingCommentDocVerbatimField(): Field {
-		final body: Expr = macro return _dt(' ' + lineCommentStr([content], 0, opt));
+		final body: Expr = macro return _dtv(' ' + lineCommentStr([content], 0, opt));
 		return {
 			name: 'trailingCommentDocVerbatim',
 			access: [APrivate, AStatic],

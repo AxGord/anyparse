@@ -345,19 +345,23 @@ enum Doc {
 	 * end. A verbatim leaf is written whole, always.
 	 *
 	 * Omitted means syntax, because syntax is what nearly every `Text`
-	 * in the tree is. The mark set is one call — `D.verbatim` over the
-	 * Doc `BlockCommentNormalizer` hands back — where marking the syntax
-	 * side would be an open-ended sweep over every `kwLead`, separator
-	 * and delimiter in the writer; that sweep was measured and refused
-	 * (three `kwLead` sites split producer-side moved none of the nine
-	 * offending lines, and `kwLead` has fourteen more binding sites).
+	 * in the tree is. The whole mark set is the comment emitters —
+	 * `D.verbatim` over the Doc `BlockCommentNormalizer` hands back, and
+	 * `WriterCodegen`'s three comment helpers via `_dtv` — where marking
+	 * the syntax side would be an open-ended sweep over every `kwLead`,
+	 * separator and delimiter in the writer; that sweep was measured and
+	 * refused (three `kwLead` sites split producer-side moved none of the
+	 * nine offending lines, and `kwLead` has fourteen more binding sites).
 	 *
-	 * The OTHER comment path — `WriterCodegen`'s line-comment helpers —
-	 * needs no mark, and that is a fact about `LineCommentNormalizer`,
-	 * not about the leaf: it rtrims every `//` body before a Doc exists,
-	 * so such a leaf cannot end in a blank. `WriterTrailingWhitespaceTest`
-	 * pins that, because it is what would have to change first for the
-	 * path to need marking.
+	 * The `_dtv` half is INERT for the Haxe grammar and is not there for
+	 * Haxe: `LineCommentNormalizer` rtrims every `//` body before a Doc
+	 * exists, so no such leaf can end in a blank, and
+	 * `WriterTrailingWhitespaceTest` pins that rtrim as the reason. It is
+	 * there because a grammar that binds NO `lineCommentAdapter` gets the
+	 * raw captured bytes instead, and `trailingCommentDocGuarded` appends
+	 * an `OptHardlineSkipBeforeHardline` right after them — author bytes
+	 * with a break behind them is exactly the case the flag exists for,
+	 * and grammars are plugins.
 	 *
 	 * The flag is deliberately NOT a separate ctor. Every other `Doc`
 	 * walker — measurement, flattening, the thirteen spine walkers —

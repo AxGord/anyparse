@@ -2,6 +2,7 @@ package unit;
 
 import anyparse.core.Doc;
 import anyparse.core.Renderer;
+import anyparse.format.IndentChar;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import haxe.Exception;
 import utest.Assert;
@@ -10,7 +11,9 @@ import utest.Test;
 using StringTools;
 
 /**
- * The writer must never emit a trailing space, whatever config reaches it.
+ * The writer must never emit a trailing space OF ITS OWN, whatever
+ * config reaches it — the author's own bytes are a separate question,
+ * and the second half of this file is what keeps the two apart.
  *
  * Four Doc leaves used to break that: `', '`, `': '`, `'return '` and
  * `'macro '` — each a hard `Text` carrying its OWN separator space, emitted
@@ -205,6 +208,39 @@ class WriterTrailingWhitespaceTest extends Test {
 	/** …including when an all-blank leaf arrives between the two. */
 	public function testAllBlankLeafKeepsAPendingOptSpaceOrdered(): Void {
 		Assert.equals('aX  b', Renderer.render(Doc.Concat([Doc.Text('a'), Doc.OptSpace('X'), Doc.Text('  '), Doc.Text('b')]), 80));
+	}
+
+	/**
+	 * The fourth way to reach a line end, and the one that does not write
+	 * `ctx.lineEnd`: `D.hardline()` IS `Line('\n')`, and inside a `Flatten`
+	 * region a `Line` takes the FLAT branch, where the flat text is the
+	 * newline itself. Committing the held run there would strand it exactly
+	 * as the three `ctx.lineEnd` paths would.
+	 */
+	public function testFlatLineWhoseTextIsANewlineDropsTheSpaceItStrands(): Void {
+		Assert.equals('a,\nb', Renderer.render(Doc.Flatten(Doc.Concat([Doc.Text('a, '), Doc.Line('\n'), Doc.Text('b')])), 80));
+	}
+
+	/**
+	 * A `Text` can carry its own newline — a conditional-compilation splice
+	 * renders as one, which is why `Renderer.embeddedLineWidths` exists. The
+	 * run held before such a leaf is stranded on the line that newline ends.
+	 */
+	public function testLeafOpeningWithANewlineDropsTheSpaceItStrands(): Void {
+		Assert.equals('a,\nb', Renderer.render(Doc.Concat([Doc.Text('a, '), Doc.Text('\nb')]), 80));
+	}
+
+	/**
+	 * `indentation.trailingWhitespace` asks for a blank line to carry its
+	 * block's indent; it does not ask for a stranded separator to survive.
+	 * The all-blank-leaf path is what leaves `pendingIndent` standing for
+	 * that guard to act on, so this is the case that pins it — under the
+	 * default `false` the same document must lose the indent too.
+	 */
+	public function testIndentedBlankLineCarriesItsIndentAndNotTheHeldRun(): Void {
+		final doc: Doc = Doc.Nest(2, Doc.Concat([Doc.Text('a'), Doc.Line('\n'), Doc.Text('  '), Doc.Line('\n'), Doc.Text('b')]));
+		Assert.equals('a\n  \n  b', Renderer.render(doc, 80, IndentChar.Space, 1, 1, '\n', false, true));
+		Assert.equals('a\n\n  b', Renderer.render(doc, 80));
 	}
 
 	private function write(source: String): String {
