@@ -1,6 +1,5 @@
 package unit;
 
-import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.SharedParseTier;
 import utest.Assert;

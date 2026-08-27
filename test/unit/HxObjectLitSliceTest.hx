@@ -2,7 +2,6 @@ package unit;
 
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxObjectFieldBody;
-import anyparse.grammar.haxe.HxObjectLit;
 import anyparse.grammar.haxe.HxVarDecl;
 import utest.Assert;
 

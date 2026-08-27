@@ -1,7 +1,6 @@
 package unit;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxIntersectionClause;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxType;

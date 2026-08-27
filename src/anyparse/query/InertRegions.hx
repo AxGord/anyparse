@@ -9,11 +9,14 @@ import anyparse.runtime.Span;
  * `TypeRefPrinter.canAddImport`, which without it refuses an import on the strength of a word in
  * a doc-comment or an assertion message.
  *
- * NOT for the `unused-*` / rename consumers of that same scan. Masking makes the scan report
- * FEWER references, and there a missed reference DELETES or REBINDS a binding — their
- * conservative direction is the opposite one, and the raw over-counting scan is exactly what
- * protects them. That is why this is a caller-owned mask rather than a change to
- * `referencedInRange`.
+ * NOT for the `unused-*` / rename consumers of that same scan — not WHOLE, at least. Masking makes
+ * the scan report FEWER references, and there a missed reference DELETES or REBINDS a binding, so
+ * the raw over-counting scan is what protects them. That reasoning holds for the LITERAL half
+ * only: `Type.resolveClass('Foo')` reaches a type through a string, and nothing else sees it. It
+ * does not hold for the comment half, and `unused-import` masks comments on its own since
+ * 2026-08-27 (see its class doc for the measurement). That split is why this stays a caller-owned
+ * mask rather than a change to `referencedInRange`: each consumer decides which of the two inert
+ * sources it can afford to ignore.
  *
  * Two sources because the two questions have two exact answers. Comments are TRIVIA — no node
  * carries them — so they come off the lexer (`RefactorSupport.collectCommentRegions`). Literals

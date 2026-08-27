@@ -45,6 +45,36 @@ typedef MoveChange = {
 }
 
 /**
+ * One binding a file already has for a simple type name: the importable path it resolves to, and
+ * whether that binding is the file's OWN module declaration — the half that decides which side of a
+ * collision would silently change meaning, and therefore what the refusal tells its author to do
+ * about it. Asked of the destination and of the source alike, which is why it is not named for
+ * either.
+ */
+typedef NameBinding = {
+	var path: String;
+	var ownModule: Bool;
+}
+
+/**
+ * Outcome of the dependency-import carry — the statements the moved code needs at the
+ * destination, or the reason a move must not happen at all.
+ *
+ * The carry needs an error channel because a bound-name COLLISION is not a missing import it can
+ * work around: the destination already binds that simple name to a different module, and every
+ * way of proceeding changes what some existing code means. Emitting the second binding — what the
+ * op did until 2026-08-27 — is the worst of them, because Haxe resolves the last import and says
+ * nothing: `import b.Dep;` carried into a destination holding `import p.Dep;` compiled clean and
+ * silently retyped the destination's own `new Dep()` from `p.Dep` to `b.Dep`.
+ */
+enum CarryResult {
+
+	CarryOk(lines: Array<String>);
+	CarryErr(message: String);
+
+}
+
+/**
  * Scope-correct, format-preserving move of a TYPE declaration from one
  * file to another within the SAME PACKAGE, fixing imports across a
  * scope. The largest cross-file refactoring op in the query suite — it
@@ -99,7 +129,9 @@ final class MoveSymbol {
 	/** The advisory appended to every successful move. */
 	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a static receiver ('
 		+ 'T.staticMethod()) or a value position are not auto-detected and may need a manual import. A '
-		+ 'cross-package move repoints importers and the source/dest imports; a fully-qualified ' + 'pkg.Type code reference is refused.';
+		+ 'cross-package move repoints importers and the source/dest imports; a fully-qualified pkg.Type code reference is '
+		+ 'refused. The bound-name collision gate reads the SCOPE index, so a name the destination binds outside it — a stdlib '
+		+ 'or top-level type, a package wildcard, a `#if`-guarded import — is not seen and cannot be refused.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -151,9 +183,12 @@ final class MoveSymbol {
 			final fqnErr: Null<String> = crossPackageFqnRefusal(index, sourceOf, oldImportPath, typeName);
 			if (fqnErr != null) return Err(fqnErr);
 		}
-		final carried: Array<String> = dependencyImportLinesToCarry(
-			cursorSource, declSpan, cursorInfo, destInfo, plugin, typeRefShape, typeName
-		);
+		final carried: Array<String> = switch dependencyImportLinesToCarry(
+			cursorSource, declSpan, cursorInfo, destInfo, destSource, index, plugin, typeRefShape, typeName
+		) {
+			case CarryErr(message): return Err(message);
+			case CarryOk(lines): lines;
+		};
 
 		// 6. Compute the new import path the moved type is reached by.
 		final destBasename: String = RefactorSupport.baseNameOf(destFile);
@@ -162,8 +197,14 @@ final class MoveSymbol {
 		// 7. Assemble per-file edits, keyed by file path.
 		final editsByFile: Map<String, Array<{ span: Span, text: String }>> = [];
 
-		// 7a. Cut the decl from the source file.
-		editsFor(editsByFile, cursorFile).push({ span: cut, text: '' });
+		// 7a. Cut the decl from the source file. A decl cut from the END of its module leaves the
+		//     blank line that separated it from the previous declaration standing as the file's
+		//     trailing blank, which `fmt --list` rejects — `declText` is already taken, so the cut
+		//     span widens over that run and the destination is unaffected.
+		editsFor(editsByFile, cursorFile).push({
+			span: isBlank(cursorSource, cut.to, cursorSource.length) ? new Span(blankRunStart(cursorSource, cut.from), cut.to) : cut,
+			text: ''
+		});
 
 		// 7b. Insert the decl (plus carried imports) into the destination.
 		//     The carried imports go at the destination's import region;
@@ -235,32 +276,42 @@ final class MoveSymbol {
 	 * (`SymbolIndex.pathImportedBy`) and the `as` / `in` suffix from the
 	 * statement's own text, so a bound name is never re-spelled twice.
 	 *
-	 * Same-package dependencies are auto-visible at the destination (the
-	 * move is same-package), so an `import` for them is neither present
-	 * in the source's explicit set in a way that resolves to a different
-	 * module, nor needed — only the source's genuine cross-module
-	 * explicit imports are carried.
+	 * Same-package dependencies are auto-visible at the destination (the move is same-package), so
+	 * an `import` for them is neither present in the source's explicit set in a way that resolves
+	 * to a different module, nor needed — only the source's genuine cross-module explicit imports
+	 * are carried.
+	 *
+	 * A carry is REFUSED, not performed, when the destination already binds that simple name to a
+	 * different module. Three shapes, all measured on the base engine at 11f22a25, all compiled and
+	 * run to a CHANGED runtime class with rc 0 and no diagnostic: the destination module declares
+	 * the name itself (its own type wins over any import, so the MOVED code silently rebinds to
+	 * it); the destination imports the name from elsewhere (Haxe resolves the last import, so the
+	 * DESTINATION's code silently rebinds to the carried module); and a sibling module of the
+	 * destination's package declares it (an import beats same-package visibility, same rebind).
+	 * The alias spelling is the same defect in different clothes — `import q.Thing as D;` carried
+	 * next to `import r.Thing as D;` produced the identical rebind — and one gate on the BOUND
+	 * name covers both. The destination-side reference test over-counts (a name in a comment or a
+	 * string reads as a use), which is the conservative direction for a refusal.
 	 */
 	public static function dependencyImportLinesToCarry(
-		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
-		typeName: String
-	): Array<String> {
-		final typeRefTree: QueryNode = plugin.parseFileTypeRefs(source);
-		// Distinct dependency names referenced in a type position inside
-		// the decl. Walk every type-ref hit and keep those inside the span.
+		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, index: SymbolIndex,
+		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
+	): CarryResult {
 		final depNames: Array<String> = [];
-		function collectDeps(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			final span: Null<Span> = node.span;
-			if (
-				name != null && span != null && typeRefShape.typeRefKinds.contains(node.kind) && span.from >= declSpan.from
-				&& span.to <= declSpan.to && name != typeName && !depNames.contains(name)
-			)
-				depNames.push(name);
-			for (c in node.children) collectDeps(c);
-		}
-		collectDeps(typeRefTree);
+		collectDependencyNames(plugin.parseFileTypeRefs(source), declSpan, typeRefShape, typeName, depNames);
+		// A declaration's own type PARAMETERS stand in the same type positions its dependencies do, and
+		// shadow every module-level binding of that name INSIDE it — so pricing one asks about a type
+		// the moved code never means. `class Moved<Key>` beside a `p/Key.hx` refused a move that was
+		// correct. The enclosing type is found by span containment, which is also what makes this work
+		// for `move-member`, where `declSpan` is a member's and the parameters are the type's.
+		// METHOD-level parameters are not in the index and stay priced; that residue costs a refusal,
+		// never a silent rebind.
+		for (t in cursorInfo.types) if (t.span.from <= declSpan.from && t.span.to >= declSpan.to) for (param in t.typeParamNames)
+			depNames.remove(param);
 
+		// One copy of the file list for the whole carry — `allFiles()` copies, and the binding walk
+		// runs once per dependency name on each side.
+		final files: Array<FileInfo> = index.allFiles();
 		final carried: Array<String> = [];
 		for (dep in depNames) {
 			// The source's explicit TOP-LEVEL statement that BINDS `dep` — for a plain import /
@@ -275,19 +326,26 @@ final class MoveSymbol {
 					!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
 					&& SymbolIndex.pathImportedBy(imp) != null && RefactorSupport.lastSegment(imp.raw) == dep
 			);
+			// What the SOURCE means by `dep`: its own explicit import when it has one, else the same
+			// resolution ladder the destination is measured on — a dependency reached by same-package
+			// visibility has no import statement to carry and was therefore never checked at all, which
+			// left the headline defect open through a second route (compile-proved: a bare `Dep` from
+			// `p/Dep.hx` moved into a `p/Host.hx` holding `import r.Dep;` returned `r.Dep` where it had
+			// returned `p.Dep`, rc 0, nothing carried, nothing reported).
+			final wanted: Null<String> = provider != null ? SymbolIndex.pathImportedBy(provider) : bindingOf(dep, cursorInfo, files)?.path;
+			// A binding the destination has and the moved code does not share is the one thing carrying
+			// cannot repair: whichever of the two wins, code that compiled before means a different
+			// type, with no diagnostic anywhere.
+			final collision: Null<String> = wanted == null
+				? null
+				: carryCollision(dep, wanted, destInfo, destSource, files, provider != null);
+			if (collision != null) return CarryErr(collision);
 			if (provider == null) continue;
 			// Already present in the destination → no carry. The PATH is part of the identity: two
 			// alias statements binding one name to different modules share a `raw`, and reading
 			// them as the same statement would silently leave the moved decl on the DESTINATION's
-			// binding instead of its own.
-			//
-			// What it does instead is emit a second binding of that name, which the destination's
-			// own code then resolves to (Haxe takes the last one). That is not a new hazard and not
-			// specific to aliases: measured on the base engine, `import b.Dep;` carried into a
-			// destination holding `import p.Dep;` produces exactly the same pair, so this term makes
-			// the alias behave like the plain import rather than differently from it. Refusing a
-			// bound-name collision outright is the right answer for BOTH kinds and is one change, not
-			// this one — `dependencyImportLinesToCarry` has no error channel to refuse through.
+			// binding instead of its own. The differing-path case no longer reaches here at all —
+			// the collision gate above refuses it, for the plain and the alias spelling alike.
 			final already: Bool = destInfo.imports.exists(
 				imp ->
 					imp.kind == provider.kind && imp.raw == provider.raw
@@ -299,7 +357,7 @@ final class MoveSymbol {
 			final line: String = importLineFor(provider, source);
 			if (!carried.contains(line)) carried.push(line);
 		}
-		return carried;
+		return CarryOk(carried);
 	}
 
 	/**
@@ -317,7 +375,25 @@ final class MoveSymbol {
 		final already: Bool = info.imports.exists(imp -> !imp.guarded && imp.kind == ImportKind.Import && imp.raw == path);
 		if (already) return null;
 		final anchor: ImportAnchor = importAnchor(source, plugin, path);
-		return { span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}import $path;\n' };
+		return { span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}import $path;\n${anchor.trail}' };
+	}
+
+	/**
+	 * The edit that writes a carry list into `destSource`'s import region, or null when there is
+	 * nothing to carry — the ONE spelling of that edit, because `MoveSymbol` and `MoveMember` had
+	 * grown a byte-identical copy each and both had to change in lockstep the moment `ImportAnchor`
+	 * gained `trail`. The lines land under the anchor with whatever blank lines it says the fresh run
+	 * owes its neighbours; `ImportAnchor`'s own doc holds that ladder.
+	 */
+	public static function carriedImportEdit(
+		destSource: String, carried: Array<String>, plugin: GrammarPlugin
+	): Null<{ span: Span, text: String }> {
+		if (carried.length == 0) return null;
+		final anchor: ImportAnchor = importAnchor(destSource, plugin);
+		return {
+			span: new Span(anchor.offset, anchor.offset),
+			text: '${anchor.lead}${carried.join('\n')}\n${anchor.trail}'
+		};
 	}
 
 	/**
@@ -333,7 +409,118 @@ final class MoveSymbol {
 	 */
 	public static function importAnchor(source: String, plugin: GrammarPlugin, ?path: String): ImportAnchor {
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		return tree == null ? { offset: 0, lead: '', order: -1 } : ImportOrder.insertionFor(source, tree, plugin, path);
+		return tree == null ? {
+			offset: 0,
+			lead: '',
+			trail: '',
+			order: -1
+		} : ImportOrder.insertionFor(source, tree, plugin, path);
+	}
+
+	/**
+	 * What `info`'s file ALREADY means by the simple name `name`, or null when nothing in the indexed
+	 * scope binds it (a stdlib or top-level type, which no scope-limited index can see — the fail-open
+	 * direction, and the one the base engine took for every name).
+	 *
+	 * The order IS Haxe's resolution order, measured on 4.3.7 rather than read off the spec: a type the
+	 * file's own module declares beats an import (a carried import placed next to it is inert, and the
+	 * moved code binds to the module's type); an import beats a sibling module of the same package;
+	 * among imports the LAST one wins, which is why the fold keeps the last match instead of the first.
+	 * A `#if`-guarded import is skipped — it binds the name in some configurations only, and a carry
+	 * that is a collision in one build and not in another is not a question this seat can answer.
+	 *
+	 * Asked of the DESTINATION it says what a carried import would collide with; asked of the SOURCE it
+	 * says what the moved code means today, which is the only way to price a dependency the source
+	 * reaches with no import statement at all.
+	 */
+	private static function bindingOf(name: String, info: FileInfo, files: Array<FileInfo>): Null<NameBinding> {
+		for (t in info.types) if (t.name == name) return { path: t.isMain ? info.module : '${info.module}.${t.name}', ownModule: true };
+		var imported: Null<String> = null;
+		for (imp in info.imports) if (!imp.guarded && RefactorSupport.lastSegment(imp.raw) == name) {
+			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
+			if (path != null) imported = path;
+		}
+		if (imported != null) return { path: imported, ownModule: false };
+		// `isMain` FILTERS here, where in the branch above it only spells the path: a sibling module's
+		// SUB-module type is not visible by simple name from another file of the package — this file's
+		// own header proves it, importing `SymbolIndex.ImportKind` from its own package — so counting
+		// one was a refusal against a binding that does not exist. Compile-proved: a file naming `Dep`
+		// beside a sibling `p/Other.hx` declaring a secondary `Dep` is `Type not found : Dep` on 4.3.7,
+		// and this used to refuse a move over it.
+		for (fi in files) if (fi.pkg == info.pkg && fi.file != info.file) for (t in fi.types) if (t.name == name && t.isMain)
+			return { path: fi.module, ownModule: false };
+		return null;
+	}
+
+	/**
+	 * Whether the destination's own code names `name` outside its import statements — the test that
+	 * decides whether a differing binding is OBSERVABLE there. `RefactorSupport`'s raw scan is
+	 * deliberate: it counts a mention in a comment or a string literal as a use, so the gate refuses
+	 * a move it cannot prove harmless rather than performing one it cannot prove safe.
+	 */
+	private static function referencedInDest(destSource: String, destInfo: FileInfo, name: String): Bool {
+		return RefactorSupport.referencedUnqualifiedInRange(
+			destSource, name, 0, destSource.length, [for (imp in destInfo.imports) imp.span],
+			RefactorSupport.collectCommentRegions(destSource)
+		);
+	}
+
+	/**
+	 * The reason a dependency must NOT follow the moved declaration into the destination, or null when
+	 * nothing about it changes meaning. A collision is a binding the destination already has for the
+	 * same simple name, resolving to a different module.
+	 *
+	 * Which SIDE silently moves decides both whether the collision is observable at all and what its
+	 * author has to do about it, so there is one sentence per arm rather than one for the gate.
+	 * `carried` says whether there is an import statement to bring along: without one the moved code
+	 * takes the destination's own resolution and always moves; with one the carried line wins over
+	 * everything except a type the destination module declares itself, so the side that moves is the
+	 * destination's own code — and only when it names `dep`.
+	 */
+	private static function carryCollision(
+		dep: String, wanted: String, destInfo: FileInfo, destSource: String, files: Array<FileInfo>, hasProvider: Bool
+	): Null<String> {
+		final standing: Null<NameBinding> = bindingOf(dep, destInfo, files);
+		if (standing == null || standing.path == wanted) return null;
+		final head: String = 'the moved code reaches "$dep" as $wanted, and ${destInfo.file} ';
+		return if (!hasProvider)
+			// Nothing to carry — the source reaches `dep` with no import statement, so at the
+			// destination the moved code takes the DESTINATION's ladder. Always observable: the moved
+			// declaration references `dep` by construction, which is why it is in the dependency set.
+			'${head}resolves "$dep" to ${standing.path} instead, and the source binds it with no import to carry — so the moved '
+				+ 'code would silently rebind to ${standing.path}; import it explicitly at the source first, or move the dependency too';
+		else if (standing.ownModule)
+			// A type the destination MODULE declares beats every import, so the carried line would be
+			// inert and the MOVED code is the side that changes meaning — true whether or not the
+			// destination names `dep` anywhere, which is why this arm does not ask.
+			'${head}declares "$dep" itself (${standing.path}) — a module\'s own type wins over an import, so carrying the import '
+				+ 'would silently rebind the moved code to ${standing.path}; rename one of the two, or move the dependency too';
+		else if (referencedInDest(destSource, destInfo, dep))
+			// An import or a same-package sibling loses to the carried line instead, so the side that
+			// changes meaning is the destination's own code — and only if it names `dep` at all.
+			'${head}already binds "$dep" to ${standing.path} — Haxe resolves the last import, so carrying the import would '
+				+ 'silently rebind that file\'s own references from ${standing.path} to $wanted; alias one of the two imports, or '
+				+ 'qualify the references';
+		else
+			null;
+	}
+
+	/**
+	 * Append to `out` the distinct names `node`'s subtree references in a TYPE position INSIDE
+	 * `declSpan` — the moved declaration's dependency set, minus the declaration's own name. Walks
+	 * every hit of the type-ref projection and keeps the ones the span contains.
+	 */
+	private static function collectDependencyNames(
+		node: QueryNode, declSpan: Span, typeRefShape: TypeRefShape, typeName: String, out: Array<String>
+	): Void {
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (
+			name != null && span != null && typeRefShape.typeRefKinds.contains(node.kind) && span.from >= declSpan.from
+			&& span.to <= declSpan.to && name != typeName && !out.contains(name)
+		)
+			out.push(name);
+		for (c in node.children) collectDependencyNames(c, declSpan, typeRefShape, typeName, out);
 	}
 
 	/**
@@ -406,6 +593,22 @@ final class MoveSymbol {
 	}
 
 	/**
+	 * The offset of the first byte of the run of BLANK lines that ends at `at` (a line start), or
+	 * `at` itself when the line above carries code. Used to absorb the separator blank line left
+	 * behind when a cut reaches the end of the module and there is no following declaration for it
+	 * to separate.
+	 */
+	private static function blankRunStart(source: String, at: Int): Int {
+		var start: Int = at;
+		while (start > 0) {
+			final prevLineStart: Int = lineStartOf(source, start - 1);
+			if (!isBlank(source, prevLineStart, start - 1)) return start;
+			start = prevLineStart;
+		}
+		return start;
+	}
+
+	/**
 	 * Whether the declaration is module-`private` — a `Private` node inside the
 	 * modifier run `declGroupSpan` folded in, i.e. between `group.from` and the
 	 * declaration's own start. A module-private type is invisible OUTSIDE its own
@@ -433,21 +636,26 @@ final class MoveSymbol {
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 
-		if (carried.length > 0) {
-			final importLines: String = carried.join('\n');
-			final anchor: ImportAnchor = importAnchor(destSource, plugin);
-			// Insert as its own line(s) after the anchor.
-			edits.push({ span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}$importLines\n' });
-		}
+		final carriedEdit: Null<{ span: Span, text: String }> = carriedImportEdit(destSource, carried, plugin);
+		if (carriedEdit != null) edits.push(carriedEdit);
 
 		// Append the decl after the file content. Ensure exactly one blank
 		// line of separation from the prior content.
 		final trimmedEnd: Int = trimTrailingNewlines(destSource);
 		final tail: String = destSource.substring(trimmedEnd);
 		final sep: String = trimmedEnd == 0 ? '' : '\n\n';
-		// Replace the trailing-newline region with: separator + decl +
-		// the file's original trailing newlines (preserve EOF newline).
-		edits.push({ span: new Span(trimmedEnd, destSource.length), text: '$sep$declText$tail' });
+		// The cut span reaches over the decl's own line terminator, so `declText` ends in the
+		// newline the SOURCE file's next line started on. Re-adding the destination's own trailing
+		// newlines on top of it left every destination one blank line longer than canonical — no
+		// gate saw it, because the move op splices spans and never re-emits through the writer.
+		final decl: String = declText.substring(0, trimTrailingNewlines(declText));
+		// The destination's OWN trailing newlines are preserved rather than normalised — a file that
+		// arrived with a blank line at EOF is not this op's to canonicalise — but a destination with
+		// none still gets the one terminator the appended declaration's last line needs, which is
+		// what the untrimmed `declText` used to supply by accident.
+		final eof: String = tail.length > 0 ? tail : '\n';
+		// Replace the trailing-newline region with: separator + decl + that EOF run.
+		edits.push({ span: new Span(trimmedEnd, destSource.length), text: '$sep$decl$eof' });
 
 		return edits;
 	}
@@ -730,7 +938,6 @@ final class MoveSymbol {
 		}
 		return changes.length == 0 ? Err('move of "$typeName" changed nothing') : Ok(changes, ADVISORY);
 	}
-
 
 	/**
 	 * Cross-package refusal: a fully-qualified code reference to the moved

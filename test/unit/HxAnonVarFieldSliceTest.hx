@@ -4,7 +4,6 @@ import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeArg;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;

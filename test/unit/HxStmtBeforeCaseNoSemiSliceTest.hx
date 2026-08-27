@@ -2,7 +2,6 @@ package unit;
 
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxStatement;
 import utest.Assert;
 
 /**

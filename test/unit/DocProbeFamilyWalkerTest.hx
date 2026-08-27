@@ -2,7 +2,6 @@ package unit;
 
 import anyparse.core.Doc;
 import anyparse.format.wrap.BinaryChainEmit;
-import anyparse.format.wrap.MethodChainEmit;
 import anyparse.format.wrap.WrapList;
 import utest.Assert;
 import utest.Test;

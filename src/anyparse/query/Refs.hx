@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.Scope.ScopeBinding;
 import anyparse.query.Scope.ScopeFrame;
 import anyparse.query.Scope.ScopeStack;
 import anyparse.runtime.Span;

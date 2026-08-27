@@ -7,7 +7,6 @@ import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchCase;
 import anyparse.grammar.haxe.HxSwitchStmt;
-import anyparse.grammar.haxe.HxVarNameLit;
 import utest.Assert;
 
 /**

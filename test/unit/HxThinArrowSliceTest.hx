@@ -5,7 +5,6 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxStatement;
-import anyparse.grammar.haxe.HxThinParenLambda;
 import anyparse.grammar.haxe.HxVarDecl;
 import utest.Assert;
 

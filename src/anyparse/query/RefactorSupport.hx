@@ -4679,12 +4679,13 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Index of the closing `quote` of the string opened at `open`, honouring
-	 * `\`-escapes; the source length minus one if unterminated (the caller's `i++`
-	 * then ends the scan).
+	 * Index of the closing `quote` of the string opened at `open`, honouring `\`-escapes and — for the
+	 * INTERPOLATING quote — the `${ … }` holes whose contents are code rather than text; the source
+	 * length minus one if unterminated (the caller's `i++` then ends the scan).
 	 */
 	private static function skipStringLiteral(text: String, open: Int, quote: Int): Int {
 		final n: Int = text.length;
+		final interpolating: Bool = quote == "'".code;
 		var i: Int = open + 1;
 		while (i < n) {
 			final c: Int = text.fastCodeAt(i);
@@ -4692,10 +4693,61 @@ final class RefactorSupport {
 				i += 2;
 				continue;
 			}
+			// A `${ … }` hole is CODE, and Haxe lexes it by brace/quote balancing at any depth — so a
+			// nested literal of the SAME quote inside one closes nothing. Reading `$` as ordinary text
+			// mis-paired the quotes of `'${cond ? '// note' : X}'` and handed the caller a region that
+			// ended mid-expression; `scanLexicalRegions` then lexed the rest as code, and a `//` or
+			// `/*` there opened a comment region over live source. `$$` is the escaped dollar and the
+			// unbraced `$name` shorthand carries no nesting, so only `${` needs the walk.
+			if (interpolating && c == '$'.code && i + 1 < n) {
+				final next: Int = text.fastCodeAt(i + 1);
+				if (next == '$'.code) {
+					i += 2;
+					continue;
+				}
+				if (next == '{'.code) {
+					i = skipInterpolationHole(text, i + 1);
+					continue;
+				}
+			}
 			if (c == quote) return i;
 			i++;
 		}
 		return n - 1;
+	}
+
+	/**
+	 * Offset just past the `}` closing the interpolation hole whose `{` is at `open`, or the source
+	 * length when it is unterminated. Nested braces are counted and a nested string literal is
+	 * skipped whole through `skipStringLiteral`, so the two walk arbitrary depth together — the same
+	 * mutual balancing Haxe's own lexer does for `'${'a ${'b'}'}'`.
+	 */
+	private static function skipInterpolationHole(text: String, open: Int): Int {
+		final n: Int = text.length;
+		var depth: Int = 0;
+		var i: Int = open;
+		while (i < n) {
+			final c: Int = text.fastCodeAt(i);
+			if (c == '"'.code || c == "'".code) {
+				final close: Int = skipStringLiteral(text, i, c);
+				// An unterminated nested literal means the walk has lost the thread — a quote inside a
+				// regex or a comment in the hole, which this scanner does not model. Fail CLOSED: hand
+				// the caller back the `{` so the outer literal falls back to plain quote pairing rather
+				// than swallowing the rest of the file, which would widen a region every consumer reads.
+				if (text.fastCodeAt(close) != c) return open;
+				i = close + 1;
+				continue;
+			}
+			if (c == '{'.code) {
+				depth++;
+			} else if (c == '}'.code) {
+				depth--;
+				if (depth <= 0) return i + 1;
+			}
+			i++;
+		}
+		// Unterminated hole — same fail-closed reading.
+		return open;
 	}
 
 	/**

@@ -62,7 +62,7 @@ final class AddImport {
 		// Exact whitespace is the writer's concern — the canonicalize finalize re-emits the whole file.
 		final edit: { span: Span, text: String } = {
 			span: new Span(anchor.offset, anchor.offset),
-			text: '${anchor.lead}$stmt\n'
+			text: '${anchor.lead}$stmt\n${anchor.trail}'
 		};
 
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
