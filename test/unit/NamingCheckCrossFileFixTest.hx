@@ -311,27 +311,41 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 
 	/**
 	 * An ALIASING decl reaches its target through a link no `extends` / `implements` clause records,
-	 * so its indexed `supertypes` is EMPTY — and an empty closure "excludes" everything. Here the
-	 * subtype reads the inherited field through a receiver typed `Alias`, a `typedef` for the owner
-	 * itself: reading that vacuous closure as a proof of unrelatedness filed a genuine owner-bound
-	 * access under "different owner" and half-applied the rename. The proof must refuse an aliasing
-	 * decl outright, leaving the access uncovered so the completeness gate blocks.
+	 * so its indexed `supertypes` is EMPTY — and an empty closure "excludes" everything. Reading that
+	 * vacuous closure as a proof of unrelatedness filed a genuine owner-bound access under "different
+	 * owner" and half-applied the rename; `closureExcludesFrom` refuses an aliasing decl outright, and
+	 * the ALIEN arm here is what still exercises that refusal: a receiver typed for a typedef of
+	 * ANOTHER class is neither a proven subtype nor a proven stranger, so it stays uncovered and the
+	 * completeness gate blocks.
+	 *
+	 * The OWNER arm used to block for the same reason and no longer does — `isSubtype` now follows a
+	 * typedef hop upward, so `a:Alias` where `typedef Alias = C` is resolved as the owner itself and
+	 * the rename lands in both files. Compile-proved on Haxe 4.3.7 rather than asserted structurally
+	 * alone: `lint --rule naming --fix` over the three files rewrote `C` and `D` (4 edits in 2 files)
+	 * and the result compiles, where the previous engine declined the whole rewrite as incomplete.
 	 */
-	public function testCrossFileFixBlocksOnTypedefAliasedReceiver(): Void {
-		final aliasSrc: String = 'package pkg;\ntypedef Alias = C;';
+	public function testCrossFileFixThroughTypedefAliasedReceiver(): Void {
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(a:Alias) { return a.size; }\n}';
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: AMBIGUITY_OWNER_SRC },
-			{ file: 'pkg/Alias.hx', source: aliasSrc },
-			{ file: 'pkg/D.hx', source: dSrc }
-		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
-		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
-		Assert.equals(0, renames.length);
+		inline function renamesFor(aliasTarget: String): Array<Array<CrossFileEdits>> {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'pkg/C.hx', source: AMBIGUITY_OWNER_SRC },
+				{ file: 'pkg/Other.hx', source: 'package pkg;\nclass Other {\n\tpublic var size:Int = 0;\n}' },
+				{ file: 'pkg/Alias.hx', source: 'package pkg;\ntypedef Alias = $aliasTarget;' },
+				{ file: 'pkg/D.hx', source: dSrc }
+			];
+			final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+			final check: Naming = new Naming();
+			final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+			Assert.equals(1, vs.length);
+			final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+			assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
+			return renames;
+		}
+		final owner: Array<Array<CrossFileEdits>> = renamesFor('C');
+		Assert.equals(1, owner.length, 'a typedef of the OWNER resolves the receiver and the rename lands');
+		assertRenameSlice(owner[0], 'pkg/C.hx', AMBIGUITY_OWNER_SRC, '_size', 'var size');
+		assertRenameSlice(owner[0], 'pkg/D.hx', dSrc, '_size', 'a.size');
+		Assert.equals(0, renamesFor('Other').length, 'a typedef of ANOTHER class proves nothing, so the gate still blocks');
 	}
 
 	/**

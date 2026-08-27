@@ -564,6 +564,39 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
+	 * A dependency the moved declaration reaches ONLY through `import p.Dep as D;` is CARRIED into
+	 * the destination, spelled as the statement that bound it. The carry filter kept `Import` /
+	 * `Using` and dropped `Alias`, so the declaration arrived at a file with no binding for `D`;
+	 * letting the kind through alone would have emitted `import D;`, since `raw` is the ALIAS.
+	 * Compile-proved on Haxe 4.3.7: before, the moved tree stopped at
+	 * `q/Host.hx:11: characters 21-22 : Type not found : D`; after, it compiles.
+	 *
+	 * The `in` spelling is asserted beside `as` — one `ImportKind`, told apart only by the
+	 * statement's own text — and the plain-import dependency is the control that must keep being
+	 * carried exactly as it always was, so a green run cannot come from the carry going silent.
+	 */
+	public function testAliasDependencyIsCarriedIntoTheDestination(): Void {
+		inline function destAfterMove(binding: String, denotes: String): String {
+			return changeFor(okChanges('q/Mover.hx', 5, 7, 'q/Host.hx', [
+				{ file: 'p/Dep.hx', source: 'package p;\n\nclass Dep {}' },
+				{ file: 'q/Mover.hx', source: 'package q;\n\n$binding\n\nclass Mover {\n\tvar d:$denotes;\n}' },
+				{ file: 'q/Host.hx', source: 'package q;\n\nclass Host {}' }
+			]), 'q/Host.hx').newSource;
+		}
+		Assert.isTrue(destAfterMove('import p.Dep as D;', 'D').contains('import p.Dep as D;'), 'the `as` binding is carried whole');
+		Assert.isTrue(destAfterMove('import p.Dep in D;', 'D').contains('import p.Dep in D;'), 'and the `in` spelling is preserved');
+		Assert.isTrue(destAfterMove('import p.Dep;', 'Dep').contains('import p.Dep;'), 'the plain control is carried as before');
+		// The destination already binding the SAME name to the SAME module is the whole effect of
+		// keeping the path in the `already` identity: nothing is carried, so `D` is bound once.
+		final held: String = changeFor(okChanges('q/Mover.hx', 5, 7, 'q/Host.hx', [
+			{ file: 'p/Dep.hx', source: 'package p;\n\nclass Dep {}' },
+			{ file: 'q/Mover.hx', source: 'package q;\n\nimport p.Dep as D;\n\nclass Mover {\n\tvar d:D;\n}' },
+			{ file: 'q/Host.hx', source: 'package q;\n\nimport p.Dep as D;\n\nclass Host {\n\tvar h:D;\n}' }
+		]), 'q/Host.hx').newSource;
+		Assert.equals(1, held.split('import p.Dep as D;').length - 1, 'an identical binding already there is not carried again');
+	}
+
+	/**
 	 * Drive a successful move and return the changes, asserting the result
 	 * is `Ok`, the advisory is present, and every rewrite re-parses (the
 	 * op already validates this; the test makes it explicit by re-parsing

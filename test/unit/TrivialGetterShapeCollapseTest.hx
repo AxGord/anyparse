@@ -651,18 +651,23 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	}
 
 	/**
-	 * The residue, pinned in the direction it errs. Through an alias the collapse now WITHHOLDS
-	 * rather than rewriting both files, because `classifyOwnerBinding` asks `index.isSubtype`,
-	 * whose `closureContains` walks UP from the subtype's written supertype name and cannot
-	 * resolve an import alias — the mirror of the DOWNWARD gap `subtypesOf` closed. The
-	 * occurrence is then neither renamed nor excluded, so the completeness gate blocks the whole
-	 * collapse. That is the safe direction and not a regression (it used to emit a fix that broke
-	 * the build), but it is not parity with the written-`extends` control above. A slice closing
-	 * the upward alias gap should REPLACE this assertion with the rewrite the control pins, never
-	 * weaken it.
+	 * The residue that pin recorded, now closed — REPLACED by the parity it asked for rather than
+	 * weakened. `classifyOwnerBinding` asks `index.isSubtype`, whose walk now reads the same alias
+	 * hops `subtypesOf` reads on the way down, so the subtype's read is a rename edit instead of an
+	 * occurrence the completeness gate blocks on: through an alias the collapse REPORTS and rewrites
+	 * both files, exactly as the written-`extends` control does.
+	 *
+	 * Compile-proved rather than only asserted structurally: `lint --rule trivial-getter --fix` over
+	 * the two files produced 5 edits in 2 files — the control's own figure — and Haxe 4.3.7 accepts
+	 * the rewritten tree. Both spellings, since the grammar projects `in` and `as` alike.
 	 */
-	public function testAliasImportedSupertypeWithholdsRatherThanRewriting(): Void {
-		Assert.equals(0, new TrivialGetter().run(aliasSubtypeFiles('import p.Owner as O;\n', 'O'), new HaxeQueryPlugin()).length);
+	public function testAliasImportedSupertypeRewritesBothFiles(): Void {
+		for (imports in ['import p.Owner as O;\n', 'import p.Owner in O;\n']) {
+			Assert.equals(1, new TrivialGetter().run(aliasSubtypeFiles(imports, 'O'), new HaxeQueryPlugin()).length, imports);
+			final out: Map<String, String> = crossFixApply(aliasSubtypeFiles(imports, 'O'));
+			Assert.isTrue((out['p/Owner.hx'] ?? '').indexOf('active(default, null):Bool = false') >= 0, 'the owner collapses');
+			Assert.isTrue((out['p/Sub.hx'] ?? '').indexOf('return active;') >= 0, 'and the subtype read is rewritten');
+		}
 		Assert.equals(1, new TrivialGetter().run(aliasSubtypeFiles('', 'Owner'), new HaxeQueryPlugin()).length);
 	}
 

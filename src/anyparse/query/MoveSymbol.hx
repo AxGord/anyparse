@@ -151,7 +151,7 @@ final class MoveSymbol {
 			final fqnErr: Null<String> = crossPackageFqnRefusal(index, sourceOf, oldImportPath, typeName);
 			if (fqnErr != null) return Err(fqnErr);
 		}
-		final carried: Array<ImportInfo> = dependencyImportsToCarry(
+		final carried: Array<String> = dependencyImportLinesToCarry(
 			cursorSource, declSpan, cursorInfo, destInfo, plugin, typeRefShape, typeName
 		);
 
@@ -223,11 +223,17 @@ final class MoveSymbol {
 	 * The explicit imports the moved decl's body depends on that the
 	 * destination lacks. A dependency name `D` is a type-position
 	 * reference (`Uses.find` on the `parseFileTypeRefs` tree) whose span
-	 * falls INSIDE the decl's span. For each such `D` that the source
-	 * imports explicitly (kind `Import` / `Using`, not `Wild` / `Alias`)
-	 * via a path whose last dotted segment is `D`, and that the
-	 * destination does not already carry verbatim, the source's
-	 * `ImportInfo` is returned for copying into the destination.
+	 * falls INSIDE the decl's span. For each such `D` the source binds by
+	 * an explicit statement (any kind but `Wild`) whose BOUND name is `D`,
+	 * and that the destination does not already carry verbatim, the
+	 * statement is returned as READY TEXT for the destination.
+	 *
+	 * Text rather than the `ImportInfo`, because two callers used to spell
+	 * that statement themselves and `raw` is the ALIAS for an `Alias` one:
+	 * either would have emitted `import D;` the moment an alias dependency
+	 * became carriable. The path comes from the project's one decoder
+	 * (`SymbolIndex.pathImportedBy`) and the `as` / `in` suffix from the
+	 * statement's own text, so a bound name is never re-spelled twice.
 	 *
 	 * Same-package dependencies are auto-visible at the destination (the
 	 * move is same-package), so an `import` for them is neither present
@@ -235,10 +241,10 @@ final class MoveSymbol {
 	 * module, nor needed — only the source's genuine cross-module
 	 * explicit imports are carried.
 	 */
-	public static function dependencyImportsToCarry(
+	public static function dependencyImportLinesToCarry(
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
 		typeName: String
-	): Array<ImportInfo> {
+	): Array<String> {
 		final typeRefTree: QueryNode = plugin.parseFileTypeRefs(source);
 		// Distinct dependency names referenced in a type position inside
 		// the decl. Walk every type-ref hit and keep those inside the span.
@@ -255,24 +261,43 @@ final class MoveSymbol {
 		}
 		collectDeps(typeRefTree);
 
-		final carried: Array<ImportInfo> = [];
+		final carried: Array<String> = [];
 		for (dep in depNames) {
-			// The source's explicit TOP-LEVEL import that provides `dep` (path's
-			// last segment is `dep`). A guarded (`#if`) provider is skipped: it
-			// would be carried into the destination as an unconditional import,
-			// which could be platform-inappropriate.
+			// The source's explicit TOP-LEVEL statement that BINDS `dep` — for a plain import /
+			// using that is a path whose last segment is `dep`, for an alias it is the alias
+			// itself, and `raw` is exactly the bound name in both. The kinds are listed rather
+			// than `!= Wild`: this writes a statement into ANOTHER file, so a kind nobody has
+			// thought about yet must be refused, not admitted. An alias whose path did not decode
+			// names nothing to carry. A guarded (`#if`) provider is skipped: it would be carried
+			// into the destination as an unconditional import, which could be platform-inappropriate.
 			final provider: Null<ImportInfo> = cursorInfo.imports.find(
 				imp ->
-					!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using)
-					&& RefactorSupport.lastSegment(imp.raw) == dep
+					!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
+					&& SymbolIndex.pathImportedBy(imp) != null && RefactorSupport.lastSegment(imp.raw) == dep
 			);
 			if (provider == null) continue;
-			// Already present in the destination → no carry.
-			final already: Bool = destInfo.imports.exists(imp -> imp.kind == provider.kind && imp.raw == provider.raw);
+			// Already present in the destination → no carry. The PATH is part of the identity: two
+			// alias statements binding one name to different modules share a `raw`, and reading
+			// them as the same statement would silently leave the moved decl on the DESTINATION's
+			// binding instead of its own.
+			//
+			// What it does instead is emit a second binding of that name, which the destination's
+			// own code then resolves to (Haxe takes the last one). That is not a new hazard and not
+			// specific to aliases: measured on the base engine, `import b.Dep;` carried into a
+			// destination holding `import p.Dep;` produces exactly the same pair, so this term makes
+			// the alias behave like the plain import rather than differently from it. Refusing a
+			// bound-name collision outright is the right answer for BOTH kinds and is one change, not
+			// this one — `dependencyImportLinesToCarry` has no error channel to refuse through.
+			final already: Bool = destInfo.imports.exists(
+				imp ->
+					imp.kind == provider.kind && imp.raw == provider.raw
+					&& SymbolIndex.pathImportedBy(imp) == SymbolIndex.pathImportedBy(provider)
+			);
 			if (already) continue;
 			// De-dup the carry list (a single import line could provide more
 			// than one referenced name only via wildcards, which we skipped).
-			if (!carried.exists(c -> c.kind == provider.kind && c.raw == provider.raw)) carried.push(provider);
+			final line: String = importLineFor(provider, source);
+			if (!carried.contains(line)) carried.push(line);
 		}
 		return carried;
 	}
@@ -404,12 +429,12 @@ final class MoveSymbol {
 	 * blank line.
 	 */
 	private static function buildDestInsertEdits(
-		destSource: String, declText: String, carried: Array<ImportInfo>, plugin: GrammarPlugin
+		destSource: String, declText: String, carried: Array<String>, plugin: GrammarPlugin
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 
 		if (carried.length > 0) {
-			final importLines: String = carried.map(importLineFor).join('\n');
+			final importLines: String = carried.join('\n');
 			final anchor: ImportAnchor = importAnchor(destSource, plugin);
 			// Insert as its own line(s) after the anchor.
 			edits.push({ span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}$importLines\n' });
@@ -486,14 +511,22 @@ final class MoveSymbol {
 		return '$keyword $newImportPath ${spelling == '' ? 'as' : spelling} $alias;';
 	}
 
-	/** `import <path>;` / `using <path>;` text for a carried import. `raw` IS the path here only
-	 * because `dependencyImportsToCarry` keeps `Import` / `Using` kinds and drops `Alias` — for
-	 * an alias `raw` is the ALIAS, and this would emit `import D;`. A slice that lets an alias
-	 * dependency be carried owes this line `SymbolIndex.pathImportedBy` and the suffix
-	 * `importStatementText` already knows how to write. */
-	private static function importLineFor(imp: ImportInfo): String {
-		final keyword: String = imp.kind == ImportKind.Using ? 'using' : 'import';
-		return '$keyword ${imp.raw};';
+	/**
+	 * `import <path>;` / `using <path>;` / `import <path> as <alias>;` text for a carried import,
+	 * spelled out of `statementSource` — which MUST be the source of the file `imp` was read from,
+	 * since the `as` / `in` keyword is recovered by slicing `imp.span` out of it. `raw` is the path
+	 * for every kind but `Alias`, where it is the alias, so the path comes from the project's one
+	 * decoder and the suffix from `importStatementText`, which already writes a repointed one.
+	 *
+	 * The undecodable case throws rather than falling back: the value a fallback would produce is
+	 * `import <the alias>;`, the exact line this seam exists to stop emitting, and it would reach
+	 * the destination file silently. The carry filter already drops such a statement, so widening
+	 * that filter without widening this is what the throw is here to catch.
+	 */
+	private static function importLineFor(imp: ImportInfo, statementSource: String): String {
+		final path: Null<String> = SymbolIndex.pathImportedBy(imp);
+		if (path == null) throw new Exception('importLineFor: carried import "${imp.raw}" names no decodable module path');
+		return importStatementText(imp, path, statementSource.substring(imp.span.from, imp.span.to));
 	}
 
 	/** Start offset of the line containing `offset`. */

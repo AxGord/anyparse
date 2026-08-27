@@ -330,6 +330,32 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	/**
+	 * The same subtype-receiver arm when the subtype reaches its base through `import p.Base as B;`.
+	 * `resolvesToSourceType` asks `SymbolIndex.isSubtype`, whose walk could not follow an import
+	 * alias upward, so `s.speak()` was not proven to reach the renamed member and was left standing:
+	 * `apq rename` reported `wrote 1 file(s)` and the tree failed with `p.Derived has no field tag`
+	 * on Haxe 4.3.7 (the same fixture with the classes named `Owner` / `Derived`). It now writes both
+	 * files and compiles. A HALF-applied rename, not a missing finding — which is why this arm sits
+	 * beside the written-`extends` one rather than in a lint test.
+	 */
+	public function testBaseRenameReachesASubtypeBoundThroughAnImportAlias(): Void {
+		final base: String = 'package p;\n\nclass Base {\n\tpublic function new() {}\n\tpublic function speak():Void {}\n}';
+		final sub: String = 'package p;\n\nimport p.Base as B;\n\nclass Sub extends B {\n\tpublic function new() { super(); }\n}';
+		final caller: String = 'package p;\n\nclass C {\n\tfunction m(s:Sub):Void s.speak();\n}';
+		final changes: Array<FileChange> = okChanges('p/Base.hx', base, 'speak', 'talk', [
+			{ file: 'p/Base.hx', source: base },
+			{ file: 'p/Sub.hx', source: sub },
+			{ file: 'p/C.hx', source: caller }
+		]);
+		Assert.equals(2, changes.length, 'the declaration and the caller change, and the subtype is left alone');
+		Assert.equals(
+			'package p;\n\nclass Base {\n\tpublic function new() {}\n\tpublic function talk():Void {}\n}',
+			changeFor(changes, 'p/Base.hx').newSource
+		);
+		Assert.equals('package p;\n\nclass C {\n\tfunction m(s:Sub):Void s.talk();\n}', changeFor(changes, 'p/C.hx').newSource);
+	}
+
+	/**
 	 * A type declaring the same member whose relation to the source type cannot be PROVEN refuses the
 	 * rename outright. `Foreign` extends a type the scope does not declare, so it is neither provably
 	 * family nor provably unrelated — and renaming the base while guessing about it is exactly how a

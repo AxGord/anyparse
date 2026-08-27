@@ -1028,6 +1028,16 @@ final class SymbolIndex {
 	 * MISS, never a false claim of subtyping); not reflexive (`sub == sup` → false — the
 	 * caller decides same-type separately). Names are SIMPLE; a same-named unrelated type
 	 * in the chain is the residual soundness boundary, as in `unrelatedClasses`.
+	 *
+	 * A supertype written through an ALIAS is followed — both kinds, composing in either order. The
+	 * `import pkg.Base as U;` hop is read off the DECLARING file's own imports (that binding exists in
+	 * no other module); the `typedef U = Base;` hop off the declaration `U` itself resolves to.
+	 *
+	 * The UPWARD counterpart of `subtypesOf`, and deliberately NOT its equal. This walk never claims
+	 * more than the downward one does and refuses two shapes it accepts: a name the index resolves to
+	 * several declarations, and an alias bound inside a `#if` region. Both refusals are the same
+	 * reason — `subtypesOf` is read as a veto, where over-breadth withholds, while this is read
+	 * affirmatively by autofixes that DELETE.
 	 */
 	public function isSubtype(sub: String, sup: String): Bool {
 		return closureContains(sub, sup, [sub]);
@@ -2504,7 +2514,7 @@ final class SymbolIndex {
 				// read off the file's own imports rather than from the project-wide `aliasEdges` a
 				// `typedef` earns. It is consulted inside the walk, not only on the written name, so
 				// the two alias kinds compose in either order.
-				final importAliases: Map<String, Array<String>> = importAliasEdges(fi);
+				final importAliases: Map<String, Array<String>> = importAliasEdges(fi, true);
 				for (t in fi.types) {
 					// A type naming one simple name TWICE (two differently-qualified supertypes reducing to
 					// it) lands in that bucket once — `supertypes.contains` reported it once per scan too.
@@ -2547,7 +2557,7 @@ final class SymbolIndex {
 			// A `typedef Hop = L;` whose `L` is an `import pkg.Leaf as L;` re-points at `Leaf`. The
 			// alias binds per FILE, so the hop is read where the typedef is WRITTEN — not where its
 			// name is later extended, which is a different file with different imports.
-			final importAliases: Map<String, Array<String>> = importAliasEdges(fi);
+			final importAliases: Map<String, Array<String>> = importAliasEdges(fi, true);
 			for (t in fi.types) {
 				// Null for every non-alias declaration, for an anon-struct typedef (its fields ARE its
 				// members) and for an alias the builder could not read as a nominal path.
@@ -2613,13 +2623,31 @@ final class SymbolIndex {
 
 	/** Whether `target` appears in `name`'s transitive supertype closure. `seen` guards cycles. */
 	private function closureContains(name: String, target: String, seen: Array<String>): Bool {
-		final ds: Array<TypeDeclInfo> = declsNamed(name);
+		final ds: Array<ResolvedType> = resolvedDeclsNamed(name);
 		if (ds.length != 1) return false;
-		for (sup in ds[0].supertypes) {
-			if (sup == target) return true;
-			if (seen.contains(sup)) continue;
-			seen.push(sup);
-			if (closureContains(sup, target, seen)) return true;
+		final decl: ResolvedType = ds[0];
+		// `denoted` is every name this declaration's supertype list can be spelling, and doubles as
+		// the hop worklist AND its cycle guard, exactly as `subtypesOf`s `named` does. `supertypes`
+		// belongs to the shared index, so the copy is load-bearing.
+		final denoted: Array<String> = decl.type.supertypes.copy();
+		// A `typedef U = Base;` names its target where the typedef is WRITTEN, so the hop for THIS
+		// declaration is its own `aliasTargetNominal`, read one recursion deeper than the name that
+		// denoted it — no project-wide map is needed for it. Null for a guarded typedef, which is
+		// where the two alias kinds agree to fail closed (see `importAliasEdges`).
+		final hop: Null<String> = decl.type.aliasTargetNominal;
+		if (hop != null && hop != name) denoted.push(hop);
+		if (denoted.length == 0) return false;
+		// `false`: going UP, this answer is read affirmatively by autofixes that delete, so a `#if`
+		// region binding one alias name to two modules must not make this type a subtype of both.
+		final aliases: Map<String, Array<String>> = importAliasEdges(decl.file, false);
+		var i: Int = 0;
+		while (i < denoted.length) {
+			final written: String = denoted[i++];
+			if (written == target) return true;
+			for (aliased in aliases[written] ?? []) if (!denoted.contains(aliased)) denoted.push(aliased);
+			if (seen.contains(written)) continue;
+			seen.push(written);
+			if (closureContains(written, target, seen)) return true;
 		}
 		return false;
 	}
@@ -2770,20 +2798,31 @@ final class SymbolIndex {
 	/**
 	 * ONE file's import-alias edges: the alias a `import pkg.Util as U;` statement binds -> the
 	 * SIMPLE name of every path it points at. An ARRAY because a `#if` region may bind one
-	 * alias name to a different target per branch, and only one of those compilations is the
-	 * one being reasoned about — offering both is the withholding direction for every
-	 * consumer, dropping either is the deleting one. The import twin of `aliasEdges`, and per-FILE rather
+	 * alias name to a different target per branch. The import twin of `aliasEdges`, and per-FILE rather
 	 * than project-wide because that is the scope such an alias actually has — a `U` bound in one
 	 * module says nothing about a `U` written in another.
+	 *
+	 * `followGuarded` is the whole `#if` question, and it has OPPOSITE answers on the two sides of
+	 * the subtype relation, so it is the caller's to give. Going DOWN (`subtypesOf`) the answer is a
+	 * veto — offering both branch targets makes MORE types answer "something subtypes me", which is
+	 * the withholding direction, and dropping either is what compile-proved a deleted private
+	 * constructor. Going UP (`closureContains`) the answer is read AFFIRMATIVELY by two autofixes
+	 * that DELETE — `unreachable-catch` removes a clause, `redundant-upcast` removes a cast — and
+	 * offering both makes one type a subtype of two modules no single build agrees on: measured,
+	 * `#if cpp import pkg.A as U; #else import pkg.Bee as U; #end class Both extends U` reported the
+	 * `catch (e:Both)` after `catch (e:A)` AND the one after `catch (e:Bee)` unreachable, and `--fix`
+	 * deleted both clauses. So the upward walk refuses a guarded alias, which is also what
+	 * `SymbolIndexBuilder.aliasTargetPathOf` already does for a guarded TYPEDEF — the two alias kinds
+	 * fail closed together rather than one each way.
 	 *
 	 * Simple names on both sides: `supertypes` is already reduced that way, and so is every name
 	 * `subtypesOf` is asked about. An alias whose path did not decode carries no edge; a
 	 * self-alias (`import pkg.U as U`, which Haxe accepts) carries none either, since the walk
 	 * already holds that name.
 	 */
-	private static function importAliasEdges(fi: FileInfo): Map<String, Array<String>> {
+	private static function importAliasEdges(fi: FileInfo, followGuarded: Bool): Map<String, Array<String>> {
 		final edges: Map<String, Array<String>> = [];
-		for (imp in fi.imports) if (imp.kind == ImportKind.Alias) {
+		for (imp in fi.imports) if (imp.kind == ImportKind.Alias && (followGuarded || !imp.guarded)) {
 			final alias: Null<String> = imp.alias;
 			final target: Null<String> = imp.aliasTarget;
 			if (alias == null || target == null) continue;

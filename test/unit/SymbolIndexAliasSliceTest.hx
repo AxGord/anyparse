@@ -151,10 +151,61 @@ class SymbolIndexAliasSliceTest extends Test {
 	 * and `unused-private --fix` removed its private constructor — Haxe 4.3.7 then refused the
 	 * tree with `p.Second does not have a constructor`. The deletion arm of that is pinned in
 	 * `UnusedPrivateCheckTest`; this one pins the index answer both orders round.
+	 *
+	 * The UPWARD answer is the opposite and asserted beside it: `isSubtype` refuses a guarded alias,
+	 * because a type extending it is a subtype of exactly ONE of the two per compilation and that
+	 * answer feeds autofixes that delete.
 	 */
 	public function testGuardedImportAliasFollowsEveryBranch(): Void {
 		guardedBranchesBothFollowed('First', 'Second');
 		guardedBranchesBothFollowed('Second', 'First');
+	}
+
+	/**
+	 * `isSubtype` walks UP from a subtype's written supertype name, so it needs the same alias hops
+	 * `subtypesOf` reads on the way DOWN — an `import pkg.Owner as O;` binds `O` in the SUBTYPE's own
+	 * file and nowhere else, and a `typedef` hop is written in the file that declares it. Every shape
+	 * the downward walk follows is asserted here in the upward direction.
+	 *
+	 * The last two assertions are what stops a pass from coming from the predicate saying yes to
+	 * everything: a class extending nothing is no subtype, and `Alias` bound per FILE means `ByIn`s
+	 * `Alias` is `InForm` and never `Named`.
+	 */
+	public function testIsSubtypeThroughAliasSupertype(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Named.hx', source: 'package pkg;\nclass Named {}' },
+			{ file: 'pkg/ByImport.hx', source: 'package pkg;\nimport pkg.Named as Alias;\nclass ByImport extends Alias {}' },
+			{ file: 'pkg/InForm.hx', source: 'package pkg;\nclass InForm {}' },
+			{ file: 'pkg/ByIn.hx', source: 'package pkg;\nimport pkg.InForm in Alias;\nclass ByIn extends Alias {}' },
+			{ file: 'far/Distant.hx', source: 'package far;\nclass Distant {}' },
+			{ file: 'pkg/ByFar.hx', source: 'package pkg;\nimport far.Distant as D;\nclass ByFar extends D {}' },
+			{ file: 'pkg/Root.hx', source: 'package pkg;\nclass Root {}' },
+			{ file: 'pkg/Mid.hx', source: 'package pkg;\ntypedef Mid = Root;' },
+			{ file: 'pkg/ByTypedef.hx', source: 'package pkg;\nclass ByTypedef extends Mid {}' },
+			{ file: 'pkg/Leaf.hx', source: 'package pkg;\nclass Leaf {}' },
+			{ file: 'pkg/Hop.hx', source: 'package pkg;\nimport pkg.Leaf as L;\ntypedef Hop = L;' },
+			{ file: 'pkg/ByTypedefOfImport.hx', source: 'package pkg;\nclass ByTypedefOfImport extends Hop {}' },
+			{ file: 'pkg/Deep.hx', source: 'package pkg;\nclass Deep extends ByImport {}' },
+			{ file: 'pkg/Lonely.hx', source: 'package pkg;\nclass Lonely {}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.isTrue(index.isSubtype('ByImport', 'Named'), 'an `import ... as` supertype');
+		Assert.isTrue(index.isSubtype('ByIn', 'InForm'), 'the `import ... in` spelling');
+		Assert.isTrue(index.isSubtype('ByFar', 'Distant'), 'a target written qualified, in another package');
+		Assert.isTrue(index.isSubtype('ByTypedef', 'Root'), 'a typedef hop, upward');
+		Assert.isTrue(index.isSubtype('ByTypedefOfImport', 'Leaf'), 'a typedef of an import alias');
+		Assert.isTrue(index.isSubtype('Deep', 'Named'), 'the alias hop composes with a further class hop above it');
+		Assert.isTrue(index.isSubtype('ByImport', 'Alias'), 'the written name still answers, so nothing that worked stops');
+		Assert.isFalse(index.isSubtype('Lonely', 'Named'), 'a class extending nothing is no subtype');
+		Assert.isFalse(index.isSubtype('ByIn', 'Named'), 'the binding is per FILE — `Alias` in ByIn.hx is InForm');
+		// The ambiguity gate holds THROUGH the alias path, which is the property a later hoist of the
+		// per-file map to a project-wide one would silently lose: a second declaration named `Mid`
+		// makes the hop unresolvable, and the walk goes back to answering false.
+		final ambiguous: SymbolIndex = SymbolIndex.build(
+			files.concat([{ file: 'far/Mid.hx', source: 'package far;\nclass Mid {}' }]), new HaxeQueryPlugin()
+		);
+		Assert.isFalse(ambiguous.isSubtype('ByTypedef', 'Root'), 'a hop whose name two declarations share is not followed');
+		Assert.isTrue(ambiguous.isSubtype('ByImport', 'Named'), 'and the unrelated hops still answer');
 	}
 
 	/**
@@ -177,6 +228,18 @@ class SymbolIndexAliasSliceTest extends Test {
 		final extending: SymbolIndex = index('class Both extends U {}');
 		Assert.isTrue(extending.hasSubtype(first), '$first (the #if branch) is followed');
 		Assert.isTrue(extending.hasSubtype(second), '$second (the #else branch) is followed');
+		// UPWARD the same region answers NEITHER, and that asymmetry is the point. `hasSubtype` is a
+		// veto: naming both targets makes more types answer "something subtypes me", which withholds.
+		// `isSubtype` is read affirmatively by autofixes that DELETE, and `Both` is a subtype of
+		// exactly one of these per compilation — measured, offering both made `unreachable-catch`
+		// report the clause after `catch (e:$first)` AND the one after `catch (e:$second)`, and
+		// `--fix` deleted both. So a guarded alias is refused here, as a guarded TYPEDEF already is.
+		Assert.isFalse(extending.isSubtype('Both', first), 'a guarded alias is not followed upward ($first)');
+		Assert.isFalse(extending.isSubtype('Both', second), 'a guarded alias is not followed upward ($second)');
+		Assert.isTrue(
+			index('import pkg.$first as V;\nclass Both extends V {}').isSubtype('Both', first),
+			'and the same file WITHOUT the guard is followed upward, so the refusal is the `#if` and not the alias'
+		);
 		final plain: SymbolIndex = index('class Both {}');
 		Assert.isFalse(plain.hasSubtype(first), '$first is not subtyped without the extends');
 		Assert.isFalse(plain.hasSubtype(second), '$second is not subtyped without the extends');
