@@ -197,6 +197,34 @@ final class MemberBranchScan {
 	}
 
 	/**
+	 * The spans that can NEVER compile together with the declaration at `offset`: for every
+	 * member-position conditional region holding it, that region's OTHER branches.
+	 *
+	 * The exclusivity a whole-file name scan owes conditional compilation. Such a scan reads every
+	 * declaration of a type as coexisting, but sibling branches of ONE region never do — so a member
+	 * declared in `#elseif android` neither COLLIDES with a name `#if ios` binds, nor is a DIFFERENT
+	 * binding from a same-named declaration written there: that one is the same logical member as
+	 * another build declares it, and `#if ios … #elseif android …` writes the pair by design.
+	 *
+	 * Only SIBLING branches of one region qualify, exactly as `declaresMemberNamed` argues:
+	 * independent regions (`#if A f #end #if B f #end`) can both be live, and a region NESTED inside a
+	 * branch is not exclusive with that branch. The walk gets both for free by descending only through
+	 * children whose span CONTAINS the offset — the region chain the declaration sits in — and
+	 * answering per region.
+	 *
+	 * Empty for a grammar without the seam, a source with no `#if` at all, an offset outside every
+	 * region, and a region whose branch boundaries the splitter refuses. Every unknown answers "not
+	 * proven exclusive", which leaves the caller's own verdict exactly where it stood.
+	 */
+	public static function exclusiveSpansAt(shape: RefShape, source: String, tree: QueryNode, offset: Int): Array<Span> {
+		final seams: MemberBranchSeams = seamsOf(shape, source);
+		if (seams.condKind == null) return [];
+		final out: Array<Span> = [];
+		collectExclusive(seams, tree, offset, out);
+		return out;
+	}
+
+	/**
 	 * Every member declaration a conditional REGION holds, across all of its branches and through any
 	 * region nested inside it — the one answer to "what would emptying this region take with it".
 	 *
@@ -294,6 +322,31 @@ final class MemberBranchScan {
 			if (nested != null) return nested;
 		}
 		return null;
+	}
+
+	/**
+	 * Push the branches of every region under `node` that holds `offset` in one of its OTHER branches.
+	 * Descends only through children whose span covers the offset, so the walk visits exactly the
+	 * region chain the declaration sits in.
+	 *
+	 * A region the offset is inside but no RUN claims — an offset on the `#if` directive itself, or a
+	 * shape the splitter refuses — contributes nothing. Without a home branch there is no sibling to
+	 * call exclusive, and answering with every run would exclude the declaration's own neighbourhood.
+	 */
+	private static function collectExclusive(seams: MemberBranchSeams, node: QueryNode, offset: Int, out: Array<Span>): Void {
+		for (child in node.children) {
+			final span: Null<Span> = child.span;
+			if (span == null || offset < span.from || offset >= span.to) continue;
+			if (isRegion(seams, child)) {
+				final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
+					child, seams.source, seams.elseKeywords, seams.comments
+				);
+				if (runs != null && runs.exists(r -> offset >= r.span.from && offset < r.span.to))
+					for (run in runs)
+						if (offset < run.span.from || offset >= run.span.to) out.push(run.span);
+			}
+			collectExclusive(seams, child, offset, out);
+		}
 	}
 
 	/** The branch span of `member` inside any region among `nodes` — the nested-region arm of `branchSpanIn`. */

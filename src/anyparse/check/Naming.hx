@@ -6,6 +6,7 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamedDecl;
@@ -893,6 +894,11 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * A simple `$name` string-interpolation read needs no caller-side help: `Refs` indexes it as
 	 * an ordinary read, so it is already in the resolved set and renames along instead of
 	 * blocking the gate.
+	 *
+	 * A MEMBER redeclared in a MUTUALLY EXCLUSIVE conditional branch is one declaration in two
+	 * builds, so its occurrences join the rename rather than being excluded as another binding's
+	 * (`MemberBranchScan.exclusiveSpansAt`) — the same treatment, and for the same reason, that
+	 * `familySpans` gives an override.
 	 */
 	private static function declaringFileRenameSpans(
 		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool,
@@ -961,7 +967,21 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// A `package` / `import` path is a dotted module path, not a reference — a field named after
 		// its own package (`package touches;` beside `var touches`) or after a package some import
 		// traverses would otherwise leave an unattributable occurrence and veto the rename.
-		final excluded: Array<Span> = covered.concat(otherBindingSpans(source, tree, name, declFrom, shape))
+		// One class of "other binding" is not one at all: a same-named MEMBER declared in a conditional
+		// branch that never compiles with this declaration's own is THIS member as another build writes
+		// it, and `#if ios … #elseif android …` writes that pair by design. Excluded — which is what
+		// `otherBindingSpans` does with it — the rename lands on one branch's declaration and leaves the
+		// other spelled the old way, while the references it rewrote are shared: the build compiling the
+		// untouched branch then reaches a name nothing declares, and a later `unused-private` pass
+		// deletes the stranded declaration outright. So the twin's occurrences are RENAME targets, for
+		// the same reason an override family's are. Body-scoped bindings are excluded: two locals in
+		// exclusive branches are genuinely unrelated, sharing a name by coincidence, not by design.
+		final others: Array<Span> = otherBindingSpans(source, tree, name, declFrom, shape);
+		final exclusive: Array<Span> = bodyScoped ? [] : MemberBranchScan.exclusiveSpansAt(shape, source, tree, declFrom);
+		final twins: Array<Span> = exclusive.length == 0
+			? []
+			: [for (s in others) if (RefactorSupport.offsetWithinAny(s.from, exclusive)) s];
+		final excluded: Array<Span> = covered.concat(others)
 			.concat(ownerBound)
 			.concat(foreign)
 			.concat(typeRefs)
@@ -970,7 +990,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
 			source, name, plugin, 0, source.length, excluded
 		);
-		final renamed: Array<Span> = mergeUniqueSpans(covered.concat(ownerBound), family);
+		final renamed: Array<Span> = mergeUniqueSpans(mergeUniqueSpans(covered.concat(ownerBound), twins), family);
 		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : renamed;
 		final spans: Array<Span> = renamed;
 		// A distinctive comment mention renames along, but only within the binding's own lexical container:
@@ -1427,7 +1447,20 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			final unrelated: Array<Span> = owner == null || resolutionIndex == null
 				? []
 				: unrelatedTypeSpans(tree, owner, shape, resolutionIndex);
-			return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, unrelated, plugin);
+			// And EXCEPT the conditional branches that never compile with this declaration: a name bound
+			// in `#if ios` cannot be duplicated or shadowed by a rename landing in `#elseif android`, and
+			// reading it as a collision is what sent the pair to two DIFFERENT spellings — the shape that
+			// strands every reference the rename rewrote (see `MemberBranchScan.exclusiveSpansAt`).
+			final exclusive: Array<Span> = MemberBranchScan.exclusiveSpansAt(shape, source, tree, span.from);
+			// And EXCEPT what a same-named member declared in one of those branches EXPLAINS. The scan
+			// answers on lexical context, not on binding, so a plain read of that twin counts as the name
+			// being taken - which is how `#if ios … key … #elseif android … _key … #end` got told its
+			// obvious correction collided and answered with the rule's OTHER spelling instead. The twin's
+			// own occurrence set is exactly the set that becomes a read of THIS declaration once the
+			// rename lands; a binding of the name anywhere else - this declaration's own branch above all
+			// - is outside it and still collides.
+			final twin: Array<Span> = exclusiveTwinOccurrences(source, tree, shape, newName, exclusive);
+			return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, unrelated.concat(exclusive).concat(twin), plugin);
 		}
 		// A local `inline function` is a function BODY for scope purposes even though it is not a
 		// measured `functionKinds` unit (`complexity` folds it into its host): its parameters and
@@ -1462,6 +1495,31 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final excluded: Array<Span> = RefactorSupport.structureFieldNameSpans(tree, source, shape);
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
 		return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
+	}
+
+	/**
+	 * Every occurrence of `newName` belonging to a member declared inside one of the `exclusive`
+	 * branches - its declaration token and the reads that resolve to it - or empty when no branch
+	 * declares it.
+	 *
+	 * The declaration is the SAME logical member as the one being renamed, one build over, so its
+	 * reads are the reads the rename is about to inherit: a collision gate counting them reports that
+	 * the target name is taken by the very declaration this rename unifies with. Resolved through
+	 * `Rename.renameOccurrences`, the same authority the rename itself uses, so the set never widens
+	 * past the reads that actually bind to the twin.
+	 */
+	private static function exclusiveTwinOccurrences(
+		source: String, tree: QueryNode, shape: RefShape, newName: String, exclusive: Array<Span>
+	): Array<Span> {
+		if (exclusive.length == 0) return [];
+		final out: Array<Span> = [];
+		for (h in Refs.find(newName, tree, shape)) {
+			if (h.kind != RefKind.Decl) continue;
+			final off: Int = RefactorSupport.identTokenOffset(source, h.span, newName);
+			if (off < 0 || !RefactorSupport.offsetWithinAny(off, exclusive)) continue;
+			for (occ in Rename.renameOccurrences(source, tree, h.span.from, shape)) if (!out.exists(s -> s.from == occ.from)) out.push(occ);
+		}
+		return out;
 	}
 
 	/**

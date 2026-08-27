@@ -539,6 +539,7 @@ import unit.MoveMemberSliceTest;
 import unit.MoveSymbolSliceTest;
 import unit.MutationVerdictTest;
 import unit.NamingCheckAltSpellingFixTest;
+import unit.NamingCheckBranchTwinFixTest;
 import unit.NamingCheckCrossFileFixTest;
 import unit.NamingCheckHoistFixTest;
 import unit.NamingCheckLocalFixTest;
@@ -1412,6 +1413,7 @@ class RunTests {
 		addCase(new NamingCheckLocalFixTest());
 		addCase(new NamingCheckMemberFixTest());
 		addCase(new NamingCheckAltSpellingFixTest());
+		addCase(new NamingCheckBranchTwinFixTest());
 		addCase(new NamingCheckCrossFileFixTest());
 		addCase(new NamingCheckHoistFixTest());
 		addCase(new ClassifyOccurrencesTest());
