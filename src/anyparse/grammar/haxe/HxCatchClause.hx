@@ -48,8 +48,11 @@ package anyparse.grammar.haxe;
  * `lineWidth`, otherwise breaks. Block bodies (`{ … }`) are
  * shape-aware — `bodyPolicyWrap`'s block-ctor detection routes
  * them through `sameLayoutExpr` regardless of the policy, so
- * the typical `} catch (e:T) { … }` stays inline. Default is
- * `Next` mirroring haxe-formatter's `sameLine.catchBody:
+ * the typical `} catch (e:T) { … }` stays inline. `@:fmt(constructFitBody)` alongside it makes the `FitLine`
+ * layout a SOFT line owned by the enclosing `constructFitGroup` (see `HxTryCatchStmt`), so this body
+ * and the try body break together instead of each answering for its own line.
+ *
+ * Default is `Next` mirroring haxe-formatter's `sameLine.catchBody:
  * @:default(Next)` and the sibling `forBody` / `whileBody`
  * defaults; only non-block bodies see the difference.
  */
@@ -59,5 +62,5 @@ typedef HxCatchClause = {
 	@:kw('catch') @:lead('(') @:trail(')')
 	@:fmt(catchParensGap, catchParensInsideOpen, catchParensInsideClose)
 	var param: HxCatchParam;
-	@:optional @:absentOn('}') @:trailOpt(';') @:fmt(bodyPolicy('catchBody')) var body: Null<HxStatement>;
+	@:optional @:absentOn('}') @:trailOpt(';') @:fmt(bodyPolicy('catchBody'), constructFitBody) var body: Null<HxStatement>;
 };

@@ -38,9 +38,21 @@ package anyparse.grammar.haxe;
  * expression-form (`HxTryCatchExpr.catches`) uses `expressionTry`
  * + `blockBodyKeepsInline` — opposite default direction (block
  * stays inline on `Next`).
+ *
+ * omega-try-brace-symmetry: this form is where a de-braced statement try/catch lands on re-parse, so
+ * it carries the same wrap-only symmetry metas as `HxTryCatchExpr`, plus
+ * `@:fmt(constructFitGroup('body', 'catches'))` and the `bareBodyBreaks` policy arguments. Without
+ * those the second `fmt` pass would explode what the first collapsed and `fmt` would stop being a
+ * fixed point: the flag unconditional hardline is haxe-formatter statement-context convention and
+ * stays the default, while a named `FitLine` knob buys the escape that keeps a fitting construct on
+ * one line. `@:fmt(constructFitBody)` on the body turns that escape into a SOFT line the construct
+ * group owns, so a construct that does not fit breaks at BOTH seams and reads as the if/else ladder
+ * rather than gluing its body to `try`.
  */
 @:peg
+@:fmt(constructFitGroup('body', 'catches'))
 typedef HxTryCatchStmtBare = {
-	@:fmt(bareBodyBreaks) var body: HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks) var catches: Array<HxCatchClauseStmtBare>;
+	@:fmt(bareBodyBreaks('tryBody'), constructFitBody, tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt')) var body: HxExpr;
+	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks('tryBody', 'catchBody'), constructFitSep,
+		tryCatchBraceSymmetry('body', 'BlockExpr', 'ExprStmt')) var catches: Array<HxCatchClauseStmtBare>;
 };

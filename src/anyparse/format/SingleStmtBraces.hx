@@ -96,6 +96,9 @@ using StringTools;
  */
 class SingleStmtBraces {
 
+	/** Value ctors a symmetry wrap must leave alone: a brace-LED value re-opens `{` in statement position. */
+	private static final TRY_WRAP_SKIP_CTORS: Array<String> = ['ObjectLit'];
+
 	public static function unwrapStmt(
 		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool, isIfThenBody: Bool
 	): Dynamic {
@@ -283,6 +286,105 @@ class SingleStmtBraces {
 		if (Type.enumConstructor(cast sibling) != blockCtor) return false;
 		final own: String = Type.enumConstructor(cast value);
 		return own != blockCtor && !skipCtors.contains(own);
+	}
+
+	/**
+	 * omega-try-brace-symmetry: the group verdict for ONE try/catch construct — `0` leave every body
+	 * as it stands, `1` brace every body, `2` de-brace every body.
+	 *
+	 * The try/catch twin of gate 7, asked over a group whose members live in two different fields: the
+	 * try body, and the body of every `catch` clause. `chainForcesBraces` answers the same question for
+	 * an if/else-if chain and this is the same shape — one verdict for the whole construct, so no
+	 * member can end up braced opposite a bare sibling. A group de-braces only when EVERY member can;
+	 * a single member that cannot pulls the whole construct to `1` as soon as anything is braced.
+	 *
+	 * `deBraceable` is a MACRO-time discriminator, false for the value-position forms
+	 * (`HxTryCatchExpr`, `HxTryCatchStmtBare`): a value branch is never de-braced, exactly as
+	 * `valueBraceSymmetry` leaves the value-`if` wrap-only. `blockCtor` names what "braced" means for
+	 * the form — `BlockStmt` for the statement one, `BlockExpr` for the value ones.
+	 *
+	 * De-brace is POSITION-sensitive, and that is not a nicety: Haxe rejects a `;` in front of `catch`
+	 * (`try f(); catch (e) g();` is `Expected }`, verified against the compiler), so every body but the
+	 * last must render with no terminator of its own. `tryDeBraced` takes that as `keepTrail` and
+	 * refuses whatever it cannot strip.
+	 */
+	public static function tryBraceVerdict(
+		body: Dynamic, catches: Null<Array<Dynamic>>, drop: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool
+	): Int {
+		if (!drop) return 0;
+		final bodies: Array<Dynamic> = tryGroupBodies(body, catches);
+		var anyBraced: Bool = false;
+		var allDeBrace: Bool = deBraceable;
+		for (i => b in bodies) {
+			final last: Bool = i == bodies.length - 1;
+			final braced: Bool = b != null && Reflect.isEnumValue(b) && Type.enumConstructor(cast b) == blockCtor;
+			if (braced) anyBraced = true;
+			// A body that carries no braces is ALREADY in the de-braced state, so it does not block the
+			// group - asking "is every body braced" instead would send `try { f(); } catch (e) g();`
+			// through a wrap that the very next pass undoes, and `fmt` would need two rewrites to
+			// settle what one can decide.
+			if (allDeBrace && (braced ? tryDeBraced(b, last, suppress) == null : !bareLegalAt(b, last))) allDeBrace = false;
+		}
+		return allDeBrace ? 2 : (anyBraced ? 1 : 0);
+	}
+
+	/**
+	 * The try body under the group verdict. Spliced around `HxTryCatchStmt.body` /
+	 * `HxTryCatchExpr.body` / `HxTryCatchStmtBare.body` by `@:fmt(tryBraceSymmetry(...))`, ahead of any
+	 * layout dispatch, so everything downstream lays out the substituted shape.
+	 *
+	 * The try body is a `;`-forbidden position whenever a `catch` follows it, which the grammar makes
+	 * all but certain — `keepTrail` is true only for the degenerate catch-less parse.
+	 */
+	public static function trySymmetryBody(
+		body: Dynamic, catches: Null<Array<Dynamic>>, drop: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool,
+		?lift: (EnumValue) -> Dynamic
+	): Dynamic {
+		final last: Bool = catches == null || catches.length == 0;
+		return trySubstBody(body, tryBraceVerdict(body, catches, drop, suppress, blockCtor, deBraceable), blockCtor, last, suppress, lift);
+	}
+
+	/**
+	 * Every catch clause under the same group verdict — a NEW array of copied elements when a body
+	 * actually changes, and the ORIGINAL array otherwise, so a construct the verdict does not move
+	 * stays allocation-inert as well as byte-inert.
+	 *
+	 * Only the LAST clause keeps its statement terminator: it doubles as the terminator of the whole
+	 * try/catch statement, while every earlier one renders without, because Haxe rejects a `;` in front
+	 * of the next `catch`. The clause node is reached through `triviaNode` — Star elements arrive as
+	 * `Trivial` wrappers, a plain Ref does not — and both levels are copied so the parsed tree is never
+	 * mutated under the writer.
+	 */
+	public static function trySymmetryCatches(
+		catches: Null<Array<Dynamic>>, body: Dynamic, drop: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool,
+		?lift: (EnumValue) -> Dynamic
+	): Dynamic {
+		if (catches == null || catches.length == 0) return catches;
+		final verdict: Int = tryBraceVerdict(body, catches, drop, suppress, blockCtor, deBraceable);
+		if (verdict == 0) return catches;
+		var changed: Bool = false;
+		final out: Array<Dynamic> = [];
+		for (i => c in catches) {
+			final wrapped: Bool = hasStructField(c, 'node');
+			final node: Dynamic = wrapped ? Reflect.field(c, 'node') : c;
+			final cur: Dynamic = hasStructField(node, 'body') ? Reflect.field(node, 'body') : null;
+			final next: Dynamic = trySubstBody(cur, verdict, blockCtor, i == catches.length - 1, suppress, lift);
+			if (next == cur) {
+				out.push(c);
+				continue;
+			}
+			changed = true;
+			final nodeCopy: Dynamic = Reflect.copy(node);
+			Reflect.setField(nodeCopy, 'body', next);
+			if (!wrapped) {
+				out.push(nodeCopy);
+				continue;
+			}
+			final elemCopy: Dynamic = Reflect.copy(c);
+			Reflect.setField(elemCopy, 'node', nodeCopy);
+			out.push(elemCopy);
+		}
+		return changed ? out : catches;
 	}
 
 	/**
@@ -635,6 +737,93 @@ class SingleStmtBraces {
 			null
 		else
 			elem;
+	}
+
+	/**
+	 * `block` with its braces removed, or `null` when it may not lose them. Gates 1-3 are reached
+	 * through `singleCleanElem` and `innerSelfTerminates`, so the comment / multi-statement /
+	 * declaration refusals are shared verbatim with the if/else side.
+	 *
+	 * `keepTrail` is false in every position a `catch` follows, where the statement's own `;` would be
+	 * a syntax error. Only the plain `@:trailOpt(';')` slot of an `ExprStmt` can be cleared there, so
+	 * every other kind is refused: `ThrowStmt` / `VoidReturnStmt` carry a MANDATORY `@:trail(';')`, and
+	 * `ReturnStmt`'s is decided at write time by `optionalSemicolon` — none of the three can promise a
+	 * terminator-free rendering. An `if`/loop statement is refused for the same reason one level down:
+	 * its own tail may end on a `;` this slot cannot reach (`try if (a) b(); catch …` does not compile).
+	 */
+	private static function tryDeBraced(block: Dynamic, keepTrail: Bool, suppress: Bool): Null<Dynamic> {
+		if (block == null || !Reflect.isEnumValue(block)) return null;
+		final elem: Null<Dynamic> = singleCleanElem(Type.enumParameters(cast block), false);
+		if (elem == null) return null;
+		final inner: Dynamic = elem.node;
+		if (inner == null || !Reflect.isEnumValue(inner) || !innerSelfTerminates(cast inner)) return null;
+		// Gates 4/5 reach the try/catch through its TAIL only. Every body but the last is followed by
+		// a `catch` keyword, which seals it; the last one ends the whole construct, so a de-braced tail
+		// ending on an else-less `if` would capture an `else` written after the try/catch - which is
+		// exactly what those braces were holding shut. `suppress` (`opt._ssbSuppress`) is the frame the
+		// enclosing `if` arms on a then-body that renders without braces.
+		if (keepTrail && suppress && tailDanglingIf(inner)) return null;
+		return keepTrail ? inner : withoutExprTrail(cast inner);
+	}
+
+	/**
+	 * `inner` with its optional trailing `;` slot cleared, or `null` when its kind has no such slot.
+	 * The slot sits at index 1 of the `@:trailOpt(';')` ctors (locked by unit tests); `ExprStmt` is the
+	 * only kind whose terminator is decided by that slot ALONE, which is what makes it the only kind a
+	 * `;`-forbidden position accepts.
+	 */
+	private static function withoutExprTrail(inner: EnumValue): Null<Dynamic> {
+		if (Type.enumConstructor(inner) != 'ExprStmt') return null;
+		final en: Null<Enum<Dynamic>> = Type.getEnum(cast inner);
+		if (en == null) return null;
+		final ps: Array<Dynamic> = Type.enumParameters(inner);
+		if (ps.length < 2) return null;
+		ps[1] = false;
+		return Type.createEnum(en, 'ExprStmt', ps);
+	}
+
+	/**
+	 * One body under the group verdict. Verdict `1` braces a bare body through `wrapInBlock` — the same
+	 * constructor gate 7's repair arm and `valueBraceSymmetry` use, so the block is SYNTHESIZED and the
+	 * real writer renders it, which is what keeps `fmt` idempotent. Verdict `2` strips the braces.
+	 * Anything already in the wanted shape, and any value a wrap would break, comes back untouched.
+	 */
+	private static function trySubstBody(
+		body: Dynamic, verdict: Int, blockCtor: String, keepTrail: Bool, suppress: Bool, lift: Null<(EnumValue) -> Dynamic>
+	): Dynamic {
+		if (verdict == 0 || body == null || !Reflect.isEnumValue(body)) return body;
+		final ctor: String = Type.enumConstructor(cast body);
+		if (verdict == 1) return ctor == blockCtor || TRY_WRAP_SKIP_CTORS.contains(ctor) ? body : wrapInBlock(cast body, blockCtor, lift);
+		return ctor != blockCtor ? body : tryDeBraced(body, keepTrail, suppress) ?? body;
+	}
+
+	/**
+	 * The try body followed by every catch clause's body, in RENDER order. A body-less `catch (e:T)`
+	 * (the `@:optional @:absentOn('}')` shape) contributes `null`, which fails every gate — the group
+	 * then keeps its braces rather than reasoning about a body that is not there.
+	 */
+	private static function tryGroupBodies(body: Dynamic, catches: Null<Array<Dynamic>>): Array<Dynamic> {
+		final out: Array<Dynamic> = [body];
+		if (catches != null) for (c in catches) {
+			final node: Dynamic = triviaNode(c);
+			out.push(hasStructField(node, 'body') ? Reflect.field(node, 'body') : null);
+		}
+		return out;
+	}
+
+	/**
+	 * Is `v` — a body that carries no braces already — legal where it stands? Only reached for the
+	 * statement form (the value forms never de-brace, so their verdict short-circuits before this), so
+	 * `v` is an `HxStatement`: in a `;`-forbidden position it has to be an `ExprStmt` whose trail slot
+	 * is already clear, and in the last position anything the parser produced is legal by construction.
+	 */
+	private static function bareLegalAt(v: Dynamic, last: Bool): Bool {
+		if (last) return true;
+		if (v == null || !Reflect.isEnumValue(v)) return false;
+		final e: EnumValue = cast v;
+		if (Type.enumConstructor(e) != 'ExprStmt') return false;
+		final ps: Array<Dynamic> = Type.enumParameters(e);
+		return ps.length >= 2 && ps[1] != true;
 	}
 
 }

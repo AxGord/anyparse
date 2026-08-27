@@ -16,13 +16,16 @@ package anyparse.grammar.haxe;
  * field carries `@:fmt(bareBodyBreaks)` —
  * the runtime ctor switch forces hardline + Nest for non-block
  * bodies (`catch (e:E)\n\tbody`) and keeps the inline `' '`
- * separator for block bodies (`catch (e:E) { … }`). No policy
- * involvement: the layout is decided purely by the body's enum
- * ctor.
+ * separator for block bodies (`catch (e:E) { … }`). The flag now takes an optional `BodyPolicy` knob name
+ * (`@:fmt(bareBodyBreaks('catchBody'))`) — bare with no argument keeps the unconditional hardline,
+ * while a named knob set to `FitLine` lets a fitting body stay on the `catch` line, which is what a
+ * de-braced try/catch needs to survive its own re-parse unchanged. `@:fmt(constructFitBody)` alongside
+ * it makes that escape a SOFT line owned by the enclosing construct group instead of a per-line
+ * width probe, so the body breaks together with the `catch` seam.
  */
 @:peg
 @:spanned('CatchClause')
 typedef HxCatchClauseStmtBare = {
 	@:kw('catch') @:lead('(') @:trail(')') var param: HxCatchParam;
-	@:fmt(bareBodyBreaks) var body: HxExpr;
+	@:fmt(bareBodyBreaks('catchBody'), constructFitBody) var body: HxExpr;
 };

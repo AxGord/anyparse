@@ -83,9 +83,20 @@ package anyparse.grammar.haxe;
  * preserves the `;` for the bare-body form; re-emitting it
  * (source-presence + writer gate, cf. `HxAstPredLowering`) is a deferred
  * follow-up — this slice closes the parse gap only.
+ *
+ * omega-try-brace-symmetry: `@:fmt(tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt'))` on `body`
+ * and `@:fmt(tryCatchBraceSymmetry('body', 'BlockExpr', 'ExprStmt'))` on `catches` give the value
+ * form the same one-verdict-per-construct brace symmetry the statement form has — but WITHOUT
+ * `@:fmt(tryDeBrace)`, so it only ever adds braces. A de-braced value body would leave the whole
+ * expression needing a terminator only the enclosing statement can supply, and this rule cannot see
+ * its parent. The third argument names the ctor that raises the wrapped EXPRESSION into the block
+ * expression element type. Same wrap-only stance `valueBraceSymmetry` takes on a value-`if`.
  */
 @:peg
 typedef HxTryCatchExpr = {
-	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body: HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch')) var catches: Array<HxCatchClauseExpr>;
+	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline, tryBraceSymmetry(
+		'catches', 'BlockExpr', 'ExprStmt'
+	)) var body: HxExpr;
+	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch'),
+		tryCatchBraceSymmetry('body', 'BlockExpr', 'ExprStmt')) var catches: Array<HxCatchClauseExpr>;
 };

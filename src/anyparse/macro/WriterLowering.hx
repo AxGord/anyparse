@@ -1029,6 +1029,16 @@ class WriterLowering {
 		// (see WrapBodyOpts.condFitGroup). -1 = no pending cond. Reset by any
 		// intervening field that is not the consumer.
 		var condFitGroupStartIdx: Int = -1;
+		// omega-try-brace-symmetry: `@:fmt(constructFitGroup('<startField>', '<endStarField>'))` on the
+		// STRUCT splices everything from the start field's emission through the end Star into ONE
+		// construct-level `BodyGroup`, the same shape the condWrap path builds for `if` / `for` /
+		// `while`. Those get it through their CONDITION field; a try/catch has none, so without this
+		// its body and its `catch` seams each answer the width question on their OWN line — and the
+		// body's answer is read after the seam already committed, which is how a de-braced
+		// `try f(a, b) catch (e) g();` that overflows ends up breaking INSIDE the call instead of at
+		// the seams. One group asks once, before any inner group commits.
+		final constructFitArgs: Null<Array<String>> = node.fmtReadStringArgs('constructFitGroup');
+		var constructFitStartIdx: Int = -1;
 
 		// ω-multivar-wrap: detect the struct-level
 		// `@:fmt(multiVarWrap('<knob>', '<moreField>'))` opt-in (sole
@@ -1080,11 +1090,13 @@ class WriterLowering {
 			var thisPadTrailing: Null<Expr> = null;
 			// (per-field literal / condWrap / trailOpt-slot facts are read by readFieldMeta into `meta`.)
 			if (meta.isSpanStart) spanStartPartsIdx = parts.length;
+			if (constructFitArgs != null && fieldName == constructFitArgs[0]) constructFitStartIdx = parts.length;
 
 			// (the @:trailOpt source-presence slot facts live in readFieldMeta.)
 
 			if (isStar) {
 				condFitGroupStartIdx = -1;
+				final closesConstructFit: Bool = constructFitArgs != null && constructFitStartIdx >= 0 && fieldName == constructFitArgs[1];
 				final starResult = emitStarField(
 					child, parts, node, typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName, kwLead, fieldName,
 					prevBodyField, prevPadTrailing, fieldAccess, prevAnyStarNonEmpty, multiVarMoreField, isOptional, prevFieldAlwaysEmits
@@ -1099,6 +1111,12 @@ class WriterLowering {
 				prevTrailFieldName = _ctx.trivia && child.fmtHasFlag('captureTrailComment') ? fieldName : null;
 				prevPadTrailing = starResult.prevPadTrailing;
 				isFirstField = false;
+				if (closesConstructFit) {
+					final grpBuf: Array<Expr> = parts.slice(constructFitStartIdx, parts.length);
+					parts.splice(constructFitStartIdx, parts.length - constructFitStartIdx);
+					parts.push(macro _dbg(${grpBuf.length == 1 ? grpBuf[0] : dcCall(grpBuf)}));
+					constructFitStartIdx = -1;
+				}
 				continue;
 			}
 
@@ -1135,6 +1153,11 @@ class WriterLowering {
 			// emitBodyPolicyBareRef dispatch predicate).
 			final condFitGroupConsumer: Bool = condFitGroupStartIdx >= 0 && !isCondFitSetter && child.kind == Ref && !isOptional
 				&& bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw;
+			// omega-try-brace-symmetry: the construct group's START field is a body in the same sense
+			// the condWrap consumer is - its FitLine layout must be the group's soft line, not a
+			// self-contained one - but it must NOT close a group here: the splice happens at the END
+			// Star. Only the `condFitGroup` half of the consumer's treatment is shared.
+			final inConstructFitGroup: Bool = constructFitArgs != null && fieldName == constructFitArgs[0];
 			var justWrappedBody: Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
@@ -1176,7 +1199,7 @@ class WriterLowering {
 					final mandResult = emitMandatoryRefField(
 						child, parts, typePath, fieldAccess, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, kwLead, leadText, isRaw,
 						isFirstField, hasElseIf, elseFieldName, fallbackFlag, hasCondWrap, condWrapArgs, spanInfo != null, trailText,
-						prevTrailFieldName, prevAnyStarNonEmpty, prevPadTrailing, condFitGroupConsumer
+						prevTrailFieldName, prevAnyStarNonEmpty, prevPadTrailing, condFitGroupConsumer || inConstructFitGroup
 					);
 					justWrappedBody = mandResult.justWrappedBody;
 					prevBareRefBody = mandResult.prevBareRefBody;
@@ -1322,6 +1345,11 @@ class WriterLowering {
 		// which emits `untyped { … }` — visually a block).
 		final blockShapeAware: Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
 		final bareShapeAware: Bool = starNode.fmtHasFlag('bareBodyBreaks');
+		// omega-try-brace-symmetry: the `BodyPolicy` knobs governing the two bodies this separator
+		// can follow — the try body for the FIRST catch, the previous catch's body for every later
+		// one. Absent (`@:fmt(bareBodyBreaks)` with no args) keeps the unconditional hardline.
+		final barePolicyFields: Array<String> = starNode.fmtReadStringArgs('bareBodyBreaks') ?? [];
+		final softSeam: Bool = starNode.fmtHasFlag('constructFitSep');
 		final shapeAware: Bool = blockShapeAware || bareShapeAware;
 		// `bareBodyBreaks` includes blockShape opt-in ctors (e.g.
 		// `UntypedBlockStmt`) — they end with `}` and should be
@@ -1344,7 +1372,7 @@ class WriterLowering {
 		else {
 			final fallback: Expr = closeTrailingFirstOverride ?? sepExpr;
 			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : fallback;
-			final bareBranch: Expr = blockShapeAware ? fallback : (macro _dhl());
+			final bareBranch: Expr = blockShapeAware ? fallback : bareSepBreak(barePolicyFields[0], sepExpr, softSeam);
 			final cases: Array<Case> = [
 				{ values: blockPatterns, expr: blockBranch, guard: null },
 				{ values: [macro _], expr: bareBranch, guard: null }
@@ -1359,7 +1387,7 @@ class WriterLowering {
 				pos: Context.currentPos()
 			};
 			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
-			final bareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
+			final bareBranch: Expr = blockShapeAware ? sepExpr : bareSepBreak(barePolicyFields[1], sepExpr, softSeam);
 			final cases: Array<Case> = [
 				{ values: blockPatterns, expr: blockBranch, guard: null },
 				{ values: [macro _], expr: bareBranch, guard: null }
@@ -1659,15 +1687,15 @@ class WriterLowering {
 		// ignored. Sole consumer: `HxCondSpliceOpExpr.terms`.
 		final tryparseFillItems: Bool = starNode.fmtHasFlag('fillItems');
 		parts.push(TriviaTryparseLowering.triviaTryparseStarExpr(
-			fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB, tryparseTrailLC, tryparseTrailBA,
-			firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
-			propagateExprPosition, refuseFlatOnComplex, cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
-			cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos, metaLineEndOptField,
-			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
-			tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null, tryparseBlockEnded, tryparseSepFaithful,
-			tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail,
-			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn, refuseGlueOnControlFlow,
-			tryparseFillItems
+			tryCatchesSymmetryWrap(starNode, fieldAccess, elemRefName), elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB,
+			tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs,
+			tryparsePadLeading, tryparsePadTrailing, propagateExprPosition, refuseFlatOnComplex, cascadeInfos.afterCtorInfos,
+			cascadeInfos.beforeCtorInfos, cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos,
+			metaLineEndOptField, cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr,
+			tryparseForceInlineSep, tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null, tryparseBlockEnded,
+			tryparseSepFaithful, tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
+			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,
+			refuseGlueOnControlFlow, tryparseFillItems
 		));
 	}
 
@@ -3582,9 +3610,31 @@ class WriterLowering {
 	 * `BlockStmt`); kept defensive so the macro doesn't fatal-error on a
 	 * future grammar that adds the flag without a block alternative.
 	 */
-	private function bareBodyBreakWrap(writeCall: Expr, bodyAccess: Expr, bodyTypePath: String): Expr {
+	private function bareBodyBreakWrap(
+		writeCall: Expr, bodyAccess: Expr, bodyTypePath: String, policyField: Null<String>, constructFitBody: Bool
+	): Expr {
 		final sameLayoutExpr: Expr = macro _dc([_dt(' '), $writeCall]);
-		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		final breakLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		// omega-try-brace-symmetry: the hardline was unconditional, which is haxe-formatter's
+		// statement-context convention and stays the default. A form that names a `BodyPolicy` knob
+		// gains the FitLine escape: the bare body keeps the header line while the whole line fits and
+		// takes the old break when it does not. Without that escape the de-brace direction is a
+		// DOWNGRADE — `try f() catch (e) g();` would render across four lines — and worse, the
+		// de-braced statement form re-parses as the bare one, so a second `fmt` pass would explode
+		// what the first collapsed and `fmt` would stop being a fixed point.
+		final nextLayoutExpr: Expr = if (policyField == null)
+			breakLayoutExpr
+		else {
+			final policy: Expr = optFieldAccess(policyField);
+			// Under `@:fmt(constructFitBody)` the escape is ONE soft line owned by the enclosing
+			// construct group (see WrapBodyOpts.constructFitBody) — the body drops to its own indented
+			// line with the same break the `catch` seam takes, instead of answering for its own line
+			// and gluing to the head. Without the flag the width probe stays per-line.
+			final fitEscape: Expr = constructFitBody
+				? macro _dn(_cols, _dc([_dl(), $writeCall]))
+				: macro _dfle(opt.lineWidth, $breakLayoutExpr, $sameLayoutExpr);
+			macro $policy == anyparse.format.BodyPolicy.FitLine ? $fitEscape : $breakLayoutExpr;
+		};
 		final blockPatterns: Array<Expr> = collectBlockCtorPatterns(bodyTypePath);
 		final wrapExpr: Expr = if (blockPatterns.length == 0)
 			nextLayoutExpr
@@ -7003,7 +7053,10 @@ class WriterLowering {
 		// decision, so a wrapped condition (hardlines in its committed shape)
 		// forces the body onto the next line. Multiline non-block bodies keep
 		// the glue branch (the group is already broken; OptSpace flushes).
-		final fitInnerExpr: Expr = if (opts.condFitGroup == true)
+		final fitInnerExpr: Expr = if (opts.constructFitBody == true)
+			// One soft line, no group of its own — see WrapBodyOpts.constructFitBody.
+			macro _dn(_cols, _dc([_dl(), _body]));
+		else if (opts.condFitGroup == true)
 			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				? $multilineGlue
 				: opt.fitLineBodyGlue
@@ -9863,6 +9916,7 @@ class WriterLowering {
 			fallbackFlagName: fallbackFlag,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
 			condFitGroup: condFitGroup,
+			constructFitBody: child.fmtHasFlag('constructFitBody'),
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
 			arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
 			loopBodyIfElseArgs: loopBodyIfElseArgs
@@ -10704,7 +10758,8 @@ class WriterLowering {
 			elseFieldName: elseFieldName,
 			afterTrailExpr: afterTrailExpr,
 			indentObjArgs: indentObjArgs,
-			inlineBlockBodyArgs: inlineBlockBodyArgs
+			inlineBlockBodyArgs: inlineBlockBodyArgs,
+			constructFitBody: child.fmtHasFlag('constructFitBody')
 		}));
 	}
 
@@ -10784,7 +10839,9 @@ class WriterLowering {
 			// `try` kw's trailing space) and `HxCatchClause.body`
 			// (last field; replaces the default `_dt(' ')` separator
 			// between `)` and the catch body).
-			parts.push(bareBodyBreakWrap(writeCall, fieldAccess, refName));
+			parts.push(bareBodyBreakWrap(
+				writeCall, fieldAccess, refName, child.fmtReadString('bareBodyBreaks'), child.fmtHasFlag('constructFitBody')
+			));
 		} else if (noLeadNoRaw && !isFirstField) {
 			// Bare-Ref non-first body: allmanIndentForCtor / nestBodyOnSourceNewline /
 			// ω-issue-48-v2 sep cascade — see emitBareRefNonFirstBody.
@@ -11822,7 +11879,13 @@ class WriterLowering {
 				);
 				_sv;
 			}
-			: valueBraceSymmetryWrap(child, fieldAccess);
+			: tryBraceSymmetryWrap(
+				// omega-try-brace-symmetry composes here rather than in a branch of its own: a field
+				// carries at most ONE of the two symmetry metas, so each wrap is inert for the other's
+				// fields and the pair is byte-identical to the pre-slice access without either.
+				child,
+				valueBraceSymmetryWrap(child, fieldAccess)
+			);
 		// The runtime gate includes `opt.dropSingleStmtBraces` so the default-off
 		// path never allocates a suppress-frame opt copy (byte-inert AND
 		// allocation-inert).
@@ -12212,6 +12275,102 @@ class WriterLowering {
 			return star.children[0].annotations.get(AnnotationKeys.BASE_REF);
 		}
 		return null;
+	}
+
+	/**
+	 * The Ref target of `fieldName` on `typePath`'s Seq rule, or null when the rule is not a Seq, has
+	 * no such field, or the field is not a bare Ref. Mirror of `findElementBodyField`, which answers
+	 * the opposite question (which FIELD holds a known type).
+	 */
+	private function seqFieldRefTarget(typePath: String, fieldName: String): Null<String> {
+		final rule: Null<ShapeNode> = _shape.rules[typePath];
+		if (rule == null || rule.kind != Seq) return null;
+		for (child in rule.children) if (child.kind == Ref && child.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == fieldName)
+			return child.annotations.get(AnnotationKeys.BASE_REF);
+		return null;
+	}
+
+	/**
+	 * The `lift` closure `SingleStmtBraces.wrapInBlock` takes when the block's ELEMENT type differs
+	 * from the wrapped value's — a value form wraps an EXPRESSION into a block expression whose
+	 * elements are statements, so the expression has to be raised into one. `macro null` when no lift
+	 * is wanted (a statement body wraps into a block of statements, same type) or the element type
+	 * cannot be resolved.
+	 */
+	private function blockElemLift(valuePath: Null<String>, blockCtor: String, stmtCtor: Null<String>): Expr {
+		if (valuePath == null || stmtCtor == null) return macro null;
+		final stmtPath: Null<String> = starElementTypePath(valuePath, blockCtor);
+		if (stmtPath == null) return macro null;
+		final stmtRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(stmtPath, stmtCtor));
+		return macro (_tbsInner -> $stmtRef(cast _tbsInner, true));
+	}
+
+	/**
+	 * omega-try-brace-symmetry: `@:fmt(tryBraceSymmetry('<catchesField>', '<blockCtor>', '<stmtCtor>'))`
+	 * on a try/catch BODY field gives the construct the brace symmetry `SingleStmtBraces` gate 7 gives
+	 * an if/else — one verdict for the try body and every `catch` body together, so a construct is
+	 * never left braced on one side and bare on the other. `@:fmt(tryDeBrace)` alongside it opts the
+	 * form into the DE-brace half; without it the meta only ever adds braces, which is how
+	 * `valueBraceSymmetry` treats a value-position branch and why the value forms carry it bare.
+	 *
+	 * The third arg is optional and names the ctor that raises the wrapped value into the block's
+	 * element type — needed by the value forms, absent for the statement one (block of statements).
+	 *
+	 * Gated on trivia mode (the ctor arity differs in plain mode) and, at runtime, on
+	 * `opt.dropSingleStmtBraces`: the same knob already owns both if/else directions, and try/catch is
+	 * the third pair of directions of that ONE policy. Returns `fieldAccess` untouched without the meta.
+	 */
+	private function tryBraceSymmetryWrap(child: ShapeNode, fieldAccess: Expr): Expr {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('tryBraceSymmetry');
+		if (args == null || !_ctx.trivia) return fieldAccess;
+		if (args.length < 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(tryBraceSymmetry) expects at least 2 string args (catchesField, blockCtor'
+				+ ', [stmtCtor]), got ${args.length}',
+				Context.currentPos()
+			);
+		final catchesAccess: Expr = { expr: EField(macro value, args[0]), pos: Context.currentPos() };
+		final blockCtor: String = args[1];
+		final liftExpr: Expr = blockElemLift(child.annotations.get(AnnotationKeys.BASE_REF), blockCtor, args[2]);
+		final deBrace: Bool = child.fmtHasFlag('tryDeBrace');
+		return macro {
+			var _tbs = $fieldAccess;
+			_tbs = cast anyparse.format.SingleStmtBraces.trySymmetryBody(
+				_tbs, $catchesAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, $v{blockCtor}, $v{deBrace}, $liftExpr
+			);
+			_tbs;
+		};
+	}
+
+	/**
+	 * The catches-Star half of `tryBraceSymmetryWrap`:
+	 * `@:fmt(tryCatchBraceSymmetry('<bodyField>', '<blockCtor>', '<stmtCtor>'))` on the `catches` Star
+	 * substitutes the ARRAY with one whose clause bodies carry the same group verdict the try body got.
+	 *
+	 * The two metas live on sibling fields of the SAME struct on purpose: only the parent can see both
+	 * halves of the group, so neither an opt-flag frame (`_ssbSuppress`) nor a probe from inside a
+	 * clause writer is needed — a catch clause's own writer has no way to reach the try body.
+	 */
+	private function tryCatchesSymmetryWrap(starNode: ShapeNode, fieldAccess: Expr, elemRefName: String): Expr {
+		final args: Null<Array<String>> = starNode.fmtReadStringArgs('tryCatchBraceSymmetry');
+		if (args == null || !_ctx.trivia) return fieldAccess;
+		if (args.length < 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(tryCatchBraceSymmetry) expects at least 2 string args (bodyField, blockCtor'
+				+ ', [stmtCtor]), got ${args.length}',
+				Context.currentPos()
+			);
+		final bodyAccess: Expr = { expr: EField(macro value, args[0]), pos: Context.currentPos() };
+		final blockCtor: String = args[1];
+		final liftExpr: Expr = blockElemLift(seqFieldRefTarget(elemRefName, args[0]), blockCtor, args[2]);
+		final deBrace: Bool = starNode.fmtHasFlag('tryDeBrace');
+		return macro {
+			var _tcs = $fieldAccess;
+			_tcs = cast anyparse.format.SingleStmtBraces.trySymmetryCatches(
+				_tcs, $bodyAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, $v{blockCtor}, $v{deBrace}, $liftExpr
+			);
+			_tcs;
+		};
 	}
 
 	/**
@@ -15065,6 +15224,24 @@ class WriterLowering {
 		return branch.fmtHasFlag('propagateArrowLambdaBody') ? macro _setArrowLambdaBody(${rightOptBase ?? macro opt}, opt) : rightOptBase;
 	}
 
+	/**
+	 * omega-try-brace-symmetry: the leading separator a `catch` takes after a NON-block body. The
+	 * unconditional `_dhl()` is haxe-formatter's statement-context convention and stays the default;
+	 * naming a `BodyPolicy` knob adds the FitLine escape, so `} catch` cuddles while the line fits and
+	 * breaks when it does not — the separator answering the same width question the body's own policy
+	 * answers, so the two agree about whether the construct rendered flat.
+	 */
+	private static function bareSepBreak(policyField: Null<String>, sepExpr: Expr, softSeam: Bool): Expr {
+		if (policyField == null) return macro _dhl();
+		final policy: Expr = optFieldAccess(policyField);
+		// Under `@:fmt(constructFitSep)` the seam is a SOFT line owned by the enclosing construct
+		// group, so it breaks with the body's own seam rather than answering for itself. Asking here
+		// is what put a flat ` catch` after a body that had already broken, which then squeezed the
+		// body's call into a width it had to wrap inside.
+		final flatSeam: Expr = softSeam ? macro _dl() : macro _dfle(opt.lineWidth, _dhl(), $sepExpr);
+		return macro $policy == anyparse.format.BodyPolicy.FitLine ? $flatSeam : _dhl();
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -15200,6 +15377,14 @@ typedef WrapBodyOpts = {
 	// Replaces the body-only `_dinfle` probe whose post-`)` column reset
 	// glued `) return x;` after a wrapped condition. Null/false → byte-inert.
 	?condFitGroup: Bool,
+	// omega-try-brace-symmetry: `@:fmt(constructFitBody)` on a body field inside a
+	// `constructFitGroup`. Its `FitLine` layout becomes ONE soft line owned by that group, so the
+	// body sits on the header line while the whole construct fits and drops to its own indented line
+	// the moment the group breaks — the shape an `if` with an `else` produces, which is what a
+	// try/catch has to match: a `catch` always follows, exactly as an `else` does. Without it the
+	// FitLine body answers for its own line and GLUES, leaving `try body` on the head while the
+	// `catch` seam below it has already broken.
+	?constructFitBody: Bool,
 	// ω-keep-chain (increment: opadd_chain_keep) — runtime `Bool` access to the
 	// ctor's captured `return`→value source newline (the `captureKwNewline` synth
 	// slot, ReturnStmt only). When true AND the body is already-multiline

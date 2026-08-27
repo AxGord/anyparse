@@ -411,6 +411,7 @@ import unit.HxSemicolonBeforeElseSliceTest;
 import unit.HxSepStarCloseTrailCommentTest;
 import unit.HxSharpErrorSliceTest;
 import unit.HxSingleStmtBracesSliceTest;
+import unit.HxTryBraceSymmetrySliceTest;
 import unit.HxSoleArgGluedCloseDedentTest;
 import unit.HxSoleItemCuddledBracketsTest;
 import unit.HxSourceBlankPreserveSliceTest;
@@ -855,6 +856,7 @@ class RunTests {
 		addCase(new HxListLiteralEmissionSliceTest());
 		addCase(new HxCaseBodySameLineSliceTest());
 		addCase(new HxSingleStmtBracesSliceTest());
+		addCase(new HxTryBraceSymmetrySliceTest());
 		addCase(new HxStringSliceTest());
 		addCase(new HxParamBodyUntypedSliceTest());
 		addCase(new HxIfExprTrailSemiSliceTest());

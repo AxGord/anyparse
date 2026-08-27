@@ -79,10 +79,34 @@ package anyparse.grammar.haxe;
  * path then forwards `bodyOnSameLineExpr = !value.bodyBeforeNewline` into
  * `bodyPolicyWrap`, which drives the `Keep` dispatch — closing the
  * `untypedBody=Keep` source-shape channel for `try\n\tuntyped {…}`.
+ *
+ * omega-try-brace-symmetry adds the brace-symmetry pair. `@:fmt(tryBraceSymmetry('catches',
+ * 'BlockStmt'))` on `body` and `@:fmt(tryCatchBraceSymmetry('body', 'BlockStmt'))` on `catches`
+ * substitute both halves under ONE group verdict, so the try body and every catch body are braced
+ * together or bare together — the try/catch twin of `SingleStmtBraces` gate 7. `@:fmt(tryDeBrace)`
+ * on both opts this STATEMENT form into the de-brace direction; the value forms carry the metas
+ * without it and only ever ADD braces, since a de-braced value body has no terminator of its own.
+ * Position matters on the way out: Haxe rejects a `;` in front of `catch`, so every body but the
+ * last renders with its trailing-`;` slot cleared and only an `ExprStmt` — whose terminator is that
+ * slot alone — is accepted there.
+ *
+ * `@:fmt(constructFitGroup('body', 'catches'))` on the TYPEDEF splices the whole construct into one
+ * `BodyGroup`, the shape the condWrap path already builds for `if` / `for` / `while` out of their
+ * CONDITION field. A try/catch has no condition, so without it the body and the `catch` seams each
+ * answered the width question on their own line, and the seam answered AFTER the body had broken —
+ * which squeezed a de-braced `try f(a, b) catch (e) g();` into breaking INSIDE the call. The companion `@:fmt(constructFitSep)` on `catches` makes the seam before each
+ * `catch` a SOFT line the group owns, and `@:fmt(constructFitBody)` on every body field does the
+ * same for the body seam. Both matter: with the body still answering for its own line it GLUED to
+ * `try` while the `catch` below it had already broken. Breaking them together gives the LADDER an
+ * `if` with an `else` produces — each body on its own indented line, the keyword back at the
+ * statement indent — which is the right analogy, since a `catch` follows a try body exactly as an
+ * `else` follows a then-body.
  */
 @:peg
+@:fmt(constructFitGroup('body', 'catches'))
 typedef HxTryCatchStmt = {
 	@:trailOpt(';') @:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'),
-		beforeNewlineSlotFirst) var body: HxStatement;
-	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks) var catches: Array<HxCatchClause>;
+		beforeNewlineSlotFirst, constructFitBody, tryBraceSymmetry('catches', 'BlockStmt'), tryDeBrace) var body: HxStatement;
+	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks('tryBody', 'catchBody'), constructFitSep,
+		tryCatchBraceSymmetry('body', 'BlockStmt'), tryDeBrace) var catches: Array<HxCatchClause>;
 };
