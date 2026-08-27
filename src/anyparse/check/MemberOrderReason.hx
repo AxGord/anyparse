@@ -58,7 +58,7 @@ final class MemberOrderReason {
 		if (pinned) return groupReason(a, b, keys.pinnedOrdinal, keys.otherPinnedOrdinal, keys.branch);
 		if (a.rank != b.rank) return rankReason(a, b);
 		return if ((keys.ranked == null) != (keys.otherRanked == null))
-			plainVersusBlockReason(b)
+			plainVersusBlockReason(a, b, keys.ranked != null)
 		else if (keys.ranked != null && keys.otherRanked != null)
 			groupReason(a, b, keys.ranked, keys.otherRanked, keys.branch)
 		else
@@ -125,8 +125,10 @@ final class MemberOrderReason {
 	}
 
 	/** One of the pair is a plain member and the other sits in a content-ranked `#if` block of the SAME rank. */
-	private static function plainVersusBlockReason(b: OrderedMember): String {
-		return 'a plain member leads its rank, and ${nameOf(b)} sits in a conditional block that trails the plain members of that rank';
+	private static function plainVersusBlockReason(a: OrderedMember, b: OrderedMember, leads: Bool): String {
+		return leads
+			? 'a conditional block of inline fields leads its rank, so ${nameOf(a)} must precede the plain ' + describe(b)
+			: 'a plain member leads its rank, and ${nameOf(b)} sits in a conditional block that trails the plain members of that rank';
 	}
 
 	/**

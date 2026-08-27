@@ -800,6 +800,38 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
 	}
 
+	public function testInlineConditionalBlockLeadsInitializedField(): Void {
+		final src: String = 'class C {\n\tpublic static inline final A:Int = 1;\n\n\tpublic static final n:N = new N();\n'
+			+ '\n\t#if release\n\tpublic static inline final U:Int = 1;\n\t#else\n\tpublic static inline final U:Int = 2;\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'the guarded inline constants below the initialized field are flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('#if release') < fixed.indexOf('final A'), 'the inline block leads the plain constants: $fixed');
+		Assert.isTrue(fixed.indexOf('final A') < fixed.indexOf('final n'), 'the plain constant still leads the initialized field: $fixed');
+		Assert.isTrue(fixed.indexOf('final U') < fixed.indexOf('#end'), 'the constants stay inside their branches: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	public function testMixedInlineConditionalBlockTrailsRank(): Void {
+		final src: String = 'class C {\n\tpublic static inline final A:Int = 1;\n\n\t#if release\n\tpublic static inline final U:Int = 1;\n'
+			+ '\n\tpublic static final V:Int = 2;\n\t#end\n\n\tpublic static final n:Int = 3;\n}';
+		Assert.isTrue(violations(src).length > 0, 'the block mixing inline and non-inline members above the plain field is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('final n') < fixed.indexOf('#if release'), 'the block of mixed inline-ness trails its rank: $fixed');
+		Assert.isTrue(fixed.indexOf('final U') < fixed.indexOf('final V'), 'the block still sorts internally: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	public function testInlineConditionalMethodBlockStillTrailsRank(): Void {
+		final src: String = 'class C {\n\t#if X\n\tpublic inline function g():Void {}\n\t#end\n\n\tpublic function f():Void {}\n}';
+		Assert.isTrue(violations(src).length > 0, 'the guarded method block above the plain method is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('function f') < fixed.indexOf('#if X'), 'an inline METHOD block still trails its rank: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
 	/**
 	 * A guarded static whose initializer READS a sibling static keeps its block pinned. Without the
 	 * gate the block would earn rank 1 and outrank `base` (rank 3), and the whole container would

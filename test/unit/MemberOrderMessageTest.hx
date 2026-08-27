@@ -86,6 +86,22 @@ final class MemberOrderMessageTest extends Test {
 	}
 
 	/**
+	 * The leading-block key: a conditional block holding only inline fields precedes the plain
+	 * members of its rank, and the advisory says so in the direction the sort actually takes -
+	 * the older wording described every plain/block pair as the block TRAILING, which reads as
+	 * the opposite instruction here.
+	 */
+	public function testAdvisoryNamesTheLeadingInlineBlock(): Void {
+		Assert.equals(
+			'type member \'U\' is out of canonical order: a conditional block of inline fields leads its rank, so \'U\' must precede the '
+			+ 'plain public constant \'n\'',
+			messageFor(
+				'class C {\n\tpublic static final n:N = new N();\n\n\t#if release\n\tpublic static inline final U:Int = 1;\n\t#end\n}'
+			)
+		);
+	}
+
+	/**
 	 * `inline` on a static constant moves it WITHIN its rank, it does not change the rank: both
 	 * spellings are a `public constant`, and the sentence says so. The old message could not, which
 	 * is how "a non-inline `static final` is classified as a field and an inline one as a constant"

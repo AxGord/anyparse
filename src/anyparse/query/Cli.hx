@@ -469,6 +469,15 @@ typedef StripResult = {
 @:nullSafety(Strict)
 final class Cli {
 
+	#if (sys || nodejs)
+	/**
+	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
+	 * stderr and the sweep footer breakdown surface at most this many
+	 * keys before truncating.
+	 */
+	private static inline final NO_TARGET_TOP_N: Int = 10;
+	#end
+
 	private static inline final SKIP_PATHS_SHOWN: Int = 5;
 
 	/** How many rule ids `unfixedFixLedger` names before it summarises the rest as a count. */
@@ -583,15 +592,6 @@ final class Cli {
 		'--spans',
 		'--type-refs'
 	];
-
-	#if (sys || nodejs)
-	/**
-	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
-	 * stderr and the sweep footer breakdown surface at most this many
-	 * keys before truncating.
-	 */
-	private static inline final NO_TARGET_TOP_N: Int = 10;
-	#end
 
 	/**
 	 * Map a `--fail-on` level name to its `Severity`, or null if unknown.
@@ -17350,6 +17350,7 @@ final class Cli {
 			);
 		return lines;
 	}
+
 	/**
 	 * Which of the things an unfixed finding can MEAN happened to `entry`'s.
 	 *
@@ -17366,6 +17367,7 @@ final class Cli {
 		// under-report a rule whose oracle pass did land edits.
 		return oracleAssisted ? '$verdict — and this rule has an oracle-assisted pass besides, counted on the summary line above' : verdict;
 	}
+
 	/**
 	 * The verdict from what the SAFE loop observed, before the oracle-assisted note is added.
 	 *
