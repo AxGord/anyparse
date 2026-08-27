@@ -78,9 +78,12 @@ class MethodChainEmit {
 		// `segments`: entry `i` is true when the thing rendered immediately
 		// before segment `i` (receiver for i=0, else segment i-1) ends with
 		// a line comment. The signal is read structurally from the already-
-		// built Docs (`endsWithLineComment`), so every receiver shape (bare
-		// ident with a glued `// …`, `new T()` with its own trailing slot,
-		// a call receiver) is covered uniformly. When any entry fires we
+		// built Docs (`WrapList.endsWithLineComment` — the ONE veto every
+		// glue-seam shaper asks; this module carried a second walker for the
+		// same question until it was found to disagree), so every receiver
+		// shape (bare ident with a glued `// …`, `new T()` with its own
+		// trailing slot, a call receiver) is covered uniformly. When any
+		// entry fires we
 		// route every cascade-decided shape through `shapeKeepTail` with a mask
 		// = `commentForcedBreak[i] OR (the cascade mode breaks at i)`, so
 		// the chain breaks at comment boundaries while preserving the
@@ -90,7 +93,7 @@ class MethodChainEmit {
 		// exactly as before → byte-inert.
 		final commentForcedBreak: Array<Bool> = [
 			for (i in 0...segments.length)
-				endsWithLineComment(i == 0 ? receiver : segments[i - 1])
+				WrapList.endsWithLineComment(i == 0 ? receiver : segments[i - 1])
 		];
 		final hasCommentBreak: Bool = commentForcedBreak.indexOf(true) != -1;
 
@@ -344,73 +347,6 @@ class MethodChainEmit {
 			minLen: minLen,
 			equalLens: equalLens,
 			anyHardline: false
-		};
-	}
-
-	/**
-	 * ω-chain-comment-forced-break — does `doc` end with a line comment on
-	 * its rendered last line? Walks the rightmost leaf of the Doc tree: a
-	 * trailing line comment is a `Text` atom whose trimmed content starts
-	 * with `//` (the verbatim `trailingCommentDocVerbatim` output for a line
-	 * comment is `' // …'`; a block comment is `' /* … *\/'` and is NOT a
-	 * forced break — content can follow it on the same line). Containers
-	 * recurse into their last child; layout atoms (`Line` / `OptHardline` /
-	 * `Empty`) are transparent — a `Line` after the comment Text still
-	 * leaves the comment as the last *visible* token, so they're skipped
-	 * while scanning right-to-left. Conditional / measured ctors
-	 * (`IfBreak`, `Group`, `BodyGroup`, …) descend into the structural child
-	 * that carries the token stream; for the comment probe the break-side /
-	 * inner subtree is sufficient since both branches end with the same
-	 * trailing comment token by construction.
-	 */
-	private static function endsWithLineComment(doc: Doc): Bool {
-		return switch doc {
-			case Text(s):
-				final t: String = StringTools.trim(s);
-				t.startsWith('//');
-			case Concat(items):
-				var i: Int = items.length - 1;
-				var found: Bool = false;
-				var decided: Bool = false;
-				while (i >= 0 && !decided) {
-					switch items[i] {
-						// Layout atoms are transparent — skip past them to the
-						// last token-bearing child.
-						case Line(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline,
-							Empty:
-							i--;
-						case _:
-							found = endsWithLineComment(items[i]);
-							decided = true;
-					}
-				}
-				found;
-			case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
-				endsWithLineComment(inner);
-			case IfBreak(breakDoc, _), IfWidthExceeds(_, breakDoc, _), IfFirstLineExceeds(_, breakDoc, _), IfLineExceeds(_, breakDoc, _),
-				IfResidualLineExceeds(_, breakDoc, _), IfFullLineExceeds(_, breakDoc, _), IfNaturalFirstLineExceeds(_, breakDoc, _),
-				IfNaturalFirstLineExceedsWithRest(_, breakDoc, _), IfNaturalFirstLineFitsOpenDelim(_, breakDoc, _),
-				IfArrowContinuationFits(_, _, _, breakDoc, _), IfIndentWidthExceeds(_, _, breakDoc, _),
-				IfGluedFirstLineExceeds(_, _, breakDoc, _):
-				// PROBE FAMILY (Doc.hx header table). The stanza's own rule — both
-				// branches end with the same trailing comment token by construction —
-				// holds for all three additions, so the break side stays this walker's
-				// single side: `IfArrowContinuationFits` pairs a glued and an opened
-				// layout of the SAME item list (both closed by the list's `Text(close)`),
-				// and the two body-placement probes wrap the SAME body object, differing
-				// only in the separator BEFORE it — which a right-spine walk never
-				// reaches.
-				endsWithLineComment(breakDoc);
-			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
-				OptHardlineSkipBeforeHardline, Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
-				// Layout atoms bear no token. A `Fill` is reachable only as a wrap-
-				// engine list body, never as a chain segment's tail, and the comment
-				// this probe hunts is spliced by the trivia writer OUTSIDE any Fill.
-				// Enumerated rather than left to `case _` so a new `Doc` ctor fails to
-				// compile here instead of silently inheriting `false`.
-				false;
 		};
 	}
 

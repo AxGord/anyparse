@@ -84,14 +84,28 @@ final class DocProbeFamilyWalkerTest extends Test {
 		);
 	}
 
-	/** `endsWithLineComment` reads the BREAK side of all three — its side for the whole conditional table. */
+	/**
+	 * `WrapList.endsWithLineComment` reads the BREAK side of all three — its side
+	 * for the whole conditional table — plus the two `Concat` shapes that decide
+	 * WHICH walker is behind it. The last two assertions are the ones the
+	 * now-deleted `MethodChainEmit` copy failed: reverting this predicate to that
+	 * copy's `Concat` scan leaves the first six green and turns exactly those two
+	 * red, which is what proves the veto is one answer and not two.
+	 */
 	public function testEndsWithLineCommentReadsBreakSide(): Void {
-		Assert.isTrue(MethodChainEmit.endsWithLineComment(IfArrowContinuationFits(1, 4, 140, Text(' // c'), Text('x'))));
-		Assert.isFalse(MethodChainEmit.endsWithLineComment(IfArrowContinuationFits(1, 4, 140, Text('x'), Text(' // c'))));
-		Assert.isTrue(MethodChainEmit.endsWithLineComment(IfIndentWidthExceeds(4, 140, bodyBreak(Text(' // c')), bodyGlue(Text('x')))));
-		Assert.isFalse(MethodChainEmit.endsWithLineComment(IfIndentWidthExceeds(4, 140, bodyBreak(Text('x')), bodyGlue(Text(' // c')))));
-		Assert.isTrue(MethodChainEmit.endsWithLineComment(IfGluedFirstLineExceeds(140, 1, bodyBreak(Text(' // c')), bodyGlue(Text('x')))));
-		Assert.isFalse(MethodChainEmit.endsWithLineComment(IfGluedFirstLineExceeds(140, 1, bodyBreak(Text('x')), bodyGlue(Text(' // c')))));
+		Assert.isTrue(WrapList.endsWithLineComment(IfArrowContinuationFits(1, 4, 140, Text(' // c'), Text('x'))));
+		Assert.isFalse(WrapList.endsWithLineComment(IfArrowContinuationFits(1, 4, 140, Text('x'), Text(' // c'))));
+		Assert.isTrue(WrapList.endsWithLineComment(IfIndentWidthExceeds(4, 140, bodyBreak(Text(' // c')), bodyGlue(Text('x')))));
+		Assert.isFalse(WrapList.endsWithLineComment(IfIndentWidthExceeds(4, 140, bodyBreak(Text('x')), bodyGlue(Text(' // c')))));
+		Assert.isTrue(WrapList.endsWithLineComment(IfGluedFirstLineExceeds(140, 1, bodyBreak(Text(' // c')), bodyGlue(Text('x')))));
+		Assert.isFalse(WrapList.endsWithLineComment(IfGluedFirstLineExceeds(140, 1, bodyBreak(Text('x')), bodyGlue(Text(' // c')))));
+		// ω-item-close-trail: the WHOLE point of there being one predicate. This is
+		// the shape `MethodChainEmit`'s own walker got wrong — its `Concat` scan
+		// committed on the last non-LAYOUT child, so an `OptSpace` (or a
+		// whitespace-only `Text`) parked after the comment made it answer `false`
+		// while `WrapList` answered `true` about the identical Doc.
+		Assert.isTrue(WrapList.endsWithLineComment(Concat([Text(' // c'), OptSpace(' ')])));
+		Assert.isTrue(WrapList.endsWithLineComment(Concat([Text(' // c'), Text('   ')])));
 	}
 
 	/** `lastVisibleText` reads the BREAK side of all three — its side for the whole conditional table. */

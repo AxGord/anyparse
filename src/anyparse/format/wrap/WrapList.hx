@@ -1324,6 +1324,34 @@ class WrapList {
 	}
 
 	/**
+	 * ω-item-close-trail, THE predicate — does `d`'s rendered tail end in a `//`
+	 * line comment?
+	 *
+	 * One question, one answer. Four callers ask it — the two multi-arg glue
+	 * intercepts and `shapeSoleItemCuddledBrackets` through
+	 * `lastItemEndsWithLineComment`, plus `MethodChainEmit`'s per-link
+	 * `commentForcedBreak` — and until this seam was audited the fourth asked it
+	 * with a private right-spine walker of its own that answered `false` where
+	 * this one answers `true`: its `Concat` scan committed on the last non-LAYOUT
+	 * child, where this walk keeps going left past a whitespace-only `Text` or an
+	 * `OptSpace`. So a comment followed by padding was invisible to the chain and
+	 * visible to the list, on the same Doc. A veto that drifts per caller is not a
+	 * veto; every caller now reads this one.
+	 *
+	 * `lastVisibleText` is the walk — a right-spine descent that treats a
+	 * whitespace-only leaf as invisible and is opaque over `Fill*` (which item
+	 * lands last is a render-time decision, so there is no static answer and
+	 * `null` reads as "no"). Public because `MethodChainEmit` is a sibling module
+	 * and asks the identical question about a chain link's predecessor. The
+	 * WHY-it-matters and the reachability numbers live in
+	 * `lastItemEndsWithLineComment`'s doc below, which is the shaper-side half of
+	 * the same story.
+	 */
+	public static function endsWithLineComment(d: Doc): Bool {
+		return isLineCommentText(lastVisibleText(d));
+	}
+
+	/**
 	 * The trimmed last-visible-Text of `d`, or `null`. Right-spine mirror of
 	 * `firstVisibleText` — used to confirm a comprehension body is a `{ … }`
 	 * BLOCK (last token `}`), distinguishing it from an expression body that
@@ -2142,10 +2170,29 @@ class WrapList {
 	 * behaviour this project matches on purpose. Re-wrapping THERE would be a
 	 * policy change, not a fix.
 	 *
-	 * `shapeSingleArgGlue` builds the same seam and is NOT gated: every sole-arg
-	 * shape probed with a trailing `//` (long and short object literal, array
-	 * literal, block-lambda arrow) took the broken arm instead, so no reachable
-	 * case was found to gate — not a proof that none exists.
+	 * `shapeSingleArgGlue` builds the same seam and is STILL not gated — and that
+	 * is now a measurement rather than the earlier "four shapes probed, none
+	 * reached it, not a proof". The shape that DOES reach it is narrower than any
+	 * of those four: a sole OBJECT-LITERAL argument WIDE enough to overflow its
+	 * own continuation line, so the `{`-led arm resolves to `hugGlue` instead of
+	 * the leading-break shape. The call then opens `f({`, the literal explodes,
+	 * and the close-trailing `//` strands the `)` one line under a `}` already at
+	 * the statement indent; the BLOCK-comment twin of the same source glues
+	 * (`} /* c *\/);`), which is the one-variable control naming the comment style
+	 * and not the width as the discriminator.
+	 *
+	 * Gating it there was written, measured and REVERTED. Two numbers killed it.
+	 * Reachability: instrumented at the head of `shapeSingleArgGlue`, the whole
+	 * Pony tree (870 files) reaches it 25 095 times and anyparse's own
+	 * `src`/`test`/`tools` 96 436 times, with a `//`-tailed sole item in ZERO of
+	 * the 121 531. Effect: on the synthetic source that DOES fire it, the gate
+	 * does not change the fixed point — declining hands the pass back to the
+	 * leading-break shape, whose output the NEXT pass re-reads as source-multiline
+	 * and re-glues through the `noWrap` cascade, landing on the identical bytes
+	 * one rewrite later. So the gate cost a normalisation pass and bought nothing,
+	 * which is the same verdict `testSoleArgLayoutUnderNoWrap` already records for
+	 * that shape: the stranded closer there is the CASCADE's answer, and this
+	 * intercept cannot outvote it.
 	 *
 	 * The item's own `Trivial<T>.trailingComment` slot cannot answer this: it is
 	 * null exactly when the comment was captured by a NESTED construct's
@@ -2158,13 +2205,14 @@ class WrapList {
 	 * item lands last is a render-time decision), so an item whose right spine
 	 * dead-ends in a `Fill` answers false and the glue fires. The trivia writer
 	 * splices a close-trailing comment outside any `Fill`, so no such item has
-	 * been observed. `MethodChainEmit.endsWithLineComment` asks the same question
-	 * with its own walker; it decides on the first non-transparent child where
-	 * this pair keeps scanning left, so it can only ever be the more eager of the
-	 * two to answer false — the safe direction for a refusal.
+	 * been observed. `MethodChainEmit` used to carry a SECOND walker for the same
+	 * question, and it disagreed with this one in exactly that direction — it
+	 * decided on the first non-layout `Concat` child where this walk keeps
+	 * scanning left past whitespace-only leaves. It now calls
+	 * `endsWithLineComment` like everyone else.
 	 */
 	private static function lastItemEndsWithLineComment(items: Array<Doc>): Bool {
-		return items.length > 0 && isLineCommentText(lastVisibleText(items[items.length - 1]));
+		return items.length > 0 && endsWithLineComment(items[items.length - 1]);
 	}
 
 	/**
@@ -2512,6 +2560,8 @@ class WrapList {
 	): Null<Doc> {
 		if (mode != FillLineWithLeadingBreak || items.length != 1 || isArrowBodyMarker(items[0]) || isMethodChainItem(items[0]))
 			return null;
+		// ω-item-close-trail is deliberately NOT asked here — measured, not assumed;
+		// see `lastItemEndsWithLineComment`'s own doc for the numbers.
 		// ω-glued-close-opener-line (T173): a closer glued straight after the sole
 		// argument lands wherever the argument's last rendered line left the pen.
 		// For a collection literal or a nested call that is the head line's own
