@@ -10,11 +10,13 @@ using StringTools;
 using Lambda;
 
 /**
- * One file's text plus the two masks every reference test takes: its import
- * statements (an occurrence inside one is not a use) and its comment regions
- * (a `.` inside a comment qualifies nothing). Hoisted once per file.
+ * One file's text plus the two masks every reference test takes. `excluded` is where an occurrence
+ * does not count at all — the file's own import statements, plus its comment regions, since a
+ * comment resolves no type. `commentRegions` is the same comment list under its OTHER job: a `.`
+ * inside a comment qualifies nothing, so the dotted-tail test has to know where comments are
+ * even for an occurrence outside them. Both hoisted once per file.
  */
-private typedef FileScan = { source: String, importSpans: Array<Span>, commentRegions: Array<Span> };
+private typedef FileScan = { source: String, excluded: Array<Span>, commentRegions: Array<Span> };
 
 /**
  * Flags `import` / `using` statements whose bound name is never referenced
@@ -28,11 +30,17 @@ private typedef FileScan = { source: String, importSpans: Array<Span>, commentRe
  * An earlier version collected occurrences from the plugin's `parseFile` +
  * `parseFileTypeRefs` trees. That MISSED references the type projection does
  * not surface — a type nested in `Array<{ f: Array<Name> }>`, for one — and
- * `lint --fix` then deleted a needed import, breaking the build. A raw
- * word-boundary scan catches every reference the compiler can see, at the
- * cost of also counting the name inside comments / strings. That trade is
- * the right one for an autofix: err toward a false NEGATIVE (a missed unused
- * import) over a false POSITIVE (deleting a needed one).
+ * `lint --fix` then deleted a needed import, breaking the build. A raw word-boundary scan catches every reference the compiler can see, at the cost of also
+ * counting the name inside STRING literals. That trade is the right one for an autofix: err
+ * toward a false NEGATIVE (a missed unused import) over a false POSITIVE (deleting a needed
+ * one), and a string is where the trade earns its keep — `Type.resolveClass('Foo')` and the
+ * macro family reach a type through one, and nothing else in the check would see them.
+ *
+ * COMMENTS are masked out, and were not until 2026-08-27. A comment resolves nothing, so the
+ * false-positive risk the string case carries does not exist there, and the cost of the blanket
+ * bias was measured: masking comments turned up 41 dead imports across this project's own `src`
+ * and `test`, all 41 deleted with both binaries still building, and 11 more on the Pony corpus,
+ * where the `lint-oracle` compile before and after came back byte-identical.
  *
  * ## Dotted tails do not count
  *
@@ -185,10 +193,15 @@ final class UnusedImport implements Check {
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
+			// One mask, hoisted per file: the import statements (an occurrence inside one is not a
+			// use) AND the comment regions (a comment resolves no type, so a name spelled only
+			// there is not a use either). String literals are deliberately NOT in it — see the
+			// class doc.
+			final comments: Array<Span> = RefactorSupport.collectCommentRegions(source);
 			final scan: FileScan = {
 				source: source,
-				importSpans: [for (imp in info.imports) imp.span],
-				commentRegions: RefactorSupport.collectCommentRegions(source)
+				excluded: [for (imp in info.imports) imp.span].concat(comments),
+				commentRegions: comments
 			};
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
@@ -297,15 +310,12 @@ final class UnusedImport implements Check {
 	}
 
 	/**
-	 * Is `name` referenced as a SIMPLE name anywhere in the file, outside its own
-	 * import statements? The one liveness test every arm of the check asks — see
+	 * Is `name` referenced as a SIMPLE name anywhere in the file, outside its own import statements and outside its comments? The one liveness test every arm of the check asks — see
 	 * `RefactorSupport.referencedUnqualifiedInRange` for why a dotted tail is not
 	 * a reference.
 	 */
 	private static function referenced(scan: FileScan, name: String): Bool {
-		return RefactorSupport.referencedUnqualifiedInRange(
-			scan.source, name, 0, scan.source.length, scan.importSpans, scan.commentRegions
-		);
+		return RefactorSupport.referencedUnqualifiedInRange(scan.source, name, 0, scan.source.length, scan.excluded, scan.commentRegions);
 	}
 
 	/**

@@ -132,11 +132,57 @@ class LintSliceTest extends Test {
 		Assert.equals(0, vs.length);
 	}
 
-	/** A name appearing only in a comment counts as used — the conservative bias (no false positive). */
-	public function testCommentMentionIsConservativelyUsed(): Void {
+	/**
+	 * A name appearing only in a COMMENT is not a reference — a comment resolves nothing, so the
+	 * import is unused and deletable. Until 2026-08-27 this test pinned the opposite, under the name
+	 * `testCommentMentionIsConservativelyUsed`, and `InertRegions` documents the reason: the raw
+	 * over-counting scan is what protects the `unused-*` family from deleting a live binding. That
+	 * reason is real for a STRING (reflection reaches a type through one) and empty for a comment,
+	 * and the cost was measured before the reversal — masking comments turned up 41 dead imports in
+	 * `src` + `test`, every one of which was deleted with both binaries still building, and 11 more
+	 * on the Pony corpus, where the two `lint-oracle` compiles came back byte-identical. The string
+	 * half is the control below.
+	 */
+	public function testCommentMentionIsNotAReference(): Void {
+		// The imported module is in the file set so the verdict reaches its deletable arm rather
+		// than the not-in-scope advisory — the point is that `--fix` would remove this import.
+		final owner: { file: String, source: String } = { file: 'a/b/Foo.hx', source: 'package a.b;\nclass Foo {}' };
 		final src: String = 'package pkg;\nimport a.b.Foo;\n// Foo is referenced here only\nclass C {}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'f.hx', source: src }], plugin());
-		Assert.equals(0, vs.length);
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'f.hx', source: src }, owner], plugin());
+		Assert.equals(1, vs.length, 'a comment cannot resolve a type, so the import is unused');
+		Assert.equals(Severity.Warning, vs[0].severity, 'and it is deletable, not an advisory');
+		// The control that keeps the conservative bias where it EARNS its keep: a name spelled in a
+		// string literal stays a use, because `Type.resolveClass('Foo')` and the macro family reach a
+		// type that way and the raw scan is the only thing that sees them.
+		final str: String = 'package pkg;\nimport a.b.Foo;\nclass C {\n\tvar n:String = "Foo";\n}';
+		Assert.equals(0, new UnusedImport().run([{ file: 'g.hx', source: str }, owner], plugin()).length);
+	}
+
+	/**
+	 * The comment mask comes off a hand-rolled lexer, and masking is what decides a DELETE — so a
+	 * region it gets wrong erases a live import. It got one wrong: `skipStringLiteral` paired quotes
+	 * without knowing that a `${ … }` hole is code, so the nested same-quote string in
+	 * `'${cond ? '// note' : Dep.NAME}'` — legal Haxe at any depth — closed the literal early and the
+	 * `//` inside it opened a comment region over the rest of the expression, `Dep.NAME` included.
+	 * Compile-proved on 4.3.7 while this slice's comment mask was in and the lexer was not: `--fix`
+	 * removed `import q.Dep;` and the tree failed with `Type not found : Dep`.
+	 *
+	 * The `/*` spelling is the same defect one step worse — an unterminated block comment runs to the
+	 * end of the file, so EVERY import below it became deletable at once.
+	 */
+	public function testInterpolationHoleIsNotACommentMask(): Void {
+		final owner: { file: String, source: String } = {
+			file: 'q/Dep.hx',
+			source: 'package q;\nclass Dep { public static var NAME:String; }'
+		};
+		inline function findings(body: String): Int {
+			final src: String = 'package app;\nimport q.Dep;\nclass User {\n\tpublic function f(c:Bool):String return $body;\n}';
+			return new UnusedImport().run([{ file: 'app/User.hx', source: src }, owner], plugin()).length;
+		}
+		Assert.equals(0, findings("'${c ? '// note' : Dep.NAME}'"), 'a nested same-quote string in a hole is not a comment');
+		Assert.equals(0, findings("'${c ? '/*' : Dep.NAME}'"), 'and an unterminated one does not mask the rest of the file');
+		// The control: a real line comment IS still a mask, which is the whole point of the change.
+		Assert.equals(1, findings("'x' /* Dep.NAME */"), 'a genuine comment still hides the only mention');
 	}
 
 	/** An unparseable file is excluded; the check does not throw (skip-parse tolerance). */

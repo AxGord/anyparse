@@ -2,6 +2,7 @@ package unit;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.MoveSymbol;
 import utest.Assert;
 import utest.Test;
@@ -324,8 +325,12 @@ class MoveSymbolSliceTest extends Test {
 		// above is consumed with it (no double blank left behind).
 		Assert.equals('package pkg;\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n}\n', newA);
 		// Byte-exact on the destination too: only the decl's OWN text moves, so the
-		// blank line the cut also removed does not arrive as a stray blank run.
-		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n', newB);
+		// blank line the cut also removed does not arrive as a stray blank run — and the
+		// destination ends in the ONE newline it arrived with. Until 2026-08-27 this
+		// assertion read `}\n\n`: the cut span reaches over the decl's line terminator, so
+		// `declText` carried one newline and the destination's own was re-added on top of
+		// it, leaving every move's destination one blank line past canonical.
+		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n', newB);
 		Assert.isFalse(newB.contains('the bar'), 'the neighbour doc must not travel to B');
 	}
 
@@ -384,8 +389,12 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b }
 		]);
-		Assert.equals('package pkg;\n\n', changeFor(changes, 'pkg/A.hx').newSource);
-		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}', changeFor(changes, 'pkg/B.hx').newSource);
+		// The source loses the blank line that separated the decl from the import block as well:
+		// with nothing following the cut it is a trailing blank, which `fmt --list` rejects.
+		Assert.equals('package pkg;\n', changeFor(changes, 'pkg/A.hx').newSource);
+		// The destination arrived with no EOF newline; the appended declaration's last line still
+		// gets the one terminator it needs, which the untrimmed `declText` used to supply.
+		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n', changeFor(changes, 'pkg/B.hx').newSource);
 	}
 
 	/**
@@ -401,8 +410,8 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b }
 		]);
-		Assert.equals('package pkg;\n\n', changeFor(changes, 'pkg/A.hx').newSource);
-		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n', changeFor(changes, 'pkg/B.hx').newSource);
+		Assert.equals('package pkg;\n', changeFor(changes, 'pkg/A.hx').newSource);
+		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n', changeFor(changes, 'pkg/B.hx').newSource);
 	}
 
 	/**
@@ -427,7 +436,7 @@ class MoveSymbolSliceTest extends Test {
 			changeFor(changes, 'pkg/A.hx').newSource
 		);
 		Assert.equals(
-			'package pkg;\n\nclass B {}\n\n@:keep\nprivate final class Hidden {\n\tpublic function new() {}\n}\n\n',
+			'package pkg;\n\nclass B {}\n\n@:keep\nprivate final class Hidden {\n\tpublic function new() {}\n}\n',
 			changeFor(changes, 'pkg/B.hx').newSource
 		);
 	}
@@ -597,6 +606,200 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
+	 * A dependency import is REFUSED, not carried, when the destination already binds that simple
+	 * name to a different module — the shape that made `move` a silent miscompile. Measured on
+	 * 11f22a25 and compile-run on Haxe 4.3.7: with `p/Host.hx` holding `import r.Dep;` and the
+	 * moved decl reaching `q.Dep`, the op wrote both files, the tree compiled with rc 0 and no
+	 * diagnostic, and `Host`'s own `new Dep()` traced `q.Dep` where it had traced `r.Dep`.
+	 *
+	 * Three arms, one gate, because Haxe's resolution order decides which SIDE silently moves: an
+	 * import the destination already has (it wins over the carried one only until the carried one
+	 * is written below it, so the DESTINATION rebinds), a sibling module of the destination's own
+	 * package (an import beats same-package visibility, same direction), and a type the destination
+	 * MODULE declares (that one beats every import, so the MOVED code rebinds instead — which is
+	 * why it refuses without asking whether the destination names it). The alias spelling is the
+	 * same defect in different clothes and takes the same gate.
+	 */
+	public function testCarriedImportCollidingWithADestinationBindingRefused(): Void {
+		inline function move(mover: String, host: String, extra: Array<{ file: String, source: String }>): MoveResult {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+				{ file: 'p/Mover.hx', source: mover },
+				{ file: 'p/Host.hx', source: host }
+			];
+			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files.concat(extra), plugin(), typeRefShape());
+		}
+		final plainMover: String = 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}';
+		final plainHost: String = 'package p;\n\nclass Host {\n\tvar h:Dep;\n}';
+		// The destination imports the same simple name from another module.
+		assertErrContains(
+			move(
+				plainMover, 'package p;\n\nimport r.Dep;\n\nclass Host {\n\tvar h:Dep;\n}',
+				[{ file: 'r/Dep.hx', source: 'package r;\n\nclass Dep {}' }]
+			),
+			'already binds "Dep" to r.Dep'
+		);
+		// A sibling module of the destination's own package declares it as its MAIN type.
+		assertErrContains(
+			move(plainMover, plainHost, [{ file: 'p/Dep.hx', source: 'package p;\n\nclass Dep {}' }]), 'already binds "Dep" to p.Dep'
+		);
+		// The destination MODULE declares it — the arm where the carried import would lose and the
+		// MOVED code is what silently rebinds, so it refuses without asking whether the destination
+		// names `Dep` at all.
+		assertErrContains(move(plainMover, 'package p;\n\nclass Host {}\n\nclass Dep {}', []), 'declares "Dep" itself (p.Host.Dep)');
+		// The alias spelling of the first arm: one bound name, two targets.
+		assertErrContains(
+			move(
+				'package p;\n\nimport q.Dep as D;\n\nclass Mover {\n\tvar d:D;\n}',
+				'package p;\n\nimport r.Dep as D;\n\nclass Host {\n\tvar h:D;\n}',
+				[{ file: 'r/Dep.hx', source: 'package r;\n\nclass Dep {}' }]
+			),
+			'already binds "D" to r.Dep'
+		);
+		// The control: nothing at the destination binds `Dep`, so the carry happens as before.
+		switch move(plainMover, plainHost, []) {
+			case Ok(changes, _):
+				Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('import q.Dep;'), 'the uncontested carry still happens');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * The collision gate runs on EVERY dependency name, not only on the ones with an import statement
+	 * to carry. A dependency the source reaches by same-package visibility has no provider, so the
+	 * first draft of the gate skipped it entirely — and it is the route with the fewest moving parts:
+	 * nothing is carried, so at the destination the moved code simply takes the DESTINATION's ladder.
+	 * Compile-proved on 4.3.7: `Moved.make()` returned `p.Dep` before and `r.Dep` after, rc 0 and no
+	 * diagnostic, with `p/Host.hx` holding `import r.Dep;` and no import anywhere in `p/Mover.hx`.
+	 *
+	 * The second arm is the control the gate must NOT refuse, and it is the one that made the
+	 * sibling-package walk read `isMain`: a SUB-module type of a sibling module is not visible by
+	 * simple name (`Type not found : Dep` on 4.3.7), so it binds nothing and the move proceeds.
+	 */
+	public function testBareSamePackageDependencyIsPricedToo(): Void {
+		inline function move(extra: Array<{ file: String, source: String }>, host: String): MoveResult {
+			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', [
+				{ file: 'p/Mover.hx', source: 'package p;\n\nclass Keep {}\n\nclass Mover {\n\tvar d:Dep;\n}' },
+				{ file: 'p/Host.hx', source: host },
+				{ file: 'r/Dep.hx', source: 'package r;\n\nclass Dep {}' }
+			].concat(extra), plugin(), typeRefShape());
+		}
+		assertErrContains(
+			move([{ file: 'p/Dep.hx', source: 'package p;\n\nclass Dep {}' }], 'package p;\n\nimport r.Dep;\n\nclass Host {}'),
+			'no import to carry'
+		);
+		switch move(
+			[{ file: 'p/Other.hx', source: 'package p;\n\nclass Other {}\n\nclass Dep {}' }], 'package p;\n\nclass Host {\n\tvar h:Dep;\n}'
+		) {
+			case Ok(_, _):
+				Assert.pass();
+			case Err(message):
+				Assert.fail('a sibling module\'s SUB-module type binds nothing here, got Err: $message');
+		}
+	}
+
+	/**
+	 * The destination a move writes is CANONICAL — the property `fmt --list` decides, and the one a
+	 * span-splicing op has to hold by construction, since it never re-emits through the writer.
+	 *
+	 * Two things used to break it, both invisible to every gate the project runs (no gate formats a
+	 * move's output): a carried import written directly under `package …;` with no blank line
+	 * between them, and the destination's own trailing newline re-added on top of the one the cut
+	 * span already carried, which left EVERY move's destination one blank line long. The second arm is the offset-0 anchor of a module with no package declaration, where the blank
+	 * line the fresh import owes is the one BELOW it.
+	 */
+	public function testDestinationIsCanonicalAfterAMove(): Void {
+		final carried: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n' },
+			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}\n' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport q.Dep;\n\nclass Host {}\n\nclass Mover {\n\tvar d:Dep;\n}\n', changeFor(carried, 'p/Host.hx').newSource
+		);
+		// A file with no package declaration anchors the carried line at offset 0 instead, where the
+		// blank line it owes is the one AFTER it.
+		final rootPkg: Array<MoveChange> = okChanges('Mover.hx', 5, 7, 'Host.hx', [
+			{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+			{ file: 'Mover.hx', source: 'import q.Dep;\n\nclass Keep {}\n\nclass Mover {\n\tvar d:Dep;\n}\n' },
+			{ file: 'Host.hx', source: 'class Host {}\n' }
+		]);
+		Assert.equals('import q.Dep;\n\nclass Host {}\n\nclass Mover {\n\tvar d:Dep;\n}\n', changeFor(rootPkg, 'Host.hx').newSource);
+	}
+
+	/**
+	 * A destination whose whole body sits inside one `#if` region carries its import run there, so
+	 * `ImportOrder.insertionFor` anchors INSIDE the guard — the third of the three anchors a file with
+	 * no top-level import offers, and the one the first draft of this slice left without a `trail`.
+	 * `fmt --list` rejected the result: the carried line landed welded to the first declaration.
+	 */
+	public function testCarriedImportInsideAWholeBodyGuardKeepsItsBlankLine(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n' },
+			{ file: 'p/Host.hx', source: 'package p;\n\n#if js\nclass Host {}\n#end\n' }
+		]);
+		Assert.equals(
+			'package p;\n\n#if js\nimport q.Dep;\n\nclass Host {}\n#end\n\nclass Mover {\n\tvar d:Dep;\n}\n',
+			changeFor(changes, 'p/Host.hx').newSource
+		);
+	}
+
+	/**
+	 * A destination whose only imports are `#if`-guarded still anchors on the PACKAGE declaration —
+	 * `lastHeaderEnd` reads direct children and a guarded import is not one. The fresh line then goes
+	 * UNDER the blank that already separates the package from the header, not above it: inserting
+	 * above pushed that blank down between the fresh import and the `#if` region, and canonical Haxe
+	 * writes a guarded import run flush under the import above it. The destination here is canonical
+	 * before the move, which is what makes the result a regression rather than a pre-existing mess.
+	 */
+	public function testCarriedImportKeepsAGuardedRunAdjacent(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+			{ file: 'c/D.hx', source: 'package c;\n\nclass D {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n' },
+			{ file: 'p/Host.hx', source: 'package p;\n\n#if js\nimport c.D;\n#end\n\nclass Host {}\n' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport q.Dep;\n#if js\nimport c.D;\n#end\n\nclass Host {}\n\nclass Mover {\n\tvar d:Dep;\n}\n',
+			changeFor(changes, 'p/Host.hx').newSource
+		);
+	}
+
+	/**
+	 * A declaration's own type PARAMETER stands in a type position and is collected as a dependency,
+	 * but it shadows every module-level binding of that name inside the declaration — so pricing it
+	 * asks about a type the moved code never means. `class Mover<Key>` moved beside a `p/Key.hx` and
+	 * into a destination holding `import r.Key;` refused a move whose every `Key` is the parameter.
+	 */
+	public function testTypeParameterIsNotPricedAsADependency(): Void {
+		switch MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{ file: 'p/Key.hx', source: 'package p;\n\nclass Key {}' },
+			{ file: 'r/Key.hx', source: 'package r;\n\nclass Key {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Keep {}\n\nclass Mover<Key> {\n\tvar k:Key;\n}' },
+			{ file: 'p/Host.hx', source: 'package p;\n\nimport r.Key;\n\nclass Host {\n\tvar h:Key;\n}' }
+		], plugin(), typeRefShape()) {
+			case Ok(_, _):
+				Assert.pass();
+			case Err(message):
+				Assert.fail('a type parameter shadows the name it spells, got Err: $message');
+		}
+	}
+
+	/**
+	 * A module that is only `package pkg;` with NO terminating newline is due BOTH reasons to lead
+	 * with one: the newline that terminates the header's last line, and the blank line canonical Haxe
+	 * puts between the package and the import block. The first draft spelled them as one ternary,
+	 * which can only ever answer with one.
+	 */
+	public function testImportAnchorOwesBothLeadingNewlines(): Void {
+		final anchor: ImportAnchor = MoveSymbol.importAnchor('package pkg;', plugin(), 'a.Bee');
+		Assert.equals('\n\n', anchor.lead);
+		Assert.equals(12, anchor.offset);
+	}
+
+	/**
 	 * Drive a successful move and return the changes, asserting the result
 	 * is `Ok`, the advisory is present, and every rewrite re-parses (the
 	 * op already validates this; the test makes it explicit by re-parsing
@@ -630,6 +833,22 @@ class MoveSymbolSliceTest extends Test {
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
 			case Err(_):
 				Assert.pass();
+		}
+	}
+
+	/**
+	 * `assertErr` with the refusal's own sentence pinned. `move` refuses for a dozen reasons — a
+	 * cross-package fully-qualified reference, an ambiguous or missing type, a decl sharing a line, a
+	 * scope file that does not parse, a module-private type still referenced — so a bare `Err` says
+	 * only that SOMETHING objected, and a future guard can keep a collision test green while the
+	 * collision gate itself is gone.
+	 */
+	private function assertErrContains(result: MoveResult, needle: String): Void {
+		switch result {
+			case Ok(changes, _):
+				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
+			case Err(message):
+				Assert.isTrue(message.contains(needle), 'Err "$message" should mention "$needle"');
 		}
 	}
 

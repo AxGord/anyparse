@@ -43,15 +43,27 @@ typedef ImportLine = {
  * `ImportOrder.insertionFor`'s answer, and the ONE place that question is answered.
  *
  * `offset` is a LINE START, so every caller splices whole lines and none of them reasons about
- * newlines: `lead` carries the single exception, the file whose last header line has no
- * terminating newline, where the anchor is the end of the source and the text needs a `\n`
- * ahead of it. `order` is the order carried by the RUN the anchor landed in, or -1 for a
- * fallback anchor — several fresh lines sharing one anchor are sorted under it, so they do not
- * leave that run explained by neither order.
+ * newlines: `lead` and `trail` are the blank lines the fresh line owes its NEIGHBOURS, and a
+ * caller writes `lead + <its lines> + trail` without knowing which anchor it got. Both are empty
+ * for an anchor inside or under an existing import RUN, where the neighbour on that side is
+ * itself an import. They are not, for the anchors a file with NO import statement offers: under
+ * `package …;` the fresh line owes the blank line canonical Haxe puts between the package and
+ * the import block (`lead`), and at the top of a file with no package declaration it owes the
+ * blank line before the first declaration (`trail`). The third such anchor is the file whose
+ * last header line has no terminating newline, where the anchor is the end of the source and
+ * the text needs a `\n` ahead of it (`lead` again). Until 2026-08-27 the first two were empty
+ * and every caller that does NOT finalize through `RefactorSupport.canonicalize` emitted
+ * `package p;` / `import q.Dep;` on adjacent lines, which `fmt --list` rejects; the two callers
+ * that do canonicalize never saw it, because the writer re-emits the whole file.
+ *
+ * `order` is the order carried by the RUN the anchor landed in, or -1 for a fallback anchor —
+ * several fresh lines sharing one anchor are sorted under it, so they do not leave that run
+ * explained by neither order.
  */
 typedef ImportAnchor = {
 	final offset: Int;
 	final lead: String;
+	final trail: String;
 	final order: Int;
 }
 
@@ -221,22 +233,71 @@ final class ImportOrder {
 		if (path != null) {
 			final slots: Array<ImportSlot> = slotsOf(header);
 			final slot: Int = insertOffset(source, slots, path);
-			if (slot >= 0) return { offset: slot, lead: '', order: orderAt(source, slots, slot) };
+			if (slot >= 0) return {
+				offset: slot,
+				lead: '',
+				trail: '',
+				order: orderAt(source, slots, slot)
+			};
 		}
 		var anchorEnd: Int = lastHeaderEnd(header);
+		// Which side of the fresh line has an import statement on it — the ONE thing the blank-line
+		// question turns on, and the only reading of `anchorEnd` that has to happen before the
+		// package-declaration fallback below overwrites it.
+		final underAnImport: Bool = anchorEnd >= 0;
 		if (anchorEnd < 0 && header != root) {
 			final bodyStart: Int = ModuleScan.guardBodyStart(source, header);
-			if (bodyStart >= 0) return { offset: bodyStart, lead: '', order: -1 };
+			if (bodyStart >= 0) return {
+				offset: bodyStart,
+				lead: '',
+				trail: separatedAt(source, bodyStart) ? '' : '\n',
+				order: -1
+			};
 		}
 		if (anchorEnd < 0) for (c in root.children) if (ModuleScan.PACKAGE_DECL_KINDS.contains(c.kind)) {
 			final span: Null<Span> = c.span;
 			if (span != null) anchorEnd = span.to;
 		}
-		if (anchorEnd < 0) return { offset: 0, lead: '', order: -1 };
+		// No package declaration and no import: the fresh line opens the file, so what follows it is
+		// the first declaration and the blank line between them is the fresh line's to write.
+		if (anchorEnd < 0) return {
+			offset: 0,
+			lead: '',
+			trail: separatedAt(source, 0) ? '' : '\n',
+			order: -1
+		};
 		final newline: Int = source.indexOf('\n', anchorEnd);
-		// The one anchor that is not a line start: nothing follows the header, so the fresh line
-		// brings its own separator instead.
-		return newline < 0 ? { offset: source.length, lead: '\n', order: -1 } : { offset: newline + 1, lead: '', order: -1 };
+		// Nothing follows the header at all, so the fresh line is not on a line start: it owes the
+		// newline that TERMINATES the header's last line, and — when the anchor is the PACKAGE
+		// declaration rather than an import — the blank one canonical Haxe puts under a package.
+		// Both are due at once for a module that is only `package p;`, which is why they add rather
+		// than share one ternary.
+		if (newline < 0) return {
+			offset: source.length,
+			lead: underAnImport ? '\n' : '\n\n',
+			trail: '',
+			order: -1
+		};
+		// Under an existing import the neighbours on both sides are the rest of the header, and
+		// canonical Haxe puts no blank line inside it.
+		if (underAnImport) return {
+			offset: newline + 1,
+			lead: '',
+			trail: '',
+			order: -1
+		};
+		// Anchored on the PACKAGE declaration, which happens only when the file holds no unguarded
+		// import. The fresh line goes UNDER the blank that canonical Haxe already puts there rather
+		// than above it: inserting above pushed that blank down between the fresh import and
+		// whatever continues the header, and a `#if` import region below is exactly what a blank
+		// line must not be inserted before. When no blank stands, the fresh line brings its own.
+		final firstDecl: Int = skipBlankLines(source, newline + 1);
+		return {
+			offset: firstDecl,
+			lead: firstDecl > newline + 1 ? '' : '\n',
+			trail: separatedAt(source, firstDecl) ? '' : '\n',
+			order: -1
+		};
 	}
 
 	/**
@@ -537,6 +598,39 @@ final class ImportOrder {
 			if (ModuleScan.IMPORT_DECL_KINDS.contains(c.kind)) any = span.to;
 		}
 		return plain >= 0 ? plain : any;
+	}
+
+	/**
+	 * Whether the line STARTING at `offset` needs no blank line above it — because it is blank, past the
+	 * end of the file, or opens a conditional-compilation region. A `#if` guarding an import run is a
+	 * CONTINUATION of the header, and canonical Haxe writes it flush under the import above it, so the
+	 * `#` test is not a nicety: probing blankness alone put a blank line inside a header.
+	 */
+	private static function separatedAt(source: String, offset: Int): Bool {
+		var i: Int = offset;
+		while (i < source.length) {
+			final c: Int = source.fastCodeAt(i);
+			if (c == '\n'.code) return true;
+			if (c == '#'.code) return true;
+			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
+			i++;
+		}
+		return true;
+	}
+
+	/**
+	 * The start of the first line at or after `offset` that carries something, or the source length
+	 * when only blank lines remain. The package anchor uses it to land UNDER an existing blank rather
+	 * than above it.
+	 */
+	private static function skipBlankLines(source: String, offset: Int): Int {
+		var at: Int = offset;
+		while (at < source.length && separatedAt(source, at)) {
+			final newline: Int = source.indexOf('\n', at);
+			if (newline < 0 || source.fastCodeAt(at) == '#'.code) return at;
+			at = newline + 1;
+		}
+		return at;
 	}
 
 	/**

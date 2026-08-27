@@ -66,7 +66,6 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
-import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.LintDiff.LintDiffResult;
 import anyparse.query.LintDiff.LintMessageIdentities;
 import anyparse.query.format.json.LintFindingJson;

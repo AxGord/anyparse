@@ -164,9 +164,11 @@ class ShortenTypeRefCheckTest extends Test {
 
 	public function testRepeatedPathGainsAnImport(): Void {
 		final out: String = applyFix(inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tg(pkg.deep.Foo.other());\n'));
-		// The raw edit anchors on the `package` statement's own end; `lint --fix` canonicalises the
-		// file afterwards, which is what restores the blank line between the two.
-		Assert.equals('package app;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
+		// The raw edit anchors on the `package` statement's own end and now brings the blank line
+		// canonical Haxe puts between the package and the import block with it (`ImportAnchor.lead`)
+		// — until 2026-08-27 it did not, and only the `lint --fix` canonicalisation that runs after
+		// this raw path restored it.
+		Assert.equals('package app;\n\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
 		Assert.isTrue(out.indexOf('g(Foo.make());') != -1 && out.indexOf('g(Foo.other());') != -1, 'both shortened, got: $out');
 	}
 
@@ -214,7 +216,7 @@ class ShortenTypeRefCheckTest extends Test {
 		final out: String = applyFix(
 			inClass('', '\t\tg(pkg.deep.Foo.a(), pkg.deep.Bar.a());\n\t\tg(pkg.deep.Foo.b(), pkg.deep.Bar.b());\n')
 		);
-		Assert.equals('package app;\nimport pkg.deep.Bar;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
+		Assert.equals('package app;\n\nimport pkg.deep.Bar;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
 		Assert.isTrue(out.indexOf('g(Foo.a(), Bar.a());') != -1, 'both shortened, got: $out');
 	}
 
@@ -245,7 +247,7 @@ class ShortenTypeRefCheckTest extends Test {
 			+ '\t\tg(pkg.deep.Bar.a());\n\t\tg(pkg.deep.Bar.b());\n'
 		);
 		final out: String = suppressedFix(src);
-		Assert.equals('package app;\nimport pkg.deep.Bar;\n\n', out.substring(0, out.indexOf('class C')));
+		Assert.equals('package app;\n\nimport pkg.deep.Bar;\n\n', out.substring(0, out.indexOf('class C')));
 		Assert.isTrue(out.indexOf('g(Bar.a());') != -1, 'the unsuppressed path still shortens, got: $out');
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.a());') != -1, 'the suppressed path is untouched, got: $out');
 	}
@@ -259,7 +261,7 @@ class ShortenTypeRefCheckTest extends Test {
 			'', '\t\tg(pkg.deep.Foo.a()); // noqa: shorten-type-ref\n\t\tg(pkg.deep.Foo.b());\n\t\tg(pkg.deep.Foo.c());\n'
 		);
 		final out: String = suppressedFix(src);
-		Assert.equals('package app;\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
+		Assert.equals('package app;\n\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
 		Assert.isTrue(out.indexOf('g(Foo.b());') != -1 && out.indexOf('g(Foo.c());') != -1, 'both survivors shorten, got: $out');
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.a());') != -1, 'the suppressed occurrence is untouched, got: $out');
 	}

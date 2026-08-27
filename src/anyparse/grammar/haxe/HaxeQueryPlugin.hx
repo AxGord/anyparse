@@ -18,7 +18,6 @@ import anyparse.query.StdResolver;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
-import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;

@@ -1,7 +1,6 @@
 package unit;
 
 import anyparse.format.wrap.WrapMode;
-import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;

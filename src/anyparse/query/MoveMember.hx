@@ -2,7 +2,6 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
-import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.ModulePath;
@@ -290,7 +289,8 @@ final class MoveMember {
 		// the moved-member insert (no dest ctor) or replacing a trivial one.
 		final destError: Null<String> = assembleDestination(prep, scaffoldFields, movedTextEdits, editsByFile, advisoryExtras);
 		if (destError != null) return Err(destError);
-		pushImportEdits(prep, typeRefShape, callerFilesNeedingImport, plugin, editsByFile);
+		final carryError: Null<String> = pushImportEdits(prep, typeRefShape, callerFilesNeedingImport, plugin, editsByFile);
+		if (carryError != null) return Err(carryError);
 		pushEndpointImports(prep, editsByFile, movedTextEdits, plugin);
 		return applyAndValidate(editsByFile, prep.sourceOf, plugin, memberNames.join(', '), advisoryExtras);
 	}
@@ -812,20 +812,23 @@ final class MoveMember {
 	private static function pushImportEdits(
 		prep: MovePrep, typeRefShape: TypeRefShape, callerFilesNeedingImport: Array<String>, plugin: GrammarPlugin,
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>
-	): Void {
+	): Null<String> {
 		// Ready TEXT, not `ImportInfo`: this used to spell the statement itself, and `raw` is the
 		// ALIAS for an alias one — the moment an alias dependency became carriable it would have
 		// emitted `import D;` here while `MoveSymbol` emitted the same wrong line separately.
 		final carried: Array<String> = [];
-		for (m in prep.moved)
-			for (line in MoveSymbol.dependencyImportLinesToCarry(
-				prep.srcSource, m.group.groupSpan, prep.srcInfo, prep.destInfo, plugin, typeRefShape, prep.srcTypeName
-			)) if (!carried.contains(line)) carried.push(line);
-		if (carried.length > 0) {
-			final anchor: ImportAnchor = MoveSymbol.importAnchor(prep.destSource, plugin);
-			final lines: String = carried.join('\n') + '\n';
-			editsFor(editsByFile, prep.destFile).push({ span: new Span(anchor.offset, anchor.offset), text: anchor.lead + lines });
+		for (m in prep.moved) switch MoveSymbol.dependencyImportLinesToCarry(
+			prep.srcSource, m.group.groupSpan, prep.srcInfo, prep.destInfo, prep.destSource, prep.index, plugin, typeRefShape,
+			prep.srcTypeName
+		) {
+			case CarryErr(message):
+				return message;
+			case CarryOk(lines):
+				for (line in lines) if (!carried.contains(line))
+					carried.push(line);
 		}
+		final carriedEdit: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(prep.destSource, carried, plugin);
+		if (carriedEdit != null) editsFor(editsByFile, prep.destFile).push(carriedEdit);
 		final destImportPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
 		for (file in callerFilesNeedingImport) {
 			final info: Null<FileInfo> = prep.index.fileInfo(file);
@@ -837,6 +840,7 @@ final class MoveMember {
 			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(callerSource, info, plugin, destImportPath);
 			if (edit != null) editsFor(editsByFile, file).push(edit);
 		}
+		return null;
 	}
 
 	/**

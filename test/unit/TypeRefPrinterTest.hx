@@ -211,7 +211,7 @@ class TypeRefPrinterTest extends Test {
 		p.print('z.deep.Zeta');
 		p.print('a.deep.Alpha');
 		Assert.equals(1, p.pendingImportEdits().length);
-		Assert.equals('package pkg;\nimport a.deep.Alpha;\nimport z.deep.Zeta;\n\nclass C {}\n', applyImports(p, src));
+		Assert.equals('package pkg;\n\nimport a.deep.Alpha;\nimport z.deep.Zeta;\n\nclass C {}\n', applyImports(p, src));
 	}
 
 	// --- route 2: what a LITERAL's text is allowed to veto ---
@@ -646,14 +646,18 @@ class TypeRefPrinterTest extends Test {
 		final src: String = 'package pkg;\n\nclass C {}\n';
 		final p: TypeRefPrinter = printer(src);
 		p.print('m.Middle');
-		Assert.equals('package pkg;\nimport m.Middle;\n\nclass C {}\n', applyImports(p, src));
+		// Anchored under `package …;` the fresh line owes the blank line above it instead
+		// (`ImportAnchor.lead`); same defect, other side.
+		Assert.equals('package pkg;\n\nimport m.Middle;\n\nclass C {}\n', applyImports(p, src));
 	}
 
 	public function testBareFileInsertsAtStart(): Void {
 		final src: String = 'class C {}\n';
 		final p: TypeRefPrinter = printer(src);
 		p.print('m.Middle');
-		Assert.equals('import m.Middle;\nclass C {}\n', applyImports(p, src));
+		// The fresh line opens the file, so it owns the blank line before the first declaration —
+		// `ImportAnchor.trail`. Until 2026-08-27 it wrote none and the result was non-canonical.
+		Assert.equals('import m.Middle;\n\nclass C {}\n', applyImports(p, src));
 	}
 
 	// --- type EXPRESSION walk ---

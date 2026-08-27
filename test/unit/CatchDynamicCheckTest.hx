@@ -186,7 +186,7 @@ class CatchDynamicCheckTest extends Test {
 		final out: String = applyFixLogging(
 			"class C { public function f():Void { try g() catch (msg:Dynamic) { trace('error creating SystemData : $msg'); } } }"
 		);
-		final expected: String = 'import haxe.Exception;\nclass C { public function f():Void { try g() catch (exception:Exception) {'
+		final expected: String = 'import haxe.Exception;\n\nclass C { public function f():Void { try g() catch (exception:Exception) {'
 			+ " trace('error creating SystemData : $exception'); } } }";
 		Assert.equals(expected, out);
 	}
@@ -194,7 +194,7 @@ class CatchDynamicCheckTest extends Test {
 	public function testFixLoggingTraceTrailingArgRenamed(): Void {
 		// The caught value is passed as a bare trace() argument — renamed to `exception`.
 		final out: String = applyFixLogging("class C { public function f():Void { try g() catch (e:Dynamic) { trace('boom', e); } } }");
-		final expected: String = 'import haxe.Exception;\n'
+		final expected: String = 'import haxe.Exception;\n\n'
 			+ "class C { public function f():Void { try g() catch (exception:Exception) { trace('boom', exception); } } }";
 		Assert.equals(expected, out);
 	}

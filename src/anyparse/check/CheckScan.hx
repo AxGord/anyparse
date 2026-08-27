@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
-import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;

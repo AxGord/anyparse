@@ -1138,6 +1138,34 @@ class MoveMemberSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * `move-member` shares `MoveSymbol.dependencyImportLinesToCarry` with `move`, so it shared the
+	 * silent-miscompile too: measured on 11f22a25 and compile-run on Haxe 4.3.7, moving a static
+	 * whose body reaches `q.Dep` into a destination holding `import r.Dep;` wrote both files with
+	 * rc 0 and no diagnostic, and the DESTINATION's own `Dest.local()` came back `q.Dep` where it
+	 * had been `r.Dep`. The gate lives at the shared seat, so both ops refuse on the same sentence;
+	 * the control is the same carry with nothing at the destination to collide with.
+	 */
+	public function testCarriedImportCollidingWithADestinationBindingRefused(): Void {
+		inline function scope(destImport: String): Array<{ file: String, source: String }> {
+			return [
+				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+				{ file: 'r/Dep.hx', source: 'package r;\n\nclass Dep {}' },
+				{
+					file: 'p/Src.hx',
+					source: 'package p;\n\nimport q.Dep;\n\nclass Src {\n\tpublic static function make():Dep return null;\n}'
+				},
+				{
+					file: 'p/Dest.hx',
+					source: 'package p;\n\n${destImport}class Dest {\n\tpublic static function local():Dep return null;\n}'
+				}
+			];
+		}
+		assertErrContains(move('p/Src.hx', 'Src', 'make', 'Dest', scope('import r.Dep;\n\n')), 'already binds "Dep" to r.Dep');
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 'Src', 'make', 'Dest', scope(''));
+		Assert.isTrue(changeFor(changes, 'p/Dest.hx').newSource.contains('import q.Dep;'), 'the uncontested carry still happens');
+	}
+
 	private function move(
 		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
 		?via: String, ?closure: Bool, ?scaffold: Bool
