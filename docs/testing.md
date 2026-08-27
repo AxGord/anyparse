@@ -916,9 +916,38 @@ binary on the same tree:
 The 4.4 s difference is accounted for by the one extra project-wide typecheck
 the narrowing spent (3.6 s cold on that tree). On a wave that does NOT break the
 build the path is not entered at all: the same tree with no broken file gives
-`fixed 658 issue(s) in 228 file(s)` on both binaries.
+`fixed 658 issue(s) in 228 file(s)` on both binaries (the wording the line carried
+at the time; the number is the edit count it still reports).
 
-### `fixed N issue(s)` is a count, not a verdict about a rule
+### The `--fix` summary counts EDITS, and is not a verdict about a rule
+
+The line reads
+
+```
+apq lint --fix: 4 edit(s) in 1 file(s) over 3 pass(es)
+```
+
+and its number is EDIT SPANS applied. A check answers with one span per site it
+rewrites, so ONE `naming` finding on a local read three times is four spans, and
+a fix whose result exposes a further finding adds that pass's spans on top. It
+used to print as `fixed N issue(s)`, which read as a finding count and did not
+match the number the reader had just counted in the plain `lint` report —
+measured at 4 for 3 findings on a cascading fold, and at 4 for exactly ONE
+finding with no cascade anywhere in the run. Only the label changed; every
+number in the transcripts quoted below was printed by the run that produced it,
+under the older wording.
+
+**The finding total is deliberately not beside it**, and the reason is the same
+defect one level up. The edit count sums the safe fixed-point loop AND the risky
+and oracle-assisted phases, while the only finding count the run holds — the
+`ledger` — is filled by the safe loop alone: `applyLintPass` records it,
+`verifyRiskyFixes` never receives it, and with no `compilerOracle` that phase
+does not even RUN its checks. Measured on one file with one `prefer-null-coalescing`
+finding: `lint` prints `1 info(s)` and `lint --fix --no-oracle` would have printed
+`0 finding(s) reported on pass 1` beside its own edit count. Two numbers on one
+line measured over two rule sets is exactly the shape this wording was fixed to
+stop making, so the line carries one. The finding total belongs to a plain
+`lint`, which runs every rule; what each rule DECLINED is the block below.
 
 A finding `lint --fix` reports and does not fix has several different causes,
 and the run used to report them all the same way — with silence. Its one
@@ -963,8 +992,8 @@ at all, and edits produced anywhere in the run. That last number needs no
 declaration behind it: a rule that produced an edit somewhere HAS an autofix, so
 its silence elsewhere is a decline whatever it says about itself.
 
-The block prints after — never appended to — the summary line, so the line every
-gate and doc quotes keeps its bytes. On the 851-file Pony scope:
+The block prints after — never appended to — the summary line, which every gate
+and doc quotes and which stays one sentence. On the 851-file Pony scope:
 
 ```
 apq lint --fix: fixed 668 issue(s) in 234 file(s) over 10 pass(es), risky-fix verified: 61 file(s) applied, 0 reverted to report-only, oracle-assisted: 3 file(s) applied, 3 reverted to report-only (compiler rejected)
@@ -1477,3 +1506,42 @@ pays zero extra round trips. Measured 0 files needing a second rewrite over `src
 The general shape is the sister of "A comment interior and a string literal are
 outside every gate": **a gate that reads the same component the defect lives in
 cannot see the defect — make the component check its own postcondition.**
+
+### Every `fmt` summary that reports a count names BOTH quantities
+
+Three real lines, each from the run named beside it — the two `fmt` runs are the
+Pony tree under its own config, the `--verify` one is the fork tree the battery
+audits:
+
+```
+apq fmt: rewrote 23 of 870 file(s), 3 failed
+apq fmt --list: 0 of 1510 file(s) would be rewritten          # src test tools
+apq fmt --verify: 0 of 6 reformatted file(s) changed more than whitespace (36 scanned, 0 could not be formatted)
+```
+
+The `--write` line used to print `formatted N file(s)` — the change count with
+no denominator — and `--list` printed nothing at all unless a file failed. Both
+readings cost a measurement arm in this campaign. `formatted 0 file(s), 3
+failed` over a tree of 870 read as "the run was inert", and nothing on the line
+separated that reading from the true one; `--list`'s silence made a run that
+scanned a whole project and a run that matched three files look identical. The
+fourth mode still reports no count: `fmt <one-file>` with no flags writes the
+formatted source to stdout, gofmt-style, and the output IS the answer.
+
+The counts themselves were re-measured over the Pony tree with the engine at
+`0c2dbdfa`, in the context the reports came from — 870 files reached through
+per-file config discovery, 3 of them unparseable — against a `cmp` of
+before/after copies: 81 of 81, 0 of 0, and 23 of 23. Neither the over-report nor
+the under-report reproduces; what did was the missing denominator, and one
+direction nobody had filed: a write that THROWS (a read-only file) took the
+whole run down with an uncaught host error, so a run that had already rewritten
+part of the tree printed no summary at all. `formatOneFile` now catches it,
+names the file, and counts it as `failed` — the read side had been caught from
+the start. The other 31 `writeFile` call sites in `Cli` still share the hazard.
+
+`unit.ApqCountSummaryCliTest` pins all of it against the BYTES, never against
+`fmt --list`: the fixture directory is snapshotted before the run and re-read
+after, and the count line must equal the number of files whose bytes moved. The
+seam that makes it possible is `Cli.fmtRun`, which returns the summary instead
+of printing it — `Sys.stderr()` on hxnodejs is a raw fd, so a line that only
+ever reaches fd 2 can be asserted by no in-process test.

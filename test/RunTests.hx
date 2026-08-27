@@ -13,6 +13,7 @@ import unit.ApqAstSelectFuzzyTest;
 import unit.ApqAstTypeRefsCliTest;
 import unit.ApqAstWriterOutputPlainTest;
 import unit.ApqAtCliTest;
+import unit.ApqCountSummaryCliTest;
 import unit.ApqDepthSemanticsTest;
 import unit.ApqDocSourceTest;
 import unit.ApqDottedAccessNudgeTest;
@@ -845,6 +846,7 @@ class RunTests {
 		addCase(new WhitespaceInvariantTest());
 		addCase(new ApqFmtVerifyCliTest());
 		addCase(new ApqFmtOnePassCliTest());
+		addCase(new ApqCountSummaryCliTest());
 		addCase(new HxAccessorSliceTest());
 		addCase(new HxAfterLeftCurlySliceTest());
 		addCase(new HxUniformStatementBlanksSliceTest());
