@@ -161,6 +161,32 @@ class LintUnusedImportDottedSliceTest extends Test {
 		Assert.isTrue(vs[0].message.contains('unused using'));
 	}
 
+	/**
+	 * `raw` is the BOUND NAME, which is what this rule judges and — for an ALIAS statement — not
+	 * enough to LABEL a finding with. A file may bind one alias name TWICE: legally and
+	 * unguarded (`import a.b.Ctx as U; import a.b.Limit as U;` compiles on 4.3.7, the last one
+	 * wins), and per branch of a `#if` region. Both statements are separately unused and each
+	 * gets its own finding, so two messages reading `unused import 'U'` would name different
+	 * statements a reader cannot tell apart. The module each binds is what separates them.
+	 *
+	 * The unguarded pair is what makes this NOT a `#if` matter: it predates guarded regions
+	 * reaching `FileInfo.imports` at all, and it is at Warning severity, where a `--fix` reader
+	 * has to know which statement a finding meant. The plain import is the control — its `raw`
+	 * IS the path, so it must gain no suffix.
+	 */
+	public function testAliasFindingNamesTheModuleItBinds(): Void {
+		final twice: String = 'package pkg;\n\nimport a.b.Ctx as U;\nimport a.b.Limit as U;\n\nclass C {}';
+		final vs: Array<Violation> = run(twice);
+
+		Assert.equals(2, vs.length);
+		Assert.isTrue(vs[0].message.contains('unused import \'U\' (binds a.b.Ctx)'), vs[0].message);
+		Assert.isTrue(vs[1].message.contains('unused import \'U\' (binds a.b.Limit)'), vs[1].message);
+
+		final plain: Array<Violation> = run('package pkg;\n\nimport a.b.Ctx;\n\nclass C {}');
+		Assert.equals(1, plain.length);
+		Assert.equals('unused import \'a.b.Ctx\'', plain[0].message);
+	}
+
 	/** The static-wildcard arm too: a member reached as `Type.MEMBER` never came through the wildcard. */
 	public function testWildcardMemberQualifiedTailDoesNotKeepImport(): Void {
 		final use: String = 'package pkg;\n\nimport a.b.Limit.*;\n\nclass C {\n\tpublic var x: Int = a.b.Limit.MAX;\n}';

@@ -277,7 +277,14 @@ final class UnusedImport implements Check {
 					out.push(make(file, imp, Severity.Info, 'import \'${imp.raw}\': $MSG_NOT_IN_SCOPE', DECLINE_NOT_IN_SCOPE));
 					return;
 				}
-				out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\''));
+				// `raw` is the BOUND NAME — the right thing for this rule to judge, and for an alias
+				// statement the wrong thing to LABEL a finding with: one file may bind one alias name
+				// twice, `#if`-guarded or not (`import a.One as U; import a.Two as U;` compiles, and
+				// the last one wins), and two findings both reading `unused import 'U'` name different
+				// statements a reader cannot tell apart. The module each binds is what separates them,
+				// and it is exactly the half `raw` cannot carry.
+				final path: Null<String> = imp.kind == ImportKind.Alias ? SymbolIndex.pathImportedBy(imp) : null;
+				out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\'${path == null ? '' : ' (binds $path)'}'));
 		}
 	}
 

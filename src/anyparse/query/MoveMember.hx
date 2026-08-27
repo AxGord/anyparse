@@ -10,7 +10,6 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -814,16 +813,17 @@ final class MoveMember {
 		prep: MovePrep, typeRefShape: TypeRefShape, callerFilesNeedingImport: Array<String>, plugin: GrammarPlugin,
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>
 	): Void {
-		final carried: Array<ImportInfo> = [];
+		// Ready TEXT, not `ImportInfo`: this used to spell the statement itself, and `raw` is the
+		// ALIAS for an alias one — the moment an alias dependency became carriable it would have
+		// emitted `import D;` here while `MoveSymbol` emitted the same wrong line separately.
+		final carried: Array<String> = [];
 		for (m in prep.moved)
-			for (imp in MoveSymbol.dependencyImportsToCarry(
+			for (line in MoveSymbol.dependencyImportLinesToCarry(
 				prep.srcSource, m.group.groupSpan, prep.srcInfo, prep.destInfo, plugin, typeRefShape, prep.srcTypeName
-			)) if (!carried.exists(c -> c.raw == imp.raw && c.kind == imp.kind)) carried.push(imp);
+			)) if (!carried.contains(line)) carried.push(line);
 		if (carried.length > 0) {
 			final anchor: ImportAnchor = MoveSymbol.importAnchor(prep.destSource, plugin);
-			final lines: String = [
-				for (imp in carried) '${imp.kind == ImportKind.Using ? 'using' : 'import'} ${imp.raw};\n'
-			].join('');
+			final lines: String = carried.join('\n') + '\n';
 			editsFor(editsByFile, prep.destFile).push({ span: new Span(anchor.offset, anchor.offset), text: anchor.lead + lines });
 		}
 		final destImportPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
