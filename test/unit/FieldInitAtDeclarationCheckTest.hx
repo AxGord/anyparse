@@ -17,20 +17,22 @@ import utest.Test;
  * cross-file write count differs from one (the `dispose()` null-out shape) still moves
  * on the ACCEPTED-CANDIDATE CHAIN: every constructor statement before its init must be
  * another accepted candidate's init. Foreign code MAY run in such a prefix — `new T()`
- * qualifies — so the chain rests on a per-right-hand-side test instead: no init sharing
- * the constructor prologue may read in-class state AT ALL, demanded of the chained
- * candidate, of every sole-write init accepted on the legacy path and of every field
- * that already carries a declaration initializer, so none of them can observe an
- * in-class static another one's foreign code writes. A `#if` member region refuses the
+ * qualifies — so the order proof rests on a per-right-hand-side test instead: no init
+ * sharing the constructor prologue may read in-class state AT ALL, so none of them can
+ * observe an in-class static another one's foreign code writes. That test gates the
+ * CANDIDATE, hence both acceptance paths — the sole-write path's permissive spelling was
+ * the live regression, where an init reading a `static final` array moved ahead of the
+ * constructor statement that filled it. A chained candidate additionally needs it of every
+ * field that already carries a declaration initializer. A `#if` member region refuses the
  * whole container (its interior is trivia here). An explicit `super(...)` ANYWHERE in
  * the constructor refuses the candidate on both paths: declaration initializers run in
  * the prologue, ahead of the base constructor. A static field, a property, a
  * right-hand side referencing a constructor parameter / `this` / another instance
- * member, a conditional / read-before-init write, a multi-write field behind a broken
- * chain or an in-class-reading co-mover, and a class without a single constructor are
- * left alone. What the gate does NOT decide — what the invoked code DOES, and anything
- * at all on the legacy path, which also reorders against arbitrary earlier constructor
- * statements — is the class doc's "Known gaps".
+ * member / a static of this class, a conditional / read-before-init write, a multi-write
+ * field behind a broken chain or an in-class-reading declaration initializer, and a class
+ * without a single constructor are left alone. What the gate does NOT decide — what
+ * the invoked code DOES, and so any reordering that travels through the state a call
+ * mutates — is the class doc's "Known gaps".
  */
 class FieldInitAtDeclarationCheckTest extends Test {
 
@@ -179,17 +181,15 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	}
 
 	/**
-	 * The live refutation that drove the order gate: moved inits land in the prologue in
-	 * a sequence the compiler picks, so `_b = bump()` can perturb what `_a = n` observes.
-	 * `_a` is refused — redundantly, by BOTH order terms (its own right-hand side reads
-	 * in-class, and so does its sole-write co-mover) — while `_b` still moves on the
-	 * legacy path. The terms are isolated separately by `testInClassReadRhsChainPartial`
-	 * and `testSoleWriteCoMoverBlocksChain`.
+	 * The live refutation that drove the order gate, now decided one step earlier: `_a = n` reads
+	 * a static of this class and `_b = bump()` calls a static METHOD of it, so NEITHER is a
+	 * candidate and nothing moves. While the gate reached only the chain path, `_b` moved — which
+	 * hoisted the `n++` inside `bump()` ahead of the statement that read `n`.
 	 */
-	public function testStaticReadRhsChainPartial(): Void {
+	public function testInClassStaticReadAndCallBothRefused(): Void {
 		final src: String = 'class C { static var n:Int = 0; static function bump():Int { n++; return 0; } private var _b:Int; private var '
 			+ '_a:Int; public function new() { _b = bump(); _a = n; } public function d():Void { _a = 0; } }';
-		assertSoleViolationOn(src, '_b');
+		Assert.equals(0, violations(src).length);
 	}
 
 	/**
@@ -210,22 +210,23 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	}
 
 	/**
-	 * A SOLE-WRITE candidate co-moves on the legacy path with no chain gate of its own,
-	 * so a chained candidate is refused whenever any co-mover reads in-class state:
-	 * here `_a = s` would be hopped over by `new Foo()`, whose constructor writes `s`.
-	 * Only the sole-write `_a` moves, which is what the rule did before the chain.
+	 * An init reading in-class state is no longer a candidate, so the statement it leaves standing
+	 * in the constructor breaks the chain: `_a = s` is refused for its own right-hand side, and the
+	 * chained `_b = new Foo()` that it precedes goes with it. While the gate reached only the chain
+	 * path, `_a` moved and `_b` was held back by the co-mover clause instead.
 	 */
-	public function testSoleWriteCoMoverBlocksChain(): Void {
+	public function testInClassReadingInitBreaksChain(): Void {
 		final src: String = 'class C { public static var s:Int = 1; private var _a:Int; private var _b:Foo;'
 			+ ' public function new() { _a = s; _b = new Foo(); } public function d():Void { _b = null; } }';
-		assertSoleViolationOn(src, '_a');
+		Assert.equals(0, violations(src).length);
 	}
 
 	/**
 	 * With no sole-write co-mover in the constructor, a chained candidate is judged on
 	 * its OWN right-hand side: `_a`'s allocation resolves nothing in-class and moves,
 	 * while `_b = n` reads a static of this class — another moved init could assign it,
-	 * so `_b` stays. Isolates the per-candidate half of the order gate.
+	 * so `_b` stays. Isolates the per-candidate half of the order gate from the
+	 * pre-existing-initializer half.
 	 */
 	public function testInClassReadRhsChainPartial(): Void {
 		final src: String = 'class C { static var n:Int = 0; private var _a:Array<Int>; private var _b:Int;'
@@ -307,9 +308,35 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(0, check.fix(src, all.slice(1), plugin).length);
 	}
 
-	/** A static reference in the right-hand side is available at declaration-init time — moved. */
-	public function testStaticRefMoved(): Void {
-		Assert.equals(1, violations('class C { static var _base:Int = 5; var _x:Int; public function new() { _x = _base; } }').length);
+	/**
+	 * A static of THIS class is not "available at declaration-init time" in the sense that
+	 * matters: the constructor can set its VALUE one statement before the init reads it, and a
+	 * declaration initializer runs first. Refused on both acceptance paths;
+	 * `testForeignStaticRefMoved` is the positive control that the gate is not blanket.
+	 */
+	public function testInClassStaticRefNotMoved(): Void {
+		Assert.equals(0, violations('class C { static var _base:Int = 5; var _x:Int; public function new() { _x = _base; } }').length);
+	}
+
+	/**
+	 * The positive control for that gate: a static of a FOREIGN type resolves to nothing this
+	 * constructor could have touched, so the init still moves.
+	 */
+	public function testForeignStaticRefMoved(): Void {
+		Assert.equals(1, violations('class C { var _x:Int; public function new() { _x = Colors.WHITE; } }').length);
+	}
+
+	/**
+	 * The live regression this gate was bought by (TM `Goals3D`): the constructor FILLS an
+	 * in-class static before the init reads it, so the hoisted right-hand side observes the
+	 * EMPTY array. The static is `final` — the binding is immutable, its CONTENTS are not —
+	 * which is why the exemption cannot be keyed on that keyword.
+	 */
+	public function testMutableInClassStaticReadNotMoved(): Void {
+		Assert.equals(
+			0,
+			violations('class C { static final ns:Array<Int> = []; var _x:Int; public function new() { ns.push(7); _x = ns[0]; } }').length
+		);
 	}
 
 	/** The fix inserts `= expr` on the declaration and deletes the constructor statement. */

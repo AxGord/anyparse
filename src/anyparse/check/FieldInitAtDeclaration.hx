@@ -17,9 +17,10 @@ using Lambda;
  * whose write is one unconditional constructor assignment `x = expr` / `this.x = expr`
  * whose right-hand side is context-independent
  * (references no constructor parameters, no `this`, no other instance members, no
- * constructor locals — only literals, static / global references, and constructions
- * such as `new Shape()`). `Severity.Info`, with an autofix that MOVES `= expr` onto
- * the field declaration and removes the constructor write — e.g.
+ * constructor locals and no static of this very type — only literals,
+ * FOREIGN static / global references, and constructions such as `new Shape()`).
+ * `Severity.Info`, with an autofix that MOVES `= expr` onto the field declaration
+ * and removes the constructor write — e.g.
  * `private var _a:Array<Int>;` + constructor `_a = new Array<Int>();` becomes
  * `private var _a:Array<Int> = new Array<Int>();`.
  *
@@ -28,10 +29,13 @@ using Lambda;
  * A declaration initializer runs BEFORE the constructor body, so moving an init
  * earlier is safe only when the moved expression does not depend on anything the
  * constructor establishes first. The context-free right-hand-side gate guarantees
- * exactly that: every identifier read resolves to a global / type / static member (a
- * value available at declaration-init time), never to a constructor parameter or
- * local (which do not exist yet), another instance member (a field that may be
- * uninitialized), or `this`. Combined with the exactly-one-write proof
+ * exactly that: every identifier read resolves to a global or a FOREIGN type's member — a
+ * value the constructor of THIS type cannot have touched — never to a constructor parameter
+ * or local (which do not exist yet), another instance member (a field that may be
+ * uninitialized), `this`, or a static of this type (whose VALUE the constructor may set one
+ * statement before the init reads it; `final` on such a static proves only that the BINDING
+ * is fixed, and the live regression read `ns[0]` from a `static final` array the constructor
+ * had yet to fill). Combined with the exactly-one-write proof
  * (`FieldWriteIndex.writeCount == 1` and no unresolved write to the field NAME), the
  * moved statement is the field's SOLE assignment, so the move preserves behaviour.
  *
@@ -106,11 +110,10 @@ using Lambda;
  *   relative to every other init in the constructor prologue: they all land there in
  *   whatever sequence the compiler emits them, which is not the sequence the moved
  *   ones had as statements. The gate is therefore per-right-hand-side and
- *   permutation-proof rather than order-restoring. `orderSafe` decides ONE thing —
- *   this right-hand side resolves NOTHING declared in this class — and a chained
- *   candidate is accepted only when it holds for the candidate AND for every init
- *   that shares the prologue with it: the sole-write ones accepted on the legacy
- *   path, and the fields that ALREADY carry a declaration initializer. Read what
+ *   permutation-proof rather than order-restoring, and it sits on the CANDIDATE: no
+ *   accepted init's right-hand side resolves ANYTHING declared in this class, on either
+ *   path. A chained candidate additionally needs that of the one prologue occupant which
+ *   is not a candidate — a field that ALREADY carries a declaration initializer. Read what
  *   that establishes carefully, because it is stronger than it first looks: NOT "no
  *   init reads a member another init assigns" (Haxe already forbids an initializer
  *   from touching another instance member, which would make the gate vacuous), but
@@ -121,31 +124,32 @@ using Lambda;
  *   what makes `--fix` safe to run to a FIXPOINT: a candidate one pass refuses
  *   cannot be unblocked by the co-mover that same pass moved out.
  *
- * The sole-write path is otherwise UNCHANGED and joins no chain: with `writeCount == 1`
- * the moved statement is the field's only assignment whatever precedes it. It does,
- * however, count as a CO-MOVER — a sole-write init that reads in-class state refuses
- * every chained candidate in the same constructor. The unresolved-write bail, the
+ * The sole-write path joins no chain: with `writeCount == 1` the moved statement is
+ * the field's only assignment whatever precedes it. It needs no co-mover clause of
+ * its own any more — a sole-write init that reads in-class state is not a
+ * CANDIDATE at all, and the statement it therefore leaves standing in the constructor
+ * breaks the chain for everything after it. The unresolved-write bail, the
  * read-before-init gate, the reachable-prefix gate and the base-constructor gate apply to
  * both paths.
  *
  * ## Known gaps
  *
- * `orderSafe` decides what a right-hand side READS, never what the code it invokes
+ * The gate decides what a right-hand side READS, never what the code it invokes
  * DOES. The gaps that remain are therefore about effects rather than references:
  *
  * - Foreign code reachable from a moved right-hand side may mutate ANY state — an
  *   external global or an in-class static alike (`new Foo()` whose constructor
- *   assigns `A.s`). `orderSafe` cannot see through the call, and the mutation is
+ *   assigns `A.s`). The gate cannot see through the call, and the mutation is
  *   reordered along with the move.
  * - A moved right-hand side and any OTHER init sharing the prologue can communicate
  *   through such state and still swap — a second moved right-hand side, or a
- *   PRE-EXISTING declaration initializer, either will do. On the chain path both are
- *   gated; on the sole-write path neither is.
- * - The SOLE-WRITE path is gated by neither of those, and its remaining exposure is
- *   not co-movers at all: it reorders against ARBITRARY EARLIER STRAIGHT-LINE
- *   CONSTRUCTOR STATEMENTS. `new() { s = 5; _a = s; }` and
- *   `new() { _b = bump(); _a = n; }` both fire and both change behaviour, unchanged
- *   from before the chain existed. What it can no longer do is hop an EARLY EXIT, a
+ *   PRE-EXISTING declaration initializer, either will do. Both paths refuse a
+ *   right-hand side that READS such state; neither sees a WRITE performed by code it calls.
+ * - The SOLE-WRITE path still reorders against ARBITRARY EARLIER STRAIGHT-LINE
+ *   CONSTRUCTOR STATEMENTS, but only through effects it cannot see: `new() { s = 5; _a = s; }`
+ *   and `new() { _b = bump(); _a = n; }` are now refused outright — each right-hand side
+ *   resolves an in-class name — while `new() { Foreign.arm(); _a = Foreign.read(); }` still
+ *   fires and still changes behaviour. What it can no longer do is hop an EARLY EXIT, a
  *   never-ending loop or an explicit `super(…)` — `ctorPrefixUnconditional` refuses a
  *   prefix it cannot prove completes and `ctorCallsSuper` refuses a constructor that
  *   calls up, on BOTH paths. A BRANCH it CAN hop: an `if` / `switch` / `try` / `#if`
@@ -153,16 +157,20 @@ using Lambda;
  *   way. The CHAIN path is stricter still: any non-candidate statement breaks the
  *   chain, where the legacy path only asks that the prefix be reached.
  *
- * The in-class veto is also deliberately coarse: an IMMUTABLE static (`static
- * inline`, `static final`) can never be the channel these gaps describe, yet reading
- * one still refuses a chained candidate. Measured cost is zero on the trees checked,
- * so the distinction is left unmade — it is the obvious first relaxation if that
- * changes.
+ * The in-class veto is deliberately coarse, and the tempting relaxation is WRONG:
+ * `static final` does NOT make a static safe to read. It fixes the BINDING, not the VALUE —
+ * `static final ns:Array<Int> = []` is what the live regression read `ns[0]` from, one
+ * statement before the constructor filled it. Only an `inline` static (a compile-time
+ * constant by construction), or a `final` one whose initializer is a scalar literal, could
+ * be exempted; a relaxation keyed on the `final` keyword would reopen the regression.
+ * Measured cost of the coarse form over openfl (94 findings), lime (21) and heaps (57) is
+ * TWO sites, and both are correct refusals — `__contextID = __lastContextID++` and
+ * `useWorker = ENABLE` on a `public static var` — so the distinction stays unmade.
  *
  * Emission order is an OBSERVATION, not a contract: field initializers ran in reverse
  * declaration order on `--interp` and `js`; hxcpp was not measured. Nothing above
- * depends on the direction — `orderSafe` holds under any permutation — so a target
- * that emits forward changes none of these statements.
+ * depends on the direction — the gate holds under any permutation — so a target that
+ * emits forward changes none of these statements.
  *
  * ## Fixpoint chain
  *
@@ -403,15 +411,13 @@ final class FieldInitAtDeclaration implements Check {
 	 * Flag every movable field of `container` whose constructor init can move to its
 	 * declaration. Collects the candidates — one plain constructor, the field
 	 * non-static / non-property / no-init, its sole top-level constructor assignment the
-	 * only one, no unresolved write to its name, a context-free right-hand side, no read
-	 * before the init — then decides acceptance in two passes, because it is
-	 * interdependent. Pass one settles the SOLE-WRITE acceptances, which no chain
-	 * condition can revoke, and records whether every one of them is `orderSafe`. Pass
-	 * two walks the constructor's top-level statements, keying each back to a candidate:
-	 * a candidate whose write count differs from one is accepted only while the walk is
-	 * still an unbroken run of accepted inits, its own right-hand side resolves nothing
-	 * in-class, and so does every sole-write init that will co-move with it. Any other
-	 * statement, or a refused candidate, ends the run for everything after it.
+	 * only one, no unresolved write to its name, a right-hand side resolving nothing
+	 * outside globals and foreign types, no read before the init — then walks the
+	 * constructor's top-level statements, keying each back to a candidate. A SOLE-write
+	 * candidate is accepted wherever it sits; one whose write count differs from one is
+	 * accepted only while the walk is still an unbroken run of accepted inits and no
+	 * pre-existing declaration initializer reads in-class state. Any other statement, or a
+	 * refused candidate, ends the run for everything after it.
 	 */
 	private static function considerContainer(
 		container: QueryNode, file: String, source: String, shape: RefShape, writeIndex: FieldWriteIndex,
@@ -438,7 +444,7 @@ final class FieldInitAtDeclaration implements Check {
 				chainOk = false;
 				continue;
 			}
-			if (!cand.sole && !(chainOk && found.coMoversOrderSafe && cand.orderSafe)) {
+			if (!cand.sole && !(chainOk && found.coMoversOrderSafe)) {
 				chainOk = false;
 				continue;
 			}
@@ -450,9 +456,9 @@ final class FieldInitAtDeclaration implements Check {
 	 * Every candidate of `container`, split by acceptance path: `byStmt` keys the top-level-statement
 	 * ones by the statement they own (the chain walk's lookup), `embedded` holds the ones whose write is
 	 * an assignment expression owning no statement of its own, and `coMoversOrderSafe` records whether
-	 * every init that will share the prologue resolves nothing in-class — the condition a CHAINED
-	 * candidate additionally needs, which a sole-write candidate or a pre-existing declaration
-	 * initializer can revoke for everyone.
+	 * every PRE-EXISTING declaration initializer that will share the prologue resolves nothing in-class —
+	 * the condition a CHAINED candidate additionally needs. The candidates cannot revoke it: `candidateFor`
+	 * already refuses an in-class-reading right-hand side.
 	 *
 	 * A field name `container` declares more than once (only reachable across mutually exclusive `#if`
 	 * branches) is dropped outright: its rival declarations share one constructor statement, and
@@ -484,8 +490,6 @@ final class FieldInitAtDeclaration implements Check {
 					byStmt[cand.stmtFrom] = cand;
 			}
 		});
-		for (cand in byStmt) if (cand.sole && !cand.orderSafe) coMoversOrderSafe = false;
-		for (cand in embedded) if (cand.sole && !cand.orderSafe) coMoversOrderSafe = false;
 		return {
 			byStmt: byStmt,
 			embedded: embedded,
@@ -611,7 +615,9 @@ final class FieldInitAtDeclaration implements Check {
 
 	/**
 	 * `stmt` as an init `run` would have accepted as part of a CHAIN, judged by the acceptance gates
-	 * that are decidable from `source` alone — candidate shape, a context-free right-hand side, a
+	 * that are decidable from `source` alone — candidate shape, a right-hand side resolving nothing
+	 * in-class (the same `allowStatics = false` reading `candidateFor` uses; the two must agree, or a
+	 * statement `run` refused reads as a chain member here and declines the fix for nothing), a
 	 * reachable prefix, no read of the field before the init, and no hoist across a base-constructor
 	 * call. Null when any of them fails.
 	 *
@@ -629,7 +635,7 @@ final class FieldInitAtDeclaration implements Check {
 		final span: Null<Span> = stmt.span;
 		return if (mv == null || span == null)
 			null
-		else if (!RefactorSupport.contextFreeRhs(mv.rhs, container, statics, shape, true, mayBeInherited))
+		else if (!RefactorSupport.contextFreeRhs(mv.rhs, container, statics, shape, false, mayBeInherited))
 			null
 		else if (!RefactorSupport.ctorPrefixUnconditional(ctor, span.from, shape))
 			null
@@ -757,13 +763,13 @@ final class FieldInitAtDeclaration implements Check {
 	}
 
 	/**
-	 * `member` as a chain CANDIDATE — a movable field whose sole top-level constructor
-	 * assignment passes every gate that does not depend on the other candidates: no
-	 * unresolved write to its name, a context-free right-hand side, and no read of the
-	 * field before that statement. Records the init statement's start (the key the
-	 * chain walk looks it up by), whether the right-hand side resolves nothing in-class
-	 * and whether the field's cross-file write count is one. Null when `member` is not
-	 * one.
+	 * `member` as a CANDIDATE — a movable field whose sole top-level constructor assignment
+	 * passes every gate that does not depend on the other candidates: no unresolved write to
+	 * its name, a right-hand side that resolves nothing in-class (parameters, locals, instance
+	 * members AND statics of this type alike), a reachable straight-line prefix, no explicit
+	 * call up, and no read of the field before that statement. Records the init statement's
+	 * start (the key the chain walk looks it up by), whether the field's cross-file write count
+	 * is one and whether the write is embedded. Null when `member` is not one.
 	 */
 	private static function candidateFor(
 		member: QueryNode, container: QueryNode, ctor: QueryNode, owner: String, source: String, statics: Array<Int>, shape: RefShape,
@@ -790,11 +796,16 @@ final class FieldInitAtDeclaration implements Check {
 		// line above, so both acceptance paths inherit it from one place.
 		if (hoistCrossesSuper(ctor, container, at, shape)) return null;
 		final unsafeRead: Bool = readBeforeInit(ctor, mv.span.from, mv.name, at, container, shape);
-		return !RefactorSupport.contextFreeRhs(write.rhs, container, statics, shape, true, mayBeInherited) || unsafeRead ? null : {
+		// `allowStatics = false`: an in-class STATIC read is refused along with the parameters, locals
+		// and instance members. The permissive spelling was the live regression — a right-hand side
+		// reading a static the constructor FILLS one statement earlier (`ns.push(7); _x = ns[0];`)
+		// hoisted ahead of that statement and observed the empty value. `final` on the static proves
+		// nothing: the binding is immutable, its contents are not. Both acceptance paths inherit the
+		// gate from here, so a candidate is order-safe by construction and needs no second tier.
+		return !RefactorSupport.contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited) || unsafeRead ? null : {
 			name: mv.name,
 			stmtFrom: at,
 			span: mv.span,
-			orderSafe: RefactorSupport.contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited),
 			sole: writeIndex.writeCount(owner, mv.name) == 1,
 			embedded: write.embedded
 		};
@@ -859,22 +870,27 @@ final class FieldInitAtDeclaration implements Check {
 }
 
 /**
- * One accepted-or-rejectable constructor init: the field's `name` and declaration
- * `span`, whether its right-hand side resolves nothing in-class (`orderSafe`) and
- * whether the field's cross-file write count is one (`sole`, the legacy path).
+ * One accepted-or-rejectable constructor init: the field's `name` and declaration `span`, the
+ * top-level statement it owns (`stmtFrom`, the chain walk's key), whether the field's cross-file
+ * write count is one (`sole`, the legacy path) and whether the write is an assignment EXPRESSION
+ * rather than a statement of its own (`embedded`).
+ *
+ * Order-safety is NOT a field here: `candidateFor` refuses a right-hand side that resolves
+ * anything in-class, so every candidate is order-safe by construction.
  */
 private typedef Candidate = {
 	var name: String;
 	var stmtFrom: Int;
 	var span: Span;
-	var orderSafe: Bool;
 	var sole: Bool;
 	var embedded: Bool;
 }
 
 /**
  * `container`'s candidates split by acceptance path — `byStmt` keyed by the top-level statement each
- * owns, `embedded` owning none — plus whether every prologue co-mover is `orderSafe`.
+ * owns, `embedded` owning none — plus whether every PRE-EXISTING declaration initializer sharing the
+ * prologue resolves nothing in-class (`coMoversOrderSafe`). The candidates need no such record: they
+ * are order-safe by construction.
  */
 private typedef Candidates = {
 	var byStmt: Map<Int, Candidate>;
