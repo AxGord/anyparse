@@ -156,8 +156,35 @@ final class BinaryChainEmit {
 			);
 		}
 
+		// ω-ternary-cuddled-braces: the gate reads only the operand Docs and the
+		// knob, never a column, so it is decided once and handed to every shape the
+		// cascade may pick. `probeGated` shapes pay one extra probe layer (below);
+		// `null` — the knob off, or the operands declining — takes the pre-knob
+		// construction with the flag never set.
+		final cuddle: Null<{ probeGated: Bool, closerWidth: Int }> = ternaryBracesCuddle(items, ops, opt);
+		// Split into plain flags before the closures read them, so nothing
+		// downstream has to re-narrow a nullable across a closure boundary.
+		final cuddleAdmitted: Bool = cuddle != null;
+		final cuddleProbed: Bool = cuddle != null && cuddle.probeGated;
+		// The rendered width of the then branch's closing-line closer run, which the
+		// gate measured on the rendering it admitted. What the `:` rides is the whole
+		// run, not its last token: a branch closing `}))` opens its line three columns
+		// wide.
+		final cuddleCloserWidth: Int = cuddle == null ? 0 : cuddle.closerWidth;
+		// The then branch's own continuation line, flat: the `? ` prefix plus the
+		// branch's flat token width, measured at the continuation indent `cols`
+		// adds. Only a `probeGated` cuddle reads it, and only that leg pays the walk.
+		final cuddleProbeWidth: Int = cuddleProbed ? ops[0].length + 1 + DocMeasure.flatTokenWidth(items[1]) : 0;
+
+		function shapeWith(r: { mode: WrapMode, location: WrappingLocation }, cuddleLast: Bool): Doc {
+			return shape(r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast);
+		}
+
 		function shapeAt(r: { mode: WrapMode, location: WrappingLocation }): Doc {
-			return shape(r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments);
+			final plain: Doc = shapeWith(r, false);
+			return cuddleAdmitted && honoursCuddleLast(r.mode)
+				? cuddleShape(cuddleProbed, cuddleCloserWidth, items, ops, opt, cols, cuddleProbeWidth, shapeWith(r, true), plain)
+				: plain;
 		}
 
 		function shapeNoWrapAt(location: WrappingLocation): Doc {
@@ -312,6 +339,34 @@ final class BinaryChainEmit {
 	private static inline function hasBareParenTail(items: Array<Doc>): Bool {
 		return leadingOperandOpensDelim(items[items.length - 1], true) && WrapList.endsWithCloseDelim(items[items.length - 1])
 			&& !leadingOperandOpensDelim(items[0]);
+	}
+
+	/**
+	 * `ops` is a ternary's degenerate two-op chain (`?` then `:`) — the mixfix
+	 * shape `WriterLowering.lowerTernaryBranch` dispatches into this engine.
+	 * Says nothing about `items`; the two callers that also need the operand
+	 * count check it themselves.
+	 */
+	private static inline function isTernaryOps(ops: Array<String>): Bool {
+		return ops.length == 2 && ops[0] == '?' && ops[1] == ':'; // noqa: magic-number
+	}
+
+	/**
+	 * Does `mode` reach a shaper that honours the `cuddleLast` flag? The two
+	 * one-operand-per-line shapes do; `Keep` is source-faithful by contract, the
+	 * fill family breaks its gaps by packing rather than at a fixed separator, and
+	 * `NoWrap` is already glued. Asked so a probe-gated cuddle wraps only the
+	 * shapes that CAN differ.
+	 *
+	 * It answers about the mode alone, and that is one axis short of the truth:
+	 * both shapers read the flag only in their `BeforeLast` location arm, so under
+	 * `defaultLocation: "afterLast"` the two slots really are the same Doc twice.
+	 * Measured — the knob's output there is byte-identical to the knob off — so
+	 * what the missing axis costs is a pair of dead probe nodes, never a layout.
+	 * Widening it to take the location would drop them.
+	 */
+	private static inline function honoursCuddleLast(mode: WrapMode): Bool {
+		return mode == WrapMode.OnePerLine || mode == WrapMode.OnePerLineAfterFirst;
 	}
 
 	/**
@@ -532,12 +587,12 @@ final class BinaryChainEmit {
 
 	private static function shape(
 		mode: WrapMode, location: WrappingLocation, items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int,
-		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, ?afterComments: Array<Null<Doc>>
+		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, ?afterComments: Array<Null<Doc>>, cuddleLast: Bool = false
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
-			case OnePerLine: shapeOnePerLine(items, ops, cols, location);
-			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location);
+			case OnePerLine: shapeOnePerLine(items, ops, cols, location, cuddleLast);
+			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location, cuddleLast);
 			case FillLine, FillLineWithLeadingBreak:
 				shapeFillLine(items, ops, cols, indentUnit, location);
 			// ω-keep-chain (increment 2): JSON `"defaultWrap": "keep"` on chain
@@ -644,7 +699,9 @@ final class BinaryChainEmit {
 		return headBreak ? Nest(cols, Concat([Line('\n'), items[0]].concat(tail))) : Concat([items[0], Nest(cols, Concat(tail))]);
 	}
 
-	private static function shapeOnePerLineAfterFirst(items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation): Doc {
+	private static function shapeOnePerLineAfterFirst(
+		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, cuddleLast: Bool = false
+	): Doc {
 		// First operand stays at the call-site column; remaining operands
 		// each on their own indented continuation line.
 		//
@@ -658,8 +715,14 @@ final class BinaryChainEmit {
 		switch location {
 			case BeforeLast:
 				for (i in 0...ops.length) {
-					tail.push(Line('\n'));
-					tail.push(Text('${ops[i]} '));
+					// ω-ternary-cuddled-braces: `cuddleLast` glues the FINAL gap —
+					// the operator rides the previous operand's own closing line
+					// (` : {`) instead of opening a continuation line of its own.
+					// `ternaryBracesCuddle` is what decides it; here it is one
+					// dropped `Line`, so the knob-off path is the pre-knob Concat.
+					final cuddled: Bool = cuddleLast && i == ops.length - 1;
+					if (!cuddled) tail.push(Line('\n'));
+					tail.push(Text(cuddled ? ' ${ops[i]} ' : '${ops[i]} '));
 					tail.push(items[i + 1]);
 				}
 				return Concat([items[0], Nest(cols, Concat(tail))]);
@@ -678,7 +741,9 @@ final class BinaryChainEmit {
 		}
 	}
 
-	private static function shapeOnePerLine(items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation): Doc {
+	private static function shapeOnePerLine(
+		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, cuddleLast: Bool = false
+	): Doc {
 		// Every operand on its own indented line.
 		//
 		//  - `AfterLast` (haxe-formatter's `defaultWrap: onePerLine`
@@ -706,8 +771,13 @@ final class BinaryChainEmit {
 				}
 			case BeforeLast:
 				for (i in 0...ops.length) {
-					inner.push(Line('\n'));
-					inner.push(Text('${ops[i]} '));
+					// ω-ternary-cuddled-braces, sister of the `OnePerLineAfterFirst`
+					// arm: the final gap glues when `cuddleLast`. Same one dropped
+					// `Line` — this shaper differs only in breaking before the FIRST
+					// operand as well, which the cuddle never touches.
+					final cuddled: Bool = cuddleLast && i == ops.length - 1;
+					if (!cuddled) inner.push(Line('\n'));
+					inner.push(Text(cuddled ? ' ${ops[i]} ' : '${ops[i]} '));
 					inner.push(items[i + 1]);
 				}
 		}
@@ -1006,9 +1076,8 @@ final class BinaryChainEmit {
 		// under threshold) but subtracts `flatTokenWidthOfRestStack(stack)` from the
 		// budget, so the trailing content is counted. opBool `&&`/`||` chains
 		// (non-ternary ops) keep the plain `Group(IfBreak)` pivot.
-		final isTernaryOps: Bool = ops.length == 2 && ops[0] == '?' && ops[1] == ':';
 		final ifBreak: Doc = IfBreak(brkShape, shapeAt(flat));
-		return WrapBoundary(isTernaryOps && ternaryRestAware ? GroupWithRestProbe(ifBreak) : Group(ifBreak));
+		return WrapBoundary(isTernaryOps(ops) && ternaryRestAware ? GroupWithRestProbe(ifBreak) : Group(ifBreak));
 	}
 
 	/**
@@ -1086,6 +1155,149 @@ final class BinaryChainEmit {
 	}
 
 	/**
+	 * ω-ternary-cuddled-braces — may the `:` and the ELSE branch's opening
+	 * delimiter ride on the THEN branch's own closing line, rather than opening
+	 * a continuation line that would hold nothing but `: {`?
+	 *
+	 * Yes exactly when `WriteOptions.ternaryCuddledBraces` is on and both
+	 * operands answer for their own half:
+	 *
+	 *  - the THEN branch's rendered tail is a forced closing line whose leftmost
+	 *    closer is a BRACE landing at Nest depth ZERO — the indent of the line
+	 *    the branch itself started on. `DocMeasure.breakTailCloseNest` answers
+	 *    all three in one walk, which is why it is asked instead of a
+	 *    forced-break test plus a separate brace test: the depth and the brace
+	 *    have to be measured on the same rendering. The zero is what makes the
+	 *    cuddle safe rather than merely shorter — the else branch's `{` opens at
+	 *    the `?` line's indent, so its own `}` closes there too and no delimiter
+	 *    lands below its opener. A then branch that renders FLAT has no closing
+	 *    line to ride and answers `-1`, so a ternary whose branches both fit is
+	 *    never rebuilt onto one line.
+	 *  - the ELSE branch OPENS with a collection delimiter. `} : {` is legible
+	 *    because what follows the separator is itself a delimited body that owns
+	 *    its own multi-line layout; a call / chain / bare identifier there keeps
+	 *    the continuation line the cascade gave it.
+	 *
+	 * The FIRST leg is structural and column-free, so no render-time measurement
+	 * can flip a ternary's shape — the discipline the sibling
+	 * `methodChainCuddledLinks` gate keeps throughout. The second leg gives that
+	 * up deliberately, because a config that defers every object-literal break to
+	 * the renderer (`objectLiteral.defaultWrap: "ignore"` plus a single
+	 * `exceedsMaxLineLength` rule — Pony's own in-flight config) leaves the
+	 * structural read nothing to see; it pays for the render-time reading with a
+	 * probe the caller must emit, and its pre-knob shape sits in the slot every
+	 * Doc walker resolves to.
+	 */
+	private static function ternaryBracesCuddle(
+		items: Array<Doc>, ops: Array<String>, opt: WriteOptions
+	): Null<{ probeGated: Bool, closerWidth: Int }> {
+		if (!opt.ternaryCuddledBraces || !isTernaryOps(ops) || items.length != 3) return null;
+		if (!WrapList.startsWithCollectionDelim(items[2])) return null; // noqa: magic-number
+		// `closerWidth` is measured on whichever rendering the leg admitted, never
+		// on `items[1]` as written: the pivot leg's branch has no committed closing
+		// line at all, so only its resolved arm knows how wide the run is.
+		if (DocMeasure.breakTailCloseNest(items[1]) == 0) return { probeGated: false, closerWidth: DocMeasure.breakTailCloseRun(items[1]) };
+		// ω-render-pivot-collection-arg, cuddle leg — the SAME second scan the hug
+		// below runs, and for the same reason: a branch whose break the renderer
+		// decides leaves no forced hardline for the structural read, so resolving
+		// its pivot is the only way to see the closing line at all. What differs is
+		// the certainty available. The hug knows its branch breaks because the whole
+		// ternary did not fit and the hug's own head does; a cuddle sits on the
+		// branch's CONTINUATION line, which can fit while the ternary does not — so
+		// the resolved arm only makes the cuddle POSSIBLE, and the caller owes it a
+		// continuation-fits probe. Without that probe this leg would rebuild a
+		// ternary whose branches both fit onto one line, which is the shape the
+		// structural leg refuses by construction. Both pivot shapes are asked for,
+		// in the order `WrapList.shapeMultiArgCollection` asks them: the
+		// `IfFirstLineExceeds` threshold a shadowed breaking default emits, then the
+		// `Group(IfBreak(…))` a two-run `exceedsMaxLineLength` cascade emits
+		// (`fitPivot`). The second carries the stricter contract — a committed host
+		// does NOT make it certain to fire — and the probe owed is the same one
+		// either way, so they share it.
+		final threshold: Null<Doc> = WrapList.renderPivotBreakArm(items[1]);
+		final arm: Null<Doc> = threshold ?? WrapList.renderPivotBreakArm(items[1], true);
+		return arm == null || DocMeasure.breakTailCloseNest(arm) != 0
+			? null
+			: { probeGated: true, closerWidth: DocMeasure.breakTailCloseRun(arm) };
+	}
+
+	/**
+	 * ω-ternary-cuddled-braces — the shape an ADMITTED cuddle takes, `cuddled`
+	 * and `plain` being the two already-built candidates. `items`/`ops` are the
+	 * three-operand ternary `ternaryBracesCuddle` admitted, so `items[2]` and
+	 * `ops[1]` are the else branch and its separator, and `closerWidth` is the
+	 * rendered width of the then branch's closing-line closer run, measured by the
+	 * gate on whichever rendering it admitted.
+	 *
+	 * The else branch is measured TWICE, because gluing does not move it — it
+	 * SHIFTS it. The separator line the cuddle removes was `: <else>` at `cols`;
+	 * the line it rides instead is `} : <else>`, wider by the then branch's whole
+	 * closer run and the space after it. That run is why `closerWidth` is a number
+	 * and not a constant: a branch closing `}))` opens its line three columns wide,
+	 * and charging one closer admits a glued line two columns past the limit. An
+	 * else that fit its own line inside the difference does not fit the glued one,
+	 * and the renderer then breaks a branch that was a single line — measured on a
+	 * six-field else whose separator line landed on the limit: one line became
+	 * eight, and the line the cuddle saved brought that back to +6 net.
+	 *
+	 * So the two widths BRACKET the decision rather than decide it: both failing
+	 * means the else lays out across lines either way and the cuddle is free; both
+	 * fitting means it stays on one line either way and the cuddle is free; only
+	 * the gap between them — fits alone, overflows glued — keeps its separator
+	 * line. `flatTokenWidth` is the right measure on both counts even for an else
+	 * whose break the renderer decides: such a branch reports its whole flat width,
+	 * fails both probes together, and lands in the first free case.
+	 *
+	 * Both else probes stop at `opt.lineWidth` rather than `opt.lineWidth + 1`, and
+	 * the missing column is a RESERVE, not an off-by-one: the line they measure
+	 * does not end where the branch does. A ternary is followed by whatever
+	 * terminates the statement or the call holding it, and
+	 * `IfArrowContinuationFits` compares a column-independent token width that
+	 * cannot see that tail. Measured without the reserve the whole band sat one
+	 * width too high — an else whose glued line reached 141 counting its `;`
+	 * passed a glue probe that stopped at 140, cuddled, and broke.
+	 *
+	 * KNOWN LIMIT, and no constant closes it. One reserved column is exact for a
+	 * STATEMENT-position ternary and wrong for every other host: one inside a call
+	 * trails `);` and wants two, one whose host opened its own paren trails nothing
+	 * and wants none. Widening the reserve does not make it safe either, because
+	 * the two probes want OPPOSITE conservatism — a loose glue probe cuddles a line
+	 * that overflows, and a strict else probe reads a fitting else as "breaks
+	 * anyway, so the cuddle is free" and cuddles it too. The honest fix is the real
+	 * tail width, which needs a continuation-fits probe that also reads the rest of
+	 * the render stack (`flatTokenWidthOfRestStack`, the way `IfFullLineExceeds`
+	 * does). Until then the knob is calibrated for the host it was asked for, and a
+	 * ternary in a call argument can still lose a couple of lines inside a
+	 * two-column window.
+	 *
+	 * SLOT INVERSION on the `probeGated` layer, the pairing four other consumers of
+	 * this ctor already use: the arm renders `flatDoc` when the continuation FITS,
+	 * and a then branch that fits stays FLAT — it has no closing line to ride — so
+	 * the PRE-KNOB shape is the flat slot and the cuddle the break slot. That
+	 * direction is also what keeps every Doc walker (which resolves this ctor to
+	 * `flatDoc`) reading the pre-knob layout. The structural leg needs no probe
+	 * and takes the guarded shape directly.
+	 *
+	 * The else-fits probe pairs the same way. The inner GLUE probe does NOT: it
+	 * asks whether the GLUED line fits, so fitting is the reason to glue and its
+	 * flat slot holds the cuddle, which means a walker resolving that node reads
+	 * the CUDDLED layout rather than the pre-knob one. `Doc.hx`'s header records
+	 * the disagreement, because the three sites this function builds are the only
+	 * ones where the ctor's two conventions meet.
+	 */
+	private static function cuddleShape(
+		probeGated: Bool, closerWidth: Int, items: Array<Doc>, ops: Array<String>, opt: WriteOptions, cols: Int, probeWidth: Int,
+		cuddled: Doc, plain: Doc
+	): Doc {
+		final elseWidth: Int = ops[1].length + 1 + DocMeasure.flatTokenWidth(items[2]);
+		final gluedWidth: Int = elseWidth + closerWidth + 1;
+		final guarded: Doc = IfArrowContinuationFits(
+			cols, elseWidth, opt.lineWidth, cuddled, IfArrowContinuationFits(cols, gluedWidth, opt.lineWidth, plain, cuddled)
+		);
+		return probeGated ? IfArrowContinuationFits(cols, probeWidth, opt.lineWidth + 1, guarded, plain) : guarded;
+	}
+
+	/**
 	 * ω-ternary-collection-hug: returns the index (1 = THEN, 2 = ELSE) of a
 	 * TERNARY chain's SOLE multi-line branch when that branch is a bare
 	 * collection literal — it STARTS with `{`/`[` and ENDS with the matching
@@ -1109,7 +1321,7 @@ final class BinaryChainEmit {
 	 * the predicate.
 	 */
 	private static function ternaryHugCollectionBranchIndex(items: Array<Doc>, ops: Array<String>): Int {
-		if (items.length != 3 || ops.length != 2 || ops[0] != '?' || ops[1] != ':') return -1;
+		if (items.length != 3 || !isTernaryOps(ops)) return -1;
 		if (WrapList.flatLength(items[0]) < 0) return -1;
 		var idx: Int = -1; // noqa: magic-number
 		for (i in 1...3) if (WrapList.flatLength(items[i]) < 0) { // noqa: magic-number

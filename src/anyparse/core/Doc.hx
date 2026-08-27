@@ -456,18 +456,26 @@ enum Doc {
 	 * measurer call is needed; the arm just checks
 	 * `f.indent + extraIndent + flatWidth < n`.
 	 *
-	 * SLOT INVERSION at the four NON-arrow consumers. `WrapList.shapeSingleArgGlue`
+	 * SLOT INVERSION at the NON-arrow consumers. `WrapList.shapeSingleArgGlue`
 	 * reuses this ctor twice — for a sole `{`-object-literal argument
 	 * (ω-callparam-single-objectlit) and for the sole-argument outer-first probe
 	 * (ω-outer-first-wrap), and `BinaryChainEmit.emitNoThreshold` a third time for
 	 * the trailing-paren operator break (ω-opadd-trailing-paren-break), and
 	 * `WrapList.shapeMultiArgCollection` a fourth for the FIT-pivot collection arg
-	 * (ω-fit-pivot-collection-arg) — all four pass `breakDoc` = the GLUED /
+	 * (ω-fit-pivot-collection-arg). All four pass `breakDoc` = the GLUED /
 	 * fall-through shape and `flatDoc` = the OPENED shape, the reverse of the arrow
 	 * consumer's pairing. The arm itself is unchanged (fits → `flatDoc`); what
 	 * swaps is which layout each slot holds, because at those sites "fits at the
-	 * continuation" is the reason to break the OUTER boundary rather than to keep it
-	 * inline.
+	 * continuation" is the reason to break the OUTER boundary rather than to keep
+	 * it inline.
+	 *
+	 * `BinaryChainEmit.cuddleShape` (ω-ternary-cuddled-braces) adds three more, and
+	 * they do NOT all agree with each other: its outer probe gate and its
+	 * else-fits probe invert like the four above, while the innermost GLUE probe
+	 * keeps the arrow pairing (`breakDoc` = the pre-knob separated shape,
+	 * `flatDoc` = the glued one) — it asks "does the GLUED line fit", so fitting
+	 * is the reason to glue. A walker resolving that one to `flatDoc` therefore
+	 * reads the CUDDLED layout, not the pre-knob one.
 	 *
 	 * That inversion is visible to every walker that resolves this ctor to ONE
 	 * slot. `WrapList.flatLength` takes `flatDoc`, so for such a call it walks a

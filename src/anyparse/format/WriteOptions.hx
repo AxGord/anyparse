@@ -325,6 +325,72 @@ typedef WriteOptions = {
 	methodChainCuddledLinks: Bool,
 
 	/**
+	 * Cuddle the `:` of a BROKEN ternary onto the then branch's own closing line
+	 * (`} : {`) instead of opening a continuation line that holds nothing but
+	 * `: {`. Only the `:` side moves; the `?` keeps its break, because the branch
+	 * that gains a line by breaking has earned it while the `: {` line buys
+	 * nothing — the else branch lays out across lines regardless, its own `{` IS
+	 * its wrap point, and the separator line only pushes everything below it down
+	 * one. `soleItemCuddledBrackets` reads the same policy from the other side: a
+	 * break is worth taking only when it RESCUES the line.
+	 *
+	 * TWO ADMISSION LEGS, both in `BinaryChainEmit.ternaryBracesCuddle`. The
+	 * STRUCTURAL one reads `DocMeasure.breakTailCloseNest` over the then branch,
+	 * whose rendered tail must be a forced closing line whose leftmost closer is a
+	 * BRACE landing at depth ZERO — the indent of the line the branch itself
+	 * started on. That zero is what makes the cuddle safe rather than merely
+	 * shorter: the else branch's `{` opens at the `?` line's indent, so its own `}`
+	 * closes there too and neither delimiter sits below its opener. A then branch
+	 * that rendered FLAT has no closing line to ride and answers `-1`, so a ternary
+	 * whose branches both fit is never rebuilt onto one line.
+	 *
+	 * That read sees nothing under a config that defers every object-literal break
+	 * to the RENDERER (`objectLiteral.defaultWrap: "ignore"` plus a single
+	 * `exceedsMaxLineLength` rule). The SECOND leg resolves such a branch through
+	 * `WrapList.renderPivotBreakArm` and pays for the render-time reading with a
+	 * continuation-fits probe wrapped around the cuddled shape, slot-inverted so
+	 * the PRE-KNOB layout is what every Doc walker resolves to: a branch that fits
+	 * its own continuation line stays flat, and is never glued.
+	 *
+	 * The ELSE branch must additionally OPEN with a collection delimiter
+	 * (`WrapList.startsWithCollectionDelim`) — the `} : {` shape is only legible
+	 * when what follows the separator is itself a delimited body. A non-collection
+	 * else operand (a call, a chain, a bare identifier) keeps the pre-knob line of
+	 * its own.
+	 *
+	 * A THIRD gate, `BinaryChainEmit.cuddleShape`, answers about the else branch's
+	 * WIDTH, because gluing does not move that branch — it SHIFTS it right by the
+	 * then branch's whole closing-line CLOSER RUN and the space after it — two
+	 * columns for a bare `}`, four for a `}))`. An else that fits its own
+	 * separator line can overflow the line it rides once glued, and the renderer
+	 * then breaks a branch that was a single line, spending several to save one.
+	 * Two `IfArrowContinuationFits` probes BRACKET that band — both failing, or
+	 * both fitting, means the else lays out the same way either way and the cuddle
+	 * is free — and only inside the band does the separator line survive. Both
+	 * probes stop one column short of the limit, reserving the statement
+	 * terminator neither can see; `cuddleShape`'s own doc carries the arithmetic
+	 * and the KNOWN LIMIT that reserve leaves behind for a ternary whose host is
+	 * not a statement.
+	 *
+	 * Covers the two one-operand-per-line break shapes (`OnePerLineAfterFirst` /
+	 * `OnePerLine`) — what a broken ternary is — and within them only the
+	 * `beforeLast` separator location, the only one whose shaper reads the flag.
+	 * Deliberately NOT covered: `Keep` (source-faithful by contract — the source's
+	 * own `:` placement is the answer there), the fill family (its gaps break by
+	 * packing, so the separator may not start a line at all), and `NoWrap`
+	 * (already glued).
+	 *
+	 * Default `false` — absent from config means byte-identical output to the
+	 * pre-knob writer, since the cuddle branch is entered only when the gate
+	 * answers yes. Fed by `wrapping.ternaryCuddledBraces` through
+	 * `HaxeFormatConfigLoader`. Lives on the base options alongside the other
+	 * cuddle policies the wrap engine reads directly; the shape it recognises is
+	 * expressed purely in `Doc` terms, so any grammar emitting a mixfix `? :`
+	 * chain through `BinaryChainEmit` inherits it.
+	 */
+	ternaryCuddledBraces: Bool,
+
+	/**
 	 * Cap on consecutive line-end runs in the rendered output. Read once
 	 * by `Renderer.render` as the final post-pass: any run of `N+1` or
 	 * more consecutive `lineEnd` sequences is truncated to exactly

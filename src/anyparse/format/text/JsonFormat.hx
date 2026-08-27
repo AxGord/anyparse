@@ -117,6 +117,7 @@ final class JsonFormat implements TextFormat {
 		comprehensionCuddledOpen: false,
 		soleItemCuddledBrackets: false,
 		methodChainCuddledLinks: false,
+		ternaryCuddledBraces: false,
 		addLineCommentSpace: true,
 		normalizeLineCommentIndent: false,
 		compressSuccessiveParenthesis: true

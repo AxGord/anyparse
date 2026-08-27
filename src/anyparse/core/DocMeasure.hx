@@ -641,8 +641,33 @@ final class DocMeasure {
 	 * which owns its own multi-line layout and dedents to the caller's indent.
 	 */
 	public static function breakTailCloseNest(d: Doc): Int {
-		final out: TailOut = { nest: 0, braceCloser: false };
+		final out: TailOut = { nest: 0, braceCloser: false, closeWidth: 0 };
 		return scanTailAt(d, 0, true, out) == TailBreak && out.braceCloser ? out.nest : -1;
+	}
+
+	/**
+	 * The rendered WIDTH of the closer run that opens the closing line
+	 * `breakTailCloseNest` locates — the same walk, reading the other fact it
+	 * records, and `-1` on exactly the same non-answers.
+	 *
+	 * A caller gluing its own text after that line needs both numbers and they
+	 * answer different questions: the nest says WHETHER the glue is legal (a
+	 * closer landing under its own opener), the width says what the glued line
+	 * COSTS. Asking for both is two walks of the same tail; that is deliberate,
+	 * since the second one runs only for a caller that has already been told the
+	 * glue is legal, while the `null`-out fast path every other consumer takes
+	 * pays nothing at all.
+	 *
+	 * Counting the run rather than its last token is the whole point — a branch
+	 * closing `}))` opens its line three columns wide, and a caller that charged
+	 * itself one would admit a glued line up to two columns past the limit. So is
+	 * counting each leaf as the renderer emits it: `closesOnly` admits interior
+	 * padding (`} )` under a `closingPolicy: "before"` paren), and a caller
+	 * gluing text after the run gets that padding flushed, not dropped.
+	 */
+	public static function breakTailCloseRun(d: Doc): Int {
+		final out: TailOut = { nest: 0, braceCloser: false, closeWidth: 0 };
+		return scanTailAt(d, 0, true, out) == TailBreak && out.braceCloser ? out.closeWidth : -1;
 	}
 
 	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
@@ -747,9 +772,21 @@ final class DocMeasure {
 				if (closesOnly(s)) {
 					// Right-to-left, so each closers-only leaf overwrites the last:
 					// when the hardline is finally reached the recorded character is
-					// the LEFTMOST closer, the one that opens the closing line.
+					// the LEFTMOST closer, the one that opens the closing line. The
+					// width ACCUMULATES over the same visits instead, because the
+					// closing line is the whole run and the run reaches a caller as one
+					// leaf per closer as often as it does as one leaf for all of them.
+					//
+					// `s.length`, not its non-whitespace count: `closesOnly` admits a
+					// leaf carrying interior padding (a `closingPolicy: "before"` paren
+					// renders `} )`), and a caller gluing text after this line gets that
+					// padding flushed rather than dropped — only a BREAK-mode `Line`
+					// drops a pending `OptSpace`, and the glue puts a `Text` there
+					// instead. Trimming would also under-count a run split across
+					// leaves, where the padding IS its own leaf and trims to nothing.
 					final c: Int = firstVisibleChar(s);
 					if (out != null && c >= 0) out.braceCloser = c == '}'.code;
+					if (out != null) out.closeWidth += s.length;
 					TailCloses;
 				} else
 					TailOther;
@@ -922,19 +959,20 @@ private enum abstract DocTailScan(Int) {
 }
 
 /**
- * The two facts `DocMeasure.scanTailAt` records about the closing line it
+ * The three facts `DocMeasure.scanTailAt` records about the closing line it
  * finds, when a caller asks for them: the `Nest` depth that line starts at,
- * and whether the LEFTMOST closer opening it is a brace. Both are meaningful
- * only alongside a `TailBreak` verdict.
+ * whether the LEFTMOST closer opening it is a brace, and how wide the closer
+ * run is. All three are meaningful only alongside a `TailBreak` verdict.
  *
  * A mutable carrier rather than a return value, on purpose. The walk visits
  * every node of the tail spine, and `endsWithForcedCloseLine` — the
- * cuddled-chain gate on the writer's per-link path — wants neither fact, so it
- * passes `null` and the walk allocates nothing at all. Returning a struct from
- * every node instead cost a measured 1.5% of a whole 870-file format pass
- * (interleaved medians 3.759s vs 3.817s).
+ * cuddled-chain gate on the writer's per-link path — wants none of the
+ * three, so it passes `null` and the walk allocates nothing at all.
+ * Returning a struct from every node instead cost a measured 1.5% of a whole
+ * 870-file format pass (interleaved medians 3.759s vs 3.817s).
  */
 private typedef TailOut = {
 	var nest: Int;
 	var braceCloser: Bool;
+	var closeWidth: Int;
 }
