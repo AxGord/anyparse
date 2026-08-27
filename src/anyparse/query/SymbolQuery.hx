@@ -72,9 +72,10 @@ final class SymbolQuery {
 	}
 
 	/**
-	 * The files in `files` that import the module `modulePath` — a
-	 * direct `import`/`using` of the module itself or of one of its
-	 * sub-types (`SymbolIndex.filesImportingModule`). Returns the file
+	 * The files in `files` that import the module `modulePath` — an
+	 * `import`/`using` of the module itself or of one of its sub-types,
+	 * an `import pkg.Mod.Type as T;` among them
+	 * (`SymbolIndex.filesImportingModule`). Returns the file
 	 * paths in input order. A wildcard `import pkg.*;` is NOT counted —
 	 * see the `filesImportingModule` docstring for why.
 	 */

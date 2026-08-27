@@ -454,6 +454,116 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
+	 * An importer that reaches the moved type ONLY through `import pkg.A.Foo as F;` is repointed
+	 * like any other, and keeps its binding. It used to be invisible twice over: an alias
+	 * statement's `raw` is the ALIAS, so `filesImportingModule` did not list the file and the
+	 * per-statement match did not fire either, and `importStatementText` had no alias suffix to
+	 * emit even if it had. Compile-proved on Haxe 4.3.7 — the file was left on
+	 * `import p.Thing as T;` after `Thing` moved into `p/Host.hx`, and the tree failed with
+	 * `Module p.Thing does not define type Thing` / `Type not found : T`.
+	 *
+	 * The `in` spelling is asserted beside `as` because the two share one `ImportKind` and the
+	 * re-emit therefore has to read the statement's own text to tell them apart; re-emitting an
+	 * `in` importer as `as` would be a restyle of a file the caller only asked to repoint. The
+	 * plain importer in the same scope is the control: it must still repoint the way it always
+	 * did, so a pass cannot come from the alias arm and the plain arm both going silent.
+	 */
+	public function testAliasImporterRepointedKeepingItsBinding(): Void {
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\nclass Foo {}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' },
+			{ file: 'pkg/Plain.hx', source: 'package pkg;\n\nimport pkg.A.Foo;\n\nclass Plain {\n\tvar f:Foo;\n}' },
+			{ file: 'pkg/AsUser.hx', source: 'package pkg;\n\nimport pkg.A.Foo as F;\n\nclass AsUser {\n\tvar f:F;\n}' },
+			{ file: 'pkg/InUser.hx', source: 'package pkg;\n\nimport pkg.A.Foo in G;\n\nclass InUser {\n\tvar f:G;\n}' }
+		]);
+		Assert.equals('package pkg;\n\nimport pkg.B.Foo;\n\nclass Plain {\n\tvar f:Foo;\n}', changeFor(changes, 'pkg/Plain.hx').newSource);
+		Assert.equals(
+			'package pkg;\n\nimport pkg.B.Foo as F;\n\nclass AsUser {\n\tvar f:F;\n}', changeFor(changes, 'pkg/AsUser.hx').newSource
+		);
+		Assert.equals(
+			'package pkg;\n\nimport pkg.B.Foo in G;\n\nclass InUser {\n\tvar f:G;\n}', changeFor(changes, 'pkg/InUser.hx').newSource
+		);
+	}
+
+	/**
+	 * The DESTINATION's own alias import of the moved type is REPOINTED, not removed. A plain
+	 * import of it becomes redundant once the type is local and is deleted; an alias import does
+	 * not, because the destination's code names the type through the ALIAS and nothing else binds
+	 * it. Deleting it left `p/Host.hx` compiling against a module that no longer defines the type
+	 * (`Module p.Thing does not define type Thing` / `Type not found : T`, Haxe 4.3.7), and
+	 * `import p.Host.Thing as T;` inside `p/Host.hx` — a module aliasing its own sub-type — was
+	 * compiled to confirm the repointed form is legal.
+	 */
+	public function testDestinationAliasImportRepointedNotRemoved(): Void {
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\nclass Foo {}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nimport pkg.A.Foo as F;\n\nclass B {\n\tvar f:F;\n}' }
+		]);
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.isTrue(newB.contains('import pkg.B.Foo as F;'), 'the destination alias is repointed at the new path');
+		Assert.isFalse(newB.contains('import pkg.A.Foo as F;'), 'the old path is gone');
+		Assert.isTrue(newB.contains('var f:F;'), 'the destination still names the type through its alias');
+	}
+
+	/**
+	 * A cross-package move is NOT refused by the alias importer's own statement. The refusal scans
+	 * for the old dotted path outside any import statement, and recognised an import by
+	 * `imp.raw == path` — which for an alias is the ALIAS, so the `pkg.A.Foo` inside
+	 * `import pkg.A.Foo as F;` read as a fully-qualified CODE reference. The move was refused with
+	 * a message telling the file's author to convert it to a bare name "with an import", which is
+	 * exactly what they had written. The genuine fully-qualified reference is the control and must
+	 * still refuse.
+	 */
+	public function testCrossPackageAliasImporterNotMistakenForAnFqnReference(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\nclass Foo {}' },
+			{ file: 'other/B.hx', source: 'package other;\n\nclass B {}' },
+			{ file: 'pkg/AsUser.hx', source: 'package pkg;\n\nimport pkg.A.Foo as F;\n\nclass AsUser {\n\tvar f:F;\n}' }
+		];
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'other/B.hx', files);
+		Assert.isTrue(
+			changeFor(changes, 'pkg/AsUser.hx').newSource.contains('import other.B.Foo as F;'), 'the alias importer is repointed'
+		);
+		assertErr(MoveSymbol.moveType('pkg/A.hx', 3, 7, 'other/B.hx', files.concat([
+			{ file: 'pkg/Fqn.hx', source: 'package pkg;\n\nclass Fqn {\n\tvar f:pkg.A.Foo;\n}' }
+		]), plugin(), typeRefShape()));
+	}
+
+	/**
+	 * The destination's alias import is repointed only while the ALIAS still buys something. Two
+	 * shapes decide it, and both were compiled on 4.3.7 before being pinned:
+	 *
+	 *  - a SELF-alias (`import pkg.A.Foo as Foo;`) binds the very name the moved declaration now
+	 *    binds, so after the move it is redundant exactly as a plain import is. Repointing it
+	 *    leaves `pkg/B.hx` importing its own type under its own name — which compiles, and which
+	 *    no lint rule reports (`unused-import` and `redundant-import` both ask about the BOUND
+	 *    NAME, and that name IS used), so nothing downstream would ever have caught it. It is
+	 *    deleted.
+	 *  - the moved type becoming the destination's MAIN type makes the repointed statement
+	 *    `import pkg.B as F;` inside `pkg/B.hx` — a module importing ITSELF rather than a
+	 *    sub-type of itself. That is the shape the other destination pin does not reach, and it
+	 *    compiles; the alias is still the only binding for `F`, so it is kept.
+	 */
+	public function testDestinationSelfAliasRemovedAndMainTypeAliasKept(): Void {
+		final self: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\nclass Foo {}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nimport pkg.A.Foo as Foo;\n\nclass B {\n\tvar f:Foo;\n}' }
+		]);
+		final newSelf: String = changeFor(self, 'pkg/B.hx').newSource;
+		Assert.isFalse(newSelf.contains('import'), 'a self-alias of the moved type is redundant once it is local');
+		Assert.isTrue(newSelf.contains('var f:Foo;'), 'the reference resolves against the moved declaration');
+
+		// `B` moving into `pkg/B.hx` becomes that module's MAIN type, so the new path is `pkg.B`.
+		final main: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\nclass A {}\n\nclass B {}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nimport pkg.A.B as F;\n\nclass B2 {\n\tvar f:F;\n}' }
+		]);
+		final newMain: String = changeFor(main, 'pkg/B.hx').newSource;
+		Assert.isTrue(newMain.contains('import pkg.B as F;'), 'a main-type destination repoints at the module path');
+		Assert.isTrue(newMain.contains('var f:F;'), 'the alias is still the only binding for F');
+	}
+
+	/**
 	 * Drive a successful move and return the changes, asserting the result
 	 * is `Ok`, the advisory is present, and every rewrite re-parses (the
 	 * op already validates this; the test makes it explicit by re-parsing

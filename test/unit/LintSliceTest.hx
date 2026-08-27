@@ -347,6 +347,47 @@ class LintSliceTest extends Test {
 		Assert.equals(0, vs.length);
 	}
 
+	/**
+	 * Two `#if` branches binding ONE alias name to DIFFERENT modules are not duplicates — each is
+	 * the only binding its own compilation has. Both statements reach `FileInfo.imports` since the
+	 * builder's alias dedup key carries the path; keying the rule on `imp.raw` (the ALIAS, for an
+	 * alias statement) collapsed them to one, flagged the `#else` branch, and `--fix` deleted it,
+	 * leaving a bare `#if js … #else #end` and a non-js compilation whose supertype no longer
+	 * resolved. The controls: an unguarded alias written twice is a genuine duplicate and must still be
+	 * flagged, and the last arm is the same wrong-key confusion with NO `#if` at all — two
+	 * unguarded statements binding one name to different modules, which the base engine
+	 * reported and would have deleted.
+	 */
+	public function testGuardedAliasBranchesBindingDifferentModulesNotDuplicate(): Void {
+		inline function duplicates(extra: String): Int {
+			return new DuplicateImport().run([
+				{
+					file: 'pkg/C.hx',
+					source: 'package pkg;\n#if js\nimport a.b.One as U;\n#else\nimport a.b.Two as U;\n#end\n${extra}class C extends U {}'
+				}
+			], plugin()).length;
+		}
+		Assert.equals(0, duplicates(''));
+		// A genuine unguarded alias repeat in the same file IS a duplicate — so a pass above
+		// cannot come from the rule having gone silent on alias statements altogether.
+		Assert.equals(1, duplicates('import a.b.Three as V;\nimport a.b.Three as V;\n'));
+		// The UNGUARDED shape of the same confusion, and the one that deletes: two statements
+		// binding one name to different modules. Haxe accepts them and the LAST one wins
+		// (compiled on 4.3.7 — `new U().who()` traced `Two`), so deleting the second silently
+		// rebinds `U` to the first. Keyed on `raw` both read as `Alias|U|U`; measured against the
+		// base engine, it reported `duplicate import 'U'` on line 4 and `--fix` would have taken
+		// it. No `#if` involved, so this arm is independent of the builder's dedup key.
+		Assert.equals(
+			0,
+			new DuplicateImport().run([
+				{
+					file: 'pkg/C.hx',
+					source: 'package pkg;\nimport a.b.One as U;\nimport a.b.Two as U;\nclass C {\n\tvar u:U;\n}'
+				}
+			], plugin()).length
+		);
+	}
+
 	/** The autofix deletes the duplicate (one edit, an empty replacement). */
 	public function testDuplicateImportFix(): Void {
 		final src: String = 'package pkg;\nimport a.b.Dup;\nimport a.b.Dup;\nclass C {}';

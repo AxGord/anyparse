@@ -179,7 +179,7 @@ final class SymbolIndexBuilder {
 		final externModifierKind: Null<String> = shape.externModifierKind;
 		var pendingExtern: Bool = false;
 
-		for (gn in declNodes(tree, externModifierKind)) {
+		for (gn in declNodes(tree, source, externModifierKind)) {
 			final node: QueryNode = gn.node;
 			if (externModifierKind != null && node.kind == externModifierKind) {
 				pendingExtern = true;
@@ -681,7 +681,7 @@ final class SymbolIndexBuilder {
 	 * of being dropped as an ordinary modifier. Null when the grammar names no
 	 * extern modifier kind, matching every other `shape`-gated seam here.
 	 */
-	private static function declNodes(tree: QueryNode, externModifierKind: Null<String>): Array<GuardedNode> {
+	private static function declNodes(tree: QueryNode, source: String, externModifierKind: Null<String>): Array<GuardedNode> {
 		final out: Array<GuardedNode> = [];
 		final guardedNames: Array<String> = [];
 		// Every top-level import's dedup key, seeded up front so a guarded import
@@ -689,14 +689,14 @@ final class SymbolIndexBuilder {
 		// while a genuine top-level duplicate stays in `out` for `duplicate-import`.
 		final seenImports: Array<String> = [];
 		for (node in tree.children) {
-			final key: Null<String> = importDedupKey(node);
+			final key: Null<String> = importDedupKey(node, source);
 			if (key != null && !seenImports.contains(key)) seenImports.push(key);
 		}
 		for (node in tree.children) switch node.kind {
 			case 'Conditional':
-				collectGuardedDecls(node, out, guardedNames, seenImports, externModifierKind);
+				collectGuardedDecls(node, source, out, guardedNames, seenImports, externModifierKind);
 			case 'CondSharedBodyDecl':
-				pushGuardedDecl(node, out, guardedNames, seenImports, externModifierKind);
+				pushGuardedDecl(node, source, out, guardedNames, seenImports, externModifierKind);
 			case _:
 				out.push({ node: node, guarded: false });
 		}
@@ -719,12 +719,13 @@ final class SymbolIndexBuilder {
 	 * Int; #end`) are all kept.
 	 */
 	private static function collectGuardedDecls(
-		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>, externModifierKind: Null<String>
+		node: QueryNode, source: String, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>,
+		externModifierKind: Null<String>
 	): Void {
 		for (child in node.children) if (child.kind == 'Conditional')
-			collectGuardedDecls(child, out, guardedNames, seenImports, externModifierKind);
+			collectGuardedDecls(child, source, out, guardedNames, seenImports, externModifierKind);
 		else
-			pushGuardedDecl(child, out, guardedNames, seenImports, externModifierKind);
+			pushGuardedDecl(child, source, out, guardedNames, seenImports, externModifierKind);
 	}
 
 	/**
@@ -738,7 +739,8 @@ final class SymbolIndexBuilder {
 	 * loop does not distinguish). Any OTHER lifted modifier still has no place and is dropped.
 	 */
 	private static function pushGuardedDecl(
-		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>, externModifierKind: Null<String>
+		node: QueryNode, source: String, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>,
+		externModifierKind: Null<String>
 	): Void {
 		final decl: Null<TypeDeclMatch> = typeDeclAt(node);
 		if (decl != null) {
@@ -766,7 +768,7 @@ final class SymbolIndexBuilder {
 		// deduped against every import already seen (a top-level one seeded up
 		// front, or an earlier guarded branch). A non-import, non-declaration node
 		// (a lifted modifier other than `extern`) has no key and is dropped.
-		final key: Null<String> = importDedupKey(node);
+		final key: Null<String> = importDedupKey(node, source);
 		if (key == null || seenImports.contains(key)) return;
 		seenImports.push(key);
 		out.push({ node: node, guarded: true });
@@ -811,23 +813,34 @@ final class SymbolIndexBuilder {
 	/**
 	 * The `(kind, raw)` dedup key of an import-declaration `node`, or null when
 	 * `node` is not an import / using declaration. `raw` is the node's exposed
-	 * name — the dotted path for `import` / `using`, `pkg.*` for a wildcard, the
-	 * alias for an alias import (so two distinct aliases of one path stay
-	 * distinct) — which with the import kind uniquely identifies a repeat across
-	 * `#if` branches or a top-level / guarded pair. The `as` and `in` alias forms
-	 * share one key, so a cross-form alias duplicate collapses too.
+	 * name — the dotted path for `import` / `using`, `pkg.*` for a wildcard, the alias
+	 * for an alias import (so two distinct
+	 * aliases of one path stay distinct) — which with the import kind uniquely
+	 * identifies a repeat across `#if` branches or a top-level / guarded pair. The `as` and
+	 * `in` alias forms share one key, so a cross-form alias duplicate collapses too.
+	 *
+	 * An alias key also carries the PATH the statement binds, decoded from `source` through
+	 * `ModuleScan.aliasTargetOf`. Keyed on the alias name alone, `#if js import p.A as T;
+	 * #else import p.B as T; #end` collapsed to its first branch and the other compilation's
+	 * supertype was left with no subtype at all — the direction that DELETES, compile-proved:
+	 * `unused-private --fix` removed `B`s private constructor and the non-js build stopped at
+	 * `p.B does not have a constructor`. Both branches now reach `ImportInfo`, and a
+	 * same-path repeat still collapses. A statement whose path does not decode keys on the
+	 * empty string, which is the pre-existing collapse for that shape.
 	 */
-	private static function importDedupKey(node: QueryNode): Null<String> {
+	private static function importDedupKey(node: QueryNode, source: String): Null<String> {
 		final raw: Null<String> = node.name;
-		return raw == null
-			? null
-			: switch node.kind {
-				case 'ImportDecl': 'import|$raw';
-				case 'ImportAliasDecl', 'ImportAliasInDecl': 'alias|$raw';
-				case 'ImportWildDecl': 'wild|$raw';
-				case 'UsingDecl': 'using|$raw';
-				case _: null;
-			};
+		if (raw == null) return null;
+		final name: String = raw;
+		return switch node.kind {
+			case 'ImportDecl': 'import|$name';
+			case 'ImportAliasDecl', 'ImportAliasInDecl':
+				final span: Null<Span> = node.span;
+				'alias|$name|${span == null ? '' : ModuleScan.aliasTargetOf(source.substring(span.from, span.to))}';
+			case 'ImportWildDecl': 'wild|$name';
+			case 'UsingDecl': 'using|$name';
+			case _: null;
+		};
 	}
 
 	/**

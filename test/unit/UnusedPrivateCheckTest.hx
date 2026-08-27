@@ -793,6 +793,31 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * The private-CONSTRUCTOR arm through a `#if` region binding ONE alias name to DIFFERENT
+	 * targets. Both compilations are real: `#if js import pkg.First as U; #else import pkg.Second
+	 * as U; #end class Both extends U` is `Both extends First` on js and `Both extends Second`
+	 * everywhere else, and each target's private `new` is what `Both`s `super()` calls in its own
+	 * configuration. The index kept only the FIRST branch — the alias dedup key was the alias
+	 * NAME, so the second statement was dropped as a duplicate — so the other target read as
+	 * never-subtyped and `--fix` deleted its constructor; Haxe 4.3.7 then refused the tree with
+	 * `p.Second does not have a constructor`.
+	 *
+	 * Both branch orders are asserted, since a pass on one order alone is exactly what the
+	 * first-branch-wins bug produced. The third arm drops the `extends` and keeps the whole
+	 * region, so both targets ARE dead there and the arm still fires — a green run cannot come
+	 * from it going silent.
+	 */
+	public function testPrivateCtorKeptForEveryBranchOfAGuardedImportAlias(): Void {
+		Assert.equals(
+			0, guardedAliasCtorArmViolations('First', 'Second', 'class Both extends U {\n\tpublic function new() { super(); }\n}')
+		);
+		Assert.equals(
+			0, guardedAliasCtorArmViolations('Second', 'First', 'class Both extends U {\n\tpublic function new() { super(); }\n}')
+		);
+		Assert.equals(2, guardedAliasCtorArmViolations('First', 'Second', 'class Both {\n\tpublic function new() {}\n}'));
+	}
+
 	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
 	private function assertReportedButNotDeleted(src: String): Void {
 		final check: UnusedPrivate = new UnusedPrivate();
@@ -875,6 +900,34 @@ class UnusedPrivateCheckTest extends Test {
 	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
 		final check: UnusedPrivate = new UnusedPrivate();
 		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+	}
+
+	/**
+	 * Violations against the two classes a guarded alias region binds `U` to — `first` in the
+	 * `#if` branch, `second` in the `#else`, `bothSrc` the declaration under it. Each target
+	 * carries a static someone else calls, so the arm's "never instantiated" proof is about the
+	 * constructor and not about the class being unreferenced.
+	 */
+	private function guardedAliasCtorArmViolations(first: String, second: String, bothSrc: String): Int {
+		inline function target(name: String): { file: String, source: String } {
+			return {
+				file: 'pkg/$name.hx',
+				source: 'package pkg;\nclass $name {\n\tpublic static function helper():Int return 1;\n\tprivate function new() {}\n}'
+			};
+		}
+		final files: Array<{ file: String, source: String }> = [
+			target('First'),
+			target('Second'),
+			{
+				file: 'pkg/User.hx',
+				source: 'package pkg;\nclass User {\n\tpublic function f():Int return First.helper() + Second.helper();\n}'
+			},
+			{
+				file: 'pkg/Both.hx',
+				source: 'package pkg;\n#if js\nimport pkg.$first as U;\n#else\nimport pkg.$second as U;\n#end\n$bothSrc'
+			}
+		];
+		return violations(files).filter(v -> v.file == 'pkg/First.hx' || v.file == 'pkg/Second.hx').length;
 	}
 
 }

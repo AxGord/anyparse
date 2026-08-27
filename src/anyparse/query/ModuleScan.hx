@@ -171,17 +171,57 @@ final class ModuleScan {
 	 * the wrong type. `''` still occupies the alias's name, which is what the collision gate
 	 * needs.
 	 *
-	 * The project's ONLY decoder of an alias import's path, and deliberately so. Three call
+	 * The project's ONLY decoder of an alias import's path, and deliberately so. Four call
 	 * sites: `aliasTargetsOf` just below (which `TypeRefPrinter` reaches for a whole file's
-	 * map), `TypeRefPrinter`'s shadow gate directly, and `SymbolIndexBuilder`, which files
-	 * the answer into `ImportInfo.aliasTarget` for the whole index to read.
+	 * map), `TypeRefPrinter`'s shadow gate directly, and `SymbolIndexBuilder` TWICE — its
+	 * extraction loop, which files the answer into `ImportInfo.aliasTarget` for the whole
+	 * index to read, and `importDedupKey`, which keys a guarded alias statement by the path
+	 * it binds so two branches binding one name are not read as one import.
 	 *
-	 * The two consumers read imprecision in OPPOSITE safe directions, which any future
-	 * tightening has to weigh: `TypeRefPrinter` compares the result to a full canonical path,
-	 * so a partial decode reads as "shadow" and withholds; `SymbolIndex` takes its last
-	 * segment, so a partial decode costs an alias EDGE — the direction that deletes.
+	 * The sibling `aliasKeywordOf` has one caller, `MoveSymbol`, which re-emits a repointed
+	 * alias statement; it does NOT call this one.
+	 *
+	 * The consumers read imprecision in OPPOSITE directions, which any future tightening has to
+	 * weigh: `TypeRefPrinter` compares the result to a full canonical path, so a partial decode
+	 * reads as "shadow" and withholds; `SymbolIndex` takes its last segment, so a partial decode
+	 * costs an alias EDGE — the direction that deletes; and a REWRITER (`aliasKeywordOf`'s
+	 * caller) gets `''` and falls back to `as`, which restyles an `in` import rather than
+	 * losing it.
 	 */
 	public static function aliasTargetOf(stmt: String): String {
+		final runs: Array<String> = identRuns(stmt);
+		final at: Int = aliasKeywordIndexIn(runs);
+		return at < 0 ? '' : runs[at - 1];
+	}
+
+	/**
+	 * Which of the two spellings an alias import statement uses — `'as'`, `'in'`, or `''` when
+	 * `stmt` decodes as no alias import at all. The twin of `aliasTargetOf` over the same run scan and the same
+	 * keyword rule, for a rewriter that must re-emit the statement: an `import p.T in U;`
+	 * re-emitted as `as` is a silent style change in a file the caller only meant to repoint.
+	 */
+	public static function aliasKeywordOf(stmt: String): String {
+		final runs: Array<String> = identRuns(stmt);
+		final at: Int = aliasKeywordIndexIn(runs);
+		return at < 0 ? '' : runs[at];
+	}
+
+	/**
+	 * The index in `runs` of the `as` / `in` keyword an alias import spells, or -1 when there
+	 * is none (or it leads the statement, which no path can precede). The one place that
+	 * decision is made, so `aliasTargetOf` and `aliasKeywordOf` cannot drift apart on which
+	 * run is the keyword. Takes the runs rather than the statement so each caller scans once.
+	 */
+	private static function aliasKeywordIndexIn(runs: Array<String>): Int {
+		for (r => run in runs) if ((run == 'as' || run == 'in') && r > 0) return r;
+		return -1;
+	}
+
+	/**
+	 * `stmt`s maximal runs of identifier characters and `.`, comments stripped first so comment
+	 * text cannot read as code.
+	 */
+	private static function identRuns(stmt: String): Array<String> {
 		final bare: String = stripComments(stmt);
 		final runs: Array<String> = [];
 		final n: Int = bare.length;
@@ -200,9 +240,7 @@ final class ModuleScan {
 			}
 			runs.push(bare.substring(start, i));
 		}
-		// `import <path> as <alias>;` -> the run before the `as` / `in` keyword.
-		for (r => run in runs) if ((run == 'as' || run == 'in') && r > 0) return runs[r - 1];
-		return '';
+		return runs;
 	}
 
 	/** Whether the file carries a `package` declaration whose span the grammar did not record. */

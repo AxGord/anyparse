@@ -603,7 +603,7 @@ final class SymbolIndex {
 
 	/**
 	 * Files that import the module `modulePath` — an `ImportInfo` whose
-	 * `raw` equals `modulePath` (the main type / module itself) OR
+	 * path equals `modulePath` (the main type / module itself) OR
 	 * starts with `modulePath + '.'` (a sub-type of the module, e.g.
 	 * `anyparse.query.Refs.RefHit` for module `anyparse.query.Refs`).
 	 *
@@ -611,17 +611,22 @@ final class SymbolIndex {
 	 * dotted path whose prefix can be compared. `Wild` (`pkg.*`) is
 	 * skipped — its `raw` is a package-prefix glob, not a module path,
 	 * so prefix-matching it against a module path is a different
-	 * predicate left for a future package-prefix query. (`Alias` only
-	 * matches when its exposed `raw` — the alias — coincides with the
-	 * path, since the grammar does not expose the aliased original
-	 * path; this is the documented alias limitation carried from
-	 * `ImportInfo`.)
+	 * predicate left for a future package-prefix query.
+	 *
+	 * The path compared is `pathImportedBy`, not `raw`: for an `Alias`
+	 * statement `raw` is the ALIAS, so a file that reaches the module ONLY
+	 * through `import a.b.C as D;` answered as no importer at all, and
+	 * `apq move` stranded exactly that file on a module that no longer
+	 * defined the type. A statement whose path did not decode carries no
+	 * path and is not matched.
 	 */
 	public function filesImportingModule(modulePath: String): Array<FileInfo> {
 		final prefix: String = '$modulePath.';
-		return _files.filter(
-			f -> f.imports.exists(imp -> imp.kind != ImportKind.Wild && (imp.raw == modulePath || StringTools.startsWith(imp.raw, prefix)))
-		);
+		inline function under(imported: String): Bool return imported == modulePath || imported.startsWith(prefix);
+		return _files.filter(f -> f.imports.exists(imp -> {
+			final path: Null<String> = pathImportedBy(imp);
+			imp.kind != ImportKind.Wild && path != null && under(path);
+		}));
 	}
 
 	/**
@@ -1459,10 +1464,10 @@ final class SymbolIndex {
 	 * `prefer-inline` reads it as a veto list: a method whose name a subtype redeclares must stay
 	 * physical, since inlining would bind the call statically and skip the override.
 	 *
-	 * The walk is the memoised subtype adjacency (`subtypesOf`) expanded outward from `owner` -
-	 * the same worklist shape as `subtypeDeclMatches` above. The consumer used to ask this
-	 * question by scanning EVERY type in the index and testing `isSubtype` on each, which is one
-	 * supertype-closure walk per type per class - O(classes x types) over a corpus, plus an
+	 * The walk is `eachSubtype`, the memoised subtype adjacency expanded outward from `owner`.
+	 * The consumer used to ask this question by scanning EVERY type in the index and testing
+	 * `isSubtype` on each, which is one supertype-closure walk per type per class -
+	 * O(classes x types) over a corpus, plus an
 	 * `allFiles()` array COPY per class. Measured with `lint --rule prefer-inline` over a haxelib
 	 * prefix: 8.4s / 500 files, 11.5s / 1000, 49.9s / 2000, 322.5s / 4000, against a ~25s parse
 	 * baseline at 4000. The adjacency walk visits only the closure.
@@ -1472,17 +1477,8 @@ final class SymbolIndex {
 	 * the consumer - the same trade `subtypeDeclMatches` makes.
 	 */
 	public function subtypeMemberNames(owner: String): Array<String> {
-		final closure: Array<String> = [owner];
 		final out: Array<String> = [];
-		var i: Int = 0;
-		while (i < closure.length) {
-			final parent: String = closure[i++];
-			for (sub in subtypesOf(parent)) {
-				final t: TypeDeclInfo = sub.type;
-				if (!closure.contains(t.name)) closure.push(t.name);
-				if (t.name != owner) for (m in t.members) if (!out.contains(m.name)) out.push(m.name);
-			}
-		}
+		eachSubtype(owner, sub -> if (sub.type.name != owner) for (m in sub.type.members) if (!out.contains(m.name)) out.push(m.name));
 		return out;
 	}
 
@@ -1647,6 +1643,35 @@ final class SymbolIndex {
 		return false;
 	}
 
+	/**
+	 * Every FILE declaring a type in `owner`s transitive SUBTYPE closure. The walk is the
+	 * memoised subtype adjacency (`subtypesOf`), so it answers about the SAME hierarchy every
+	 * other subtype query does — alias hops included, which a hand-rolled
+	 * `supertypes.contains(parent)` scan over `allFiles()` cannot see. `TrivialGetter` ran
+	 * exactly that scan to decide which files its collapse must LOOK AT, and through `import
+	 * p.Owner as O` it looked at only the owner: the subtype's `_v` references were left naming
+	 * a field that no longer existed and the tree failed with `Unknown identifier : _v`. (Looking
+	 * is not rewriting — through an alias the scan now reaches the subtype and the collapse
+	 * WITHHOLDS, because `isSubtype`'s upward walk still cannot resolve the alias.)
+	 *
+	 * The closure walk and its name dedup are `eachSubtype`'s; the FILES are deduped by path —
+	 * a file is collected for every subtype it declares, so a second same-named subtype in
+	 * another file is not silently dropped from the answer, and neither is a subtype that happens
+	 * to carry `owner`s OWN simple name (the walk seeds its closure with `owner`, so a
+	 * name-guarded push would have skipped exactly that one).
+	 *
+	 * Name-keyed like every other index query, so the result over-approximates. That is the safe
+	 * direction even for a caller that EDITS the files it gets back, not merely reads them:
+	 * every occurrence in them is re-gated per site by `isSubtype`, which a homonym cannot pass
+	 * (`closureContains` refuses an ambiguous simple name outright), so a spurious file can only
+	 * ever add a refusal — never an edit.
+	 */
+	public function subtypeFiles(owner: String): Array<String> {
+		final out: Array<String> = [];
+		eachSubtype(owner, sub -> if (!out.contains(sub.file.file)) out.push(sub.file.file));
+		return out;
+	}
+
 	/** The `seen`-set identity of a resolved type: its declaring file plus its name — see `markSeen`. */
 	private inline function seenKey(cur: ResolvedType): String {
 		return '${cur.file.file}#${cur.type.name}';
@@ -1667,6 +1692,29 @@ final class SymbolIndex {
 	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
 	private inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
 		return t.isMain ? fi.module : '${fi.module}.${t.name}';
+	}
+
+	/**
+	 * Call `visit` for every declaration in `owner`s transitive SUBTYPE closure, expanding
+	 * outward over the memoised adjacency (`subtypesOf`). The WALK is deduped by simple name —
+	 * two distinct types sharing one expand once, which is what terminates it — while `visit`
+	 * sees every declaration, since each carries its own file and its own members and skipping
+	 * the second one's would silently drop evidence. `owner` itself is visited whenever some
+	 * type in the closure names it; a collector that must exclude it says so.
+	 *
+	 * The shared seat of `subtypeMemberNames` and `subtypeFiles`, which differ only in what they
+	 * collect. `subtypeDeclMatches` keeps its own copy: it answers by RETURNING out of the walk.
+	 */
+	private function eachSubtype(owner: String, visit: ResolvedType -> Void): Void {
+		final closure: Array<String> = [owner];
+		var i: Int = 0;
+		while (i < closure.length) {
+			final parent: String = closure[i++];
+			for (sub in subtypesOf(parent)) {
+				if (!closure.contains(sub.type.name)) closure.push(sub.type.name);
+				visit(sub);
+			}
+		}
 	}
 
 	/**
@@ -2428,20 +2476,19 @@ final class SymbolIndex {
 	 * in. It is applied to every name in the closure, not only the written one, so a name
 	 * that arrived through ANOTHER file's typedef edge is also offered to this file's
 	 * aliases — an over-approximation, in the withholding direction the paragraph above
-	 * describes. Two shapes are NOT closed:
+	 * describes. A `#if` region binding ONE alias name to DIFFERENT targets carries BOTH:
+	 * the dedup key an alias statement gets includes the path it binds, so no branch is
+	 * dropped as a duplicate of another, and `importAliasEdges` maps an alias to an ARRAY.
+	 * Keyed on the name alone the first branch won and the other compilation's supertype
+	 * was left with no subtype — compile-proved: `unused-private --fix` then deleted its
+	 * private constructor and the non-js build stopped at `p.Second does not have a
+	 * constructor`. One shape is still NOT closed:
 	 *
 	 *  - a `#if`-GUARDED `typedef` — `aliasTargetNominal` is deliberately null for one, because
 	 *    every branch projects under one `Conditional` and following the indexed branch would
-	 *    commit to whichever happened to be first and be wrong for the other compilation.
-	 *  - a `#if`-GUARDED IMPORT alias whose branches bind ONE name to DIFFERENT targets
-	 *    (`#if js import pkg.Other as U; #else import pkg.Util as U; #end`). Two mechanisms
-	 *    keep only one of them: `SymbolIndexBuilder.importDedupKey` keys an alias statement
-	 *    as `alias|<the alias NAME>`, so the second branch is dropped as a duplicate, and
-	 *    `importAliasEdges` maps one alias to one target rather than to an array. First
-	 *    branch wins, and the other compilation's target is left with no subtype — measured,
-	 *    swapping the two branches flips the finding. This is the UNSAFE direction and is not
-	 *    a regression: before `aliasTarget` existed NEITHER branch was followed. Closing it
-	 *    means a target-bearing dedup key and multi-valued edges, both out of this walk.
+	 *    commit to whichever happened to be first and be wrong for the other compilation. The
+	 *    IMPORT-alias twin of that shape IS closed, above — a typedef has no statement text
+	 *    to key a branch apart by, which is the whole difference.
 	 *
 	 * An ABSTRACT over the type (`abstract A(Util)`) is not a gap: Haxe gives it no `extends`, no
 	 * `super()` and no access to the underlying type's privates, so the ctor really is dead there
@@ -2457,7 +2504,7 @@ final class SymbolIndex {
 				// read off the file's own imports rather than from the project-wide `aliasEdges` a
 				// `typedef` earns. It is consulted inside the walk, not only on the written name, so
 				// the two alias kinds compose in either order.
-				final importAliases: Map<String, String> = importAliasEdges(fi);
+				final importAliases: Map<String, Array<String>> = importAliasEdges(fi);
 				for (t in fi.types) {
 					// A type naming one simple name TWICE (two differently-qualified supertypes reducing to
 					// it) lands in that bucket once — `supertypes.contains` reported it once per scan too.
@@ -2473,8 +2520,7 @@ final class SymbolIndex {
 							bucket.push({ file: fi, type: t });
 							adjacency[denoted] = bucket;
 							for (target in aliases[denoted] ?? []) if (!named.contains(target)) named.push(target);
-							final imported: Null<String> = importAliases[denoted];
-							if (imported != null && !named.contains(imported)) named.push(imported);
+							for (imported in importAliases[denoted] ?? []) if (!named.contains(imported)) named.push(imported);
 						}
 					}
 				}
@@ -2501,7 +2547,7 @@ final class SymbolIndex {
 			// A `typedef Hop = L;` whose `L` is an `import pkg.Leaf as L;` re-points at `Leaf`. The
 			// alias binds per FILE, so the hop is read where the typedef is WRITTEN — not where its
 			// name is later extended, which is a different file with different imports.
-			final importAliases: Map<String, String> = importAliasEdges(fi);
+			final importAliases: Map<String, Array<String>> = importAliasEdges(fi);
 			for (t in fi.types) {
 				// Null for every non-alias declaration, for an anon-struct typedef (its fields ARE its
 				// members) and for an alias the builder could not read as a nominal path.
@@ -2509,8 +2555,7 @@ final class SymbolIndex {
 				if (target == null || target == t.name) continue;
 				final bucket: Array<String> = edges[t.name] ?? [];
 				if (!bucket.contains(target)) bucket.push(target);
-				final imported: Null<String> = importAliases[target];
-				if (imported != null && imported != t.name && !bucket.contains(imported)) bucket.push(imported);
+				for (imported in importAliases[target] ?? []) if (imported != t.name && !bucket.contains(imported)) bucket.push(imported);
 				edges[t.name] = bucket;
 			}
 		}
@@ -2659,6 +2704,36 @@ final class SymbolIndex {
 		return path;
 	}
 
+	/**
+			 * The dotted MODULE PATH an import statement names — `imp.raw` for every kind except
+			 * `Alias`, whose `raw` is the ALIAS the statement binds and whose path lives in
+			 * `aliasTarget`. Null only for an alias statement whose path did not decode. Distinct from `importPathOf`,
+	which answers about a TYPE: the path some other file would import it by.
+
+	That null is read in OPPOSITE directions by the consumers, which any future tightening has
+	to weigh — the same trade `ModuleScan.aliasTargetOf` records for its own: comparing it to a
+	path makes `filesImportingModule` omit the file and `MoveSymbol`s cross-package gate refuse
+	(both withhold), while `MoveSymbol`s importer loop then leaves that file unrepointed and
+	`duplicate-import`s `?? raw` fallback keys two undecoded aliases alike. Undecodable is not a
+	shape the grammar can currently produce — an `ImportAliasDecl` node with no `as` / `in` run
+	past position 0 — so none of that is reachable today; it is written down because this is now
+	the single seat everything routes through.
+			 *
+			 * The one seat of the MODULE-PATH question — not of every question about an import. A rule
+		asking about the BOUND NAME (`unused-import`, `redundant-import`) is right to read `raw`,
+		which for an alias is exactly the name it binds; those are deliberately left alone. What
+		reading `raw` cannot answer is "which module does this statement name", and every consumer
+		that asked it that way got it wrong differently: `filesImportingModule` did not list
+			 * an alias importer at all, `MoveSymbol` left it unrepointed and separately mistook its
+			 * own statement for a fully-qualified code reference, and `duplicate-import` keyed both
+			 * branches of `#if js import p.A as U; #else import p.B as U; #end` as one import and
+			 * deleted the second — while its own doc says two imports are duplicates only when the
+			 * module PATH matches, which is exactly what `raw` is not here.
+	 */
+	public static function pathImportedBy(imp: ImportInfo): Null<String> {
+		return imp.kind == ImportKind.Alias ? imp.aliasTarget : imp.raw;
+	}
+
 	/** The last segment of a dotted module path — `pkg.Mod` -> `Mod`, a root-package `Mod` unchanged. */
 	private static inline function moduleSimpleName(module: String): String {
 		final dot: Int = module.lastIndexOf('.');
@@ -2694,7 +2769,10 @@ final class SymbolIndex {
 
 	/**
 	 * ONE file's import-alias edges: the alias a `import pkg.Util as U;` statement binds -> the
-	 * SIMPLE name of the path it points at. The import twin of `aliasEdges`, and per-FILE rather
+	 * SIMPLE name of every path it points at. An ARRAY because a `#if` region may bind one
+	 * alias name to a different target per branch, and only one of those compilations is the
+	 * one being reasoned about — offering both is the withholding direction for every
+	 * consumer, dropping either is the deleting one. The import twin of `aliasEdges`, and per-FILE rather
 	 * than project-wide because that is the scope such an alias actually has — a `U` bound in one
 	 * module says nothing about a `U` written in another.
 	 *
@@ -2703,14 +2781,17 @@ final class SymbolIndex {
 	 * self-alias (`import pkg.U as U`, which Haxe accepts) carries none either, since the walk
 	 * already holds that name.
 	 */
-	private static function importAliasEdges(fi: FileInfo): Map<String, String> {
-		final edges: Map<String, String> = [];
+	private static function importAliasEdges(fi: FileInfo): Map<String, Array<String>> {
+		final edges: Map<String, Array<String>> = [];
 		for (imp in fi.imports) if (imp.kind == ImportKind.Alias) {
 			final alias: Null<String> = imp.alias;
 			final target: Null<String> = imp.aliasTarget;
 			if (alias == null || target == null) continue;
 			final simple: String = RefactorSupport.lastSegment(target);
-			if (simple != alias) edges[alias] = simple;
+			if (simple == alias) continue;
+			final bucket: Array<String> = edges[alias] ?? [];
+			if (!bucket.contains(simple)) bucket.push(simple);
+			edges[alias] = bucket;
 		}
 		return edges;
 	}
