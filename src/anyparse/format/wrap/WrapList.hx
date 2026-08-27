@@ -2630,8 +2630,27 @@ class WrapList {
 		// the object fits there (fork keeps the object flat); if it exceeds its
 		// own line it stays brace-hugged and its fields wrap (fork `({`-glued +
 		// explode). Arrays / nested calls keep the open-delim-glue path below.
+		//
+		// ω-committed-objectlit-glue: an object literal already COMMITTED to
+		// breaking (`flatLength < 0` — a forced hardline on its resolved spine)
+		// can never be "kept flat on its own indented line", so the probe above
+		// asks a question whose premise is false and answers it from a width the
+		// literal will not render at. That is a FIXED-POINT defect, not a taste
+		// one: the same literal measures its real flat token width while the
+		// source keeps it on one line and ZERO once the writer's own output has
+		// broken it (`DocMeasure.flatTokenWidth` defers a `BodyGroup` to 0, and
+		// the force-multi emit that a source-MULTILINE list takes wraps its
+		// content in one). Pass 1 therefore opened the paren and pass 2 glued —
+		// two rewrites, and a file `writeRoundTrip(s) == s` rejects after one.
+		// Gluing unconditionally makes pass 1 write what pass 2 would, which is
+		// also the shape `testCallArgObjectLiteralGluesOnFirstPass` and
+		// `testCallArgObjectLiteralHugsUnderAnExceedsCascade` already pin as the
+		// settled one. The sibling probe at the bottom of this function skips
+		// itself on the same `argFlat < 0` signal for the same reason.
 		if (DocMeasure.firstVisibleTextStartsWith(items[0], '{'.code))
-			return IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, hugGlue, broken);
+			return flatLength(items[0]) < 0
+				? hugGlue
+				: IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, hugGlue, broken);
 		// ω-outer-first-wrap (T20) SCOPE: a `[`-leading sole arg — array literal
 		// or `for`/`while`/map comprehension — is excluded. A bracket-delimited
 		// collection owns its own multi-line layout: its `[` IS its wrap point,

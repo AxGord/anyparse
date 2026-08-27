@@ -21,6 +21,7 @@ import unit.ApqDxTier3CliTest;
 import unit.ApqDxTier4CliTest;
 import unit.ApqDxTier5CliTest;
 import unit.ApqExitOnEmptyCliTest;
+import unit.ApqFmtOnePassCliTest;
 import unit.ApqFmtVerifyCliTest;
 import unit.ApqFromFileCliTest;
 import unit.ApqHxqDxV10CliTest;
@@ -843,6 +844,7 @@ class RunTests {
 		addCase(new HxCondListSeparatorWriteTest());
 		addCase(new WhitespaceInvariantTest());
 		addCase(new ApqFmtVerifyCliTest());
+		addCase(new ApqFmtOnePassCliTest());
 		addCase(new HxAccessorSliceTest());
 		addCase(new HxAfterLeftCurlySliceTest());
 		addCase(new HxUniformStatementBlanksSliceTest());
