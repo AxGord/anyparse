@@ -911,10 +911,10 @@ final class NullFlow {
 	private static function isNullConsumingCase(b: QueryNode, ctx: FlowCtx): Bool {
 		final nl: Null<String> = ctx.nullLitKind;
 		if (b.kind != ctx.caseBranchKind || nl == null || caseGuard(b, ctx) != null) return false;
-		for (c in b.children) if (ctx.plainCasePatternKind != null && c.kind == ctx.plainCasePatternKind) for (p in c.children) if (
-			p.kind == nl
-		)
-			return true;
+		for (c in b.children)
+			if (ctx.plainCasePatternKind != null && c.kind == ctx.plainCasePatternKind)
+				for (p in c.children)
+					if (p.kind == nl) return true;
 		return false;
 	}
 

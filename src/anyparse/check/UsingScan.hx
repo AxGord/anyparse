@@ -188,10 +188,9 @@ final class UsingScan {
 		if (headerDeclaresType(header, module) || headerRebindsName(header, module)) return false;
 		final index: Null<SymbolIndex> = symbols();
 		if (index == null) return true;
-		for (fi in index.declaringFiles(module)) for (t in fi.types) if (t.name == module && !t.members.exists(m ->
-			m.name == method && m.isStatic
-		))
-			return false;
+		for (fi in index.declaringFiles(module))
+			for (t in fi.types)
+				if (t.name == module && !t.members.exists(m -> m.name == method && m.isStatic)) return false;
 		return true;
 	}
 

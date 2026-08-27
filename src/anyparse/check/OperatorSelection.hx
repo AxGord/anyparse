@@ -300,8 +300,10 @@ final class OperatorSelection {
 		if (_builtinTypeNames.contains(typeName)) return Builtin;
 		final decls: Array<TypeDeclInfo> = declsOf(typeName);
 		if (decls.length == 0) return Unproven;
-		for (decl in decls) for (member in decl.members) for (overloaded in member.operatorOverloads) if (kinds.contains(overloaded))
-			return Overloaded(typeName);
+		for (decl in decls)
+			for (member in decl.members)
+				for (overloaded in member.operatorOverloads)
+					if (kinds.contains(overloaded)) return Overloaded(typeName);
 		if (indexes().exists(index -> index.resolvesToPlainNominal(typeName))) return Builtin;
 		return decls.foreach(decl -> _abstractKinds.contains(decl.kind) && !decl.hasBuild && !decl.hasAutoBuild) ? Builtin : Unproven;
 	}

@@ -452,8 +452,9 @@ final class ComparisonToBoolean implements Check {
 	 */
 	private static function typeNameIsPinned(recvType: String, index: SymbolIndex): Bool {
 		var independent: Int = 0;
-		for (fi in index.declaringFiles(recvType)) for (t in fi.types) if (t.name == recvType && t.aliasTargetNominal != recvType)
-			independent++;
+		for (fi in index.declaringFiles(recvType))
+			for (t in fi.types)
+				if (t.name == recvType && t.aliasTargetNominal != recvType) independent++;
 		return independent <= 1;
 	}
 

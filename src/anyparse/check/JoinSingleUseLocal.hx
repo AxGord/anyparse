@@ -511,10 +511,9 @@ final class JoinSingleUseLocal implements Check {
 	 * Haxe binds a reference to the nearest PRECEDING declaration.
 	 */
 	private static function initIdentRebound(init: QueryNode, declSpan: Span, readFrom: Int, tree: QueryNode, s: Seams): Bool {
-		for (nm in initIdentNames(init, s)) for (h in Refs.find(nm, tree, s.shape)) if (
-			h.kind == RefKind.Decl && h.span.from >= declSpan.to && h.span.from < readFrom
-		)
-			return true;
+		for (nm in initIdentNames(init, s))
+			for (h in Refs.find(nm, tree, s.shape))
+				if (h.kind == RefKind.Decl && h.span.from >= declSpan.to && h.span.from < readFrom) return true;
 		return false;
 	}
 

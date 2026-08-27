@@ -226,6 +226,7 @@ import unit.HxCastSliceTest;
 import unit.HxCatchBodySliceTest;
 import unit.HxChainFillBoundaryCallOperandTest;
 import unit.HxChainOuterOperatorWrapSliceTest;
+import unit.HxChainStaircaseSliceTest;
 import unit.HxCompareOperandBreakSliceTest;
 import unit.HxComplexItemWrapTest;
 import unit.HxComprehensionBlockHugSliceTest;
@@ -1041,6 +1042,7 @@ class RunTests {
 		addCase(new HxCaseBodyPolicySliceTest());
 		addCase(new HxCaseBodyFitLineSliceTest());
 		addCase(new HxGlueWidthSliceTest());
+		addCase(new HxChainStaircaseSliceTest());
 		addCase(new HxCaseBodySymmetrySliceTest());
 		addCase(new HxCaseBodyControlFlowGlueTest());
 		addCase(new HxCaseBodyTrailCommentInlineTest());

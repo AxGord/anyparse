@@ -405,8 +405,10 @@ final class TypeRefPrinter {
 			for (path in _importMap) if (!imported.contains(path)) imported.push(path);
 			if (imported.length > 0) for (f in index.allFiles()) {
 				final byModule: Bool = imported.contains(f.module);
-				for (t in f.types) if (kinds.contains(t.kind) && (byModule || imported.contains(ModuleScan.pathOfTypeIn(f, t.name))))
-					for (m in t.members) if (!out.contains(m.name)) out.push(m.name);
+				for (t in f.types)
+					if (kinds.contains(t.kind) && (byModule || imported.contains(ModuleScan.pathOfTypeIn(f, t.name))))
+						for (m in t.members)
+							if (!out.contains(m.name)) out.push(m.name);
 			}
 		}
 		_importedMemberNames = out;

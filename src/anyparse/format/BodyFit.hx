@@ -176,7 +176,7 @@ final class BodyFit {
 	): Doc {
 		final flat: Int = WrapList.flatLength(body);
 		final own: Doc = if (flat != -1)
-			Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body])));
+			chainStaircase(cols, body, Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body]))), lineWidth);
 		else if (refuseGlue)
 			breakLayout(cols, body);
 		else {
@@ -386,6 +386,86 @@ final class BodyFit {
 	}
 
 	/**
+	 * The chained-`FitLine` staircase gate (T135): a control-flow construct
+	 * whose `FitLine` body is ANOTHER such construct that in turn carries one
+	 * — three or more links — glues onto ONE line only when the whole chain
+	 * fits there. Otherwise every link but the last goes to its own line.
+	 *
+	 * Without the gate each link answers for itself, and it answers with the
+	 * next link's own body DEFERRED: `Renderer.fitsFlat` refuses to spend a
+	 * parent's budget on a nested `BodyGroup` (Departure 2), so link k measures
+	 * its own header plus link k+1's header and nothing below that. The chain
+	 * therefore glues link by link until some link's OWN content finally
+	 * overflows — and that link is the one that pays, at the deepest column in
+	 * the chain, by wrapping its CONDITION: `… if (` / cond / `)` / body, four
+	 * lines where the source had three. Measured at a limit of 140 on a nine-
+	 * level-deep `if` / `for` / `if` chain, and on `haxe-formatter`'s own
+	 * `wrapping/condition_chain_short_cond_no_paren_split.hxtest`, which this
+	 * gate turns from FAIL to PASS.
+	 *
+	 * `sameLine` is the caller's own same-line layout and is returned UNCHANGED
+	 * for every shape the gate does not claim, so a two-link chain
+	 * (`for (…) if (…) push();`) keeps the head-fit glue it has always had —
+	 * that is the population `sameline/fitline_chained_for_if_long.hxtest`
+	 * pins, and the gate must not reach it.
+	 *
+	 * WHY the threshold is arithmetic rather than a second measurer:
+	 * `Doc.IfLineExceeds` tests `col + flatTokenWidth(inline) + rest >= n`, and
+	 * `flatTokenWidth` defers the very `BodyGroup`s whose width this gate
+	 * exists to charge. Both the honest width (`charged`, the chain's flat
+	 * FIRST line, measured THROUGH those `BodyGroup`s) and the width the probe
+	 * WILL measure are static, column-independent quantities, so their
+	 * difference folds into `n` at emit time — the same correction
+	 * `arrowGlueThreshold` makes for the arrow-body marker. Stopping at the chain's first hardline is not an
+	 * approximation either: it is what the fork's own Phase 1 measures
+	 * (`findFirstLineLastToken`).
+	 *
+	 * THE BOUNDARY IS EXACT, and it rests on `charged` EXCLUDING the leading
+	 * glue space. Substituting `n` into the renderer's
+	 * `col + flatTokenWidth(flatDoc) + rest >= n` cancels the
+	 * `flatTokenWidth(sameLine)` term identically — for both call sites, whose
+	 * `sameLine` shapes differ — and leaves `col + charged + rest >= lineWidth`.
+	 * The rendered line is `col + 1 + charged + rest`, so the test is
+	 * `rendered > lineWidth`: the fork's strict semantic, where a line landing
+	 * ON the limit fits. The sibling `WrapList` probe reaches the same boundary
+	 * through an explicit `lineWidth + 1` because ITS measured doc contains the
+	 * separator; do not align the two by copying that `+ 1` here.
+	 * `testWholeChainExactlyAtTheLimitStaysOnOneLine` pins the edge.
+	 *
+	 * `lineWidth <= 0` returns `sameLine` unchanged — the inert answer for a
+	 * caller with no width to spend, mirroring `glueLayout`. No production
+	 * config reaches it (`WriteOptions.lineWidth` is always the positive
+	 * `maxLineLength`).
+	 *
+	 * INVARIANT the threshold rests on: `n` is computed at EMIT time from
+	 * `flatTokenWidth(sameLine)`, so no post-pass may rewrite the flat branch in
+	 * a way that changes that width. `WrapList.groupifyInlineBodies` is exactly
+	 * such a pass — it re-tags a hardline-free `BodyGroup` as a `Group`, which
+	 * `flatTokenWidth` descends instead of deferring — and it carries an
+	 * `IfLineExceeds` through untouched. It cannot reach this gate today (the
+	 * gate is statement-position only, below), but `arrowGlueThreshold` shares
+	 * the exposure and neither said so until now.
+	 *
+	 * THE POPULATION, measured rather than assumed. The gate is reached from
+	 * two writer sites only, and both place a STATEMENT body, so three shapes
+	 * of the same chain keep the pre-slice layout and can still tear their
+	 * innermost condition: a chain in an arrow-lambda argument (the
+	 * expression-`if` body field), a chain that IS a brace-less function body,
+	 * and a chain whose last link carries a `{}` block or an `else` (those
+	 * measure `-1` and reach `glueLayout` instead). Each was reproduced against
+	 * the fixed engine. Widening is a separate slice; what is refused here is
+	 * pretending the gate already covers them.
+	 */
+	public static function chainStaircase(cols: Int, body: Doc, sameLine: Doc, lineWidth: Int): Doc {
+		if (lineWidth <= 0) return sameLine;
+		final second: Null<Doc> = chainBodyInner(body);
+		if (second == null || chainBodyInner(second) == null) return sameLine;
+		final charged: Int = DocMeasure.flatFirstLineWidthThroughBodyGroup(body);
+		final n: Int = lineWidth + DocMeasure.flatTokenWidth(sameLine) - charged;
+		return Doc.IfLineExceeds(n, Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), forceChainBreaks(body)])), sameLine);
+	}
+
+	/**
 	 * Pin a body that IS an expression paren to its GLUED delimiters
 	 * (ω-fitline-body-glue): `({` on the header line, `})` closing the body,
 	 * never the opened `(` / newline / `{` shape.
@@ -444,6 +524,189 @@ final class BodyFit {
 				return carriesCollapseProbe(inner);
 			case _:
 				return false;
+		}
+	}
+
+	/**
+	 * The body a `FitLine` construct places on its own header line, or `null`
+	 * when `d` is not such a construct — the chain-link test.
+	 *
+	 * Both writer paths that emit a measured `FitLine` body land on the same
+	 * signature: a `BodyGroup` (the body-level one `fitLineLayout` builds, or
+	 * the construct-level one `WriterLowering` splices around condition plus
+	 * body when a `conditionWrapping` cascade is configured) whose TAIL is
+	 * `Nest(cols, Concat([Line(' '), body]))`. It is a SHAPE test, not an identity test, and the obvious uniqueness
+	 * claim would be FALSE: `WriterLowering.valueIfGapExpr` also emits
+	 * `Nest(_, Concat([Line(' '), body]))` for a value-`if` gap under
+	 * `softGap`. What keeps the classifier honest is the POSITION plus the
+	 * two-deep requirement — the node must be the tail of a construct's
+	 * trailing `BodyGroup` AND hold another such node — and the measurement
+	 * behind it: over the fork corpus (946 fixtures), the whole anyparse tree
+	 * (1511 files) and Pony under both of its configs (867 files each), the
+	 * only shapes this gate moved were control-flow chains. A false positive
+	 * is a latent hazard rather than an observed one; tagging the gate's own
+	 * probe would remove it, at the cost of a `Doc` ctor. The same reading
+	 * applies to the `IfLineExceeds` arms below: the two in the REWRITE twins
+	 * replace the matched node with its break branch, so a probe from another
+	 * emitter landing on a link's tail path would have its own width decision
+	 * overwritten. None was reachable in any shape probed.
+	 *
+	 * Deliberately narrow in two directions, both conservative: a body that
+	 * cannot render flat reaches `glueLayout` and carries an
+	 * `IfGluedFirstLineExceeds` instead, and a body under
+	 * `opt.fitLineBodyGlue` carries an `IfBreak` — neither answers here, so a
+	 * chain through one of them keeps its current layout.
+	 */
+	private static function chainBodyInner(d: Doc): Null<Doc> {
+		final group: Null<Doc> = tailBodyGroup(d);
+		return group == null ? null : tailSlotInner(group);
+	}
+
+	/**
+	 * The contents of the `BodyGroup` that carries the tail construct's body,
+	 * or `null` when `d` has none.
+	 *
+	 * A construct's Doc is a `Concat` of its keyword, its header and one
+	 * `BodyGroup` — the body-level one when the construct has no
+	 * `conditionWrapping` cascade, the construct-level one (header AND body
+	 * inside it) when it has. Both sit at the tail, sometimes behind an `Empty`
+	 * an absent optional field left there, so the walk skips those and never
+	 * descends anything else: an earlier `BodyGroup` in the same `Concat`
+	 * belongs to a sibling, not to this construct's body.
+	 */
+	private static function tailBodyGroup(d: Doc): Null<Doc> {
+		switch d {
+			case Doc.BodyGroup(inner):
+				return inner;
+			// A link this gate has ALREADY claimed carries its own probe WHERE
+			// its body group was; read through the same-line branch so a chain
+			// one link longer still classifies every link below it, and
+			// staircases as one shape instead of gluing its top two links.
+			case Doc.IfLineExceeds(_, _, fl):
+				return tailBodyGroup(fl);
+			case Doc.Concat(items):
+				final i: Int = lastNonEmptyIdx(items);
+				return i < 0 ? null : tailBodyGroup(items[i]);
+			case _:
+				return null;
+		}
+	}
+
+	/** Index of the last element of `items` that is not an `Empty` placeholder, or `-1`. */
+	private static function lastNonEmptyIdx(items: Array<Doc>): Int {
+		var i: Int = items.length;
+		while (--i >= 0) switch items[i] {
+			case Doc.Empty:
+			case _:
+				return i;
+		}
+		return -1;
+	}
+
+	/** The `Line(' ')`-led body slot at the tail of `d`, unwrapped to its body, or `null`. */
+	private static function tailSlotInner(d: Doc): Null<Doc> {
+		switch d {
+			case Doc.Nest(_, Doc.Concat(items)) if (items.length == 2 && isGlueSeparator(items[0])):
+				return items[1];
+			// A link this gate has ALREADY claimed carries its own probe in the
+			// slot's place; read through the same-line branch so a chain one
+			// link longer still classifies every link below it.
+			case Doc.IfLineExceeds(_, _, fl):
+				return tailSlotInner(fl);
+			case Doc.Concat(items):
+				final i: Int = lastNonEmptyIdx(items);
+				return i < 0 ? null : tailSlotInner(items[i]);
+			case _:
+				return null;
+		}
+	}
+
+	/** Is `d` the one-space soft `Line` a `FitLine` body slot leads with? */
+	private static function isGlueSeparator(d: Doc): Bool {
+		return switch d {
+			case Doc.Line(' '): true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * Rebuild `d` — a chain link BELOW the one that refused to glue — with its
+	 * own body forced onto the next line, recursively.
+	 *
+	 * The recursion stops one link short of the bottom on purpose: the LAST
+	 * link's body is not another construct, so nothing about it forces a
+	 * staircase and it keeps its own `FitLine` answer
+	 * (`if (c) return true;` stays on one line under the two links above it).
+	 * That is the fork's `_forceFitLineNext` cascade, which pushes a link into
+	 * the forced set only while `isChainBodyKwd(body.body)` still holds.
+	 */
+	private static function forceChainBreaks(d: Doc): Doc {
+		final rebuilt: Null<Doc> = forceTailBodyGroup(d);
+		// `null` is the CASCADE'S STOPPING CONDITION, not a failure — and it was
+		// measured, not assumed: a review argued the two walks are arm-for-arm
+		// equivalent so `rebuilt` is provably non-null, a `throw` here proved
+		// otherwise on the very first fixture. `chainBodyInner(d) != null` says
+		// only that `d` HAS a body slot; `forceTailBodyGroup` additionally
+		// declines a slot whose inner is not itself a link, which is exactly the
+		// deepest link. Returning `d` unchanged there is what lets that link keep
+		// its own `FitLine` answer.
+		return rebuilt ?? d;
+	}
+
+	/** `tailBodyGroup`'s rewriting twin: rebuild `d` around a forced body slot, or `null`. */
+	private static function forceTailBodyGroup(d: Doc): Null<Doc> {
+		switch d {
+			case Doc.BodyGroup(inner):
+				final rebuilt: Null<Doc> = forceTailSlot(inner);
+				return rebuilt == null ? null : Doc.BodyGroup(rebuilt);
+			// The forced form of a link that already carries this gate IS its
+			// own break branch — the staircase it built for everything below.
+			case Doc.IfLineExceeds(_, brk, fl) if (tailBodyGroup(fl) != null):
+				return brk;
+			case Doc.Concat(items):
+				return rebuiltTail(items, forceTailBodyGroup);
+			case _:
+				return null;
+		}
+	}
+
+	/**
+	 * Rebuild `items` with `f` applied to its last non-`Empty` element, or `null`
+	 * when there is no such element or `f` declines it.
+	 *
+	 * The two rewriting twins differ only in which walk they recurse with, so the
+	 * `Concat` arm is one helper taking that walk as its argument rather than two
+	 * copies to keep in step. Trailing `Empty` placeholders survive: the search
+	 * SKIPS them, the rebuild writes back at the index the search returned, and
+	 * `copy()` carries everything else through untouched.
+	 */
+	private static function rebuiltTail(items: Array<Doc>, f: Doc -> Null<Doc>): Null<Doc> {
+		final i: Int = lastNonEmptyIdx(items);
+		if (i < 0) return null;
+		final rebuilt: Null<Doc> = f(items[i]);
+		if (rebuilt == null) return null;
+		final copy: Array<Doc> = items.copy();
+		copy[i] = rebuilt;
+		return Doc.Concat(copy);
+	}
+
+	/**
+	 * Rebuild the tail body slot of `d` with a hardline separator, or `null`
+	 * when there is no slot to force — including the case where the slot holds
+	 * a plain statement rather than another chain link.
+	 */
+	private static function forceTailSlot(d: Doc): Null<Doc> {
+		switch d {
+			case Doc.Nest(n, Doc.Concat(items)) if (items.length == 2 && isGlueSeparator(items[0])):
+				return chainBodyInner(items[1]) == null ? null : Doc.Nest(n, Doc.Concat([Doc.Line('\n'), forceChainBreaks(items[1])]));
+			// The forced form of a link that already carries this gate IS its
+			// own break branch — the staircase it built for everything below.
+			case Doc.IfLineExceeds(_, brk, fl) if (tailSlotInner(fl) != null):
+				return brk;
+			case Doc.Concat(items):
+				return rebuiltTail(items, forceTailSlot);
+			case _:
+				return null;
 		}
 	}
 

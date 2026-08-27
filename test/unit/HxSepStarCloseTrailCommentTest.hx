@@ -110,6 +110,18 @@ class HxSepStarCloseTrailCommentTest extends Test {
 	 * `HxFillAfterCollectionTest` pins under a `fillLineWithLeadingBreak`
 	 * cascade, where the call opens and the closer returns to the statement
 	 * indent. Both are the cascade's own answer; neither is this glue's.
+	 *
+	 * MEASURED AND LEFT ALONE (T135 slice, the T122 question): the shape has a
+	 * population of ZERO outside this fixture — a lone-closer line that is not
+	 * dedented relative to the content line above it occurs 0 times across the
+	 * 1511 anyparse files and the 867 Pony files under EACH of its two configs,
+	 * with or without the `//` precondition. And the closer is not the list
+	 * shape's to move: `WrapList.shapeFillLine` already emits `Text(close)`
+	 * OUTSIDE its continuation `Nest`, so the deeper column comes from the
+	 * hardline that TERMINATES the trailing `//` inside the last item. Fixing it
+	 * means re-anchoring that terminator at the outer nest — the machinery
+	 * `DocMeasure.breakTailCloseNest` built for the sole-argument glue — for no
+	 * real site.
 	 */
 	public inline function testCallLastArgObjectLiteralKeepsCloseTrail(): Void {
 		assertRewrites(

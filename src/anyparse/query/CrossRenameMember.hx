@@ -445,8 +445,9 @@ final class CrossRenameMember {
 			// An override declared in this file: its own declaration plus the bare / `this.` reads its
 			// type makes of it, resolved by the same machinery the cursor file uses. Renaming the base
 			// without these leaves `override function <old>` overriding nothing.
-			for (fm in family) if (fm.file == entry.file)
-				for (occ in Rename.renameOccurrences(entry.source, entry.tree, fm.declFrom, refShape)) addOff(occ.from);
+			for (fm in family)
+				if (fm.file == entry.file)
+					for (occ in Rename.renameOccurrences(entry.source, entry.tree, fm.declFrom, refShape)) addOff(occ.from);
 			final qualified: LocatedOffsets = qualifiedMemberOffsets(
 				entry.source, entry.file, entry.tree, target, plugin, refShape, index, module, cursorFile
 			);
@@ -794,10 +795,10 @@ final class CrossRenameMember {
 		}
 		final proof: ReceiverProof = receiverProof(subjectNames, source, file, tree, target, plugin, refShape, index, cursorFile);
 		final out: Array<Int> = [];
-		for (candidate in candidates) if (receiverIsSourceType(candidate.subject, proof)) for (off in candidate.offsets) if (
-			!out.contains(off)
-		)
-			out.push(off);
+		for (candidate in candidates)
+			if (receiverIsSourceType(candidate.subject, proof))
+				for (off in candidate.offsets)
+					if (!out.contains(off)) out.push(off);
 		return out;
 	}
 

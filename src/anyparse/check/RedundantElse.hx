@@ -129,8 +129,9 @@ final class RedundantElse implements Check {
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, seams: Seams, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Void {
-		if (seams.support.blockKinds().contains(node.kind)) for (stmt in node.children) if (seams.ifKinds.contains(stmt.kind))
-			flagIf(out, file, stmt, seams.support, comments);
+		if (seams.support.blockKinds().contains(node.kind))
+			for (stmt in node.children)
+				if (seams.ifKinds.contains(stmt.kind)) flagIf(out, file, stmt, seams.support, comments);
 		for (c in node.children) walk(out, file, c, seams, comments);
 	}
 
@@ -201,8 +202,9 @@ final class RedundantElse implements Check {
 		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, narrowed: Array<String>
 	): Void {
 		final scopeNames: Array<String> = ScopeFrames.ownScopeNames(node, seams, inherited);
-		if (seams.blockKinds.contains(node.kind)) for (stmt in node.children) if (seams.ifKinds.contains(stmt.kind))
-			deNest(stmt, source, seams, scopeNames, comments, flagged, edits, narrowed);
+		if (seams.blockKinds.contains(node.kind))
+			for (stmt in node.children)
+				if (seams.ifKinds.contains(stmt.kind)) deNest(stmt, source, seams, scopeNames, comments, flagged, edits, narrowed);
 		final ownParams: Null<Array<String>> = ScopeFrames.ownParamNames(node, seams);
 		for (index => c in node.children)
 			collectDeNests(

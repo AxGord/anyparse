@@ -847,10 +847,10 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		family: Array<OverrideFamilyMember>, file: String, source: String, tree: QueryNode, shape: RefShape
 	): Array<Span> {
 		final out: Array<Span> = [];
-		for (fm in family) if (fm.file == file) for (occ in Rename.renameOccurrences(source, tree, fm.declFrom, shape)) if (
-			!out.exists(s -> s.from == occ.from)
-		)
-			out.push(occ);
+		for (fm in family)
+			if (fm.file == file)
+				for (occ in Rename.renameOccurrences(source, tree, fm.declFrom, shape))
+					if (!out.exists(s -> s.from == occ.from)) out.push(occ);
 		return out;
 	}
 

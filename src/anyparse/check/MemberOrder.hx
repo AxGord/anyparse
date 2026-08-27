@@ -531,10 +531,11 @@ final class MemberOrder implements Check implements ConfigAware {
 	): Bool {
 		final unsafe: Array<String> = unsafeInitKinds(shape);
 		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
-		for (f in fields) if (sideEffecting(f, unsafe, shape, source, movableArglessNew)) for (g in fields) if (
-			g.node != f.node && f.isStatic == g.isStatic && g.initNode != null && !g.isInline && orderFlips(f, g, sorted)
-		)
-			return true;
+		for (f in fields)
+			if (sideEffecting(f, unsafe, shape, source, movableArglessNew))
+				for (g in fields)
+					if (g.node != f.node && f.isStatic == g.isStatic && g.initNode != null && !g.isInline && orderFlips(f, g, sorted))
+						return true;
 		return false;
 	}
 

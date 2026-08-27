@@ -246,8 +246,10 @@ final class InheritanceMove {
 
 	/** The simple name of a class's direct superclass (`extends X`), or null. */
 	private static function superNameOf(decl: TypeDeclMatch): Null<String> {
-		for (child in decl.nameNode.children) if (child.kind == 'ExtendsClause') for (gc in child.children) if (gc.kind == 'Named')
-			return gc.name;
+		for (child in decl.nameNode.children)
+			if (child.kind == 'ExtendsClause')
+				for (gc in child.children)
+					if (gc.kind == 'Named') return gc.name;
 		return null;
 	}
 

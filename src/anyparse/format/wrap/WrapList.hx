@@ -1791,7 +1791,23 @@ class WrapList {
 	 * The probe mode is evaluated at `exceeds=true / firing=∅` before
 	 * threshold enumeration — a heuristic that does not cover cascades
 	 * combining `defaultAdditionalIndent > 0` with `LineLengthLargerThan`
-	 * thresholds (no current consumer does). `complexItemCount` is NOT part
+	 * thresholds. MEASURED INERT (T135 slice, the T111 question): flipping the
+	 * `_ -> false` below to `_ -> true` — the opposite extreme — changes ZERO
+	 * bytes over the whole anyparse tree (1511 files), Pony under BOTH of its
+	 * configs (867 files each), all five haxe-formatter fixtures that configure
+	 * a `lineLength >= n` rule, and four purpose-built configs on
+	 * `functionSignature` / `implementsExtends` that put a `lineLength` rule on
+	 * each side of the forcing/non-forcing split. Two things make it inert: with
+	 * `additional == 0` both arms of the return below are `baseCols`, and no
+	 * BUILT-IN cascade carries a `LineLengthLargerThan` condition, so only a
+	 * user config reaches the predicate at all; and when `breakAsOnePerLine` is
+	 * on, `onePerLineWhenBreaking` collapses FillLine / OnePerLineAfterFirst /
+	 * FillLineWithLeadingBreak / PackedOrOnePerLine to OnePerLine, so every mode
+	 * a rule can select except NoWrap / Keep classifies as forcing and the rule
+	 * CHOICE cannot change the classification. The harness is discriminating:
+	 * dropping `cascadeForcesBreak` from the conjunction below moves
+	 * `src/anyparse/check/PreferIndexAccess.hx`'s lambda-signature continuation
+	 * by one indent level. `complexItemCount` is NOT part
 	 * of that heuristic: it is a static per-list count, known before either
 	 * probe runs, so the caller hands it in and the probe answers the same
 	 * cascade the real decision answers. Passing a hardcoded 0 here made a
