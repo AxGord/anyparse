@@ -163,6 +163,48 @@ final class ModuleScan {
 		return { path: pkg == '' ? base : '$pkg.$base', pkg: pkg, base: base };
 	}
 
+	/**
+	 * The dotted path of one `import a.b.C as D;` statement text — the identifier run BEFORE the
+	 * trailing `as` / `in` keyword, which is where the aliased path always sits — or `''` when it
+	 * does not decode. Comments are stripped first: a `/* … *\/` between the keyword and the path
+	 * would otherwise be decoded AS the path, and a wrong target silently prints the alias for
+	 * the wrong type. `''` still occupies the alias's name, which is what the collision gate
+	 * needs.
+	 *
+	 * The project's ONLY decoder of an alias import's path, and deliberately so. Three call
+	 * sites: `aliasTargetsOf` just below (which `TypeRefPrinter` reaches for a whole file's
+	 * map), `TypeRefPrinter`'s shadow gate directly, and `SymbolIndexBuilder`, which files
+	 * the answer into `ImportInfo.aliasTarget` for the whole index to read.
+	 *
+	 * The two consumers read imprecision in OPPOSITE safe directions, which any future
+	 * tightening has to weigh: `TypeRefPrinter` compares the result to a full canonical path,
+	 * so a partial decode reads as "shadow" and withholds; `SymbolIndex` takes its last
+	 * segment, so a partial decode costs an alias EDGE — the direction that deletes.
+	 */
+	public static function aliasTargetOf(stmt: String): String {
+		final bare: String = stripComments(stmt);
+		final runs: Array<String> = [];
+		final n: Int = bare.length;
+		var i: Int = 0;
+		while (i < n) {
+			final c: Int = bare.fastCodeAt(i);
+			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
+				i++;
+				continue;
+			}
+			final start: Int = i;
+			while (i < n) {
+				final cc: Int = bare.fastCodeAt(i);
+				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
+				i++;
+			}
+			runs.push(bare.substring(start, i));
+		}
+		// `import <path> as <alias>;` -> the run before the `as` / `in` keyword.
+		for (r => run in runs) if ((run == 'as' || run == 'in') && r > 0) return runs[r - 1];
+		return '';
+	}
+
 	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
 	private static function hasSpanlessPackage(root: QueryNode): Bool {
 		return root.children.exists(c -> PACKAGE_DECL_KINDS.contains(c.kind) && c.span == null);
@@ -307,38 +349,6 @@ final class ModuleScan {
 			if (alias != null && span != null) out[alias] = aliasTargetOf(source.substring(span.from, span.to));
 		}
 		return out;
-	}
-
-	/**
-	 * The dotted path of one `import a.b.C as D;` statement text — the identifier run BEFORE the
-	 * trailing `as` / `in` keyword, which is where the aliased path always sits — or `''` when it
-	 * does not decode. Comments are stripped first: a `/* … *\/` between the keyword and the path
-	 * would otherwise be decoded AS the path, and a wrong target silently prints the alias for
-	 * the wrong type. `''` still occupies the alias's name, which is what the collision gate
-	 * needs.
-	 */
-	private static function aliasTargetOf(stmt: String): String {
-		final bare: String = stripComments(stmt);
-		final runs: Array<String> = [];
-		final n: Int = bare.length;
-		var i: Int = 0;
-		while (i < n) {
-			final c: Int = bare.fastCodeAt(i);
-			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
-				i++;
-				continue;
-			}
-			final start: Int = i;
-			while (i < n) {
-				final cc: Int = bare.fastCodeAt(i);
-				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
-				i++;
-			}
-			runs.push(bare.substring(start, i));
-		}
-		// `import <path> as <alias>;` -> the run before the `as` / `in` keyword.
-		for (r => run in runs) if ((run == 'as' || run == 'in') && r > 0) return runs[r - 1];
-		return '';
 	}
 
 	/** `text` with every `//` line comment and `/* … *\/` block comment replaced by a space, so a lexical scan cannot read comment content as code. */

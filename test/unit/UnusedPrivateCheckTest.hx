@@ -142,8 +142,42 @@ class UnusedPrivateCheckTest extends Test {
 	 * file that SPELLS the class; run-wide the arm went silent for any unparseable file at all.
 	 */
 	public function testPrivateCtorArmSkipParseIsPerClass(): Void {
-		Assert.equals(1, utilCtorSkipParseViolations('package pkg;\nclass Bad { function f() { other = 1;'));
-		Assert.equals(0, utilCtorSkipParseViolations('package pkg;\nclass Bad extends Util { function f() { q = 1;'));
+		Assert.equals(1, utilCtorArmViolations('package pkg;\nclass Bad { function f() { other = 1;'));
+		Assert.equals(0, utilCtorArmViolations('package pkg;\nclass Bad extends Util { function f() { q = 1;'));
+	}
+
+	/**
+	 * The private-CONSTRUCTOR arm across an IMPORT alias — the wrong DELETION this gate exists
+	 * for, in the one alias shape `subtypesOf` could not follow until `ImportInfo.aliasTarget`
+	 * existed. `class Bad extends U` under `import pkg.Util as U;` IS a subtype and its `super()`
+	 * needs `Util`s private `new`; the index answered "no subtype", `--fix` deleted the
+	 * constructor, and the tree stopped compiling with `p.Util does not have a constructor`
+	 * (Haxe 4.3.7). Both spellings the grammar projects are covered. The third arm drops the
+	 * `extends` (and with it the `super()`, which Haxe will not accept without one) and keeps
+	 * the alias import, so it isolates the one semantic axis and still FIRES — a pass here
+	 * cannot come from the arm going silent.
+	 */
+	public function testPrivateCtorKeptWhenSubtypeExtendsImportAlias(): Void {
+		Assert.equals(
+			0, utilCtorArmViolations('package pkg;\nimport pkg.Util as U;\nclass Bad extends U {\n\tpublic function new() { super(); }\n}')
+		);
+		Assert.equals(
+			0, utilCtorArmViolations('package pkg;\nimport pkg.Util in U;\nclass Bad extends U {\n\tpublic function new() { super(); }\n}')
+		);
+		Assert.equals(1, utilCtorArmViolations('package pkg;\nimport pkg.Util as U;\nclass Bad {\n\tpublic function new() {}\n}'));
+	}
+
+	/**
+	 * The MEMBER arm of the same hole. A private method a subtype calls is confined to its file
+	 * only while nothing extends its owner, so an unfollowed import alias sent `helper` down the
+	 * in-file scan, which cannot see the caller: `--fix` deleted it and the tree failed with
+	 * `Unknown identifier : helper`. The control keeps the alias import and drops the
+	 * `extends` (and with it the call, which would no longer resolve), leaving `helper`
+	 * genuinely dead.
+	 */
+	public function testPrivateMemberKeptWhenSubtypeExtendsImportAlias(): Void {
+		Assert.equals(0, aliasSubtypeMemberViolations('class D extends B {\n\tpublic function f():Int return helper();\n}'));
+		Assert.equals(1, aliasSubtypeMemberViolations('class D {\n\tpublic function f():Int return 1;\n}'));
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -787,7 +821,7 @@ class UnusedPrivateCheckTest extends Test {
 	}
 
 	/** Findings on a never-instantiated all-static `Util` with a private constructor. */
-	private function utilCtorSkipParseViolations(badSrc: String): Int {
+	private function utilCtorArmViolations(badSrc: String): Int {
 		final files: Array<{ file: String, source: String }> = [
 			{
 				file: 'pkg/Util.hx',
@@ -797,6 +831,19 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'pkg/Bad.hx', source: badSrc }
 		];
 		return violations(files).filter(v -> v.file == 'pkg/Util.hx').length;
+	}
+
+	/**
+	 * `pkg/C.hx` declaring a private `helper`, plus `pkg/D.hx` built from `dSrc` under an
+	 * `import pkg.C as B;` — the member twin of `utilCtorArmViolations`. Answers how many
+	 * violations land on the OWNER, so the caller reads 0 as "the subtype was seen".
+	 */
+	private function aliasSubtypeMemberViolations(dSrc: String): Int {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tprivate function helper():Int return 1;\n}' },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nimport pkg.C as B;\n$dSrc' }
+		];
+		return violations(files).filter(v -> v.file == 'pkg/C.hx').length;
 	}
 
 	/**
