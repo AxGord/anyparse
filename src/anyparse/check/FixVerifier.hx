@@ -25,7 +25,7 @@ typedef FixVerifyResult = {
 	var baseline: OracleOutcome;
 	var applied: Array<String>;
 
-	/** Total EDITS that survived verification — the honest "issues fixed" contribution, unlike the FILE count. */
+	/** Total EDITS that survived verification — this phase's contribution to the run summary's edit count, unlike the FILE count. */
 	var appliedEdits: Int;
 	var reverted: Array<FixVerifyRevert>;
 	var partials: Array<FixVerifyPartial>;

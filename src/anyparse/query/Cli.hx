@@ -2226,11 +2226,11 @@ final class Cli {
 		// contradiction rather than as the two budgets it actually reports.
 		final capTail: String = hitCap ? ' (a round stopped at its $maxPasses-pass budget — re-run if more remain)' : '';
 		stderr(
-			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail'
-			+ '$baselineTail$riskyTail$oracleTail${followUp.tail}\n'
+			'${lintFixSummary(fixedCount, changedFiles.length, passes)}$skipTail$capTail$baselineTail$riskyTail$oracleTail'
+			+ '${followUp.tail}\n'
 		);
-		// What the run did NOT fix, per rule. Its own block, not a tail on the line above: that line
-		// is what every gate and doc quotes, and it keeps its bytes. It also prints on a PRODUCTIVE
+		// What the run did NOT fix, per rule. Its own block, not a tail on the line above, which is
+		// what every gate and doc quotes and stays one sentence. It also prints on a PRODUCTIVE
 		// run, which the tail it replaces did not — `fixed 0` was the only trigger, so this 668-fix
 		// tree said nothing whatever about the 161 findings it declined, and a productive run is
 		// exactly where the misreading lands.
@@ -7488,23 +7488,46 @@ final class Cli {
 	 * file that fails to parse is reported and skipped; the exit code is
 	 * non-zero if any file failed. A file whose re-emission would drop a
 	 * comment is reported the same way and left byte-identical — see the
-	 * comment-loss obligation on `GrammarPlugin.writeRoundTrip`.
+	 * comment-loss obligation on `GrammarPlugin.writeRoundTrip`. Every one of
+	 * those behaviours lives in `fmtRun` / `formatOneFile`; this entry only
+	 * prints what the run decided to say.
 	 */
 	private static function runFmt(args: Array<String>): Int {
+		final run: FmtRunResult = fmtRun(args);
+		if (run.summary.length > 0) stderr(run.summary);
+		return run.exit;
+	}
+
+	/**
+	 * `apq fmt`'s whole run, with the summary handed BACK instead of printed.
+	 *
+	 * The seam exists for the summary alone. Three recorded defects in this family
+	 * were a count line disagreeing with the tree it described, and each was found
+	 * by hand on a real tree because nothing could assert it: `Sys.stderr()` on
+	 * hxnodejs is a raw fd, so no in-process test can read what the user reads.
+	 * Returning the line lets a test drive a REAL directory through the REAL loop
+	 * and assert it in every direction — over-report, under-report, and failure.
+	 */
+	private static function fmtRun(args: Array<String>): FmtRunResult {
 		final o: FmtOpts = parseFmtArgs(args);
-		if (o.errExit != null) return o.errExit;
+		if (o.errExit != null) {
+			// Re-bound: a narrowed FIELD never reaches an anonymous-structure literal
+			// whose expected field is non-nullable.
+			final parsedExit: Int = o.errExit;
+			return { exit: parsedExit, summary: '' };
+		}
 		warnCommentGuardDeclined();
 		if (o.inputSpecs.length == 0) {
 			stderr('apq fmt: expected <file/dir/glob>...\n');
 			printFmtUsage();
-			return EXIT_USAGE;
+			return { exit: EXIT_USAGE, summary: '' };
 		}
 
 		final io = resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq fmt: ${o.inputSpecs.join(', ')} matched no .hx files\n');
-			return EXIT_RUNTIME;
+			return { exit: EXIT_RUNTIME, summary: '' };
 		}
 		final plugin: GrammarPlugin = io.plugin;
 
@@ -7519,14 +7542,18 @@ final class Cli {
 		var unsettled: Int = 0;
 		for (path in paths) {
 			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write && !o.verify, listMode, o.verify, o.onePass);
-			if (r.fatalExit != null) return r.fatalExit;
+			if (r.fatalExit != null) {
+				// Re-bound for the same reason as `parsedExit` above.
+				final fatal: Int = r.fatalExit;
+				return { exit: fatal, summary: '' };
+			}
 			if (r.changed) changed++;
 			if (r.failed) failed++;
 			if (r.diverged == true) diverged++;
 			if (r.unsettled == true) unsettled++;
 		}
 
-		reportFmtSummary(o, listMode, {
+		final summary: String = fmtSummary(o, listMode, {
 			scanned: paths.length,
 			changed: changed,
 			failed: failed,
@@ -7537,11 +7564,27 @@ final class Cli {
 		// second rewrite was still formatted — folding it into `failed` would make
 		// `--write` claim it left the file alone, which is the opposite of what
 		// happened.
-		return failed > 0 || unsettled > 0 ? EXIT_RUNTIME : EXIT_OK;
+		return {
+			exit: failed > 0 || unsettled > 0 ? EXIT_RUNTIME : EXIT_OK,
+			summary: summary
+		};
 	}
 
-	/** The per-mode run summary `apq fmt` writes to stderr once every file is done. */
-	private static function reportFmtSummary(
+	/**
+	 * The per-mode run summary `apq fmt` RETURNS for its caller to print.
+	 *
+	 * Every mode states BOTH quantities — how many files the run considered and
+	 * how many it acted on. One number alone is what let `formatted 0 file(s),
+	 * 3 failed` read as "the run was inert" on an 870-file tree: nothing on the
+	 * line separated that reading from the true one. `--list` said nothing at
+	 * all unless a file failed, so its drift count was reported nowhere.
+	 *
+	 * A String rather than a `stderr` call because `Sys.stderr()` on hxnodejs
+	 * is a raw fd — a line that only ever reaches fd 2 can be pinned by no
+	 * in-process test, and every defect in this family is a count line that
+	 * disagreed with the tree it described.
+	 */
+	private static function fmtSummary(
 		o: FmtOpts, listMode: Bool, n: {
 			scanned: Int,
 			changed: Int,
@@ -7549,31 +7592,39 @@ final class Cli {
 			diverged: Int,
 			unsettled: Int
 		}
-	): Void {
+	): String {
+		final out: StringBuf = new StringBuf();
+		// Never folded into the mode lines below: a failure is not a rewrite that did
+		// not happen, it is a file the run could not answer for at all.
+		final failTail: String = n.failed > 0 ? ', ${n.failed} failed' : '';
 		if (o.verify)
 			// Three numbers, because a single one reads as a clean audit for the wrong
 			// reason: `changed` is the scan's real denominator (a file the writer would
 			// not rewrite cannot diverge), and `failed - diverged` is the files it could
 			// not format at all — each already printed its own reason.
-			stderr(
+			out.add(
 				'apq fmt --verify: ${n.diverged} of ${n.changed} reformatted file(s) changed more than whitespace'
 				+ ' (${n.scanned} scanned, ${n.failed - n.diverged} could not be formatted)\n'
 			);
 		else if (o.write)
-			stderr('apq fmt: formatted ${n.changed} file(s)${n.failed > 0 ? ', ${n.failed} failed' : ''}\n');
-		else if (listMode && n.failed > 0)
-			// Not always a parse failure any more — a file whose re-emission
-			// would drop a comment is refused too (each one already printed
-			// its own reason above).
-			stderr('apq fmt: ${n.failed} file(s) failed\n');
+			out.add('apq fmt: rewrote ${n.changed} of ${n.scanned} file(s)$failTail\n');
+		else if (listMode)
+			// Printed even at zero, and even with nothing failing. `--list` names the
+			// drifted files on stdout and used to say NOTHING on a clean tree, so a run
+			// that scanned a whole project and a run that matched three files were the
+			// same silence. A failure is counted here too — it is not always a parse
+			// failure any more, a file whose re-emission would drop a comment is refused
+			// as well, and each one printed its own reason above.
+			out.add('apq fmt --list: ${n.changed} of ${n.scanned} file(s) would be rewritten$failTail\n');
 		// Its OWN line, never folded into the mode summaries above: the count is
 		// about the WRITER, and every mode — preview, list, write, verify — reports
 		// it the same way.
 		if (n.unsettled > 0)
-			stderr(
+			out.add(
 				'apq fmt --one-pass: ${n.unsettled} file(s) needed more than one writer rewrite'
 				+ ' — the one-pass canonical gate `writeRoundTrip(s) == s` does not hold for them\n'
 			);
+		return out.toString();
 	}
 
 	/**
@@ -11335,7 +11386,21 @@ final class Cli {
 		}
 		if (write) {
 			if (!isCanonical) {
-				writeFile(path, formatted);
+				// A write that THROWS took the whole run down mid-tree: an uncaught host
+				// error, no summary line at all, and every file already rewritten left
+				// with nothing said about it — the extreme of the count-line family, since
+				// the count never reaches the reader. Read failures were caught here from
+				// the start; the write side was not, and a read-only file is the ordinary
+				// way to meet it.
+				try writeFile(path, formatted) catch (exception: Exception) {
+					stderr('apq fmt: $path: ${exception.message}\n');
+					return {
+						changed: false,
+						failed: true,
+						unsettled: unsettled,
+						fatalExit: null
+					};
+				}
 				return {
 					changed: true,
 					failed: false,
@@ -13660,7 +13725,7 @@ final class Cli {
 		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracleHxml, oracleDir);
 		return {
 			reverted: pass.reverted,
-			tail: '${pass.tail}, follow-up: $fixed fix(es) in ${rewritten.length} file(s) exposed by the verified phases',
+			tail: '${pass.tail}, follow-up: $fixed edit(s) in ${rewritten.length} file(s) exposed by the verified phases',
 			notice: pass.notice
 		};
 	}
@@ -17192,10 +17257,33 @@ final class Cli {
 	}
 
 	/**
+	 * The head of the `lint --fix` run summary, and it reports EDIT SPANS.
+	 *
+	 * A check answers with one span per site it rewrites, so ONE `naming` finding on a
+	 * local read three times is four spans; a fix whose result exposes a further finding
+	 * adds that pass's spans on top of them. Printed as `fixed N issue(s)` it read as a
+	 * finding count and disagreed with the number the reader had just counted in the
+	 * plain `lint` report — measured at 4 for 3 findings on a cascading fold, and at 4
+	 * for exactly ONE finding with no cascade anywhere in the run.
+	 *
+	 * The finding total is deliberately NOT here beside it, and the reason is this same
+	 * defect one level up: `edits` sums the safe loop AND the risky and oracle-assisted
+	 * phases, while the only finding count the run holds — the `ledger` — is filled by
+	 * the safe loop alone (`applyLintPass` records it; `verifyRiskyFixes` never receives
+	 * it, and with no oracle it does not even RUN its checks). Two numbers on one line
+	 * measured over two rule sets is the shape this wording was fixed to stop making.
+	 * The finding total belongs to a plain `lint`, which runs every rule; what each rule
+	 * DECLINED is `unfixedFixLedger`'s block below.
+	 */
+	private static function lintFixSummary(edits: Int, files: Int, passes: Int): String {
+		return 'apq lint --fix: $edits edit(s) in $files file(s) over $passes pass(es)';
+	}
+
+	/**
 	 * The `lint --fix` block naming, per rule, the findings that got NO edit from their own check —
 	 * and which of the things that can mean happened to each.
 	 *
-	 * `fixed N issue(s)` answered none of that. Its ambiguous companion tail printed ONLY when the run
+	 * The summary line answered none of that. Its ambiguous companion tail printed ONLY when the run
 	 * changed nothing, so a 668-fix tree said not one word about the 161 findings it declined; and the
 	 * tail itself spelled the ambiguity out rather than resolving it ("the check has no autofix, or when
 	 * its fix declined here"), which three readers resolved the wrong way and two of them filed work on.
@@ -17682,6 +17770,19 @@ typedef FmtFileResult = {
 	// Non-null = a fatal per-file outcome (no writer wired for the lang);
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;
+};
+
+/**
+ * What `apq fmt` decided, with the summary as DATA.
+ *
+ * `summary` is empty for every exit taken before a file was read (a usage
+ * error, an empty match, a lang with no writer) — those already printed their
+ * own sentence, and a count line about a run that never counted anything would
+ * be the family's own defect.
+ */
+typedef FmtRunResult = {
+	var exit: Int;
+	var summary: String;
 };
 
 /**
