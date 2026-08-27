@@ -1,5 +1,6 @@
 package anyparse.format.comment;
 
+import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.format.CommentStyle;
 import anyparse.format.IndentChar;
@@ -42,29 +43,7 @@ class BlockCommentNormalizer {
 	private static inline final DOC_OPEN: String = '/**';
 
 	public static function processCapturedBlockComment(content: String, opt: WriteOptions): Doc {
-		final parsed: Null<BlockComment> = try BlockCommentParser.parse(content) catch (_: haxe.Exception) null;
-		if (parsed == null) return Text(content);
-		if (opt.commentStyle != CommentStyle.Verbatim && canonicalizable(content)) return canonicalDoc(parsed, opt);
-		// Parser's `@:sep('\n') @:trail('*/')` Star elides the trailing
-		// separator: source `Xx\n*/` parses as N lines (not N+1 with an
-		// empty trailing line). The writer therefore loses the `\n` that
-		// would have placed `*/` on its own line. Detect the
-		// `<content>\n*/` close-on-own-line shape and append a synthetic
-		// empty line so normalize's `body == '' last line` branch routes
-		// to the canonical ` */` close pad.
-		if (content.endsWith('\n*/') && parsed.lines.length > 0) {
-			final lastBody: String = parsed.lines[parsed.lines.length - 1].body;
-			if (lastBody.length > 0) parsed.lines.push({ ws: '', body: '' });
-		}
-		final lines: Array<BlockCommentLine> = parsed.lines;
-		return if (lines.length <= 1)
-			Text(content)
-		else if (isJavadocStyle(lines))
-			javadocBytePreserveDoc(content, parsed)
-		else if (isFirstInlineNested(lines))
-			firstInlineRebuildDoc(parsed, opt)
-		else
-			BlockCommentWriter.writeDoc(parsed, opt);
+		return D.verbatim(commentDoc(content, opt));
 	}
 
 	/**
@@ -158,6 +137,38 @@ class BlockCommentNormalizer {
 	/** Whether `c` is comment-body whitespace — the separator a ` * ` gutter marker may carry. */
 	private static inline function isSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code || c == '\r'.code;
+	}
+
+	/**
+	 * `processCapturedBlockComment` without the verbatim mark — every return
+	 * below is comment CONTENT, so the caller marks the whole subtree once
+	 * rather than each leaf. That also covers the `BlockCommentWriter` branch,
+	 * whose Doc is macro-generated and carries no hand-written `Text` at all.
+	 */
+	private static function commentDoc(content: String, opt: WriteOptions): Doc {
+		final parsed: Null<BlockComment> = try BlockCommentParser.parse(content) catch (_: haxe.Exception) null;
+		if (parsed == null) return Text(content);
+		if (opt.commentStyle != CommentStyle.Verbatim && canonicalizable(content)) return canonicalDoc(parsed, opt);
+		// Parser's `@:sep('\n') @:trail('*/')` Star elides the trailing
+		// separator: source `Xx\n*/` parses as N lines (not N+1 with an
+		// empty trailing line). The writer therefore loses the `\n` that
+		// would have placed `*/` on its own line. Detect the
+		// `<content>\n*/` close-on-own-line shape and append a synthetic
+		// empty line so normalize's `body == '' last line` branch routes
+		// to the canonical ` */` close pad.
+		if (content.endsWith('\n*/') && parsed.lines.length > 0) {
+			final lastBody: String = parsed.lines[parsed.lines.length - 1].body;
+			if (lastBody.length > 0) parsed.lines.push({ ws: '', body: '' });
+		}
+		final lines: Array<BlockCommentLine> = parsed.lines;
+		return if (lines.length <= 1)
+			Text(content)
+		else if (isJavadocStyle(lines))
+			javadocBytePreserveDoc(content, parsed)
+		else if (isFirstInlineNested(lines))
+			firstInlineRebuildDoc(parsed, opt)
+		else
+			BlockCommentWriter.writeDoc(parsed, opt);
 	}
 
 	/**

@@ -716,6 +716,7 @@ import unit.WhileTrueConditionCheckTest;
 import unit.WhitespaceInvariantTest;
 import unit.WrapFlatSourceFixedPointTest;
 import unit.WriteOptionsTest;
+import unit.WriterTrailingWhitespaceTest;
 import utest.Runner;
 
 /**
@@ -915,6 +916,7 @@ class RunTests {
 		addCase(new HxTypedefAnonForceMultiTest());
 		addCase(new HxAnonTypeIgnoreReflowTest());
 		addCase(new WrapFlatSourceFixedPointTest());
+		addCase(new WriterTrailingWhitespaceTest());
 		addCase(new HxObjectLitRestProbeTest());
 		addCase(new HxPackedOrOnePerLineTest());
 		addCase(new HxReturnValueBreaksInsideTest());

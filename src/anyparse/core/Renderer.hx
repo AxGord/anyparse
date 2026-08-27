@@ -22,6 +22,11 @@ private typedef RenderCtx = {
 	var col: Int;
 	var pendingIndent: Int;
 	var pendingOptSpace: Null<String>;
+	// The trailing blank run held back from the last non-verbatim `Text`
+	// committed on the current line. Already counted in `col` (so no layout
+	// decision sees it move); written by the next content append, dropped by
+	// the line break that would otherwise strand it. See `flushTrailBlank`.
+	var pendingTrailBlank: Null<String>;
 	var pendingHardline: Int;
 	var lastEmit: LastEmit;
 	var lineCount: Int;
@@ -84,6 +89,24 @@ private enum LastEmit {
 	Hardline;
 	OpenDelim;
 
+}
+
+/**
+	Index of the first byte of `s`'s trailing run of spaces and tabs, or
+	`s.length` when it ends in neither. `0` means the whole string is blank.
+
+	A String scan rather than a rendering step, so it sits at module level
+	instead of on `Renderer` — where it would also be the member that pushes
+	the type past its size cap.
+**/
+private function trailBlankStart(s: String): Int {
+	var i: Int = s.length;
+	while (i > 0) {
+		final c: Int = s.fastCodeAt(i - 1);
+		if (c != ' '.code && c != '\t'.code) break;
+		i--;
+	}
+	return i;
 }
 
 /**
@@ -286,6 +309,7 @@ class Renderer {
 			col: 0,
 			pendingIndent: -1,
 			pendingOptSpace: null,
+			pendingTrailBlank: null,
 			pendingHardline: -1,
 			lastEmit: Other,
 			lineCount: 0,
@@ -2523,6 +2547,11 @@ class Renderer {
 	 */
 	private static function flushOptSpace(ctx: RenderCtx): Void {
 		if (ctx.pendingOptSpace == null) return;
+		// A held trailing blank run was emitted BEFORE this optional space, so it
+		// has to reach the buffer first. Every path that commits an optional space
+		// goes through here, which is what keeps the two slots ordered without each
+		// caller knowing about both.
+		flushTrailBlank(ctx);
 		if (ctx.pendingIndent >= 0) {
 			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 			ctx.pendingIndent = -1;
@@ -2531,6 +2560,30 @@ class Renderer {
 		ctx.col += ctx.pendingOptSpace.length;
 		ctx.pendingOptSpace = null;
 		ctx.lastEmit = Other;
+	}
+
+	/**
+	 * Commit the blank run held back from the last non-verbatim `Text`.
+	 *
+	 * Called by every path that is about to append real content to the
+	 * buffer, so the held bytes land in their original position; the line
+	 * breaks call `ctx.pendingTrailBlank = null` instead, which is the whole
+	 * mechanism — a trailing space only disappears when a newline is what
+	 * follows it.
+	 *
+	 * The indent flush mirrors `flushOptSpace`: a run held from a leaf that
+	 * committed no visible body (an all-blank `Text`) leaves `pendingIndent`
+	 * standing, so the indent still has to precede these bytes.
+	 */
+	private static function flushTrailBlank(ctx: RenderCtx): Void {
+		final held: Null<String> = ctx.pendingTrailBlank;
+		if (held == null) return;
+		if (ctx.pendingIndent >= 0) {
+			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+			ctx.pendingIndent = -1;
+		}
+		ctx.buf.add(held);
+		ctx.pendingTrailBlank = null;
 	}
 
 	/**
@@ -2545,6 +2598,9 @@ class Renderer {
 	private static function flushPendingHardline(ctx: RenderCtx): Void {
 		if (ctx.pendingHardline >= 0) {
 			ctx.pendingOptSpace = null;
+			// The newline is what follows the held blank run, so it never gets
+			// written — this is the deferred hardline's share of the invariant.
+			ctx.pendingTrailBlank = null;
 			if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
 				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 			}
@@ -2563,7 +2619,7 @@ class Renderer {
 	 * policies, flushing pending hardline / opt-space / indent, then the text.
 	 * Mutates `ctx` (invariant #1: render-local carrier, no static state).
 	 */
-	private static function emitText(ctx: RenderCtx, s: String): Void {
+	private static function emitText(ctx: RenderCtx, s: String, verbatim: Bool): Void {
 		if (s.length <= 0) return;
 		// ω-cond-indent-policy FixedZero: inside a
 		// `ConditionalMarkerZero` scope, a fresh-line token that
@@ -2588,12 +2644,30 @@ class Renderer {
 			ctx.pendingIndent = shifted > 0 ? shifted : 0;
 		}
 		flushPendingHardline(ctx);
-		flushOptSpace(ctx);
-		if (ctx.pendingIndent >= 0) {
-			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
-			ctx.pendingIndent = -1;
+		// Syntax carries its separator space INSIDE the token (`', '`, `': '`,
+		// `'return '`, `'macro '`), so the only place that can stop such a space
+		// from reaching a line end is here, where the run is still un-committed.
+		// Verbatim content — a comment body's own trailing tab — is written whole:
+		// the writer reproduces it, it is not the writer's to trim.
+		final bodyEnd: Int = verbatim ? s.length : trailBlankStart(s);
+		if (bodyEnd > 0) {
+			flushTrailBlank(ctx);
+			flushOptSpace(ctx);
+			if (ctx.pendingIndent >= 0) {
+				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+				ctx.pendingIndent = -1;
+			}
+			ctx.buf.add(bodyEnd == s.length ? s : s.substring(0, bodyEnd));
+		} else if (ctx.pendingOptSpace != null) {
+			// An all-blank leaf commits nothing, so a pending optional space would
+			// be stranded AFTER the run it precedes. Fold it into the run instead
+			// and charge its width here, which is what `flushOptSpace` would have
+			// done — the two slots stay one ordered sequence and `col` is unmoved.
+			ctx.pendingTrailBlank = (ctx.pendingTrailBlank ?? '') + ctx.pendingOptSpace;
+			ctx.col += ctx.pendingOptSpace.length;
+			ctx.pendingOptSpace = null;
 		}
-		ctx.buf.add(s);
+		if (bodyEnd < s.length) ctx.pendingTrailBlank = (ctx.pendingTrailBlank ?? '') + s.substring(bodyEnd);
 		ctx.col += s.length;
 		ctx.lastEmit = lastEmitFromText(s);
 	}
@@ -2607,6 +2681,10 @@ class Renderer {
 	private static function emitLine(ctx: RenderCtx, f: Frame, flat: String): Void {
 		if (f.forceFlat || f.mode == MFlat) {
 			flushPendingHardline(ctx);
+			// Only real bytes commit the held run: a zero-width flat `Line` writes
+			// nothing, so a blank held before it stays held and the next break can
+			// still drop it.
+			if (flat.length > 0) flushTrailBlank(ctx);
 			flushOptSpace(ctx);
 			if (flat.length > 0 && ctx.pendingIndent >= 0) {
 				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
@@ -2626,6 +2704,7 @@ class Renderer {
 			// existing — "fire unless next is hardline" — fails
 			// here because we ARE that hardline).
 			ctx.pendingOptSpace = null;
+			ctx.pendingTrailBlank = null;
 			if (ctx.pendingHardline >= 0) ctx.pendingHardline = -1;
 			if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
 				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
@@ -2674,6 +2753,10 @@ class Renderer {
 					ctx.pendingIndent = f.indent;
 					ctx.col = f.indent;
 				} else {
+					// Only the arm that actually writes `\n` drops the held blank
+					// run; the two dropping arms above emit nothing, so a space
+					// between two texts they sit between must survive.
+					ctx.pendingTrailBlank = null;
 					if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
 						writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 					}
@@ -2722,6 +2805,7 @@ class Renderer {
 							ctx.pendingIndent = f.indent;
 							ctx.col = f.indent;
 						case Other:
+							ctx.pendingTrailBlank = null;
 							if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
 								writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 							}
@@ -2818,8 +2902,8 @@ class Renderer {
 		switch (f.doc) {
 			case Empty:
 				// nothing
-			case Text(s):
-				emitText(ctx, s);
+			case Text(s, verbatim):
+				emitText(ctx, s, verbatim == true);
 			case Line(flat):
 				emitLine(ctx, f, flat);
 			case OptSpace(_), OptSpaceSkipAfterHardline, OptHardlineSkipBeforeHardline:
