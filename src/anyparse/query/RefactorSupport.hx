@@ -4,6 +4,8 @@ import anyparse.format.comment.CommentLossException;
 import anyparse.query.CondBranchProjection.CondBranchRun;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
@@ -145,25 +147,6 @@ enum abstract OccurrenceClass(Int) {
 typedef ClassifiedOccurrence = {
 	final span: Span;
 	final kind: OccurrenceClass;
-};
-
-/**
- * Kind of a lexically-scanned non-code source region (comment, string or regex literal).
- */
-private enum abstract LexRegionKind(Int) {
-
-	final LineComment = 0;
-	final BlockComment = 1;
-	final StringLit = 2;
-	final RegexLit = 3;
-
-}
-
-/** A lexically-scanned non-code region: `[from, to)` and its kind. */
-private typedef LexRegion = {
-	final from: Int;
-	final to: Int;
-	final kind: LexRegionKind;
 };
 
 /**
@@ -1198,11 +1181,11 @@ final class RefactorSupport {
 	 * both live references a rename has to reach.
 	 */
 	public static function activeCodeIdentTokenOffset(source: String, span: Span, name: String): Int {
-		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		final regions: Array<LexRegion> = LexicalRegions.scan(source);
 		var from: Int = span.from;
 		while (from < span.to) {
 			final at: Int = identTokenOffset(source, new Span(from, span.to), name);
-			if (at < 0 || !offsetWithinComment(at, regions)) return at;
+			if (at < 0 || !LexicalRegions.offsetWithinComment(at, regions)) return at;
 			from = at + 1;
 		}
 		return -1;
@@ -1357,6 +1340,16 @@ final class RefactorSupport {
 					+ '`apq fmt --write <file>`); a command that accepts `--reformat` can canonicalise the whole file in place instead'
 				);
 		}
+
+		// A re-parse gate cannot see a deletion that empties a brace-less construct's body
+		// slot: the result parses, because the construct pulls the FOLLOWING statement in.
+		// Measured — `remove-element` on the body of `if (flag) log.push("in-branch");` wrote
+		// `if (flag) log.push("after");` and reported success, and `lint --fix`'s
+		// `unused-local` reached the same result from `if (c) var y: Int = 1;`. Both compile.
+		// This is the ONLY structural question the gate asks, and it is asked HERE because
+		// every writer-emit op and every `--fix` wave funnels through this one function.
+		final emptied: Null<String> = BodySlotGuard.emptiedSlot(source, edits, plugin);
+		if (emptied != null) return Err(emptied);
 
 		final spliced: String = applyEdits(source, edits);
 		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT
@@ -1882,7 +1875,7 @@ final class RefactorSupport {
 	 */
 	public static function collectCommentTokens(source: String): Array<{ from: Int, to: Int, isLine: Bool }> {
 		final out: Array<{ from: Int, to: Int, isLine: Bool }> = [];
-		for (region in scanLexicalRegions(source)) switch region.kind {
+		for (region in LexicalRegions.scan(source)) switch region.kind {
 			case LineComment:
 				out.push({ from: region.from, to: region.to, isLine: true });
 			case BlockComment:
@@ -1899,7 +1892,7 @@ final class RefactorSupport {
 	 * directive reader) and must not grow a lexer of its own. Not memoised: each call re-lexes.
 	 */
 	public static function collectNonCodeRegions(source: String): Array<Span> {
-		return [for (region in scanLexicalRegions(source)) new Span(region.from, region.to)];
+		return [for (region in LexicalRegions.scan(source)) new Span(region.from, region.to)];
 	}
 
 	/**
@@ -2024,9 +2017,9 @@ final class RefactorSupport {
 	public static function carriesAllowGrant(source: String): Bool {
 		var at: Int = source.indexOf('@:allow');
 		if (at < 0) return false;
-		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		final regions: Array<LexRegion> = LexicalRegions.scan(source);
 		while (at >= 0) {
-			if (regionAt(at, regions) == null) return true;
+			if (LexicalRegions.regionAt(at, regions) == null) return true;
 			at = source.indexOf('@:allow', at + 1);
 		}
 		return false;
@@ -3272,7 +3265,7 @@ final class RefactorSupport {
 		if (len == 0) return out;
 		final condSpans: Array<Span> = [];
 		collectConditionalSpans(tree, condSpans);
-		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		final regions: Array<LexRegion> = LexicalRegions.scan(source);
 		final stop: Int = end <= source.length ? end : source.length;
 		var i: Int = from;
 		while (i + len <= stop) {
@@ -3381,7 +3374,7 @@ final class RefactorSupport {
 	): Bool {
 		final classified: Null<Array<ClassifiedOccurrence>> = classifyOccurrences(source, name, plugin, from, end, excluded);
 		if (classified == null) return referencedInRange(source, name, from, end, excluded);
-		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		final regions: Array<LexRegion> = LexicalRegions.scan(source);
 		for (occ in classified) switch occ.kind {
 			// A word inside a longer literal binds nothing, whatever the literal interpolates.
 			case CommentTrivia, DirectiveComment, StringWord:
@@ -4083,11 +4076,6 @@ final class RefactorSupport {
 		map[key] = (cur ?? 0) + 1;
 	}
 
-	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
-	private static inline function isRegexFlag(c: Int): Bool {
-		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
-	}
-
 	/** Whether the block comment opening at `open` is a `/**` doc rather than a plain block. */
 	private static inline function isDocOpener(source: String, open: Int): Bool {
 		return open + 2 < source.length && source.fastCodeAt(open + 2) == '*'.code;
@@ -4192,24 +4180,6 @@ final class RefactorSupport {
 		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
 		final nameAt: Int = activeCodeIdentTokenOffset(source, nameSpan, typeName);
 		return nameAt < 0 ? nameSpan.from : nameAt + typeName.length;
-	}
-
-	/**
-	 * Is `offset` inside a COMMENT region? The first lexical region that
-	 * contains it decides; a string literal is not a comment, so code
-	 * interpolated inside one stays eligible.
-	 */
-	private static function offsetWithinComment(offset: Int, regions: Array<LexRegion>): Bool {
-		final region: Null<LexRegion> = regionAt(offset, regions);
-		return region != null && switch region.kind {
-			case LineComment, BlockComment: true;
-			case StringLit, RegexLit: false;
-		};
-	}
-
-	/** The lexically-scanned non-code region containing `offset`, or null when `offset` is code. */
-	private static function regionAt(offset: Int, regions: Array<LexRegion>): Null<LexRegion> {
-		return regions.find(region -> offset >= region.from && offset < region.to);
 	}
 
 	/** The scan behind `referencedInRange` / `referencedUnqualifiedInRange`; a non-null `commentRegions` drops dot-qualified occurrences. */
@@ -4668,7 +4638,7 @@ final class RefactorSupport {
 				}
 			}
 			if (c == '"'.code || c == "'".code) {
-				i = skipStringLiteral(source, i, c) + 1;
+				i = LexicalRegions.skipStringLiteral(source, i, c) + 1;
 				tokenEnd = i;
 				continue;
 			}
@@ -4677,139 +4647,6 @@ final class RefactorSupport {
 			i++;
 		}
 		return { brace: brace, tokenEnd: tokenEnd };
-	}
-
-	/**
-	 * Index of the closing `quote` of the string opened at `open`, honouring `\`-escapes and — for the
-	 * INTERPOLATING quote — the `${ … }` holes whose contents are code rather than text; the source
-	 * length minus one if unterminated (the caller's `i++` then ends the scan).
-	 */
-	private static function skipStringLiteral(text: String, open: Int, quote: Int): Int {
-		final n: Int = text.length;
-		final interpolating: Bool = quote == "'".code;
-		var i: Int = open + 1;
-		while (i < n) {
-			final c: Int = text.fastCodeAt(i);
-			if (c == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			// A `${ … }` hole is CODE, and Haxe lexes it by brace/quote balancing at any depth — so a
-			// nested literal of the SAME quote inside one closes nothing. Reading `$` as ordinary text
-			// mis-paired the quotes of `'${cond ? '// note' : X}'` and handed the caller a region that
-			// ended mid-expression; `scanLexicalRegions` then lexed the rest as code, and a `//` or
-			// `/*` there opened a comment region over live source. `$$` is the escaped dollar and the
-			// unbraced `$name` shorthand carries no nesting, so only `${` needs the walk.
-			if (interpolating && c == '$'.code && i + 1 < n) {
-				final next: Int = text.fastCodeAt(i + 1);
-				if (next == '$'.code) {
-					i += 2;
-					continue;
-				}
-				if (next == '{'.code) {
-					i = skipInterpolationHole(text, i + 1);
-					continue;
-				}
-			}
-			if (c == quote) return i;
-			i++;
-		}
-		return n - 1;
-	}
-
-	/**
-	 * Offset just past the `}` closing the interpolation hole whose `{` is at `open`, or the source
-	 * length when it is unterminated. Nested braces are counted and a nested string literal is
-	 * skipped whole through `skipStringLiteral`, so the two walk arbitrary depth together — the same
-	 * mutual balancing Haxe's own lexer does for `'${'a ${'b'}'}'`.
-	 */
-	private static function skipInterpolationHole(text: String, open: Int): Int {
-		final n: Int = text.length;
-		var depth: Int = 0;
-		var i: Int = open;
-		while (i < n) {
-			final c: Int = text.fastCodeAt(i);
-			if (c == '"'.code || c == "'".code) {
-				final close: Int = skipStringLiteral(text, i, c);
-				// An unterminated nested literal means the walk has lost the thread — a quote inside a
-				// regex or a comment in the hole, which this scanner does not model. Fail CLOSED: hand
-				// the caller back the `{` so the outer literal falls back to plain quote pairing rather
-				// than swallowing the rest of the file, which would widen a region every consumer reads.
-				if (text.fastCodeAt(close) != c) return open;
-				i = close + 1;
-				continue;
-			}
-			if (c == '{'.code) {
-				depth++;
-			} else if (c == '}'.code) {
-				depth--;
-				if (depth <= 0) return i + 1;
-			}
-			i++;
-		}
-		// Unterminated hole — same fail-closed reading.
-		return open;
-	}
-
-	/**
-	 * Single-pass lexer emitting every non-code region (line/block comment, string
-	 * literal, regex literal) with byte offsets. Strings are skipped with
-	 * `\`-escape handling, regex literals through `scanRegexLiteral`;
-	 * `collectCommentTokens` filters this to its comment tokens.
-	 *
-	 * The regex arm exists because a regex body may legally contain a comment
-	 * opener (`~/[\/*]/`), and without it that opener started a phantom block
-	 * comment running to EOF - see `scanRegexLiteral` for what that broke.
-	 */
-	private static function scanLexicalRegions(source: String): Array<LexRegion> {
-		final out: Array<LexRegion> = [];
-		final n: Int = source.length;
-		var i: Int = 0;
-		while (i < n) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '"'.code || c == "'".code) {
-				final start: Int = i;
-				i = skipStringLiteral(source, i, c) + 1;
-				out.push({ from: start, to: i, kind: StringLit });
-				continue;
-			}
-			if (c == '~'.code && i + 1 < n && source.fastCodeAt(i + 1) == '/'.code) {
-				final regexEnd: Int = scanRegexLiteral(source, i, n);
-				if (regexEnd >= 0) {
-					out.push({ from: i, to: regexEnd, kind: RegexLit });
-					i = regexEnd;
-					continue;
-				}
-			}
-			if (c == '/'.code && i + 1 < n) {
-				final next: Int = source.fastCodeAt(i + 1);
-				if (next == '/'.code) {
-					final start: Int = i;
-					i += 2;
-					while (i < n && source.fastCodeAt(i) != '\n'.code) i++;
-					out.push({ from: start, to: i, kind: LineComment });
-					continue;
-				}
-				if (next == '*'.code) {
-					final start: Int = i;
-					i += 2;
-					var closed: Bool = false;
-					while (i + 1 < n) {
-						if (source.fastCodeAt(i) == '*'.code && source.fastCodeAt(i + 1) == '/'.code) {
-							i += 2;
-							closed = true;
-							break;
-						}
-						i++;
-					}
-					if (!closed) i = n;
-					out.push({ from: start, to: i, kind: BlockComment });
-					continue;
-				}
-			}
-			i++;
-		}
-		return out;
 	}
 
 	/** Collect the span of every `#if...#end` region node into `out` (recursive). */
@@ -4890,40 +4727,6 @@ final class RefactorSupport {
 	 */
 	private static function commentEndingAt(tokens: Array<{ from: Int, to: Int, isLine: Bool }>, end: Int, blockOnly: Bool): Int {
 		for (t in tokens) if (t.to == end && !(blockOnly && t.isLine)) return t.from;
-		return -1;
-	}
-
-	/**
-	 * End offset (exclusive) of the Haxe regex literal opened by `~/` at `open`,
-	 * flags included; -1 when it is not terminated on its own line. Matches the
-	 * compiler's own lexer: the body runs to the first unescaped `/`, and a
-	 * comment OPENER inside it is body text - `haxe` lexes a block-comment
-	 * opener right after `~/` as part of the regex too, not as `~` applied to a
-	 * comment (verified against the compiler).
-	 *
-	 * Without this arm the shared region scan opened a phantom block comment at
-	 * the comment opener hiding in `~/[\/*]/`: unterminated, so every byte to
-	 * EOF counted as comment trivia and real code after the literal became
-	 * invisible - a cross-file member rename refused the whole scope, and every
-	 * consumer of `collectCommentTokens` saw a comment token that is not there.
-	 */
-	private static function scanRegexLiteral(source: String, open: Int, n: Int): Int {
-		final nl: Int = source.indexOf('\n', open + 2);
-		final lineEnd: Int = nl < 0 ? n : nl;
-		var i: Int = open + 2;
-		while (i < lineEnd) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			if (c == '/'.code) {
-				i++;
-				while (i < lineEnd && isRegexFlag(source.fastCodeAt(i))) i++;
-				return i;
-			}
-			i++;
-		}
 		return -1;
 	}
 
