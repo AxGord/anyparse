@@ -3578,8 +3578,9 @@ final class RefactorSupport {
 		if (kinds.length == 0 || name.length == 0) return null;
 		function walk(node: QueryNode): Null<Span> {
 			final span: Null<Span> = node.span;
-			if (span != null && kinds.contains(node.kind)) for (gap in unmodelledGaps(node, span)) if (mentionsIdent(source, gap, name))
-				return gap;
+			if (span != null && kinds.contains(node.kind))
+				for (gap in unmodelledGaps(node, span))
+					if (mentionsIdent(source, gap, name)) return gap;
 			for (c in node.children) {
 				final found: Null<Span> = walk(c);
 				if (found != null) return found;

@@ -404,10 +404,9 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 
 	/** Whether `name` resolves, in `index`, to a declaration of an exhaustiveness-checked kind. */
 	private static function declaresExhaustive(scan: Scan, index: SymbolIndex, name: String): Bool {
-		for (file in index.declaringFiles(name)) for (type in file.types) if (
-			type.name == name && scan.seams.exhaustiveDeclKinds.contains(type.kind)
-		)
-			return true;
+		for (file in index.declaringFiles(name))
+			for (type in file.types)
+				if (type.name == name && scan.seams.exhaustiveDeclKinds.contains(type.kind)) return true;
 		return false;
 	}
 

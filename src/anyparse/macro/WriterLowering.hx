@@ -7013,7 +7013,7 @@ class WriterLowering {
 						),
 						_dn(_cols, _dc([_dl(), _body]))
 					)
-					: _dn(_cols, _dc([_dl(), _body]));
+					: anyparse.format.BodyFit.chainStaircase(_cols, _body, _dn(_cols, _dc([_dl(), _body])), opt.lineWidth);
 		else if (singleLineFlagName != null)
 			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				? $multilineGlue

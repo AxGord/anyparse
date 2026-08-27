@@ -33,8 +33,9 @@ class StdlibDifferentialTest extends Test {
 		final candidate: StdlibCandidate = padDigit();
 		final maps: Array<Mapping> = StdlibDifferential.mappings(candidate);
 		Assert.isTrue(maps.length > 0);
-		for (map in maps) if (!StdlibDifferential.isTrivial(map)) for (param in candidate.params)
-			Assert.isTrue(map.display.indexOf(param.name) >= 0, '${map.display} drops ${param.name}');
+		for (map in maps)
+			if (!StdlibDifferential.isTrivial(map))
+				for (param in candidate.params) Assert.isTrue(map.display.indexOf(param.name) >= 0, '${map.display} drops ${param.name}');
 	}
 
 	/**

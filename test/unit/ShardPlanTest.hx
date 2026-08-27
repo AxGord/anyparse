@@ -118,8 +118,9 @@ class ShardPlanTest extends Test {
 	 */
 	public function testStickyGroupLandsTogetherOnShardZero(): Void {
 		final rows: Array<ShardPlacement> = planned(registering(generated(30)), 4);
-		for (sticky in ShardPlan.STICKY_CLASSES) for (row in rows) if (row.cls == sticky)
-			Assert.equals(0, row.shard, 'pinned $sticky landed on shard ${row.shard}');
+		for (sticky in ShardPlan.STICKY_CLASSES)
+			for (row in rows)
+				if (row.cls == sticky) Assert.equals(0, row.shard, 'pinned $sticky landed on shard ${row.shard}');
 	}
 
 	/**

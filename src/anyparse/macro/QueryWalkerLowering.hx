@@ -588,8 +588,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				if (envelope != null)
 					return block([bind].concat(typeRefsDescend(envelope, field(ident('v'), PairedShapeLowering.ENVELOPE_FIELD), 0)));
 				final out: Array<Expr> = [bind];
-				for (child in node.children) if (fieldNameOf(child) != 'name')
-					for (e in typeRefsDescend(child, field(ident('v'), fieldNameOf(child)), 0)) out.push(e);
+				for (child in node.children)
+					if (fieldNameOf(child) != 'name')
+						for (e in typeRefsDescend(child, field(ident('v'), fieldNameOf(child)), 0)) out.push(e);
 				block(out);
 			case Star:
 				block(

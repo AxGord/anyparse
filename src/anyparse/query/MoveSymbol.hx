@@ -306,8 +306,9 @@ final class MoveSymbol {
 		// for `move-member`, where `declSpan` is a member's and the parameters are the type's.
 		// METHOD-level parameters are not in the index and stay priced; that residue costs a refusal,
 		// never a silent rebind.
-		for (t in cursorInfo.types) if (t.span.from <= declSpan.from && t.span.to >= declSpan.to) for (param in t.typeParamNames)
-			depNames.remove(param);
+		for (t in cursorInfo.types)
+			if (t.span.from <= declSpan.from && t.span.to >= declSpan.to)
+				for (param in t.typeParamNames) depNames.remove(param);
 
 		// One copy of the file list for the whole carry — `allFiles()` copies, and the binding walk
 		// runs once per dependency name on each side.
@@ -447,8 +448,10 @@ final class MoveSymbol {
 		// one was a refusal against a binding that does not exist. Compile-proved: a file naming `Dep`
 		// beside a sibling `p/Other.hx` declaring a secondary `Dep` is `Type not found : Dep` on 4.3.7,
 		// and this used to refuse a move over it.
-		for (fi in files) if (fi.pkg == info.pkg && fi.file != info.file) for (t in fi.types) if (t.name == name && t.isMain)
-			return { path: fi.module, ownModule: false };
+		for (fi in files)
+			if (fi.pkg == info.pkg && fi.file != info.file)
+				for (t in fi.types)
+					if (t.name == name && t.isMain) return { path: fi.module, ownModule: false };
 		return null;
 	}
 

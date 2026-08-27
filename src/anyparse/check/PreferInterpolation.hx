@@ -245,8 +245,9 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	private static function scanInterpBlocks(out: Array<ScanMatch>, ctx: ScanCtx, literal: QueryNode, inMeta: Bool): Void {
 		final blockKind: Null<String> = ctx.shape.stringInterpBlockKind;
 		if (blockKind == null) return;
-		for (block in literal.children) if (block.kind == blockKind) for (c in block.children)
-			scan(out, ctx, c, null, inMeta, true, block.children.length == 1);
+		for (block in literal.children)
+			if (block.kind == blockKind)
+				for (c in block.children) scan(out, ctx, c, null, inMeta, true, block.children.length == 1);
 	}
 
 	/**

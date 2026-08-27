@@ -1296,8 +1296,9 @@ final class SymbolIndex {
 	public function implementsInterfaceDeclaringMember(typeName: String, field: String): Bool {
 		// The `interfaces` entries are SIMPLE names lifted from the owner's own `implements`
 		// clause, so they resolve against the OWNER's file — not globally.
-		for (r in resolvedDeclsNamed(typeName)) for (iface in r.type.interfaces) if (!typeProvablyLacksMember(iface, field, r.file.file))
-			return true;
+		for (r in resolvedDeclsNamed(typeName))
+			for (iface in r.type.interfaces)
+				if (!typeProvablyLacksMember(iface, field, r.file.file)) return true;
 		return false;
 	}
 
@@ -1344,10 +1345,9 @@ final class SymbolIndex {
 	 * a subclass override may use it.
 	 */
 	public function subtypeDeclaresMember(typeName: String, member: String): Bool {
-		for (fi in _files) for (t in fi.types) if (t.name != typeName && t.members.exists(m ->
-			m.name == member
-		) && declMayBeSubtype(t, typeName, [t.name]))
-			return true;
+		for (fi in _files)
+			for (t in fi.types)
+				if (t.name != typeName && t.members.exists(m -> m.name == member) && declMayBeSubtype(t, typeName, [t.name])) return true;
 		return false;
 	}
 
@@ -1868,10 +1868,9 @@ final class SymbolIndex {
 	 * field already fails to unify with it, so finalizing can only repair that, never break it.
 	 */
 	private function structuralConformancePins(typeName: String, field: String, methodMemberPins: Bool): Bool {
-		if (methodMemberPins) for (members in BUILTIN_STRUCTURAL_MEMBER_SETS) if (
-			members.contains(field) && familyDeclaresEveryMember(typeName, members, [])
-		)
-			return true;
+		if (methodMemberPins)
+			for (members in BUILTIN_STRUCTURAL_MEMBER_SETS)
+				if (members.contains(field) && familyDeclaresEveryMember(typeName, members, [])) return true;
 		for (fi in _files) for (t in fi.types) if (t.isAnonStruct) {
 			final declared: Null<MemberInfo> = t.members.find(m -> m.name == field);
 			if (declared == null) continue;
@@ -2136,10 +2135,11 @@ final class SymbolIndex {
 	private function supertypeDeclares(typeName: String, field: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return false;
 		seen.push(typeName);
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) if (
-			typeDeclaresMember(sup, field) || supertypeDeclares(sup, field, seen)
-		)
-			return true;
+		for (fi in _files)
+			for (t in fi.types)
+				if (t.name == typeName)
+					for (sup in t.supertypes)
+						if (typeDeclaresMember(sup, field) || supertypeDeclares(sup, field, seen)) return true;
 		return false;
 	}
 
