@@ -113,6 +113,20 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '[{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
 		+ '"itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
+	/**
+	 * The reduced form of THIS project's own `hxformat.json` `callParameter`
+	 * cascade — `fillLineWithLeadingBreak` shadowed by an `exceedsMaxLineLength:
+	 * 0` and an `itemCount <= 1 && totalItemLength <= 100` `noWrap`. The object
+	 * literal is deliberately left UNCONFIGURED, so it resolves through
+	 * `HaxeFormat.defaultObjectLiteralWrap`, whose `totalItemLength >= 60` rule
+	 * commits it to `OnePerLine` in BOTH fit states. That commitment is the
+	 * fixture's whole point.
+	 */
+	private static final CALL_ARG_COMMITTED_OBJECT: String = '{"wrapping": {"maxLineLength": 140, "callParameter": '
+		+ '{"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", '
+		+ '"value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": '
+		+ '"totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+
 	/** The same literal cascade under a ternary host instead of a call host. */
 	private static final TERNARY_ARG_OBJECT: String = '{"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": '
 		+ '"onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, '
@@ -585,6 +599,74 @@ class WrapFlatSourceFixedPointTest extends Test {
 			case Err(message):
 				Assert.fail('canonicalize refused: $message');
 		}
+	}
+
+	/**
+	 * ω-committed-objectlit-glue — a sole object-literal call argument the
+	 * literal's own cascade has already COMMITTED to breaking.
+	 *
+	 * `shapeSingleArgGlue`'s `{`-branch asked `IfArrowContinuationFits` whether
+	 * the literal fits FLAT on its own continuation line, off
+	 * `DocMeasure.flatTokenWidth`. For a literal carrying a forced hardline that
+	 * question has no answer — the literal will not render flat anywhere — and
+	 * the measure it was answered from is not even stable across passes: a
+	 * source-FLAT list reaches the call through `WrapList.emit` and measures its
+	 * real token width (101 columns for the source below), while the same list
+	 * once the writer's own output has broken it takes the force-multi emit,
+	 * arrives as `WrapBoundary(BodyGroup(…))`, and `flatTokenWidth` DEFERS a
+	 * `BodyGroup` to 0. Zero then satisfies the cascade's `totalItemLength <= 100`
+	 * `noWrap` rule, so the call glued on pass 2 what it had opened on pass 1.
+	 *
+	 * MEASURED (base `ee9f7a51`, `ast --writer-output` chained three times):
+	 * pass 1 opens `recordResolution(` with the `{` on its own line, pass 2
+	 * glues `recordResolution({`, pass 3 reproduces pass 2 — a two-rewrite
+	 * convergence, NOT an oscillation. Sweeping the literal's flat width one
+	 * column at a time under this cascade gives a CONTIGUOUS two-sided band,
+	 * `flatTokenWidth` 101..127: below 101 the `totalItemLength <= 100` rule
+	 * glues on pass 1 already, above 127 the continuation probe (`8 + 4 + W <
+	 * 140` at this indent) stops fitting and the glued shape wins on pass 1.
+	 *
+	 * The fix answers the question the premise allows: a committed literal
+	 * glues. That is also the shape `testCallArgObjectLiteralGluesOnFirstPass`
+	 * and `testCallArgObjectLiteralHugsUnderAnExceedsCascade` already pin as the
+	 * settled one, so pass 1 now writes what pass 2 wanted.
+	 *
+	 * Both assertions discriminate: with the guard reverted `once` is the opened
+	 * shape, so the anchor fails, and `once != twice`, so the equality fails too.
+	 */
+	public function testSoleCommittedObjectLiteralArgGluesOnFirstPass(): Void {
+		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\trecordResolution({ ownerClass: levelClass, '
+			+ 'fieldName: producer.fieldName, scopeLevel: depth, fromRootExport: exports != null });\n\t}\n}';
+		final once: String = write(src, CALL_ARG_COMMITTED_OBJECT);
+		Assert.isTrue(
+			once.indexOf('recordResolution({\n\t\t\townerClass: levelClass,') != -1,
+			'expected the glued shape the next pass produces, got:\n<$once>'
+		);
+		Assert.isTrue(
+			once.indexOf('\n\t\t\tfromRootExport: exports != null\n\t\t});') != -1,
+			'expected the closer glued to the literal, got:\n<$once>'
+		);
+		Assert.equals(once, write(once, CALL_ARG_COMMITTED_OBJECT), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * The must-not-fire half, and the reason the glue above is gated on the
+	 * literal's COMMITMENT rather than on its being an object literal at all.
+	 * Here the sole `{`-argument is short enough that its own cascade leaves it
+	 * flat, so it carries no hardline, the continuation probe has a real question
+	 * to answer, and the answer is the one that was already right: open the
+	 * paren and leave the literal flat on its own line. Byte-identical to the
+	 * pre-slice output — verified against a base-engine build of `ee9f7a51`.
+	 */
+	public function testSoleUncommittedObjectLiteralArgKeepsTheOpenParen(): Void {
+		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\tregisterDeferredResolutionForVerifiedProducerFields'
+			+ 'OnTheCurrentLevelAndItsParentsAndEveryEnclosingScopeChainInDeclarationOrder({ x: 1, y: 2 });\n\t}\n}';
+		final once: String = write(src, CALL_ARG_COMMITTED_OBJECT);
+		Assert.isTrue(
+			once.indexOf('InDeclarationOrder(\n\t\t\t{x: 1, y: 2}\n\t\t);') != -1,
+			'expected the literal left flat on its own continuation line, got:\n<$once>'
+		);
+		Assert.equals(once, write(once, CALL_ARG_COMMITTED_OBJECT), 'one round trip must land on the fixed point');
 	}
 
 	private static function write(src: String, config: String): String {

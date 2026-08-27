@@ -1122,6 +1122,7 @@ final class Cli {
 			write: false,
 			list: false,
 			verify: false,
+			onePass: false,
 			inputSpecs: [],
 			errExit: code
 		};
@@ -7515,31 +7516,64 @@ final class Cli {
 		var changed: Int = 0;
 		var failed: Int = 0;
 		var diverged: Int = 0;
+		var unsettled: Int = 0;
 		for (path in paths) {
-			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write && !o.verify, listMode, o.verify);
+			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write && !o.verify, listMode, o.verify, o.onePass);
 			if (r.fatalExit != null) return r.fatalExit;
 			if (r.changed) changed++;
 			if (r.failed) failed++;
 			if (r.diverged == true) diverged++;
+			if (r.unsettled == true) unsettled++;
 		}
 
+		reportFmtSummary(o, listMode, {
+			scanned: paths.length,
+			changed: changed,
+			failed: failed,
+			diverged: diverged,
+			unsettled: unsettled
+		});
+		// ω-one-pass-gate: its own clause in the exit condition. A file that needed a
+		// second rewrite was still formatted — folding it into `failed` would make
+		// `--write` claim it left the file alone, which is the opposite of what
+		// happened.
+		return failed > 0 || unsettled > 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/** The per-mode run summary `apq fmt` writes to stderr once every file is done. */
+	private static function reportFmtSummary(
+		o: FmtOpts, listMode: Bool, n: {
+			scanned: Int,
+			changed: Int,
+			failed: Int,
+			diverged: Int,
+			unsettled: Int
+		}
+	): Void {
 		if (o.verify)
 			// Three numbers, because a single one reads as a clean audit for the wrong
 			// reason: `changed` is the scan's real denominator (a file the writer would
 			// not rewrite cannot diverge), and `failed - diverged` is the files it could
 			// not format at all — each already printed its own reason.
 			stderr(
-				'apq fmt --verify: $diverged of $changed reformatted file(s) changed more than whitespace'
-				+ ' (${paths.length} scanned, ${failed - diverged} could not be formatted)\n'
+				'apq fmt --verify: ${n.diverged} of ${n.changed} reformatted file(s) changed more than whitespace'
+				+ ' (${n.scanned} scanned, ${n.failed - n.diverged} could not be formatted)\n'
 			);
 		else if (o.write)
-			stderr('apq fmt: formatted $changed file(s)${failed > 0 ? ', $failed failed' : ''}\n');
-		else if (listMode && failed > 0)
+			stderr('apq fmt: formatted ${n.changed} file(s)${n.failed > 0 ? ', ${n.failed} failed' : ''}\n');
+		else if (listMode && n.failed > 0)
 			// Not always a parse failure any more — a file whose re-emission
 			// would drop a comment is refused too (each one already printed
 			// its own reason above).
-			stderr('apq fmt: $failed file(s) failed\n');
-		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
+			stderr('apq fmt: ${n.failed} file(s) failed\n');
+		// Its OWN line, never folded into the mode summaries above: the count is
+		// about the WRITER, and every mode — preview, list, write, verify — reports
+		// it the same way.
+		if (n.unsettled > 0)
+			stderr(
+				'apq fmt --one-pass: ${n.unsettled} file(s) needed more than one writer rewrite'
+				+ ' — the one-pass canonical gate `writeRoundTrip(s) == s` does not hold for them\n'
+			);
 	}
 
 	/**
@@ -7555,13 +7589,16 @@ final class Cli {
 	}
 
 	private static function printFmtUsage(): Void {
-		sysPrint('Usage: apq fmt <file/dir/glob>... [--write] [--list] [--verify]\n');
+		sysPrint('Usage: apq fmt <file/dir/glob>... [--write] [--list] [--verify] [--one-pass]\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write, -w     Rewrite each file in place with its canonical form\n');
 		sysPrint('  --list, -l      Print paths whose output differs (gofmt -l); no rewrite\n');
 		sysPrint('  --verify        Audit: the output must differ from the input by WHITESPACE\n');
 		sysPrint('                  only. Reports every other divergence; never writes\n');
+		sysPrint('  --one-pass      Also require every file to reach its fixed point in ONE\n');
+		sysPrint('                  writer rewrite; exit non-zero otherwise. Composes with\n');
+		sysPrint('                  every mode above and changes none of them\n');
 		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Canonicalise Haxe source by re-emitting it through the writer, formatted\n');
@@ -7573,6 +7610,13 @@ final class Cli {
 		sysPrint('A file whose re-emission would DROP a comment (an inline comment in a seam\n');
 		sysPrint('the parser has no capture slot for, e.g. `if (/* c */ x)`) is reported with\n');
 		sysPrint('the comment and left byte-identical rather than rewritten without it.\n');
+		sysPrint('\n');
+		sysPrint('--one-pass catches the class NO other tree-level gate can see: `fmt` writes\n');
+		sysPrint('the writer\'s FIXED POINT, so a file the writer settles only on its second\n');
+		sysPrint('rewrite is reported canonical by --list while the next writer-emit op\n');
+		sysPrint('refuses it — that op\'s gate is one round trip, not the fixed point. Off by\n');
+		sysPrint('default so a project whose config reaches the writer\'s convergence tail can\n');
+		sysPrint('still run --write; on for a gate.\n');
 		sysPrint('\n');
 		sysPrint('--verify catches what the writer round-trip cannot: a writer defect whose\n');
 		sysPrint('output this parser still accepts is invisible to a tree-level gate, so\n');
@@ -11172,6 +11216,7 @@ final class Cli {
 		var write: Bool = false;
 		var list: Bool = false;
 		var verify: Bool = false;
+		var onePass: Bool = false;
 		final inputSpecs: Array<String> = [];
 
 		var i: Int = 0;
@@ -11186,6 +11231,8 @@ final class Cli {
 					list = true;
 				case '--verify':
 					verify = true;
+				case '--one-pass':
+					onePass = true;
 				case '-h', '--help':
 					printFmtUsage();
 					return fmtParseExit(EXIT_OK);
@@ -11203,13 +11250,14 @@ final class Cli {
 			write: write,
 			list: list,
 			verify: verify,
+			onePass: onePass,
 			inputSpecs: inputSpecs,
 			errExit: null
 		};
 	}
 
 	private static function formatOneFile(
-		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, verify: Bool = false
+		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, verify: Bool = false, onePass: Bool = false
 	): FmtFileResult {
 		final source: String = try readFile(path) catch (exception: Exception) {
 			stderr('apq fmt: $path: ${exception.message}\n');
@@ -11245,13 +11293,35 @@ final class Cli {
 		// mutation ops now print off `EditResult.Ok`'s `rewrites`, from one copy, so
 		// a user who meets the note twice can tell it is one finding.
 		warnRewrites('fmt', path, fixedPoint.rewrites);
+		// ω-one-pass-gate: `--one-pass` turns that note into a VERDICT. The project's
+		// canonical gate is `writeRoundTrip(s) == s` after ONE pass, and every
+		// writer-emit op is built on it — but a tree holding a file the writer only
+		// settles on its SECOND rewrite answers `fmt --list` EMPTY, because `fmt`
+		// writes the fixed point, while the next op on that same file refuses it as
+		// non-canonical. So the class has no tree-level gate at all unless one is
+		// asked for, and it cannot be the default: a project whose config reaches the
+		// writer's convergence tail must still be able to run `fmt --write`.
+		// Reported apart from `failed`: the file formatted correctly and, under
+		// `--write`, was written to its fixed point — what did not hold is a property
+		// of the WRITER.
+		final unsettled: Bool = onePass && fixedPoint.rewrites > 1;
 		final isCanonical: Bool = formatted == source;
 		if (verify) {
 			// A file already at its fixed point cannot diverge, so the scan is skipped
 			// for the overwhelming majority of a canonical tree.
-			if (isCanonical) return { changed: false, failed: false, fatalExit: null };
+			if (isCanonical) return {
+				changed: false,
+				failed: false,
+				unsettled: unsettled,
+				fatalExit: null
+			};
 			final divergence: Null<Divergence> = WhitespaceInvariant.firstDivergence(source, formatted);
-			if (divergence == null) return { changed: true, failed: false, fatalExit: null };
+			if (divergence == null) return {
+				changed: true,
+				failed: false,
+				unsettled: unsettled,
+				fatalExit: null
+			};
 			sysPrint('$path:${divergence.line}: formatting changed more than whitespace\n');
 			sysPrint('  source: ${divergence.expected}\n');
 			sysPrint('  writer: ${divergence.actual}\n');
@@ -11259,22 +11329,38 @@ final class Cli {
 				changed: true,
 				failed: true,
 				fatalExit: null,
-				diverged: true
+				diverged: true,
+				unsettled: unsettled
 			};
 		}
 		if (write) {
 			if (!isCanonical) {
 				writeFile(path, formatted);
-				return { changed: true, failed: false, fatalExit: null };
+				return {
+					changed: true,
+					failed: false,
+					unsettled: unsettled,
+					fatalExit: null
+				};
 			}
 		} else if (listMode) {
 			if (!isCanonical) {
 				sysPrint('$path\n');
-				return { changed: true, failed: false, fatalExit: null };
+				return {
+					changed: true,
+					failed: false,
+					unsettled: unsettled,
+					fatalExit: null
+				};
 			}
 		} else
 			sysPrint(formatted);
-		return { changed: false, failed: false, fatalExit: null };
+		return {
+			changed: false,
+			failed: false,
+			unsettled: unsettled,
+			fatalExit: null
+		};
 	}
 
 	private static function parseMoveArgs(args: Array<String>): MoveOpts {
@@ -17554,6 +17640,16 @@ typedef FmtOpts = {
 	 * `anyparse.format.WhitespaceInvariant` for what the rule does and does not know.
 	 */
 	var verify: Bool;
+
+	/**
+	 * Gate the ONE-PASS canonical property: a file whose writer needed more than
+	 * one rewrite to reach its fixed point is reported and the run exits
+	 * non-zero. Off by default, because a project whose config reaches the
+	 * writer's convergence tail must still be able to run `fmt --write`; on for
+	 * the gates, where `writeRoundTrip(s) == s` after ONE pass is the property
+	 * every writer-emit op is built on.
+	 */
+	var onePass: Bool;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
@@ -17575,6 +17671,14 @@ typedef FmtFileResult = {
 	 * reporting those as invariant breaches would name the wrong defect.
 	 */
 	@:optional var diverged: Bool;
+
+	/**
+	 * `--one-pass` only: the writer needed more than one rewrite to settle this
+	 * file. Counted apart from `failed` because the file was formatted fine —
+	 * and, under `--write`, still written to that fixed point. What did not hold
+	 * is the ONE-PASS property, which is a statement about the WRITER.
+	 */
+	@:optional var unsettled: Bool;
 	// Non-null = a fatal per-file outcome (no writer wired for the lang);
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;

@@ -55,7 +55,8 @@
 # only.
 #
 # What fails the run: any build error, a red or count-diverged suite, a
-# non-empty `fmt --list`, a `fmt --verify` divergence, a `--jvm` probe that
+# non-empty `fmt --list`, a `fmt --one-pass` file (the writer needed a second
+# rewrite to settle it), a `fmt --verify` divergence, a `--jvm` probe that
 # stops compiling, a corpus
 # regression (more failures than the base), or any blast-radius change that
 # was not explicitly allowed with --allow-blast. A blast comparison that
@@ -501,13 +502,19 @@ branch_fmt() {
     # the battery's single verdict was red on every run in that environment.
     # stderr is still PRINTED whenever it is non-empty -- dropping it on success
     # would hide a real future warning -- it just does not decide the verdict.
-    bin/hxq fmt --list src test tools > "$work/fmt.log" 2> "$work/fmt.err" || fmt_rc=$?
+    # `--one-pass` carries the OTHER half of the canonical gate, and it is the
+    # half `--list` structurally cannot see: `fmt` writes the writer's FIXED
+    # POINT, so a file the writer settles only on its SECOND rewrite is reported
+    # canonical here while the next writer-emit op refuses it -- that op's gate
+    # is one round trip. The flag leaves every other mode alone and only makes
+    # the run exit non-zero, naming each file on stderr.
+    bin/hxq fmt --list --one-pass src test tools > "$work/fmt.log" 2> "$work/fmt.err" || fmt_rc=$?
     if [ -s "$work/fmt.err" ]; then
         cat "$work/fmt.err" >&2
     fi
     if [ "$fmt_rc" -ne 0 ] || [ -s "$work/fmt.log" ]; then
         cat "$work/fmt.log" >&2
-        fail "fmt --list is not empty (or exited $fmt_rc)"
+        fail "fmt --list --one-pass is not empty (or exited $fmt_rc -- read fmt.err: a non-zero exit with an EMPTY list is the one-pass gate)"
     fi
     # The non-whitespace invariant, on the one tree here that is NOT already
     # canonical. `--verify` can only speak about files the writer would
@@ -515,12 +522,24 @@ branch_fmt() {
     # denominator of zero and report a clean audit for the wrong reason. The
     # fork tree keeps a handful of drifted files, so the line below carries a
     # real (if small) count — read it, do not just check the exit status.
+    #
+    # `--one-pass` rides along HERE for a reason the arm above cannot supply: the
+    # one-pass property is only observable on a file that is NOT yet at its fixed
+    # point, because `fmt` writes that fixed point and a file already holding it
+    # settles in zero rewrites. src/test/tools is canonical, so the flag is
+    # trivially green there; this tree is not, so every file's round trip is
+    # actually exercised. Measured at the time of writing: 36 scanned, 6
+    # reformatted, 0 needing a second rewrite.
     local verify_rc=0
-    bin/hxq fmt --verify "$ANYPARSE_HXFORMAT_FORK/src" > "$work/fmt-verify.log" 2>&1 || verify_rc=$?
+    bin/hxq fmt --verify --one-pass "$ANYPARSE_HXFORMAT_FORK/src" > "$work/fmt-verify.log" 2>&1 || verify_rc=$?
     grep 'fmt --verify:' "$work/fmt-verify.log" >&2 || true
     if grep -q 'formatting changed more than whitespace' "$work/fmt-verify.log"; then
         cat "$work/fmt-verify.log" >&2
         fail "fmt --verify found a non-whitespace divergence in $ANYPARSE_HXFORMAT_FORK/src"
+    fi
+    if grep -q 'fmt --one-pass:' "$work/fmt-verify.log"; then
+        grep -e 'fmt --one-pass:' -e 'rewrites to reach its fixed point' "$work/fmt-verify.log" >&2
+        fail "the writer needed more than one rewrite on a file in $ANYPARSE_HXFORMAT_FORK/src"
     fi
     step_end "fmt"
 }
