@@ -178,6 +178,69 @@ class D {
 	}
 
 	/**
+	 * Rebuild `d` with `f` applied to each of its direct `Doc` children,
+	 * returning a childless node unchanged.
+	 *
+	 * Exhaustive on purpose: every wrapper and probe is rebuilt AS ITSELF, so
+	 * a merged arm can never downgrade a rest-aware node to its plain sibling,
+	 * and a ctor added to `Doc` fails to compile here instead of silently
+	 * losing its children on the way through any caller.
+	 */
+	public static function mapChildren(d: Doc, f: Doc -> Doc): Doc {
+		return switch d {
+			case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
+				OptSpaceSkipAfterHardline:
+				d;
+			case Nest(n, inner): Nest(n, f(inner));
+			case Group(inner): Group(f(inner));
+			case GroupWithRestProbe(inner): GroupWithRestProbe(f(inner));
+			case BodyGroup(inner): BodyGroup(f(inner));
+			case Flatten(inner): Flatten(f(inner));
+			case WrapBoundary(inner): WrapBoundary(f(inner));
+			case HardFlatten(inner): HardFlatten(f(inner));
+			case CollapseProbe(inner): CollapseProbe(f(inner));
+			case CollapseAddProbe(inner): CollapseAddProbe(f(inner));
+			case CollapseBoolProbe(inner): CollapseBoolProbe(f(inner));
+			case CollapseChainProbe(inner): CollapseChainProbe(f(inner));
+			case ConditionalMarkerZero(inner): ConditionalMarkerZero(f(inner));
+			case ConditionalMarkerDecrease(inner): ConditionalMarkerDecrease(f(inner));
+			case IfBreak(brk, fl): IfBreak(f(brk), f(fl));
+			case IfWidthExceeds(n, brk, fl): IfWidthExceeds(n, f(brk), f(fl));
+			case IfFirstLineExceeds(n, brk, fl): IfFirstLineExceeds(n, f(brk), f(fl));
+			case IfLineExceeds(n, brk, fl): IfLineExceeds(n, f(brk), f(fl));
+			case IfResidualLineExceeds(n, brk, fl): IfResidualLineExceeds(n, f(brk), f(fl));
+			case IfFullLineExceeds(n, brk, fl): IfFullLineExceeds(n, f(brk), f(fl));
+			case IfNaturalFirstLineExceeds(n, brk, fl): IfNaturalFirstLineExceeds(n, f(brk), f(fl));
+			case IfNaturalFirstLineExceedsWithRest(n, brk, fl): IfNaturalFirstLineExceedsWithRest(n, f(brk), f(fl));
+			case IfNaturalFirstLineFitsOpenDelim(n, brk, fl): IfNaturalFirstLineFitsOpenDelim(n, f(brk), f(fl));
+			case IfArrowContinuationFits(ei, fw, n, brk, fl): IfArrowContinuationFits(ei, fw, n, f(brk), f(fl));
+			case IfIndentWidthExceeds(fw, n, brk, fl): IfIndentWidthExceeds(fw, n, f(brk), f(fl));
+			case IfGluedFirstLineExceeds(n, bi, brk, fl): IfGluedFirstLineExceeds(n, bi, f(brk), f(fl));
+			case Concat(items): Concat([for (it in items) f(it)]);
+			case Fill(items, sep, tr): Fill([for (it in items) f(it)], f(sep), tr);
+			case FillWithRestProbe(items, sep, tr): FillWithRestProbe([for (it in items) f(it)], f(sep), tr);
+			case FillBreakAfterWrap(items, sep, tr): FillBreakAfterWrap([for (it in items) f(it)], f(sep), tr);
+		};
+	}
+
+	/**
+	 * Mark every `Text` leaf of `d` as VERBATIM content, so the renderer
+	 * reproduces its bytes exactly — including a trailing blank run a line
+	 * break would otherwise strand and drop.
+	 *
+	 * One call at the boundary where a subtree is known to be content rather
+	 * than emitted syntax beats marking each leaf: the comment path builds
+	 * some of its Docs here and delegates the rest to a macro-generated
+	 * writer, whose `_dt` calls no hand edit can reach.
+	 */
+	public static function verbatim(d: Doc): Doc {
+		return switch d {
+			case Text(s, _): Text(s, true);
+			case _: mapChildren(d, verbatim);
+		};
+	}
+
+	/**
 	 * Flatten a conditional `If*` kind by descending into its flat branch, or
 	 * `null` when `d` is not an `If*`. Every variant forwards to its flat side —
 	 * the broken branch is moot once an outer `flatten` commits to flat shape.

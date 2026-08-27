@@ -332,7 +332,47 @@ package anyparse.core;
 enum Doc {
 
 	Empty;
-	Text(s: String);
+
+	/**
+	 * A literal string with no line break of its own.
+	 *
+	 * `verbatim` says whether the bytes are CONTENT the writer must
+	 * reproduce exactly (a comment body) or SYNTAX the writer emitted
+	 * (a keyword, an operator, a separator, a delimiter). The renderer
+	 * reads it for one decision and nothing else: a non-verbatim leaf's
+	 * TRAILING blank run is held back and dropped when a line break
+	 * lands on it, so no emitted-syntax space can ever reach a line
+	 * end. A verbatim leaf is written whole, always.
+	 *
+	 * Omitted means syntax, because syntax is what nearly every `Text`
+	 * in the tree is. The mark set is one call — `D.verbatim` over the
+	 * Doc `BlockCommentNormalizer` hands back — where marking the syntax
+	 * side would be an open-ended sweep over every `kwLead`, separator
+	 * and delimiter in the writer; that sweep was measured and refused
+	 * (three `kwLead` sites split producer-side moved none of the nine
+	 * offending lines, and `kwLead` has fourteen more binding sites).
+	 *
+	 * The OTHER comment path — `WriterCodegen`'s line-comment helpers —
+	 * needs no mark, and that is a fact about `LineCommentNormalizer`,
+	 * not about the leaf: it rtrims every `//` body before a Doc exists,
+	 * so such a leaf cannot end in a blank. `WriterTrailingWhitespaceTest`
+	 * pins that, because it is what would have to change first for the
+	 * path to need marking.
+	 *
+	 * The flag is deliberately NOT a separate ctor. Every other `Doc`
+	 * walker — measurement, flattening, the thirteen spine walkers —
+	 * treats a verbatim leaf identically to a syntax one, so a ctor
+	 * would buy thirteen pass-through arms and thirteen chances to get
+	 * one subtly wrong. A trailing optional parameter is invisible to
+	 * `case Text(s)` (Haxe matches a ctor's leading arguments) and to
+	 * `Text(s)` construction, so nothing else in the tree changes.
+	 *
+	 * A `Doc → Doc` rewriter must not rebuild a matched leaf as
+	 * `Text(s)` — that silently demotes content to syntax. Today none
+	 * does: `D.mapChildren` and `D.flatten` both return the original
+	 * node for a `Text`.
+	 */
+	Text(s: String, ?verbatim: Bool);
 	Line(flat: String);
 	Nest(indent: Int, inner: Doc);
 	Group(inner: Doc);
