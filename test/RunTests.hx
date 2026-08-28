@@ -730,6 +730,8 @@ import unit.WrapFlatSourceFixedPointTest;
 import unit.WriteOptionsTest;
 import unit.WriterTrailingWhitespaceTest;
 import utest.Runner;
+import unit.CondRegionLivenessTest;
+import unit.HaxeSpawnTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1303,6 +1305,8 @@ class RunTests {
 		addCase(new FixVerifierGroupTest());
 		addCase(new FixVerifierGroupE2ETest());
 		addCase(new OracleCoverageTest());
+		addCase(new CondRegionLivenessTest());
+		addCase(new HaxeSpawnTest());
 		addCase(new FixVerifierCoverageE2ETest());
 		addCase(new DocCoverageCheckTest());
 		addCase(new UnguardedNullableDerefTest());

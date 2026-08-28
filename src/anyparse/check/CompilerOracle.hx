@@ -1,10 +1,6 @@
 package anyparse.check;
 
-using StringTools;
-
-#if nodejs
-import js.node.ChildProcess.ChildProcessSpawnSyncResult;
-#end
+import anyparse.check.HaxeSpawn.HaxeRun;
 
 /**
  * The verdict of one compiler-oracle typecheck run — `apq lint`'s bridge to
@@ -34,16 +30,26 @@ enum OracleOutcome {
  * WITHOUT a configured `compilerOracle` the compiler is never launched (see
  * `FixVerifier` / `Cli.runLint`).
  *
- * Process spawn is target-conditional: `js.node.ChildProcess.spawnSync` under
- * nodejs (the target `apq` ships on), `sys.io.Process` on a native sys target,
- * and a compile-time `Unavailable` on a pure target with no process API — so
- * the class type-checks under `#if (sys || nodejs)` everywhere while only the
- * nodejs path is exercised in practice. `cwd` is honoured on nodejs;
- * the native sys branch IGNORES it and runs in the process CWD, so an
- * hxml's own relative `-cp` entries resolve against the wrong root there.
+ * The spawn itself is `HaxeSpawn`, shared with the two `-v` probes — the target
+ * conditional, the output buffer and the four ways a run can produce no verdict all
+ * live there. `cwd` is honoured on nodejs; the native sys branch IGNORES it and runs
+ * in the process CWD, so an hxml's own relative `-cp` entries resolve against the
+ * wrong root there (`HaxeSpawn.honoursCwd`).
  */
 @:nullSafety(Strict)
 final class CompilerOracle {
+
+	/**
+	 * Output buffer for the typecheck spawn, in bytes.
+	 *
+	 * Node's default is 1 MiB, and an overflow there is not a lost log line: it arrives as
+	 * a spawn ERROR with a null status and a truncated stream, so a build whose errors run
+	 * long was reported as a rejection quoting a cut-off transcript. `OracleCoverage`
+	 * already pays 256 MiB for a `-v` probe on the same projects; a typecheck's error text
+	 * is far smaller than that, so the cap only ever costs address space that is never
+	 * touched.
+	 */
+	private static inline final ORACLE_BUFFER: Int = 256 * 1024 * 1024;
 
 	/** Total typecheck spawns this process — tests assert 0 when no oracle is configured. */
 	public static var invocations(default, null): Int = 0;
@@ -57,54 +63,17 @@ final class CompilerOracle {
 	 */
 	public static function typecheck(hxml: String, ?cwd: String): OracleOutcome {
 		invocations++;
-		#if nodejs
-		final options: Dynamic = { encoding: 'utf8' };
-		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
-		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', [hxml, '--no-output'], options);
-		final launchError: Null<Dynamic> = (res.error: Dynamic);
-		if (launchError != null) {
-			// ENOBUFS = the compiler out-wrote the default output buffer; a build that
-			// verbose is failing, so treat overflow as a rejection (with the partial
-			// errors) rather than unavailability. Any other spawn error means haxe never
-			// ran (missing binary, permission) -> Unavailable.
-			final code: Null<Dynamic> = Reflect.field(launchError, 'code');
-			return code != null && '$code' == 'ENOBUFS'
-				? Rejected(StringTools.trim(oracleText(res.stderr) + oracleText(res.stdout)))
-				: Unavailable('could not launch haxe (${Reflect.field(launchError, 'message')})');
-		}
-		final status: Null<Int> = (res.status: Null<Int>);
-		return switch (status) {
+		final run: HaxeRun = HaxeSpawn.run([hxml, '--no-output'], cwd, ORACLE_BUFFER);
+		// An overflow is the compiler having RUN and out-written the buffer; a build that
+		// verbose is failing, so it is a rejection carrying the partial errors rather than
+		// unavailability. Every other launch failure means haxe never ran.
+		if (run.overflowed) return Rejected(StringTools.trim(run.err + run.out));
+		if (run.failure != '') return Unavailable(run.failure);
+		return switch (run.status) {
 			case null: Unavailable('haxe exited without a status code');
 			case 0: Confirmed;
-			case _: Rejected(StringTools.trim(oracleText(res.stderr) + oracleText(res.stdout)));
+			case _: Rejected(StringTools.trim(run.err + run.out));
 		};
-		#elseif sys
-		try {
-			final process: sys.io.Process = new sys.io.Process('haxe', [hxml, '--no-output']);
-			// `exitCode()` is `Null<Int>`: null only in the non-blocking form, which this
-			// call is not; a null is still "haxe produced no status", the same Unavailable
-			// the nodejs branch reports for a missing `status`.
-			final code: Null<Int> = process.exitCode();
-			final errText: String = StringTools.trim(process.stderr.readAll().toString() + process.stdout.readAll().toString());
-			process.close();
-			return switch (code) {
-				case null: Unavailable('haxe exited without a status code');
-				case 0: Confirmed;
-				case _: Rejected(errText);
-			};
-		} catch (exception: haxe.Exception) {
-			return Unavailable('could not launch haxe (${exception.message})');
-		}
-		#else
-		return Unavailable('compiler oracle requires a sys or nodejs target');
-		#end
 	}
-
-	#if nodejs
-	/** Coerce a possibly-null spawn stream field (Buffer|String under utf8) to a String. */
-	private static function oracleText(value: Dynamic): String {
-		return value == null ? '' : '$value';
-	}
-	#end
 
 }

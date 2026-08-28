@@ -340,6 +340,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 				}
 			],
 			coverageUnknown: null,
+			coverage: null,
 			tallies: [
 				{
 					rule: 'avoid-dynamic',

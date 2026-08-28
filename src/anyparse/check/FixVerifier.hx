@@ -46,6 +46,16 @@ typedef FixVerifyResult = {
 	var coverageUnknown: Null<String>;
 
 	/**
+	 * The compiled-set probe this run PAID FOR, or null when it never needed one (no risky
+	 * candidate ever existed, or the baseline was not `Confirmed`).
+	 *
+	 * Handed back so the caller's oracle-assisted phase can ask the same question without
+	 * spawning a second `-v` compile — and, more to the point, so that it asks at all: it
+	 * writes annotations and verifies them with the same typecheck, and was ungated.
+	 */
+	var coverage: Null<OracleCoverage>;
+
+	/**
 	 * What each risky check ACHIEVED, one row per (rule, file) it had findings in — see
 	 * `FixVerifyTally`. The lists above answer per FILE and per EVENT, which is the wrong
 	 * shape for the caller's per-RULE fix ledger, and so a `RiskyFix` rule used to add edits
@@ -199,12 +209,13 @@ private enum EntryVerdict {
 	Applied;
 
 	/**
-	 * A candidate WAS produced and then not written: the file sits outside the oracle's
-	 * compiled set, so no typecheck could have judged it. Reached only after the
-	 * canonicalise, which is what keeps the reported count honest — a rule whose edits the
-	 * writer would have refused anyway is `NoChange`, not a decline.
+	 * A candidate WAS produced and then not written, because no typecheck could have
+	 * judged it: `reason` says whether the FILE sits outside the oracle's compiled set or
+	 * the REGION the edits land in is a conditional branch no compiled arm makes live.
+	 * Reached only after the canonicalise, which is what keeps the reported count honest —
+	 * a rule whose edits the writer would have refused anyway is `NoChange`, not a decline.
 	 */
-	Declined;
+	Declined(reason: String);
 	Reverted(cause: FixRevertCause);
 	Partial(appliedEdits: Int, revertedEdits: Int, oracleInvocations: Int, cause: FixRevertCause);
 }
@@ -276,6 +287,7 @@ final class FixVerifier {
 					partials: partials,
 					declined: declined,
 					coverageUnknown: null,
+					coverage: null,
 					tallies: tallies
 				};
 		}
@@ -346,6 +358,7 @@ final class FixVerifier {
 					partials: partials,
 					declined: declined,
 					coverageUnknown: compiled.reason,
+					coverage: compiled,
 					// Emptied to keep the contract `coverageUnknown` states: every list above is
 					// empty here, because an oracle whose compiled set cannot be established proves
 					// nothing about any file. The rows a check produced before the unknown answer
@@ -363,8 +376,8 @@ final class FixVerifier {
 				final verdict: EntryVerdict = verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write, compiled);
 				final landed: Int = switch verdict {
 					case NoChange, SourceNotCanonical: 0;
-					case Declined:
-						// The whole point of this class: a file the oracle never compiles cannot be
+					case Declined(reason):
+						// The whole point of this class: code the oracle never typechecks cannot be
 						// typechecked into safety. Writing the candidate would spend a full compile to
 						// obtain an exit 0 that no edit could have changed, and then report it as
 						// `verified`. Say which file, which rule, and how much went unapplied instead.
@@ -372,8 +385,7 @@ final class FixVerifier {
 							file: entry.file,
 							rule: check.id(),
 							edits: edits.length,
-							reason: 'the compiler oracle does not compile this file'
-							+ ' (its hxml reads ${compiled.size} source file(s), this one not among them)'
+							reason: reason
 						});
 						0;
 					case Applied:
@@ -427,15 +439,20 @@ final class FixVerifier {
 			partials: partials,
 			declined: declined,
 			coverageUnknown: null,
+			coverage: coverageMemo,
 			tallies: tallies
 		};
 	}
 
 	/**
-	 * Speculatively apply `edits` to one file and reconcile with the oracle. A candidate
-	 * whose FILE the oracle does not compile is `Declined` the moment it exists — asked
-	 * after the canonicalise so the verdict distinguishes "no candidate" from "a candidate
-	 * nothing can judge". Otherwise the full set is written and typechecked first:
+	 * Speculatively apply `edits` to one file and reconcile with the oracle.
+	 *
+	 * A candidate the oracle does not TYPECHECK — its file outside the compiled set, or its
+	 * edits inside a conditional branch no compiled arm makes live — is `Declined` the moment
+	 * it exists, carrying which of the two it was; asked after the canonicalise so the verdict
+	 * distinguishes "no candidate" from "a candidate nothing can judge".
+	 *
+	 * Otherwise the full set is written and typechecked first:
 	 * `Confirmed` keeps it (`Applied`);
 	 * `Unavailable` (the oracle cannot run) or a `Rejected` with fewer than two
 	 * UNITS reverts the whole file (`Reverted`). A multi-unit `Rejected` is
@@ -479,7 +496,16 @@ final class FixVerifier {
 		// The candidate exists; whether anything could ever JUDGE it is a separate question,
 		// and it is asked here rather than earlier so that the decline count means what it says:
 		// an edit set the writer would have refused is `NoChange` above, never a decline.
-		if (!coverage.covers(entry.file)) return Declined;
+		// Both ends of every edit, because a set whose first edit is in a live branch and whose
+		// last reaches past an `#else` is no more verifiable than one entirely inside the dead
+		// half — and the whole set is written as one candidate.
+		final touched: Array<Int> = [];
+		for (edit in edits) {
+			touched.push(edit.span.from);
+			touched.push(edit.span.to);
+		}
+		final gap: Null<String> = coverage.uncovered(entry.file, before, touched, plugin.refShape());
+		if (gap != null) return Declined(gap);
 		write(entry.file, fullText);
 		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
 			case Confirmed:

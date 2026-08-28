@@ -48,6 +48,21 @@ final class FixVerifierCoverageE2ETest extends Test {
 		+ '\tstatic function main() {\n\t\trun(new Main());\n\t}\n\n\tstatic function run(a:Main, ?b:Main):Void {\n'
 		+ '\t\tvar x:Dynamic = a;\n\t\tx = b;\n\t\tvar y:Main = x;\n\t\ttrace(y);\n\t}\n\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n';
+
+	/** Both region modules are referenced, so `-main` pulls them into the compiled set. */
+	private static final REGION_MAIN: String =
+		'class Main {\n\n\tstatic function main() {\n\t\tnew Live().run();\n\t\tnew Dead().run();\n\t}\n\n}\n';
+
+	/** The narrowable shape in the branch `-D regionon` KEEPS. */
+	private static final LIVE: String = 'class Live {\n\n\tpublic function new() {}\n\n\tpublic function run():Void {\n'
+		+ '\t\t#if regionon\n\t\tfinal a:Live = new Live();\n\t\tvar x:Dynamic = a;\n\t\tvar y:Live = x;\n\t\ttrace(y);\n'
+		+ '\t\t#else\n\t\ttrace(0);\n\t\t#end\n\t}\n\n}\n';
+
+	/** The SAME shape in the branch it drops — one variable, and the file is compiled either way. */
+	private static final DEAD: String = 'class Dead {\n\n\tpublic function new() {}\n\n\tpublic function run():Void {\n'
+		+ '\t\t#if regionon\n\t\ttrace(0);\n\t\t#else\n\t\tfinal a:Dead = new Dead();\n\t\tvar x:Dynamic = a;\n'
+		+ '\t\tvar y:Dead = x;\n\t\ttrace(y);\n\t\t#end\n\t}\n\n}\n';
+	private static final REGION_HXML: String = '-cp .\n-main Main\n-D regionon\n';
 	/**
 	 * `OTHER`'s shape under an indentation the writer will not settle on — the same findings, but
 	 * `canonicalize` refuses the source before any candidate exists.
@@ -243,6 +258,52 @@ final class FixVerifierCoverageE2ETest extends Test {
 		], result.tallies, 'the drifted file contributes no row, the canonical one still does');
 		Assert.equals(0, result.declined.length, 'and it is not a decline either — no candidate was ever produced');
 		Assert.equals(DRIFTED, File.getContent('$dir/Other.hx'), 'the drifted file is byte-identical');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Direction 6, one level below the other five: two files the oracle BOTH compiles, whose
+	 * `avoid-dynamic` shapes differ only in which `#if` branch they sit in.
+	 *
+	 * A branch the arm's defines exclude is skipped at lex time, so a candidate written there
+	 * cannot fail the typecheck whatever it did — the same vacuity as an uncompiled file, one
+	 * level down, and `covers` answers TRUE for both files. Asserted as a PAIR in one run so
+	 * neither half can be satisfied alone: a gate that refused everything would lose the applied
+	 * narrowing, and one that refused nothing would lose the decline.
+	 */
+	public function testAnExcludedBranchIsDeclinedWhileItsLiveSiblingApplies(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('fixverregion', [
+			{ name: 'Main.hx', source: REGION_MAIN },
+			{ name: 'Live.hx', source: LIVE },
+			{ name: 'Dead.hx', source: DEAD },
+			{ name: 'check.hxml', source: REGION_HXML }
+		]);
+		if (skipWithoutHaxe(dir)) return;
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$dir/Live.hx', source: LIVE },
+			{ file: '$dir/Dead.hx', source: DEAD }
+		];
+		final result: FixVerifyResult = FixVerifier.verify(
+			files,
+			[new AvoidDynamic()],
+			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+		);
+		Assert.same(['$dir/Live.hx'], result.applied, 'the live branch is verified and applied');
+		Assert.equals(1, result.declined.length, 'the excluded branch yields exactly one decline');
+		Assert.equals('$dir/Dead.hx', result.declined[0].file);
+		Assert.isTrue(
+			result.declined[0].reason.indexOf('`#else` of `#if regionon`') != -1,
+			'and the reason NAMES the branch rather than blaming the file: got ${result.declined[0].reason}'
+		);
+		Assert.equals(DEAD, File.getContent('$dir/Dead.hx'), 'nothing was written into the excluded branch');
+		Assert.isTrue(
+			File.getContent('$dir/Live.hx').indexOf('var x:Live = a;\n\t\tvar y:Live = x;') != -1,
+			'and the live branch carries the narrowing'
+		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

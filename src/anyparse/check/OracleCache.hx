@@ -1,13 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.CompilerOracle.OracleOutcome;
+import anyparse.check.HaxeSpawn.HaxeRun;
 import haxe.io.Path;
 
 using StringTools;
-
-#if nodejs
-import js.node.ChildProcess.ChildProcessSpawnSyncResult;
-#end
 
 /**
  * The compile-input tokens one hxml's TEXT declares: its `-cp` classpath roots, its
@@ -132,6 +129,16 @@ private typedef HxmlChain = {
  */
 @:nullSafety(Strict)
 final class OracleCache {
+
+	/**
+	 * Output buffer for the toolchain probe, in bytes. The probe is small — `haxe -v -lib …
+	 * --interp Std` prints a classpath, a defines line and the std modules it typed — but it
+	 * shared node's 1 MiB default with the typecheck spawn until both moved onto
+	 * `HaxeSpawn`, and an overflow there is silent by construction: it comes back as a
+	 * launch error, `probeOutput` answers `''`, `runCompilerProbe` reads that as "not
+	 * believed", and the CACHE simply stops working with nothing said.
+	 */
+	private static inline final PROBE_BUFFER: Int = 256 * 1024 * 1024;
 
 	/** Cap on hxml files followed through include lines — a cycle guard's partner, so a pathological chain cannot spin. */
 	private static inline final MAX_HXML_CHAIN: Int = 32;
@@ -497,31 +504,14 @@ final class OracleCache {
 		return defines == null || dirs.length == 0 ? failed : { ok: true, dirs: dirs, defines: defines };
 	}
 
-	/** One `haxe` spawn for the probe; `''` for every launch failure and every non-zero status, which `runCompilerProbe` then reads as "not believed". */
+	/**
+	 * One `haxe` spawn for the probe through the shared `HaxeSpawn` seam; `''` for every
+	 * launch failure, every overflow and every non-zero status, which `runCompilerProbe`
+	 * then reads as "not believed".
+	 */
 	private static function probeOutput(root: String, args: Array<String>): String {
-		#if nodejs
-		final options: Dynamic = { encoding: 'utf8', cwd: root };
-		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', args, options);
-		final launchError: Null<Dynamic> = (res.error: Dynamic);
-		if (launchError != null) return '';
-		final status: Null<Int> = (res.status: Null<Int>);
-		final out: Dynamic = res.stdout;
-		return status == 0 && out != null ? '$out' : '';
-		#elseif sys
-		try {
-			final process: sys.io.Process = new sys.io.Process('haxe', args);
-			// Drained BEFORE `exitCode()`: the probe writes a line per parsed module, far
-			// more than a pipe buffer holds, and waiting on exit first would deadlock.
-			final text: String = process.stdout.readAll().toString();
-			final code: Null<Int> = process.exitCode();
-			process.close();
-			return code == 0 ? text : '';
-		} catch (_exception: haxe.Exception) {
-			return '';
-		}
-		#else
-		return '';
-		#end
+		final run: HaxeRun = HaxeSpawn.run(args, root, PROBE_BUFFER);
+		return run.failure == '' && run.status == 0 ? run.out : '';
 	}
 
 	/** `path` resolved against the compile root when relative, normalised either way — the one spelling every key and memo is written in. */
