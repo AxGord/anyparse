@@ -48,6 +48,12 @@ final class FixVerifierCoverageE2ETest extends Test {
 		+ '\tstatic function main() {\n\t\trun(new Main());\n\t}\n\n\tstatic function run(a:Main, ?b:Main):Void {\n'
 		+ '\t\tvar x:Dynamic = a;\n\t\tx = b;\n\t\tvar y:Main = x;\n\t\ttrace(y);\n\t}\n\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n';
+	/**
+	 * `OTHER`'s shape under an indentation the writer will not settle on — the same findings, but
+	 * `canonicalize` refuses the source before any candidate exists.
+	 */
+	private static final DRIFTED: String = 'class Other {\n    public function new() {}\n    public function run():Void {\n'
+		+ '        final a:Other = new Other();\n        var x:Dynamic = a;\n        var y:Other = x;\n        trace(y);\n' + '    }\n}\n';
 	#end
 
 	/** Direction 1: outside the compiled set — declined, untouched, and named. */
@@ -100,6 +106,23 @@ final class FixVerifierCoverageE2ETest extends Test {
 		Assert.equals(1, result.reverted.length, 'it is REVERTED — the compiler read it and refused it');
 		Assert.equals('$dir/Main.hx', result.reverted[0].file);
 		Assert.isTrue(result.reverted[0].cause.match(OracleRejected), 'and the cause is the compiler, not a coverage gap');
+		// The `Reverted` arm of the tally arithmetic, which no other test fills: a candidate the
+		// compiler read and refused reached disk with ZERO edits surviving, however many it had.
+		// Beside it the uncovered file's `Declined` row, so neither can satisfy the other.
+		Assert.same([
+			{
+				rule: 'avoid-dynamic',
+				file: '$dir/Main.hx',
+				findings: 1,
+				edits: 0
+			},
+			{
+				rule: 'avoid-dynamic',
+				file: '$dir/Other.hx',
+				findings: 1,
+				edits: 0
+			}
+		], result.tallies);
 		Assert.equals(BREAKS, File.getContent('$dir/Main.hx'), 'the compiled file is restored byte for byte');
 		CliFixture.removeDir(dir);
 		#else
@@ -134,6 +157,92 @@ final class FixVerifierCoverageE2ETest extends Test {
 		Assert.equals(0, result.declined.length, 'no per-file declines — one fact about the oracle, not one per candidate');
 		Assert.equals(MAIN, File.getContent('$dir/Main.hx'), 'even the compiled file is left alone');
 		Assert.equals(OTHER, File.getContent('$dir/Other.hx'));
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Direction 5, and the reason the other four could not answer it: what each RULE achieved.
+	 *
+	 * `applied` / `reverted` / `declined` answer per FILE and per EVENT, which is the wrong shape
+	 * for the caller's per-rule fix ledger — so a `RiskyFix` rule contributed EDITS to a
+	 * `lint --fix` summary and never a FINDING to the block that says what got no edit, and the two
+	 * numbers a reader compares were measured over two different rule sets. `tallies` is that shape,
+	 * and both directions of the same run have to appear in it: the covered file with its edit
+	 * landed, the uncovered one with its findings and nothing landed.
+	 *
+	 * Asserted as the whole array in one `same`, so neither row can be satisfied by the other.
+	 */
+	public function testEachRulesFindingsAndLandedEditsAreTallied(): Void {
+		#if (sys || nodejs)
+		final dir: String = pairDir(MAIN);
+		if (skipWithoutHaxe(dir)) return;
+		final result: FixVerifyResult = verifyPair(dir, MAIN);
+		Assert.same([
+			{
+				rule: 'avoid-dynamic',
+				file: '$dir/Main.hx',
+				findings: 1,
+				edits: 1
+			},
+			{
+				rule: 'avoid-dynamic',
+				file: '$dir/Other.hx',
+				findings: 1,
+				edits: 0
+			}
+		], result.tallies);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A source the WRITER will not settle on is not this check's decline, and gets no tally at all.
+	 *
+	 * `verifyEntry` reaches `canonicalize` before anything else, and with `reformat = false` that
+	 * REFUSES a source which is not already the writer's fixed point: nothing is spliced, nothing is
+	 * typechecked, and nothing whatever is learned about the check. On a tree nobody has run `fmt`
+	 * over, that is the common answer rather than the exceptional one.
+	 *
+	 * A tally row for it would be `edits: 0`, which the caller's ledger reads as a DECLINE — and
+	 * since no `declined` / `reverted` entry exists to quote, the run then printed `its fix was
+	 * called for these findings and returned no edit` against a check it never asked. So the verdict
+	 * carries its own constructor now and this row is the one that is never pushed.
+	 *
+	 * Asserted against the covered file's row in the same array, so a run that tallied NOTHING would
+	 * fail it too.
+	 */
+	public function testADriftedSourceIsNotTalliedAtAll(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('fixverdrift', [
+			{ name: 'Main.hx', source: MAIN },
+			{ name: 'Other.hx', source: DRIFTED },
+			{ name: 'check.hxml', source: HXML }
+		]);
+		if (skipWithoutHaxe(dir)) return;
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$dir/Main.hx', source: MAIN },
+			{ file: '$dir/Other.hx', source: DRIFTED }
+		];
+		final result: FixVerifyResult = FixVerifier.verify(
+			files,
+			[new AvoidDynamic()],
+			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+		);
+		Assert.same([
+			{
+				rule: 'avoid-dynamic',
+				file: '$dir/Main.hx',
+				findings: 1,
+				edits: 1
+			}
+		], result.tallies, 'the drifted file contributes no row, the canonical one still does');
+		Assert.equals(0, result.declined.length, 'and it is not a decline either — no candidate was ever produced');
+		Assert.equals(DRIFTED, File.getContent('$dir/Other.hx'), 'the drifted file is byte-identical');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

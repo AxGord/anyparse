@@ -1,6 +1,7 @@
 package unit;
 
 import anyparse.check.Check;
+import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -240,5 +241,133 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	/**
+	 * A risky rule's findings reach the fix ledger, with the verifier's own sentence.
+	 *
+	 * The gap this closes: `FixVerifier` is the only place a `RiskyFix` check's fix is ever
+	 * called, and it never received the ledger — so with a `compilerOracle` configured those 13
+	 * rules put EDITS into the summary count and never a FINDING into the block that says what got
+	 * no edit, and the block had to disclaim them instead of answering. The fold is asserted here
+	 * off a constructed result rather than a real verification, because what has to hold is the
+	 * ARITHMETIC (findings to `reported`, landed edits to `edits`, a file that landed none to
+	 * `declined` under its recorded reason); whether the verifier fills the tallies correctly is
+	 * `FixVerifierCoverageE2ETest`'s question, against the real compiler.
+	 *
+	 * At base `Cli.ledgerRiskyTallies` does not exist and the file does not compile.
+	 */
+	public function testARiskyRulesTalliesBecomeItsLedgerRow(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = [];
+		Cli.ledgerRiskyTallies(ledger, riskyResult());
+		final row: Null<RuleFixOutcome> = ledger['avoid-dynamic'];
+		if (row == null) {
+			Assert.fail('the risky rule has no ledger row');
+			return;
+		}
+		Assert.equals(10, row.reported, 'every finding the phase saw, across all four files');
+		Assert.equals(2, row.edits, 'and only the edits that landed');
+		Assert.equals(8, row.declined, 'the findings in every file where none landed');
+		// One row per distinct SENTENCE, from both of the verifier's lists — and the fourth file,
+		// which is in neither, contributes findings to `declined` and no sentence at all. A run that
+		// invented one for it, or that dropped the revert's, fails here.
+		Assert.same([
+			{ text: 'the compiler oracle does not compile this file', count: 3 },
+			{ text: 'the compiler rejected it', count: 1 }
+		], row.reasons);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The ledger stops disclaiming the risky rules once it has rows for them.
+	 *
+	 * One sentence, two states, and the pair is the pin: handed the risky ids the block names them
+	 * as absent, handed none it says nothing about them at all — which is what `printUnfixedLedger`
+	 * passes on a run whose risky phase actually ran (`RiskyFixOutcome.ledgered`). RED at base on
+	 * both halves: the wording there is unconditional and claims the rules "never enter this
+	 * ledger", a sentence that is now false exactly when the ledger holds their row.
+	 */
+	public function testTheRiskyDisclaimerIsOnlyForAPhaseThatDidNotRun(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = [];
+		Cli.ledgerRiskyTallies(ledger, riskyResult());
+		final declared: Map<String, String> = [];
+		final absent: String = Cli.unfixedFixLedger(ledger, declared, [], ['avoid-dynamic']).join('');
+		Assert.isTrue(absent.indexOf('the risky-fix path never ran them this run') != -1, 'a phase that did not run says so: $absent');
+		final present: String = Cli.unfixedFixLedger(ledger, declared, [], []).join('');
+		Assert.isTrue(present.indexOf('risky-fix path') == -1, 'a phase that ran leaves the disclaimer off: $present');
+		Assert.isTrue(present.indexOf('avoid-dynamic 8 of 10:') != -1, 'and its row is what the reader gets instead: $present');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	#if (sys || nodejs)
+	/**
+	 * One risky-fix phase's outcome, shaped to exercise all THREE reason states of the fold in one
+	 * call: `avoid-dynamic` landed both its edits in a covered file, landed none in a file the oracle
+	 * does not compile (reason in `declined`), none in a file the compiler read and refused (reason in
+	 * `reverted`, via `revertCauseText`), and none in a file that is in NEITHER list — an edit set that
+	 * canonicalised back to its own source, which declines with nothing to quote.
+	 *
+	 * That last row is the one the fold got wrong first time round and the one a hand-built fixture is
+	 * for: it is the shape `riskyDeclineReason` answers null for, and the shape whose real producer
+	 * (`SourceNotCanonical`) is now excluded upstream instead. Built by hand rather than verified for
+	 * real, so the ARITHMETIC is measured on its own; whether the verifier fills these rows correctly is
+	 * `FixVerifierCoverageE2ETest`'s question, against the real compiler.
+	 */
+	private static function riskyResult(): FixVerifyResult {
+		return {
+			baseline: Confirmed,
+			applied: ['Covered.hx'],
+			appliedEdits: 2,
+			reverted: [
+				{
+					file: 'Rejected.hx',
+					rule: 'avoid-dynamic',
+					cause: OracleRejected
+				}
+			],
+			partials: [],
+			declined: [
+				{
+					file: 'Uncovered.hx',
+					rule: 'avoid-dynamic',
+					edits: 3,
+					reason: 'the compiler oracle does not compile this file'
+				}
+			],
+			coverageUnknown: null,
+			tallies: [
+				{
+					rule: 'avoid-dynamic',
+					file: 'Covered.hx',
+					findings: 2,
+					edits: 2
+				},
+				{
+					rule: 'avoid-dynamic',
+					file: 'Uncovered.hx',
+					findings: 3,
+					edits: 0
+				},
+				{
+					rule: 'avoid-dynamic',
+					file: 'Rejected.hx',
+					findings: 1,
+					edits: 0
+				},
+				{
+					rule: 'avoid-dynamic',
+					file: 'Silent.hx',
+					findings: 4,
+					edits: 0
+				}
+			]
+		};
+	}
+	#end
 
 }

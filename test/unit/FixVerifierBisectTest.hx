@@ -124,15 +124,20 @@ class FixVerifierBisectTest extends Test {
 		];
 		var written: Int = 0;
 		// A coverage that covers NOTHING, which pins the ORDER the two gates run in: the
-		// canonical gate answers first, so an edit set the writer refuses stays `NoChange` and
-		// never becomes a coverage decline. Reverse them and this reads `Declined`.
+		// canonical gate answers first, so a source the writer refuses stays `SourceNotCanonical`
+		// and never becomes a coverage decline. Reverse them and this reads `Declined`.
 		final verdict = FixVerifier.verifyEntry(
 			entry, edits, new HaxeQueryPlugin(), null, 'no-such-oracle.hxml', null, (_, _) -> written++,
 			OracleCoverage.unknown('covers nothing — the canonical gate must answer first')
 		);
 		Assert.equals(0, written, 'nothing may be written when no candidate was produced');
+		// Its OWN constructor, not `NoChange`. Both mean "no candidate", but only one of them is a
+		// statement about the CHECK, and `FixVerifier.verify` tallies for the caller's fix ledger off
+		// exactly this distinction — a `NoChange` row is a decline the rule owns, while this one is
+		// the tree's formatting state and must reach no row at all.
 		Assert.equals(
-			'NoChange', verdict.getName(), 'a source the tree never canonicalised says nothing about the check — it is not a revert'
+			'SourceNotCanonical', verdict.getName(),
+			'a source the tree never canonicalised says nothing about the check — it is neither a revert nor its decline'
 		);
 		Assert.isFalse(
 			FixVerifier.isWriterCanonical(entry.source, new HaxeQueryPlugin(), null),

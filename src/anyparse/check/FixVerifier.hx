@@ -44,6 +44,44 @@ typedef FixVerifyResult = {
 	 * empty — an oracle whose coverage is unknown proves nothing about any file.
 	 */
 	var coverageUnknown: Null<String>;
+
+	/**
+	 * What each risky check ACHIEVED, one row per (rule, file) it had findings in — see
+	 * `FixVerifyTally`. The lists above answer per FILE and per EVENT, which is the wrong
+	 * shape for the caller's per-RULE fix ledger, and so a `RiskyFix` rule used to add edits
+	 * to the run's count and never a finding to the block that says what went unfixed.
+	 */
+	var tallies: Array<FixVerifyTally>;
+}
+
+/**
+ * What ONE risky check achieved in ONE file: the findings it reported there, and the edits that
+ * LANDED for them.
+ *
+ * The shape the caller's fix ledger is keyed by, and the reason it exists: `Cli`'s ledger is filled
+ * by the safe loop alone, so with a `compilerOracle` configured the 13 `RiskyFix` rules contributed
+ * EDITS to the run's summary count and never a FINDING to the per-rule block that says what got no
+ * edit — the two numbers a reader compares were measured over two different rule sets.
+ *
+ * `edits == 0` is a decline, and WHY is in `reverted` / `declined` under the same (file, rule) pair
+ * when the verifier has an answer; carrying that sentence a second time here would be a second copy
+ * of `revertCauseText` in this package. It can legitimately be in NEITHER list — an edit set that
+ * canonicalised back to the original source declines with nothing to quote. What never reaches a row
+ * at all is `SourceNotCanonical`: that one is not the check's decline, it is the tree's formatting
+ * state, and folding it in charged the rule for it.
+ *
+ * A row per FILE rather than per rule, because that is where the verdict is taken — a rule can be
+ * applied in one file and reverted in the next, and one row per rule could state only one of them.
+ */
+typedef FixVerifyTally = {
+	var rule: String;
+	var file: String;
+
+	/** Findings this check reported in this file — the `reported` half of a ledger row. */
+	var findings: Int;
+
+	/** Edits that survived to disk: the full set, the kept complement of a bisect, or 0. */
+	var edits: Int;
 }
 
 /**
@@ -146,6 +184,18 @@ typedef FixVerifyPartial = {
  */
 private enum EntryVerdict {
 	NoChange;
+
+	/**
+	 * No candidate was produced because the SOURCE is not the writer's fixed point, so
+	 * nothing was spliced and nothing whatever was learned about this check.
+	 *
+	 * Apart from `NoChange` because the caller's fix ledger must not read it as a decline. A
+	 * decline is a fact about the RULE; this is a fact about the tree's formatting, on which
+	 * the rule has no opinion — and on a tree nobody has run `fmt` over it is the common
+	 * answer, not the exceptional one. Folded in as a decline it printed `its fix was called
+	 * for these findings and returned no edit` against a check that was never asked.
+	 */
+	SourceNotCanonical;
 	Applied;
 
 	/**
@@ -209,6 +259,10 @@ final class FixVerifier {
 		final reverted: Array<FixVerifyRevert> = [];
 		final partials: Array<FixVerifyPartial> = [];
 		final declined: Array<FixVerifyDecline> = [];
+		// One row per (rule, file) the check reported in, filled at every exit from the
+		// per-entry switch below — including the `continue` for a check that answered no edit
+		// at all, which is a decline like any other and the one the caller could least see.
+		final tallies: Array<FixVerifyTally> = [];
 		var appliedEdits: Int = 0;
 		final baseline: OracleOutcome = CompilerOracle.typecheck(oracleHxml, oracleDir);
 		switch baseline {
@@ -221,7 +275,8 @@ final class FixVerifier {
 					reverted: reverted,
 					partials: partials,
 					declined: declined,
-					coverageUnknown: null
+					coverageUnknown: null,
+					tallies: tallies
 				};
 		}
 		// LAZY on purpose: the probe is a compile, and a run whose risky checks find nothing
@@ -268,7 +323,17 @@ final class FixVerifier {
 					: [
 						for (e in check.fix(entry.source, own, plugin, index)) { span: e.span, text: e.text, group: null }
 					];
-				if (edits.length == 0) continue;
+				if (edits.length == 0) {
+					// The check was asked for these findings and answered nothing — a decline, and
+					// the only one no other list in this result records.
+					tallies.push({
+						rule: check.id(),
+						file: entry.file,
+						findings: own.length,
+						edits: 0
+					});
+					continue;
+				}
 				// The coverage question, asked BEFORE anything is written. `compiledSet` memoises,
 				// so its knownness cannot change mid-loop: an unknown answer is therefore always the
 				// first one, and returning here can never abandon an already-applied candidate.
@@ -280,11 +345,24 @@ final class FixVerifier {
 					reverted: reverted,
 					partials: partials,
 					declined: declined,
-					coverageUnknown: compiled.reason
+					coverageUnknown: compiled.reason,
+					// Emptied to keep the contract `coverageUnknown` states: every list above is
+					// empty here, because an oracle whose compiled set cannot be established proves
+					// nothing about any file. The rows a check produced before the unknown answer
+					// arrived are the only ones that could be non-empty, and a partial ledger reads
+					// as "these rules declined here" about a phase that stopped. The caller gates on
+					// `coverageUnknown` and never folds these, so this is the value agreeing with
+					// the contract rather than a second gate.
+					tallies: []
 				};
 				final opts: Null<String> = optsByFile == null ? null : optsByFile[entry.file];
-				switch verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write, compiled) {
-					case NoChange:
+				// The verdict answers HOW MANY of this check's edits reached disk, because that
+				// is the one thing the caller's ledger row turns on: zero is a decline whatever
+				// the reason, and the reason is already in `declined` / `reverted` under the same
+				// (file, rule) pair.
+				final verdict: EntryVerdict = verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write, compiled);
+				final landed: Int = switch verdict {
+					case NoChange, SourceNotCanonical: 0;
 					case Declined:
 						// The whole point of this class: a file the oracle never compiles cannot be
 						// typechecked into safety. Writing the candidate would spend a full compile to
@@ -297,15 +375,18 @@ final class FixVerifier {
 							reason: 'the compiler oracle does not compile this file'
 							+ ' (its hxml reads ${compiled.size} source file(s), this one not among them)'
 						});
+						0;
 					case Applied:
 						applied.push(entry.file);
 						appliedEdits += edits.length;
+						edits.length;
 					case Reverted(cause):
 						reverted.push({
 							file: entry.file,
 							rule: check.id(),
 							cause: cause
 						});
+						0;
 					case Partial(keptEdits, revertedEdits, probes, cause):
 						appliedEdits += keptEdits;
 						if (keptEdits > 0)
@@ -323,7 +404,19 @@ final class FixVerifier {
 							revertedEdits: revertedEdits,
 							oracleInvocations: probes
 						});
-				}
+						keptEdits;
+				};
+				// NOT for `SourceNotCanonical`. Every other verdict is something the check
+				// answered — a candidate applied, reverted, declined, or an edit set that
+				// changed nothing — and a row with `edits == 0` is read downstream as a
+				// decline. That one is the tree's formatting state, on which the check was
+				// never asked, and folding it in charged the rule for it.
+				if (!verdict.match(SourceNotCanonical)) tallies.push({
+					rule: check.id(),
+					file: entry.file,
+					findings: own.length,
+					edits: landed
+				});
 			}
 		}
 		return {
@@ -333,7 +426,8 @@ final class FixVerifier {
 			reverted: reverted,
 			partials: partials,
 			declined: declined,
-			coverageUnknown: null
+			coverageUnknown: null,
+			tallies: tallies
 		};
 	}
 
@@ -380,7 +474,7 @@ final class FixVerifier {
 		final fullText: String = switch RefactorSupport.canonicalize(before, full, false, plugin, opts) {
 			case Ok(text) if (text != before): text;
 			case Ok(_): return NoChange;
-			case Err(message): return isWriterCanonical(before, plugin, opts) ? Reverted(NotCanonical(message)) : NoChange;
+			case Err(message): return isWriterCanonical(before, plugin, opts) ? Reverted(NotCanonical(message)) : SourceNotCanonical;
 		};
 		// The candidate exists; whether anything could ever JUDGE it is a separate question,
 		// and it is asked here rather than earlier so that the decline count means what it says:

@@ -492,6 +492,20 @@ final class Cli {
 
 	private static inline final SKIP_PATHS_SHOWN: Int = 5;
 
+	/**
+	 * The suffix every write is staged through, on the far side of the extension on purpose:
+	 * a `.hx.apq-tmp` a killed process left behind is invisible to every `*.hx` walk this tool
+	 * does, where a `.apq-tmp.hx` would be linted, formatted and reported as a source file.
+	 */
+	private static inline final STAGED_WRITE_SUFFIX: String = '.apq-tmp';
+
+	/**
+	 * The mode bits a staged temporary inherits from the target it will replace: 07777, so the
+	 * setuid / setgid / sticky trio travels with the nine permission bits rather than being dropped
+	 * by the rename. Inert on a `.hx` source and free to carry.
+	 */
+	private static inline final PERMISSION_BITS: Int = 0xFFF;
+
 	/** How many rule ids `unfixedFixLedger` names before it summarises the rest as a count. */
 	private static inline final DECLINED_RULES_SHOWN: Int = 6;
 
@@ -631,8 +645,38 @@ final class Cli {
 		#end
 	}
 
-	/** Pure-argv entry. Returns process exit code. */
+	/**
+	 * Pure-argv entry. Returns process exit code.
+	 *
+	 * The one place a `WriteFailure` becomes an exit code again. `writeFile` WAS reached from 31
+	 * call sites in this class and from `FixVerifier`'s candidate writes, and only one of them —
+	 * `formatOneFile` — caught anything: one unwritable file took the whole run down with a raw
+	 * host error, no summary line, and part of the tree already rewritten. Catching at each site
+	 * would be 31 catches that each have to decide what their op does next; catching here is the
+	 * answer every one of them would have given — say which file, and exit non-zero.
+	 *
+	 * Only this exception. An internal error still reaches the reader as a stack trace, which is
+	 * what a bug wants.
+	 */
 	public static function run(args: Array<String>): Int {
+		try
+			return dispatch(args)
+		catch (failure: WriteFailure) {
+			// Named with the subcommand, like every other line the CLI prints: a bare `apq:` costs
+			// a script the identity of the op that failed, and `args[0]` is the op by construction
+			// (the empty / `--help` argv returned above).
+			stderr('apq ${args[0]}: ${failure.message}\n');
+			return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * The subcommand switch — every op's entry, and the whole of what `run` wraps.
+	 *
+	 * Separate from `run` so the write-failure catch has somewhere to sit that is not inside 100
+	 * arms: the split is the catch, and nothing else moved.
+	 */
+	private static function dispatch(args: Array<String>): Int {
 		if (args.length == 0 || args[0] == '-h' || args[0] == '--help') {
 			printUsage();
 			return EXIT_OK;
@@ -1488,7 +1532,7 @@ final class Cli {
 				var totalOccurrences: Int = 0;
 				for (c in changes) totalOccurrences += c.count;
 				if (write) {
-					for (c in changes) writeFile(c.file, c.newSource);
+					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
 					stderr('apq rename: wrote ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
 				} else {
 					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
@@ -2197,12 +2241,9 @@ final class Cli {
 		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
 		// otherwise left report-only. With no risky check present this block is a
 		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
-		final risky: {
-			tail: String,
-			appliedCount: Int,
-			reverts: Array<FixVerifyRevert>,
-			declines: Array<FixVerifyDecline>
-		} = verifyRiskyFixes(files, split.risky, cached, oracleHxml, oracleDir, optsByFile, changedFiles);
+		final risky: RiskyFixOutcome = verifyRiskyFixes(
+			files, split.risky, cached, oracleHxml, oracleDir, optsByFile, changedFiles, ledger
+		);
 		fixedCount += risky.appliedCount;
 		final riskyTail: String = risky.tail;
 
@@ -2245,7 +2286,7 @@ final class Cli {
 		// run, which the tail it replaces did not — `fixed 0` was the only trigger, so this 668-fix
 		// tree said nothing whatever about the 161 findings it declined, and a productive run is
 		// exactly where the misreading lands.
-		printUnfixedLedger(ledger, checks, split.risky, oracleAssisted);
+		printUnfixedLedger(ledger, checks, split.risky, oracleAssisted, risky.ledgered);
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
 		// md5 snapshot before and after plus one run per candidate rule.
@@ -5769,13 +5810,163 @@ final class Cli {
 		#end
 	}
 
+	/**
+	 * Write `content` to `path` — through a temporary beside the target, never into the target
+	 * itself. One file is a change set of one, so this is `writeFiles` of a single member.
+	 *
+	 * `File.saveContent` opens with truncation, so a write that fails PART WAY leaves the source
+	 * file destroyed rather than unchanged. Measured on a 10 MB volume filled to zero free blocks:
+	 * `fmt --write` over five files reported `rewrote 3 of 5 file(s), 2 failed` and left the two
+	 * failures at 0 bytes — the per-file catch turns the crash into a message and then goes on to
+	 * the next file, so a full disk zeroes a tree one source file at a time. Staging the bytes
+	 * beside the target and renaming them into place makes each write all-or-nothing: the same run
+	 * leaves every file byte-identical and still reports.
+	 *
+	 * The rename is what costs something, and it is paid for deliberately — see `stageWrite` for
+	 * the writability probe, the symlink resolution and the mode copy that keep it from defeating a
+	 * read-only file, replacing a link, or flattening a file's permission bits.
+	 */
 	private static function writeFile(path: String, content: String): Void {
+		writeFiles([
+			{
+				path: path,
+				content: content
+			}
+		]);
+	}
+
+	/**
+	 * Write a whole change set, or none of it.
+	 *
+	 * Every file is staged first and only then renamed into place, so a set one member of
+	 * which cannot be written leaves the tree exactly as it found it. Without that a
+	 * `rename --scope` over five files whose third is unwritable committed the first two
+	 * and died — and a rename applied to some of its files is not a partial success, it is
+	 * a tree that no longer compiles.
+	 *
+	 * The commit loop can still fail part way and nothing could undo that: by then the
+	 * originals are gone. It is the narrow half of the window — a rename into a directory
+	 * this process has just created a file in — while the whole of ENOSPC, EACCES and a
+	 * read-only target is decided in the staging loop above it.
+	 */
+	private static function writeFiles(writes: Array<{ path: String, content: String }>): Void {
 		#if (sys || nodejs)
-		File.saveContent(path, content);
+		final staged: Array<StagedWrite> = [];
+		try {
+			for (w in writes) staged.push(stageWrite(w.path, w.content));
+		} catch (failure: WriteFailure) {
+			for (pending in staged) discardStage(pending.staged);
+			throw failure;
+		}
+		for (i in 0...staged.length) try commitStagedWrite(staged[i]) catch (failure: WriteFailure) {
+			// The renames already done cannot be undone — the originals are gone. What CAN be
+			// tidied is the tail nobody has moved yet, and it must be: an ordinary handled error
+			// would otherwise leave a `.apq-tmp` beside every remaining member of the set, which
+			// is the one thing the suffix's own doc treats as a killed-process artefact.
+			for (j in i + 1...staged.length) discardStage(staged[j].staged);
+			throw failure;
+		}
 		#else
 		throw 'apq: file IO requires a sys target';
 		#end
 	}
+
+	#if (sys || nodejs)
+	/**
+	 * Stage `content` for `path` in a sibling temporary, answering the pair `commitStagedWrite`
+	 * renames into place.
+	 *
+	 * Three things a rename changes that an in-place write does not, and every one is repaired
+	 * here rather than accepted, because a seat every write in this class goes through cannot
+	 * afford to behave differently from the call it replaces:
+	 *
+	 * - A SYMLINK. `File.saveContent` writes THROUGH it; a rename replaces it with a regular file
+	 *   and the link is gone. `FileSystem.fullPath` resolves it first, so the bytes land on the
+	 *   same file the in-place write would have hit.
+	 * - A READ-ONLY file. `rename(2)` needs write permission on the DIRECTORY, not on the file, so
+	 *   a naked stage-and-rename silently overwrites a `chmod 444` file that `File.saveContent`
+	 *   refuses with EACCES. Opening the target for append asks the kernel the same question the
+	 *   in-place write asked, and writes nothing.
+	 * - The MODE. A fresh temporary is created under the process umask, so renaming it over an
+	 *   0755 file leaves 0644. Copied across before the rename — but on NODE only: `sys.FileSystem`
+	 *   exposes no chmod, and the guard below says why that gap is recorded rather than closed.
+	 *
+	 * One difference survives, deliberately: a writable file inside a read-only DIRECTORY can no
+	 * longer be rewritten, because there is nowhere beside it to stage. Falling back to the
+	 * in-place write there would put the truncation window back exactly where this seat exists to
+	 * close it, so the write fails and names the reason instead.
+	 *
+	 * The staging path is `<target>.apq-tmp`, derived and not randomised, which is what lets a test
+	 * block it with a directory and pin the mechanism. Two apq PROCESSES writing the same file
+	 * concurrently therefore share a temporary — already undefined behaviour before this change,
+	 * since both used to truncate the same target, but the failure is now a spurious `ENOENT` on
+	 * the loser rather than interleaved bytes.
+	 */
+	private static function stageWrite(path: String, content: String): StagedWrite {
+		// INSIDE the try, both of them: a `fullPath` that throws (the file vanishing between the
+		// two calls) would otherwise escape as a bare `Exception`, miss `run`'s WriteFailure-only
+		// catch, and produce exactly the raw host trace this seat exists to remove.
+		var target: String = path;
+		var staged: String = path + STAGED_WRITE_SUFFIX;
+		try {
+			target = FileSystem.exists(path) ? FileSystem.fullPath(path) : path;
+			staged = target + STAGED_WRITE_SUFFIX;
+			// The kernel's own answer to the question `File.saveContent` used to ask, asked
+			// before anything is staged: `open(…, 'a')` needs W_OK on the file and writes nothing.
+			final mode: Null<Int> = if (FileSystem.exists(target)) {
+				File.append(target, true).close();
+				FileSystem.stat(target).mode & PERMISSION_BITS;
+			} else
+				null;
+			File.saveContent(staged, content);
+			// NODE ONLY, and the doc above says so: `sys.FileSystem` has no chmod, so a target
+			// without `js.node.Fs` cannot put the mode back and a staged write there resets it to
+			// the umask default. js/node is the only runner this CLI ships on, and nothing builds
+			// `Cli` for another target — `tools/jvm-portability.hxml` never reaches this module —
+			// so the gap is recorded rather than papered over with a per-write `chmod` process.
+			#if nodejs
+			if (mode != null) js.node.Fs.chmodSync(staged, mode);
+			#end
+		} catch (exception: Exception) {
+			discardStage(staged);
+			// `path`, not the resolved `target`: every other line this CLI prints names a file the
+			// way the caller spelled it, and a diagnostic that suddenly answers in absolute
+			// symlink-resolved form reads as being about a different file.
+			throw new WriteFailure(path, exception.message);
+		}
+		return {
+			staged: staged,
+			target: target,
+			asked: path
+		};
+	}
+
+	/**
+	 * Move a staged temporary onto its target, or report the file — never the temporary — as unwritable. The host message it quotes can still name the temporary; the path this CLI prints is the one the caller gave.
+	 */
+	private static function commitStagedWrite(pending: StagedWrite): Void {
+		try FileSystem.rename(pending.staged, pending.target) catch (exception: Exception) {
+			discardStage(pending.staged);
+			throw new WriteFailure(pending.asked, exception.message);
+		}
+	}
+
+	/**
+	 * Drop a staged temporary.
+	 *
+	 * Best effort by construction: every caller is already reporting a write failure, and a
+	 * temporary that cannot be removed must not replace the diagnostic the caller is
+	 * carrying with one about the cleanup.
+	 */
+	private static function discardStage(staged: String): Void {
+		try {
+			if (FileSystem.exists(staged)) FileSystem.deleteFile(staged);
+		} catch (exception: Exception) { // noqa: swallowed-exception
+			// Deliberately swallowed — see the doc above: this runs only while a `WriteFailure` is
+			// already on its way out, and a cleanup that cannot finish must not replace it.
+		}
+	}
+	#end
 
 	/**
 	 * Read all bytes from stdin and decode as UTF-8 source. Used by
@@ -11459,8 +11650,13 @@ final class Cli {
 				// the count never reaches the reader. Read failures were caught here from
 				// the start; the write side was not, and a read-only file is the ordinary
 				// way to meet it.
-				try writeFile(path, formatted) catch (exception: Exception) {
-					stderr('apq fmt: $path: ${exception.message}\n');
+				//
+				// It stays a per-file failure only because the write is now all-or-nothing.
+				// Continuing past a TRUNCATING write is what turned a full disk into a tree
+				// of empty source files: measured, five files on a volume with no free
+				// blocks gave `rewrote 3 of 5 file(s), 2 failed` and two files of 0 bytes.
+				try writeFile(path, formatted) catch (failure: WriteFailure) {
+					stderr('apq fmt: ${failure.message}\n');
 					return {
 						changed: false,
 						failed: true,
@@ -11569,7 +11765,7 @@ final class Cli {
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
-					for (c in changes) writeFile(c.file, c.newSource);
+					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
 					stderr('apq $cmd: wrote ${changes.length} file(s)\n');
 				} else {
 					for (c in changes) {
@@ -12268,10 +12464,17 @@ final class Cli {
 				case Ok(text, rewrites):
 					warnRewrites(op, path, rewrites);
 					final isChanged: Bool = text != source;
+					// Symmetric with the `readFile` catch at the head of this loop, and safe to
+					// continue on now that a failed write leaves its file byte-identical: this op
+					// walks a file set, so one unwritable member is a per-file failure like an
+					// unreadable one, not a reason to abandon the rest.
 					if (write) {
-						if (isChanged) {
+						if (isChanged) try {
 							writeFile(path, text);
 							changed++;
+						} catch (failure: WriteFailure) {
+							stderr('apq comment-rewrite: ${failure.message}\n');
+							failed++;
 						}
 					} else if (listMode) {
 						if (isChanged) {
@@ -13011,7 +13214,7 @@ final class Cli {
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
-					for (c in changes) writeFile(c.file, c.newSource);
+					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
 					stderr('apq extract-interface: wrote ${changes.length} file(s)\n');
 				} else {
 					for (c in changes) sysPrint('${c.file}: ${c.file == ifaceFile ? 'created' : 'updated'}\n');
@@ -13193,7 +13396,7 @@ final class Cli {
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
-					for (c in changes) writeFile(c.file, c.newSource);
+					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
 					stderr('apq extract-superclass: wrote ${changes.length} file(s)\n');
 				} else {
 					for (c in changes) sysPrint('${c.file}: ${c.file == superFile ? 'created' : 'updated'}\n');
@@ -13708,10 +13911,21 @@ final class Cli {
 			case NoNet(tail): return { reverted: false, tail: tail, notice: '' };
 			case Revert(text): text;
 		};
-		function restore(list: Array<String>): Void for (entry in files) if (list.contains(entry.file)) {
-			final original: String = originalOf[entry.file] ?? entry.source;
-			entry.source = original;
-			writeFile(entry.file, original);
+		// ONE `writeFiles`, not a write per file. This is the ROLLBACK path, reached because the
+		// tree already fails to typecheck, and a rollback that stops half way leaves precisely the
+		// mixed state `writeFiles` exists to prevent — with no second chance, since the wave it was
+		// undoing is what made the tree red.
+		function restore(list: Array<String>): Void {
+			final undo: Array<{ path: String, content: String }> = [];
+			for (entry in files) if (list.contains(entry.file)) {
+				final original: String = originalOf[entry.file] ?? entry.source;
+				entry.source = original;
+				undo.push({
+					path: entry.file,
+					content: original
+				});
+			}
+			writeFiles(undo);
 		}
 		final narrowing: SafePassNarrowing = LintFixSafePass.narrow(
 			errors, changedFiles, coupled, restore, CompilerOracle.typecheck.bind(hxml, oracleDir), LintFixSafePass.NARROW_ROUNDS
@@ -13754,7 +13968,9 @@ final class Cli {
 		final baseline: Null<OracleOutcome> = oracleHxml != null && changed.length > 0
 			? CompilerOracle.typecheck(oracleHxml, oracleDir)
 			: null;
-		for (entry in files) if (changed.contains(entry.file)) writeFile(entry.file, entry.source);
+		writeFiles([
+			for (entry in files) if (changed.contains(entry.file)) { path: entry.file, content: entry.source }
+		]);
 		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracleHxml, oracleDir);
 	}
 
@@ -13798,32 +14014,33 @@ final class Cli {
 	}
 
 	/**
-	 * Verify and apply the RiskyFix checks' fixes: a no-op with no risky check,
-	 * report-only (no compile) with no oracle, else `FixVerifier`-gated — files
-	 * whose risky fix survives fold into `changedFiles`. Returns the summary tail
-	 * and the count of applied files for the caller's fixed-count. Split out of
-	 * `applyLintFixes` to keep that function under the complexity budget.
+	 * Verify and apply the RiskyFix checks' fixes: a no-op with no risky check, report-only (no
+	 * compile) with no oracle, else `FixVerifier`-gated — files whose risky fix survives fold into
+	 * `changedFiles`. Returns the summary tail, this phase's edit count, and the reverts and
+	 * declines the caller names on their own lines. Split out of `applyLintFixes` to keep that
+	 * function under the complexity budget.
+	 *
+	 * It also fills the run's fix `ledger` for its own rules, on the one path where the phase
+	 * actually ran them (`ledgerRiskyTallies`). Every other path answers `ledgered: false`, which
+	 * is what lets the ledger block disclaim the risky set only when the disclaimer is true.
 	 */
 	private static function verifyRiskyFixes(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracleHxml: Null<String>,
-		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>
-	): {
-		tail: String,
-		appliedCount: Int,
-		reverts: Array<FixVerifyRevert>,
-		declines: Array<FixVerifyDecline>
-	} {
+		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>
+	): RiskyFixOutcome {
 		if (riskyChecks.length == 0) return {
 			tail: '',
 			appliedCount: 0,
 			reverts: [],
-			declines: []
+			declines: [],
+			ledgered: false
 		};
 		if (oracleHxml == null) return {
 			tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only (no compiler oracle for this run)',
 			appliedCount: 0,
 			reverts: [],
-			declines: []
+			declines: [],
+			ledgered: false
 		};
 		final verified: FixVerifyResult = FixVerifier.verify(files, riskyChecks, cached, oracleHxml, oracleDir, writeFile, optsByFile);
 		switch verified.baseline {
@@ -13838,22 +14055,26 @@ final class Cli {
 						+ ' (the oracle\'s compiled set is unknown: $unknownCoverage)',
 					appliedCount: 0,
 					reverts: [],
-					declines: []
+					declines: [],
+					ledgered: false
 				};
 				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
+				ledgerRiskyTallies(ledger, verified);
 				return {
 					tail: ', risky-fix verified: ${verified.applied.length} file(s) applied, ${verified.reverted.length}'
 						+ ' reverted to report-only${declinedTail(verified.declined)}${bisectTail(verified.partials)}',
 					appliedCount: verified.appliedEdits,
 					reverts: verified.reverted,
-					declines: verified.declined
+					declines: verified.declined,
+					ledgered: true
 				};
 			case Unavailable(reason):
 				return {
 					tail: ', risky-fix skipped (oracle unavailable: $reason)',
 					appliedCount: 0,
 					reverts: [],
-					declines: []
+					declines: [],
+					ledgered: false
 				};
 			case Rejected(_):
 				// NOT "the baseline is red": `FixVerifier` measures its baseline AFTER the safe
@@ -13864,9 +14085,50 @@ final class Cli {
 					tail: ', risky-fix skipped (the tree does not typecheck — see the note above)',
 					appliedCount: 0,
 					reverts: [],
-					declines: []
+					declines: [],
+					ledgered: false
 				};
 		}
+	}
+
+	/**
+	 * Fold one risky-fix phase's per-(rule, file) tallies into the run's fix ledger.
+	 *
+	 * `noteFixOutcome` in the risky path's own words: `reported` takes the findings, `edits`
+	 * takes what landed, and a file where nothing landed contributes its findings to `declined`
+	 * under whatever sentence the verifier already recorded for that (file, rule) pair. Until
+	 * this existed the 13 `RiskyFix` rules put edits into the run's summary count and never a
+	 * finding into the block that says what got no edit — the two numbers a reader compares were
+	 * measured over two different rule sets, and the block had to say so instead of answering.
+	 *
+	 * Reached only from a phase that actually RAN its checks. `declined` also stays a
+	 * once-per-run count here, which is what keeps it comparable with `reported`; the risky phase
+	 * runs once by construction, so it needs no equivalent of the safe loop's `countDeclines`.
+	 */
+	private static function ledgerRiskyTallies(ledger: Map<String, RuleFixOutcome>, verified: FixVerifyResult): Void {
+		for (tally in verified.tallies) {
+			final entry: RuleFixOutcome = ledgerFor(ledger, tally.rule);
+			entry.reported += tally.findings;
+			entry.edits += tally.edits;
+			if (tally.edits != 0) continue;
+			entry.declined += tally.findings;
+			final reason: Null<String> = riskyDeclineReason(verified, tally);
+			if (reason != null) bumpReason(entry.reasons, reason, tally.findings);
+		}
+	}
+
+	/**
+	 * The verifier's own sentence for a (file, rule) whose edits never landed, or null when the
+	 * check simply answered no edit and there is nothing to quote.
+	 *
+	 * Looked up rather than carried on the tally: both lists are keyed by the same pair, and a
+	 * copy on the tally would be a second `revertCauseText` living in `anyparse.check`.
+	 */
+	private static function riskyDeclineReason(verified: FixVerifyResult, tally: FixVerifyTally): Null<String> {
+		final decline: Null<FixVerifyDecline> = verified.declined.find(d -> d.file == tally.file && d.rule == tally.rule);
+		if (decline != null) return decline.reason;
+		final revert: Null<FixVerifyRevert> = verified.reverted.find(r -> r.file == tally.file && r.rule == tally.rule);
+		return revert != null ? revertCauseText(revert.cause) : null;
 	}
 
 	/**
@@ -14301,8 +14563,15 @@ final class Cli {
 				for (c in changes) total += c.count;
 				final verb: String = created ? 'create' : 'extend';
 				if (write) {
-					for (c in changes) writeFile(c.file, c.newSource);
-					writeFile(intoPath, finalModule);
+					// The module and the call sites that will reference its constant are ONE change
+					// set: a run that wrote the sites and then could not write the module would
+					// leave every one of them naming a constant that does not exist.
+					writeFiles([for (c in changes) { path: c.file, content: c.newSource }].concat([
+						{
+							path: intoPath,
+							content: finalModule
+						}
+					]));
 					stderr('apq extract-constant: wrote ${changes.length} file(s), $total occurrence(s); module $verb $intoPath\n');
 				} else {
 					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
@@ -14446,7 +14715,7 @@ final class Cli {
 		// error text naming no candidate, a batch that never settles) and a fixture cannot stage
 		// them against a real haxe. A test supplies canned verdicts; production passes nothing.
 		final verdict: (String, Null<String>) -> OracleOutcome = typecheck ?? (h, d) -> CompilerOracle.typecheck(h, d);
-		for (c in candidates) writeFile(c.file, c.after);
+		writeFiles([for (c in candidates) { path: c.file, content: c.after }]);
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;
 		var reason: String = 'compiler rejected';
@@ -14526,10 +14795,14 @@ final class Cli {
 	private static function revertRemaining(
 		candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
 	): Void {
-		for (c in candidates) if (!reverted.contains(c.file)) {
-			writeFile(c.file, c.before);
-			reverted.push(c.file);
-		}
+		// Whole set through one `writeFiles`, for the same reason `reconcileSafePass.restore` uses
+		// it: a rollback stopped half way leaves a tree carrying some unverified annotations and
+		// not others, which is the state this function exists to leave behind under no
+		// circumstances. Per-CULPRIT reverts above stay individual — those are incremental by
+		// construction, one round per oracle verdict.
+		final undo: Array<{ file: String, before: String, after: String }> = candidates.filter(c -> !reverted.contains(c.file));
+		writeFiles([for (c in undo) { path: c.file, content: c.before }]);
+		for (c in undo) reverted.push(c.file);
 	}
 
 	/**
@@ -17326,21 +17599,29 @@ final class Cli {
 	/**
 	 * The head of the `lint --fix` run summary, and it reports EDIT SPANS.
 	 *
-	 * A check answers with one span per site it rewrites, so ONE `naming` finding on a
-	 * local read three times is four spans; a fix whose result exposes a further finding
-	 * adds that pass's spans on top of them. Printed as `fixed N issue(s)` it read as a
-	 * finding count and disagreed with the number the reader had just counted in the
-	 * plain `lint` report — measured at 4 for 3 findings on a cascading fold, and at 4
-	 * for exactly ONE finding with no cascade anywhere in the run.
+	 * A check answers with one span per site it rewrites, so ONE `naming` finding on a local read
+	 * three times is four spans; a fix whose result exposes a further finding adds that pass's
+	 * spans on top of them. Printed as `fixed N issue(s)` it read as a finding count and disagreed
+	 * with the number the reader had just counted in the plain `lint` report — measured at 4 for 3
+	 * findings on a cascading fold, and at 4 for exactly ONE finding with no cascade anywhere in
+	 * the run.
 	 *
-	 * The finding total is deliberately NOT here beside it, and the reason is this same
-	 * defect one level up: `edits` sums the safe loop AND the risky and oracle-assisted
-	 * phases, while the only finding count the run holds — the `ledger` — is filled by
-	 * the safe loop alone (`applyLintPass` records it; `verifyRiskyFixes` never receives
-	 * it, and with no oracle it does not even RUN its checks). Two numbers on one line
-	 * measured over two rule sets is the shape this wording was fixed to stop making.
-	 * The finding total belongs to a plain `lint`, which runs every rule; what each rule
-	 * DECLINED is `unfixedFixLedger`'s block below.
+	 * The finding total is still not here beside it, and the reason it was given is now half fixed
+	 * rather than true. `edits` sums the safe loop AND the risky and oracle-assisted phases, while
+	 * the `ledger` was filled by the safe loop alone, so the two were measured over two different
+	 * RULE SETS; `FixVerifier` carries per-rule tallies now and `ledgerRiskyTallies` folds them in,
+	 * which closes that half on the one path where the risky phase actually ran.
+	 *
+	 * Two differences remain and neither is a rule set. The first is the MOMENT: `reported` is a
+	 * FIRST-pass count for the safe rules and a single-run count for the risky ones, and an
+	 * `OracleAssisted` rule's second pass adds edits under a row whose findings were counted before
+	 * it ran. The second is the GATES: `FixVerifier` collects through `Linter.collect`, which
+	 * applies the reification and inline-suppression gates and nothing else — no `resolveConfig`,
+	 * no enablement inversion, no version gate, no per-file severity — and `applyLintFixes` relaxes
+	 * the `OracleRelaxable` risky checks before it, so a risky rule's row here can count findings a
+	 * plain `lint` would not report. The finding total belongs to that plain `lint`, which runs
+	 * every rule once under its own config; what each rule DECLINED is `unfixedFixLedger`'s block
+	 * below.
 	 */
 	private static function lintFixSummary(edits: Int, files: Int, passes: Int): String {
 		return 'apq lint --fix: $edits edit(s) in $files file(s) over $passes pass(es)';
@@ -17374,10 +17655,11 @@ final class Cli {
 	 * tail itself spelled the ambiguity out rather than resolving it ("the check has no autofix, or when
 	 * its fix declined here"), which three readers resolved the wrong way and two of them filed work on.
 	 *
-	 * A row counts the DECLINED findings, not the reported ones — a finding whose check answered with an
-	 * edit is not news — so a run that fixed everything it reported, and a clean run, both print nothing.
-	 * `verifiedIds` are the rules the safe loop never asks at all; they are named once at the end rather
-	 * than shown as silent zeroes.
+	 * A row counts the DECLINED findings, not the reported ones — a finding whose check answered
+	 * with an edit is not news — so a run that fixed everything it reported, and a clean run, both
+	 * print nothing. `riskyIds` are the rules this run never asked at all; they are named once at
+	 * the end rather than shown as silent zeroes, and a run whose risky phase DID ask them passes
+	 * an empty list because `ledgerRiskyTallies` has given each of them a row of its own.
 	 */
 	private static function unfixedFixLedger(
 		ledger: Map<String, RuleFixOutcome>, noAutofixReasons: Map<String, String>, oracleAssistedIds: Array<String>,
@@ -17430,13 +17712,17 @@ final class Cli {
 			for (row in rows.slice(DECLINED_RULES_SHOWN)) rest += row.count;
 			lines.push('  ... +${rows.length - DECLINED_RULES_SHOWN} more rule(s), $rest finding(s)\n');
 		}
-		// ONLY the RiskyFix set is missing from the ledger. An `OracleAssisted` rule that is not also
-		// risky DOES run in the safe loop, so it has a row here — listing it as absent was the first
-		// version of this line and it contradicted the row three lines above it.
+		// `riskyIds` arrives EMPTY from a run whose risky phase ran, because `FixVerifier` now
+		// carries per-(rule, file) tallies and `ledgerRiskyTallies` folds them into rows here. What
+		// is left is the run that never asked those rules at all — no oracle, an oracle that would
+		// not start, a tree that does not typecheck — and for that the disclaimer is the answer.
+		// An `OracleAssisted` rule that is not also risky DOES run in the safe loop, so it has a row
+		// either way; listing it as absent was the first version of this line and it contradicted
+		// the row three lines above it.
 		if (riskyIds.length > 0)
 			lines.push(
-				'apq lint --fix: ${riskyIds.length} rule(s) never enter this ledger — the risky-fix path owns them '
-				+ '(${riskyIds.join(', ')}); the summary line above is their whole verdict.\n'
+				'apq lint --fix: ${riskyIds.length} rule(s) are absent from this ledger — the risky-fix path never ran them this '
+				+ 'run (${riskyIds.join(', ')}); the summary line above says why, and is their whole verdict.\n'
 			);
 		if (rows.exists(row -> !row.declared))
 			lines.push(
@@ -17569,20 +17855,26 @@ final class Cli {
 	/**
 	 * Print the per-rule ledger of reported-but-unfixed findings.
 	 *
-	 * `risky` never enters the ledger at all: a `RiskyFix` check is excluded from the safe loop, so no
-	 * `Check.fix` of its own is ever called there and its row would be a silent zero. Naming those rules
-	 * is what keeps the block from reading as though it LOST the largest rule on the tree — on Pony
-	 * `avoid-dynamic` alone reports 470 — and the summary line above already carries their applied /
-	 * reverted verdict.
+	 * `risky` is passed so a run that could NOT verify its risky rules can name them: a `RiskyFix`
+	 * check is excluded from the safe loop, so on such a run no `Check.fix` of its own is ever
+	 * called and its row would be a silent zero. Naming them is what keeps the block from reading
+	 * as though it LOST the largest rule on the tree — on Pony `avoid-dynamic` alone reports 470 —
+	 * and the summary line above already carries why the phase did not run.
 	 *
-	 * `oracleAssisted` is the opposite case and was got wrong first time round: such a rule DOES run in
-	 * the safe loop (unless it is risky too), so it has a row here — its extra oracle pass is noted ON
-	 * that row rather than by claiming the rule is absent.
+	 * `riskyLedgered` says the opposite happened: the phase ran, `FixVerifier` tallied it, and
+	 * `ledgerRiskyTallies` folded those tallies into rows here. Then the list must be empty, or the
+	 * footer would disclaim a rule whose own row sits three lines above it.
+	 *
+	 * `oracleAssisted` is a third case and was got wrong first time round: such a rule DOES run in
+	 * the safe loop (unless it is risky too), so it has a row here — its extra oracle pass is noted
+	 * ON that row rather than by claiming the rule is absent.
 	 */
 	private static function printUnfixedLedger(
-		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>
+		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool
 	): Void {
-		final riskyIds: Array<String> = [for (c in risky) c.id()];
+		// Empty when the risky phase RAN: its rules then have rows of their own here, and the
+		// footer that names them as absent would contradict the row three lines above it.
+		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) c.id()];
 		riskyIds.sort((a, b) -> Reflect.compare(a, b));
 		final oracleIds: Array<String> = [for (c in oracleAssisted) c.id()];
 		final reasons: Map<String, String> = [
@@ -18167,3 +18459,57 @@ typedef RuleFixOutcome = {
 	var reasons: Array<{ text: String, count: Int }>;
 	var refusals: Array<{ text: String, count: Int }>;
 };
+
+/**
+ * What the risky-fix phase did, in the shape `applyLintFixes` consumes: the summary tail,
+ * this phase's contribution to the edit count, the per-file reverts and declines it names on
+ * their own lines, and whether its rules reached the fix LEDGER at all.
+ *
+ * `ledgered` is what the ledger's footer turns on. A `RiskyFix` check is excluded from the
+ * safe loop, so before `FixVerifier` carried tallies the per-rule "reported but got no edit"
+ * block had to disclaim every risky rule unconditionally; it now disclaims only a phase that
+ * genuinely never asked them — no oracle, an oracle that would not start, a tree that does not
+ * typecheck, or a compiled set that could not be established.
+ */
+@:nullSafety(Strict)
+private typedef RiskyFixOutcome = {
+	var tail: String;
+	var appliedCount: Int;
+	var reverts: Array<FixVerifyRevert>;
+	var declines: Array<FixVerifyDecline>;
+	var ledgered: Bool;
+};
+
+/**
+ * One file's pending write: `staged` holds the new bytes beside `target`, which is where
+ * `Cli.commitStagedWrite` renames them, and `asked` is the spelling any diagnostic quotes.
+ */
+@:nullSafety(Strict)
+private typedef StagedWrite = {
+	var staged: String;
+	var target: String;
+
+	/** The path as the CALLER spelled it, which is the one a diagnostic must name. */
+	var asked: String;
+};
+
+/**
+ * A write that did not happen, carrying the file it was for.
+ *
+ * Its own type rather than a bare `Exception` because `Cli.run` catches exactly this and
+ * nothing else. An internal error still reaches the reader as a stack trace, which is what a
+ * bug wants; a file the run cannot write is a fact about the environment, and gets a sentence
+ * and an exit code.
+ */
+@:nullSafety(Strict)
+final class WriteFailure extends Exception {
+
+	/** The file the write was for, spelled the way the caller spelled it — never the staging temporary. */
+	public final path: String;
+
+	public function new(path: String, reason: String) {
+		super('cannot write $path: $reason');
+		this.path = path;
+	}
+
+}
