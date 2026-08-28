@@ -11,10 +11,10 @@ using StringTools;
  * this expression, this receiver path or this loop binder carry, and what bare type name
  * does that written source reduce to.
  *
- * Extracted from `RefactorSupport` as one connected call cluster (`hxq clusters`): nothing
- * left behind calls in, and the only call out is `RefactorSupport.isIdentifier`. Every
- * member is a pure static — the tree, the `declaredTypes` map, the `SymbolIndex` and the
- * reading file all arrive as arguments — so there is no shared state and no thread-safety
+ * Extracted from `RefactorSupport` as one connected call cluster (`hxq clusters`): nothing left
+ * behind calls in, and the only calls out are to `RefactorSupport` character / identifier
+ * predicates. Every member is a pure static — the tree, the `declaredTypes` map, the `SymbolIndex`
+ * and the reading file all arrive as arguments — so there is no shared state and no thread-safety
  * question to answer.
  *
  * Three layers, outside in:
@@ -150,6 +150,30 @@ final class NominalTypes {
 		}
 		out.push(text.substring(start).trim());
 		return out;
+	}
+
+	/**
+	 * The NAME a type-parameter segment declares (`T:Item` -> `T`, `K = Int` -> `K`), or null when the
+	 * segment does not open with a plain identifier.
+	 *
+	 * The second half of a header type-parameter read: `splitTypeArgumentList` cuts the `<...>` run into
+	 * segments, this reduces one segment to the name it binds. Null means UNREADABLE, never "no name" —
+	 * a caller building a POSITIONAL substitution table must drop the whole header on it rather than skip
+	 * the segment, or every parameter after it shifts.
+	 *
+	 * A segment carrying METADATA (`class C<@:const N>`) is deliberately not stepped over: the scan stops
+	 * at the first `:`, so such a segment reads as unreadable rather than as a wrong name.
+	 */
+	public static function typeParamNameOf(segment: String): Null<String> {
+		final text: String = segment.trim();
+		var end: Int = 0;
+		while (end < text.length) {
+			final ch: Int = text.fastCodeAt(end);
+			if (ch == ':'.code || ch == '='.code || RefactorSupport.isSpace(ch)) break;
+			end++;
+		}
+		final name: String = text.substring(0, end);
+		return RefactorSupport.isIdentifier(name) ? name : null;
 	}
 
 	/**

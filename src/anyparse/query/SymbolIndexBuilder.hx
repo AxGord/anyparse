@@ -178,11 +178,21 @@ final class SymbolIndexBuilder {
 		// is carried forward like `pendingMeta` and consumed by the next type declaration.
 		final externModifierKind: Null<String> = shape.externModifierKind;
 		var pendingExtern: Bool = false;
+		// A module-`private` type's modifier takes that same nameless-sibling shape, and is carried
+		// forward the same way. Spelled as "the visibility modifier that is not the public one" so no
+		// grammar kind name is written here; a grammar declaring no visibility modifiers yields an
+		// empty set and every type indexes as public, which is the pre-existing answer.
+		final privateModifierKinds: Array<String> = privateVisibilityKinds(shape);
+		var pendingPrivate: Bool = false;
 
 		for (gn in declNodes(tree, source, externModifierKind)) {
 			final node: QueryNode = gn.node;
 			if (externModifierKind != null && node.kind == externModifierKind) {
 				pendingExtern = true;
+				continue;
+			}
+			if (privateModifierKinds.contains(node.kind)) {
+				pendingPrivate = true;
 				continue;
 			}
 			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
@@ -197,6 +207,7 @@ final class SymbolIndexBuilder {
 					kind: typeDecl.kind,
 					span: typeDecl.fullSpan,
 					isMain: typeDecl.name == basename,
+					isPrivate: pendingPrivate,
 					isExtern: pendingExtern,
 					typeParamArity: paramSegments.length,
 					typeParamNames: declTypeParamNames(paramSegments),
@@ -218,6 +229,7 @@ final class SymbolIndexBuilder {
 				});
 				pendingMeta = [];
 				pendingExtern = false;
+				pendingPrivate = false;
 				continue;
 			}
 
@@ -246,6 +258,7 @@ final class SymbolIndexBuilder {
 					pkg = name;
 					pendingMeta = [];
 					pendingExtern = false;
+					pendingPrivate = false;
 				case 'ImportDecl':
 					imports.push({
 						raw: name,
@@ -257,6 +270,7 @@ final class SymbolIndexBuilder {
 					});
 					pendingMeta = [];
 					pendingExtern = false;
+					pendingPrivate = false;
 				case 'ImportAliasDecl', 'ImportAliasInDecl':
 					// The grammar's name slot for these two kinds is the ALIAS; the aliased path is
 					// only in the statement text, so it is decoded there — through the project's one
@@ -272,6 +286,7 @@ final class SymbolIndexBuilder {
 					});
 					pendingMeta = [];
 					pendingExtern = false;
+					pendingPrivate = false;
 				case 'ImportWildDecl':
 					imports.push({
 						raw: name,
@@ -283,6 +298,7 @@ final class SymbolIndexBuilder {
 					});
 					pendingMeta = [];
 					pendingExtern = false;
+					pendingPrivate = false;
 				case 'UsingDecl':
 					imports.push({
 						raw: name,
@@ -294,7 +310,16 @@ final class SymbolIndexBuilder {
 					});
 					pendingMeta = [];
 					pendingExtern = false;
+					pendingPrivate = false;
 				case _:
+					// A module-level declaration that is not a TYPE — Haxe 4.2's module-level statics
+					// project as `(Private) (FnDecl helper)`, so the visibility modifier reaches this loop
+					// with no type to attach to. It must NOT be carried forward the way `pendingMeta` and
+					// `pendingExtern` are: over-attaching those two only makes a consumer more
+					// conservative, while over-attaching `isPrivate` REMOVES a binding, and a removed
+					// binding is what `MoveSymbol`'s gate reads as "nothing binds this name" — the
+					// direction that refuses LESS.
+					pendingPrivate = false;
 			}
 		}
 
@@ -621,28 +646,6 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * The WRITTEN name of one header type-parameter segment (`K:Base` -> `K`), or null when the
-	 * segment does not start with a plain identifier. The name ends at the first `:` (constraint),
-	 * `=` (default) or whitespace - the only three things Haxe lets follow it.
-	 *
-	 * Metadata on a type parameter (`class C<@:const N>`) is deliberately NOT stepped over: the
-	 * grammar does not parse that declaration at all, so such a file is skipped by the index long
-	 * before this runs. Were it ever to parse, the segment would yield no identifier and refuse
-	 * the whole header - which is the fail-closed direction anyway.
-	 */
-	private static function typeParamNameOf(segment: String): Null<String> {
-		final text: String = segment.trim();
-		var end: Int = 0;
-		while (end < text.length) {
-			final ch: Int = text.fastCodeAt(end);
-			if (ch == ':'.code || ch == '='.code || RefactorSupport.isSpace(ch)) break;
-			end++;
-		}
-		final name: String = text.substring(0, end);
-		return RefactorSupport.isIdentifier(name) ? name : null;
-	}
-
-	/**
 	 * Every segment's parameter name, or EMPTY when ANY segment fails to yield one -
 	 * a partial list would silently mis-index a substitution, so all-or-nothing is
 	 * the only safe answer. Empty is also what a non-generic header gives, which is
@@ -651,11 +654,23 @@ final class SymbolIndexBuilder {
 	private static function declTypeParamNames(segments: Array<String>): Array<String> {
 		final out: Array<String> = [];
 		for (segment in segments) {
-			final name: Null<String> = typeParamNameOf(segment);
+			final name: Null<String> = NominalTypes.typeParamNameOf(segment);
 			if (name == null) return [];
 			out.push(name);
 		}
 		return out;
+	}
+
+	/**
+	 * The visibility-modifier kinds that DENY outside-the-module access — every entry of the
+	 * grammar's visibility set except the public one. Empty for a grammar that declares neither,
+	 * which indexes every type as non-private: the answer this record carried before the flag.
+	 */
+	private static function privateVisibilityKinds(shape: RefShape): Array<String> {
+		final all: Null<Array<String>> = shape.visibilityModifierKinds;
+		if (all == null) return [];
+		final publicKind: Null<String> = shape.publicModifierKind;
+		return [for (kind in all) if (kind != publicKind) kind];
 	}
 
 	/**

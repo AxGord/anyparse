@@ -177,6 +177,20 @@ typedef TypeDeclInfo = {
 	var isMain: Bool;
 
 	/**
+	 * Whether the declaration carries a NON-PUBLIC visibility modifier — Haxe's module-`private`
+	 * type, visible by simple name only inside its own module. A binding walk that answers what a
+	 * name means in ANOTHER file must skip one: counting it invents a binding the compiler refuses
+	 * (`Type not found`), and a mutation gate reading that phantom refuses a move that was correct.
+	 * Inside the declaring module the flag is irrelevant — the module's own types are all visible.
+	 *
+	 * False for a declaration whose `private` sits inside a `#if` region: the modifier is a
+	 * NAMELESS sibling node and only the type declaration itself is lifted out of the region, so
+	 * the run never reaches this record. That direction keeps the phantom rather than inventing an
+	 * invisibility, which is the conservative half.
+	 */
+	var isPrivate: Bool;
+
+	/**
 	 * Whether the declaration carries the language's EXTERN modifier — a type whose runtime
 	 * representation belongs to the target rather than to the compiler. Load-bearing for any
 	 * consumer reasoning about what a runtime does with an instance: an extern type's methods

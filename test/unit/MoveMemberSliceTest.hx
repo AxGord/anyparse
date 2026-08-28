@@ -1147,7 +1147,7 @@ class MoveMemberSliceTest extends Test {
 	 * the control is the same carry with nothing at the destination to collide with.
 	 */
 	public function testCarriedImportCollidingWithADestinationBindingRefused(): Void {
-		inline function scope(destImport: String): Array<{ file: String, source: String }> {
+		inline function scope(destImport: String, destMember: String): Array<{ file: String, source: String }> {
 			return [
 				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
 				{ file: 'r/Dep.hx', source: 'package r;\n\nclass Dep {}' },
@@ -1157,12 +1157,15 @@ class MoveMemberSliceTest extends Test {
 				},
 				{
 					file: 'p/Dest.hx',
-					source: 'package p;\n\n${destImport}class Dest {\n\tpublic static function local():Dep return null;\n}'
+					source: 'package p;\n\n${destImport}class Dest {\n\tpublic static function local():$destMember return null;\n}'
 				}
 			];
 		}
-		assertErrContains(move('p/Src.hx', 'Src', 'make', 'Dest', scope('import r.Dep;\n\n')), 'already binds "Dep" to r.Dep');
-		final changes: Array<MoveChange> = okChanges('p/Src.hx', 'Src', 'make', 'Dest', scope(''));
+		assertErrContains(move('p/Src.hx', 'Src', 'make', 'Dest', scope('import r.Dep;\n\n', 'Dep')), 'already binds "Dep" to r.Dep');
+		// The control's destination neither binds NOR names `Dep`. It used to name it with nothing in
+		// the scope binding it — source Haxe rejects outright (`Type not found : Dep`, 4.3.7) — and the
+		// ambient-shadowing arm now refuses that correctly.
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 'Src', 'make', 'Dest', scope('', 'Null<Int>'));
 		Assert.isTrue(changeFor(changes, 'p/Dest.hx').newSource.contains('import q.Dep;'), 'the uncontested carry still happens');
 	}
 
