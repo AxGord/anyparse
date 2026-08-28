@@ -134,12 +134,13 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '"value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"}]}}}';
 
 	/**
-	 * The case-body source behind `tools/src/module/Unpack.hx`, reduced. ONE
-	 * copy, because three tests read it and they must not drift apart: the pin
-	 * below asserts it still takes two writer rewrites, and
-	 * `testCanonicalizeWritesTheWriterFixedPoint` is only a regression test for
-	 * as long as that holds. (`unit.NewFileSliceTest` needs its own copy — a
-	 * different class — and carries a local precondition instead.)
+	 * The case-body source behind `tools/src/module/Unpack.hx`, reduced. ONE copy,
+	 * because FOUR tests read it and they must not drift apart: the tail pin
+	 * asserts it still takes two writer rewrites, the mechanism split re-reads it
+	 * under a committed cascade, and `testCanonicalizeWritesTheWriterFixedPoint` is
+	 * only a regression test for as long as the first of those holds.
+	 * (`unit.NewFileSliceTest` needs its own copy — a different class — and carries
+	 * a local precondition instead.)
 	 */
 	private static final CASE_BODY_SRC: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n'
 		+ '\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n\t\t\t\tcfg.zips.push({ path: try '
@@ -172,6 +173,11 @@ class WrapFlatSourceFixedPointTest extends Test {
 	/**
 	 * A sole-argument call whose argument is a TERNARY whose branches are the
 	 * pivot-bearing literals — the pivot is two levels below the call.
+	 *
+	 * Its `callParameter` cascade is this project's own, so it serves a SECOND
+	 * reader unchanged: `testMultiArgFillPacksACommittedBodyOnPassTwo`'s control
+	 * arm, over `MULTI_ARG_FILL_SRC`. One copy rather than two identical ones, for
+	 * the reason `CASE_BODY_SRC` gives about sources.
 	 */
 	private static final CALL_TERNARY_NESTED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, '
 		+ '"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": '
@@ -195,6 +201,98 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '[{"conditions": [{"cond": "totalItemLength >= n", "value": 80}], "type": "fillLine"}]}, '
 		+ '"ternaryExpression": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", '
 		+ '"value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"}]}}}';
+
+	/**
+	 * `CASE_BODY_OBJECT` with the literal cascade's `noWrap` SHADOW removed. A
+	 * rules-free cascade answers the same mode in BOTH fit states, so it can emit
+	 * no pivot at all — which is the whole discriminator between the tail's two
+	 * mechanisms.
+	 */
+	private static final CASE_BODY_COMMITTED: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": tr'
+		+ 'ue}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}, "wrapping": {"maxLineLength": 140, "objectLiteral": {"def'
+		+ 'aultWrap": "onePerLine", "rules": []}}}';
+
+	/**
+	 * `VALUE_IF_NESTED` with the same shadow removed, its `arrayWrap` cascade
+	 * left exactly as it was so the only variable is the literal's.
+	 */
+	private static final VALUE_IF_COMMITTED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"ifBody": "fitLine'
+		+ '", "expressionIf": "next"}, "wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": []}, "arr'
+		+ 'ayWrap": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "hasMultilineItems", "value": 1}], "type": "onePerLine"}, '
+		+ '{"conditions": [{"cond": "totalItemLength <= n", "value": 80}], "type": "noWrap"}, {"conditions": [{"cond": "anyItemLength >= n"'
+		+ ', "value": 30}], "type": "onePerLine"}]}}}';
+
+	/**
+	 * `CALL_TERNARY_NESTED` with the same shadow removed. This is the one of the
+	 * three that KEEPS diverging under it — which is what places it in mechanism
+	 * B rather than beside its two siblings.
+	 *
+	 * Second reader, same one-copy rule as its pivot twin above:
+	 * `testMultiArgFillPacksACommittedBodyOnPassTwo`'s committed arm.
+	 */
+	private static final CALL_TERNARY_COMMITTED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength'
+		+ '": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": []}, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak"'
+		+ ', "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCoun'
+		+ 't <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+
+	/**
+	 * The two mechanisms STACKED: a rules-free `fillLine` array cascade
+	 * (mechanism B, committed either way) inside a literal cascade that still
+	 * carries its `totalItemLength <= 140` shadow (mechanism A, a pivot).
+	 * `rules: []` is load-bearing — `defaultWrap: fillLine` alone leaves Pony's
+	 * shipped `arrayWrap` rules shadowing it, and `tools/src/create/ides/VSCode.hx`
+	 * then converges in one.
+	 */
+	private static final STACKED_ARRAY_PIVOT: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": '
+		+ '140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "'
+		+ 'type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "fillLine", "rules": []}}}';
+
+	/**
+	 * The same pair with the literal cascade committed: one link of the chain is
+	 * gone and the source settles one pass earlier.
+	 */
+	private static final STACKED_ARRAY_COMMITTED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLengt'
+		+ 'h": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": []}, "arrayWrap": {"defaultWrap": "fillLine", "rules": []}}}';
+
+	/**
+	 * `tools/src/create/ides/VSCode.hx`'s `createElectron`, reduced: an object
+	 * literal whose second field is an array of two parenthesised type-checks.
+	 * The array is the mechanism-B link, the enclosing literal the mechanism-A one.
+	 */
+	private static final STACKED_SRC: String = 'class A {\n\tpublic static function createElectron(output: String): Void {\n\t\tfinal data '
+		+ '= { version: \'0.2.0\', configurations: [\n\t\t\t({ type: \'node\', request: \'launch\', name: mainConfName, protocol: \'inspect'
+		+ 'or\', runtimeExecutable: electronExecutable, runtimeArgs: [output, \'--remote-debugging-port\'], windows: { runtimeExecutable: e'
+		+ 'lectronExecutable\n\t\t\t\t+ \'.cmd\' }, preLaunchTask: PRELAUNCH_TASK, internalConsoleOptions: \'neverOpen\' }: Dynamic),\n\t\t'
+		+ '\t({ name: renderConfName, type: \'chrome\', request: \'attach\', port: port, webRoot: resultDir, timeout: 20000, internalConsol'
+		+ 'eOptions: \'openOnSessionStart\' }: Dynamic)\n\t\t], compounds: [{ name: \'AllConfigurations\', configurations: [mainConfName, r'
+		+ 'enderConfName] }] };\n\t\tUtils.saveJson(\'.vscode/launch.json\', data);\n\t}\n}';
+
+	/**
+	 * `src/anyparse/query/Cli.hx`'s `limitEntries(...)` call, reduced: four
+	 * arguments whose last is a lambda returning an object literal.
+	 */
+	private static final MULTI_ARG_FILL_SRC: String = 'class A {\n\tfunction f(): Void {\n\t\tfinal shown: Array<{ file: String, source: St'
+		+ 'ring, hits: Array<RefHit> }> = limitEntries(\n\t\t\tallEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source'
+		+ ': e.source, hits: e.hits.slice(0, k) }\n\t\t);\n\t}\n}';
+
+	/**
+	 * The value-`if` branch behind `src/pony/magic/builder/DIBuilder.hx`, reduced.
+	 * ONE copy for the same reason `CASE_BODY_SRC` gives: two tests read it — the
+	 * tail pin and the mechanism split — and they must not drift apart.
+	 */
+	private static final VALUE_IF_SRC: String = 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n\t\t\t{ expr: E'
+		+ 'Vars([\n\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', params: [TPType(t)] }), expr: macro null, i'
+		+ 'sFinal: false }\n\t\t\t]), pos: Context.currentPos() }\n\t\telse\n\t\t\tcheckExpr(x);\n\t}\n}';
+
+	/**
+	 * The ternary-under-a-sole-argument-call behind
+	 * `src/pony/magic/builder/HasSignalBuilder.hx`, reduced. Same one-copy rule.
+	 */
+	private static final CALL_TERNARY_SRC: String = 'class C {\n\tfunction f(): Void {\n\t\tfields.push({\n\t\t\tname: setterName,\n\t\t\ta'
+		+ 'ccess: ast.concat([AInline, setterAccess]),\n\t\t\tmeta: null,\n\t\t\tpos: f.pos,\n\t\t\tkind: FFun(setcontroll ? { args: [{ nam'
+		+ 'e: \'v\', type: null }], ret: null, expr: macro return evName == null || v != fName && !evName.dispatchWithFlag(v, fName, notsav'
+		+ 'e) ? fName = v : fName } : { args: [{ name: \'v\', type: null }], ret: null, expr: macro { if (evName == null) { var prev = fNam'
+		+ 'e; } return fName; } })\n\t\t});\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -433,24 +531,76 @@ class WrapFlatSourceFixedPointTest extends Test {
 	}
 
 	/**
-	 * The three writer shapes of the convergence tail, PINNED AS STILL DIVERGENT
+	 * The writer shapes of the convergence tail, PINNED AS STILL DIVERGENT
 	 * (ω-canonical-fixed-point). Each needs two writer rewrites under the config
-	 * beside it, and each is one of the FIVE files that still warn on Pony's
-	 * committed `hxformat.json` — `tools/src/module/Unpack.hx` and
+	 * beside it.
+	 *
+	 * THE POPULATION, re-measured at `dd188575`. Pony's committed `hxformat.json`
+	 * over its 867 sources leaves FIVE: `tools/src/module/Unpack.hx` and
 	 * `src/pony/net/http/modules/mmodels/Builder.hx` (case body),
 	 * `src/pony/magic/builder/DIBuilder.hx` (value-`if` branch),
-	 * `src/pony/magic/builder/HasSignalBuilder.hx` (ternary under a sole-arg
-	 * call). The fifth, `tools/nodesrc/module/Imagemin.hx`, is a method chain
-	 * whose receiver measures flat on pass 1 and hardline-bearing on pass 2; it
-	 * has no fixture here yet.
+	 * `src/pony/magic/builder/HasSignalBuilder.hx` (ternary under a sole-argument
+	 * call) and `tools/nodesrc/module/Imagemin.hx` (method chain). THIS tree read
+	 * under that same config adds THREE, not the two recorded before —
+	 * `check/DuplicateCase.hx` and `check/UnnecessarySwitch.hx` (both on an
+	 * `ifBody: fitLine` host) and `macro/Lowering.hx` (case body). Under Pony's
+	 * WORKING-tree config the count is ZERO, and under this project's own
+	 * `hxformat.json` it is zero too: the tail is a property of a CONFIG, not of a
+	 * file.
 	 *
-	 * ONE root cause under all three: a static measure reads a collection whose
-	 * break the RENDERER decides — `emitZeroThresholdAgree`'s `IfFirstLineExceeds`
-	 * pivot, or a committed `BodyGroup` — and answers differently depending on
-	 * whether the SOURCE line was flat. Pass 1 measures the pivot's flat arm and
-	 * commits the enclosing shape on it; the renderer breaks the collection; pass 2
-	 * reads that newline, force-commits the list, and the same measure answers
-	 * `-1` (or `0`, behind the `BodyGroup`), so the enclosing shape flips.
+	 * TWO root causes, not one. The paragraph that stood here named a single one —
+	 * "a static measure reads a collection whose break the RENDERER decides" — for
+	 * every file in the list, and that is wrong for two of them. The discriminator
+	 * is one config edit: replace the collection's cascade with a RULES-FREE one
+	 * (`{"defaultWrap": "onePerLine", "rules": []}`), which answers the same mode in
+	 * both fit states and therefore cannot emit a pivot at all.
+	 * `testTailMechanismSplitsOnTheLiteralCascade` runs it on the three sources
+	 * below.
+	 *
+	 *  - MECHANISM A, and the old wording is right for it: a static measure reads a
+	 *    collection whose break the RENDERER decides. The cascade carries a
+	 *    fit-dependent `noWrap` SHADOW over a breaking `defaultWrap`
+	 *    (`totalItemLength <= 140` in both real Pony configs), so a source-FLAT
+	 *    literal reaches its host as `emitZeroThresholdAgree`'s `IfFirstLineExceeds`
+	 *    pivot while the same
+	 *    literal, once the writer's own output has broken it, is force-committed by
+	 *    the Star that does not reflow source newlines. The host measure answers
+	 *    differently and the enclosing shape flips. Committing the cascade makes
+	 *    every one of these CONVERGE. Six of the eight: `Unpack.hx`,
+	 *    `mmodels/Builder.hx` and `Lowering.hx` through `BodyFit.fitLineLayout` on a
+	 *    `caseBody: fitLine` host; `DuplicateCase.hx` and `UnnecessarySwitch.hx`
+	 *    through that same measure on an `ifBody: fitLine` host; `DIBuilder.hx`
+	 *    through the value-`if` branch. Only the first and last of those three hosts
+	 *    have a fixture here — the `ifBody: fitLine` pair has none yet.
+	 *  - MECHANISM B, no pivot anywhere: `DocMeasure.flatTokenWidth` DEFERS a
+	 *    `BodyGroup` to 0, so the width a CASCADE reads for an item ALREADY
+	 *    committed to breaking collapses between the two passes. It is the class
+	 *    ω-committed-objectlit-glue closed inside `shapeSingleArgGlue`'s `{`-branch,
+	 *    met here through the cascade's own INPUT rather than through a shaper's
+	 *    probe, and it SURVIVES a rules-free cascade — which is what proves it is
+	 *    not mechanism A. Measured, one width per pass:
+	 *     · `HasSignalBuilder.hx` — `WrapList.measureItems` reports 227 for the sole
+	 *       `FFun(<ternary>)` argument on pass 1 and 15 on pass 2, which turns
+	 *       `callParameter`'s `itemCount <= 1 && totalItemLength <= 100` `noWrap` ON
+	 *       and glues `FFun(setcontroll` where pass 1 had opened the paren
+	 *       (`shapeSingleArgGlue` is not reached at all on pass 2).
+	 *     · `Imagemin.hx` — `MethodChainEmit.measureSegments` reports 173 for the
+	 *       receiver on pass 1 and 60 on pass 2, total 195 against 82, which glues
+	 *       `}).then(completeHandler)` onto the literal's close brace. It has no
+	 *       fixture here yet; the sole-argument-call host above carries the pin for
+	 *       both.
+	 *
+	 * The two mechanisms STACK, and that is what a THREE-rewrite file is:
+	 * `tools/src/create/ides/VSCode.hx` under Pony's committed config plus
+	 * `arrayWrap: {"defaultWrap": "fillLine", "rules": []}` —
+	 * `testStackedMechanismsNeedThreeRewrites`. `defaultWrap` alone does NOT
+	 * reproduce it: the shipped `arrayWrap` rules shadow it and the file converges,
+	 * so the `rules: []` is load-bearing.
+	 *
+	 * `src/anyparse/query/Cli.hx` is mechanism B in a third host —
+	 * `testMultiArgFillPacksACommittedBodyOnPassTwo`. It is NOT
+	 * `shapeMultiArgCollection`, which `shapeMultiArgBlockLambda` claims first and
+	 * which never sees the divergent list.
 	 *
 	 * Candidate fixes measured on this tree and Pony's. The first one SHIPPED
 	 * (W17); the rest did not, and every one of those reformats anyparse's OWN
@@ -488,9 +638,18 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 *    to the glue gate instead of the break shape (W17): closes ONE case-body
 	 *    file, reformats 10 here — every one of them a `for`/`if` body glued onto
 	 *    its header — and adds two files to Pony's drift set. Rejected.
+	 *  - saturating a COMMITTED item's width in `WrapList.measureItems` to
+	 *    `MAX_ITEM_LEN`, so a `totalItemLength <= n` rule can never fire on a list
+	 *    that cannot render flat — mechanism B's false premise, stated the way
+	 *    ω-committed-objectlit-glue states it for `IfArrowContinuationFits`: closes
+	 *    TWO of the ten reduced shapes (`DIBuilder.hx`, `HasSignalBuilder.hx`) and
+	 *    takes `VSCode.hx` from three rewrites to two, while reformatting 11 files
+	 *    of THIS tree, +117/-87, net +30 lines, max added column 137. Saturating
+	 *    only the `total` axis and leaving `maxLen`/`minLen`/`equalLens` alone
+	 *    measures IDENTICALLY. Rejected on that trade.
 	 *
-	 * So the writer defect is left standing for the remaining five and reported
-	 * (`apq fmt` warns), and the CONSUMER that was silently harmed by it —
+	 * So the writer defect is left standing for all eight and reported (`apq fmt`
+	 * warns), and the CONSUMER that was silently harmed by it —
 	 * `RefactorSupport.canonicalize` — was fixed instead. When a fix does land,
 	 * these three become `Assert.equals` on `once` and `twice`; do not delete them.
 	 */
@@ -504,18 +663,12 @@ class WrapFlatSourceFixedPointTest extends Test {
 			{
 				name: 'value-if branch (DIBuilder.hx)',
 				config: VALUE_IF_NESTED,
-				src: 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n\t\t\t{ expr: EVars([\n'
-					+ '\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', params: [TPType(t)] '
-					+ '}), expr: macro null, isFinal: false }\n\t\t\t]), pos: Context.currentPos() }\n\t\telse\n\t\t\tcheckExpr(x);\n\t}\n}'
+				src: VALUE_IF_SRC
 			},
 			{
 				name: 'ternary under a sole-arg call (HasSignalBuilder.hx)',
 				config: CALL_TERNARY_NESTED,
-				src: 'class C {\n\tfunction f(): Void {\n\t\tfields.push({\n\t\t\tname: setterName,\n'
-					+ '\t\t\taccess: ast.concat([AInline, setterAccess]),\n\t\t\tmeta: null,\n\t\t\tpos: f.pos,\n'
-					+ '\t\t\tkind: FFun(setcontroll ? { args: [{ name: \'v\', type: null }], ret: null, expr: macro return evName == null '
-					+ '|| v != fName && !evName.dispatchWithFlag(v, fName, notsave) ? fName = v : fName } : { args: [{ name: \'v\', type: '
-					+ 'null }], ret: null, expr: macro { if (evName == null) { var prev = fName; } return fName; } })\n\t\t});\n\t}\n}'
+				src: CALL_TERNARY_SRC
 			}
 		];
 		for (c in cases) {
@@ -667,6 +820,142 @@ class WrapFlatSourceFixedPointTest extends Test {
 			'expected the literal left flat on its own continuation line, got:\n<$once>'
 		);
 		Assert.equals(once, write(once, CALL_ARG_COMMITTED_OBJECT), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * The tail's TWO mechanisms, told apart by ONE config edit
+	 * (ω-canonical-fixed-point).
+	 *
+	 * `testConvergenceTailStillNeedsTwoRewrites` pins these same three sources
+	 * DIVERGENT under cascades that carry a fit-dependent `noWrap` shadow. Run
+	 * them again with only that shadow removed — a rules-free cascade answers
+	 * ONE mode in both fit states, so no `IfFirstLineExceeds` pivot can exist —
+	 * and two of the three CONVERGE while the third still needs two rewrites.
+	 *
+	 * That split is the whole content of the mechanism claim above, and the two
+	 * tests together are its mutation proof: the only variable between them is
+	 * the cascade's `rules` array, and flipping it flips exactly the first two
+	 * cases.
+	 *
+	 * Each case pins the settled SHAPE beside the rewrite count, so a writer
+	 * that reformatted nothing at all would fail here rather than pass.
+	 */
+	public function testTailMechanismSplitsOnTheLiteralCascade(): Void {
+		final cases: Array<{
+			name: String,
+			src: String,
+			config: String,
+			rewrites: Int,
+			shape: String
+		}> = [
+			{
+				name: 'case body — mechanism A, the pivot WAS the whole cause',
+				src: CASE_BODY_SRC,
+				config: CASE_BODY_COMMITTED,
+				rewrites: 1,
+				shape: 'case \'zip\': cfg.zips.push({\n'
+			},
+			{
+				name: 'value-if branch — mechanism A',
+				src: VALUE_IF_SRC,
+				config: VALUE_IF_COMMITTED,
+				rewrites: 1,
+				shape: 'if (staticDIVar != null)\n\t\t\t{\n\t\t\t\texpr: EVars([\n'
+			},
+			{
+				name: 'ternary under a sole-arg call — mechanism B, no pivot and still two passes',
+				src: CALL_TERNARY_SRC,
+				config: CALL_TERNARY_COMMITTED,
+				rewrites: 2,
+				shape: 'kind: FFun(setcontroll\n'
+			}
+		];
+		for (c in cases) {
+			final result: FormatFixedPointResult = FormatFixedPoint.run(s -> write(s, c.config), c.src);
+			Assert.equals(
+				c.rewrites, result.rewrites,
+				'${c.name}: the mechanism split moved — re-run the committed-cascade sweep before editing the doc above'
+			);
+			final settled: Null<String> = result.text;
+			Assert.isTrue(settled != null && settled.indexOf(c.shape) != -1, '${c.name}: settled on an unexpected shape:\n<$settled>');
+		}
+	}
+
+	/**
+	 * The two mechanisms STACKED, which is what a THREE-rewrite file is
+	 * (ω-canonical-fixed-point).
+	 *
+	 * `tools/src/create/ides/VSCode.hx` under Pony's committed `hxformat.json`
+	 * plus `arrayWrap: {"defaultWrap": "fillLine", "rules": []}` needs three
+	 * writer rewrites — one deeper than any shape recorded before this. The
+	 * links settle one per pass and they are one of each mechanism: pass 1 to 2
+	 * packs the committed array (`} : Dynamic), ({`, mechanism B), and only the
+	 * shape that leaves lets pass 2 to 3 read the enclosing literal's pivot and
+	 * explode it one-per-line (mechanism A).
+	 *
+	 * Committing the literal cascade removes the second link and leaves exactly
+	 * two, which is the assertion that proves the two are independent rather
+	 * than one decision counted twice.
+	 */
+	public function testStackedMechanismsNeedThreeRewrites(): Void {
+		final chained: FormatFixedPointResult = FormatFixedPoint.run(s -> write(s, STACKED_ARRAY_PIVOT), STACKED_SRC);
+		// `converged` first: three is ONE pass under `FormatFixedPoint.MAX_REWRITES`,
+		// so a chain that grew a fourth link would fail the count assertion with
+		// "expected 3 got 4" and say nothing about the condition that actually broke.
+		Assert.isTrue(chained.converged, 'the chain must still reach a fixed point at all: ${chained.failure}');
+		Assert.equals(3, chained.rewrites, 'the deepest known chain must still take three writer rewrites');
+		final settled: Null<String> = chained.text;
+		Assert.isTrue(
+			settled != null && settled.indexOf('} : Dynamic), ({\n') != -1,
+			'the mechanism-B link must settle on the packed array:\n<$settled>'
+		);
+		Assert.isTrue(
+			settled != null && settled.indexOf('final data = {\n\t\t\tversion: \'0.2.0\',\n') != -1,
+			'the mechanism-A link must settle on the exploded literal:\n<$settled>'
+		);
+		Assert.equals(
+			2, FormatFixedPoint.run(s -> write(s, STACKED_ARRAY_COMMITTED), STACKED_SRC).rewrites,
+			'with the literal cascade committed exactly ONE link must remain'
+		);
+	}
+
+	/**
+	 * Mechanism B in a third host: the multi-argument fill
+	 * (ω-canonical-fixed-point).
+	 *
+	 * `src/anyparse/query/Cli.hx`'s `limitEntries(...)` is a fixed point under
+	 * this project's own `hxformat.json`, so nothing here observes it; 14 of 78
+	 * single-knob config arms do. Under a COMMITTED literal cascade the
+	 * trailing `(e, k) -> {…}` argument measures `DocMeasure.flatTokenWidth` 66
+	 * on pass 1 and 10 on pass 2 — the `BodyGroup` deferral — so
+	 * `shapeFillLineWithLeadingBreak`'s `FillBreakAfterWrap` wraps before that
+	 * argument on pass 1 and packs it on pass 2.
+	 *
+	 * The control is the SAME cascade with its `totalItemLength <= 140` shadow
+	 * put back: the literal then stays flat, nothing is committed, and one
+	 * rewrite is the fixed point. It is green at base BY CONSTRUCTION, so it is
+	 * not evidence on its own — its job is to show that the two-rewrite arm
+	 * above is about the COMMITMENT and not about the source.
+	 */
+	public function testMultiArgFillPacksACommittedBodyOnPassTwo(): Void {
+		final committed: FormatFixedPointResult = FormatFixedPoint.run(s -> write(s, CALL_TERNARY_COMMITTED), MULTI_ARG_FILL_SRC);
+		Assert.equals(2, committed.rewrites, 'the multi-argument fill must still need two writer rewrites');
+		final settled: Null<String> = committed.text;
+		Assert.isTrue(
+			settled != null && settled.indexOf('e -> e.hits.length, (e, k) -> {\n') != -1,
+			'pass 2 must pack the committed lambda body onto the leading arguments:\n<$settled>'
+		);
+		final control: FormatFixedPointResult = FormatFixedPoint.run(s -> write(s, CALL_TERNARY_NESTED), MULTI_ARG_FILL_SRC);
+		Assert.equals(1, control.rewrites, 'an UNcommitted literal leaves the same call a one-rewrite fixed point');
+		final flat: Null<String> = control.text;
+		// SPANNING assertion: the packed leading arguments AND the flat literal in
+		// one string. The source line differs from it by the space before its close
+		// brace, so no untransformed input can satisfy it.
+		Assert.isTrue(
+			flat != null && flat.indexOf('e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)}\n')
+				!= -1,
+			'the control must keep the literal flat on the packed argument line:\n<$flat>'
+		);
 	}
 
 	private static function write(src: String, config: String): String {
