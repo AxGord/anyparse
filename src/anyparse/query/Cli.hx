@@ -10417,7 +10417,14 @@ final class Cli {
 						nextActive.push(entry);
 					}
 				case Err(message):
-					if (passes == 1 && !noted.contains(entry.file)) {
+					// EVERY pass, not just the first: `noted` already dedupes per file, so the
+					// `passes == 1` this used to also carry bought nothing and cost the one place a
+					// slot emptied BETWEEN two checks can land — a per-check look cannot see that
+					// pair, so this backstop is its only report, and it was muted exactly where the
+					// backstop is the whole point. It is also what the run summary counts as
+					// `N file(s) skipped`, so a later-pass refusal used to leave the file unwritten
+					// AND uncounted.
+					if (!noted.contains(entry.file)) {
 						stderr('apq lint --fix: ${entry.file}: $message\n');
 						noted.push(entry.file);
 					}
@@ -10543,10 +10550,21 @@ final class Cli {
 			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 			if (own.length == 0) continue;
 			final checkEdits: Array<{ span: Span, text: String }> = check.fix(source, own, cached, index);
+			// The guard runs BEFORE the ledger, because the ledger's subject is what the check
+			// ACHIEVED and a refused edit set achieves nothing. Counting it as `edits` claimed the rule
+			// had fixed these findings, so the run reported no decline for them at all — and the one
+			// sentence anyone had about why, the guard's own message, was computed right here and
+			// thrown away against `null`. A refusal is now the row's verdict, in the guard's words.
+			//
+			// It also now runs for an edit set the overlap test below would have short-circuited past.
+			// That is the point: an overlap is temporary and the deferred check fires cleanly next
+			// pass, while a gate refusal is a standing fact about those edits, so recording the
+			// refusal rather than "1 edit produced" is the truer of the two readings.
+			final refused: Null<String> = checkEdits.length > 0 ? BodySlotGuard.emptiedSlot(source, checkEdits, cached) : null;
 			// The ONE place in the tool that knows what a check answered for a given set of its own
 			// findings. Recorded here rather than inferred later: "no edit came back" is a fact only
 			// this call site holds, and every reading of it downstream was a guess.
-			noteFixOutcome(ledger, check.id(), own, checkEdits.length, countDeclines);
+			noteFixOutcome(ledger, check.id(), own, refused == null ? checkEdits.length : 0, countDeclines, refused);
 			// Accept a check's edits only when none overlaps an edit already accepted from
 			// an earlier check this pass — applying a subset would break an atomic fix
 			// (e.g. unused-parameter's signature edit without its call-site arg edit, when
@@ -10557,11 +10575,8 @@ final class Cli {
 			// `if (c) var y = 1;` costs its own fix and not the other rules' work on the file.
 			// `canonicalize` refuses the same shape for the whole file; that stays the backstop
 			// for a slot two checks empty between them, which no per-check look can see.
-			if (
-				checkEdits.length > 0 && !RefactorSupport.editsOverlapAny(checkEdits, edits)
-				&& BodySlotGuard.emptiedSlot(source, checkEdits, cached) == null
-			)
-				for (e in checkEdits) edits.push(e);
+			if (checkEdits.length > 0 && refused == null && !RefactorSupport.editsOverlapAny(checkEdits, edits)) for (e in checkEdits)
+				edits.push(e);
 		}
 		return RefactorSupport.dropContainedEdits(edits);
 	}
@@ -10593,12 +10608,15 @@ final class Cli {
 	 * — a later pass re-reports whatever an earlier edit exposed, and summing those would count
 	 * one finding several times.
 	 *
-	 * The REASON is never inferred here. It is whatever the check itself wrote on one of its own
-	 * findings (`Violation.declineReason`), first one seen; a rule that says nothing leaves it
-	 * null and the ledger reports only what it observed.
+	 * The REASON is never invented here, but it has two sources. Normally it is whatever the check
+	 * itself wrote on its own findings (`Violation.declineReason`); when the writer-emit gate REFUSED
+	 * the check's edits, `refusal` carries the gate's own sentence and stands for all of them — the
+	 * check answered, the driver threw the answer away, and the driver is the only one that can say
+	 * so. A rule that says nothing either way leaves it null and the ledger reports only what it
+	 * observed.
 	 */
 	private static function noteFixOutcome(
-		ledger: Map<String, RuleFixOutcome>, rule: String, own: Array<Violation>, editCount: Int, countDeclines: Bool
+		ledger: Map<String, RuleFixOutcome>, rule: String, own: Array<Violation>, editCount: Int, countDeclines: Bool, ?refusal: String
 	): Void {
 		final entry: RuleFixOutcome = ledgerFor(ledger, rule);
 		entry.edits += editCount;
@@ -10608,7 +10626,7 @@ final class Cli {
 		// a reason total BELOW `declined` says the check spoke for some of them and not the rest,
 		// which is a fact about the check, not an artefact of where the counting happened.
 		for (v in own) {
-			final reason: Null<String> = v.declineReason;
+			final reason: Null<String> = refusal ?? v.declineReason;
 			if (reason == null) continue;
 			final text: String = reason;
 			final seen: Null<{ text: String, count: Int }> = entry.reasons.find(r -> r.text == text);
@@ -17986,14 +18004,15 @@ private typedef NamedMember = {
  * "reported but got no edit" block.
  *
  * `reported` is the FIRST pass's finding count (later passes see only what an earlier edit
- * exposed, so summing them would not be a number to compare `fixed N` against). `declined`
- * counts the first-pass findings whose `Check.fix` call answered with NO edit at all — the
+ * exposed, so summing them would not be a number to compare `fixed N` against). `declined` counts the first-pass findings that got no LANDED edit — either their `Check.fix`
+ * answered with none at all, or it answered and the writer-emit gate refused the lot; the
  * measurement, taken where the call happens, that replaces guessing. `edits` accumulates over
  * EVERY pass on purpose: one edit anywhere PROVES the rule can fix, which is exactly the claim
  * a reader of `fixed 0` got wrong twice.
  *
- * `reasons` are the check's own `Violation.declineReason` texts, each with the number of DECLINED
- * findings that carried it — never one sentence per rule. First-seen-wins was the shape while every
+ * `reasons` are the check's own `Violation.declineReason` texts — or, for an edit set the
+ * writer-emit gate refused, that gate's sentence — each with the number of DECLINED findings that
+ * carried it, never one sentence per rule. First-seen-wins was the shape while every
  * converted rule declined for a single cause; the first rule to adopt the field per-ARM declines for
  * four different ones on one tree (`unused-import`: 110 out-of-scope, 54 `#if`-guarded, 25 unknown
  * `using`, 15 unknown wildcard), and reporting whichever the file walk reached first would state one

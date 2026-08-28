@@ -510,6 +510,7 @@ import unit.LintConfigInheritanceTest;
 import unit.LintConfigTest;
 import unit.LintDiffTest;
 import unit.LintFailOnCliTest;
+import unit.LintFixDeclineWiringSliceTest;
 import unit.LintFixFixedPointCliTest;
 import unit.LintFixFollowUpRoundTest;
 import unit.LintFixSafePassRevertTest;
@@ -1141,6 +1142,7 @@ class RunTests {
 		addCase(new PatchSliceTest());
 		addCase(new RemoveElementSliceTest());
 		addCase(new BodySlotGuardSliceTest());
+		addCase(new LintFixDeclineWiringSliceTest());
 		addCase(new LexicalRegionsTest());
 		addCase(new RemoveImportSliceTest());
 		addCase(new RemoveMemberSliceTest());

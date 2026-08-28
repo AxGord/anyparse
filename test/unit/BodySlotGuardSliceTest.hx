@@ -29,15 +29,21 @@ import sys.io.File;
  * nothing. `apq lint --fix` reached the identical result through `unused-local` on
  * `if (c) var y: Int = 1;`.
  *
- * All eight refusal tests are RED against `1218170f` (8 failures / 9 successes of 17
- * assertions). Six of them WROTE the corrupted file and reported success; `do` and
- * `catch` failed there on the re-parse gate instead, with a message that names nothing
- * about the cause — the second thing the guard buys.
+ * The eight refusal tests written for the guard's first slice are RED against `1218170f`
+ * (8 failures / 9 successes of 17 assertions). Six of them WROTE the corrupted file and
+ * reported success; `do` and `catch` failed there on the re-parse gate instead, with a message
+ * that names nothing about the cause — the second thing the guard buys. Nine more refusals came
+ * with the RESULT-side question that followed: a non-blank replacement that drops the body, one
+ * that is itself an unfinished construct, one that is no construct at all, a construct the
+ * replacement BUILDS over a plain statement, one an INSERTION drops in, and a swallow whose end
+ * lands in a second, unrelated edit — every one of them measured on a program that stopped
+ * printing at rc 0.
  *
- * The three CONTROL tests are green on both sides by construction and are the other
- * half of the pin: a guard that refused a `case` arm, a braced body or an ordinary
- * block statement would be a worse regression than the bug, since those deletions mean
- * exactly what they say.
+ * The eleven CONTROL tests are green on both sides by construction and are the other half of
+ * the pin: a guard that refused a `case` arm, a braced body, an ordinary block statement, a
+ * sole `catch` clause, a header rewritten over its own body or a body somebody braced by hand
+ * would be a worse regression than the bug, since those edits mean exactly what they say. Each names the line it pins and how disabling that line flips it — except one, which says
+ * plainly that nothing flips it and why it is still here.
  */
 class BodySlotGuardSliceTest extends Test {
 
@@ -53,6 +59,20 @@ class BodySlotGuardSliceTest extends Test {
 
 	/** A `try` EXPRESSION whose body is the distinctive literal `11`. */
 	private static final TRY_EXPR: String = 'class C {\n\tfunction f():Int {\n\t\treturn try 11 catch (e:Dynamic) 22;\n\t}\n}\n';
+
+	/** A brace-less `while` whose body is `a();`, followed by `b();` — the `if` fixture's loop twin. */
+	private static final WHILE_STMT: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\twhile (c) a();\n\t\tb();\n\t}\n}\n';
+
+	/** A brace-less `try` with ONE `catch`, followed by `b();`. */
+	private static final TRY_CATCH_STMT: String =
+		'class C {\n\tfunction f():Void {\n\t\ttry a() catch (e:Dynamic) d();\n\t\tb();\n\t}\n}\n';
+
+	/** The same with a trailing line comment after it — trivia the `try`\'s own span runs into. */
+	private static final TRY_CATCH_COMMENT_STMT: String =
+		'class C {\n\tfunction f():Void {\n\t\ttry a() catch (e:Dynamic) d(); // note\n\t\tb();\n\t}\n}\n';
+
+	/** Two plain statements and no control construct anywhere — what a replacement can BUILD one over. */
+	private static final PLAIN_STMTS: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\ta();\n\t\tb();\n\t}\n}\n';
 
 	/** The then-branch of a brace-less `if` — the shape the campaign reported. */
 	public function testRefusesBracelessIfBody(): Void {
@@ -125,6 +145,153 @@ class BodySlotGuardSliceTest extends Test {
 	 */
 	public function testRefusesCommentReplacementOfBracelessIfBody(): Void {
 		assertRefusalNames(spliceOf(IF_STMT, 'a();', '// gone'), 'IfStmt');
+	}
+
+	/**
+	 * A replacement that is NOT blank and still drops the body — the shape S30 left open.
+	 * `apq patch` with `if (flag) log.push('x');` ==== `if (flag)` wrote `if (flag)` followed by
+	 * the NEXT statement, which parses and silently re-binds it into the branch: measured on a
+	 * program that went from printing `in-branch,after` / `after` to printing `after` / nothing,
+	 * rc 0 and `wrote <file>` throughout.
+	 *
+	 * Neither source-side test can see it. The pre-filter reads the edit TEXT, and `if (flag)` is
+	 * not blank, so the guard used to return before it ever parsed; and `surviving` splices a
+	 * super-span edit's whole text into every clipped sub-region, so host and slot BOTH read
+	 * non-blank even once it does. The answer is on the RESULT: the construct ends up covering
+	 * source text that used to follow it.
+	 */
+	public function testRefusesNonBlankReplacementDroppingBracelessIfBody(): Void {
+		assertRefusalNames(spliceOf(IF_STMT, 'if (c) a();', 'if (c)'), 'IfStmt');
+	}
+
+	/** The same one-node-over: a `while` header kept, its body dropped, the next statement pulled in. */
+	public function testRefusesNonBlankReplacementDroppingBracelessWhileBody(): Void {
+		assertRefusalNames(spliceOf(WHILE_STMT, 'while (c) a();', 'while (c)'), 'WhileStmt');
+	}
+
+	/**
+	 * The construct the replacement BUILDS, over a statement that had no construct around it.
+	 * `a();` ==== `if (c)` in a plain block wrote `if (c) b();` — rc 0, and a probe went from
+	 * printing `one,two` twice to printing `two` and then nothing. NOTHING in the source lost a
+	 * body here, so every source-side reading of the edits is silent by construction; only the
+	 * result says what happened. The first shape this guard's own trigger was too narrow to see.
+	 */
+	public function testRefusesConstructBuiltOverAPlainStatement(): Void {
+		assertRefusalNames(spliceOf(PLAIN_STMTS, 'a();', 'if (c)'), 'IfStmt');
+	}
+
+	/**
+	 * The construct's end landing in a SECOND, unrelated edit. Two independent pairs — one on the
+	 * brace-less body, one on the statement after it — wrote `if (c) a() + d();` with the second
+	 * statement inside the branch, rc 0, because the end sat inside a replacement and the rule read
+	 * every such end as authored. A replacement only authors an end it reaches back to.
+	 */
+	public function testRefusesSwallowEndingInAnUnrelatedEdit(): Void {
+		assertRefusalNames(splicesOf(IF_STMT, [{ find: 'a();', text: 'a() +' }, { find: 'b();', text: 'd();' }]), 'IfStmt');
+	}
+
+	/**
+	 * The same swallow from an edit that DELETES NOTHING. `apq add-element --before` with the bare
+	 * element `if (c)` wrote `if (c) b();` — rc 0 — and the pre-filter, which asked for an edit
+	 * with a non-empty span, returned before parsing. An insertion replaced nothing, so it owns
+	 * nothing: a construct born there may end inside the inserted text and nowhere else.
+	 */
+	public function testRefusesConstructBornAtAPureInsertion(): Void {
+		assertRefusalNames(insertOf(PLAIN_STMTS, 'b();', 'if (c)\n\t\t'), 'IfStmt');
+	}
+
+	/**
+	 * CONTROL for the comment half of `trimmedEnd`, green on both sides: the sole-`catch` removal
+	 * again, with a trailing `// note` after the statement. A node span runs into trailing trivia
+	 * and the two sides carry different amounts of it, so trimming only WHITESPACE made this
+	 * ordinary `remove-element` a refusal — one comment was the whole discriminator, and the
+	 * comment-free twin below stayed green throughout.
+	 */
+	public function testAllowsSoleCatchClauseRemovalWithATrailingComment(): Void {
+		final out: String = assertRemoved(TRY_CATCH_COMMENT_STMT, 3, 11);
+		Assert.isTrue(out.indexOf('catch') == -1, 'the catch clause is gone: $out');
+		Assert.isTrue(out.indexOf('// note') != -1 && out.indexOf('b();') != -1, 'the comment and the next statement stay: $out');
+	}
+
+	/**
+	 * The same corruption from an edit CONTAINED in the slot, which the crossing trigger alone
+	 * does not see: the replacement is itself a construct that needs a body. `apq patch` with
+	 * `log.push('in-branch');` ==== `if (log.length > 0)` wrote
+	 * `if (flag) if (log.length > 0) log.push('after');` — rc 0, `wrote <file>`, and the probe
+	 * stopped printing. `surviving` reads this slot exactly and it is NOT blank; what changed is
+	 * that the construct no longer ends where it did.
+	 */
+	public function testRefusesHeaderShapedReplacementOfBracelessIfBody(): Void {
+		assertRefusalNames(spliceOf(IF_STMT, 'a();', 'if (c)'), 'IfStmt');
+	}
+
+	/**
+	 * The swallow with NO construct in the replacement at all: an unterminated EXPRESSION.
+	 * `a();` ==== `a() +` leaves `if (c) a() + b();`, so `b()` moved inside the branch — and the
+	 * construct that took it in is the one already standing in SURVIVING source, not one the
+	 * replacement built. It is the only fixture that reads its limit off the source construct at
+	 * the same position rather than off the edit.
+	 */
+	public function testRefusesUnterminatedExpressionReplacementOfBracelessIfBody(): Void {
+		assertRefusalNames(spliceOf(IF_STMT, 'a();', 'a() +'), 'IfStmt');
+	}
+
+	/**
+	 * The near-miss neighbour of the refusal above, green on both sides: the SAME edit span,
+	 * replaced by a construct that DOES end. The rule must read "the `;` moved" as different
+	 * from "the `;` went", and the two fixtures differ in nothing but that.
+	 *
+	 * No single mutation of the guard flips this one — every line whose removal would refuse it
+	 * is already pinned by a fixture that refuses. It is here as the near-miss, not as a line's
+	 * proof.
+	 */
+	public function testAllowsTerminatedReplacementOfBracelessIfBody(): Void {
+		final out: String = assertSpliced(IF_STMT, 'a();', 'if (c) d();');
+		Assert.isTrue(out.indexOf('if (c) if (c) d();') != -1, 'the nested construct landed whole: $out');
+		Assert.isTrue(out.indexOf('b();') != -1, 'and the statement after it stays outside the branch: $out');
+	}
+
+	/**
+	 * CONTROL for the authored-end rule, green on both sides: a construct whose END sits inside
+	 * the REPLACEMENT is the shape the caller wrote out, however much it takes in. Bracing a body
+	 * around the following statement is a rewrite somebody spelled; only a construct that ends in
+	 * SURVIVING source can have taken in what nobody asked for. Drop the `editEnd` test in
+	 * `reached` and this goes red while every refusal above stays green.
+	 */
+	public function testAllowsAuthoredBodyThatTakesInTheNextStatement(): Void {
+		final out: String = assertSpliced(IF_STMT, 'a();\n\t\tb();', '{\n\t\t\ta();\n\t\t\tb();\n\t\t}');
+		Assert.isTrue(out.indexOf('if (c) {') != -1, 'the caller\'s braces are what the construct now holds: $out');
+		Assert.isTrue(out.indexOf('a();') != -1 && out.indexOf('b();') != -1, 'both statements survive inside them: $out');
+	}
+
+	/**
+	 * CONTROL for `ownedEnd`, green on both sides: a super-span edit that rewrites the HEADER
+	 * leaves the body where it was, so nothing is swallowed. It is what stops the rule from reading
+	 * every edit that spans a construct as a dropped body — make the inserted-start limit the
+	 * EDIT's own end instead of the region it replaced and this one goes red while every refusal
+	 * stays green.
+	 */
+	public function testAllowsHeaderRewriteOfBracelessConstruct(): Void {
+		final out: String = assertSpliced(WHILE_STMT, 'while (c)', 'if (c)');
+		Assert.isTrue(out.indexOf('if (c) a();') != -1, 'the header was rewritten over its own body: $out');
+		Assert.isTrue(out.indexOf('while') == -1 && out.indexOf('b();') != -1, 'nothing else moved: $out');
+	}
+
+	/**
+	 * CONTROL, and a correction to the brief that queued this slice: removing the SOLE `catch`
+	 * clause is NOT the brace-less-body class. Haxe 4.3.7 accepts a catch-less `try` — measured
+	 * on `-js` and `--interp`, braced and brace-less, statement and expression form, all rc 0 —
+	 * so the result is valid code that means what the edit says, and the guard must stay out of
+	 * the way.
+	 *
+	 * It is also the one shape that reaches the guard's whitespace-lead rule: the lead between a
+	 * try body and its first `catch` is a single space, so the slot is skipped. That skip is
+	 * correct here, which is why the "hole" was left as it is.
+	 */
+	public function testAllowsSoleCatchClauseRemoval(): Void {
+		final out: String = assertRemoved(TRY_CATCH_STMT, 3, 11);
+		Assert.isTrue(out.indexOf('catch') == -1, 'the catch clause is gone: $out');
+		Assert.isTrue(out.indexOf('a()') != -1 && out.indexOf('b();') != -1, 'the try body and the next statement stay: $out');
 	}
 
 	/**
@@ -265,10 +432,29 @@ class BodySlotGuardSliceTest extends Test {
 	 * `reformat` is true so the fixture does not also have to be writer-canonical.
 	 */
 	private static function spliceOf(source: String, fragment: String, text: String): EditResult {
-		final at: Int = source.indexOf(fragment);
-		if (at < 0) throw new Exception('the fixture does not contain "$fragment"');
-		final edits: Array<{ span: Span, text: String }> = [{ span: new Span(at, at + fragment.length), text: text }];
+		return splicesOf(source, [{ find: fragment, text: text }]);
+	}
+
+	/**
+	 * SEVERAL hand-built edits over `source`, through `canonicalize` — the shape a `patch`
+	 * multi-pair payload and one `lint --fix` check's edit set both produce, and the only one where
+	 * a construct's end can land in an edit OTHER than the one that touched its body.
+	 */
+	private static function splicesOf(source: String, pairs: Array<{ find: String, text: String }>): EditResult {
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (pair in pairs) {
+			final at: Int = source.indexOf(pair.find);
+			if (at < 0) throw new Exception('the fixture does not contain "${pair.find}"');
+			edits.push({ span: new Span(at, at + pair.find.length), text: pair.text });
+		}
 		return RefactorSupport.canonicalize(source, edits, true, new HaxeQueryPlugin());
+	}
+
+	/** One pure INSERTION before `before`, through `canonicalize` — an edit whose span deletes nothing. */
+	private static function insertOf(source: String, before: String, text: String): EditResult {
+		final at: Int = source.indexOf(before);
+		if (at < 0) throw new Exception('the fixture does not contain "$before"');
+		return RefactorSupport.canonicalize(source, [{ span: new Span(at, at), text: text }], true, new HaxeQueryPlugin());
 	}
 
 }
