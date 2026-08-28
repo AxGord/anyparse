@@ -267,30 +267,10 @@ class LintFixFixedPointCliTest extends Test {
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerTellsNoAutofixApartFromDeclinedHere(): Void {
 		final lines: Array<String> = Cli.unfixedFixLedger([
-			'complexity' => {
-				reported: 3,
-				declined: 3,
-				edits: 0,
-				reasons: []
-			},
-			'prefer-typed-throw' => {
-				reported: 9,
-				declined: 9,
-				edits: 0,
-				reasons: [{ text: 'a String catch clause is in scope', count: 9 }]
-			},
-			'naming' => {
-				reported: 7,
-				declined: 2,
-				edits: 5,
-				reasons: []
-			},
-			'magic-number' => {
-				reported: 1,
-				declined: 1,
-				edits: 0,
-				reasons: []
-			}
+			'complexity' => outcome(3, 3, 0),
+			'prefer-typed-throw' => outcome(9, 9, 0, [{ text: 'a String catch clause is in scope', count: 9 }]),
+			'naming' => outcome(7, 2, 5),
+			'magic-number' => outcome(1, 1, 0)
 		], ['complexity' => 'which decomposition is right is a human call'], [], []);
 		final all: String = lines.join('');
 		Assert.isTrue(
@@ -321,14 +301,7 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerIsSilentWhenNothingWasDeclined(): Void {
-		final fixedEverything: Array<String> = Cli.unfixedFixLedger([
-			'unused-import' => {
-				reported: 4,
-				declined: 0,
-				edits: 4,
-				reasons: []
-			}
-		], [], [], []);
+		final fixedEverything: Array<String> = Cli.unfixedFixLedger(['unused-import' => outcome(4, 0, 4)], [], [], []);
 		Assert.equals(0, fixedEverything.length, 'nothing was declined, so there is nothing to explain');
 		Assert.equals(0, Cli.unfixedFixLedger([], [], [], []).length, 'a clean run gains no noise');
 	}
@@ -342,18 +315,8 @@ class LintFixFixedPointCliTest extends Test {
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerNamesTheRulesItDoesNotCover(): Void {
 		final all: String = Cli.unfixedFixLedger([
-			'magic-number' => {
-				reported: 1,
-				declined: 1,
-				edits: 0,
-				reasons: []
-			},
-			'explicit-local-type' => {
-				reported: 5,
-				declined: 5,
-				edits: 0,
-				reasons: []
-			}
+			'magic-number' => outcome(1, 1, 0),
+			'explicit-local-type' => outcome(5, 5, 0)
 		], [], ['explicit-local-type'], ['avoid-dynamic', 'prefer-inline']).join('');
 		Assert.isTrue(all.indexOf('2 rule(s) never enter this ledger') >= 0, 'the RISKY rules are counted - got: $all');
 		Assert.isTrue(all.indexOf('avoid-dynamic, prefer-inline') >= 0, 'and named - got: $all');
@@ -373,54 +336,14 @@ class LintFixFixedPointCliTest extends Test {
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerCapsTheRuleListAndTotalsTheRest(): Void {
 		final all: String = Cli.unfixedFixLedger([
-			'r1' => {
-				reported: 8,
-				declined: 8,
-				edits: 0,
-				reasons: []
-			},
-			'r2' => {
-				reported: 7,
-				declined: 7,
-				edits: 0,
-				reasons: []
-			},
-			'r3' => {
-				reported: 6,
-				declined: 6,
-				edits: 0,
-				reasons: []
-			},
-			'r4' => {
-				reported: 5,
-				declined: 5,
-				edits: 0,
-				reasons: []
-			},
-			'r5' => {
-				reported: 4,
-				declined: 4,
-				edits: 0,
-				reasons: []
-			},
-			'r6' => {
-				reported: 3,
-				declined: 3,
-				edits: 0,
-				reasons: []
-			},
-			'r7' => {
-				reported: 2,
-				declined: 2,
-				edits: 0,
-				reasons: []
-			},
-			'r8' => {
-				reported: 1,
-				declined: 1,
-				edits: 0,
-				reasons: []
-			}
+			'r1' => outcome(8, 8, 0),
+			'r2' => outcome(7, 7, 0),
+			'r3' => outcome(6, 6, 0),
+			'r4' => outcome(5, 5, 0),
+			'r5' => outcome(4, 4, 0),
+			'r6' => outcome(3, 3, 0),
+			'r7' => outcome(2, 2, 0),
+			'r8' => outcome(1, 1, 0)
 		], [], [], []).join('');
 		Assert.isTrue(all.indexOf('r1 8:') >= 0 && all.indexOf('r6 3:') >= 0, 'the six biggest are named - got: $all');
 		Assert.isTrue(all.indexOf('r7 2:') < 0, 'the seventh is not - got: $all');
@@ -441,17 +364,12 @@ class LintFixFixedPointCliTest extends Test {
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerSpellsOutEveryReasonWithItsCount(): Void {
 		final all: String = Cli.unfixedFixLedger([
-			'unused-import' => {
-				reported: 205,
-				declined: 204,
-				edits: 2,
-				reasons: [
-					{ text: 'the import is `#if`-guarded', count: 54 },
-					{ text: 'the module is outside the lint scope', count: 110 },
-					{ text: 'the `using` module is unknown', count: 25 },
-					{ text: 'the wildcard symbol set is unknown', count: 15 }
-				]
-			}
+			'unused-import' => outcome(205, 204, 2, [
+				{ text: 'the import is `#if`-guarded', count: 54 },
+				{ text: 'the module is outside the lint scope', count: 110 },
+				{ text: 'the `using` module is unknown', count: 25 },
+				{ text: 'the wildcard symbol set is unknown', count: 15 }
+			])
 		], [], [], []).join('');
 		Assert.isTrue(
 			all.indexOf('unused-import 204 of 205: fix DECLINED, 4 distinct reason(s) over 204 finding(s)') >= 0,
@@ -477,26 +395,18 @@ class LintFixFixedPointCliTest extends Test {
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerKeepsOneReasonInlineAndOwnsTheRemainder(): Void {
 		final one: String = Cli.unfixedFixLedger([
-			'prefer-typed-throw' => {
-				reported: 9,
-				declined: 9,
-				edits: 0,
-				reasons: [{ text: 'a String catch clause is in scope', count: 9 }]
-			}
-		], [], [], []).join('');
+			'prefer-typed-throw' => outcome(9, 9, 0, [{ text: 'a String catch clause is in scope', count: 9 }])
+		], [], [], [])
+			.join('');
 		Assert.isTrue(
 			one.indexOf('prefer-typed-throw 9: fix DECLINED — a String catch clause is in scope\n') >= 0,
 			'one reason covering every decline stays on the row, byte for byte - got: $one'
 		);
 		Assert.isTrue(one.indexOf('×') < 0, 'and gains no sub-line it does not need - got: $one');
 		final partial: String = Cli.unfixedFixLedger([
-			'naming' => {
-				reported: 10,
-				declined: 10,
-				edits: 0,
-				reasons: [{ text: 'the method is an `override`', count: 4 }]
-			}
-		], [], [], []).join('');
+			'naming' => outcome(10, 10, 0, [{ text: 'the method is an `override`', count: 4 }])
+		], [], [], [])
+			.join('');
 		Assert.isTrue(
 			partial.indexOf('4× the method is an `override`') >= 0, 'the reason that WAS given is shown with its share - got: $partial'
 		);
@@ -548,6 +458,26 @@ class LintFixFixedPointCliTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/**
+	 * One ledger row for a fixture, with the empty lists defaulted.
+	 *
+	 * The shape lives HERE and not seventeen times over: spelled inline, adding a field to
+	 * `RuleFixOutcome` failed every literal at once with an anonymous-structure mismatch that named
+	 * neither the type nor which field was missing.
+	 */
+	private static function outcome(
+		reported: Int, declined: Int, edits: Int, ?reasons: Array<{ text: String, count: Int }>,
+		?refusals: Array<{ text: String, count: Int }>
+	): RuleFixOutcome {
+		return {
+			reported: reported,
+			declined: declined,
+			edits: edits,
+			reasons: reasons ?? [],
+			refusals: refusals ?? []
+		};
 	}
 
 }
