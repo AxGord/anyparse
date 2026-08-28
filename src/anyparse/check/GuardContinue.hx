@@ -652,6 +652,7 @@ private typedef HoistSeams = {
 	var loopJumpKinds: Array<String>;
 	var nestedScopeKinds: Array<String>;
 }
+
 /**
  * A matched loop guard: the trailing `if` statement, its braced then-branch, its
  * condition, the hoistable tail statements following the `if` (empty when it is the

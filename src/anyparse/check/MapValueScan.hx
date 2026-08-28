@@ -312,6 +312,7 @@ typedef Decl = {
 	final owner: Null<String>;
 	final exported: Bool;
 }
+
 /**
  * The grammar seams the no-null-value census reads.
  */

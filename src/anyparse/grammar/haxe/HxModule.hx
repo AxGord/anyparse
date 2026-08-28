@@ -249,6 +249,24 @@ typedef HxModule = {
 		'EnumAbstractDecl', 'betweenSingleLineTypes'
 	))
 	@:fmt(multilineWhenLeadingTriviaSpansLines('meta', 'decl'))
+
+	/**
+	 * ω-measured-multiline-decl — the RENDERED half of the same `multiline`
+	 * predicate. `multilineWhenLeadingTriviaSpansLines` above and the
+	 * per-payload `@:fmt(multilineWhen…)` metas answer from SHAPE: a class is
+	 * multi-line iff it declares members. An empty-bodied
+	 * `class C extends B implements I1 … I4 {}` whose heritage wraps is
+	 * single-line by that rule and three lines on the page. This flag makes
+	 * the EOF-Star loop build each declaration's Doc once up front and read
+	 * the answer off it — a committed break, or a width the module-level pen
+	 * cannot hold WITH somewhere to break it — which is the question fork
+	 * `MarkEmptyLines.getTypeInfo` asks through `isSameLine`. Only the
+	 * after- / before-side rules consume it; `betweenSingleLineTypes` keeps
+	 * its structural answer (see `WriterLowering.readCascadeInfosFromStar`).
+	 * EOF-mode Stars only — every other lowering path rejects the flag at
+	 * compile time, since no other scaffold declares the array it reads.
+	 */
+	@:fmt(measuredMultilineDecls)
 	@:fmt(blankBeforeOrphanLineCommentTrail)
 	@:fmt(blankBeforeLineCommentLed)
 	@:fmt(afterFileHeaderCommentBlanks)

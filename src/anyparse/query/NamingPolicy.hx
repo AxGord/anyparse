@@ -104,6 +104,7 @@ typedef NamingRule = {
 	 */
 	@:optional var normalizeAlt: String -> Null<String>;
 }
+
 /**
  * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category / modifier selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the grammar built-in default.
  */
@@ -187,6 +188,7 @@ typedef NamedDecl = {
 	 */
 	@:optional var contractName: Bool;
 }
+
 /**
  * One framework's INVOCATION contract: the root type whose subtypes the framework drives, and the
  * member names it reaches BY NAME with no call written anywhere in the project.
@@ -213,6 +215,7 @@ typedef FrameworkContract = {
 	/** Member-name prefixes the framework discovers by, matched as a leading fragment. */
 	final prefixes: Array<String>;
 };
+
 /**
  * A grammar plugins projection for the `naming` check: `project` lists the name-checkable declarations of a tree, and the policy lookup resolves each file to its effective `NamingPolicy` (discovered project config or built-in default). Keeps the check free of grammar-specific node types.
  */

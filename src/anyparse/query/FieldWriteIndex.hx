@@ -38,11 +38,13 @@ typedef UnresolvedWrite = {
 	var field: String;
 	var rhsType: Null<String>;
 }
+
 /** A parsed nominal type source: the simple `name` plus the raw text between its type-parameter brackets, if any. */
 private typedef NominalParts = {
 	var name: String;
 	var params: Null<String>;
 }
+
 /**
  * The current type-body context threaded down the walk: the enclosing type's
  * simple name, its decl-node KIND (an `underlyingThisTypeKinds` container makes
@@ -96,6 +98,7 @@ typedef ScanCtx = {
 	var typeParams: Map<String, Array<String>>;
 	var patternNames: Null<Array<String>>;
 }
+
 /**
  * A cross-file index of field WRITES keyed by the receiver's resolved type. Built
  * once over a whole file set, it answers — for a `(typeName, field)` pair — whether

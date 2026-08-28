@@ -330,6 +330,7 @@ typedef TypeDeclInfo = {
 	 */
 	var abstractForwardUnderlying: Null<String>;
 };
+
 /**
  * A cross-file index entry for one source file: its `file` path, `pkg` / `module`, `imports`, declared `types`, and `accessGrants` (types it `@:access(...)`-grants itself private reach into). The unit `SymbolIndex` aggregates.
  */

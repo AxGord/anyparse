@@ -2095,7 +2095,13 @@ class WriterLowering {
 		final trailBBAccess: Null<Expr> = c.trailBBAccess;
 		final trailLCAccess: Null<Expr> = c.trailLCAccess;
 		if (openText != null) parts.push(macro _dt($v{openText}));
-		final cascadeInfos: CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
+		// ω-measured-multiline-decl — this is the ONE Star kind whose scaffold
+		// declares `_measMulti`, so this is the one caller that may hand the
+		// cascade an accessor into it.
+		final measuredMultiline: Bool = starNode.fmtHasFlag('measuredMultilineDecls');
+		final cascadeInfos: CascadeInfos = readCascadeInfosFromStar(
+			starNode, elemRefName, measuredMultiline ? (macro _measMulti[_si]) : null
+		);
 		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
 		final lineCommentLedAddBlank: Bool = starNode.fmtHasFlag('blankBeforeLineCommentLed');
 		final afterFileHeaderCommentBlanks: Bool = starNode.fmtHasFlag('afterFileHeaderCommentBlanks');
@@ -2103,7 +2109,8 @@ class WriterLowering {
 		parts.push(TriviaEofLowering.triviaEofStarExpr(
 			fieldAccess, trailBBAccess, trailLCAccess, elemFn, cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 			cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos, lineCommentTrailBlank,
-			lineCommentLedAddBlank, afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks, cascadeInfos.betweenSameCtorIfNotInfos
+			lineCommentLedAddBlank, afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks, cascadeInfos.betweenSameCtorIfNotInfos,
+			measuredMultiline
 		));
 	}
 
@@ -4743,7 +4750,7 @@ class WriterLowering {
 	 * transparent meta whose classifier has no matching between/transition
 	 * meta is rejected at compile time as dead code.
 	 */
-	private function readCascadeInfosFromStar(starNode: ShapeNode, elemRefName: String): CascadeInfos {
+	private function readCascadeInfosFromStar(starNode: ShapeNode, elemRefName: String, ?measuredMultilineExpr: Expr): CascadeInfos {
 		// ω-leading-trivia-multiline — `@:fmt(multilineWhenLeadingTriviaSpansLines(
 		// '<metaField>', '<declField>'))` on the Star builds a per-element
 		// `_t`-scoped boolean OR-ed into the `'multiline'` predicate of every
@@ -4759,6 +4766,30 @@ class WriterLowering {
 		// which counts only the type's own leading comment + leading meta.
 		// Absent flag → null → byte-identical to pre-slice.
 		final triviaMultilineExpr: Null<Expr> = buildTriviaMultilineExpr(starNode);
+		// ω-measured-multiline-decl — `@:fmt(measuredMultilineDecls)` on the Star
+		// opts the two `multiline`-predicated blank rules (afterMultilineDecl /
+		// beforeMultilineDecl) into the RENDERED channel: a per-element boolean
+		// read out of `_measMulti`, the array `TriviaEofLowering` fills once per
+		// module from each element's built Doc. Deliberately NOT threaded into
+		// `blankLinesBetweenSameCtorIfNot` for the same reason the trivia flag is
+		// not — that rule OWNS the pair blank when `betweenSingleLineTypes > 0`,
+		// and flipping an element to not-single-line there would SUPPRESS the
+		// user-configured count rather than replace it with `betweenTypes`.
+		// Absent flag → null → byte-identical to pre-slice.
+		//
+		// The accessor is the CALLER's to supply, because only the EOF-mode Star
+		// declares `_measMulti`. This function has two callers — the EOF branch
+		// and the inner-Star (`@:tryparse`) branch — and reading the flag here
+		// would let the inner one emit a reference to an identifier its own
+		// scaffold never declares, failing as `Unknown identifier _measMulti`
+		// inside generated code with nothing naming the flag. The guard below
+		// turns that into the diagnostic it should be.
+		if (starNode.fmtHasFlag('measuredMultilineDecls') && measuredMultilineExpr == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(measuredMultilineDecls) is supported only on an EOF-mode @:trivia Star (the one that declares '
+				+ '`_measMulti`); this Star is lowered through another path',
+				Context.currentPos()
+			);
 		final afterCtorAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtor');
 		final afterCtorInfos: Array<AfterCtorBlankInfo> = [
 			for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args, null)
@@ -4773,7 +4804,7 @@ class WriterLowering {
 		// source gap the writer otherwise tightens
 		// (lineends/issue_216_typedef_without_semicolon_unstable_comments).
 		final afterCtorIfAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtorIf');
-		for (args in afterCtorIfAllArgs) afterCtorInfos.push(buildAfterCtorBlankInfoIf(elemRefName, args));
+		for (args in afterCtorIfAllArgs) afterCtorInfos.push(buildAfterCtorBlankInfoIf(elemRefName, args, measuredMultilineExpr));
 		// ω-after-conditional-block — tail-leaf-gated after-ctor override.
 		final afterCtorIfTailNullAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtorIfTailLeafNull');
 		for (args in afterCtorIfTailNullAllArgs) afterCtorInfos.push(buildAfterCtorBlankInfoIfTailLeafNull(elemRefName, args));
@@ -4785,7 +4816,7 @@ class WriterLowering {
 		for (args in beforeCtorIfAllArgs) beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
 		final beforeCtorIfPrevNotAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtorIfPrevNot');
 		for (args in beforeCtorIfPrevNotAllArgs)
-			beforeCtorInfos.push(buildBeforeCtorBlankInfoIfPrevNot(elemRefName, args, triviaMultilineExpr));
+			beforeCtorInfos.push(buildBeforeCtorBlankInfoIfPrevNot(elemRefName, args, triviaMultilineExpr, measuredMultilineExpr));
 		final betweenCtorAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
 		final tailTransparentAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorTailTransparent');
 		final headTransparentAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorHeadTransparent');
@@ -4883,7 +4914,7 @@ class WriterLowering {
 	 * ctor name (which would force the blank around empty-body decls
 	 * too, e.g. `class C<T> {}`).
 	 */
-	private function buildAfterCtorBlankInfoIf(elemRefName: String, args: Array<String>): AfterCtorBlankInfo {
+	private function buildAfterCtorBlankInfoIf(elemRefName: String, args: Array<String>, ?measuredMultilineExpr: Expr): AfterCtorBlankInfo {
 		if (args.length < 4)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesAfterCtorIf) expects ≥ 4 string args (classifierField, predicateAdapter, CtorName1, ['
@@ -4891,7 +4922,9 @@ class WriterLowering {
 				Context.currentPos()
 			);
 		final reduced: Array<String> = [args[0]].concat(args.slice(2));
-		final r: CtorBlankResolution = resolveCtorBlankArgs(elemRefName, reduced, 'blankLinesAfterCtorIf', args[1]);
+		final r: CtorBlankResolution = resolveCtorBlankArgs(
+			elemRefName, reduced, 'blankLinesAfterCtorIf', args[1], false, null, measuredMultilineExpr
+		);
 		return {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
@@ -5046,7 +5079,7 @@ class WriterLowering {
 	 * blank" rule (issue_298): `Conditional`-prev → respect source.
 	 */
 	private function buildBeforeCtorBlankInfoIfPrevNot(
-		elemRefName: String, args: Array<String>, ?triviaMultilineExpr: Expr
+		elemRefName: String, args: Array<String>, ?triviaMultilineExpr: Expr, ?measuredMultilineExpr: Expr
 	): BeforeCtorBlankInfo {
 		final sepIdx: Int = args.indexOf('|');
 		if (args.length < 5 || sepIdx < 0)
@@ -5070,7 +5103,7 @@ class WriterLowering {
 		// the predicate name threaded in).
 		final targetArgs: Array<String> = [classifier].concat(targetCtors).concat([optField]);
 		final target: CtorBlankResolution = resolveCtorBlankArgs(
-			elemRefName, targetArgs, 'blankLinesBeforeCtorIfPrevNot', predicateName, false, triviaMultilineExpr
+			elemRefName, targetArgs, 'blankLinesBeforeCtorIfPrevNot', predicateName, false, triviaMultilineExpr, measuredMultilineExpr
 		);
 		// Excluded side: bare binary classify-switch on the same classifier
 		// field — no predicate, kind=1 for any excluded ctor. `optField` is
@@ -5323,7 +5356,7 @@ class WriterLowering {
 	 */
 	private function resolveCtorBlankArgs(
 		elemRefName: String, args: Array<String>, metaName: String, predicateName: Null<String>, predicateInvert: Bool = false,
-		?triviaMultilineExpr: Expr
+		?triviaMultilineExpr: Expr, ?measuredMultilineExpr: Expr
 	): CtorBlankResolution {
 		if (args.length < 3)
 			Context.fatalError(
@@ -5366,7 +5399,7 @@ class WriterLowering {
 			else if (predicateName == null)
 				macro 1;
 			else
-				buildPredicateGatedKind(branch, predicateName, metaName, predicateInvert, triviaMultilineExpr);
+				buildPredicateGatedKind(branch, predicateName, metaName, predicateInvert, triviaMultilineExpr, measuredMultilineExpr);
 			// When a predicate gate is active, the case pattern must bind the
 			// first arg as `_v0` so the predicate can reference it. Plain
 			// (non-predicated) and zero-arg ctors keep the original wildcard
@@ -5415,7 +5448,8 @@ class WriterLowering {
 	 * untagged ctors emit `false`.
 	 */
 	private function buildPredicateGatedKind(
-		branch: ShapeNode, predicateName: String, metaName: String, invert: Bool = false, ?triviaMultilineExpr: Expr
+		branch: ShapeNode, predicateName: String, metaName: String, invert: Bool = false, ?triviaMultilineExpr: Expr,
+		?measuredMultilineExpr: Expr
 	): Expr {
 		if (predicateName != 'multiline')
 			Context.fatalError(
@@ -5447,12 +5481,29 @@ class WriterLowering {
 			else
 				buildMultilinePredicate(argTypeName, macro _v0);
 		}
-		final cond: Null<Expr> = if (structPred != null && triviaMultilineExpr != null)
-			macro ($structPred || $triviaMultilineExpr);
-		else if (structPred != null)
-			structPred;
+		// ω-measured-multiline-decl — the RENDERED channel. `structPred` answers
+		// from the payload's SHAPE (a class is multi-line iff it declares
+		// members), which is blind to a header that renders across lines on its
+		// own: an empty-bodied `class C extends B implements … {}` whose heritage
+		// clauses wrap is structurally single-line and physically three. Fork
+		// `MarkEmptyLines.getTypeInfo` asks `isSameLine`, which reads the
+		// whitespace `MarkWrapping` already committed — a rendering property, not
+		// a source one — so the honest analogue is to measure the built Doc. The
+		// caller supplies a per-element boolean (`_measMulti[_si]`, computed once
+		// per module in `TriviaEofLowering`); null keeps every pre-slice path
+		// byte-identical.
+		final rendered: Null<Expr> = if (triviaMultilineExpr != null && measuredMultilineExpr != null)
+			macro ($triviaMultilineExpr || $measuredMultilineExpr);
 		else if (triviaMultilineExpr != null)
 			triviaMultilineExpr;
+		else
+			measuredMultilineExpr;
+		final cond: Null<Expr> = if (structPred != null && rendered != null)
+			macro ($structPred || $rendered);
+		else if (structPred != null)
+			structPred;
+		else if (rendered != null)
+			rendered;
 		else
 			null;
 		return if (cond == null)
@@ -15834,6 +15885,17 @@ typedef BlockStarCtx = {
 typedef EofStarCtx = {
 	final fieldAccess: Expr;
 	final triviaElemCall: Expr;
+
+	/**
+	 * ω-measured-multiline-decl — the Star carries
+	 * `@:fmt(measuredMultilineDecls)`, so the loop pre-builds every element's
+	 * Doc into `_elemDocs` and its rendered-multiline verdict into
+	 * `_measMulti`, which the cascade's `multiline` predicate reads.
+	 */
+	final measuredMultiline: Bool;
+
+	/** Per-element write call with the comprehension binder `_e` as receiver — feeds the `_elemDocs` pre-pass. */
+	final measuredElemCall: Expr;
 	final trailBB: Expr;
 	final trailLC: Expr;
 	final emit: CascadeEmit;

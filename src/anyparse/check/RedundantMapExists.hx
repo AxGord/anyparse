@@ -330,6 +330,7 @@ private typedef Shape = {
 	final fallback: QueryNode;
 	final name: String;
 }
+
 /**
  * One matched `m.exists(k) ? m[k] : d` site and the verbatim parts its rewrite keeps.
  */

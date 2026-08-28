@@ -61,6 +61,7 @@ private typedef FixCtx = {
 	var index: Null<SymbolIndex>;
 	var flagged: Array<String>;
 }
+
 /**
  * Flags a **dead store**: an assignment to a local variable / parameter whose
  * value is provably never read — every path from the store reaches another

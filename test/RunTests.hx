@@ -352,6 +352,7 @@ import unit.HxMacroClassSliceTest;
 import unit.HxMacroModHexSliceTest;
 import unit.HxMacroTypeExprSliceTest;
 import unit.HxMaxAnywhereInFileSliceTest;
+import unit.HxMeasuredMultilineDeclBlankSliceTest;
 import unit.HxMemberVarTrailOptSliceTest;
 import unit.HxMetaAllmanObjectLitSliceTest;
 import unit.HxMetaCallStmtSpaceTest;
@@ -936,6 +937,7 @@ class RunTests {
 		addCase(new HxFillLeadingCommentTest());
 		addCase(new HxFormatterOffTest());
 		addCase(new HxBlankAroundMultilineMembersTest());
+		addCase(new HxMeasuredMultilineDeclBlankSliceTest());
 		addCase(new HxVarTypeHintAnonIndentTest());
 		addCase(new HxTypedefBetweenBlankTest());
 		addCase(new HxArrowFnTypeSliceTest());

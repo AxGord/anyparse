@@ -429,6 +429,7 @@ private typedef Origin = {
 	var editFrom: Int;
 	var editEnd: Int;
 };
+
 /**
  * Everything the result-side walk reads, in one value: the SOURCE tree and text with its comment
  * regions, the SPLICED text with its own, the edits ascending and pairwise

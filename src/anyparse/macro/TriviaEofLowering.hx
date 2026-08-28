@@ -54,10 +54,18 @@ final class TriviaEofLowering {
 		?betweenCtorInfos: Array<WriterLowering.BetweenCtorBlankInfo>, ?transitionAcrossInfos: Array<WriterLowering.TransitionAcrossInfo>,
 		?headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo>, lineCommentTrailBlank: Bool = false, lineCommentLedAddBlank: Bool = false,
 		afterFileHeaderCommentBlanks: Bool = false, betweenMultilineCommentsBlanks: Bool = false,
-		?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>
+		?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>, measuredMultiline: Bool = false
 	): Expr {
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
+			pos: Context.currentPos()
+		};
+		// ω-measured-multiline-decl — the same call with the comprehension
+		// binder as receiver, for the `_elemDocs` pre-pass. Docs are built
+		// ONCE either way: with the flag on, the loop reads `_elemDocs[_si]`
+		// instead of calling the element writer again.
+		final measuredElemCall: Expr = {
+			expr: ECall(macro $i{elemFn}, [macro _e.node, macro opt]),
 			pos: Context.currentPos()
 		};
 		final trailBB: Expr = trailBBAccess ?? macro false;
@@ -82,6 +90,8 @@ final class TriviaEofLowering {
 		final c: WriterLowering.EofStarCtx = {
 			fieldAccess: fieldAccess,
 			triviaElemCall: triviaElemCall,
+			measuredMultiline: measuredMultiline,
+			measuredElemCall: measuredElemCall,
 			trailBB: trailBB,
 			trailLC: trailLC,
 			emit: emit,
@@ -150,7 +160,11 @@ final class TriviaEofLowering {
 			}
 		});
 		whileBodyParts.push(balcExpr);
-		whileBodyParts.push(macro final _elem: anyparse.core.Doc = $triviaElemCall);
+		whileBodyParts.push(
+			c.measuredMultiline
+				? (macro final _elem: anyparse.core.Doc = _elemDocs[_si])
+				: (macro final _elem: anyparse.core.Doc = $triviaElemCall)
+		);
 		whileBodyParts.push(macro final _tc: Null<String> = _t.trailingComment);
 		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem));
 		whileBodyParts.push(c.emit.trackPrev);
@@ -172,6 +186,43 @@ final class TriviaEofLowering {
 		final headEmitExpr: Expr = c.emit.headEmit;
 		final elseBodyParts: Array<Expr> = [];
 		elseBodyParts.push(macro final _docs: Array<anyparse.core.Doc> = []);
+		// ω-measured-multiline-decl — build every element's Doc up front and
+		// record, per element, whether it RENDERS across more than one line.
+		// The question fork `MarkEmptyLines.getTypeInfo` answers with
+		// `isSameLine` over the whitespace `MarkWrapping` has already
+		// committed; here it is answered from the built Doc, in three terms:
+		//  - a COMMITTED break — exact, the same `hasForcedBreak` term
+		//    `WriterLowering.blankAroundMultilineExprs` uses for members;
+		//  - a flat width the module-level pen (column 0) cannot hold —
+		//    the sibling's second term;
+		//  - AND a break OPPORTUNITY to spend it on. Without the third term
+		//    the width test is a prediction the renderer can refuse: an
+		//    unbreakable 164-column header (`implementsExtends` configured
+		//    `noWrap`, or a long `typedef A = B;`) renders on ONE over-wide
+		//    line, and `isSameLine` would call it one line. `breakableHead`
+		//    stops at the first break opportunity and returns the whole flat
+		//    width when there is none, so the comparison is exactly "is
+		//    there anywhere to break".
+		// Residual imprecision, recorded rather than chased: a Doc whose
+		// only break opportunities sit inside groups that each fit can still
+		// render as one over-wide line and be counted multi-line here. Only
+		// a speculative render answers that, which is not worth a second
+		// pass over every module.
+		// The cascade's `multiline` predicate reads `_measMulti` through
+		// `_measMulti[_si]`; the loop reuses `_elemDocs[_si]` rather than
+		// writing each element twice. Flag off ⇒ neither array is emitted
+		// and the loop keeps its own per-element call.
+		if (c.measuredMultiline) {
+			final measuredElemCall: Expr = c.measuredElemCall;
+			elseBodyParts.push(macro final _elemDocs: Array<anyparse.core.Doc> = [for (_e in _arr) $measuredElemCall]);
+			elseBodyParts.push(macro final _measMulti: Array<Bool> = [
+				for (_d in _elemDocs) {
+					final _w: Int = anyparse.core.DocMeasure.flatTokenWidth(_d);
+					anyparse.core.DocMeasure.hasForcedBreak(_d)
+					|| (_w > opt.lineWidth && anyparse.core.DocMeasure.breakableHead(_d).width < _w);
+				}
+			]);
+		}
 		elseBodyParts.push(c.emit.initPrev);
 		// ω-fileheader-multiline-comments: `_hasPiu` flags whether the
 		// module contains any `package` / `import` / `using` decl (mirrors
