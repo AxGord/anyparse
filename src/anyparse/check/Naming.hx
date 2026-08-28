@@ -1776,6 +1776,7 @@ private typedef DeclRename = {
 	final edits: Array<{ span: Span, text: String }>;
 	final scope: Span;
 };
+
 /**
  * Why a rename was withheld, one sentence per gate, plus the four ways a gate hands one to the
  * `Violation` it came from — read only by `apq lint --fix`'s per-rule unfixed ledger.

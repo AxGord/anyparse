@@ -555,6 +555,7 @@ private typedef Candidate = {
 	final edit: Span;
 	final text: String;
 };
+
 /**
  * How a case pattern classifies for the convertibility whitelist: `Refused` is outside it
  * (and refuses the whole switch), while `LiteralPattern` and `DottedPattern` are the two

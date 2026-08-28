@@ -164,6 +164,7 @@ private typedef FoldableDecl = {
 	final initNode: QueryNode;
 	final initDrop: Span;
 };
+
 /**
  * The constructor side of a null-guarded constructor-default fold: the whole
  * `if (p != null) x = p;` statement to replace, the assignment target and the guarded
@@ -233,6 +234,7 @@ typedef CtorDefaultSite = {
 	/** The default's verbatim source text, exactly as the fold would splice it. */
 	final defaultText: String;
 };
+
 /**
  * Cursor-resolution and identifier/span primitives shared by the scope-correct refactoring
  * operations (`Rename`, `Inline`). Every member is `public static` and behaviour-preserving: the

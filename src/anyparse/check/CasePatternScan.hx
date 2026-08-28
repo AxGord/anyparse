@@ -618,6 +618,7 @@ typedef ScopeSeams = {
 	/** The member kinds a `classLikeKinds` container declares. */
 	final memberDeclKinds: Array<String>;
 };
+
 /** What `runContextOf` resolves once for a whole lint run. */
 typedef CaseRunContext = {
 

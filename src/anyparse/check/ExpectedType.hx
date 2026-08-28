@@ -461,6 +461,7 @@ typedef FileTypes = {
 	final importMap: Map<String, String>;
 	final wrapperNames: Array<String>;
 };
+
 /**
  * One cast node the walk found in a position, with the three context nodes the position gates
  * read: its PARENT (which position it is in at all), the enclosing function (position (b)'s
@@ -484,6 +485,7 @@ typedef CastScan = {
 	final types: FileTypes;
 	final resolutionIndex: () -> SymbolIndex;
 }
+
 /**
  * The kind lists `walkCasts` tests per node, resolved ONCE per walk. Read from the shape at every
  * step instead, each `?? []` fallback would allocate a fresh array per node of the tree.

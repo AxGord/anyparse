@@ -384,6 +384,7 @@ private typedef MergeSite = {
 	final replacement: Null<String>;
 	final message: String;
 };
+
 /**
  * The merge two adjacent regions admit: `complements` tells the two splices apart (a boundary
  * replaced by `#else` rather than deleted), `firstElse` whether the first region's last branch is

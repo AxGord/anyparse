@@ -834,6 +834,7 @@ private typedef PathRoot = {
 	final selfTypeName: Null<String>;
 	final bindingFrom: Null<Int>;
 };
+
 /**
  * Which binder of an iteration node a binding offset landed on: the loop node itself (its own
  * key-or-element binder, sharing the loop's start offset) or the VALUE binder it carries as a

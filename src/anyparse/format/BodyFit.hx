@@ -442,19 +442,42 @@ final class BodyFit {
 	 * a way that changes that width. `WrapList.groupifyInlineBodies` is exactly
 	 * such a pass — it re-tags a hardline-free `BodyGroup` as a `Group`, which
 	 * `flatTokenWidth` descends instead of deferring — and it carries an
-	 * `IfLineExceeds` through untouched. It cannot reach this gate today (the
-	 * gate is statement-position only, below), but `arrowGlueThreshold` shares
-	 * the exposure and neither said so until now.
+	 * `IfLineExceeds` through untouched.
+	 * Whether it can reach this gate is now UNMEASURED: the claim that it
+	 * cannot rested on the "statement-position only" premise the population
+	 * note below corrects. `arrowGlueThreshold` shares the exposure and still does not say so.
 	 *
-	 * THE POPULATION, measured rather than assumed. The gate is reached from
-	 * two writer sites only, and both place a STATEMENT body, so three shapes
-	 * of the same chain keep the pre-slice layout and can still tear their
-	 * innermost condition: a chain in an arrow-lambda argument (the
-	 * expression-`if` body field), a chain that IS a brace-less function body,
-	 * and a chain whose last link carries a `{}` block or an `else` (those
-	 * measure `-1` and reach `glueLayout` instead). Each was reproduced against
-	 * the fixed engine. Widening is a separate slice; what is refused here is
-	 * pretending the gate already covers them.
+	 * THE POPULATION, re-measured (S31). This gate is NOT statement-position
+	 * only: a brace-less FUNCTION body reaches it through `fitLineLayout`, and
+	 * does not tear because the two-link guard BELOW refuses the chain, handing
+	 * the caller its glue untouched. Proved by splicing a `Doc.Text` marker
+	 * into that guard and reading the writer output — the marker lands on the
+	 * function-body slot and on every link below it, while a
+	 * statement-position `if` in the same file carries none.
+	 * What differs is the enclosing site, not the position class: a statement
+	 * `if` arrives with `buildBodyFitExpr`'s construct-level `condFitGroup`
+	 * already around it.
+	 *
+	 * That note also listed three shapes as still tearing, its third entry being
+	 * "a `{}` block OR an `else`"; split into halves that is `{}`-block, `else`
+	 * and arrow-lambda. Swept at a limit of 140 over five widths of one `if` /
+	 * `for` / `if` chain, only two of them still diverge from the fork and
+	 * neither is a tear: the `{}`-BLOCK one is byte-identical to the fork at
+	 * every width, so that half of the claim does not reproduce at all, and
+	 * the `else` and arrow-lambda ones diverge in SHAPE only — neither of THIS
+	 * writer's two outputs has a line over the limit, while on the arrow one
+	 * it is the FORK that runs to 144 columns against the same 140.
+	 *
+	 * REFUSED, with the measurement. Gating `fitLineLayout`'s whole
+	 * `flat != -1` arm on the body's HONEST full flat width — break when
+	 * `col + flat + 1 >= lineWidth` — reproduces the fork byte for byte on the
+	 * brace-less function body, and costs exactly one corpus fixture —
+	 * `sameline/fitline_chained_for_if_long`, PASS -> FAIL, corpus 777 -> 776,
+	 * measured on the base writer with the S31 blank-line channel out of the
+	 * tree — plus 10 unit failures. That same arm places the two-link body of
+	 * a statement `for`, where the head-fit glue is what the fork wants. The
+	 * seam is shared by callers whose safe default points opposite ways, so a
+	 * fix belongs at the function-body site, not here.
 	 */
 	public static function chainStaircase(cols: Int, body: Doc, sameLine: Doc, lineWidth: Int): Doc {
 		if (lineWidth <= 0) return sameLine;

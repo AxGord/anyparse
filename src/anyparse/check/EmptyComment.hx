@@ -14,6 +14,7 @@ private typedef CommentToken = {
 	var to: Int;
 	var isLine: Bool;
 }
+
 /**
  * Flags a content-free comment — a line comment with only whitespace after the
  * slashes, an empty block comment, or an empty doc comment (including a multi-line

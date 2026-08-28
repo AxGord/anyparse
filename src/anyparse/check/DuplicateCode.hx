@@ -386,6 +386,7 @@ typedef DupStmt = {
 	var span: Span;
 	var nonWs: Int;
 }
+
 /** A (block-index, statement-index) coordinate into the per-file collected block list. */
 typedef DupPos = {
 	var b: Int;
