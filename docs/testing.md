@@ -592,6 +592,54 @@ ISOLATED. A suite failure that reproduces under the battery and not under a
 bare `tools/suite-shard.sh --verify` is a load artefact, not a slice
 regression; re-run the suite alone before believing it.
 
+### The cross-config `--one-pass` arm
+
+The `fmt` branch's first two arms pair each tree with its own
+`hxformat.json` — this repo's sources under this repo's config, the fork's
+sources under the fork's. Between them they cover two (tree, config) pairs
+and no third, and the third is where the writer's convergence tail lives: a
+file settles in one rewrite under one config and needs two under another, so
+"`--one-pass` is green here" says nothing about any config but ours. Measured
+on `a3cc4999`: under a second real-world config, three files of THIS repo
+(`check/DuplicateCase.hx`, `check/UnnecessarySwitch.hx`, `macro/Lowering.hx`)
+need a second rewrite, and neither the battery, the suite nor the corpus
+could see them.
+
+The third arm closes that. It formats `src test tools` under
+`tools/xconfig-hxformat.json` — a vendored, fully specified 751-line config
+kept in the repo so the arm is hermetic and its baseline stays meaningful
+when the tree it came from moves. Vendoring is not a convenience: the source
+tree's working copy of that file already differs from its committed one in
+four wrap knobs, so reading it live would have made the baseline
+non-deterministic. Re-vendor from a commit. The arm runs on a scratch root of
+SYMLINKS (`$work/xconfig/src -> $repo/src`, with the vendored config at that
+root) rather than by swapping this repo's own `hxformat.json`: config
+discovery walks up from each file's directory lexically, so the symlink root
+supplies the config, and an interrupted battery cannot leave the repo holding
+a foreign config the way a swap could. The symlinks are not themselves a write
+barrier — what keeps the tree untouched is that the arm only ever reads.
+
+What it gates is narrow on purpose. `--list` is NOT a gate here — under a
+foreign config the whole tree legitimately drifts, 301 of 1529 files at the
+time of writing, and that number carries no verdict. The gate is the
+`--one-pass` SET, compared for EQUALITY against a baseline written into
+`branch_fmt`. Equality rather than a ceiling, because a file leaving the set
+is progress in the convergence tail and belongs in the list just as much as a
+file joining it.
+
+A set comparison alone would be satisfiable by a PARTIAL run — `check/` and
+`macro/` are walked early, so an abort after them leaves exactly the three
+baseline paths behind — so the arm additionally requires the run's own
+`apq fmt --list:` summary line, which is printed last and is therefore the
+completion proof. Both of `fmt`'s summary lines are replayed to stderr rather
+than re-derived, so no count is hardcoded here to drift, and every other
+stderr line is replayed too: this arm silences the config advisory
+(`APQ_NO_CONFIG_WARN=1`, since the vendored config's unimplemented-key list is
+pure noise) and would otherwise have no stderr visibility at all.
+
+Cost: 14.7s inside the `fmt` branch, which runs 25s against the `lint`
+branch's 131s — the battery's wall time went 173.1s to 173.7s, i.e. nothing.
+
 ### Why `compilerOracleServer` is off here
 
 Lint is the battery's largest branch — about 70s of its own, both trees — and

@@ -64,6 +64,7 @@ import unit.AvoidDynamicBagOracleE2ETest;
 import unit.AvoidDynamicCheckTest;
 import unit.AvoidDynamicNarrowFixTest;
 import unit.AvoidDynamicRiskyFixE2ETest;
+import unit.BodyGroupPrefixChargeConsumerTest;
 import unit.BodySlotGuardSliceTest;
 import unit.BuildMacroMetaSeamTest;
 import unit.CachingGrammarPluginTest;
@@ -968,6 +969,7 @@ class RunTests {
 		addCase(new HxArrowBlockBodyOpenSliceTest());
 		addCase(new DocMeasureFirstVisibleTextTest());
 		addCase(new DocProbeFamilyWalkerTest());
+		addCase(new BodyGroupPrefixChargeConsumerTest());
 		addCase(new HxFnSigExceedsBoundaryWrapTest());
 		addCase(new HxFnSigFillLastParamBoundaryTest());
 		addCase(new HxFnSigSingleParamWrapIndentTest());

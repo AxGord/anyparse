@@ -468,16 +468,43 @@ final class BodyFit {
 	 * writer's two outputs has a line over the limit, while on the arrow one
 	 * it is the FORK that runs to 144 columns against the same 140.
 	 *
-	 * REFUSED, with the measurement. Gating `fitLineLayout`'s whole
-	 * `flat != -1` arm on the body's HONEST full flat width — break when
-	 * `col + flat + 1 >= lineWidth` — reproduces the fork byte for byte on the
-	 * brace-less function body, and costs exactly one corpus fixture —
-	 * `sameline/fitline_chained_for_if_long`, PASS -> FAIL, corpus 777 -> 776,
-	 * measured on the base writer with the S31 blank-line channel out of the
-	 * tree — plus 10 unit failures. That same arm places the two-link body of
-	 * a statement `for`, where the head-fit glue is what the fork wants. The
-	 * seam is shared by callers whose safe default points opposite ways, so a
-	 * fix belongs at the function-body site, not here.
+	 * REFUSED, with the measurement — and the CODE SHAPE it was measured on,
+	 * because a refusal whose candidate nobody can rebuild is a claim, not a
+	 * measurement. Gate `fitLineLayout`'s whole `flat != -1` arm on the body's
+	 * HONEST full flat width, i.e. break when `col + flat + 1 >= lineWidth`.
+	 * That reads, verbatim, as
+	 *
+	 *     final own: Doc = if (flat != -1)
+	 *         Doc.IfLineExceeds(
+	 *             lineWidth - flat - 1, breakLayout(cols, body),
+	 *             chainStaircase(cols, body, Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body]))), lineWidth)
+	 *         );
+	 *
+	 * — the probe's own `flatTokenWidth(flatDoc)` term is 0 (the flat branch is
+	 * the deferred `BodyGroup`), so substituting `n = lineWidth - flat - 1`
+	 * leaves exactly `col + flat + 1 + rest >= lineWidth`.
+	 *
+	 * It reproduces the fork byte for byte on the brace-less function body, and
+	 * it costs, RE-DERIVED on `a3cc4999` (the earlier note recorded the same
+	 * deltas against a 777-fixture base and named none of the tests):
+	 *  - one corpus fixture — `sameline/fitline_chained_for_if_long`,
+	 *    PASS -> FAIL, 781 -> 780, the ONLY fixture that moves;
+	 *  - exactly ten unit failures — `testFitLineBoundaryIsExactlyMaxLineLength`,
+	 *    `testTrailingBodyCommentCountsTowardTheFitMeasure`,
+	 *    `testForChainHeaderFitsBodyDrops`, `testForLadderIsIdempotent`,
+	 *    `testWholeChainExactlyAtTheLimitStaysOnOneLine`,
+	 *    `testTwoLinkChainKeepsItsHeadFitGlue`,
+	 *    `testAPatternScopeConditionalStillMeasuresFlat`,
+	 *    `testARegionIsNotATriggerByItself`,
+	 *    `testCondSpliceSwitchOpenStaysInlineWhenEverythingFits`,
+	 *    `testTriggerFlipsAtTheWidestSiblingsBoundary`.
+	 *
+	 * Those ten are also the pin: the refusal needs no fixture of its own,
+	 * because the candidate cannot be re-introduced without turning them red.
+	 * The cause is unchanged — that same arm places the two-link body of a
+	 * statement `for`, where the head-fit glue is what the fork wants. The seam
+	 * is shared by callers whose safe default points opposite ways, so a fix
+	 * belongs at the function-body site, not here.
 	 */
 	public static function chainStaircase(cols: Int, body: Doc, sameLine: Doc, lineWidth: Int): Doc {
 		if (lineWidth <= 0) return sameLine;
