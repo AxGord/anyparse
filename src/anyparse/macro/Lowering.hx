@@ -6738,15 +6738,15 @@ class Lowering {
 	}
 
 	/**
-		 * First token of a bare-`Ref` Alt branch, taken from the RULE it
-		 * references — the branch itself commits nothing before recursing, so
-		 * its first token is whatever the sub-rule's is.
-		 *
-		 * `@:fmt(atomOperand)` retargets the call to the `…Atom` variant of
-		 * the sub-rule rather than its entry function; `ruleFirstToken`
-		 * models the entry only, so such a branch answers `Unknown`.
-		 *
-		  * Kept separate from `branchFirstToken` so the dispatch dump can
+	 * First token of a bare-`Ref` Alt branch, taken from the RULE it
+	 * references — the branch itself commits nothing before recursing, so
+	 * its first token is whatever the sub-rule's is.
+	 *
+	 * `@:fmt(atomOperand)` retargets the call to the `…Atom` variant of
+	 * the sub-rule rather than its entry function; `ruleFirstToken`
+	 * models the entry only, so such a branch answers `Unknown`.
+	 *
+	 * Kept separate from `branchFirstToken` so the dispatch dump can
 	 * report, per branch, what the branch-local classifier sees AND what
 	 * looking through the `Ref` would add.
 	 */

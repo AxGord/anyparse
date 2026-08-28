@@ -256,16 +256,16 @@ final class ShardPlan {
 	}
 
 	/**
-		 * `sort(1)`'s order under a UTF-8 locale, pinned so the plan no longer
-		 * depends on the machine's `LC_COLLATE`: primary weights compare the base
-		 * character (punctuation, then digits, then letters case-folded), and case
-		 * decides only when the primaries tie, lowercase first. The shell version
-		 * inherited whatever collation the caller's locale supplied — the same
-		 * tree produced a different split under `LC_ALL=C` than under a UTF-8
-		 * locale, since C orders every uppercase letter ahead of every lowercase
-		 * one and this does not.
-		 *
-		  * Only the tiebreak between classes of equal weight rides on this, so a
+	 * `sort(1)`'s order under a UTF-8 locale, pinned so the plan no longer
+	 * depends on the machine's `LC_COLLATE`: primary weights compare the base
+	 * character (punctuation, then digits, then letters case-folded), and case
+	 * decides only when the primaries tie, lowercase first. The shell version
+	 * inherited whatever collation the caller's locale supplied — the same
+	 * tree produced a different split under `LC_ALL=C` than under a UTF-8
+	 * locale, since C orders every uppercase letter ahead of every lowercase
+	 * one and this does not.
+	 *
+	 * Only the tiebreak between classes of equal weight rides on this, so a
 	 * disagreement would cost balance rather than correctness — but a plan
 	 * that is reproducible across machines is worth the twenty lines.
 	 *

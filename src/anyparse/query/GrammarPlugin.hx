@@ -759,7 +759,7 @@ typedef RefShape = {
 	/**
 	 * Parent kinds in which a value-position conditional chain may be rewritten to an
 	 * if-EXPRESSION chain (`if (c1) v1 else if (c2) v2 else v3`) — the positions where the
-	  * multi-line if-chain reads at least as well as the nested ternary it replaces (Haxe: a
+	 * multi-line if-chain reads at least as well as the nested ternary it replaces (Haxe: a
 	 * `return`, a local / member initializer, an assignment r-value, an arrow-lambda body, a
 	 * `switch` ARM's value).
 	 * A SUPERSET of `switchExpressionHostKinds`, which lists the same value hosts for the
@@ -2058,7 +2058,7 @@ typedef RefShape = {
 	@:optional var switchStatementKinds: Array<String>;
 
 	/**
-	  * Subject TYPE names whose statement `switch` the compiler never
+	 * Subject TYPE names whose statement `switch` the compiler never
 	 * exhaustiveness-checks (Haxe `Int` / `UInt` / `Float` / `Single` / `String`) — the whitelist
 	 * `empty-case-arm` proves its deletion against. Every `enum` / `enum abstract` /
 	 * `Bool` subject IS checked: its arm list is part of the compile, so deleting an
@@ -2467,17 +2467,17 @@ typedef RefShape = {
 	@:optional var iterationBindingKinds: Array<String>;
 
 	/**
-		 * Node kinds carrying the VALUE binder of a key-value iteration — the `v` in Haxe's
-		 * `for (k => v in m)` (`KeyValueBinder`). The node is a direct child of an
-		 * `iterationBindingKinds` loop, sits BEFORE the iterable child, carries the bound name on
-		 * itself and spans exactly that identifier.
-		 *
-		 * Two independent jobs. A consumer reading the loop's OPERANDS must skip these to reach the
-		 * iterable (see `iterationBindingKinds`). A consumer collecting BOUND NAMES must include
-		 * them: the loop node's own `name` is the KEY only, so a scan keyed on it alone misses every
-		 * value binder — the blindness that made shadow scans read the loop's header TEXT instead.
-		 *
-		  * Optional; unset means the grammar has no separate value binder. OBLIGATION on a grammar that
+	 * Node kinds carrying the VALUE binder of a key-value iteration — the `v` in Haxe's
+	 * `for (k => v in m)` (`KeyValueBinder`). The node is a direct child of an
+	 * `iterationBindingKinds` loop, sits BEFORE the iterable child, carries the bound name on
+	 * itself and spans exactly that identifier.
+	 *
+	 * Two independent jobs. A consumer reading the loop's OPERANDS must skip these to reach the
+	 * iterable (see `iterationBindingKinds`). A consumer collecting BOUND NAMES must include
+	 * them: the loop node's own `name` is the KEY only, so a scan keyed on it alone misses every
+	 * value binder — the blindness that made shadow scans read the loop's header TEXT instead.
+	 *
+	 * Optional; unset means the grammar has no separate value binder. OBLIGATION on a grammar that
 	 * DOES have key-value iteration: publish the kind here. Consumers read an unset field as "no
 	 * loop binds two names", so a grammar that binds two and names neither kind here leaves them
 	 * unable to tell a KEY binder from a VALUE one — and the element-type arm
@@ -2487,7 +2487,7 @@ typedef RefShape = {
 	@:optional var iterationValueBinderKinds: Array<String>;
 
 	/**
-	  * Maps a container type's SIMPLE name to the index of the type parameter a `for` iteration
+	 * Maps a container type's SIMPLE name to the index of the type parameter a `for` iteration
 	 * over it YIELDS (Haxe `Array<T>` → 0, `Map<K, V>` → 1, since iterating a map yields its
 	 * VALUES). Only containers whose iteration provably yields the listed parameter belong
 	 * here; any other container leaves the binder unresolved.

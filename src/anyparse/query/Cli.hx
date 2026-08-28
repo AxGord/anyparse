@@ -7853,6 +7853,11 @@ final class Cli {
 		sysPrint('existing leading doc comment is replaced, the declaration itself is left\n');
 		sysPrint('untouched. The text may be inline, --from-file, or - for stdin\n');
 		sysPrint('(heredoc-friendly, multi-line). Writer-formatted + validated.\n');
+		sysPrint('\n');
+		sysPrint('The text is PLAIN prose, one line per doc line: this op owns the ` * `\n');
+		sysPrint('gutter and adds it. A gutter you write yourself is stripped rather than\n');
+		sysPrint('doubled, and only the two spellings the writer emits count as one, so a\n');
+		sysPrint('`* bullet` and an indented code sample keep what they were given.\n');
 	}
 
 	/**
@@ -8252,6 +8257,10 @@ final class Cli {
 		sysPrint('apq lit). Code and comment delimiters are never touched; strings are\n');
 		sysPrint('skipped. The result is canonical + re-parse-validated.\n');
 		sysPrint('\n');
+		sysPrint("A replacement holding real newlines (a shell $'a\\nb' literal) is re-prefixed\n");
+		sysPrint("with the comment's own continuation, so write plain lines — a ` * ` you add\n");
+		sysPrint('yourself is stripped, not doubled.\n');
+		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint("  --regex        <find> is a regex; <replace> a template where ${0}/${N}\n");
 		sysPrint("                 expand to group N and ${N+K}/${N-K} shift group N by K\n");
@@ -8267,9 +8276,11 @@ final class Cli {
 		sysPrint('prefixes or without them. A --regex find is matched against the RAW body\n');
 		sysPrint('instead, prefixes included, so a multi-line pattern needs `\\s+\\*\\s+`.\n');
 		sysPrint('\n');
-		sysPrint('SPLICING. The replacement goes in RAW over the range the match covers: a long\n');
-		sysPrint('single-line replacement produces an over-long line that neither `fmt --list`\n');
-		sysPrint('nor lint reports, so spell the line breaks and their ` * ` prefixes yourself.\n');
+		sysPrint("SPLICING. Write plain lines and real newlines (a shell $'a\\nb' literal): each\n");
+		sysPrint("new line gets the comment's own continuation, and a ` * ` you add yourself is\n");
+		sysPrint('stripped rather than doubled. What is NOT re-wrapped is line LENGTH — a long\n');
+		sysPrint('single-line replacement still produces an over-long line that neither\n');
+		sysPrint('`fmt --list` nor lint reports, so break it where you want it broken.\n');
 	}
 
 	/**
@@ -16488,11 +16499,11 @@ final class Cli {
 	}
 
 	/**
-		 * `apq lint-diff --old <a.json> --new <b.json>` — the blast-radius gate
-		 * `tools/battery.sh` runs once per compared tree.
-		 *
-		 * Both arguments are `apq lint --format json` snapshots; the comparison is a
-		  * MULTISET diff over `(file, rule, severity, message)` with the two
+	 * `apq lint-diff --old <a.json> --new <b.json>` — the blast-radius gate
+	 * `tools/battery.sh` runs once per compared tree.
+	 *
+	 * Both arguments are `apq lint --format json` snapshots; the comparison is a
+	 * MULTISET diff over `(file, rule, severity, message)` with the two
 	 * normalizations `LintDiff` documents — `--root` makes a relative and an
 	 * absolute snapshot of one tree comparable, and `duplicate-code` messages are
 	 * digit-masked.

@@ -460,10 +460,10 @@ class UnusedLocalShadowTest extends Test {
 	}
 
 	/**
-		 * Only the FIRST link of a chain is reported per pass: the scan spans the whole scope, so the
-	earlier declaration's own binder token reads as an occurrence of the middle one and keeps it
-	live. The `--fix` driver loops to a fixed point, and each pass promotes the next link to
-	first — three passes clear this one.
+	 * Only the FIRST link of a chain is reported per pass: the scan spans the whole scope, so the
+	 * earlier declaration's own binder token reads as an occurrence of the middle one and keeps it
+	 * live. The `--fix` driver loops to a fixed point, and each pass promotes the next link to
+	 * first — three passes clear this one.
 	 */
 	public function testChainedRedeclarationsCollapseOverPasses(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar a = 1;\n\t\tvar a = 2;\n\t\tvar a = 3;\n\t\treturn a;\n\t}\n}';

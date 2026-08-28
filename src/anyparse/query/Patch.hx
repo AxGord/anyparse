@@ -103,6 +103,8 @@ final class Patch {
 		sorted.sort((a, b) -> a.span.from - b.span.from);
 		for (i in 1...sorted.length) if (sorted[i].span.from < sorted[i - 1].span.to)
 			return Err(discarded('the matched fragments overlap — merge the overlapping pairs into one', multi));
+		final orphan: Null<String> = docOrphanRefusal(source, tree, sorted, plugin);
+		if (orphan != null) return Err(discarded(orphan, multi));
 		return switch RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson) {
 			case Ok(text, rewrites): verbatimSpliceIntact(source, synthesised, text, rewrites);
 			case failed: failed;
@@ -138,6 +140,170 @@ final class Patch {
 	/** The leading horizontal whitespace of `line` — the indentation a dedented fragment dropped. */
 	private static inline function leadingSpace(line: String): String {
 		return line.substring(0, line.length - line.ltrim().length);
+	}
+
+	/**
+	 * Why this pair would ORPHAN a doc comment, or null when it would not.
+	 *
+	 * A declaration's `/** ... *\/` is trivia BEFORE its node, so a fragment copied from
+	 * `apq source --select` starts at the declaration KEYWORD and the doc sits above the
+	 * match. A payload that keeps that declaration and puts a NEW one ahead of it therefore
+	 * splices between the doc and what it documents: the doc silently transfers to the
+	 * insertion and the documented declaration is left bare. `apq patch` reported `wrote
+	 * <file>`, the build stayed green, and no gate in this project could see it — the writer
+	 * re-emits the comment verbatim and `fragmented-doc-comment` only fires when the
+	 * insertion happens to carry a doc of its own.
+	 *
+	 * The shape is exact, so the refusal is: an ATTACHED `/**` block ends directly above the
+	 * match (`RefactorSupport.docExtendedSpan`, the same attachment model `set-doc` and
+	 * `move-member` use — a plain banner comment is not a doc and never triggers this), and
+	 * the new text still holds the old fragment's opening line but no longer OPENS with it.
+	 * An ordinary in-place edit does not repeat that line ahead of itself, and a payload that
+	 * drops the line entirely is replacing the declaration the doc belongs to, which is not an
+	 * orphan.
+	 *
+	 * The remedy in the message is verified, not suggested: widening the old fragment upward
+	 * to include the doc block makes the doc part of the match, so it travels with the
+	 * declaration and the insertion lands above the whole unit.
+	 */
+	private static function docOrphanRefusal(
+		source: String, tree: QueryNode, sorted: Array<{ span: Span, text: String }>, plugin: GrammarPlugin
+	): Null<String> {
+		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call, and
+		// asking it per edit cost ~19% on a 17 000-line file with 135 ranges under `--all`.
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final watched: Array<{ shifted: Int, owner: String }> = [];
+		var delta: Int = 0;
+		for (edit in sorted) {
+			final end: Int = docBlockEnd(source, comments, declGroupStart(source, tree, edit.span.from));
+			if (end >= 0) {
+				final owner: Null<String> = docOwnerName(source, tree, comments, end);
+				if (owner != null) watched.push({ shifted: end + delta, owner: owner });
+			}
+			delta += edit.text.length - (edit.span.to - edit.span.from);
+		}
+		if (watched.length == 0) return null;
+
+		final spliced: String = RefactorSupport.applyEdits(source, sorted);
+		final after: QueryNode = try plugin.parseFile(spliced) catch (exception: Exception) return null;
+		final splicedComments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(spliced);
+		for (w in watched) {
+			final now: Null<String> = docOwnerName(spliced, after, splicedComments, w.shifted);
+			if (now != null && now != w.owner)
+				return 'the edit moves the `/**` block above `${w.owner}` onto `$now` — the doc would '
+					+ 'silently transfer to the insertion and `${w.owner}` would be left undocumented. Widen the old fragment upward to '
+					+ 'include the doc block and repeat it in the replacement, so the doc travels with the declaration it documents; a '
+					+ 'declaration\'s doc is trivia OUTSIDE its node, so that widening needs an address that contains it — the enclosing '
+					+ '`--select \'ClassDecl:<Type>\'`, not the member itself';
+		}
+		return null;
+	}
+
+	/**
+	 * `at` advanced past whitespace and any COMMENT tokens that follow it — where the next real
+	 * code is. A `//` note prepended between a doc block and its declaration is trivia, not a new
+	 * owner, and stopping at it made the guard refuse that edit while naming the enclosing type
+	 * as the doc's new owner.
+	 */
+	private static function skipTrivia(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Int {
+		var i: Int = at;
+		while (true) {
+			while (i < source.length && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+			var moved: Bool = false;
+			for (tok in comments) if (tok.from == i) {
+				i = tok.to;
+				moved = true;
+				break;
+			}
+			if (!moved) return i;
+		}
+	}
+
+	/**
+	 * The OUTERMOST node starting at byte `at`, or null when nothing starts there. `Engine.at`
+	 * resolves the NARROWEST, which for `public static function f` is the modifier token rather
+	 * than the member it prefixes — and every question here is about the member.
+	 */
+	private static function outermostAt(tree: QueryNode, at: Int): Null<QueryNode> {
+		final resolved: Null<QueryNode> = Engine.at(tree, at);
+		if (resolved == null) return null;
+		var node: QueryNode = resolved;
+		while (true) {
+			final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
+			if (parent == null) break;
+			final parentSpan: Null<Span> = parent.span;
+			if (parentSpan == null || parentSpan.from != at) break;
+			node = parent;
+		}
+		return node;
+	}
+
+	/**
+	 * Where the declaration group containing `at` STARTS — `at` folded back over the modifier /
+	 * `@:meta` / conditional-region run that belongs to the same declaration
+	 * (`RefactorSupport.declGroupSpan`, the same fold `apq source --select` prints).
+	 *
+	 * Without it the doc lookup asked about the bytes directly above the MATCH, and a doc
+	 * separated from its declaration by `@:noCompletion` was invisible — the guard passed an
+	 * insert-ahead that orphaned the doc AND the metadata onto the insertion.
+	 */
+	private static function declGroupStart(source: String, tree: QueryNode, at: Int): Int {
+		var from: Int = at;
+		while (from < source.length && RefactorSupport.isSpace(source.fastCodeAt(from))) from++;
+		final node: Null<QueryNode> = outermostAt(tree, from);
+		if (node == null) return from;
+		final span: Null<Span> = node.span;
+		return span == null ? from : RefactorSupport.declGroupSpan(node, TreePath.parentOf(tree, node), span).from;
+	}
+
+	/**
+	 * Where the `/**` block directly above `at` ends, or -1 when no attached doc block is there.
+	 *
+	 * This asks the pre-lexed `comments` list rather than `RefactorSupport.docExtendedSpan`, which
+	 * re-lexes the whole file per call: a 17 000-line file patched with `--all` resolves 135
+	 * ranges, and one lex each cost ~19% of the op. `startsItsLine` is the same attribution rule
+	 * `docExtendedSpan` applies — a comment sharing its line with preceding code trails THAT
+	 * declaration — and the `/**` test is its `docOnly` clause, which keeps a plain banner comment
+	 * from counting as documentation.
+	 */
+	private static function docBlockEnd(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Int {
+		var i: Int = at - 1;
+		while (i >= 0 && RefactorSupport.isSpace(source.fastCodeAt(i))) i--;
+		if (i < 0) return -1;
+		for (tok in comments) if (
+			tok.to == i + 1 && !tok.isLine && RefactorSupport.startsItsLine(source, tok.from) && source.fastCodeAt(tok.from + 2) == '*'.code
+		)
+			return tok.to;
+		return -1;
+	}
+
+	/**
+	 * The NAME of the declaration a doc block ending at `docEnd` documents, or null when the
+	 * position is not followed by a named declaration.
+	 *
+	 * This is `RefactorSupport.declGroupSpan`'s forward walk asked in reverse: the doc attaches
+	 * to whatever starts after it, and a modifier / `@:meta` / conditional-region sibling in
+	 * between belongs to that same declaration rather than replacing it
+	 * (`RefactorSupport.isDeclPrefixSibling` is the same predicate the group span uses, so the
+	 * two cannot drift). Comparing this NAME across the edit is what makes the guard structural:
+	 * wrapping the member in `#if`, prepending `@:noCompletion` or a `//` note all leave the name
+	 * unchanged and are not refused, while an inserted declaration changes it and is.
+	 */
+	private static function docOwnerName(
+		source: String, tree: QueryNode, comments: Array<{ from: Int, to: Int, isLine: Bool }>, docEnd: Int
+	): Null<String> {
+		final at: Int = skipTrivia(source, comments, docEnd);
+		if (at >= source.length) return null;
+		final resolved: Null<QueryNode> = outermostAt(tree, at);
+		if (resolved == null) return null;
+		final node: QueryNode = resolved;
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
+		if (parent == null) return node.name;
+		final siblings: Array<QueryNode> = parent.children;
+		var i: Int = siblings.indexOf(node);
+		if (i < 0) return node.name;
+		while (i < siblings.length && RefactorSupport.isDeclPrefixSibling(siblings[i])) i++;
+		return i < siblings.length ? siblings[i].name : null;
 	}
 
 	/**

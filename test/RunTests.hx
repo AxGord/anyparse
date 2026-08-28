@@ -97,6 +97,7 @@ import unit.DeadNullGuardTest;
 import unit.DeadSafeNavTest;
 import unit.DeadStoreTest;
 import unit.DeleteBlankLineSliceTest;
+import unit.DocCommentContinuationCheckTest;
 import unit.DocCoverageCheckTest;
 import unit.DocMeasureFirstVisibleTextTest;
 import unit.DocProbeFamilyWalkerTest;
@@ -1341,6 +1342,7 @@ class RunTests {
 		addCase(new RedundantTrailingCommaCheckTest());
 		addCase(new EmptyCommentCheckTest());
 		addCase(new EmptyDocTagCheckTest());
+		addCase(new DocCommentContinuationCheckTest());
 		addCase(new RedundantCondCompParensCheckTest());
 		addCase(new CondRegionMergeCheckTest());
 		addCase(new ApqLitDirectivesCliTest());

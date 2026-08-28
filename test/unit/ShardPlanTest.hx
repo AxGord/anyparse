@@ -44,7 +44,7 @@ class ShardPlanTest extends Test {
 	}
 
 	/**
-	  * The runner's own filtering wrapper calls `runner.addCase(...)` — a
+	 * The runner's own filtering wrapper calls `runner.addCase(...)` — a
 	 * `FieldAccess` callee, not a registration. The fixture gives that call a
 	 * `new` argument so that dropping the callee-shape guard makes it a
 	 * nameable registration, and the count assertion below is what fires.

@@ -86,7 +86,7 @@ final class LintDiff {
 	 *
 	 * The report is a bare top-level JSON array and the ByName lowering
 	 * cannot root on one, so the text is wrapped into the `LintReportJson`
-	  * envelope first — see that typedef for the measured constraint. The
+	 * envelope first — see that typedef for the measured constraint. The
 	 * leading-`[` check is the cheap sanity gate on that wrap: it turns an
 	 * object or a fragment into a message naming the real problem instead of a
 	 * parse error about a key nobody wrote. It is NOT a validation of the whole
@@ -107,7 +107,7 @@ final class LintDiff {
 	}
 
 	/**
-	  * Fold a report into a multiset: how many times each normalized
+	 * Fold a report into a multiset: how many times each normalized
 	 * `(file, rule, severity, message)` key occurs, plus the first record seen
 	 * for each key so the renderer can print a readable example.
 	 *

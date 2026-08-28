@@ -408,26 +408,26 @@ final class UnusedPrivate implements Check implements ConfigAware {
 	}
 
 	/**
-		 * The unconfined-member usage test: whether `name` is provably dead across the whole
-		 * project — zero word-boundary occurrences outside its own declaration `span` in EVERY
-		 * file of report UNION resolution scope. A private member is reachable only from its own
-		 * class or a subtype / `@:access` grantee / `@:allow`ed type; if the raw scan (which sees
-		 * inside `#if` regions and comments) finds the name nowhere but its declaration, none of
-		 * those name it.
-		 *
-		 * That scan needs no parse and gets none: `nameOccursOutside` walks the index's RETAINED
-		 * sources, which include every skip-parsed file, with the same word-boundary test
-		 * `skippedMayReference` uses plus the interpolation escape. So a reference hiding in an
-		 * unreadable file already fails this proof by itself, and the `skippedFiles().length == 0`
-		 * this used to open with only put every OTHER member in the scope back on the structural
-		 * confinement gate. A cheap own-file pre-scan short-circuits the common referenced case
-		 * before the cross-file walk; the library scan runs only for a name already unique in
-	report scope.
-
-	What an unreadable file still costs here is a FRAMEWORK contract whose chain root lives in it:
-	that cannot be proven, so a member the contract reaches is now reported where the run-wide
-	clause used to hide it. The CONFINED arm has behaved that way since it went per-name, so the
-	two arms agree, and `--fix` declines the member on the unresolvable `extends`.
+	 * The unconfined-member usage test: whether `name` is provably dead across the whole
+	 * project — zero word-boundary occurrences outside its own declaration `span` in EVERY
+	 * file of report UNION resolution scope. A private member is reachable only from its own
+	 * class or a subtype / `@:access` grantee / `@:allow`ed type; if the raw scan (which sees
+	 * inside `#if` regions and comments) finds the name nowhere but its declaration, none of
+	 * those name it.
+	 *
+	 * That scan needs no parse and gets none: `nameOccursOutside` walks the index's RETAINED
+	 * sources, which include every skip-parsed file, with the same word-boundary test
+	 * `skippedMayReference` uses plus the interpolation escape. So a reference hiding in an
+	 * unreadable file already fails this proof by itself, and the `skippedFiles().length == 0`
+	 * this used to open with only put every OTHER member in the scope back on the structural
+	 * confinement gate. A cheap own-file pre-scan short-circuits the common referenced case
+	 * before the cross-file walk; the library scan runs only for a name already unique in
+	 * report scope.
+	 *
+	 * What an unreadable file still costs here is a FRAMEWORK contract whose chain root lives in it:
+	 * that cannot be proven, so a member the contract reaches is now reported where the run-wide
+	 * clause used to hide it. The CONFINED arm has behaved that way since it went per-name, so the
+	 * two arms agree, and `--fix` declines the member on the unresolvable `extends`.
 	 */
 	private static function provablyDeadProjectWide(
 		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex

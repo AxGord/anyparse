@@ -1070,7 +1070,7 @@ final class RefactorSupport {
 	}
 
 	/**
-	  * The ONE dotted path that names `typeName` in `module` from every file, whatever its package
+	 * The ONE dotted path that names `typeName` in `module` from every file, whatever its package
 	 * or imports: `pkg.Mod` for a module's main type, `pkg.Mod.T` for a sub-module type, and the
 	 * basename alone (`Mod` / `Mod.T`) for a root-package module, which is visible everywhere.
 	 * The single exception is a ROOT-package module shadowed by a same-named module in the reading
@@ -1131,7 +1131,7 @@ final class RefactorSupport {
 	}
 
 	/**
-	  * Offset at which the dotted `pathName` starts inside `span`, or -1 when `span` does not hold
+	 * Offset at which the dotted `pathName` starts inside `span`, or -1 when `span` does not hold
 	 * the whole path contiguously (whitespace around a dot) or `pathName` is null. Both ends are
 	 * checked, because the caller turns this into a REPLACEMENT span `[at, at + pathName.length)`.
 	 *
@@ -1839,7 +1839,10 @@ final class RefactorSupport {
 		final lines: Array<String> = trimBlankEdges(text.split('\n'));
 		final buf: StringBuf = new StringBuf();
 		buf.add('/**\n');
-		for (line in lines) buf.add(line == '' ? ' *\n' : ' * $line\n');
+		for (line in lines) {
+			final body: String = ungutter(line);
+			buf.add(body == '' ? ' *\n' : ' * $body\n');
+		}
 		buf.add(' */');
 		return buf.toString();
 	}
@@ -2147,6 +2150,58 @@ final class RefactorSupport {
 			if (afterIdx < source.length && isIdentChar(source.fastCodeAt(afterIdx))) continue;
 			if (!qualifiedBySkip(at - 1)) return true;
 		}
+	}
+
+	/**
+	 * The text every NEW line of a splice into the comment token `tok` must begin with, so
+	 * the block keeps the continuation prefix it already has: the comment line's own
+	 * indentation, plus `// ` for a line comment and ` * ` for a star-guttered block. A block
+	 * comment with no gutter (commented-out code, a free-form paragraph) gets the indentation
+	 * alone — it has no prefix to keep.
+	 *
+	 * The ops that splice into a comment splice RAW, and the writer re-emits a comment
+	 * interior byte for byte, so a replacement carrying a real newline started a line with no
+	 * gutter at all. The writer then re-bases the whole run onto the shallowest line, which is
+	 * why ONE unguttered line pushed every guttered sibling one level deeper — and `fmt --list`
+	 * called the result canonical, because it IS what the writer emits. This is what the
+	 * splicers prefix with instead.
+	 */
+	public static function commentContinuation(source: String, tok: { from: Int, to: Int, isLine: Bool }): String {
+		var lineStart: Int = tok.from;
+		while (lineStart > 0 && source.fastCodeAt(lineStart - 1) != '\n'.code) lineStart--;
+		var indent: String = source.substring(lineStart, tok.from);
+		if (indent.trim() != '') indent = indent.substring(0, indent.length - indent.ltrim().length);
+		if (tok.isLine) return '$indent// ';
+		final body: String = source.substring(tok.from + 2, tok.to);
+		for (line in body.split('\n').slice(1)) {
+			final text: String = line.trim();
+			if (text == '') continue;
+			return text.fastCodeAt(0) == '*'.code ? '$indent * ' : indent;
+		}
+		// No interior line to read: a one-line `/** … */` whose replacement is about to become
+		// several. A doc opener means a guttered block; a plain one means none.
+		return tok.from + 2 < source.length && source.fastCodeAt(tok.from + 2) == '*'.code ? '$indent * ' : indent;
+	}
+
+	/**
+	 * `text` prepared for splicing into a comment whose continuation prefix is `continuation`:
+	 * the first line lands wherever the match did and is left alone, and every following line
+	 * gets the prefix — its own caller-written gutter stripped first, so a payload that already
+	 * carries one is not doubled. A line that would hold nothing but the prefix is rtrimmed, so
+	 * a paragraph break does not become trailing whitespace.
+	 */
+	public static function reflowIntoComment(text: String, continuation: String): String {
+		final lines: Array<String> = text.split('\n');
+		if (lines.length < 2) return text;
+		// Line 0 lands wherever the match did, so it keeps its position — but it is exactly as liable
+		// to carry a caller-written gutter as any other, and leaving it raw produced ` *  * text` that
+		// no gate in this project can see. Ungutter it too, splice it where it was.
+		final out: Array<String> = [ungutter(lines[0])];
+		for (i in 1...lines.length) {
+			final body: String = ungutter(lines[i]);
+			out.push(body.trim() == '' ? continuation.rtrim() : continuation + body);
+		}
+		return out.join('\n');
 	}
 
 	/**
@@ -2880,25 +2935,25 @@ final class RefactorSupport {
 	}
 
 	/**
-		 * Whether a never-reassigned `var` (field or local) named `name` with declared
-		 * simple type `declType` must STAY mutable because a method call on it may reassign
-		 * an `abstract`'s underlying `this` — a mutation the assignment-operator write scans
-		 * cannot see (`abstract Step(Int) { function next():Void this = this + 1; }` mutated
-		 * only via `_s.next()`). Finalizing such a binding produces code the compiler rejects
-		 * ("Cannot modify abstract value of final field").
-		 *
-		 * `index` is forced lazily — only after a method call is found — so most runs never build it. When
-		 * the plugin carries a resolution scope, the forced index resolves against the configured libraries
-		 * too, so a library abstract (e.g. openfl `ByteArray`) is recognised rather than treated as unknown.
-		 *
-		 * True (keep the `var`) when `name` has a method call in `source` outside its own declaration
-		 * `exclude` AND its type either resolves to an abstract that may REBIND `this`
-		 * (`SymbolIndex.abstractRebindsThis`) or is an UNRESOLVED non-stdlib type whose abstractness cannot
-		 * be ruled out. False — the `final` suggestion stays sound and useful — for a resolved non-abstract
-		 * type, a RESOLVED abstract whose only `this`-writes are in its constructor (the compiler forbids
-		 * `this =` outside inline members and `final` rejects an inline this-writer transitively, so a
-		 * ctor-only writer like `ByteArray` is final-safe) or that only `@:forward`s to a class underlying
-		  * (which mutates the object, never the binding), a stdlib value type, an untyped binding, or no
+	 * Whether a never-reassigned `var` (field or local) named `name` with declared
+	 * simple type `declType` must STAY mutable because a method call on it may reassign
+	 * an `abstract`'s underlying `this` — a mutation the assignment-operator write scans
+	 * cannot see (`abstract Step(Int) { function next():Void this = this + 1; }` mutated
+	 * only via `_s.next()`). Finalizing such a binding produces code the compiler rejects
+	 * ("Cannot modify abstract value of final field").
+	 *
+	 * `index` is forced lazily — only after a method call is found — so most runs never build it. When
+	 * the plugin carries a resolution scope, the forced index resolves against the configured libraries
+	 * too, so a library abstract (e.g. openfl `ByteArray`) is recognised rather than treated as unknown.
+	 *
+	 * True (keep the `var`) when `name` has a method call in `source` outside its own declaration
+	 * `exclude` AND its type either resolves to an abstract that may REBIND `this`
+	 * (`SymbolIndex.abstractRebindsThis`) or is an UNRESOLVED non-stdlib type whose abstractness cannot
+	 * be ruled out. False — the `final` suggestion stays sound and useful — for a resolved non-abstract
+	 * type, a RESOLVED abstract whose only `this`-writes are in its constructor (the compiler forbids
+	 * `this =` outside inline members and `final` rejects an inline this-writer transitively, so a
+	 * ctor-only writer like `ByteArray` is final-safe) or that only `@:forward`s to a class underlying
+	 * (which mutates the object, never the binding), a stdlib value type, an untyped binding, or no
 	 * method call. A `@:build` abstract bails conservative (its members may be macro-generated and
 	 * invisible).
 	 *
@@ -4056,6 +4111,16 @@ final class RefactorSupport {
 		return segments.join('_').toUpperCase();
 	}
 
+	/**
+	 * Whether `sibling` belongs to the prefix run a declaration carries BEFORE
+	 * itself - a plain modifier / `@:meta` sibling, or a conditional-modifier
+	 * region (`isConditionalModifierRegion`). The walk-back test `declGroupSpan`
+	 * runs in both directions.
+	 */
+	public static function isDeclPrefixSibling(sibling: QueryNode): Bool {
+		return MODIFIER_META_KINDS.contains(sibling.kind) || isConditionalModifierRegion(sibling);
+	}
+
 	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
 	private static inline function isHorizontalSpace(code: Int): Bool {
 		return code == ' '.code || code == '\t'.code || code == '\r'.code;
@@ -4110,6 +4175,34 @@ final class RefactorSupport {
 
 	private static inline function isUpperCode(code: Int): Bool {
 		return code >= 'A'.code && code <= 'Z'.code;
+	}
+
+	/**
+	 * `line` with a continuation gutter the CALLER supplied stripped off — the leading
+	 * whitespace, the `*`, and the single space that separates it from the text.
+	 *
+	 * This function owns the gutter, so a caller who also writes one gets it twice, and
+	 * ` * \t * text` is a corruption no gate in this project can see: the writer re-emits a
+	 * comment interior byte for byte, so the file stays writer-canonical and every node-based
+	 * rule is blind to trivia. The op reports `wrote <file>` and the damage waits for a human
+	 * to read the block. Stripping is the correction — the payload is PLAIN prose either way,
+	 * and a caller who already knew that loses nothing.
+	 *
+	 * EXACTLY ONE space or tab may precede the star, because ` * ` and `\t * ` are the only two
+	 * spellings this function and the writer ever emit. That is what keeps CONTENT reachable: a
+	 * flush `* item` bullet survives, an indented `  * item` bullet survives, and a code sample's
+	 * continuation line `        * b;` keeps both its indentation and its `*` operator. Stripping
+	 * any leading whitespace run instead ate all three — a correction that destroys content is
+	 * worse than the doubling it was written to prevent.
+	 */
+	private static function ungutter(line: String): String {
+		var i: Int = 0;
+		while (i < line.length && line.fastCodeAt(i) == '\t'.code) i++;
+		// EXACTLY ONE space between the indent and the star: `<tabs> * ` and ` * ` are the only two
+		// spellings this function and the writer ever emit.
+		if (i + 1 >= line.length || line.fastCodeAt(i) != ' '.code || line.fastCodeAt(i + 1) != '*'.code) return line;
+		final rest: String = line.substring(i + 2);
+		return rest.length > 0 && (rest.fastCodeAt(0) == ' '.code || rest.fastCodeAt(0) == '\t'.code) ? rest.substring(1) : rest;
 	}
 
 	/**
@@ -5263,16 +5356,6 @@ final class RefactorSupport {
 			match = found;
 		}
 		return match;
-	}
-
-	/**
-	 * Whether `sibling` belongs to the prefix run a declaration carries BEFORE
-	 * itself - a plain modifier / `@:meta` sibling, or a conditional-modifier
-	 * region (`isConditionalModifierRegion`). The walk-back test `declGroupSpan`
-	 * runs in both directions.
-	 */
-	private static function isDeclPrefixSibling(sibling: QueryNode): Bool {
-		return MODIFIER_META_KINDS.contains(sibling.kind) || isConditionalModifierRegion(sibling);
 	}
 
 	/**

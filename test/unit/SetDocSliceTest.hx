@@ -27,6 +27,33 @@ class SetDocSliceTest extends Test {
 		Assert.isTrue(text.contains('function f'));
 	}
 
+	/**
+	 * The op owns the gutter, so a caller who writes one too gets ` * \t * text` — a corruption
+	 * the writer re-emits verbatim, `fmt --list` calls canonical and no lint rule reads. The
+	 * supplied gutter is stripped instead. The assertion names the whole block in one string so
+	 * an untransformed payload cannot satisfy it.
+	 */
+	public function testCallerSuppliedGutterIsStripped(): Void {
+		final src: String = 'package p;\nclass C {\n\tpublic function f(): Int return 1;\n}';
+		final text: String = okText(SetDoc.setDoc(src, 3, 2, 'One.\n\t * Two.\n * Three.', true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains('/**\n\t * One.\n\t * Two.\n\t * Three.\n\t */'), text);
+	}
+
+	/**
+	 * A FLUSH `* item` is a markdown bullet, not a gutter, and survives — the strip requires
+	 * leading whitespace before the star, which is what keeps the two apart. Green at base by
+	 * construction (nothing stripped anything then); its value is the mutation that leaves it
+	 * standing. Returning `RefactorSupport.ungutter` to the identity flips
+	 * `testCallerSuppliedGutterIsStripped` here and `testCallerSuppliedGutterIsNotDoubled` in
+	 * `CommentRewriteSliceTest`, and those two ONLY — measured; this test does not move, which is
+	 * what says the strip reads the whitespace and not the star.
+	 */
+	public function testFlushBulletSurvives(): Void {
+		final src: String = 'package p;\nclass C {\n\tpublic function f(): Int return 1;\n}';
+		final text: String = okText(SetDoc.setDoc(src, 3, 2, 'Items:\n* first\n* second', true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains('/**\n\t * Items:\n\t * * first\n\t * * second\n\t */'), text);
+	}
+
 	/** An existing leading doc is replaced, not duplicated. */
 	public function testReplacesExistingDoc(): Void {
 		final src: String = 'package p;\nclass C {\n\t/** old doc */\n\tpublic function f(): Int return 1;\n}';

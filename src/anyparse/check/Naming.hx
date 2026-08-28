@@ -881,7 +881,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * over-reaching past a shadowed member and the whole rename is refused. A MEMBER's references
 	 * legitimately precede it, so the flag defaults off.
 	 *
-	  * `ctx` supplies the discounts that need the index (see `RenameContext`). With `ownerName` — a
+	 * `ctx` supplies the discounts that need the index (see `RenameContext`). With `ownerName` — a
 	 * member declaration — every same-name access is attributed through its RECEIVER's declared type
 	 * (`inheritedFieldRefSpans`, the attribution the cross-file path also runs): one on a provably
 	 * unrelated type stops counting as an uncovered occurrence, and one on the owner or a subtype is
