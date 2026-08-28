@@ -72,7 +72,14 @@ final class BodySlotGuard {
 	 * Neither subsumes the other, measured by disabling each against this guard's own tests:
 	 * without the first, five refusals go green that should not; without the second, seven do.
 	 *
-	 * Costs two parses per call. The pre-filter is only "there is an edit": a pure INSERTION
+	 * Costs two parses per call, one of them free in practice: measured on a 281 KB file, the SOURCE
+	 * parse is served from the run-scoped `CachingGrammarPlugin` cache the caller's own parse filled
+	 * (0 ms), and the whole 55-58 ms is `reaching` — 45 ms of RESULT parse plus 7.5 ms of
+	 * `LexicalRegions` scanning. Nothing in `canonicalize` can supply that parse: `writeRoundTrip`
+	 * goes through a DIFFERENT parser (`HaxeModuleTriviaParser`) whose AST has no QueryNode walker,
+	 * and neither of its round trips gets cheaper when this one has already run.
+	 *
+	 * The pre-filter is only "there is an edit": a pure INSERTION
 	 * builds the same swallow (`add-element` with the bare element `if (c)`) and deletes nothing,
 	 * so the narrower filter that asked for a deleting edit returned before parsing. Unparseable
 	 * input — either side of the edit — answers null: the caller's own parse is about to report
@@ -215,8 +222,12 @@ final class BodySlotGuard {
 		final srcComments: Map<Int, Int> = commentStarts(source);
 		final ends: Map<Int, Int> = [];
 		collectEnds(tree, source, srcComments, kinds, ends);
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> a.span.from - b.span.from);
+		// Ascending, and DISJOINT: `origin` reads them as ONE run of alternating kept / replaced
+		// stretches, which is a mapping only while no two of them overlap. That is the same
+		// precondition `RefactorSupport.applyEdits` states in its own words — an overlap corrupts the
+		// splice below before anything here could see it — so this inherits it rather than re-testing.
+		final disjoint: Array<{ span: Span, text: String }> = edits.copy();
+		disjoint.sort((a, b) -> a.span.from - b.span.from);
 		final spliced: String = RefactorSupport.applyEdits(source, edits);
 		final result: QueryNode = try plugin.parseFile(spliced) catch (exception: Exception) return null;
 		return reached(result, {
@@ -225,7 +236,7 @@ final class BodySlotGuard {
 			srcComments: srcComments,
 			spliced: spliced,
 			outComments: commentStarts(spliced),
-			sorted: sorted,
+			disjoint: disjoint,
 			ends: ends,
 			kinds: kinds
 		});
@@ -257,11 +268,11 @@ final class BodySlotGuard {
 	private static function reached(node: QueryNode, at: Reach): Null<String> {
 		final span: Null<Span> = node.span;
 		if (span != null && at.kinds.contains(node.kind)) {
-			final start: Origin = origin(at.sorted, span.from, false);
+			final start: Origin = origin(at.disjoint, span.from, false);
 			final limit: Int = limitOf(at, start);
 			if (limit >= 0) {
 				final end: Int = trimmedEnd(at.spliced, at.outComments, span.from, span.to);
-				final finish: Origin = origin(at.sorted, end, true);
+				final finish: Origin = origin(at.disjoint, end, true);
 				// Measured, on the two readings this line got wrong first time round: removing a sole
 				// `catch` left a `TryCatchStmt` whose span ran to the next statement's first character
 				// while its source counterpart stopped at its own `;` — hence `trimmedEnd` on BOTH
@@ -305,11 +316,18 @@ final class BodySlotGuard {
 	 * `end` reads `at` as an EXCLUSIVE end, so a position on a run boundary belongs to the run that
 	 * ends there rather than the one that starts there — which is what makes a construct ending
 	 * exactly where a replacement ends read as authored rather than as reaching.
+	 *
+	 * The parameter name IS the precondition, since nothing here can test it: the edits must be
+	 * ASCENDING and PAIRWISE NON-OVERLAPPING. The walk reads them as one alternating run of kept and
+	 * replaced stretches, so an overlap would advance `res` past text a later edit also claims and
+	 * every position after it would map to the wrong place. `RefactorSupport.applyEdits` states the
+	 * same requirement and corrupts the spliced text long before anything here could notice, which
+	 * is why this stays a stated precondition rather than a check.
 	 */
-	private static function origin(sorted: Array<{ span: Span, text: String }>, at: Int, end: Bool): Origin {
+	private static function origin(disjoint: Array<{ span: Span, text: String }>, at: Int, end: Bool): Origin {
 		var src: Int = 0;
 		var res: Int = 0;
-		for (edit in sorted) {
+		for (edit in disjoint) {
 			final from: Int = edit.span.from;
 			final to: Int = edit.span.to;
 			final length: Int = edit.text.length;
@@ -413,8 +431,9 @@ private typedef Origin = {
 };
 /**
  * Everything the result-side walk reads, in one value: the SOURCE tree and text with its comment
- * regions, the SPLICED text with its own, the edits sorted ascending, every source fixed-slot
- * construct's end by its start, and the fixed-slot kind vocabulary.
+ * regions, the SPLICED text with its own, the edits ascending and pairwise
+ * non-overlapping, every source fixed-slot construct's end by its start, and the fixed-slot kind
+ * vocabulary.
  *
  * The two comment maps are the reason this is a struct rather than a parameter list: a node span
  * carries trailing trivia, the two sides carry DIFFERENT amounts of it, and telling code from
@@ -426,7 +445,7 @@ private typedef Reach = {
 	var srcComments: Map<Int, Int>;
 	var spliced: String;
 	var outComments: Map<Int, Int>;
-	var sorted: Array<{ span: Span, text: String }>;
+	var disjoint: Array<{ span: Span, text: String }>;
 	var ends: Map<Int, Int>;
 	var kinds: Array<String>;
 };

@@ -2219,7 +2219,7 @@ final class Cli {
 		}
 
 		final baselineTail: String = safePass.tail;
-		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
+		final skipTail: String = skippedTail(noted, changedFiles);
 		// Names the per-ROUND budget, not the run total: `passes` spans both rounds now, so the old
 		// wording produced `over 12 pass(es) (stopped at 10 passes …)` — a line that reads as a
 		// contradiction rather than as the two budgets it actually reports.
@@ -10593,7 +10593,8 @@ final class Cli {
 			reported: 0,
 			declined: 0,
 			edits: 0,
-			reasons: []
+			reasons: [],
+			refusals: []
 		};
 		ledger[rule] = created;
 		return created;
@@ -10620,21 +10621,38 @@ final class Cli {
 	): Void {
 		final entry: RuleFixOutcome = ledgerFor(ledger, rule);
 		entry.edits += editCount;
-		if (editCount != 0 || !countDeclines) return;
+		if (editCount != 0) return;
+		// EVERY pass, and counted in EDIT SETS rather than findings — the whole point of it having a
+		// list of its own. A gate refusal is not a re-report of what an earlier edit exposed, it is a
+		// standing fact about these edits and the only sentence anyone gets about why the fix
+		// vanished; `declined` cannot carry it, because `declined` has to stay a FIRST-pass count to
+		// stay comparable with `reported`, and the same findings come back refused every later pass.
+		// A refusal first landing on pass 2 used to reach no report at all.
+		if (refusal != null) bumpReason(entry.refusals, refusal, 1);
+		if (!countDeclines) return;
 		entry.declined += own.length;
 		// Counted over exactly the findings `declined` counts, so the two numbers are comparable:
 		// a reason total BELOW `declined` says the check spoke for some of them and not the rest,
 		// which is a fact about the check, not an artefact of where the counting happened.
 		for (v in own) {
 			final reason: Null<String> = refusal ?? v.declineReason;
-			if (reason == null) continue;
-			final text: String = reason;
-			final seen: Null<{ text: String, count: Int }> = entry.reasons.find(r -> r.text == text);
-			if (seen == null)
-				entry.reasons.push({ text: text, count: 1 })
-			else
-				seen.count++;
+			if (reason != null) bumpReason(entry.reasons, reason, 1);
 		}
+	}
+
+	/**
+	 * Add `count` to `list`'s row for `text`, creating it on first sight.
+	 *
+	 * The shape BOTH sentence lists share (`reasons`, `refusals`): one row per distinct sentence with
+	 * the number of things that carried it, never one sentence per rule. What that number counts is the
+	 * caller's to say — findings for `reasons`, refused edit sets for `refusals`.
+	 */
+	private static function bumpReason(list: Array<{ text: String, count: Int }>, text: String, count: Int): Void {
+		final seen: Null<{ text: String, count: Int }> = list.find(r -> r.text == text);
+		if (seen == null)
+			list.push({ text: text, count: count })
+		else
+			seen.count += count;
 	}
 
 	/**
@@ -17306,6 +17324,25 @@ final class Cli {
 	}
 
 	/**
+	 * The summary line's `N file(s) skipped` tail — and the one thing it could not say before.
+	 *
+	 * `noted` and `changedFiles` OVERLAP now. The `canonicalize` backstop reports on EVERY pass, which
+	 * is what makes it the only report a slot two checks empty BETWEEN them can ever get; so a file
+	 * fixed on pass 1 and refused on pass 2 lands in both sets, and `skipped` on its own read as
+	 * "nothing was written here" for a file the run had already rewritten. The parenthetical is the
+	 * whole difference between "never fixed" and "partly fixed, then refused", and it is absent when
+	 * the count is zero — a run whose two sets are disjoint prints the bytes it always printed.
+	 */
+	private static function skippedTail(noted: Array<String>, changedFiles: Array<String>): String {
+		if (noted.length == 0) return '';
+		var partly: Int = 0;
+		for (file in noted) if (changedFiles.contains(file)) partly++;
+		return partly == 0
+			? ', ${noted.length} file(s) skipped'
+			: ', ${noted.length} file(s) skipped ($partly partly fixed first, then refused)';
+	}
+
+	/**
 	 * The `lint --fix` block naming, per rule, the findings that got NO edit from their own check —
 	 * and which of the things that can mean happened to each.
 	 *
@@ -17338,11 +17375,15 @@ final class Cli {
 				count: entry.declined,
 				reported: entry.reported,
 				verdict: unfixedVerdict(entry, declared, oracleAssistedIds.contains(rule)),
-				detail: declared != null ? [] : declineReasonLines(entry),
+				detail: declared != null ? [] : reasonLines(entry.reasons, entry.declined),
 				declared: declared != null || entry.reasons.length > 0
 			});
 		}
-		if (rows.length == 0) return [];
+		// Its own block, NOT rows here: these counts are edit SETS refused over every pass, and the
+		// rows above count first-pass FINDINGS. Summing the two into one header would state a number
+		// that means neither.
+		final refused: Array<String> = gateRefusalLines(ledger);
+		if (rows.length == 0) return refused;
 		rows.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.rule, b.rule));
 		var total: Int = 0;
 		for (row in rows) total += row.count;
@@ -17375,6 +17416,46 @@ final class Cli {
 				+ 'WIDER scope than this run (a member rename must see every file that could collide). Re-run over the project root, and '
 				+ 'see `Check.NoAutofix` / `Violation.declineReason` for what a rule owes its reader here.\n'
 			);
+		for (line in refused) lines.push(line);
+		return lines;
+	}
+
+	/**
+	 * The block naming every rule whose edits the writer-emit gate REFUSED and the ledger above does
+	 * not account for — a refusal that first landed after pass 1, or one whose sentence the
+	 * first-pass reasons never carried.
+	 *
+	 * Its own block, and its counts are edit SETS rather than findings, because `declined` has to stay
+	 * a FIRST-pass measurement to be comparable with `reported`: a later pass re-reports whatever an
+	 * earlier edit exposed, so folding those findings in would count one of them once per pass. A
+	 * refusal is no re-report though — it is a standing fact about an edit set, and the gate's
+	 * sentence is the only word a run has about why that fix vanished. Uncapped, because the row
+	 * count is bounded by the rule registry rather than by the tree.
+	 */
+	private static function gateRefusalLines(ledger: Map<String, RuleFixOutcome>): Array<String> {
+		final rows: Array<{ rule: String, count: Int, texts: Array<String> }> = [];
+		for (rule => entry in ledger) {
+			final unseen: Array<{ text: String, count: Int }> = entry.refusals.filter(r -> !entry.reasons.exists(x -> x.text == r.text));
+			if (unseen.length == 0) continue;
+			var count: Int = 0;
+			for (r in unseen) count += r.count;
+			rows.push({ rule: rule, count: count, texts: [for (r in unseen) r.text] });
+		}
+		if (rows.length == 0) return [];
+		rows.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.rule, b.rule));
+		final lines: Array<String> = [
+			'apq lint --fix: the writer-emit gate REFUSED ${rows.length} rule(s) the block above does not account for — their'
+				+ ' edits were computed and thrown away, and this is the only word the run has on why:\n'
+		];
+		for (row in rows) {
+			final distinct: Int = row.texts.length;
+			lines.push(
+				distinct == 1
+					? '  ${row.rule}: ${row.count} edit set(s) refused — ${row.texts[0]}\n'
+					: '  ${row.rule}: ${row.count} edit set(s) refused, $distinct distinct reason(s)\n'
+			);
+			if (distinct > 1) for (text in row.texts) lines.push('      $text\n');
+		}
 		return lines;
 	}
 
@@ -17423,21 +17504,21 @@ final class Cli {
 	}
 
 	/**
-	 * The sub-lines under a rule's row when its check declined for MORE THAN ONE reason, or spoke
-	 * for only some of the findings — `<count>× <reason>`, strongest first.
+	 * The `<count>× <reason>` sub-lines under a rule's row, strongest first, against the `total`
+	 * findings that row counts.
 	 *
-	 * Empty for the two cases the row itself already answers in full: no reason at all (the row
-	 * carries the measured default), and one reason covering every declined finding (the row carries
-	 * it inline, in the exact bytes the single-reason form has always printed).
+	 * Empty for the two cases the row itself already answers in full: no reason at all (the row carries
+	 * the measured default), and one reason covering every finding (the row carries it inline, in the
+	 * exact bytes the single-reason form has always printed).
 	 *
-	 * The trailing `declared no reason for these` count is the honest remainder. A check that
-	 * declines at several sites and writes the reason at only some of them is a real state — the
-	 * ledger's whole point is that the run reports what it MEASURED — and silently rounding the
-	 * remainder into the reasons that were given would restate the defect this block exists to end.
+	 * The trailing `declared no reason for these` count is the honest remainder — a check that declines
+	 * at several sites and writes the reason at only some of them is a real state, and rounding the
+	 * remainder into the reasons that WERE given would restate the defect this block exists to end. A
+	 * writer-emit gate refusal the first-pass reasons never carried is not here at all: it counts edit
+	 * sets rather than findings, so `gateRefusalLines` reports it under its own header.
 	 */
-	private static function declineReasonLines(entry: RuleFixOutcome): Array<String> {
-		final reasons: Array<{ text: String, count: Int }> = entry.reasons;
-		if (reasons.length == 0 || (reasons.length == 1 && reasons[0].count == entry.declined)) return [];
+	private static function reasonLines(reasons: Array<{ text: String, count: Int }>, total: Int): Array<String> {
+		if (reasons.length == 0 || (reasons.length == 1 && reasons[0].count == total)) return [];
 		final sorted: Array<{ text: String, count: Int }> = reasons.copy();
 		sorted.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.text, b.text));
 		final out: Array<String> = [];
@@ -17452,7 +17533,7 @@ final class Cli {
 			out.push('      ... +${sorted.length - DECLINED_REASONS_SHOWN} more reason(s), $rest finding(s)\n');
 			explained += rest;
 		}
-		final silent: Int = entry.declined - explained;
+		final silent: Int = total - explained;
 		if (silent > 0) out.push('      $silent× — the check declared no reason for these\n');
 		return out;
 	}
@@ -18018,10 +18099,20 @@ private typedef NamedMember = {
  * `using`, 15 unknown wildcard), and reporting whichever the file walk reached first would state one
  * quarter of the answer with the confidence of the whole. An empty array means the check said
  * nothing and the run must not invent it; a sum below `declined` means it spoke for only some.
+ *
+ * `refusals` counts the writer-emit gate's own refusals, per sentence, over EVERY pass, in EDIT
+ * SETS rather than findings — the one thing `declined` cannot carry. `declined` is deliberately a
+ * FIRST-pass measurement, because a later pass re-reports whatever an earlier edit exposed and summing those would count one finding
+ * several times; but a gate refusal that first happens on pass 2 is no re-report, it is the only
+ * word anyone gets about why that fix vanished, and it used to reach no report at all.
+ *
+ * `gateRefusalLines` renders it, in a block of its own under the ledger: an edit-set count and a
+ * finding count are different quantities and one header cannot total both.
  */
-private typedef RuleFixOutcome = {
+typedef RuleFixOutcome = {
 	var reported: Int;
 	var declined: Int;
 	var edits: Int;
 	var reasons: Array<{ text: String, count: Int }>;
+	var refusals: Array<{ text: String, count: Int }>;
 };
