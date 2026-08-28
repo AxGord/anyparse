@@ -30,9 +30,10 @@ using StringTools;
  * The same hole exists one level down, INSIDE a compiled file: a `#if` branch the arm's
  * defines exclude is skipped at lex time, so the file still earns its `Parsed` line while
  * that branch is typechecked by nothing. Measured in THIS repo, whose oracle is
- * `test-js.hxml`: `final _planted: Int = 'not an int';` planted in the native-sys `#else`
- * of `probeOutput` below leaves `haxe test-js.hxml --no-output` at exit 0, and the same
- * line in the `#if nodejs` branch four lines above fails it with `String should be Int`.
+ * `test-js.hxml`: `final _planted: Int = 'not an int';` planted in the native-sys
+ * `#elseif sys` branch of `HaxeSpawn.run` leaves `haxe test-js.hxml --no-output` at exit
+ * 0, and the same line in the `#if nodejs` branch above it fails with
+ * `String should be Int`.
  * `covers` answers TRUE for both, which is why `uncovered` — the answer a caller should
  * be asking — takes the edit's own offsets and hands the region half to
  * `CondRegionLiveness`.
@@ -247,7 +248,7 @@ final class OracleCoverage {
 	}
 
 	/**
-	 * Why an edit set touching `offsets` in `file` is NOT verifiable by the oracle's
+	 * Why an edit set covering `spans` in `file` is NOT verifiable by the oracle's
 	 * compile — a sentence ready to quote in a decline — or null when it is.
 	 *
 	 * Two ways it can fail, and they are different facts. The FILE may sit outside the
@@ -256,10 +257,10 @@ final class OracleCoverage {
 	 * at lex time, so the file still earns its `Parsed` line and a typecheck after the edit
 	 * cannot fail whatever the edit did. Measured in this repo, whose oracle is
 	 * `test-js.hxml`: a planted `final _planted: Int = 'not an int';` in the native-sys
-	 * `#else` of `probeOutput` below leaves the oracle at exit 0, and the same line in the
-	 * `#if nodejs` branch above it fails with `String should be Int`.
+	 * `#elseif sys` branch of `HaxeSpawn.run` leaves the oracle at exit 0, and the same line
+	 * in the `#if nodejs` branch above it fails with `String should be Int`.
 	 *
-	 * An arm must satisfy BOTH halves at once — read this file AND make every offset live —
+	 * An arm must satisfy BOTH halves at once — read this file AND make every byte of every span live —
 	 * because a region is only ever typechecked by a compile that did both.
 	 */
 	public function uncovered(file: String, source: String, spans: Array<Span>, shape: RefShape): Null<String> {

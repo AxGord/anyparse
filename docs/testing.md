@@ -1175,10 +1175,11 @@ and fails it from `src/pony/Byte.hx`. One variable, opposite verdicts.
 **The same hole exists one level down, inside a compiled file, and is measured
 the same way.** A `#if` branch the arm's defines exclude is skipped at lex time,
 so the file still earns its `Parsed` line while that branch is typechecked by
-nothing: `final _planted: Int = 'not an int';` in the native-sys `#else` of
-`OracleCoverage.probeOutput` leaves `haxe test-js.hxml --no-output` at exit 0,
-and the same line in the `#if nodejs` branch four lines above fails it with
-`String should be Int`. So the probe splits its transcript into ARMS — one per
+nothing: `final _planted: Int = 'not an int';` in the native-sys `#elseif sys`
+branch of `HaxeSpawn.run` leaves `haxe test-js.hxml --no-output` at exit 0, and
+the same line in the `#if nodejs` branch above it fails with
+`String should be Int` — while `covers` answers TRUE for the file either way and
+`uncovered` declines only the second, naming the branch. So the probe splits its transcript into ARMS — one per
 `Defines:` line, each owning the files parsed after it and the defines it
 declares (that line's names plus the `--macro define(...)` calls that follow,
 which is the only way `nodejs` is visible at all) — and `OracleCoverage.uncovered`

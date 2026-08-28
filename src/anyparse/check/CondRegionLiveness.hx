@@ -17,11 +17,12 @@ using StringTools;
  * A conditional-compilation branch the defines exclude is skipped at lex time, so the
  * file still earns its `Parsed <path>` line while that branch is typechecked by
  * NOTHING. Measured in this repo, whose configured oracle is `test-js.hxml`: a
- * `final _planted: Int = 'not an int';` planted in the native-sys `#else` of
- * `OracleCoverage.probeOutput` leaves `haxe test-js.hxml --no-output` at exit 0, while
- * the identical line in the `#if nodejs` branch four lines above fails it with
- * `String should be Int`. Same file, same compile, opposite answers — and a file-level
- * coverage answer says TRUE for both.
+ * `final _planted: Int = 'not an int';` planted in the native-sys `#elseif sys`
+ * branch of `HaxeSpawn.run` leaves `haxe test-js.hxml --no-output` at exit 0, while the
+ * identical line in the `#if nodejs` branch above it fails with `String should be Int`.
+ * Same file, same compile, opposite answers — and a file-level coverage answer says TRUE
+ * for both, while `OracleCoverage.uncovered` grants the first offset and declines the
+ * second by name.
  *
  * ## The answer is THREE-valued, and only one direction is ever asserted
  *
