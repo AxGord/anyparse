@@ -555,6 +555,32 @@ class Renderer {
 	 * Closing them needs a width-aware answer, which would make this guard disagree
 	 * with the two natural walks that resolve the same marker without a rest-stack
 	 * term; that trade is a separate slice.
+	 *
+	 * THE THRESHOLD'S SLACK, measured on `a3cc4999`. `<= 0` flips five
+	 * `HxArrowBlockBodyOpenSliceTest` cases, so the lower side was pinned; `<= 2`
+	 * flipped NOTHING in the suite OR the 946-fixture corpus, and the next
+	 * threshold SAMPLED above it that moved anything was `<= 1000` (one case,
+	 * `testKeepModeLiteralBreakingLaterStillBreaks`, whose literal measures 37) —
+	 * 35 values of unguarded slack over a threshold the whole admitted population
+	 * sits EXACTLY on. Bounded by those two samples, not swept: nothing between 3
+	 * and 36 was tried. Closed by
+	 * `BodyGroupPrefixChargeConsumerTest.testArrowMarkerAdmitsExactlyOneColumn`,
+	 * which rejects a `{a`-headed Doc at width 2 with the other two conjuncts
+	 * asserted TRUE on that same Doc, so the width is the only thing that can
+	 * reject it.
+	 *
+	 * SECOND CONSUMER of the charged answer (the first is the `IfFirstLineExceeds`
+	 * probe), and why no end-to-end fixture can pin THAT. Reverting the charge here
+	 * alone — reading `flatTokenWidthFirstLineWithBreak(flatDoc, false).width`
+	 * instead — leaves the whole suite green and the corpus byte-identical: a
+	 * statement block measures 0 deferred and 1 charged, and `<= 1` admits both. No
+	 * input separates them either, since a discriminating one needs two or more
+	 * columns of content AFTER a committed `BodyGroup` on the same first line and
+	 * the arrow-body marker never emits that shape. The two ANSWERS are therefore pinned
+	 * directly, by `BodyGroupPrefixChargeConsumerTest`
+	 * `.testBlockBodyChargesItsBareBrace`. Read that as what it is: the walk's
+	 * arithmetic is pinned, the CHOICE this line makes between the two is not, and
+	 * cannot be — flipping this call's argument still leaves every gate green.
 	 */
 	private static inline function selfBreakingBraceBody(flatDoc: Doc): Bool {
 		return DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code) && DocMeasure.hasForcedBreak(flatDoc)
@@ -1419,10 +1445,19 @@ class Renderer {
 				// calibrated against the deferring one, so charging here wraps
 				// headers that fit. `flatTokenWidthFirstLine`'s doc carries the
 				// measurement and says why this is calibration debt rather than a
-				// second question. Nothing in `test/` flips when this `false` is
-				// flipped: what guards it is the whole-tree `apq fmt src test
-				// --list` (6 files instead of 3, 3 of them worse) plus the Pony
-				// A/B, not a fixture.
+				// second question. RE-MEASURED on `a3cc4999`: flipping this `false`
+				// to `true` leaves the whole suite green and the 946-fixture corpus
+				// byte-identical, and drifts exactly TWO files under `apq fmt
+				// --list` — `check/PreferMapType.hx` and `query/LintFixSafePass.hx`,
+				// both the very `for (…) if (…) { … }` shape named above, both to a
+				// worse shape: the inner call's argument list breaks instead of the
+				// condition. (The count recorded here before was six; that came from
+				// a different, both-walkers arm and does not reproduce for this
+				// literal alone.) Until then a whole-tree byte oracle was all that
+				// guarded it — it names no mechanism and goes quiet the moment the
+				// tree is reformatted. `BodyGroupPrefixChargeConsumerTest`
+				// `.testRestStackDefersACommittedNestedBody` now asks this arm its
+				// own question, and is the ONE test the flip flips.
 				if (bgDescend) {
 					inner.push({ doc: innerDoc, mode: MFlat });
 					return { add: 0, aborted: false };

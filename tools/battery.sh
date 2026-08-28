@@ -56,7 +56,10 @@
 #
 # What fails the run: any build error, a red or count-diverged suite, a
 # non-empty `fmt --list`, a `fmt --one-pass` file (the writer needed a second
-# rewrite to settle it), a `fmt --verify` divergence, a `--jvm` probe that
+# rewrite to settle it), a MOVE in the cross-config `--one-pass` set (this
+# repo's own sources re-formatted under a second, vendored config — the one
+# (tree, config) pair the two per-tree arms structurally cannot cover), a
+# `fmt --verify` divergence, a `--jvm` probe that
 # stops compiling, a corpus
 # regression (more failures than the base), or any blast-radius change that
 # was not explicitly allowed with --allow-blast. A blast comparison that
@@ -542,6 +545,86 @@ branch_fmt() {
         fail "the writer needed more than one rewrite on a file in $ANYPARSE_HXFORMAT_FORK/src"
     fi
     step_end "fmt"
+
+    # --- the CROSS-CONFIG one-pass arm -----------------------------------
+    #
+    # The two arms above pair each tree with its OWN hxformat.json, so between
+    # them they cover two (tree, config) pairs and no third. That leaves a
+    # blind spot with a name: the writer's convergence tail is a property of
+    # the CONFIG as much as of the code, and this tree's own config does not
+    # reach it. Measured on `a3cc4999`: under a second real-world config three
+    # files of THIS repo need a second rewrite to settle, and nothing in the
+    # battery, the suite or the corpus can see them.
+    #
+    # The config is vendored (`tools/xconfig-hxformat.json`, a verbatim copy of
+    # the Pony project's committed one at `b6b94e37` — a fully specified
+    # 751-line config, and the one the measurement was made with) rather than
+    # read from a personal checkout, so the arm is hermetic and its baseline
+    # below stays meaningful when that tree moves. Re-vendor from a COMMIT, never
+    # from a working tree: Pony's working copy of that file differs from its
+    # committed one in four wrap knobs today, which is exactly the
+    # non-determinism vendoring removes.
+    #
+    # It runs on a SCRATCH ROOT of symlinks rather than by swapping this repo's
+    # own hxformat.json: config discovery walks up from each file's directory
+    # lexically, so `$xroot/src/... -> $repo/src/...` picks up `$xroot`'s config
+    # while this arm, which only ever reads, leaves the real tree alone. (The
+    # symlinks are not a write barrier — a `--write` through them would rewrite
+    # the real files. What the scratch root buys is that an interrupted battery
+    # cannot leave the repo holding a foreign config, which a swap could.)
+    #
+    # WHAT IT GATES, and what it deliberately does not. `--list` is NOT a gate
+    # here — under a foreign config the whole tree legitimately drifts (301 of
+    # 1529 files at the time of writing), and that number carries no verdict.
+    # The gate is the `--one-pass` SET, compared for EQUALITY against the
+    # baseline below. Equality, not a ceiling: a file joining is a regression
+    # and a file leaving is progress in the convergence tail (T284/T285), and
+    # both must land in this list rather than pass silently.
+    step_begin "fmt xconfig"
+    local xroot="$work/xconfig"
+    rm -rf "$xroot"
+    mkdir -p "$xroot"
+    cp "$repo/tools/xconfig-hxformat.json" "$xroot/hxformat.json"
+    ln -s "$repo/src" "$xroot/src"
+    ln -s "$repo/test" "$xroot/test"
+    ln -s "$repo/tools" "$xroot/tools"
+    # The known non-converging set under that config. Update it — with the
+    # measurement — whenever it legitimately moves.
+    cat > "$work/fmt-xconfig.base" <<'XCFG'
+src/anyparse/check/DuplicateCase.hx
+src/anyparse/check/UnnecessarySwitch.hx
+src/anyparse/macro/Lowering.hx
+XCFG
+    # The exit code is non-zero on drift alone, so it says nothing here; the
+    # `--one-pass` verdict is read off stderr, which is why the two streams are
+    # kept apart as in the arm above.
+    APQ_NO_CONFIG_WARN=1 bin/hxq fmt --list --one-pass "$xroot/src" "$xroot/test" "$xroot/tools" \
+        > "$work/fmt-xconfig.log" 2> "$work/fmt-xconfig.err" || true
+    sed -n "s|^apq fmt: $xroot/\(.*\): the writer needed .*|\1|p" "$work/fmt-xconfig.err" \
+        | LC_ALL=C sort > "$work/fmt-xconfig.set"
+    # Replay the run's own two summary lines instead of re-deriving them here.
+    # They carry both counts (drift numerator AND file-count denominator) so
+    # neither can be hardcoded into this script and drift; and the FIRST of them
+    # is also the completion proof this arm otherwise lacks. Without that check
+    # the set comparison below can pass on a partial run: `src/anyparse/check`
+    # and `src/anyparse/macro` are walked early, so a crash or an abort anywhere
+    # after them leaves exactly the three baseline paths on stderr and the arm
+    # goes green having scanned a fraction of the tree.
+    grep -e '^apq fmt --list:' -e '^apq fmt --one-pass:' "$work/fmt-xconfig.err" >&2 || true
+    # Everything else on stderr is unexpected -- a crash trace, a parse failure,
+    # a config error. The sibling arm cats its whole `.err`; here the per-file
+    # one-pass lines are the expected bulk, so only the rest is replayed.
+    grep -v -e ': the writer needed ' -e '^apq fmt --list:' -e '^apq fmt --one-pass:' \
+        "$work/fmt-xconfig.err" >&2 || true
+    if ! grep -q '^apq fmt --list:' "$work/fmt-xconfig.err"; then
+        cat "$work/fmt-xconfig.err" >&2
+        fail "the cross-config fmt run printed no summary line -- it did not finish, so its one-pass set means nothing"
+    fi
+    if ! diff -u "$work/fmt-xconfig.base" "$work/fmt-xconfig.set" > "$work/fmt-xconfig.diff"; then
+        cat "$work/fmt-xconfig.diff" >&2
+        fail "the cross-config one-pass set moved (+ = a new non-converging file, - = one that now settles) -- re-measure, then update the baseline in branch_fmt"
+    fi
+    step_end "fmt xconfig"
 }
 
 # --- 4. branch: jvm portability probe ----------------------------------
@@ -712,7 +795,7 @@ fi
 echo "battery.sh: running suite→corpus ∥ fmt ∥ jvm ∥ oracle→lint concurrently — output replays in a fixed order once they join"
 parallel_start=$(now_ms)
 launch suite "suite" "corpus"
-launch fmt   "fmt"
+launch fmt   "fmt" "fmt xconfig"
 launch jvm   "jvm probe"
 launch lint  "oracle" "lint" "blast"
 
