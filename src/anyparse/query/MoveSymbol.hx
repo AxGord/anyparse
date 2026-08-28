@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.ImportOrder.ImportAnchor;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -54,6 +55,21 @@ typedef MoveChange = {
 typedef NameBinding = {
 	var path: String;
 	var ownModule: Bool;
+}
+
+/**
+ * A simple name paired with the source span it is written at. Two readings, both needing the span
+ * the bare name loses: a type-POSITION occurrence inside the moved declaration, and the REGION a
+ * function's type parameter shadows that name over.
+ *
+ * A method's `<Dep>` shadows `Dep` only inside that method, so the same name can be a parameter at
+ * one occurrence and a genuine dependency at another in the same declaration — un-pricing it by
+ * NAME dropped the dependency from the gate entirely, which a `pick<Dep>` beside a `var d:Dep;`
+ * compile-ran to a changed runtime class with rc 0.
+ */
+typedef NameSpan = {
+	var name: String;
+	var span: Span;
 }
 
 /**
@@ -130,8 +146,13 @@ final class MoveSymbol {
 	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a static receiver ('
 		+ 'T.staticMethod()) or a value position are not auto-detected and may need a manual import. A '
 		+ 'cross-package move repoints importers and the source/dest imports; a fully-qualified pkg.Type code reference is '
-		+ 'refused. The bound-name collision gate reads the SCOPE index, so a name the destination binds outside it — a stdlib '
-		+ 'or top-level type, a package wildcard, a `#if`-guarded import — is not seen and cannot be refused.';
+		+ 'refused. The bound-name collision gate reads the SCOPE index and REFUSES rather than guesses whenever ONE file can '
+		+ 'name its binding for a dependency and the other cannot — unless the two spell the same import statement for it, or '
+		+ 'the destination never names it at all. A `#if`-guarded destination import is named separately and refused on its '
+		+ 'own. What is left is the case where NEITHER side is nameable: the move proceeds, which is right for the standard '
+		+ 'library (the same scope in every file) and NOT right for a wildcard of a package outside the scope, which is '
+		+ 'per-file and is the door still open. A dependency reached through a MODULE import (import pkg.Mod; binding '
+		+ 'pkg.Mod.Sub) is priced but never carried.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -297,19 +318,7 @@ final class MoveSymbol {
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, index: SymbolIndex,
 		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
 	): CarryResult {
-		final depNames: Array<String> = [];
-		collectDependencyNames(plugin.parseFileTypeRefs(source), declSpan, typeRefShape, typeName, depNames);
-		// A declaration's own type PARAMETERS stand in the same type positions its dependencies do, and
-		// shadow every module-level binding of that name INSIDE it — so pricing one asks about a type
-		// the moved code never means. `class Moved<Key>` beside a `p/Key.hx` refused a move that was
-		// correct. The enclosing type is found by span containment, which is also what makes this work
-		// for `move-member`, where `declSpan` is a member's and the parameters are the type's.
-		// METHOD-level parameters are not in the index and stay priced; that residue costs a refusal,
-		// never a silent rebind.
-		for (t in cursorInfo.types)
-			if (t.span.from <= declSpan.from && t.span.to >= declSpan.to)
-				for (param in t.typeParamNames) depNames.remove(param);
-
+		final depNames: Array<String> = dependencyNames(source, declSpan, cursorInfo, plugin, typeRefShape, typeName);
 		// One copy of the file list for the whole carry — `allFiles()` copies, and the binding walk
 		// runs once per dependency name on each side.
 		final files: Array<FileInfo> = index.allFiles();
@@ -336,10 +345,10 @@ final class MoveSymbol {
 			final wanted: Null<String> = provider != null ? SymbolIndex.pathImportedBy(provider) : bindingOf(dep, cursorInfo, files)?.path;
 			// A binding the destination has and the moved code does not share is the one thing carrying
 			// cannot repair: whichever of the two wins, code that compiled before means a different
-			// type, with no diagnostic anywhere.
-			final collision: Null<String> = wanted == null
-				? null
-				: carryCollision(dep, wanted, destInfo, destSource, files, provider != null);
+			// type, with no diagnostic anywhere. `wanted == null` is NOT a licence to skip the gate —
+			// the source binding is then merely unnameable, and it is exactly the case the base engine
+			// fell through on for a stdlib name, a package wildcard and a `#if`-guarded import alike.
+			final collision: Null<String> = carryCollision(dep, wanted, cursorInfo, destInfo, destSource, files, provider != null);
 			if (collision != null) return CarryErr(collision);
 			if (provider == null) continue;
 			// Already present in the destination → no carry. The PATH is part of the identity: two
@@ -420,15 +429,19 @@ final class MoveSymbol {
 
 	/**
 	 * What `info`'s file ALREADY means by the simple name `name`, or null when nothing in the indexed
-	 * scope binds it (a stdlib or top-level type, which no scope-limited index can see — the fail-open
-	 * direction, and the one the base engine took for every name).
+	 * scope binds it. Null is UNKNOWN, never "nothing binds it": the name may still resolve through the
+	 * AMBIENT top-level scope — the standard library, or a root-package module outside the scope — which
+	 * no scope-limited index can see. Reading null as "free" is what let a carried import shadow a
+	 * stdlib name with no diagnostic, so every caller must decide what an unknown means for its own
+	 * direction rather than fall through.
 	 *
 	 * The order IS Haxe's resolution order, measured on 4.3.7 rather than read off the spec: a type the
-	 * file's own module declares beats an import (a carried import placed next to it is inert, and the
-	 * moved code binds to the module's type); an import beats a sibling module of the same package;
-	 * among imports the LAST one wins, which is why the fold keeps the last match instead of the first.
-	 * A `#if`-guarded import is skipped — it binds the name in some configurations only, and a carry
-	 * that is a collision in one build and not in another is not a question this seat can answer.
+	 * file's own module declares beats an import; an EXPLICIT import beats a WILDCARD one whichever is
+	 * written first; a wildcard beats a sibling module of the same package; and the package beats the
+	 * TOP LEVEL. Among explicit imports the LAST one wins, which is why the fold keeps the last match
+	 * instead of the first. A `#if`-guarded import is skipped here — it binds the name in some
+	 * configurations only, so it is not a rung of any one build's ladder; `guardedImportPath` asks about
+	 * it separately, and the caller refuses on it rather than ranking it.
 	 *
 	 * Asked of the DESTINATION it says what a carried import would collide with; asked of the SOURCE it
 	 * says what the moved code means today, which is the only way to price a dependency the source
@@ -436,23 +449,148 @@ final class MoveSymbol {
 	 */
 	private static function bindingOf(name: String, info: FileInfo, files: Array<FileInfo>): Null<NameBinding> {
 		for (t in info.types) if (t.name == name) return { path: t.isMain ? info.module : '${info.module}.${t.name}', ownModule: true };
-		var imported: Null<String> = null;
-		for (imp in info.imports) if (!imp.guarded && RefactorSupport.lastSegment(imp.raw) == name) {
-			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
-			if (path != null) imported = path;
-		}
+		final imported: Null<String> = importBinding(name, info, files);
 		if (imported != null) return { path: imported, ownModule: false };
-		// `isMain` FILTERS here, where in the branch above it only spells the path: a sibling module's
-		// SUB-module type is not visible by simple name from another file of the package — this file's
-		// own header proves it, importing `SymbolIndex.ImportKind` from its own package — so counting
-		// one was a refusal against a binding that does not exist. Compile-proved: a file naming `Dep`
-		// beside a sibling `p/Other.hx` declaring a secondary `Dep` is `Type not found : Dep` on 4.3.7,
-		// and this used to refuse a move over it.
-		for (fi in files)
-			if (fi.pkg == info.pkg && fi.file != info.file)
-				for (t in fi.types)
-					if (t.name == name && t.isMain) return { path: fi.module, ownModule: false };
+		final wild: Null<String> = wildcardBinding(name, info, files);
+		if (wild != null) return { path: wild, ownModule: false };
+		final scoped: Null<String> = packageOrTopLevelBinding(name, info, files);
+		return scoped == null ? null : { path: scoped, ownModule: false };
+	}
+
+	/**
+	 * The module path an unguarded EXPLICIT import / using of `info`'s file binds `name` to, or null.
+	 * The LAST such statement wins, which is why the fold keeps the last match rather than the first.
+	 *
+	 * A MODULE import binds every type the module declares, not only the one that shares its name:
+	 * `import q.Mod;` makes `q.Mod.Sub` reachable as bare `Sub` — compile-run on 4.3.7, and
+	 * `Type.getClassName` on what it built came back `q.Sub`. Reading only the import's last segment
+	 * left every such name unbound, and an unbound SOURCE name is what the collision gate refuses on.
+	 * An ALIAS is excluded: `import q.Mod as X;` binds X and nothing else.
+	 */
+	private static function importBinding(name: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
+		var imported: Null<String> = null;
+		for (imp in info.imports) if (!imp.guarded) {
+			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
+			if (path == null) continue;
+			if (RefactorSupport.lastSegment(imp.raw) == name) {
+				imported = path;
+				continue;
+			}
+			if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) continue;
+			for (fi in files) if (fi.module == path) for (t in fi.types) if (t.name == name && !t.isPrivate) imported = '$path.$name';
+		}
+		return imported;
+	}
+
+	/**
+	 * The two IMPLICIT rungs of the ladder, in their measured order: a sibling MODULE of `info`'s own
+	 * package first, then the TOP LEVEL — a module of the root package, visible by simple name from
+	 * every file in the project exactly as the standard library's own top-level types are. The root
+	 * package's own files skip the second walk; the first has already answered for them.
+	 *
+	 * `isMain` FILTERS both, where the module-own branch of `bindingOf` only spells a path with it: a
+	 * sibling module's SUB-module type is not visible by simple name from another file of the package
+	 * — this file's own header proves it, importing `SymbolIndex.ImportKind` from its own package — so
+	 * counting one was a refusal against a binding that does not exist (`Type not found : Dep` on
+	 * 4.3.7). `isPrivate` filters for the same reason one step further in: `private class Dep` in
+	 * `p/Dep.hx` is equally `Type not found` from `p/Host.hx`.
+	 */
+	private static function packageOrTopLevelBinding(name: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
+		for (fi in files) if (fi.pkg == info.pkg && fi.file != info.file) {
+			for (t in fi.types) if (t.name == name && t.isMain && !t.isPrivate) return fi.module;
+		}
+		if (info.pkg == '') return null;
+		for (fi in files) if (fi.pkg == '') {
+			for (t in fi.types) if (t.name == name && t.isMain && !t.isPrivate) return fi.module;
+		}
 		return null;
+	}
+
+	/**
+	 * The module path a `#if`-guarded import of `info`'s file binds `name` to, or null when it has
+	 * none. Kept OUT of `bindingOf`'s ladder on purpose: a guarded import is a rung in some builds and
+	 * absent in others, so ranking it would answer one configuration and hide the rest.
+	 *
+	 * The caller uses it as a VETO rather than as an answer. Both directions were compile-run on 4.3.7
+	 * with a destination holding `#if neko import r.Dep; #end`: with the carried line written ABOVE the
+	 * guard the guarded import wins under `-D neko` and the MOVED code rebinds (`q.Dep` -> `r.Dep`);
+	 * with an unguarded import below the guard the carried line lands last and the DESTINATION's own
+	 * code rebinds (`r.Dep` -> `q.Dep`). Both exited 0 with no output. Which of the two happens is
+	 * decided by where the anchor puts the line, so the veto does not ask.
+	 */
+	private static function guardedImportPath(name: String, info: FileInfo): Null<String> {
+		var found: Null<String> = null;
+		for (imp in info.imports) if (imp.guarded && RefactorSupport.lastSegment(imp.raw) == name) {
+			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
+			if (path != null) found = path;
+		}
+		return found;
+	}
+
+	/**
+	 * The module path a WILDCARD import of `info`'s file binds `name` to, or null when none of them
+	 * does — including when the wildcard names a package the scope index does not hold, where the
+	 * honest answer is "unknown" and the caller's unknown handling takes over.
+	 *
+	 * Only ONE of the two `.*` spellings binds a TYPE. `import pkg.*` brings in each MODULE of `pkg`
+	 * under its main type's name — a SUB-module type stays unbound, which is why `isMain` filters here as
+	 * it does on the package rung. `import pkg.Module.*` binds no type at all: it imports that
+	 * module's STATIC FIELDS, measured on 4.3.7 (`trace(STATIC_FIELD)` prints, `new Mod()` and
+	 * `new Sub()` are both `Type not found`), so it is not a rung and modelling it as one INVENTED a
+	 * binding — which then matched `wanted` and cancelled the very ambient refusal this slice added.
+	 * Privacy filters what remains: a module-`private` type is not importable by any spelling.
+	 *
+	 * Without this rung a wildcard was simply invisible, and the collision gate read the destination as
+	 * binding nothing: `p/Host.hx` holding `import r.*` next to a moved decl reaching `q.Dep` had the
+	 * carried `import q.Dep;` win over the wildcard, and `Host.dep()` came back `q.Dep` where it had
+	 * been `r.Dep`, rc 0.
+	 */
+	private static function wildcardBinding(name: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
+		var found: Null<String> = null;
+		for (imp in info.imports) if (!imp.guarded && imp.kind == ImportKind.Wild && imp.raw.endsWith('.*')) {
+			final head: String = imp.raw.substring(0, imp.raw.length - 2);
+			for (fi in files) if (fi.pkg == head) for (t in fi.types) if (t.name == name && t.isMain && !t.isPrivate) found = fi.module;
+		}
+		return found;
+	}
+
+	/**
+	 * Every module path an import / using statement of `info`'s file could bind `name` to — the
+	 * statement's own path when its last segment IS `name`, and `<path>.<name>` for a module import,
+	 * which brings the module's other types along. Guarded statements are included: this answers "could
+	 * the two files mean the same thing by this name", not "what does this build mean by it".
+	 *
+	 * The reconciliation half of the collision gate. `bindingOf` deliberately cannot name a binding that
+	 * comes from a `#if`-guarded import or from a module OUTSIDE the indexed scope — and a refusal built
+	 * on "cannot name it" then fires on the commonest macro-file shape there is, where BOTH files carry
+	 * the same `#if macro import haxe.macro.Expr;`. Measured on the Pony tree: four of eleven changed
+	 * outcomes in a 60-case census were exactly that, and each names a path both sides already agree on.
+	 *
+	 * The set is deliberately not proof of a binding — an entry is a path the statement WOULD produce if
+	 * the module declares `name`, which an out-of-scope module cannot be asked. It is only ever used to
+	 * cancel a refusal whose other side names one of these paths exactly, so a wrong entry costs a
+	 * missed refusal on a shape where the two files already spell the same import.
+	 */
+	private static function importCandidates(name: String, info: FileInfo, files: Array<FileInfo>): Array<String> {
+		final out: Array<String> = [];
+		for (imp in info.imports) if (imp.kind != ImportKind.Wild) {
+			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
+			if (path == null) continue;
+			if (RefactorSupport.lastSegment(imp.raw) == name) {
+				if (!out.contains(path)) out.push(path);
+				continue;
+			}
+			if (imp.kind == ImportKind.Alias) continue;
+			// A module the index HOLDS can be asked whether it declares `name`, and is only offered when
+			// it does — the same "do not invent a binding" rule the wildcard rung learned the hard way.
+			// A module OUTSIDE the scope cannot be asked, and the constructed path is the only handle
+			// there is on `#if macro import haxe.macro.Expr;` providing `Field`.
+			final known: Null<FileInfo> = files.find(fi -> fi.module == path);
+			if (known != null && !known.types.exists(t -> t.name == name && !t.isPrivate)) continue;
+			final candidate: String = '$path.$name';
+			if (!out.contains(candidate)) out.push(candidate);
+		}
+		return out;
 	}
 
 	/**
@@ -462,9 +600,23 @@ final class MoveSymbol {
 	 * a move it cannot prove harmless rather than performing one it cannot prove safe.
 	 */
 	private static function referencedInDest(destSource: String, destInfo: FileInfo, name: String): Bool {
+		// A type that declares `name` as a HEADER type parameter spells it all over its own body, and
+		// the reference scan cannot tell that from a reference to a module of that name — so those
+		// declarations' spans are excluded alongside the import statements. Excluded by SPAN rather
+		// than by a file-wide flag: `class Box<Date>` says nothing about a `Date` a SIBLING type in the
+		// same module writes, and cancelling the whole file on it left that sibling's carry unrefused
+		// (compile-run to a changed runtime class with rc 0).
+		//
+		// And only for a type that declares NO STATIC member, because a class type parameter is not in
+		// scope inside one — `class Box<Date> { static function tag() return Date.now(); }` compiles and
+		// answers the STDLIB `Date`, measured on 4.3.7 — so a static member's `Date` is an ambient
+		// reference the exclusion would hide. The index carries a member's start offset but not its end,
+		// so the span cannot be cut around the statics; refusing to exclude at all when the type has any
+		// is the direction that costs a refusal rather than a rebind.
+		final excluded: Array<Span> = [for (imp in destInfo.imports) imp.span];
+		for (t in destInfo.types) if (t.typeParamNames.contains(name) && !t.members.exists(m -> m.isStatic)) excluded.push(t.span);
 		return RefactorSupport.referencedUnqualifiedInRange(
-			destSource, name, 0, destSource.length, [for (imp in destInfo.imports) imp.span],
-			RefactorSupport.collectCommentRegions(destSource)
+			destSource, name, 0, destSource.length, excluded, RefactorSupport.collectCommentRegions(destSource)
 		);
 	}
 
@@ -481,10 +633,44 @@ final class MoveSymbol {
 	 * destination's own code — and only when it names `dep`.
 	 */
 	private static function carryCollision(
-		dep: String, wanted: String, destInfo: FileInfo, destSource: String, files: Array<FileInfo>, hasProvider: Bool
+		dep: String, wanted: Null<String>, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, files: Array<FileInfo>,
+		hasProvider: Bool
 	): Null<String> {
 		final standing: Null<NameBinding> = bindingOf(dep, destInfo, files);
-		if (standing == null || standing.path == wanted) return null;
+		final guardedDest: Null<String> = guardedImportPath(dep, destInfo);
+		if (wanted == null) return unnameableSourceCollision(dep, cursorInfo, destInfo, files, standing, guardedDest);
+		// A guarded import at the destination is a rung of SOME build's ladder and of no other, so
+		// whether the carried line wins or loses is a per-configuration question. Refuse either way:
+		// both directions were compile-run to a changed runtime class with rc 0.
+		if (guardedDest != null && guardedDest != wanted && !importCandidates(dep, cursorInfo, files).contains(guardedDest))
+			return 'the moved code reaches "$dep" as $wanted, and ${destInfo.file} binds "$dep" to $guardedDest inside a `#if` '
+				+ 'guard — under that guard one of the two imports is last and the other loses, silently rebinding either the '
+				+ 'moved code or the destination\'s; alias one of the two imports, or move the dependency too';
+		if (standing == null) {
+			// Nothing the index can name binds `dep` at the destination, which is NOT "nothing binds
+			// it": the ambient top-level scope is invisible from here. Two ways that bites, one per
+			// side of the move.
+			return if (!hasProvider)
+				// No carry, so the moved code takes the destination's ladder, and the ladder's visible
+				// rungs are all empty — what is left is the ambient scope. Compile-proved: `p/Date.hx`
+				// shadowing the stdlib `Date` for a same-package source, moved to a destination the
+				// index says nothing about, resolved to the STDLIB `Date` with rc 0.
+				'the moved code reaches "$dep" as $wanted with no import to carry, and nothing in the indexed scope binds '
+					+ '"$dep" at ${destInfo.file} — the moved code would take that file\'s own resolution, which this index '
+					+ 'cannot see; import "$dep" explicitly at the source first, or move the dependency too';
+			else if (referencedInDest(destSource, destInfo, dep) && !importCandidates(dep, destInfo, files).contains(wanted))
+				// The destination NAMES `dep` and the index cannot say what it means by it, so it means
+				// something ambient — and a carried import outranks the ambient scope. Compile-proved
+				// twice: a stdlib `Date` and a root-package `Dep.hx` at the destination each came back
+				// as the carried module's type instead, rc 0, no output.
+				'the moved code reaches "$dep" as $wanted, and ${destInfo.file} references "$dep" while nothing in the '
+					+ 'indexed scope binds it there — it resolves through the ambient top level (a stdlib or top-level type, or '
+					+ 'an out-of-scope package), which a carried import outranks, so carrying it would silently rebind that '
+					+ 'file\'s own references to $wanted; alias the import, or qualify the references';
+			else
+				null;
+		}
+		if (standing.path == wanted) return null;
 		final head: String = 'the moved code reaches "$dep" as $wanted, and ${destInfo.file} ';
 		return if (!hasProvider)
 			// Nothing to carry — the source reaches `dep` with no import statement, so at the
@@ -509,21 +695,166 @@ final class MoveSymbol {
 	}
 
 	/**
+	 * The `wanted == null` half of the collision gate: the SOURCE's own binding for `dep` is not
+	 * nameable — the moved code reaches it through the ambient top level (the stdlib, or a module
+	 * outside the scope), a wildcard whose package the index does not hold, or a `#if`-guarded import.
+	 * Nothing is carried for any of those, so at the destination the moved code takes the DESTINATION's
+	 * ladder, and there are only two answers: the destination's ladder is ALSO ambient, which is the
+	 * same scope in every file and so cannot differ — or it names something, and then it names
+	 * something else.
+	 *
+	 * Except when the two files spell the SAME statement for `dep`. Two macro modules each carrying
+	 * `#if macro import haxe.macro.Expr;` is the commonest shape in the tree, and there the index can
+	 * name neither side while the two agree perfectly — four of eleven changed outcomes in a 60-case
+	 * `move` census over the Pony tree were exactly that.
+	 */
+	private static function unnameableSourceCollision(
+		dep: String, cursorInfo: FileInfo, destInfo: FileInfo, files: Array<FileInfo>, standing: Null<NameBinding>,
+		guardedDest: Null<String>
+	): Null<String> {
+		if (standing == null && guardedDest == null) return null;
+		final reachable: Array<String> = importCandidates(dep, cursorInfo, files);
+		if ((standing == null || reachable.contains(standing.path)) && (guardedDest == null || reachable.contains(guardedDest)))
+			return null;
+		// The path once, and the `#if` note once beside it — interpolating a pre-suffixed string into
+		// both slots produced "rebind to X under a #if guard under a #if guard".
+		final theirs: String = standing != null ? standing.path : '$guardedDest';
+		final howTheirs: String = standing != null ? '' : ' inside a `#if` guard';
+		final mine: Null<String> = guardedImportPath(dep, cursorInfo);
+		final why: String = mine != null
+			? 'the source binds it to $mine inside a `#if` guard, which is not carried'
+			: 'the source reaches it outside the indexed scope (a stdlib or top-level type, or a package wildcard)';
+		return 'the moved code reaches "$dep" through a binding this index cannot name — $why — and ${destInfo.file} binds '
+			+ '"$dep" to $theirs$howTheirs, so the moved code would silently rebind to $theirs; import "$dep" explicitly at '
+			+ 'the source first, or qualify its references';
+	}
+
+	/**
 	 * Append to `out` the distinct names `node`'s subtree references in a TYPE position INSIDE
 	 * `declSpan` — the moved declaration's dependency set, minus the declaration's own name. Walks
 	 * every hit of the type-ref projection and keeps the ones the span contains.
 	 */
 	private static function collectDependencyNames(
-		node: QueryNode, declSpan: Span, typeRefShape: TypeRefShape, typeName: String, out: Array<String>
+		node: QueryNode, declSpan: Span, typeRefShape: TypeRefShape, typeName: String, out: Array<NameSpan>
 	): Void {
 		final name: Null<String> = node.name;
 		final span: Null<Span> = node.span;
 		if (
 			name != null && span != null && typeRefShape.typeRefKinds.contains(node.kind) && span.from >= declSpan.from
-			&& span.to <= declSpan.to && name != typeName && !out.contains(name)
-		)
-			out.push(name);
+			&& span.to <= declSpan.to && name != typeName
+		) {
+			// Re-bound: a narrowed local does not reach an anonymous-structure literal whose expected
+			// field type is non-nullable.
+			final at: Span = span;
+			final spelled: String = name;
+			out.push({ name: spelled, span: at });
+		}
 		for (c in node.children) collectDependencyNames(c, declSpan, typeRefShape, typeName, out);
+	}
+
+	/**
+	 * The simple type names the moved declaration depends on, with every name that is really a TYPE
+	 * PARAMETER of its own removed.
+	 *
+	 * Two kinds of parameter, subtracted two different ways. The DECLARATION's own (`class Moved<Key>`)
+	 * shadow the whole span and come from the index, so the name goes at once — pricing one asked about
+	 * a type the moved code never means, and `class Mover<Key>` beside a `p/Key.hx` was refused a move
+	 * that was correct. A METHOD's are not indexed at all (the grammar projects no `<...>` list for a
+	 * function at any depth), so they reach the type-ref walk only through the annotations that spell
+	 * them and look exactly like a dependency on a module of that name — and they are subtracted PER
+	 * OCCURRENCE, because `<Dep>` on one method shadows `Dep` inside that method and nowhere else.
+	 * Dropping the NAME instead dropped a sibling `var d:Dep;` from the gate as well, which compile-ran
+	 * to a changed runtime class with rc 0 on a move the base engine refused.
+	 */
+	private static function dependencyNames(
+		source: String, declSpan: Span, cursorInfo: FileInfo, plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
+	): Array<String> {
+		final refs: Array<NameSpan> = [];
+		collectDependencyNames(plugin.parseFileTypeRefs(source), declSpan, typeRefShape, typeName, refs);
+		final shadows: Array<NameSpan> = functionTypeParamNames(plugin, source, declSpan);
+		for (t in cursorInfo.types)
+			if (t.span.from <= declSpan.from && t.span.to >= declSpan.to)
+				for (param in t.typeParamNames) shadows.push({ name: param, span: declSpan });
+		final out: Array<String> = [];
+		for (ref in refs) {
+			final shadowed: Bool = shadows.exists(s -> s.name == ref.name && ref.span.from >= s.span.from && ref.span.to <= s.span.to);
+			if (!shadowed && !out.contains(ref.name)) out.push(ref.name);
+		}
+		return out;
+	}
+
+	/**
+	 * Every type-parameter name a FUNCTION inside `declSpan` declares (`function f<K, V>(...)`).
+	 *
+	 * The grammar does not project a function's `<...>` list — there is no node for it at any depth —
+	 * so the names exist in the tree only as the type POSITIONS that spell them, indistinguishable
+	 * from a dependency on a module of that name. This recovers them from the source the same way a
+	 * type declaration's header parameters are recovered: the `<...>` run that closes immediately
+	 * before the parameter list's `(`, split on its top-level commas.
+	 *
+	 * Anchored on the `(` rather than on the function's name, because a function node's span starts at
+	 * the `function` keyword and searching forward for the name would match that keyword's own first
+	 * letter. A multi-constraint parameter (`<T:(A, B)>`) puts a `(` inside the list and so is not
+	 * read — the names stay priced, which costs a refusal rather than a miss.
+	 */
+	private static function functionTypeParamNames(plugin: GrammarPlugin, source: String, declSpan: Span): Array<NameSpan> {
+		final shape: RefShape = plugin.refShape();
+		final kinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		if (kinds.length == 0) return [];
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return [];
+		final out: Array<NameSpan> = [];
+		collectFunctionTypeParams(tree, source, declSpan, kinds, out);
+		return out;
+	}
+
+	/** The recursive half of `functionTypeParamNames`. */
+	private static function collectFunctionTypeParams(
+		node: QueryNode, source: String, declSpan: Span, kinds: Array<String>, out: Array<NameSpan>
+	): Void {
+		final nullableSpan: Null<Span> = node.span;
+		if (nullableSpan != null && kinds.contains(node.kind) && nullableSpan.from >= declSpan.from && nullableSpan.to <= declSpan.to) {
+			final span: Span = nullableSpan;
+			final list: Null<String> = typeParamListBefore(source, span);
+			if (list != null) for (segment in NominalTypes.splitTypeArgumentList(list)) {
+				final name: Null<String> = NominalTypes.typeParamNameOf(segment);
+				// The FUNCTION's span, not the parameter's: that is the region the name shadows.
+				if (name == null) continue;
+				final param: String = name;
+				out.push({ name: param, span: span });
+			}
+		}
+		for (c in node.children) collectFunctionTypeParams(c, source, declSpan, kinds, out);
+	}
+
+	/**
+	 * The text between the `<` and the `>` of the type-parameter list that closes immediately before
+	 * the parameter list of the function starting at `span`, or null when there is none.
+	 *
+	 * Anchored on the `(` rather than on the function's name: a function node's span starts at the
+	 * `function` keyword, so searching forward for the name would match that keyword's own first
+	 * letter. A multi-constraint parameter (`<T:(A, B)>`) puts a `(` inside the list and so reads as
+	 * "no list" — the names stay priced, which costs a refusal rather than a miss.
+	 */
+	private static function typeParamListBefore(source: String, span: Span): Null<String> {
+		final open: Int = source.indexOf('(', span.from);
+		if (open <= span.from || open >= span.to) return null;
+		var close: Int = open - 1;
+		while (close > span.from && RefactorSupport.isSpace(source.fastCodeAt(close))) close--;
+		if (source.fastCodeAt(close) != '>'.code) return null;
+		var depth: Int = 0;
+		var i: Int = close;
+		while (i > span.from) {
+			final ch: Int = source.fastCodeAt(i);
+			if (ch == '>'.code && source.fastCodeAt(i - 1) != '-'.code)
+				depth++;
+			else if (ch == '<'.code) {
+				depth--;
+				if (depth == 0) break;
+			}
+			i--;
+		}
+		return depth == 0 && i > span.from ? source.substring(i + 1, close) : null;
 	}
 
 	/**
@@ -640,7 +971,6 @@ final class MoveSymbol {
 		final edits: Array<{ span: Span, text: String }> = [];
 
 		final carriedEdit: Null<{ span: Span, text: String }> = carriedImportEdit(destSource, carried, plugin);
-		if (carriedEdit != null) edits.push(carriedEdit);
 
 		// Append the decl after the file content. Ensure exactly one blank
 		// line of separation from the prior content.
@@ -657,6 +987,23 @@ final class MoveSymbol {
 		// none still gets the one terminator the appended declaration's last line needs, which is
 		// what the untrimmed `declText` used to supply by accident.
 		final eof: String = tail.length > 0 ? tail : '\n';
+		// A destination that holds NO declaration puts the import anchor at or past the point the
+		// declaration is appended at, so two independent edits splice the import BELOW it and the file
+		// stops compiling — `import and using may not appear after a declaration`, compile-proved on a
+		// destination that was only `package p;` and on one that was `package p;` plus an import.
+		// Nothing but newlines stands between the two offsets, so there is one line to write, not two:
+		// emit a single edit spelling the whole tail, the header's own terminator included. The test is
+		// `>=`, not `>`: a header with NO trailing newline puts the anchor exactly ON the append point,
+		// and `>` sent that spelling straight back down the two-edit path.
+		if (carriedEdit != null && carriedEdit.span.from >= trimmedEnd) {
+			final head: String = destSource.substring(trimmedEnd, carriedEdit.span.from) + carriedEdit.text;
+			edits.push({
+				span: new Span(trimmedEnd, destSource.length),
+				text: '${head.substring(0, trimTrailingNewlines(head))}\n\n$decl$eof'
+			});
+			return edits;
+		}
+		if (carriedEdit != null) edits.push(carriedEdit);
 		// Replace the trailing-newline region with: separator + decl + that EOF run.
 		edits.push({ span: new Span(trimmedEnd, destSource.length), text: '$sep$decl$eof' });
 

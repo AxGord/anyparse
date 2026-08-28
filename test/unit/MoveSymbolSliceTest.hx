@@ -656,8 +656,11 @@ class MoveSymbolSliceTest extends Test {
 			),
 			'already binds "D" to r.Dep'
 		);
-		// The control: nothing at the destination binds `Dep`, so the carry happens as before.
-		switch move(plainMover, plainHost, []) {
+		// The control: the destination neither binds NOR names `Dep`, so the carry happens as before.
+		// It used to reuse `plainHost`, which names `Dep` while nothing in the scope binds it — source
+		// that does not compile (`Type not found : Dep`, 4.3.7), and the ambient-shadowing arm now
+		// refuses it correctly. A control has to be a file Haxe would accept.
+		switch move(plainMover, 'package p;\n\nclass Host {\n\tvar h:Int;\n}', []) {
 			case Ok(changes, _):
 				Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('import q.Dep;'), 'the uncontested carry still happens');
 			case Err(message):
@@ -797,6 +800,387 @@ class MoveSymbolSliceTest extends Test {
 		final anchor: ImportAnchor = MoveSymbol.importAnchor('package pkg;', plugin(), 'a.Bee');
 		Assert.equals('\n\n', anchor.lead);
 		Assert.equals(12, anchor.offset);
+	}
+
+	/**
+	 * A dependency the DESTINATION resolves through a binding the scope index cannot name. Two
+	 * spellings, both compile-run to a CHANGED runtime class on the base engine with rc 0 and no
+	 * output: a ROOT-PACKAGE module (`Dep.hx` at the top level, which the index CAN name once the
+	 * ladder has a top-level rung — `Dep` -> `q.Dep`) and the standard library's own top-level scope
+	 * (`Date`, which it never can — `Date` -> `q.Date`). A carried import outranks both.
+	 */
+	public function testCarryOverAnAmbientDestinationBindingRefused(): Void {
+		inline function move(host: String, extra: Array<{ file: String, source: String }>): MoveResult {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+				{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}' },
+				{ file: 'p/Host.hx', source: host }
+			];
+			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files.concat(extra), plugin(), typeRefShape());
+		}
+		final namingHost: String = 'package p;\n\nclass Host {\n\tvar h:Dep;\n}';
+		assertErrContains(move(namingHost, [{ file: 'Dep.hx', source: 'class Dep {}' }]), 'already binds "Dep" to Dep');
+		assertErrContains(move(namingHost, []), 'references "Dep" while nothing in the indexed scope binds it');
+		// The control is a destination that neither binds NOR names `Dep` — the only shape of the
+		// three that is valid Haxe on its own, and the carry still happens for it.
+		switch move('package p;\n\nclass Host {\n\tvar h:Int;\n}', []) {
+			case Ok(changes, _):
+				Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('import q.Dep;'), 'the uncontested carry still happens');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * The mirror: the SOURCE's binding is the one the index cannot name, and the destination names
+	 * something for the same simple name. Nothing is carried for any of the three spellings, so the
+	 * moved code takes the destination's ladder — compile-run to a changed class with rc 0 for the
+	 * stdlib one (`Date` -> `q.Date`) and the guarded one (`q.Dep` -> `r.Dep`).
+	 */
+	public function testUnnameableSourceBindingAgainstANamedDestinationRefused(): Void {
+		inline function move(dep: String, mover: String, line: Int, extra: Array<{ file: String, source: String }>): MoveResult {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'p/Mover.hx', source: mover },
+				{ file: 'r/$dep.hx', source: 'package r;\n\nclass $dep {}' },
+				{ file: 'p/Host.hx', source: 'package p;\n\nimport r.$dep;\n\nclass Host {\n\tvar h:$dep;\n}' }
+			];
+			return MoveSymbol.moveType('p/Mover.hx', line, 7, 'p/Host.hx', files.concat(extra), plugin(), typeRefShape());
+		}
+		// The stdlib spelling. `Date` rather than a made-up name so the fixture is a program Haxe would
+		// accept: nothing in the scope binds it, and the source still resolves it — to the STDLIB type,
+		// which is precisely the binding the index cannot name.
+		assertErrContains(
+			move('Date', 'package p;\n\nclass Mover {\n\tvar d:Date;\n}', 3, []), 'the source reaches it outside the indexed scope'
+		);
+		// The `#if`-guarded provider: a guarded import is never carried, so the moved code arrives bare.
+		assertErrContains(
+			move(
+				'Dep', 'package p;\n\n#if neko\nimport q.Dep;\n#end\n\nclass Mover {\n\tvar d:Dep;\n}', 7,
+				[{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' }]
+			),
+			'the source binds it to q.Dep inside a `#if` guard'
+		);
+		// A package WILDCARD at the source IS nameable once the ladder has a wildcard rung, so this one
+		// reports the resolved path rather than the unknown-binding arm.
+		assertErrContains(
+			move(
+				'Dep', 'package p;\n\nimport q.*;\n\nclass Mover {\n\tvar d:Dep;\n}', 5,
+				[{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' }]
+			),
+			'reaches "Dep" as q.Dep'
+		);
+	}
+
+	/**
+	 * The destination's binding comes from a package WILDCARD or a `#if`-guarded import. Both were
+	 * invisible to the ladder and both were compile-run to a changed class with rc 0: `import r.*`
+	 * lost to the carried `import q.Dep;` (`r.Dep` -> `q.Dep`), and with a guarded `import r.Dep;`
+	 * the loser depends only on which line the anchor picked — under `-D neko` the MOVED code went
+	 * `q.Dep` -> `r.Dep` with the carry above the guard, and the DESTINATION's went the other way
+	 * with an unguarded import below it.
+	 */
+	public function testDestinationWildcardAndGuardedBindingsAreSeen(): Void {
+		inline function move(host: String): MoveResult {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+				{ file: 'r/Dep.hx', source: 'package r;\n\nclass Dep {}' },
+				{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}' },
+				{ file: 'p/Host.hx', source: host }
+			];
+			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape());
+		}
+		assertErrContains(move('package p;\n\nimport r.*;\n\nclass Host {\n\tvar h:Dep;\n}'), 'already binds "Dep" to r.Dep');
+		assertErrContains(
+			move('package p;\n\n#if neko\nimport r.Dep;\n#end\n\nclass Host {\n\tvar h:Dep;\n}'),
+			'binds "Dep" to r.Dep inside a `#if` guard'
+		);
+		// A wildcard of a package the index does not hold names nothing, so it leaves the destination
+		// unbound — the ambient arm answers, not the wildcard rung.
+		assertErrContains(
+			move('package p;\n\nimport x.*;\n\nclass Host {\n\tvar h:Dep;\n}'),
+			'references "Dep" while nothing in the indexed scope binds it'
+		);
+	}
+
+	/**
+	 * A dependency the source reaches with NO import statement, moved into a destination the index
+	 * says nothing about. There is nothing to carry, so the moved code takes that file's own ladder —
+	 * compile-run on the base engine, a same-package `p.Date` shadowing the stdlib came back as the
+	 * STDLIB `Date` at a destination in another package, rc 0.
+	 */
+	public function testNoCarryIntoAnUnnameableDestinationBindingRefused(): Void {
+		inline function move(destFile: String, destSource: String): MoveResult {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'p/Dep.hx', source: 'package p;\n\nclass Dep {}' },
+				{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\tvar d:Dep;\n}' },
+				{ file: destFile, source: destSource }
+			];
+			return MoveSymbol.moveType('p/Mover.hx', 3, 7, destFile, files, plugin(), typeRefShape());
+		}
+		assertErrContains(
+			move('s/Host.hx', 'package s;\n\nclass Host {}'), 'with no import to carry, and nothing in the indexed scope binds'
+		);
+		// The control: a destination in the SAME package sees the same sibling module, so the binding
+		// is reproduced and the move goes through with nothing carried.
+		switch move('p/Host.hx', 'package p;\n\nclass Host {}') {
+			case Ok(changes, _):
+				final host: String = changeFor(changes, 'p/Host.hx').newSource;
+				Assert.isTrue(host.contains('class Mover') && !host.contains('import'), 'the same-package move carries nothing');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * Two files spelling the SAME import statement for a dependency the index cannot name is not a
+	 * collision — it is the commonest macro-module shape there is (`#if macro import haxe.macro.Expr;`
+	 * on both sides), and four of eleven changed outcomes in a 60-case `move` census over the Pony tree
+	 * were exactly that. Both halves of the reconciliation are exercised: the statement that binds the
+	 * name directly, and the MODULE import that binds it as one of the module's other types.
+	 */
+	public function testTheSameUnnameableImportOnBothSidesIsNotACollision(): Void {
+		inline function move(mover: String, host: String, dep: String): Void {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'p/Mover.hx', source: mover },
+				{ file: 'p/Host.hx', source: host }
+			];
+			switch MoveSymbol.moveType('p/Mover.hx', 7, 7, 'p/Host.hx', files, plugin(), typeRefShape()) {
+				case Ok(changes, _):
+					Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('var d:$dep'), 'the decl moved');
+				case Err(message):
+					Assert.fail('expected Ok, got Err: $message');
+			}
+		}
+		move(
+			'package p;\n\n#if macro\nimport x.Ctx;\n#end\n\nclass Mover {\n\tvar d:Ctx;\n}',
+			'package p;\n\n#if macro\nimport x.Ctx;\n#end\n\nclass Host {\n\tvar h:Ctx;\n}', 'Ctx'
+		);
+		move(
+			'package p;\n\n#if macro\nimport x.Mod;\n#end\n\nclass Mover {\n\tvar d:Sub;\n}',
+			'package p;\n\n#if macro\nimport x.Mod.Sub;\n#end\n\nclass Host {\n\tvar h:Sub;\n}', 'Sub'
+		);
+	}
+
+	/**
+	 * `import q.Mod;` binds every type MODULE `q.Mod` declares, not only the one sharing its name —
+	 * compile-run on 4.3.7, `new Sub()` under that single import built a `q.Sub`. Reading only the
+	 * import's last segment left `Sub` unbound, and an unbound source name is what the gate refuses on,
+	 * so the rung is what turns a wrong-message refusal into the right one.
+	 */
+	public function testModuleImportBindsTheModulesOtherTypes(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'r/Sub.hx', source: 'package r;\n\nclass Sub {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Mod;\n\nclass Mover {\n\tvar d:Sub;\n}' },
+			{ file: 'p/Host.hx', source: 'package p;\n\nimport r.Sub;\n\nclass Host {\n\tvar h:Sub;\n}' }
+		];
+		assertErrContains(
+			MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape()), 'reaches "Sub" as q.Mod.Sub'
+		);
+	}
+
+	/**
+	 * A METHOD's type parameters are not projected by the grammar at all, so they reach the dependency
+	 * scan only through the annotations that spell them and look exactly like a dependency on a module
+	 * of that name. `class Mover` beside a `p/Item.hx` was refused a move over a `pick<Item>` whose
+	 * every `Item` was the parameter — RED on the base engine, which reported the sibling module.
+	 */
+	public function testMethodTypeParameterIsNotPricedAsADependency(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+			{ file: 'p/Item.hx', source: 'package p;\n\nclass Item {}' },
+			{ file: 'r/Item.hx', source: 'package r;\n\nclass Item {}' },
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n\n'
+					+ '\tpublic function pick<Item>(x:Item):Item return x;\n}'
+			},
+			{ file: 'p/Host.hx', source: 'package p;\n\nimport r.Item;\n\nclass Host {\n\tvar h:Item;\n}' }
+		];
+		switch MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape()) {
+			case Ok(changes, _):
+				Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('pick<Item>'), 'the generic method moved');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * A module-`private` MAIN type is invisible by simple name outside its own module — compile-proved
+	 * on 4.3.7, `private class Dep` in `p/Dep.hx` is `Type not found : Dep` from `p/Host.hx` — so
+	 * counting one invents a binding, and the unnameable-source arm then refuses a move that was correct.
+	 *
+	 * The fixture is a program Haxe accepts: `s/Date.hx` keeps its private main type invisible, so BOTH
+	 * files mean the stdlib `Date` and the move genuinely changes nothing. Green at base BY CONSTRUCTION
+	 * (the base gate never reached the phantom — it skipped every name it could not name at the source),
+	 * so the `isPrivate` filter is proved by MUTATION instead: drop `!t.isPrivate` from the same-package
+	 * rung and this test alone flips.
+	 */
+	public function testPrivateSiblingMainTypeIsNotABinding(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 's/Date.hx', source: 'package s;\n\nprivate class Date {}\n\nclass DateHelper {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\tvar d:Date;\n}' },
+			{ file: 's/Host.hx', source: 'package s;\n\nclass Host {}' }
+		];
+		switch MoveSymbol.moveType('p/Mover.hx', 3, 7, 's/Host.hx', files, plugin(), typeRefShape()) {
+			case Ok(changes, _):
+				Assert.isTrue(changeFor(changes, 's/Host.hx').newSource.contains('class Mover'), 'the decl moved');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * A destination holding no declaration of its own puts the import anchor at or past the point the
+	 * declaration is appended at, so the carried line was spliced BELOW it — `import and using may not
+	 * appear after a declaration`, compile-proved on both shapes. The assertions are whole-source so
+	 * neither the order nor the blank lines can drift.
+	 */
+	public function testCarriedImportIntoAHeaderOnlyDestinationStaysAboveTheDeclaration(): Void {
+		inline function move(host: String): String {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+				{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' },
+				{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}' },
+				{ file: 'p/Host.hx', source: host }
+			];
+			return switch MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape()) {
+				case Ok(changes, _): changeFor(changes, 'p/Host.hx').newSource;
+				case Err(message): 'ERR: $message';
+			}
+		}
+		Assert.equals('package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n'));
+		Assert.equals(
+			'package p;\n\nimport q.Other;\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n\nimport q.Other;\n')
+		);
+		// The same two headers with NO trailing newline. That is the boundary: the anchor lands exactly
+		// ON the append point rather than past it, and a `>` test sent both straight back down the
+		// two-edit path whose output is `import and using may not appear after a declaration`.
+		Assert.equals('package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;'));
+		Assert.equals(
+			'package p;\n\nimport q.Other;\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n\nimport q.Other;')
+		);
+	}
+
+	/**
+	 * `import pkg.Module.*` binds NO TYPE — it imports that module's STATIC FIELDS, measured on 4.3.7
+	 * (`trace(STATIC_FIELD)` prints; `new Mod()` and `new Sub()` are both `Type not found`). Modelling
+	 * it as a rung invented a binding, and the invented binding EQUALLED `wanted`, which cancelled the
+	 * ambient refusal one line later: the destination's `Sub` (the root-package module) came back as
+	 * `q.Mod.Sub` with rc 0.
+	 */
+	public function testModuleWildcardBindsNoTypeSoItIsNotARung(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'Sub.hx', source: 'class Sub {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Mod.Sub;\n\nclass Mover {\n\tvar d:Sub;\n}' },
+			{ file: 'p/Host.hx', source: 'package p;\n\nimport q.Mod.*;\n\nclass Host {\n\tvar h:Sub;\n}' }
+		];
+		assertErrContains(
+			MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape()), 'already binds "Sub" to Sub'
+		);
+	}
+
+	/**
+	 * A method's `<Dep>` shadows `Dep` INSIDE that method and nowhere else, so un-pricing the name over
+	 * the whole moved declaration dropped a sibling `var d:Dep;` from the gate entirely — compile-run to
+	 * a changed runtime class with rc 0, on a move the base engine refused. The shadow is subtracted per
+	 * OCCURRENCE, which is why the same name can be a parameter at one position and a dependency at
+	 * another.
+	 */
+	public function testMethodTypeParameterShadowsOnlyItsOwnFunction(): Void {
+		inline function move(mover: String): MoveResult {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+				{ file: 'r/Dep.hx', source: 'package r;\n\nclass Dep {}' },
+				{ file: 'p/Mover.hx', source: mover },
+				{ file: 'p/Host.hx', source: 'package p;\n\nimport r.Dep;\n\nclass Host {\n\tvar h:Dep;\n}' }
+			];
+			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape());
+		}
+		// The field's `Dep` is a real dependency; the method parameter of the same name must not cancel it.
+		assertErrContains(
+			move('package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n\n\tpublic function pick<Dep>(x:Dep):Dep return x;\n}'),
+			'already binds "Dep" to r.Dep'
+		);
+		// The control: the SAME declaration without the field is all parameter, and moves.
+		switch move('package p;\n\nimport q.Dep;\n\nclass Mover {\n\n\tpublic function pick<Dep>(x:Dep):Dep return x;\n}') {
+			case Ok(changes, _):
+				Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('pick<Dep>'), 'the generic method moved');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * A destination type that declares the dependency's name as a HEADER type parameter spells it all
+	 * over its OWN body, and the reference scan cannot tell that from a reference to a module of that
+	 * name. The cancel is therefore by SPAN: `class Box<Date>` says nothing about a `Date` a SIBLING
+	 * type in the same module writes, and cancelling the whole FILE on it left that sibling's carry
+	 * unrefused — compile-run to a changed runtime class with rc 0.
+	 */
+	public function testDestinationTypeParameterCancelsOnlyItsOwnDeclaration(): Void {
+		inline function move(host: String): MoveResult {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'q/Date.hx', source: 'package q;\n\nclass Date {}' },
+				{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Date;\n\nclass Mover {\n\tvar d:Date;\n}' },
+				{ file: 'p/Host.hx', source: host }
+			];
+			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape());
+		}
+		assertErrContains(
+			move('package p;\n\nclass Box<Date> {\n\tvar b:Date;\n}\n\nclass Host {\n\tvar h:Date;\n}'),
+			'references "Date" while nothing in the indexed scope binds it'
+		);
+		// A class type parameter is NOT in scope inside a STATIC member — `class Box<Date> { static
+		// function tag() return Date.now(); }` compiles and answers the STDLIB `Date`, measured on
+		// 4.3.7 — so excluding the whole declaration hid an ambient reference that a carried import
+		// would outrank. A type declaring any static member gets no exclusion at all.
+		assertErrContains(
+			move('package p;\n\nclass Box<Date> {\n\tvar b:Date;\n\n\tpublic static function tag():String return Date.now();\n}'),
+			'references "Date" while nothing in the indexed scope binds it'
+		);
+		// The control: every `Date` at the destination IS the parameter, so the carry changes nothing.
+		switch move('package p;\n\nclass Box<Date> {\n\tvar b:Date;\n}') {
+			case Ok(changes, _):
+				Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('import q.Date;'), 'the carry still happens');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * A module-level `private` static (Haxe 4.2) projects as `(Private) (FnDecl helper)` — a visibility
+	 * modifier with no type to attach to. Carrying it forward the way a meta or an `extern` is carried
+	 * marked the NEXT declaration private, and that direction is the unsafe one: a private type is
+	 * skipped by the binding walk, so a real binding disappears and the gate stops refusing. The pin is
+	 * the MESSAGE — with the leak the arm that answers is the ambient one, not the named-binding one.
+	 */
+	public function testModuleLevelPrivateStaticDoesNotMarkTheNextTypePrivate(): Void {
+		inline function move(dep: String): MoveResult {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {}' },
+				{ file: 'p/Dep.hx', source: dep },
+				{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}' },
+				{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {\n\tvar h:Dep;\n}' }
+			];
+			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape());
+		}
+		assertErrContains(move('package p;\n\nclass Dep {}'), 'already binds "Dep" to p.Dep');
+		assertErrContains(move('package p;\n\nprivate function helper():Int return 1;\n\nclass Dep {}'), 'already binds "Dep" to p.Dep');
+		// And the modifier still reaches the type it DOES belong to. The dependency is `Date` here so
+		// the fixture stays a program Haxe accepts: with `p/Date.hx`'s main type private, both files
+		// mean the stdlib `Date`, which is exactly the ambient binding the arm names.
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'q/Date.hx', source: 'package q;\n\nclass Date {}' },
+			{ file: 'p/Date.hx', source: 'package p;\n\nprivate class Date {}\n\nclass DateHelper {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Date;\n\nclass Mover {\n\tvar d:Date;\n}' },
+			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {\n\tvar h:Date;\n}' }
+		];
+		assertErrContains(
+			MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', files, plugin(), typeRefShape()),
+			'references "Date" while nothing in the indexed scope binds it'
+		);
 	}
 
 	/**
