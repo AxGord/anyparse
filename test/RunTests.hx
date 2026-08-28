@@ -649,6 +649,7 @@ import unit.RedundantUncheckedCastCheckTest;
 import unit.RedundantUpcastTest;
 import unit.RedundantVoidReturnCheckTest;
 import unit.RefsCacheTest;
+import unit.RegexFirstBytesTest;
 import unit.ReificationGateFixPathTest;
 import unit.ReificationGateTest;
 import unit.RemoveElementSliceTest;
@@ -1404,6 +1405,7 @@ class RunTests {
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
 		addCase(new RefsCacheTest());
+		addCase(new RegexFirstBytesTest());
 		addCase(new SimplifyBooleanTernaryCheckTest());
 		addCase(new SimplifyNegatedCompoundCheckTest());
 		addCase(new SimplifyBooleanReturnChainCheckTest());

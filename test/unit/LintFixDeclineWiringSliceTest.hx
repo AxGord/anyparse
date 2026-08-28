@@ -201,4 +201,44 @@ class LintFixDeclineWiringSliceTest extends Test {
 		#end
 	}
 
+
+	/**
+	 * The decline row's `<n> of <reported>` label never states a part larger than its whole.
+	 *
+	 * `reported` is filled ONLY by the driver's pass-1 report loop in `applyLintPass`, so a caller
+	 * that drives `computeFileLintEdits` itself — the pins above, and any embedder — leaves it at
+	 * zero while `declined` counts real findings. The label's only test was `count == reported`, so
+	 * the else arm fired and the run printed `unused-local 2 of 0`: a ratio out of a total smaller
+	 * than its own part, in the one block that exists to explain why a fix vanished.
+	 *
+	 * RED at base, where the same ledger renders ` of 0`.
+	 */
+	public function testTheDeclineLabelNeverReadsOutOfZero(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final check: Null<Check> = Linter.byId('unused-local');
+		if (check == null) {
+			Assert.fail('unused-local is not registered');
+			return;
+		}
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: REFUSED }];
+		final own: Array<Violation> = check.run(files, plugin);
+		final ledger: Map<String, RuleFixOutcome> = [];
+		Cli.computeFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin), ledger, true);
+		final row: Null<RuleFixOutcome> = ledger['unused-local'];
+		if (row == null) {
+			Assert.fail('the refused rule has no ledger row');
+			return;
+		}
+		Assert.equals(0, row.reported, 'nothing on this path fills the pass-1 report count');
+		Assert.isTrue(row.declined > 0, 'while the declines are real findings');
+		final declared: Map<String, String> = [];
+		final lines: String = Cli.unfixedFixLedger(ledger, declared, [], []).join('');
+		Assert.isTrue(lines.indexOf(' of 0') == -1, 'the label states no ratio out of nothing: $lines');
+		Assert.isTrue(lines.indexOf('unused-local ${row.declined}:') != -1, 'it states the plain count instead: $lines');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

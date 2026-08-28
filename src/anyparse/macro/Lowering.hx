@@ -69,6 +69,21 @@ class Lowering {
 	private static inline final STAR_GATE_WORD_LOCAL: String = '_eW';
 
 	/**
+	 * Char code at a `@:re` Terminal's own entry position — the subject of
+	 * the multi-code first-byte reject `lowerTerminal` emits, and the name
+	 * `firstByteRejectCodes` reads that reject back through.
+	 *
+	 * Distinct from `_gC0` / `_eC0` because a terminal function is a
+	 * SEPARATE function from the Alt or Star that guards its call: nothing
+	 * is in scope from either, and giving it its own name keeps the three
+	 * readers from ever matching each other's shape.
+	 */
+	private static inline final TERMINAL_BYTE_LOCAL: String = '_tC0';
+
+	/** `DEL` — the one non-printable byte that is not below the space. */
+	private static inline final DELETE_BYTE: Int = 127;
+
+	/**
 	 * Shape-node annotation recording `shouldLowerByName`'s answer.
 	 *
 	 * That answer is a FORMAT decision (`_formatInfo.fieldLookup` /
@@ -1995,10 +2010,14 @@ class Lowering {
 		// produces this reject, so the generated function CANNOT accept a
 		// first byte outside the claim — `checkRuleFirstToken` then reads
 		// this very statement back out of the emitted body as the fact.
-		// A classifier bug can therefore only make the terminal reject MORE
-		// than the regex would (a parse failure a test catches), never
-		// silently claim more than it rejects (a wrong dispatch guard no
-		// runtime oracle catches).
+		// What that buys is exactly one thing: the guard and the terminal can
+		// never disagree, because one fact produces both. It is NOT soundness.
+		// A classifier that answers a set too NARROW makes the terminal reject
+		// input the regex accepts AND makes the guard skip that branch, so a
+		// sibling branch can match instead and the parse succeeds down it with
+		// no error anywhere. Soundness rests entirely on `RegexFirstBytes` being
+		// right, which is what `RegexFirstBytesTest.testSoundnessAgainstTheRealRegex`
+		// is the check for.
 		//
 		// `Input.charCodeAt` answers -1 outside `[0, length)`, so no bounds
 		// test is needed — end-of-input fails the compare like any other
@@ -2006,12 +2025,12 @@ class Lowering {
 		// a `substring` plus a regex run before finding out the first byte
 		// was never right.
 		final first: BranchFirstToken = terminalFirstToken(node);
-		final head: Null<Int> = switch first {
-			case FirstLit([code]): code;
+		final codes: Null<Array<Int>> = switch first {
+			case FirstLit(cs): cs;
 			case _: null;
 		};
-		if (head == null) return body;
-		final reject: Expr = macro if (ctx.input.charCodeAt(ctx.pos) != $v{head}) {
+		if (codes == null) return body;
+		final fail: Expr = macro {
 			ctx.recordFail(ctx.pos, $v{simple});
 			throw anyparse.runtime.ParseError.backtrack;
 		};
@@ -2019,7 +2038,24 @@ class Lowering {
 			case EBlock(exprs): exprs;
 			case _: [body];
 		};
-		return macro $b{[reject].concat(steps)};
+		// One code keeps the bare compare it always had; a SET reads the
+		// byte into a local first, so a class-shaped head costs one read
+		// and a range test rather than one read per term.
+		//
+		// The single-code shape is kept rather than folded into the set one so that
+		// every terminal the PREVIOUS classifier could already claim (`HxHexLit`,
+		// `HxRegexLit`, the `@`- and `#`-led ones) emits the byte it always did —
+		// which is what makes a diff of the generated parser show only the branches
+		// this slice meant to change. The cost is `firstByteRejectCodes` carrying
+		// two arms.
+		if (codes.length == 1) {
+			final reject: Expr = macro if (ctx.input.charCodeAt(ctx.pos) != $v{codes[0]}) $fail;
+			return macro $b{[reject].concat(steps)};
+		}
+		final chain: Expr = orChain(byteSetTerms(TERMINAL_BYTE_LOCAL, codes));
+		final peek: Expr = finalLocal(TERMINAL_BYTE_LOCAL, macro :Int, macro ctx.input.charCodeAt(ctx.pos));
+		final reject: Expr = macro if (!$chain) $fail;
+		return macro $b{[peek, reject].concat(steps)};
 	}
 
 	/**
@@ -6789,107 +6825,26 @@ class Lowering {
 	}
 
 	/**
-	 * First token of a `@:re` Terminal rule — a deliberately tiny prefix
-	 * reader over the regex source, NOT a FIRST-set solver.
+	 * First token of a `@:re` Terminal rule — the first-byte SET of its
+	 * pattern, read by `RegexFirstBytes`.
 	 *
-	 * Answers `FirstLit` with the pattern's first character only when
-	 * every one of these holds; anything else is `Unknown`, which costs
-	 * nothing but the guard we did not get:
+	 * A terminal whose set is known is guardable at every call site: the
+	 * Alt dispatch skips its branch on a wrong first byte instead of
+	 * paying a trial whose only exit is a thrown backtrack. That is what
+	 * the numeric literals cost before this read a character class —
+	 * `HxIntLit` and `HxFloatLit` were tried, and threw, on EVERY atom.
 	 *
-	 *  - No `base.stringEnumValues`. Those terminals take
-	 *    `lowerStringEnumTerminal`, which has no regex at all, so the
-	 *    pattern this function would read does not describe them.
-	 *  - A non-empty pattern.
-	 *  - A head that no ALTERNATION can bypass — see `headIsMandatory`.
-	 *  - A first character that is not a regex metacharacter
-	 *    (`\ ^ $ . [ ] ( ) { } * + ? |`). Each of those makes the first
-	 *    MATCHED byte something other than the first PATTERN byte.
-	 *  - No head-erasing quantifier at index 1 (`?`, `*`, `{`). Those
-	 *    let a match start past the head. A `+` is fine — one-or-more
-	 *    still requires the head byte.
+	 * `Unknown` for a terminal whose values are a closed `enum abstract`
+	 * string set (`base.stringEnumValues`): those take
+	 * `lowerStringEnumTerminal`, which has no regex at all, so the pattern
+	 * this reads does not describe them. `Unknown` too for every pattern
+	 * `RegexFirstBytes` will not commit to — see its own doc for which,
+	 * and why `null` there is the safe direction.
 	 */
 	private static function terminalFirstToken(node: ShapeNode): BranchFirstToken {
 		if (node.annotations['base.stringEnumValues'] != null) return Unknown;
-		final pattern: Null<String> = node.annotations['re.pattern'];
-		if (pattern == null || pattern.length == 0 || !headIsMandatory(pattern)) return Unknown;
-		final head: Int = pattern.charCodeAt(0);
-		if (isRegexMeta(head)) return Unknown;
-		if (pattern.length > 1) switch pattern.charCodeAt(1) {
-			case '?'.code, '*'.code, '{'.code:
-				return Unknown;
-		}
-		return FirstLit([head]);
-	}
-
-	/** A regex metacharacter — as a pattern's head it is not a literal first byte. */
-	private static function isRegexMeta(c: Int): Bool {
-		return switch c {
-			case '\\'.code, '^'.code, '$'.code, '.'.code, '['.code, ']'.code, '('.code, ')'.code, '{'.code, '}'.code, '*'.code, '+'.code,
-				'?'.code, '|'.code: true;
-			case _: false;
-		};
-	}
-
-	/**
-	 * Whether EVERY match of `pattern` must begin with the pattern's own
-	 * first character — the question a first-byte claim turns on.
-	 *
-	 * `Codegen.eregField` builds the EReg as `^${pattern}`, and `|` binds
-	 * looser than concatenation, so `^A|B` parses as `(^A)|B`: the anchor
-	 * covers the first alternative only and `B` can match anywhere. That
-	 * is the hazard `lowerTerminal`'s `matchedPos().pos != 0` check exists
-	 * for, and it is the ONLY way an alternation reaches the head — a `|`
-	 * nested inside a group or a character class cannot, because the head
-	 * literal remains the mandatory first element of the whole pattern.
-	 * So the scan refuses a `|` at paren-depth 0 outside a class, and
-	 * nothing else.
-	 *
-	 * Scanning rules, each needed to keep that answer right:
-	 *  - `\` consumes the next character whole, so `\(`, `\[` and `\|`
-	 *    never move the scanner's state.
-	 *  - Inside `[...]` nothing counts, and the class closes on the first
-	 *    unescaped `]`. That is the ECMAScript reading, and ECMAScript is
-	 *    what compiles these patterns: there `[]` is an EMPTY class and
-	 *    `[^]` is any-char, so the POSIX rule that a `]` in the first
-	 *    member slot is a literal member does NOT hold. Honouring it would
-	 *    read `a[]|b]c` as one class and hide a TOP-LEVEL alternation.
-	 *    Closing early is also the conservative direction for a PCRE-shaped
-	 *    pattern — it can only surface more `|` at depth 0, never fewer.
-	 *  - `(?:` is just a `(` as far as depth goes.
-	 *
-	 * An unbalanced pattern (a `)` with no `(`, a group or class left
-	 * open) answers `false`: a pattern the scan cannot follow is one it
-	 * cannot make a claim about.
-	 */
-	private static function headIsMandatory(pattern: String): Bool {
-		var depth: Int = 0;
-		var inClass: Bool = false;
-		var i: Int = 0;
-		while (i < pattern.length) {
-			final c: Int = pattern.charCodeAt(i);
-			if (c == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			if (inClass) {
-				if (c == ']'.code) inClass = false;
-				i++;
-				continue;
-			}
-			switch c {
-				case '['.code:
-					inClass = true;
-				case '('.code:
-					depth++;
-				case ')'.code:
-					depth--;
-				case '|'.code:
-					if (depth == 0) return false;
-			}
-			if (depth < 0) return false;
-			i++;
-		}
-		return depth == 0 && !inClass;
+		final codes: Null<Array<Int>> = RegexFirstBytes.of(node.annotations['re.pattern']);
+		return codes == null ? Unknown : FirstLit(codes);
 	}
 
 	/**
@@ -7012,8 +6967,8 @@ class Lowering {
 		if (isGuardSavedDecl(head)) return dispatchFirstToken(steps, i + 1);
 		// The terminal first-byte reject `lowerTerminal` emits from the same
 		// `terminalFirstToken` fact the claim is built on.
-		final byte: Null<Int> = firstByteRejectCode(head);
-		if (byte != null) return FirstLit([byte]);
+		final reject: Null<Array<Int>> = firstByteRejectCodes(steps, i);
+		if (reject != null) return FirstLit(reject);
 		// A leading `parseXxx(ctx)` — the emitted call for a `Seq` rule whose
 		// first field is a bare `Ref`. Resolving the function name back to
 		// its rule and recursing is NOT vacuous: it proves the shape-level
@@ -7121,32 +7076,47 @@ class Lowering {
 
 	/** One emitted branch guard — the or-chain `branchGuardExpr` built. */
 	private static function guardFirstToken(cond: Expr): BranchFirstToken {
+		final codes: Null<Array<Int>> = byteSetOf(cond, GUARD_BYTE_LOCAL);
+		if (codes != null) return FirstLit(codes);
 		return switch cond.expr {
 			case EBinop(OpBoolOr, left, right): unionFirstToken([guardFirstToken(left), guardFirstToken(right)]);
 			case EBinop(OpEq, { expr: EConst(CIdent(local)) }, { expr: EConst(CString(word, _)) }) if (local == GUARD_WORD_LOCAL):
 				FirstKw([word]);
-			case EBinop(OpEq, { expr: EConst(CIdent(local)) }, { expr: EConst(CInt(code, _)) }) if (local == GUARD_BYTE_LOCAL):
-				FirstLit([Std.parseInt(code)]);
 			case _: Unknown;
 		};
 	}
 
 	/**
-	 * The exact first-byte reject `lowerTerminal` emits — matched down to
-	 * the `ctx.input.charCodeAt(ctx.pos)` receiver so no other `if` against
-	 * an int can be mistaken for it.
+	 * The exact first-byte reject `lowerTerminal` emits, in either of its
+	 * two shapes — matched down to the `ctx.input.charCodeAt(ctx.pos)`
+	 * receiver so no other `if` against an int can be mistaken for it.
+	 *
+	 * One code is a bare `!=` compare in a single step; a SET is the
+	 * `_tC0` read followed by a negated `byteSetTerms` chain, which is why
+	 * this reads a step LIST rather than one expression.
 	 */
-	private static function firstByteRejectCode(e: Expr): Null<Int> {
-		return switch e.expr {
-			case EIf({
-				expr: EBinop(OpNotEq, {
-					expr: ECall(
-						{ expr: EField({ expr: EField({ expr: EConst(CIdent('ctx')) }, 'input') }, 'charCodeAt') },
-						[{ expr: EField({ expr: EConst(CIdent('ctx')) }, 'pos') }]
-					)
-				}, { expr: EConst(CInt(code, _)) })
-			}, _, null): Std.parseInt(code);
+	private static function firstByteRejectCodes(steps: Array<Expr>, at: Int): Null<Array<Int>> {
+		return switch steps[at].expr {
+			case EIf({ expr: EBinop(OpNotEq, receiver, { expr: EConst(CInt(code, _)) }) }, _, null) if (isPosCharCode(receiver)):
+				final v: Null<Int> = Std.parseInt(code);
+				v == null ? null : [v];
+			case EVars([v]) if (v.name == TERMINAL_BYTE_LOCAL && v.expr != null && isPosCharCode(v.expr) && at + 1 < steps.length):
+				switch steps[at + 1].expr {
+					case EIf({ expr: EUnop(OpNot, false, cond) }, _, null): byteSetOf(cond, TERMINAL_BYTE_LOCAL);
+					case _: null;
+				}
 			case _: null;
+		};
+	}
+
+	/** The `ctx.input.charCodeAt(ctx.pos)` read both reject shapes open with. */
+	private static function isPosCharCode(e: Expr): Bool {
+		return switch e.expr {
+			case ECall(
+				{ expr: EField({ expr: EField({ expr: EConst(CIdent('ctx')) }, 'input') }, 'charCodeAt') },
+				[{ expr: EField({ expr: EConst(CIdent('ctx')) }, 'pos') }]
+			): true;
+			case _: false;
 		};
 	}
 
@@ -7226,11 +7196,44 @@ class Lowering {
 	private static function describeFirstToken(first: BranchFirstToken): String {
 		return switch first {
 			case FirstKw(words): 'kw ${words.join('|')}';
-			case FirstLit(codes): 'lit ${[for (code in codes) '${String.fromCharCode(code)}($code)'].join('|')}';
+			case FirstLit(codes): 'lit ${describeByteSet(codes)}';
 			case Unknown: 'unknown';
 		};
 	}
 
+	/**
+	 * A byte-code set with consecutive runs written as ranges — the same
+	 * collapse `byteSetTerms` emits, so the dump reads like the guard.
+	 * Without it a class-shaped head prints as 53 comma-free members and
+	 * the per-rule dump line stops being readable.
+	 */
+	private static function describeByteSet(codes: Array<Int>): String {
+		return [
+			for (run in byteRuns(codes))
+				run.lo == run.hi ? describeByte(run.lo) : '${describeByte(run.lo)}-${describeByte(run.hi)}'
+		].join('|');
+	}
+
+	/**
+	 * One byte as character AND number — the interesting ones are punctuation, so
+	 * a bare number would be unreadable.
+	 *
+	 * A CONTROL character is spelled, never spliced raw: both consumers are
+	 * ONE-LINE-per-record channels (`// dispatch.<kind>: …` under
+	 * `-D anyparse_dispatch_dump`, and `checkRuleFirstToken`'s drift error), and a
+	 * tab or newline in the middle of a record breaks the record rather than the
+	 * character. Reachable since terminal heads became SETS: `escapeBytes` expands
+	 * `\t` / `\n` / `\r`, so any `[ \t]`-shaped class head puts one here.
+	 */
+	private static function describeByte(code: Int): String {
+		final spelled: Null<String> = switch code {
+			case '\t'.code: '\\t';
+			case '\n'.code: '\\n';
+			case '\r'.code: '\\r';
+			case _: code < ' '.code || code == DELETE_BYTE ? '\\x$code' : null;
+		};
+		return '${spelled ?? String.fromCharCode(code)}($code)';
+	}
 
 	/**
 	 * `-D anyparse_dispatch_dump` diagnostic — the per-grammar inventory
@@ -7379,8 +7382,90 @@ class Lowering {
 	private static function branchGuardExpr(first: BranchFirstToken, byteLocal: String, wordLocal: String): Null<Expr> {
 		return switch first {
 			case FirstKw(words): orChain([for (word in words) macro $i{wordLocal} == $v{word}]);
-			case FirstLit(codes): orChain([for (code in codes) macro $i{byteLocal} == $v{code}]);
+			case FirstLit(codes): orChain(byteSetTerms(byteLocal, codes));
 			case Unknown: null;
+		};
+	}
+
+	/**
+	 * Membership terms for a byte-code set over `local`, one per RUN of
+	 * consecutive codes: an equality for a run of one, a `>= lo && <= hi`
+	 * pair for a longer one.
+	 *
+	 * The collapse is what makes a class-shaped first-byte fact usable at
+	 * all. `[A-Za-z_]` is 53 codes, and it is the head of the identifier
+	 * terminals every Alt in the grammar leads with — as 53 equalities it
+	 * would be emitted at every guard site and every terminal reject; as
+	 * three range terms it is the same test the hand-written guards were.
+	 *
+	 * `byteSetOf` is the inverse, and `checkRuleFirstToken` holds the two
+	 * against each other on every build.
+	 */
+	private static function byteSetTerms(local: String, codes: Array<Int>): Array<Expr> {
+		return [
+			for (run in byteRuns(codes))
+				run.lo == run.hi ? macro $i{local} == $v{run.lo} : macro $i{local} >= $v{run.lo} && $i{local} <= $v{run.hi}
+		];
+	}
+
+	/**
+	 * A byte-code set as ascending runs of consecutive codes.
+	 *
+	 * The one place the collapse happens. `byteSetTerms` turns each run into a
+	 * guard term and `describeByteSet` into a rendered range, and the two have to
+	 * agree — `describeByteSet`'s whole job is to print what the guard tests, and a
+	 * hand-copied second loop would drift silently on a diagnostic path nothing
+	 * checks.
+	 */
+	private static function byteRuns(codes: Array<Int>): Array<{ lo: Int, hi: Int }> {
+		final sorted: Array<Int> = codes.copy();
+		sorted.sort((a, b) -> a - b);
+		final runs: Array<{ lo: Int, hi: Int }> = [];
+		var i: Int = 0;
+		while (i < sorted.length) {
+			var last: Int = i;
+			while (last + 1 < sorted.length && sorted[last + 1] == sorted[last] + 1) last++;
+			runs.push({ lo: sorted[i], hi: sorted[last] });
+			i = last + 1;
+		}
+		return runs;
+	}
+
+	/**
+	 * The byte-code set an emitted `byteSetTerms` or-chain over `local`
+	 * tests for — `null` for any expression that is not one, so no other
+	 * condition can be mistaken for a first-byte guard.
+	 *
+	 * Deliberately NOT one shape wider than `byteSetTerms` emits: this is the
+	 * READING half of the claim/emission check `checkRuleFirstToken` runs, and a
+	 * reader that accepts something the writer cannot produce is a hole in exactly
+	 * that check. `orChain` folds bare `EBinop` nodes with no parentheses, and a
+	 * run of one is always an equality, so there is no `EParenthesis` arm and no
+	 * `lo == hi` range arm here.
+	 */
+	private static function byteSetOf(cond: Expr, local: String): Null<Array<Int>> {
+		return switch cond.expr {
+			case EBinop(OpBoolOr, left, right):
+				final a: Null<Array<Int>> = byteSetOf(left, local);
+				final b: Null<Array<Int>> = byteSetOf(right, local);
+				if (a == null || b == null)
+					null;
+				else {
+					for (code in b) if (!a.contains(code)) a.push(code);
+					a;
+				}
+			case EBinop(OpEq, { expr: EConst(CIdent(name)) }, { expr: EConst(CInt(code, _)) }) if (name == local):
+				final v: Null<Int> = Std.parseInt(code);
+				v == null ? null : [v];
+			case EBinop(
+				OpBoolAnd, { expr: EBinop(OpGte, { expr: EConst(CIdent(loName)) }, { expr: EConst(CInt(lo, _)) }) },
+				{ expr: EBinop(OpLte, { expr: EConst(CIdent(hiName)) }, { expr: EConst(CInt(hi, _)) }) }
+			) if (loName == local && hiName == local):
+				final from: Null<Int> = Std.parseInt(lo);
+				final to: Null<Int> = Std.parseInt(hi);
+				from == null || to == null || to < from ? null : [for (c in from ... to + 1) c];
+			case _:
+				null;
 		};
 	}
 
