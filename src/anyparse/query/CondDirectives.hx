@@ -200,7 +200,7 @@ final class CondDirectives {
 	 * the only discrimination the declared seams support without a third keyword list. A grammar whose
 	 * branch keyword is spelled otherwise loses its condition span, never its directive.
 	 */
-	private static function takesCondition(keyword: String, ifKeyword: String, endKeyword: Null<String>): Bool {
+	public static function takesCondition(keyword: String, ifKeyword: String, endKeyword: Null<String>): Bool {
 		return keyword != endKeyword && (keyword == ifKeyword || keyword.endsWith(ifKeyword.substring(1)));
 	}
 

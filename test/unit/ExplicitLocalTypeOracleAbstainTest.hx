@@ -26,6 +26,9 @@ import sys.io.File;
  * 2. A file that no `-cp` of the oracle's hxml covers is resolved through the implicit
  *    process-cwd classpath, so every module it names is spelled REPO-relative — a redeclaration
  *    in `tests/pkg/Main.hx` got `tests.pkg.Thing` while the project builds it as `pkg.Main.Thing`.
+ *    That whole configuration is now refused up front (`OracleCoverage`), which
+ *    `testCliFixDeclinesAFileTheOracleDoesNotCompile` pins; the abstention stays as the guard
+ *    behind it.
  * 3. `Dynamic` is the answer for an expression the compiler could not type, and writing it turns
  *    type checking OFF for the binding this rule exists to strengthen.
  *
@@ -49,9 +52,14 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 		+ 'class Thing {\n\n\tpublic final n:Int;\n\n\tpublic function new(n:Int) {\n\t\tthis.n = n;\n\t}\n\n'
 		+ '\tpublic function next():Thing {\n\t\treturn new Thing(n + 1);\n\t}\n\n}\n';
 
-	/** The only module the oracle hxml compiles — `tests/pkg/Main.hx` is deliberately outside its `-cp`. */
+	/** The module `-main` reaches; `tests/pkg/Main.hx` is pulled in by the `include` below, or not at all. */
 	private static final LIB: String = 'class Lib {\n\n\tpublic static function main():Void {\n\t\ttrace(1);\n\t}\n\n}\n';
-	private static final HXML: String = '-cp src\n-main Lib\n--no-output\n';
+
+	/** An oracle that DOES compile the fixture — `tests` on the classpath and `pkg` force-included. */
+	private static final HXML: String = '-cp src\n-cp tests\n-main Lib\n--macro include(\'pkg\')\n--no-output\n';
+
+	/** The same oracle with `tests` off its classpath: it typechecks, and it never reads the fixture. */
+	private static final UNCOVERED_HXML: String = '-cp src\n-main Lib\n--no-output\n';
 	private static final APQLINT: String = '{"compilerOracle":"check.hxml","rules":{"explicit-local-type":{"enabled":true}}}';
 	#end
 
@@ -166,14 +174,73 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 	// --- end to end, against a real compiler and display server ---
 
 	/**
-	 * The three abstentions and the control, driven through `apq lint --fix` with a real oracle
-	 * over a file the oracle's own hxml does NOT compile — the condition under which every one of
-	 * them shipped, because the verify-and-revert pass covers only the compiled set.
+	 * The abstentions and the control, driven through `apq lint --fix` with a real oracle over a
+	 * file that oracle DOES compile — the only configuration in which the assisted pass may write
+	 * at all, since `testCliFixDeclinesAFileTheOracleDoesNotCompile` below pins the other one.
 	 */
 	public function testCliFixAbstainsInsteadOfMisAnnotating(): Void {
 		#if (sys || nodejs)
+		final packed: Null<String> = fixedMain(HXML);
+		if (packed == null) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final result: String = packed;
+		Assert.isTrue(result.indexOf('finalmapped:Array<Int>') != -1, 'the oracle pass ran over this file');
+		Assert.isTrue(result.indexOf('finala=e.split') != -1, 'the comprehension-body local keeps no enclosing type');
+		Assert.isTrue(result.indexOf('finalloose=Reflect.field') != -1, 'the untypeable local keeps no Dynamic');
+		Assert.isTrue(result.indexOf('finalt:Thing=newThing(1)') != -1, 'the structurally derivable declaration is still annotated');
+		// Defect 2, in its POSITIVE form. The redeclaration used to get the compiler's repo-rooted
+		// `tests.pkg.Thing` for a project that builds it as `pkg.Main.Thing`; in scope the path is
+		// spellable and the annotation is simply right. Both halves are asserted, because "no
+		// repo-rooted path" alone is true of a run that annotated nothing.
+		Assert.isTrue(result.indexOf('finalt:Thing=t.next()') != -1, 'the redeclaration is annotated with the spellable path');
+		Assert.isTrue(result.indexOf('tests.pkg.Thing') == -1, 'and never with the repo-rooted one');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The oracle-assisted pass must write NOTHING into a file its own hxml does not compile.
+	 *
+	 * That pass annotates and then asks `haxe <hxml> --no-output` whether the tree still builds —
+	 * a control that cannot fire for a file the compile never reads, so every answer it gave was
+	 * `Confirmed` by construction. This is where defect 2 of the three above came from: the
+	 * display server answers for such a file anyway (the process cwd is implicitly on the
+	 * compiler's classpath), and it spells the module REPO-relative, so `tests/pkg/Main.hx` got
+	 * `tests.pkg.Thing` for a project that builds it as `pkg.Main.Thing`. The abstention that
+	 * caught it is still in place; this pins the phase that should never have asked.
+	 *
+	 * The last assertion is the run's own control: the STRUCTURAL pass needs no oracle and does
+	 * annotate here, so a run that did nothing at all — a broken fixture, a `--rule` that matched
+	 * nothing — cannot pass this test by writing nothing.
+	 */
+	public function testCliFixDeclinesAFileTheOracleDoesNotCompile(): Void {
+		#if (sys || nodejs)
+		final packed: Null<String> = fixedMain(UNCOVERED_HXML);
+		if (packed == null) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final result: String = packed;
+		Assert.isTrue(result.indexOf('finalmapped=[') != -1, 'the assisted pass annotated a file the oracle never compiles');
+		Assert.isTrue(result.indexOf('finalt=t.next()') != -1, 'the redeclaration was annotated from a compile that never read it');
+		Assert.isTrue(result.indexOf('finalt:Thing=newThing(1)') != -1, 'the structural pass, which needs no oracle, still ran');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	#if (sys || nodejs)
+	/**
+	 * The fixture written out under `hxml` and driven through `apq lint --fix`, returned as
+	 * `tests/pkg/Main.hx` with every space removed — or null when the fixture does not typecheck
+	 * at all, which every caller reports as a skip rather than a pass it did not earn.
+	 */
+	private static function fixedMain(hxml: String): Null<String> {
 		final dir: String = CliFixture.writeDir('eltabstain', [
-			{ name: 'check.hxml', source: HXML },
+			{ name: 'check.hxml', source: hxml },
 			{ name: 'apqlint.json', source: APQLINT }
 		]);
 		FileSystem.createDirectory('$dir/src');
@@ -181,26 +248,26 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 		FileSystem.createDirectory('$dir/tests/pkg');
 		File.saveContent('$dir/src/Lib.hx', LIB);
 		File.saveContent('$dir/tests/pkg/Main.hx', MAIN);
-		final compiles: Bool = switch CompilerOracle.typecheck('check.hxml', dir) {
-			case Confirmed: true;
-			case _: false;
-		};
-		if (!compiles) {
-			Assert.pass('haxe unavailable — skipped');
-			CliFixture.removeDir(dir);
-			return;
+		// The two failures are NOT one skip. `Unavailable` is this host having no `haxe` and the
+		// caller reports it as such; `Rejected` is the FIXTURE not typechecking, which is a test
+		// defect — and one this file made likely, since `HXML` now pulls `tests/pkg/Main.hx` into
+		// the compile, so any error in it would otherwise turn both scenarios green with a message
+		// that lies about the cause.
+		switch CompilerOracle.typecheck('check.hxml', dir) {
+			case Confirmed:
+			case Unavailable(_):
+				CliFixture.removeDir(dir);
+				return null;
+			case Rejected(errors):
+				CliFixture.removeDir(dir);
+				Assert.fail('the fixture does not typecheck under this hxml: $errors');
+				return null;
 		}
 		Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', dir]);
 		final packed: String = File.getContent('$dir/tests/pkg/Main.hx').replace(' ', '');
-		Assert.isTrue(packed.indexOf('finalmapped:Array<Int>') != -1, 'the oracle pass ran over this file');
-		Assert.isTrue(packed.indexOf('finala=e.split') != -1, 'the comprehension-body local keeps no enclosing type');
-		Assert.isTrue(packed.indexOf('finalt=t.next()') != -1, 'the redeclaration keeps no repo-rooted path');
-		Assert.isTrue(packed.indexOf('finalloose=Reflect.field') != -1, 'the untypeable local keeps no Dynamic');
-		Assert.isTrue(packed.indexOf('finalt:Thing=newThing(1)') != -1, 'the structurally derivable declaration is still annotated');
 		CliFixture.removeDir(dir);
-		#else
-		Assert.pass('non-sys target');
-		#end
+		return packed;
 	}
+	#end
 
 }

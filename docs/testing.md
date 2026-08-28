@@ -1133,7 +1133,7 @@ the compiler could SEE. Nothing there is false; it simply does not extend to a
 subtree the compile never entered.
 
 **The risky-fix path now MEASURES that set instead of assuming it.**
-`anyparse.check.OracleCoverage` runs one `haxe -v --no-output --each <hxml>` from
+`anyparse.check.OracleCoverage` runs one `haxe -v --each <hxml> --no-output` from
 the oracle's own directory and reads its `Parsed <path>` lines. That is the
 compiled set, named by the compiler itself — across `--next` arms, through
 include chains, through a `--macro include(…)` ignore list and through whatever
@@ -1145,7 +1145,7 @@ which arm you get depends on where the flag sits rather than on what the oracle
 compiles. `FixVerifier` then DECLINES a risky edit set whose file falls outside
 the set — before writing anything — and the summary says which:
 
-    apq lint --fix: fixed 20 issue(s) in 11 file(s) over 2 pass(es), risky-fix verified: 11 file(s) applied, 0 reverted to report-only, 28 file(s) DECLINED unverifiable (40 edit(s) outside the oracle's compiled set)
+    apq lint --fix: fixed 20 issue(s) in 11 file(s) over 2 pass(es), risky-fix verified: 11 file(s) applied, 0 reverted to report-only, 28 file(s) DECLINED unverifiable (40 edit(s) the oracle does not typecheck)
     apq lint --fix: risky-fix DECLINED src/pony/net/http/WebServer.hx (prefer-null-coalescing): the compiler oracle does not compile this file (its hxml reads 915 source file(s), this one not among them) — 1 edit(s) left report-only
 
 (915 is every source the compile READS — std and haxelibs included. The
@@ -1172,6 +1172,47 @@ rests on it: the identical `var x:Int = "not an int"` leaves
 `haxe lint-oracle.hxml --no-output` at exit 0 from `src/pony/unity3d/UTools.hx`
 and fails it from `src/pony/Byte.hx`. One variable, opposite verdicts.
 
+**The same hole exists one level down, inside a compiled file, and is measured
+the same way.** A `#if` branch the arm's defines exclude is skipped at lex time,
+so the file still earns its `Parsed` line while that branch is typechecked by
+nothing: `final _planted: Int = 'not an int';` in the native-sys `#elseif sys`
+branch of `HaxeSpawn.run` leaves `haxe test-js.hxml --no-output` at exit 0, and
+the same line in the `#if nodejs` branch above it fails with
+`String should be Int` — while `covers` answers TRUE for the file either way and
+`uncovered` declines only the second, naming the branch. So the probe splits its transcript into ARMS — one per
+`Defines:` line, each owning the files parsed after it and the defines it
+declares (that line's names plus the `--macro define(...)` calls that follow,
+which is the only way `nodejs` is visible at all) — and `OracleCoverage.uncovered`
+asks `CondRegionLiveness` whether the edit's own span is in a branch some
+compiling arm proves live. Arms are never unioned: `#if (a && b)` with an `a`
+from one arm and a `b` from another is live under neither.
+
+The define list is POSITIVE-ONLY, and that asymmetry is the whole soundness
+argument: a listed flag is proved, an unlisted one is UNKNOWN and never false,
+so `#if !whatever` can never claim a region no compile produced and every doubt
+costs a decline instead of a permission.
+
+That makes the honest number much lower than the file answer implied, which is
+the point of measuring it. Conditional branch openings in files the oracle DOES
+compile — every one of them previously counted as covered:
+
+| tree | branch openings | provably live |
+|---|---|---|
+| anyparse (`test-js.hxml`, 1522 of 1525 scope files compiled) | 1267 | 483 |
+| Pony (`lint-oracle.hxml`, 196 of 868 scope files compiled) | 1056 | 37 |
+
+Pony's figure is dominated by 399 `#if (haxe_ver >= x)` comparisons and the 447
+`#else` branches whose openers those comparisons leave unknown. Deciding them
+needs a second implementation of the compiler's own version comparison, and a
+wrong one claims coverage that does not exist — so they stay unknown.
+
+The `--each` flag ORDER is part of the claim. `--each` pushes what precedes it
+into every arm, so `-v --no-output --each <hxml>` suppresses output in arms the
+oracle's own `haxe <hxml> --no-output` lets EMIT (that flag joins the last arm
+only). Measured on a two-arm hxml whose first arm names a `-js` output: the
+oracle emits that file, the old probe spelling emitted nothing. The probe has to
+run the compile it is describing, so `--no-output` sits after the hxml.
+
 The limits, stated in full because a gate that overstates its own reach is the
 thing this section is about.
 
@@ -1180,20 +1221,13 @@ thing this section is about.
   and puts its reason on the summary line — the same outcome as a project with
   no `compilerOracle` key at all, which is the honest reading of an oracle whose
   reach is unknown.
-- **The granularity is the FILE, not the REGION.** A `#if` branch the oracle's
-  defines exclude is skipped at lex time, so the file still earns its `Parsed`
-  line while that branch is typechecked by nothing. A risky fix landing inside
-  one is covered and still unverified — the same vacuity one level down, and it
-  reaches this repo (the oracle here is `test-js.hxml`, so no native-sys `#else`
-  branch in `src/` is ever compiled). Closing it means comparing an edit's span
-  against the file's active regions, which is a slice of its own. It is the
-  file-scoped twin of "the deleted code COMPILED" below: the exit code is 0 and
-  the edit was never looked at.
-- **`--each` changes the compile the probe runs**, pushing `--no-output` into
-  every arm where the plain oracle passes it only to the last. An hxml whose
-  later arm consumes an earlier arm's OUTPUT can therefore fail the probe while
-  passing the oracle. That is fail-safe — the phase declines and names its
-  reason — but it is new behaviour for such a project.
+- **A define the probe cannot SEE costs a decline.** An arm's define list is the
+  compiler's `Defines:` line plus the `--macro define(...)` calls the same
+  transcript reports; a define set from inside a BUILD macro appears in neither,
+  and a condition comparing a define's VALUE (`haxe_ver >= 4.2`) has nothing to
+  compare against. Both leave the region unknown and the edit report-only. Never
+  the other way round: absence is never read as "not defined", so no amount of
+  nesting can turn a flag the probe missed into a coverage claim.
 - **The set is a snapshot**, probed once per run. A fix that removes the last
   reference to a module can drop it out of the compiled set afterwards; the
   common direction (a fix that adds a reference) only leaves the snapshot
