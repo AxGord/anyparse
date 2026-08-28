@@ -26,6 +26,31 @@ final class HaxeControlFlowSupport implements ControlFlowSupport {
 	private static final BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt', 'BlockExpr', CondBranchProjection.COND_BRANCH_KIND];
 	private static final EMPTY_FLAG_KINDS: Array<String> = ['BlockStmt'];
 
+	/**
+	 * Every Haxe construct whose body is ONE statement rather than a statement list. The
+	 * expression forms sit beside the statement ones because `if` / `for` / `while` / `try`
+	 * each have both, and a slot is a slot in either.
+	 *
+	 * `CaseBranch` is deliberately ABSENT: a `case` arm holds a LIST, so `case 0:` with
+	 * nothing in it is a legal arm that does nothing — exactly what removing its only
+	 * statement means. `Ternary` is absent for the opposite reason: its branches are
+	 * delimited by `?` and `:`, so a blanked branch is a parse error the re-parse gate
+	 * already catches rather than a statement silently pulled in.
+	 */
+	private static final FIXED_SLOT_KINDS: Array<String> = [
+		'IfStmt',
+		'IfExpr',
+		'ForStmt',
+		'ForExpr',
+		'WhileStmt',
+		'WhileExpr',
+		'DoWhileStmt',
+		'TryCatchStmt',
+		'TryCatchStmtBare',
+		'TryExpr',
+		'CatchClause'
+	];
+
 	public function new() {}
 
 	public function blockKinds(): Array<String> {
@@ -34,6 +59,10 @@ final class HaxeControlFlowSupport implements ControlFlowSupport {
 
 	public function emptyFlagKinds(): Array<String> {
 		return EMPTY_FLAG_KINDS;
+	}
+
+	public function fixedSlotKinds(): Array<String> {
+		return FIXED_SLOT_KINDS;
 	}
 
 	public function isTerminal(node: QueryNode): Bool {

@@ -10552,7 +10552,16 @@ final class Cli {
 			// (e.g. unused-parameter's signature edit without its call-site arg edit, when
 			// prefer-ternary-return rewrites the enclosing region). A deferred check fires
 			// cleanly on the next fixed-point pass.
-			if (checkEdits.length > 0 && !RefactorSupport.editsOverlapAny(checkEdits, edits)) for (e in checkEdits) edits.push(e);
+			// Drop a check's edits when they would empty a brace-less construct's body slot,
+			// the same way an overlap does — per CHECK, so one `unused-local` inside an
+			// `if (c) var y = 1;` costs its own fix and not the other rules' work on the file.
+			// `canonicalize` refuses the same shape for the whole file; that stays the backstop
+			// for a slot two checks empty between them, which no per-check look can see.
+			if (
+				checkEdits.length > 0 && !RefactorSupport.editsOverlapAny(checkEdits, edits)
+				&& BodySlotGuard.emptiedSlot(source, checkEdits, cached) == null
+			)
+				for (e in checkEdits) edits.push(e);
 		}
 		return RefactorSupport.dropContainedEdits(edits);
 	}

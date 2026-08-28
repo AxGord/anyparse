@@ -32,4 +32,24 @@ interface ControlFlowSupport {
 	 */
 	public function emptyFlagKinds(): Array<String>;
 
+	/**
+	 * The `QueryNode.kind`s whose direct children sit in POSITIONAL slots rather than in a
+	 * list — a body a brace-less construct holds exactly one of, a condition, a catch
+	 * parameter. Blanking such a child is never "one element fewer": the slot has
+	 * to be filled by something, so whatever follows the construct is pulled into it.
+	 *
+	 * A kind may list OPTIONAL children too — an `else` branch, a second `catch`. What keeps
+	 * those from being refused is not this vocabulary but `BodySlotGuard`'s own rule that a
+	 * slot whose introducing tokens went with the edit is being reshaped, not emptied; a
+	 * grammar whose optional children carry no such leading token would need more than this
+	 * list.
+	 *
+	 * Read by `BodySlotGuard`, the structural half of the writer-emit gate. A grammar with no
+	 * such construct returns an empty array and the guard is inert for it.
+	 *
+	 * Distinct from `blockKinds()` in exactly the way that matters here: a block's children
+	 * are a LIST, so removing one leaves a shorter list and means what it says.
+	 */
+	public function fixedSlotKinds(): Array<String>;
+
 }
