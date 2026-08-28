@@ -73,6 +73,7 @@ import unit.CatchDynamicCheckTest;
 import unit.ChangeSigSliceTest;
 import unit.CheckstyleConfigLoaderTest;
 import unit.ClassifyOccurrencesTest;
+import unit.CliAtomicWriteSliceTest;
 import unit.ClustersTest;
 import unit.CollapseNestedSwitchCheckTest;
 import unit.CollapsibleElseIfCheckTest;
@@ -856,6 +857,7 @@ class RunTests {
 		addCase(new ApqFmtVerifyCliTest());
 		addCase(new ApqFmtOnePassCliTest());
 		addCase(new ApqCountSummaryCliTest());
+		addCase(new CliAtomicWriteSliceTest());
 		addCase(new HxAccessorSliceTest());
 		addCase(new HxAfterLeftCurlySliceTest());
 		addCase(new HxUniformStatementBlanksSliceTest());

@@ -307,10 +307,19 @@ class LintFixFixedPointCliTest extends Test {
 	}
 
 	/**
-	 * A `RiskyFix` / `OracleAssisted` rule is never handed to the safe loop, so no `fix` of its own
-	 * is ever called there and its row would be a silent zero. On Pony `avoid-dynamic` alone reports
-	 * 470 findings; a block about what did not get fixed that simply omits the largest rule on the
-	 * tree invites its own misreading, so the uncovered rules are named once at the end.
+	 * A `RiskyFix` rule this run could not verify is never handed to the safe loop either, so no
+	 * `fix` of its own is ever called and its row would be a silent zero. On Pony `avoid-dynamic`
+	 * alone reports 470 findings; a block about what did not get fixed that simply omits the largest
+	 * rule on the tree invites its own misreading, so those rules are named once at the end.
+	 *
+	 * The caller decides which rules those are, and since `FixVerifier` began carrying per-rule
+	 * tallies it passes an EMPTY list whenever the risky phase actually ran — see
+	 * `LintFixDeclineWiringSliceTest`, which pins both states of this sentence against a ledger the
+	 * risky fold has filled. What is asserted here is the list-is-not-empty state: the phase did not
+	 * run, and the block says so rather than losing the rules.
+	 *
+	 * An `OracleAssisted` rule that is not ALSO risky runs in the safe loop, so it has a row here
+	 * either way. The first version of the disclaimer listed it as absent, one line under its own row.
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerNamesTheRulesItDoesNotCover(): Void {
@@ -318,7 +327,7 @@ class LintFixFixedPointCliTest extends Test {
 			'magic-number' => outcome(1, 1, 0),
 			'explicit-local-type' => outcome(5, 5, 0)
 		], [], ['explicit-local-type'], ['avoid-dynamic', 'prefer-inline']).join('');
-		Assert.isTrue(all.indexOf('2 rule(s) never enter this ledger') >= 0, 'the RISKY rules are counted - got: $all');
+		Assert.isTrue(all.indexOf('2 rule(s) are absent from this ledger') >= 0, 'the RISKY rules are counted - got: $all');
 		Assert.isTrue(all.indexOf('avoid-dynamic, prefer-inline') >= 0, 'and named - got: $all');
 		// An OracleAssisted rule that is not ALSO risky runs in the safe loop, so it has a row here.
 		// The first version of this line listed it as absent, one line under its own row.
