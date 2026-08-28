@@ -3,6 +3,7 @@ package unit;
 import anyparse.check.CondRegionLiveness;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
@@ -20,6 +21,9 @@ import utest.Test;
  */
 @:nullSafety(Strict)
 final class CondRegionLivenessTest extends Test {
+
+	/** The Haxe grammar's directive vocabulary, which is where every keyword spelling here comes from. */
+	private static final SHAPE: RefShape = new HaxeQueryPlugin().refShape();
 
 	/** `#if nodejs` / `#else`, the shape that motivated the class. */
 	private static final BRANCHED: String = 'class C {\n\n\tpublic function new() {}\n\n\t#if nodejs\n\tvar live:Int = 1;\n'
@@ -72,9 +76,15 @@ final class CondRegionLivenessTest extends Test {
 		Assert.isNull(CondRegionLiveness.evaluate('target.unicode', ['target']));
 	}
 
-	/** A condition this cannot parse answers unknown — never the value of the part it did read. */
+	/**
+	 * A condition this cannot parse answers unknown — never the value of the part it did read.
+	 *
+	 * Both cases have a PROVED prefix, which is what makes them discriminate: drop the parser's
+	 * end-of-input check and each returns the prefix's `true`, granting a region on a condition
+	 * that was never read to the end.
+	 */
 	public function testTrailingGarbageIsUnknown(): Void {
-		Assert.isNull(CondRegionLiveness.evaluate('nodejs &&', ['nodejs']));
+		Assert.isNull(CondRegionLiveness.evaluate('nodejs @@', ['nodejs']));
 		Assert.isNull(CondRegionLiveness.evaluate('nodejs )', ['nodejs']));
 	}
 
@@ -83,63 +93,121 @@ final class CondRegionLivenessTest extends Test {
 	/** No conditional region at all: every offset is live, and the walk says so without a define set. */
 	public function testUnconditionalSourceIsLive(): Void {
 		final source: String = 'class C {\n\n\tvar n:Int = 1;\n\n}\n';
-		Assert.isNull(CondRegionLiveness.unproven(source, shape(), [source.indexOf('var n')], []));
+		Assert.isNull(CondRegionLiveness.unproven(source, SHAPE, [at(source, 'var n')], []));
 	}
 
 	/** The motivating pair: the taken branch is live, the `#else` beside it is provably dead. */
 	public function testTakenBranchIsLiveAndItsElseIsNot(): Void {
-		Assert.isNull(CondRegionLiveness.unproven(BRANCHED, shape(), [BRANCHED.indexOf('var live')], ['nodejs']));
-		Assert.equals(
-			'`#else` of `#if nodejs`', CondRegionLiveness.unproven(BRANCHED, shape(), [BRANCHED.indexOf('var dead')], ['nodejs'])
-		);
+		Assert.isNull(CondRegionLiveness.unproven(BRANCHED, SHAPE, [at(BRANCHED, 'var live')], ['nodejs']));
+		Assert.equals('`#else` of `#if nodejs`', CondRegionLiveness.unproven(BRANCHED, SHAPE, [at(BRANCHED, 'var dead')], ['nodejs']));
 	}
 
 	/** With the flag unlisted NEITHER branch is provable — the conservative answer, not the inverted one. */
 	public function testUnknownConditionRefusesBothBranches(): Void {
-		Assert.equals('`#if nodejs`', CondRegionLiveness.unproven(BRANCHED, shape(), [BRANCHED.indexOf('var live')], []));
-		Assert.notNull(CondRegionLiveness.unproven(BRANCHED, shape(), [BRANCHED.indexOf('var dead')], []));
+		Assert.equals('`#if nodejs`', CondRegionLiveness.unproven(BRANCHED, SHAPE, [at(BRANCHED, 'var live')], []));
+		Assert.notNull(CondRegionLiveness.unproven(BRANCHED, SHAPE, [at(BRANCHED, 'var dead')], []));
 	}
 
-	/** ONE offset in a dead branch condemns the whole set — the caller writes them as one candidate. */
+	/** ONE span in a dead branch condemns the whole set — the caller writes them as one candidate. */
 	public function testOneDeadOffsetCondemnsTheSet(): Void {
-		Assert.notNull(
-			CondRegionLiveness.unproven(BRANCHED, shape(), [BRANCHED.indexOf('var live'), BRANCHED.indexOf('var dead')], ['nodejs'])
+		Assert.notNull(CondRegionLiveness.unproven(BRANCHED, SHAPE, [at(BRANCHED, 'var live'), at(BRANCHED, 'var dead')], ['nodejs']));
+	}
+
+	/**
+	 * A span that STRADDLES a region is condemned by its interior, though both its ends are in
+	 * live code.
+	 *
+	 * The shape a two-point sample cannot see, and the one a risky rewrite of a whole member or
+	 * loop containing a `#if` actually produces: the endpoints prove nothing about the bytes
+	 * between them, and the whole range is what gets rewritten.
+	 */
+	public function testASpanStraddlingADeadBranchIsCondemned(): Void {
+		final head: Int = BRANCHED.indexOf('public function new');
+		final tail: Int = BRANCHED.indexOf('}\n', BRANCHED.indexOf('#end'));
+		Assert.isNull(
+			CondRegionLiveness.unproven(BRANCHED, SHAPE, [new Span(head, head), new Span(tail, tail)], ['nodejs']),
+			'both ENDS of the straddle are in live code, which is what makes the interior invisible to a two-point check'
 		);
+		Assert.equals('`#else` of `#if nodejs`', CondRegionLiveness.unproven(BRANCHED, SHAPE, [new Span(head, tail)], ['nodejs']));
 	}
 
 	/** An `#elseif` is live only when its own flag holds AND every earlier branch is refuted. */
 	public function testElseIfNeedsItsPredecessorsRefuted(): Void {
 		final source: String = 'class C {\n\n\t#if js\n\tvar a:Int = 1;\n\t#elseif nodejs\n\tvar b:Int = 2;\n\t#else\n'
 			+ '\tvar c:Int = 3;\n\t#end\n\n}\n';
-		Assert.isNull(CondRegionLiveness.unproven(source, shape(), [source.indexOf('var a')], ['js', 'nodejs']));
-		Assert.equals(
-			'`#elseif nodejs` of `#if js`', CondRegionLiveness.unproven(source, shape(), [source.indexOf('var b')], ['js', 'nodejs'])
+		Assert.isNull(CondRegionLiveness.unproven(source, SHAPE, [at(source, 'var a')], ['js', 'nodejs']));
+		Assert.equals('`#elseif nodejs` of `#if js`', CondRegionLiveness.unproven(source, SHAPE, [at(source, 'var b')], ['js', 'nodejs']));
+		Assert.equals('`#else` of `#if js`', CondRegionLiveness.unproven(source, SHAPE, [at(source, 'var c')], ['js', 'nodejs']));
+	}
+
+	/**
+	 * A branch keyword whose condition the reader could NOT delimit is unknown, not an `#else`.
+	 *
+	 * `CondDirective.condition` is null for two different facts — a keyword that takes none, and
+	 * a condition-bearing keyword whose tail was undelimitable — and reading the second as the
+	 * first declares the branch live whenever the opener is refuted, granting a region the
+	 * compiler compiles only under a condition nobody read. This source parses and is
+	 * writer-canonical, so it reaches the gate.
+	 */
+	public function testUndelimitableBranchConditionIsUnknownNotAnElse(): Void {
+		final undelimitable: String = 'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (\n\t\tjs || sys\n\t)\n'
+			+ '\tvar b:Int = 2;\n\t#end\n\n}\n';
+		Assert.notNull(
+			CondRegionLiveness.unproven(undelimitable, SHAPE, [at(undelimitable, 'var b')], ['nodejs', 'js']),
+			'the opener is provably false, so an `#else` reading would call this branch live'
 		);
-		Assert.equals('`#else` of `#if js`', CondRegionLiveness.unproven(source, shape(), [source.indexOf('var c')], ['js', 'nodejs']));
+		// The one variable: the same region with a condition the reader CAN delimit is granted,
+		// so the refusal above is about the undelimitable tail and not about the shape.
+		final delimitable: String = 'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (js || sys)\n'
+			+ '\tvar b:Int = 2;\n\t#end\n\n}\n';
+		Assert.isNull(
+			CondRegionLiveness.unproven(delimitable, SHAPE, [at(delimitable, 'var b')], ['nodejs', 'js']),
+			'a delimitable `#elseif` after a refuted opener IS live'
+		);
 	}
 
 	/** A dead OUTER region is reported, not the inner one it makes moot. */
 	public function testOutermostUnprovenRegionIsReported(): Void {
-		final source: String = 'class C {\n\n\t#if nodejs\n\t#else\n\t#if js\n\tvar deep:Int = 1;\n\t#end\n\t#end\n\n}\n';
-		Assert.equals(
-			'`#else` of `#if nodejs`', CondRegionLiveness.unproven(source, shape(), [source.indexOf('var deep')], ['nodejs', 'js'])
-		);
+		final source: String = 'class C {\n\n\t#if nodejs\n\t#else\n\t#if sys\n\tvar deep:Int = 1;\n\t#end\n\t#end\n\n}\n';
+		// BOTH frames are unproven here, and they carry different text — so the assertion fails
+		// if the innermost were reported instead, which a same-text fixture could not discriminate.
+		Assert.equals('`#else` of `#if nodejs`', CondRegionLiveness.unproven(source, SHAPE, [at(source, 'var deep')], ['nodejs']));
 	}
 
 	/** Code after `#end` is outside the region again — a walk that forgot to pop would condemn the rest of the file. */
 	public function testRegionEndsAtItsCloser(): Void {
 		final source: String = 'class C {\n\n\t#if nodejs\n\t#else\n\tvar dead:Int = 1;\n\t#end\n\tvar after:Int = 2;\n\n}\n';
-		Assert.isNull(CondRegionLiveness.unproven(source, shape(), [source.indexOf('var after')], ['nodejs']));
+		Assert.isNull(CondRegionLiveness.unproven(source, SHAPE, [at(source, 'var after')], ['nodejs']));
 	}
 
-	/** An empty offset list has nothing to refuse — the caller asking about no edits gets no decline. */
+	/**
+	 * A stray branch or closer with no open region is IGNORED, and the code beside it stays
+	 * live rather than becoming a branch of nothing.
+	 *
+	 * The permissive direction of the two ignore paths in `apply`: a stray `#else` that pushed a
+	 * frame would make everything after it a branch whose guard nothing constrains.
+	 */
+	public function testStrayDirectivesDoNotOpenARegion(): Void {
+		final source: String = 'class C {\n\n\t#end\n\tvar loose:Int = 1;\n\t#else\n\tvar after:Int = 2;\n\n}\n';
+		Assert.isNull(CondRegionLiveness.unproven(source, SHAPE, [at(source, 'var loose')], []));
+		Assert.isNull(CondRegionLiveness.unproven(source, SHAPE, [at(source, 'var after')], []));
+	}
+
+	/**
+	 * An empty span list has nothing to refuse.
+	 *
+	 * It also guards the walk's own last sweep, which reads `sorted[sorted.length - 1]`: on js
+	 * that index is `undefined` and the answer stays null by accident, but on a static target it
+	 * throws — so the early return is load-bearing where this assertion cannot see it.
+	 */
 	public function testNoOffsetsIsLive(): Void {
-		Assert.isNull(CondRegionLiveness.unproven(BRANCHED, shape(), [], []));
+		Assert.isNull(CondRegionLiveness.unproven(BRANCHED, SHAPE, [], []));
 	}
 
-	/** The Haxe grammar's directive vocabulary, which is where every keyword spelling here comes from. */
-	private function shape(): RefShape {
-		return new HaxeQueryPlugin().refShape();
+	/** A zero-length span at `needle`'s first occurrence — the shape an insertion has. */
+	private static function at(source: String, needle: String): Span {
+		final from: Int = source.indexOf(needle);
+		return new Span(from, from);
 	}
 
 }

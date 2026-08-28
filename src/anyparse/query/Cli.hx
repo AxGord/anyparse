@@ -494,6 +494,13 @@ final class Cli {
 	private static inline final SKIP_PATHS_SHOWN: Int = 5;
 
 	/**
+	 * Cap on the per-file DECLINE lines a `--fix` phase prints. A decline is the common case
+	 * on a partially-covered tree (483 of 679 files on the tree that motivated the gate), not
+	 * the rare one a revert is, so an uncapped list buries the summary it belongs to.
+	 */
+	private static inline final DECLINE_LINES_SHOWN: Int = 20;
+
+	/**
 	 * The suffix every write is staged through, on the far side of the extension on purpose:
 	 * a `.hx.apq-tmp` a killed process left behind is invisible to every `*.hx` walk this tool
 	 * does, where a `.apq-tmp.hx` would be linted, formatted and reported as a source file.
@@ -2292,17 +2299,14 @@ final class Cli {
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
 		// md5 snapshot before and after plus one run per candidate rule.
 		for (r in risky.reverts) stderr('apq lint --fix: risky-fix REVERTED ${r.file} (${r.rule}): ${revertCauseText(r.cause)}\n');
-		// And WHICH files the oracle cannot speak for at all. The count alone would leave the
-		// reader to guess which of hundreds of files this hxml never compiles — the same search
-		// the revert lines above exist to remove. CAPPED, unlike the reverts above: a revert is
-		// rare by construction, while a decline is the COMMON case on a partially-covered tree
-		// (483 of 679 files on the tree that motivated this), and an uncapped list would bury
-		// the summary it belongs to.
-		final declineCap: Int = 20;
+		// And WHICH code the oracle cannot speak for at all. The count alone would leave the
+		// reader to guess which of hundreds of files this hxml never typechecks — the same search
+		// the revert lines above exist to remove. Capped by `DECLINE_LINES_SHOWN`, unlike the
+		// reverts above: a revert is rare by construction, a decline is not.
 		for (i in 0...risky.declines.length) {
 			final d: FixVerifyDecline = risky.declines[i];
-			if (i >= declineCap) {
-				stderr('apq lint --fix: … and ${risky.declines.length - declineCap} more risky-fix decline(s) not listed\n');
+			if (i >= DECLINE_LINES_SHOWN) {
+				stderr('apq lint --fix: … and ${risky.declines.length - DECLINE_LINES_SHOWN} more risky-fix decline(s) not listed\n');
 				break;
 			}
 			stderr('apq lint --fix: risky-fix DECLINED ${d.file} (${d.rule}): ${d.reason} — ${d.edits} edit(s) left report-only\n');
@@ -14661,7 +14665,7 @@ final class Cli {
 			tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compiler oracle for this run)',
 			appliedCount: 0
 		};
-		final blocked: Null<String> = assistedSkipReason(oracleHxml, oracleDir);
+		final blocked: Null<String> = assistedSkipTail(oracleHxml, oracleDir);
 		if (blocked != null) return { tail: blocked, appliedCount: 0 };
 		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(oracleHxml, oracleDir);
 		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0 };
@@ -14671,16 +14675,20 @@ final class Cli {
 		// defines exclude, got its annotation written and confirmed by a compile that could not
 		// have refused it. `verifyRiskyFixes` hands over the probe it already paid for; the
 		// closure exists so a run whose oracle-assisted checks propose nothing pays for none.
+		//
+		// `coverageHxml` is NOT a redundant alias: `oracleHxml` is a `Null<String>` parameter whose
+		// null check narrows it only in straight-line code, and the closure below would see the
+		// declared type again. Inlining it is a strict-null-safety error, not a simplification.
 		final coverageHxml: String = oracleHxml;
 		var coverageMemo: Null<OracleCoverage> = coverage;
-		function compiledSet(): OracleCoverage {
+		inline function compiledSet(): OracleCoverage {
 			final memo: Null<OracleCoverage> = coverageMemo;
 			if (memo != null) return memo;
 			final probed: OracleCoverage = OracleCoverage.probe(coverageHxml, oracleDir);
 			coverageMemo = probed;
 			return probed;
 		}
-		final declinedFiles: Array<String> = [];
+		final declines: Array<{ file: String, reason: String, edits: Int }> = [];
 		var unknownCoverage: Null<String> = null;
 		for (check in oracleChecks) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
 		final candidates: Array<{ file: String, before: String, after: String }> = [];
@@ -14711,8 +14719,13 @@ final class Cli {
 				unknownCoverage = compiled.reason;
 				break;
 			}
-			if (!assistedEditsAreVerifiable(compiled, entry, allEdits, plugin)) {
-				declinedFiles.push(entry.file);
+			final gap: Null<String> = assistedEditsAreVerifiable(compiled, entry, allEdits, plugin);
+			if (gap != null) {
+				declines.push({
+					file: entry.file,
+					reason: gap,
+					edits: allEdits.length
+				});
 				continue;
 			}
 			editsPerFile[entry.file] = allEdits.length;
@@ -14728,12 +14741,31 @@ final class Cli {
 			tail: ', oracle-assisted skipped (the oracle\'s compiled set is unknown: $unknown)',
 			appliedCount: 0
 		};
-		final declinedTail: String = declinedFiles.length == 0
+		// WHICH files, not just how many — the same reason the risky phase prints a line per
+		// decline: a count leaves the reader to guess which of hundreds of files this hxml never
+		// typechecks, which is the search those lines exist to remove. Capped for the same reason
+		// too: on a partially-covered tree a decline is the common case, not the rare one.
+		var declinedEdits: Int = 0;
+		for (i in 0...declines.length) {
+			declinedEdits += declines[i].edits;
+			if (i >= DECLINE_LINES_SHOWN) continue;
+			stderr(
+				'apq lint --fix: oracle-assisted DECLINED ${declines[i].file}: ${declines[i].reason}'
+				+ ' — ${declines[i].edits} edit(s) left report-only\n'
+			);
+		}
+		if (declines.length > DECLINE_LINES_SHOWN)
+			stderr('apq lint --fix: … and ${declines.length - DECLINE_LINES_SHOWN} more oracle-assisted decline(s) not listed\n');
+		final declinedTail: String = declines.length == 0
 			? ''
-			: ', ${declinedFiles.length} file(s) declined (not typechecked by the oracle)';
-		return candidates.length == 0
-			? { tail: ', oracle-assisted: 0 applied$declinedTail', appliedCount: 0 }
-			: commitAssisted(candidates, oracleHxml, oracleDir, files, changedFiles, editsPerFile, declinedTail);
+			: ', ${declines.length} file(s) DECLINED unverifiable ($declinedEdits edit(s) the oracle does not typecheck)';
+		final applied: { tail: String, appliedCount: Int } = candidates.length == 0
+			? { tail: ', oracle-assisted: 0 applied', appliedCount: 0 }
+			: commitAssisted(candidates, oracleHxml, oracleDir, files, changedFiles, editsPerFile);
+		return {
+			tail: applied.tail + declinedTail,
+			appliedCount: applied.appliedCount
+		};
 	}
 
 	/**
@@ -14745,7 +14777,7 @@ final class Cli {
 	 */
 	private static function commitAssisted(
 		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>,
-		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, editsPerFile: Map<String, Int>, declinedTail: String
+		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, editsPerFile: Map<String, Int>
 	): { tail: String, appliedCount: Int } {
 		final result: OracleBatchResult = verifyOracleBatch(candidates, oracleHxml, oracleDir);
 		syncAppliedSources(files, candidates, result.applied);
@@ -14756,21 +14788,21 @@ final class Cli {
 		}
 		final why: String = result.reverted.length == 0 ? '' : ' (${result.reason})';
 		return {
-			tail: ', oracle-assisted: ${result.applied.length} file(s) applied, ${result.reverted.length}'
-				+ ' reverted to report-only$why$declinedTail',
+			tail: ', oracle-assisted: ${result.applied.length} file(s) applied, ${result.reverted.length}' + ' reverted to report-only$why',
 			appliedCount: edits
 		};
 	}
 
 	/**
 	 * Why the oracle-assisted phase cannot run at all — an oracle that will not launch, or a tree
-	 * that does not typecheck — as the summary tail to print, or null when it may proceed.
+	 * that does not typecheck — as the summary TAIL to print (leading separator and all), or null
+	 * when it may proceed.
 	 *
 	 * Same wording caveat as `verifyRiskyFixes` for the rejection: this verdict is taken AFTER the
 	 * safe writes, so "baseline" would name the wrong thing. `reconcileSafePass` has already
 	 * reverted a tree the safe pass broke, so a rejection here is a pre-existing one.
 	 */
-	private static function assistedSkipReason(oracleHxml: String, oracleDir: Null<String>): Null<String> {
+	private static function assistedSkipTail(oracleHxml: String, oracleDir: Null<String>): Null<String> {
 		return switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
 			case Confirmed: null;
 			case Unavailable(reason): ', oracle-assisted skipped (oracle unavailable: $reason)';
@@ -14796,20 +14828,19 @@ final class Cli {
 	}
 
 	/**
-	 * Whether `edits` land where the oracle's compile actually TYPECHECKS `entry` — asked at both
-	 * ends of every edit, because the file is written and verified as ONE candidate, so a single
-	 * annotation in a `#if` branch nothing compiles makes the verdict on the rest unattributable.
+	 * Why `edits` do NOT all land where the oracle's compile actually TYPECHECKS `entry`, or
+	 * null when they do — the sentence a decline quotes.
+	 *
+	 * Every edit's whole SPAN, because the file is written and verified as ONE candidate: a
+	 * single annotation in a `#if` branch nothing compiles makes the verdict on the rest
+	 * unattributable, and one that straddles such a branch does it with both its ends in live
+	 * code.
 	 */
 	private static function assistedEditsAreVerifiable(
 		compiled: OracleCoverage, entry: { file: String, source: String }, edits: Array<{ span: Span, text: String }>,
 		plugin: GrammarPlugin
-	): Bool {
-		final touched: Array<Int> = [];
-		for (edit in edits) {
-			touched.push(edit.span.from);
-			touched.push(edit.span.to);
-		}
-		return compiled.uncovered(entry.file, entry.source, touched, plugin.refShape()) == null;
+	): Null<String> {
+		return compiled.uncovered(entry.file, entry.source, [for (edit in edits) edit.span], plugin.refShape());
 	}
 
 	/**
@@ -18598,6 +18629,13 @@ private typedef RiskyFixOutcome = {
 	/**
 	 * The compiled-set probe the risky phase paid for, or null when it never ran one. The
 	 * oracle-assisted phase reuses it rather than spawning a second `-v` compile.
+	 *
+	 * It is taken BEFORE the risky phase writes and read after, which extends the
+	 * within-run snapshot `FixVerifier` documents across a phase boundary. Defines cannot
+	 * move (a fix does not change them), but MEMBERSHIP can: a risky fix that removes the
+	 * last reference to a module drops it out of the compiled set, and the assisted phase
+	 * would then permit an edit in a file the compile no longer reads. Re-probing costs a
+	 * whole compile, which is the expense this hand-off exists to avoid.
 	 */
 	var coverage: Null<OracleCoverage>;
 };

@@ -496,15 +496,10 @@ final class FixVerifier {
 		// The candidate exists; whether anything could ever JUDGE it is a separate question,
 		// and it is asked here rather than earlier so that the decline count means what it says:
 		// an edit set the writer would have refused is `NoChange` above, never a decline.
-		// Both ends of every edit, because a set whose first edit is in a live branch and whose
-		// last reaches past an `#else` is no more verifiable than one entirely inside the dead
-		// half — and the whole set is written as one candidate.
-		final touched: Array<Int> = [];
-		for (edit in edits) {
-			touched.push(edit.span.from);
-			touched.push(edit.span.to);
-		}
-		final gap: Null<String> = coverage.uncovered(entry.file, before, touched, plugin.refShape());
+		// EVERY edit's whole span, because the set is written and judged as ONE candidate: one edit
+		// landing where nothing is compiled makes the verdict on the rest unattributable, and a
+		// single edit STRADDLING such a region is the same thing with both its ends in live code.
+		final gap: Null<String> = coverage.uncovered(entry.file, before, [for (edit in edits) edit.span], plugin.refShape());
 		if (gap != null) return Declined(gap);
 		write(entry.file, fullText);
 		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {

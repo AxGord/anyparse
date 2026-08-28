@@ -51,32 +51,37 @@ final class CondRegionLiveness {
 	private static final COMPARISONS: Array<String> = ['==', '!=', '>=', '<=', '>', '<'];
 
 	/**
-	 * The innermost-enclosing region description of the first offset in `offsets` that is
-	 * NOT provably compiled under `defines`, or null when every one of them is — which
+	 * The innermost-enclosing region description of the first byte of `spans` that is NOT
+	 * provably compiled under `defines`, or null when every byte of every span is — which
 	 * includes the common case of a source with no conditional region at all.
+	 *
+	 * SPANS rather than points, because liveness is decided by the whole rewritten range: an
+	 * edit whose two ENDS are in live code can still rewrite the interior of a branch nothing
+	 * compiles. `probePoints` turns each span into the offsets that decide it.
 	 *
 	 * The description is the region's own directive text, ready to quote in a decline:
 	 * `` `#if sys` `` for a first branch, `` `#else` of `#if nodejs` `` for a later one.
 	 * The OUTERMOST unproven frame is reported when several nest, because an outer branch
 	 * that is dead makes every question about its interior moot.
 	 */
-	public static function unproven(source: String, shape: RefShape, offsets: Array<Int>, defines: Array<String>): Null<String> {
-		if (offsets.length == 0) return null;
+	public static function unproven(source: String, shape: RefShape, spans: Array<Span>, defines: Array<String>): Null<String> {
+		if (spans.length == 0) return null;
 		final directives: Array<CondDirective> = CondDirectives.scan(source, shape);
 		if (directives.length == 0) return null;
-		final sorted: Array<Int> = offsets.copy();
+		final sorted: Array<Int> = probePoints(spans, directives);
 		sorted.sort((a, b) -> a - b);
 		final frames: Array<Frame> = [];
 		var next: Int = 0;
 		// The three sweeps below differ only in where the frontier sits, so the walk is one
-		// closure over the shared cursor rather than three copies of it.
+		// closure over the shared cursor rather than three copies of it. `gapOf` is asked ONCE
+		// per sweep: the stack cannot change while the cursor advances, so every pending point
+		// below the frontier shares one answer.
 		inline function answerBelow(limit: Int): Null<String> {
-			var gap: Null<String> = null;
-			while (gap == null && next < sorted.length && sorted[next] < limit) {
-				gap = gapOf(frames);
-				if (gap == null) next++;
-			}
-			return gap;
+			if (next >= sorted.length || sorted[next] >= limit) return null;
+			final gap: Null<String> = gapOf(frames);
+			if (gap != null) return gap;
+			while (next < sorted.length && sorted[next] < limit) next++;
+			return null;
 		}
 		for (directive in directives) {
 			// Answered against the state BEFORE this directive: an offset preceding it belongs
@@ -84,9 +89,10 @@ final class CondRegionLiveness {
 			final before: Null<String> = answerBelow(directive.span.from);
 			if (before != null) return before;
 			apply(frames, source, directive, shape, defines);
-			// An offset landing INSIDE a directive's own span is not code, so nothing about it
-			// is being verified; reading it as the branch the directive opens is the answer
-			// that cannot over-claim.
+			// A point landing INSIDE a directive's own span is not code, so nothing about it is
+			// being verified; it is read as the state the directive leaves behind. `probePoints`
+			// never produces one — it takes `directive.span.to`, which is past the directive —
+			// so this sweep exists for the boundary case where an edit STARTS on a directive.
 			final inside: Null<String> = answerBelow(directive.span.to);
 			if (inside != null) return inside;
 		}
@@ -110,6 +116,28 @@ final class CondRegionLiveness {
 		final value: Null<Bool> = parseOr(condition, cursor, defines);
 		skipSpace(condition, cursor);
 		return cursor.ok && cursor.pos >= condition.length ? value : null;
+	}
+
+	/**
+	 * The offsets that decide whether every byte of `spans` is live.
+	 *
+	 * Liveness is piecewise constant — only a directive can change it — so a span is fully
+	 * decided by its own start plus one point inside each region it goes on to CROSS. Sampling
+	 * the two ENDS instead, which is what the callers used to do, grants an edit that straddles
+	 * a whole `#if … #else … #end`: both ends are in live code, the rewritten interior is in a
+	 * branch nothing compiles, and the typecheck afterwards cannot object. That is the same
+	 * vacuity this class exists to refuse, one level up.
+	 */
+	private static function probePoints(spans: Array<Span>, directives: Array<CondDirective>): Array<Int> {
+		final points: Array<Int> = [];
+		for (span in spans) {
+			points.push(span.from);
+			// `span.to` is EXCLUSIVE, so a directive starting exactly there is outside the edit;
+			// and the point taken is just past the directive, which is inside the branch it opens.
+			for (directive in directives) if (directive.span.from > span.from && directive.span.from < span.to)
+				points.push(directive.span.to);
+		}
+		return points;
 	}
 
 	/** Three-valued negation: an unknown operand stays unknown. */
@@ -168,13 +196,22 @@ final class CondRegionLiveness {
 		if (frames.length == 0) return;
 		final frame: Frame = frames[frames.length - 1];
 		frame.branch = text;
-		// A branch with no condition is the final `#else`: it is live exactly when every
-		// earlier branch is refuted, and nothing can follow it.
-		if (directive.condition == null) {
+		// Decided by the KEYWORD, never by a null condition span. `CondDirective.condition` is
+		// null for two different facts — a keyword that takes none (`#else`) and a
+		// condition-bearing keyword whose tail the reader could not delimit (`#elseif (` with the
+		// condition continuing on the next line, which parses) — and reading the second as the
+		// first declares that branch live whenever the opener is provably false, granting a
+		// region the compiler compiles only under a condition nobody read.
+		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
+		if (ifKeyword == null || !CondDirectives.takesCondition(directive.keyword, ifKeyword, shape.conditionalEndKeyword)) {
+			// The final `#else`: live exactly when every earlier branch is refuted, and nothing
+			// can follow it.
 			frame.live = frame.elseGuard;
 			frame.elseGuard = false;
 			return;
 		}
+		// Unknown when the condition could not be delimited, which `conditionValue` answers for a
+		// null span — the conservative half of the pair above.
 		final value: Null<Bool> = conditionValue(source, directive, defines);
 		frame.live = andOf(frame.elseGuard, value);
 		frame.elseGuard = andOf(frame.elseGuard, notOf(value));
@@ -337,7 +374,7 @@ final class CondRegionLiveness {
  * provably refuted, which is exactly what a later `#elseif` or `#else` needs to be live.
  */
 private typedef Frame = {
-	var open: String;
+	final open: String;
 	var branch: String;
 	var live: Null<Bool>;
 	var elseGuard: Null<Bool>;

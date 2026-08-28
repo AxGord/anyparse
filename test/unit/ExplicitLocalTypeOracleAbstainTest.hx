@@ -190,6 +190,12 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 		Assert.isTrue(result.indexOf('finala=e.split') != -1, 'the comprehension-body local keeps no enclosing type');
 		Assert.isTrue(result.indexOf('finalloose=Reflect.field') != -1, 'the untypeable local keeps no Dynamic');
 		Assert.isTrue(result.indexOf('finalt:Thing=newThing(1)') != -1, 'the structurally derivable declaration is still annotated');
+		// Defect 2, in its POSITIVE form. The redeclaration used to get the compiler's repo-rooted
+		// `tests.pkg.Thing` for a project that builds it as `pkg.Main.Thing`; in scope the path is
+		// spellable and the annotation is simply right. Both halves are asserted, because "no
+		// repo-rooted path" alone is true of a run that annotated nothing.
+		Assert.isTrue(result.indexOf('finalt:Thing=t.next()') != -1, 'the redeclaration is annotated with the spellable path');
+		Assert.isTrue(result.indexOf('tests.pkg.Thing') == -1, 'and never with the repo-rooted one');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -242,13 +248,20 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 		FileSystem.createDirectory('$dir/tests/pkg');
 		File.saveContent('$dir/src/Lib.hx', LIB);
 		File.saveContent('$dir/tests/pkg/Main.hx', MAIN);
-		final compiles: Bool = switch CompilerOracle.typecheck('check.hxml', dir) {
-			case Confirmed: true;
-			case _: false;
-		};
-		if (!compiles) {
-			CliFixture.removeDir(dir);
-			return null;
+		// The two failures are NOT one skip. `Unavailable` is this host having no `haxe` and the
+		// caller reports it as such; `Rejected` is the FIXTURE not typechecking, which is a test
+		// defect — and one this file made likely, since `HXML` now pulls `tests/pkg/Main.hx` into
+		// the compile, so any error in it would otherwise turn both scenarios green with a message
+		// that lies about the cause.
+		switch CompilerOracle.typecheck('check.hxml', dir) {
+			case Confirmed:
+			case Unavailable(_):
+				CliFixture.removeDir(dir);
+				return null;
+			case Rejected(errors):
+				CliFixture.removeDir(dir);
+				Assert.fail('the fixture does not typecheck under this hxml: $errors');
+				return null;
 		}
 		Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', dir]);
 		final packed: String = File.getContent('$dir/tests/pkg/Main.hx').replace(' ', '');

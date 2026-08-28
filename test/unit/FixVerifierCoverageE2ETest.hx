@@ -13,7 +13,7 @@ import sys.io.File;
 
 /**
  * The `RiskyFix` verifier's COVERAGE gate, end to end against the real compiler, in the
- * three directions that together make it a control rather than a slogan.
+ * directions that together make it a control rather than a slogan.
  *
  * 1. A file the oracle does not compile is DECLINED — nothing is written to it, and the
  *    run says so instead of calling the resulting exit-0 typecheck a verification.
@@ -22,6 +22,11 @@ import sys.io.File;
  *    useless one.
  * 3. A fix that genuinely breaks the build in a compiled file is still caught and REVERTED,
  *    and is reported as a revert, not as a decline.
+ * 4. Coverage that could not be established at all verifies NOTHING, and 5. every rule's
+ *    findings and landed edits are tallied — the two directions the per-file lists cannot
+ *    answer. 6. And one level below the file: two files the oracle BOTH compiles, whose
+ *    `avoid-dynamic` shapes differ only in which `#if` branch holds them — the branch a
+ *    file's `Parsed` line says nothing about.
  *
  * The fixture is one `-cp .` directory holding a `-main` module and an unreferenced sibling
  * carrying the identical `avoid-dynamic` shape, so the two files differ in exactly one
@@ -265,7 +270,7 @@ final class FixVerifierCoverageE2ETest extends Test {
 	}
 
 	/**
-	 * Direction 6, one level below the other five: two files the oracle BOTH compiles, whose
+	 * Direction 6: two files the oracle BOTH compiles, whose
 	 * `avoid-dynamic` shapes differ only in which `#if` branch they sit in.
 	 *
 	 * A branch the arm's defines exclude is skipped at lex time, so a candidate written there

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.runtime.Span;
 import haxe.io.Path;
 
 using StringTools;
@@ -111,6 +112,9 @@ final class OracleCoverage {
 	 */
 	private static inline final MACRO_DEFINE_PREFIX: String = 'Calling macro haxe.macro.Compiler.define (--macro define(';
 
+	/** The one sentence every target-without-a-process arm of this class answers with. */
+	private static inline final UNSUPPORTED_TARGET: String = 'compiler oracle coverage requires a sys or nodejs target';
+
 	/**
 	 * Spawn buffer for the probe, in bytes. Node's default is 1 MiB and a real project
 	 * blows straight through it — 815 KB of `-v` output for Pony's two arms, 2.1 MB for
@@ -209,7 +213,7 @@ final class OracleCoverage {
 		];
 		return new OracleCoverage([for (token in tokens) canonical(root, token)], arms, '');
 		#else
-		return unknown('compiler oracle coverage requires a sys or nodejs target');
+		return unknown(UNSUPPORTED_TARGET);
 		#end
 	}
 
@@ -217,6 +221,7 @@ final class OracleCoverage {
 	public static function unknown(reason: String): OracleCoverage {
 		return new OracleCoverage(null, [], reason);
 	}
+
 
 	/**
 	 * A coverage over an explicit file list, each path resolved against `root`, read as ONE
@@ -237,7 +242,7 @@ final class OracleCoverage {
 			}
 		], '');
 		#else
-		return unknown('compiler oracle coverage requires a sys or nodejs target');
+		return unknown(UNSUPPORTED_TARGET);
 		#end
 	}
 
@@ -257,26 +262,30 @@ final class OracleCoverage {
 	 * An arm must satisfy BOTH halves at once — read this file AND make every offset live —
 	 * because a region is only ever typechecked by a compile that did both.
 	 */
-	public function uncovered(file: String, source: String, offsets: Array<Int>, shape: RefShape): Null<String> {
+	public function uncovered(file: String, source: String, spans: Array<Span>, shape: RefShape): Null<String> {
 		#if (sys || nodejs)
 		final paths: Null<Array<String>> = _compiled;
 		if (paths == null) return reason;
 		final key: String = canonical(Sys.getCwd(), file);
 		if (!paths.contains(key)) return fileGap(paths.length);
 		var regionGap: Null<String> = null;
+		var claimed: Bool = false;
 		for (arm in _arms) if (arm.files.contains(key)) {
-			final gap: Null<String> = CondRegionLiveness.unproven(source, shape, offsets, arm.defines);
+			claimed = true;
+			final gap: Null<String> = CondRegionLiveness.unproven(source, shape, spans, arm.defines);
 			if (gap == null) return null;
 			if (regionGap == null) regionGap = gap;
 		}
 		final gap: Null<String> = regionGap;
-		// No arm claimed the file although the union holds it: the arms could not be read
-		// apart, so nothing here is provable and the FILE sentence is the honest one.
+		// The union holds the file but no ARM claims it, so the transcript could not be read
+		// apart. Saying the oracle does not compile the file would be false; this state is its
+		// own, and it is unreachable while `probe` builds the union out of the arms.
+		if (!claimed) return 'the compiler oracle\'s compile arms could not be told apart for this file';
 		return gap == null
 			? fileGap(paths.length)
 			: 'the compiler oracle does not typecheck this region ($gap is live under no compiled arm)';
 		#else
-		return 'compiler oracle coverage requires a sys or nodejs target';
+		return UNSUPPORTED_TARGET;
 		#end
 	}
 

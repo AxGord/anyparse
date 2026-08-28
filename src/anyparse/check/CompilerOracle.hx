@@ -39,6 +39,9 @@ enum OracleOutcome {
 @:nullSafety(Strict)
 final class CompilerOracle {
 
+	/** Total typecheck spawns this process — tests assert 0 when no oracle is configured. */
+	public static var invocations(default, null): Int = 0;
+
 	/**
 	 * Output buffer for the typecheck spawn, in bytes.
 	 *
@@ -50,9 +53,6 @@ final class CompilerOracle {
 	 * touched.
 	 */
 	private static inline final ORACLE_BUFFER: Int = 256 * 1024 * 1024;
-
-	/** Total typecheck spawns this process — tests assert 0 when no oracle is configured. */
-	public static var invocations(default, null): Int = 0;
 
 	/**
 	 * Typecheck the project described by `hxml` (a path resolved by the caller,

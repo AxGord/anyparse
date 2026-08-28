@@ -4,6 +4,7 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 #if (sys || nodejs)
@@ -95,9 +96,29 @@ final class OracleCoverageTest extends Test {
 		Assert.equals('nodejs', OracleCoverage.macroDefineName('Calling macro haxe.macro.Compiler.define (--macro define(\'nodejs\'):1)'));
 		Assert.equals('KEY', OracleCoverage.macroDefineName('Calling macro haxe.macro.Compiler.define (--macro define("KEY", "v"):1)'));
 		Assert.isNull(
-			OracleCoverage.macroDefineName('Calling macro haxe.macro.Compiler.define (/p/Build.hx:12)'),
+			OracleCoverage.macroDefineName(
+				'Calling macro haxe.macro.Compiler.define (/Users/x/project/src/pkg/Build.hx:12: characters 3-40)'
+			),
 			'a define called from inside a build macro names its call site, not its argument - unknown, never assumed'
 		);
+	}
+
+	/**
+	 * A `Parsed` line before any `Defines:` line opens an arm with an EMPTY define set: the file
+	 * still counts as compiled, and none of its conditional regions is provable.
+	 *
+	 * Measured NOT to happen with Haxe 4.3.7 — `haxe -v --each` prints `Classpath:` then
+	 * `Defines:` before parsing anything, once per `--next` arm and NOT again for the macro
+	 * context (verified on this project, whose build macros run, and on a two-arm hxml where the
+	 * count is exactly 2). This pins the fallback anyway, because the alternative to an empty
+	 * arm is attributing those files to no arm at all, which reads as "not compiled".
+	 */
+	public function testParsedBeforeAnyDefinesOpensAnEmptyArm(): Void {
+		final arms: Array<CompiledArm> = OracleCoverage.parseArms('Parsed src/Early.hx\nDefines: js\nParsed src/Late.hx\n');
+		Assert.equals(2, arms.length);
+		Assert.same(['src/Early.hx'], arms[0].files);
+		Assert.same([], arms[0].defines);
+		Assert.same(['js'], arms[1].defines);
 	}
 
 	/** `key=value` entries contribute their KEY, because a condition names the flag and not its value. */
@@ -202,9 +223,9 @@ final class OracleCoverageTest extends Test {
 		Assert.isTrue(coverage.known, 'the probe answered: ${coverage.reason}');
 		Assert.isTrue(coverage.covers('$dir/Main.hx'), 'file granularity says yes to both branches, which is the whole defect');
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
-		Assert.isNull(coverage.uncovered('$dir/Main.hx', BRANCHED, [BRANCHED.indexOf('var live')], shape), 'the live branch IS verifiable');
+		Assert.isNull(coverage.uncovered('$dir/Main.hx', BRANCHED, [at(BRANCHED, 'var live')], shape), 'the live branch IS verifiable');
 		Assert.notNull(
-			coverage.uncovered('$dir/Main.hx', BRANCHED, [BRANCHED.indexOf('var dead')], shape),
+			coverage.uncovered('$dir/Main.hx', BRANCHED, [at(BRANCHED, 'var dead')], shape),
 			'and the excluded one is not, though the file is compiled'
 		);
 		CliFixture.removeDir(dir);
@@ -244,11 +265,11 @@ final class OracleCoverageTest extends Test {
 		);
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
 		Assert.isNull(
-			coverage.uncovered('$dir/ArmA.hx', ARM_A, [ARM_A.indexOf('trace(\'a\')')], shape),
+			coverage.uncovered('$dir/ArmA.hx', ARM_A, [at(ARM_A, 'trace(\'a\')')], shape),
 			'a flag the compiling arm declares makes its region live'
 		);
 		Assert.notNull(
-			coverage.uncovered('$dir/ArmA.hx', ARM_A, [ARM_A.indexOf('trace(\'both\')')], shape),
+			coverage.uncovered('$dir/ArmA.hx', ARM_A, [at(ARM_A, 'trace(\'both\')')], shape),
 			'a condition needing one flag from EACH arm is live under neither - arms are not unioned'
 		);
 		CliFixture.removeDir(dir);
@@ -258,14 +279,6 @@ final class OracleCoverageTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	/** A fixture whose single compiled module has one live and one excluded branch. */
-	private static function branchedDir(): String {
-		return CliFixture.writeDir('oraclecovregion', [
-			{ name: 'Main.hx', source: BRANCHED },
-			{ name: 'check.hxml', source: BRANCHED_HXML }
-		]);
-	}
-
 	/**
 	 * True when this host has no working `haxe` — the fixture typechecks by construction, so a
 	 * rejection means no compiler. Carries the skip verdict AND the teardown, so each scenario
@@ -276,6 +289,20 @@ final class OracleCoverageTest extends Test {
 		CliFixture.removeDir(dir);
 		Assert.pass('haxe unavailable — skipped');
 		return true;
+	}
+
+	/** A zero-length span at `needle`'s first occurrence — the shape an insertion has. */
+	private static function at(source: String, needle: String): Span {
+		final from: Int = source.indexOf(needle);
+		return new Span(from, from);
+	}
+
+	/** A fixture whose single compiled module has one live and one excluded branch. */
+	private static function branchedDir(): String {
+		return CliFixture.writeDir('oraclecovregion', [
+			{ name: 'Main.hx', source: BRANCHED },
+			{ name: 'check.hxml', source: BRANCHED_HXML }
+		]);
 	}
 
 	/** A fresh fixture: a `-main` module, an unreferenced sibling on the same classpath, and the hxml. */
