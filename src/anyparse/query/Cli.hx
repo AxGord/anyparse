@@ -17390,10 +17390,15 @@ final class Cli {
 		final lines: Array<String> = [
 			'apq lint --fix: $total reported finding(s) in ${rows.length} rule(s) got NO edit from their own check:\n'
 		];
-		// `<n> of <reported>` only when the two differ — that gap IS the "fixed some, declined the
-		// rest" case, and a reader who cannot see it reads a partial decline as a total one.
+		// `<n> of <reported>` only when `reported` is the LARGER of the two — that gap IS the
+		// "fixed some, declined the rest" case, and a reader who cannot see it reads a partial
+		// decline as a total one. The other direction is not that case at all: `reported` is a
+		// PASS-1 count the driver fills in `applyLintPass`, so a caller that drives
+		// `computeFileLintEdits` on its own (every test here, and any future embedder) leaves it at
+		// zero while `declined` counts real findings — and the label then read `unused-local 2 of 0`,
+		// a ratio out of a total that is smaller than its own part.
 		for (row in rows.slice(0, DECLINED_RULES_SHOWN)) {
-			final label: String = row.count == row.reported ? '${row.rule} ${row.count}' : '${row.rule} ${row.count} of ${row.reported}';
+			final label: String = row.count >= row.reported ? '${row.rule} ${row.count}' : '${row.rule} ${row.count} of ${row.reported}';
 			lines.push('  $label: ${row.verdict}\n');
 			for (line in row.detail) lines.push(line);
 		}
