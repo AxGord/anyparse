@@ -73,17 +73,17 @@ using Lambda;
  * belt over the by-construction soundness, and the first real `RiskyFix`
  * consumer. Without an oracle the `--fix` run is byte-identical to report-only.
  * `Severity.Info` by default.
-	 *
-	 * A second arm converts a `Dynamic` used only as a string-keyed reflect bag
-	 * (`setField` / `field` / `hasField` / `deleteField` / `fields`, via `using Reflect`
-	 * extension calls or direct `Reflect.*`) to `haxe.DynamicAccess<T>` with map syntax
-	 * (`bag[k] = v`, `bag[k]`, `bag.exists(k)`, `bag.remove(k)`, `bag.keys()`). `T` unifies
-	 * every written value's static type (structural, with the display oracle naming the
-	 * inference tail). The fix is restricted to LOCALS and PRIVATE fields — a public field /
-	 * property rewrite changes the API, so those stay report-only (the blast-radius gate).
-	 * When the values unify to `Dynamic` the arm does NOT convert: `DynamicAccess<Dynamic>`
-	 * adds nothing over raw `Dynamic`, a shape the project owner explicitly rejected, so the
-	 * finding stays report-only with the typeless verdict.
+ *
+ * A second arm converts a `Dynamic` used only as a string-keyed reflect bag
+ * (`setField` / `field` / `hasField` / `deleteField` / `fields`, via `using Reflect`
+ * extension calls or direct `Reflect.*`) to `haxe.DynamicAccess<T>` with map syntax
+ * (`bag[k] = v`, `bag[k]`, `bag.exists(k)`, `bag.remove(k)`, `bag.keys()`). `T` unifies
+ * every written value's static type (structural, with the display oracle naming the
+ * inference tail). The fix is restricted to LOCALS and PRIVATE fields — a public field /
+ * property rewrite changes the API, so those stay report-only (the blast-radius gate).
+ * When the values unify to `Dynamic` the arm does NOT convert: `DynamicAccess<Dynamic>`
+ * adds nothing over raw `Dynamic`, a shape the project owner explicitly rejected, so the
+ * finding stays report-only with the typeless verdict.
  *
  * ## What is and is not flagged
  *

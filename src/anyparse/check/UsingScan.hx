@@ -93,7 +93,7 @@ final class UsingScan {
 	}
 
 	/**
-		  * A ZERO-WIDTH edit inserting `using <module>;` into the header. The insert companion of
+	 * A ZERO-WIDTH edit inserting `using <module>;` into the header. The insert companion of
 	 * `hasUsingModule`; the caller applies it only after deciding at least one rewrite needs
 	 * the module in scope.
 	 *

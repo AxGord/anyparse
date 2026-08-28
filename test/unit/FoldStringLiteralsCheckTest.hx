@@ -328,7 +328,7 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	 * verified on Haxe 4.3.7). The bare-`$` spellings that still refuse are pinned in
 	 * `testBareDollarOperandsNotMerged`.
 	 *
-	  * The nested quote here is a DOUBLE one, and that is the whole fixture: the
+	 * The nested quote here is a DOUBLE one, and that is the whole fixture: the
 	 * single-quoted twin of this shape is refused by a different gate for a different
 	 * reason (`testNestedSingleQuotedOperandStaysBare`), so a fixture written with one
 	 * would attribute that refusal to the `$` scanner.

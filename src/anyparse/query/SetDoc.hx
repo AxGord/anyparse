@@ -14,8 +14,11 @@ import haxe.Exception;
  *
  * The doc region is `[docExtendedSpan.from, declGroupSpan.from)`: the leading
  * block comment if one exists (replaced), else empty (the new doc is inserted
- * before the declaration). `text` is formatted into a doc-comment block by
- * `RefactorSupport.docComment` and the whole file is re-emitted +
+ * before the declaration). `text` is PLAIN prose: a continuation gutter the caller
+ * wrote themselves is stripped (`RefactorSupport.ungutter`) rather than doubled, since this
+ * op owns the gutter — supplying one produced ` * \t * text`, which the writer re-emits
+ * verbatim, so no gate in this project could see it. It is then formatted into a
+ * doc-comment block by `RefactorSupport.docComment` and the whole file is re-emitted +
  * re-parse-validated via `RefactorSupport.canonicalize` (canonical-gated unless
  * `reformat`) — so the spliced comment is re-indented and attached to the
  * declaration by the writer's own trivia rules.

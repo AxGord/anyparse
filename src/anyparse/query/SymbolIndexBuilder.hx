@@ -744,7 +744,7 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	  * Append `node` to `out` when it is a type declaration whose name no
+	 * Append `node` to `out` when it is a type declaration whose name no
 	 * conditional region has contributed yet, recording the name. A guarded import / using is
 	 * lifted (deduped) into the import scope, a guarded leading `Meta` / `MetaCall` is lifted so
 	 * its abstract sees it, and a guarded `extern` modifier is lifted so it reaches

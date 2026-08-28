@@ -3795,7 +3795,7 @@ class WrapList {
 	 *  - Collapsed cascade (modes equal at flat/break): `<shape>` direct.
 	 *  - Split cascade no-threshold: `IfFullLineExceeds(_, <break-shape>, _)`.
 	 *
-	  * Shape signature (ω-methodchain-all-or-nothing): `Concat([receiver,
+	 * Shape signature (ω-methodchain-all-or-nothing): `Concat([receiver,
 	 * <tail>])` where the tail is `Concat([Nest(_, _)])` — one child,
 	 * opening with the break BEFORE segment 0. Distinguishes OPL
 	 * (`MethodChainEmit.shapeOnePerLine`) from OPLAF

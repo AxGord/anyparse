@@ -138,7 +138,7 @@ final class MapKeysLookup implements Check {
 	}
 
 	/**
-		  * Rewrite each flagged `for (k in m.keys())` into `for (k => value in m)` — dropping
+	 * Rewrite each flagged `for (k in m.keys())` into `for (k => value in m)` — dropping
 	 * `.keys()` from the iterable, binding a fresh value variable in the header, and
 	 * replacing every `m[k]` / `m.get(k)` lookup in the body with that variable. The value
 	 * name is `value`, or `value1`, `value2`… when `value` is already used in the body.

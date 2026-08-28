@@ -54,6 +54,64 @@ class CommentRewriteSliceTest extends Test {
 		Assert.isTrue(text.contains('Merged line.'), text);
 	}
 
+	/**
+	 * A replacement carrying a real NEWLINE gets the block's own ` * ` continuation on every
+	 * line it adds. Spliced raw it produced a line with no gutter at all, and the writer then
+	 * re-based the whole run onto that shallowest line — so ONE bad line pushed its guttered
+	 * siblings one level deeper, `fmt --list` still called the file canonical, and no lint rule
+	 * read a continuation prefix. The assertion spans BOTH halves of the splice in one string,
+	 * so it cannot pass on an untransformed input.
+	 */
+	public function testMultilineReplacementKeepsMemberGutter(): Void {
+		final src: String = 'class C {\n\t/**\n\t * A member doc whose text wraps over\n\t * two lines.\n\t */\n\tfunction f() {}\n}';
+		final text: String = okText(cr(src, 'A member doc whose text', 'A member doc\nsplit here whose text', false));
+		Assert.isTrue(text.contains('\t/**\n\t * A member doc\n\t * split here whose text wraps over\n\t * two lines.\n\t */'), text);
+	}
+
+	/** The same at a TYPE-level block, whose continuation is ` * ` and not `\t * `. */
+	public function testMultilineReplacementKeepsTypeGutter(): Void {
+		final src: String = '/**\n * First sentence.\n */\nclass C {}';
+		final text: String = okText(cr(src, 'First sentence.', 'First sentence.\nAn added line.', false));
+		Assert.isTrue(text.contains('/**\n * First sentence.\n * An added line.\n */'), text);
+	}
+
+	/** A blank line in the replacement becomes the block's bare gutter, not trailing whitespace. */
+	public function testBlankReplacementLineBecomesBareGutter(): Void {
+		final src: String = '/**\n * First sentence.\n */\nclass C {}';
+		final text: String = okText(cr(src, 'First sentence.', 'First sentence.\n\nA new paragraph.', false));
+		Assert.isTrue(text.contains('/**\n * First sentence.\n *\n * A new paragraph.\n */'), text);
+	}
+
+	/**
+	 * A caller who writes the gutter themselves is not doubled — the op strips it before adding
+	 * its own. GREEN AT BASE BY CONSTRUCTION, and measured so: the raw splice put ` * An added
+	 * line.` at column 0, which made it the shallowest line of the run, and the writer re-based
+	 * the whole block onto the member indent — the one caller-written shape the old splice
+	 * survived. Its value is that the strip does not break it, proved by mutation: with
+	 * `RefactorSupport.ungutter` returned to the identity the reflow prepends a second gutter and
+	 * this test is the one that flips.
+	 */
+	public function testCallerSuppliedGutterIsNotDoubled(): Void {
+		final src: String = 'class C {\n\t/**\n\t * First sentence.\n\t */\n\tfunction f() {}\n}';
+		final text: String = okText(cr(src, 'First sentence.', 'First sentence.\n * An added line.', false));
+		Assert.isTrue(text.contains('\t/**\n\t * First sentence.\n\t * An added line.\n\t */'), text);
+		Assert.isFalse(text.contains('* * An added line'), text);
+	}
+
+	/** A LINE comment continues with `//`, not with a star gutter. */
+	public function testMultilineReplacementInLineComment(): Void {
+		final src: String = 'class C {\n\t// one note\n\tvar x = 1;\n}';
+		final text: String = okText(cr(src, 'one note', 'one note\nand a second', false));
+		Assert.isTrue(text.contains('\t// one note\n\t// and a second'), text);
+	}
+
+	/** A `--regex` replacement is re-prefixed too — the splice is just as raw on that path. */
+	public function testRegexMultilineReplacementKeepsGutter(): Void {
+		final src: String = '/**\n * First sentence.\n */\nclass C {}';
+		final text: String = okText(cr(src, 'First (sentence)\\.', 'First $1.\nSecond line.', true));
+		Assert.isTrue(text.contains('/**\n * First sentence.\n * Second line.\n */'), text);
+	}
+
 	/** Literal replace inside a block comment. */
 	public function testLiteralBlockComment(): Void {
 		final src: String = 'class C {\n\t/* the old name */\n\tvar x = 1;\n}';

@@ -31,6 +31,63 @@ class PatchSliceTest extends Test {
 		assertPatch(source, BySelector('FnMember:f'), 'var a:Int = 1;\nreturn a;', 'var a:Int = 2;\nreturn a + 1;', expected);
 	}
 
+	/**
+	 * A payload that keeps the documented declaration and puts a NEW one ahead of it splices
+	 * between a `/**` block and what it documents — the doc silently transfers to the insertion
+	 * and the declaration is left bare, with `wrote <file>` reported and every gate green. It is
+	 * refused instead. The fixture puts the doc on the SECOND member so the refusal cannot come
+	 * from the class's own doc slot.
+	 */
+	public function testInsertAheadOfADocumentedMemberRefused(): Void {
+		final source: String = 'class C {\n\tfunction a() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		switch Patch.patchNode(
+			source, BySelector('ClassDecl:C'), 'function b() {}', 'function c() {}\n\n\tfunction b() {}', false, new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				// The two NAMES are what makes this the doc-attachment guard and not some other
+				// refusal: the doc moved off `b` and onto the inserted `c`.
+				Assert.stringContains('moves the `/**` block above `b` onto `c`', message);
+		}
+	}
+
+	/**
+	 * The refusal's own remedy: widening the old fragment upward over the doc block makes the
+	 * doc part of the match, so it travels with the declaration and the insertion lands above
+	 * the whole unit. This is the control that keeps the refusal from being a dead end.
+	 */
+	public function testInsertAheadOfTheDocBlockAccepted(): Void {
+		final source: String = 'class C {\n\tfunction a() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final expected: String = 'class C {\n\tfunction a() {}\n\n\tfunction c() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		assertPatch(
+			source, BySelector('ClassDecl:C'), '/**\n * About b.\n */\nfunction b() {}',
+			'function c() {}\n\n/**\n * About b.\n */\nfunction b() {}', expected
+		);
+	}
+
+	/**
+	 * An ordinary in-place edit under a doc does NOT repeat the fragment's opening line ahead of
+	 * itself, so the guard stays out of its way. Green at base by construction — the guard did
+	 * not exist — and it is what pins the refusal to the insert-ahead shape alone.
+	 */
+	public function testInPlaceEditUnderADocAccepted(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final expected: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b():Int {\n\t\treturn 2;\n\t}\n}\n';
+		assertPatch(source, BySelector('ClassDecl:C'), 'return 1;', 'return 2;', expected);
+	}
+
+	/**
+	 * A plain `/* ... *\/` banner above a member is NOT that member's documentation, so inserting
+	 * after it is legitimate and is not refused. Green at base by construction; the discriminator
+	 * against the fixture above is the doc opener alone.
+	 */
+	public function testInsertAfterAPlainBannerAccepted(): Void {
+		final source: String = 'class C {\n\tfunction a() {}\n\n\t/* ---- section ---- */\n\tfunction b() {}\n}\n';
+		final expected: String = 'class C {\n\tfunction a() {}\n\n\t/* ---- section ---- */\n\tfunction c() {}\n\n\tfunction b() {}\n}\n';
+		assertPatch(source, BySelector('ClassDecl:C'), 'function b() {}', 'function c() {}\n\n\tfunction b() {}', expected);
+	}
+
 	public function testPatchByPosition(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Int {\n\t\treturn 3;\n\t}\n}\n';

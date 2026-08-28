@@ -251,7 +251,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	/**
 	 * The value-position hosts a conditional chain may be rewritten inside. Shared so
-	  * `switchExpressionHostKinds` and `ifExpressionChainHostKinds` (which adds the
+	 * `switchExpressionHostKinds` and `ifExpressionChainHostKinds` (which adds the
 	 * arrow-lambda bodies and the two switch-ARM kinds) cannot drift: a new value host is
 	 * added here once and both follow. A `case` arm is deliberately absent from THIS
 	 * constant — a `switch` spliced into a `switch` arm reads worse than the chain it

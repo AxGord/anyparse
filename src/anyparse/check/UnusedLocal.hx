@@ -268,24 +268,24 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	}
 
 	/**
-		 * Append a `Warning` if the local `decl` is unreferenced in `enclosingScope`.
-		 * Bails (no finding) when any coordinate the test needs is missing — a null
-		 * name, declaration span, or scope span — so an unspanned node is never
-		 * flagged.
-		 *
-		 * A scan that DOES find a reference is re-run once with the regions an inner
-		 * self-scoped binding of the same name owns excluded as well
-		 * (`shadowedRegions`), and by a RE-DECLARATION of it in the same statement
-		 * list (`sameScopeRedeclaration`): every occurrence of `var item; for (item in
-		 * xs) use(item);` belongs to the loop, and every read past the second
-		 * `var a` belongs to the second binding. The two feed ONE exclusion set, and
-		 * the second scan is the same predicate over it, so the refinement can only
-		 * turn a silence into a finding, never a finding into a silence — measured over Pony (867 files),
-	anyparse `src test` (1471), the Haxe std (2625) and ~/dev/haxelib (16 744): 21 findings added
-	in total, none removed anywhere.
-		 *
-		 * A re-declaration also puts its own position in the message. The name IS
-		 * visible below the finding there, so a bare "unused local" reads as wrong.
+	 * Append a `Warning` if the local `decl` is unreferenced in `enclosingScope`.
+	 * Bails (no finding) when any coordinate the test needs is missing — a null
+	 * name, declaration span, or scope span — so an unspanned node is never
+	 * flagged.
+	 *
+	 * A scan that DOES find a reference is re-run once with the regions an inner
+	 * self-scoped binding of the same name owns excluded as well
+	 * (`shadowedRegions`), and by a RE-DECLARATION of it in the same statement
+	 * list (`sameScopeRedeclaration`): every occurrence of `var item; for (item in
+	 * xs) use(item);` belongs to the loop, and every read past the second
+	 * `var a` belongs to the second binding. The two feed ONE exclusion set, and
+	 * the second scan is the same predicate over it, so the refinement can only
+	 * turn a silence into a finding, never a finding into a silence — measured over Pony (867 files),
+	 * anyparse `src test` (1471), the Haxe std (2625) and ~/dev/haxelib (16 744): 21 findings added
+	 * in total, none removed anywhere.
+	 *
+	 * A re-declaration also puts its own position in the message. The name IS
+	 * visible below the finding there, so a bare "unused local" reads as wrong.
 	 */
 	private static function checkDecl(ctx: ScanCtx, decl: QueryNode, enclosingScope: Null<QueryNode>): Void {
 		final name: Null<String> = decl.name;

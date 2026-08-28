@@ -65,6 +65,7 @@ final class Linter {
 			new RedundantTrailingComma(),
 			new EmptyComment(),
 			new EmptyDocTag(),
+			new DocCommentContinuation(),
 			new RedundantElse(),
 			new ComparisonToBoolean(),
 			new CollapsibleIf(),

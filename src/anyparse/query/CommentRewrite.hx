@@ -19,8 +19,15 @@ using StringTools;
  * `replace` is verbatim; in `regex` mode `find` is an `EReg` and `replace` is a
  * template where `${0}` / `${1}` / `${N}` expand to capture group N,
  * `${N+K}` / `${N-K}` shift group N (an integer) by K, and `$$` is a literal
- * `$`. Only comment bodies change — code and the comment delimiters are never
- * touched. The result is canonical + re-parse-validated via
+ * `$`. Only comment bodies change — code and the comment delimiters are never touched.
+ *
+ * A replacement carrying a real NEWLINE is re-prefixed with the comment's own continuation
+ * (`RefactorSupport.commentContinuation`) before it is spliced, in both modes: the writer
+ * re-emits a comment interior byte for byte, so an unguttered line spliced into a doc block
+ * is a corruption `fmt --list` calls canonical and every node-based rule is blind to. A
+ * replacement line that already carries a gutter is not doubled — see
+ * `RefactorSupport.ungutter`, which is also how a caller-supplied gutter is kept out of
+ * `set-doc`. The result is canonical + re-parse-validated via
  * `RefactorSupport.canonicalize` (canonical-gated unless `reformat`), so a
  * replacement that would break the parse is rejected.
  *
@@ -61,9 +68,14 @@ final class CommentRewrite {
 			for (tok in RefactorSupport.collectCommentTokens(source)) {
 				final bodySpan: Span = RefactorSupport.commentBody(source, tok);
 				final body: String = source.substring(bodySpan.from, bodySpan.to);
+				// The splice is RAW and the writer re-emits a comment interior byte for byte, so a
+				// replacement carrying a real newline would start a line with no continuation prefix
+				// — the corruption `doc-comment-continuation` exists to see. Give every new line the
+				// prefix THIS comment already uses instead.
+				final continuation: String = RefactorSupport.commentContinuation(source, tok);
 				final next: String = compiled != null
-					? compiled.map(body, m -> expandGroups(replace, m))
-					: literalReplace(body, find, replace);
+					? compiled.map(body, m -> RefactorSupport.reflowIntoComment(expandGroups(replace, m), continuation))
+					: literalReplace(body, find, RefactorSupport.reflowIntoComment(replace, continuation));
 				if (next != body) edits.push({ span: bodySpan, text: next });
 			}
 		} catch (exception: Exception)
@@ -155,8 +167,10 @@ final class CommentRewrite {
 	 * continuations: the body is normalized (each `\n` + ` * ` doc prefix folded to
 	 * one space) for the search, and every non-overlapping match is projected back
 	 * to its span in the original body via the index map — so a phrase wrapped over
-	 * two ` * ` lines is found and replaced. Consuming the continuation between the
-	 * two lines is harmless: the spliced replacement is re-wrapped by the writer.
+	 * two ` * ` lines is found and replaced. Consuming the continuation between the two lines is safe because the replacement is
+	 * re-prefixed before it is spliced (`RefactorSupport.reflowIntoComment`) — the writer does
+	 * NOT re-wrap a comment interior, it re-emits it byte for byte, which is what made the raw
+	 * splice a corruption no gate could see.
 	 *
 	 * `find` is normalised the SAME way, which is what makes a multi-line FIND work.
 	 * Without that, a find carrying a newline could never match anything in either

@@ -41,14 +41,14 @@ final class HxCasePredLowering extends AstPredLowering {
 	private static inline final HX_ELSEIF_CASE: String = 'anyparse.grammar.haxe.HxElseifCase';
 
 	/**
-		 * `HxStatement` ctors that are keyword-led CONTROL-FLOW statements —
-		 * the bodies `caseBodyControlFlowRoot` refuses to glue onto a case
-		 * label. What unites them is that a construct's CONTINUATION lines
-		 * (`else if`, `} while`, `catch`, an inner `case`) are siblings of its
-		 * head, so glued they render at the LABEL's indent and the statement
-		 * reads as if it had left the branch.
-		 *
-		  * `Conditional` joins them for the same reason with different markers:
+	 * `HxStatement` ctors that are keyword-led CONTROL-FLOW statements —
+	 * the bodies `caseBodyControlFlowRoot` refuses to glue onto a case
+	 * label. What unites them is that a construct's CONTINUATION lines
+	 * (`else if`, `} while`, `catch`, an inner `case`) are siblings of its
+	 * head, so glued they render at the LABEL's indent and the statement
+	 * reads as if it had left the branch.
+	 *
+	 * `Conditional` joins them for the same reason with different markers:
 	 * a `#if` region as the sole case body puts `#else` / `#end` on their own
 	 * lines at the head's indent, and glued the head's indent is the label's.
 	 *
@@ -338,43 +338,43 @@ final class HxCasePredLowering extends AstPredLowering {
 	}
 
 	/**
-		 * `caseUnitStructuralBreak_<ElemRule>(c) → Bool` — true iff ONE case
-		 * unit's body renders on the line(s) BELOW its own label whatever the
-		 * budget, so the per-switch symmetry verdict can be reached without a
-		 * width comparison at all. Consumed by the
-		 * `@:fmt(caseSiblingSymmetry(…))` pre-pass
-		 * (`WriterLowering.caseSiblingWidthProbeExpr`), which drops the whole
-		 * widest-sibling measurement for `BodyFit.SIBLING_FORCE_BREAK` on the
-		 * first unit that answers true.
-		 *
-		 * The verdict is the body statement COUNT plus the flat-refusal gate,
-		 * on `CaseBranch.body` and `DefaultBranch.stmts` alike:
-		 *
-		 *  - two or more statements — the body cannot share the label line, so
-		 *    it already sits below it;
-		 *  - exactly one statement that `caseBodyRefusesFlat` refuses (an
-		 *    outermost `&&` / `||`) — the same placement, reached through the
-		 *    shape gate instead of the count;
-		 *  - exactly one statement otherwise — false, and that deliberately
-		 *    covers a GLUED body (a lambda / block / object literal whose Doc
-		 *    carries a hardline). Its FIRST line shares the label line, which is
-		 *    not a below-label placement; a triggered switch still moves it, it
-		 *    just never leads;
-		 *  - ZERO statements — false. There is no body to place, and a forced
-		 *    break would have nothing to move.
-		 *
-		 * `CondSpliceCase` is true with no check at all. It splits a case's
-		 * LABELS from the body they share after `#end`, and that body is
-		 * MANDATORY (`HxCondSpliceCase.tail`, plus whatever `rest` absorbs) and
-		 * renders on the line(s) BELOW those labels at every budget — there is no
-		 * count to take and no width that could put it back on a label line. A
-		 * `Conditional` region, by contrast, never reaches this predicate AS
-		 * ITSELF: the pre-pass flattens it through `caseSiblingUnits_*` first, so
-		 * the predicate runs per INNER unit and a multi-statement case inside a
-		 * `#if` leads the outer spread like any other unit. Every other ctor is
-		 * false.
-		 *
-		  * A single CONTROL-FLOW statement is deliberately not listed above, even
+	 * `caseUnitStructuralBreak_<ElemRule>(c) → Bool` — true iff ONE case
+	 * unit's body renders on the line(s) BELOW its own label whatever the
+	 * budget, so the per-switch symmetry verdict can be reached without a
+	 * width comparison at all. Consumed by the
+	 * `@:fmt(caseSiblingSymmetry(…))` pre-pass
+	 * (`WriterLowering.caseSiblingWidthProbeExpr`), which drops the whole
+	 * widest-sibling measurement for `BodyFit.SIBLING_FORCE_BREAK` on the
+	 * first unit that answers true.
+	 *
+	 * The verdict is the body statement COUNT plus the flat-refusal gate,
+	 * on `CaseBranch.body` and `DefaultBranch.stmts` alike:
+	 *
+	 *  - two or more statements — the body cannot share the label line, so
+	 *    it already sits below it;
+	 *  - exactly one statement that `caseBodyRefusesFlat` refuses (an
+	 *    outermost `&&` / `||`) — the same placement, reached through the
+	 *    shape gate instead of the count;
+	 *  - exactly one statement otherwise — false, and that deliberately
+	 *    covers a GLUED body (a lambda / block / object literal whose Doc
+	 *    carries a hardline). Its FIRST line shares the label line, which is
+	 *    not a below-label placement; a triggered switch still moves it, it
+	 *    just never leads;
+	 *  - ZERO statements — false. There is no body to place, and a forced
+	 *    break would have nothing to move.
+	 *
+	 * `CondSpliceCase` is true with no check at all. It splits a case's
+	 * LABELS from the body they share after `#end`, and that body is
+	 * MANDATORY (`HxCondSpliceCase.tail`, plus whatever `rest` absorbs) and
+	 * renders on the line(s) BELOW those labels at every budget — there is no
+	 * count to take and no width that could put it back on a label line. A
+	 * `Conditional` region, by contrast, never reaches this predicate AS
+	 * ITSELF: the pre-pass flattens it through `caseSiblingUnits_*` first, so
+	 * the predicate runs per INNER unit and a multi-statement case inside a
+	 * `#if` leads the outer spread like any other unit. Every other ctor is
+	 * false.
+	 *
+	 * A single CONTROL-FLOW statement is deliberately not listed above, even
 	 * though `BodyFit.fitLineLayout` refuses it the glue: the same statement
 	 * kind covers `case X: if (c) x();`, which fits on one line and stays
 	 * there. The verdict needs the width measure, so it lives in the pre-pass's
