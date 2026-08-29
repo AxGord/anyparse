@@ -4645,8 +4645,16 @@ class WrapList {
 				IfResidualLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfFullLineExceeds(n, b, f):
 				IfFullLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
-			case IfNaturalFirstLineExceeds(n, b, f), IfNaturalFirstLineExceedsWithRest(n, b, f):
+			case IfNaturalFirstLineExceeds(n, b, f):
 				IfNaturalFirstLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			// A shared arm here rebuilt BOTH probes as the plain ctor and dropped the
+			// rest-awareness of the `…WithRest` one — the failure `D.mapChildren` warns
+			// about, and the sibling arrow pair three arms below keeps them separate for
+			// the same reason. Every arm of this switch must rebuild AS ITSELF; the one
+			// deliberate exception is `BodyGroup -> Group`, which is the whole point of
+			// the function. Exhaustiveness catches a MISSING ctor, never a wrong one.
+			case IfNaturalFirstLineExceedsWithRest(n, b, f):
+				IfNaturalFirstLineExceedsWithRest(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfNaturalFirstLineFitsOpenDelim(n, b, f):
 				IfNaturalFirstLineFitsOpenDelim(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfArrowContinuationFits(ei, fw, n, b, f):

@@ -1496,8 +1496,11 @@ final class RefactorSupport {
 	 * (`public` / `private` / `static` / `inline` / `override` / `macro` /
 	 * `extern` / `dynamic`) and `@:meta` project to separate siblings BEFORE
 	 * the decl they modify, so an edit on the whole declaration must span from
-	 * the FIRST of them, and a cursor that resolves to a modifier sibling
-	 * targets the decl that follows it. Any element that is not part of a
+	 * the FIRST of them, and a cursor that resolves to a MODIFIER sibling
+	 * targets the decl that follows it. A cursor on a `@:meta` does NOT — an
+	 * annotation is an addressable element in its own right, so it keeps its own
+	 * span and the forward walk is skipped; see the body for the two ops that
+	 * deleted a whole class through it. Any element that is not part of a
 	 * modifier-decl group (a statement, an array / call element, a package
 	 * decl) keeps its own span.
 	 *
@@ -1507,8 +1510,8 @@ final class RefactorSupport {
 	 * token of the declaration - see `isConditionalModifierRegion` for the
 	 * corruption that stopping there produced.
 	 *
-	 * Shared by `add-element` (insert OUTSIDE the group) and `replace-node`
-	 * (replace the WHOLE declaration, modifiers included).
+	 * Shared by `add-element` (insert OUTSIDE the group), `replace-node` and
+	 * `patch` (the WHOLE declaration, modifiers included) and `deleteNodes`.
 	 */
 	public static function declGroupSpan(node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span): Span {
 		if (parent == null) return nodeSpan;
@@ -1516,8 +1519,26 @@ final class RefactorSupport {
 		final i: Int = siblings.indexOf(node);
 		if (i < 0) return nodeSpan;
 
-		// The decl is the cursor node, or — when the cursor is on a modifier /
-		// meta sibling — the first following sibling that is not one.
+		// An ANNOTATION is an element in its OWN right: `--select 'MetaCall:@:access'`
+		// names it, `apq source --select` prints its seventeen bytes alone, and every
+		// op echoes it back as the target. Walking FORWARD off it would make the span
+		// the whole `[@:meta modifiers… decl]` group, so an edit addressed at the
+		// ANNOTATION lands on the declaration below it — `remove-element` on a
+		// module-level `@:access` deleted the annotation and the entire class (137
+		// lines to 12), and `replace-node` overwrote the class with the replacement
+		// annotation, both at rc 0 with a result that still parses. A bare modifier
+		// keyword is NOT such an element (its own op is `set-modifier`) and the cursor
+		// convention makes it the first token of the declaration it precedes, so that
+		// half keeps the walk. The BACKWARD walk below is untouched: removing the decl
+		// still carries its whole prefix run, annotations included.
+		//
+		// A consumer that wants the run START rather than the addressed element must
+		// ask `declRunStart` — this function can no longer answer that for an
+		// annotation, and two of them were silently getting the wrong answer.
+		if (isAnnotationElement(node)) return nodeSpan;
+
+		// The decl is the cursor node, or — when the cursor is on a modifier
+		// sibling — the first following sibling that is not a prefix at all.
 		var declIndex: Int = i;
 		while (declIndex < siblings.length && isDeclPrefixSibling(siblings[declIndex])) declIndex++;
 		if (declIndex >= siblings.length) return nodeSpan;
@@ -3897,7 +3918,13 @@ final class RefactorSupport {
 			// the documentation of whatever declaration follows. Removing it WITH the node is
 			// therefore the default; `withDoc = false` is the deliberate opt-out for a caller
 			// that keeps the comment on purpose. The line/comma extension then runs on top.
-			final span: Span = withDoc ? docExtendedSpan(source, group, true) : group;
+			//
+			// A `@:meta` is the exception, and it is the same defect as the forward walk
+			// `declGroupSpan` no longer takes: the doc above an annotation documents the
+			// DECLARATION under it, which is staying. Removing an `@:access` off a real
+			// 79-line Pony class took the class's own `/** … */` with it — orphaning nothing,
+			// just deleting documentation the caller never addressed.
+			final span: Span = withDoc && !isAnnotationElement(target.node) ? docExtendedSpan(source, group, true) : group;
 
 			var isComma: Bool = adjacentToComma(source, span);
 			final parent: Null<QueryNode> = target.parent;
@@ -4121,6 +4148,32 @@ final class RefactorSupport {
 		return MODIFIER_META_KINDS.contains(sibling.kind) || isConditionalModifierRegion(sibling);
 	}
 
+	/**
+	 * Where the `[@:meta modifiers… decl]` run containing `node` STARTS — the
+	 * backward half of `declGroupSpan`, with no forward step and no annotation
+	 * exception.
+	 *
+	 * `declGroupSpan` cannot answer this any more. Its forward walk is conditional
+	 * now, so an annotation there reports its OWN start, and the two consumers that
+	 * were quietly relying on the run start broke in the same commit that narrowed
+	 * it: `Patch`'s doc-orphan guard looked for a `/**` directly above the SECOND
+	 * annotation of a run, found the first annotation instead, and let a
+	 * doc-stealing insert through at rc 0; `set-doc` spliced its block BETWEEN the
+	 * two annotations and produced the stacked pair `fragmented-doc-comment`
+	 * reports. Both ask what a doc block above the run would document, and that is
+	 * the run — whichever member of it the cursor happened to land on.
+	 */
+	public static function declRunStart(node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span): Int {
+		if (parent == null) return nodeSpan.from;
+		final siblings: Array<QueryNode> = parent.children;
+		final i: Int = siblings.indexOf(node);
+		if (i < 0) return nodeSpan.from;
+		var startIndex: Int = i;
+		while (startIndex > 0 && isDeclPrefixSibling(siblings[startIndex - 1])) startIndex--;
+		final startSpan: Null<Span> = siblings[startIndex].span;
+		return startSpan == null ? nodeSpan.from : startSpan.from;
+	}
+
 	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
 	private static inline function isHorizontalSpace(code: Int): Bool {
 		return code == ' '.code || code == '\t'.code || code == '\r'.code;
@@ -4175,6 +4228,30 @@ final class RefactorSupport {
 
 	private static inline function isUpperCode(code: Int): Bool {
 		return code >= 'A'.code && code <= 'Z'.code;
+	}
+
+	/**
+	 * Is `node` an ANNOTATION — an element a caller addresses in its own right, as
+	 * opposed to a bare modifier keyword whose only meaning is the declaration it
+	 * precedes? A `@:meta` is one, and so is a `#if … #end` region holding nothing
+	 * but annotations: the grammar's own `HxMetadata` enum counts `Conditional`
+	 * among its FOUR metadata forms, and `remove-element --select 'Conditional'` on
+	 * `#if debug @:access(foo.Bar) #end` above a class emptied the whole file at
+	 * rc 0. A region holding a MODIFIER is deliberately NOT one — `#if debug public
+	 * #end` reads as the declaration's first token exactly like a bare `public`.
+	 *
+	 * `META_KINDS`'s third member, `PlainMeta`, is UNPINNED and unpinnable: it is
+	 * the enum's declared fallthrough for spellings the structural branches cannot
+	 * claim, and every spelling `HxMetaRaw`'s own doc names as its reason to exist
+	 * — a string embedding parens, four levels of nesting, a dotted name, a
+	 * colon-less `@name` — parses as `MetaCall` or `Meta` today. Dropping it from
+	 * the set flips nothing in 13266 tests; dropping `MetaCall` flips four. It stays
+	 * for grammar-completeness, not for coverage.
+	 */
+	private static function isAnnotationElement(node: QueryNode): Bool {
+		return META_KINDS.contains(node.kind) || (
+			node.kind == CONDITIONAL_REGION_KIND && node.children.length > 0 && node.children.foreach(c -> META_KINDS.contains(c.kind))
+		);
 	}
 
 	/**
