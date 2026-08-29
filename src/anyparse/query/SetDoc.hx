@@ -72,9 +72,16 @@ final class SetDoc {
 		// Fold modifiers / `@:meta` into the declaration unit, then extend back
 		// over any existing leading doc — the region between is exactly the
 		// declaration's documentation slot (empty when it has none → insert).
-		final groupSpan: Span = RefactorSupport.declGroupSpan(node, TreePath.parentOf(tree, node), span);
+		//
+		// The slot opens at the RUN start, which is what `declRunStart` answers and
+		// `declGroupSpan` no longer does for an annotation: addressed at the SECOND
+		// annotation of a run, the group span begins between the two, and the block
+		// landed THERE — a second doc under the first, the stacked pair
+		// `fragmented-doc-comment` reports, instead of replacing it.
+		final runStart: Int = RefactorSupport.declRunStart(node, TreePath.parentOf(tree, node), span);
+		final groupSpan: Span = new Span(runStart, span.to);
 		final docExtended: Span = RefactorSupport.docExtendedSpan(source, groupSpan);
-		final docRegion: Span = new Span(docExtended.from, groupSpan.from);
+		final docRegion: Span = new Span(docExtended.from, runStart);
 		final edit: { span: Span, text: String } = { span: docRegion, text: '${RefactorSupport.docComment(docText)}\n' };
 		final result: EditResult = RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 		// A result byte-identical to the NO-EDIT baseline is a silent no-op —

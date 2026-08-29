@@ -17,6 +17,9 @@ import utest.Test;
  */
 class PatchSliceTest extends Test {
 
+	/** A method holding a multi-line string literal — the shape whose interior lines are not whole lines of the node. */
+	private static final MID_LINE_SOURCE: String = 'class C {\n\tfunction f():String {\n\t\treturn \'alpha\n\tbeta\n\tgamma\';\n\t}\n}\n';
+
 	public function testPatchWithinLine(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Int {\n\t\treturn 2;\n\t}\n}\n';
@@ -457,6 +460,81 @@ class PatchSliceTest extends Test {
 		#else
 		Assert.pass('non-nodejs target');
 		#end
+	}
+
+	/**
+	 * A fragment that starts MID-LINE is invisible to both arms — the byte-exact one
+	 * is a substring search and the dedent-tolerant one compares trimmed WHOLE lines —
+	 * and the standing refusal sent the caller to `apq source --select`, whose output is
+	 * DEDENTED and therefore the one form that cannot match. The refusal now names the
+	 * line the fragment anchors inside and the widening that fixes it.
+	 */
+	public function testMidLineFragmentRefusalNamesTheAnchorLine(): Void {
+		final message: String = refusalMessage(MID_LINE_SOURCE, [{ oldText: 'alpha\nbeta', newText: 'ALPHA\nBETA' }]);
+		Assert.isTrue(
+			message.indexOf('return \'alpha') != -1 && message.indexOf('WHOLE lines') != -1,
+			'the refusal must name the anchor line and the whole-line rule, got: $message'
+		);
+	}
+
+	/** CONTROL, green at base BY CONSTRUCTION: the byte-exact arm still reaches a mid-line fragment. */
+	public function testMidLineFragmentByteExactStillApplies(): Void {
+		assertPatch(
+			MID_LINE_SOURCE, BySelector('FnMember:f'), 'alpha\n\tbeta', 'ALPHA\n\tBETA',
+			'class C {\n\tfunction f():String {\n\t\treturn \'ALPHA\n\tBETA\n\tgamma\';\n\t}\n}\n'
+		);
+	}
+
+	/**
+	 * CONTROL, green at base BY CONSTRUCTION — and the witness that disproves the
+	 * reported symptom: a WHOLE-LINE fragment matches flush-left, so indentation is
+	 * not part of the match on the first line or any other. Widening the mid-line
+	 * fragment above by the eight characters of its `return '` prefix is the whole
+	 * difference. The string LITERAL's value changes here (`\t` before `beta` becomes
+	 * `\t\t`) because the replacement is written flush-left and `rebased` re-bases it
+	 * onto the matched line's indentation — the caller's own doing, not a defect.
+	 */
+	public function testWholeLineFragmentIsIndentationInsensitive(): Void {
+		assertPatch(
+			MID_LINE_SOURCE, BySelector('FnMember:f'), 'return \'alpha\nbeta', 'return \'ALPHA\nBETA',
+			'class C {\n\tfunction f():String {\n\t\treturn \'ALPHA\n\t\tBETA\n\tgamma\';\n\t}\n}\n'
+		);
+	}
+
+	/**
+	 * CONTROL, green at base BY CONSTRUCTION: a fragment that anchors nowhere keeps the
+	 * verbatim-copy remedy. The first line IS a mid-line tail (`alpha` of `return 'alpha`),
+	 * so the tail gate passes and only the continuation check rejects — a fragment sharing
+	 * no text with the source would be turned away by both gates at once and would pin
+	 * neither.
+	 */
+	public function testAbsentFragmentKeepsTheVerbatimRemedy(): Void {
+		final message: String = refusalMessage(MID_LINE_SOURCE, [{ oldText: 'alpha\nBETA', newText: 'X\nY' }]);
+		Assert.isTrue(
+			message.indexOf('copy it verbatim') != -1 && message.indexOf('TAIL of') == -1,
+			'an unanchored fragment must keep the generic remedy, got: $message'
+		);
+	}
+
+	/**
+	 * The same guard, with the anchor on the SECOND annotation of a run. It reads the
+	 * RUN start, not the addressed element's — and once `declGroupSpan` stopped walking
+	 * forward off an annotation, the shared call answered the second annotation's own
+	 * offset, so the guard looked for a `/**` directly above it, found the FIRST
+	 * annotation, and let the doc-stealing insert through at rc 0. The single-annotation
+	 * fixture above cannot see that: there the run start and the element start coincide.
+	 */
+	public function testInsertAheadOfADocumentedTwoAnnotationRunRefused(): Void {
+		final source: String = '/**\n * About C.\n */\n@:keep\n@:access(foo.Bar)\nclass C {\n\tfunction f() {}\n}\n';
+		switch Patch.patchNode(
+			source, BySelector('ClassDecl:C'), '@:access(foo.Bar)\nclass C {', 'class D {}\n\n@:access(foo.Bar)\nclass C {', false,
+			new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `C` onto `D`', message);
+		}
 	}
 
 	/** The refusal text for `pairs`, or a failure when the call unexpectedly succeeded. */

@@ -218,6 +218,21 @@ class SetDocSliceTest extends Test {
 		Assert.equals(1, occurrences(twice, '/**'), twice);
 	}
 
+	/**
+	 * The doc slot opens at the RUN start, not at the addressed element's. Addressed at
+	 * the SECOND annotation of a run, the slot used to begin BETWEEN the two annotations
+	 * — so the block landed there, under the existing one, and the declaration ended up
+	 * with the stacked pair `fragmented-doc-comment` reports instead of a replaced doc.
+	 * The single-annotation case cannot see it: there the two starts coincide.
+	 */
+	public function testDocOnASecondAnnotationReplacesTheRunsDoc(): Void {
+		final src: String = '/**\n * Old doc.\n */\n@:keep\n@:access(foo.Bar)\nclass C {\n\tfunction f(): Int return 1;\n}';
+		final text: String = okText(SetDoc.setDoc(src, 5, 1, 'New doc.', true, new HaxeQueryPlugin()));
+		Assert.equals(1, occurrences(text, '/**'));
+		Assert.isTrue(text.contains('New doc.') && !text.contains('Old doc.'));
+		Assert.isTrue(text.indexOf('New doc.') < text.indexOf('@:keep'));
+	}
+
 	/** A doc'd member whose doc text carries a backticked block-comment opener. */
 	private inline function openerDocSource(): String {
 		return 'package p;\nclass C {\n\t/**\n\t * Whether the gap holds a `//` or `/*` opener.\n\t */\n'

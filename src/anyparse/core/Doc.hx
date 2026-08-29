@@ -76,8 +76,19 @@ package anyparse.core;
  * error is fixed, a new ctor appearing as a `Concat` element there is
  * still dropped. Fix that one by hand.
  *
- * Four more hand-written `Doc` switches keep `case _` DELIBERATELY and
- * are outside the net: `MethodChainEmit.startsWithHardline`,
+ * A FOURTH category, and the one this census kept missing: exhaustive `Doc -> Doc`
+ * REBUILDERS, which rebuild every ctor as itself while a caller transforms the
+ * children — `D.mapChildren` and `WrapList.groupifyInlineBodies`. Exhaustiveness
+ * catches a MISSING arm there and never a WRONG one, so a shared
+ * `case A(x), B(x):` arm silently rebuilds both as whichever ctor it names: that
+ * is how `groupifyInlineBodies` dropped the rest-awareness of
+ * `IfNaturalFirstLineExceedsWithRest`, and it moved no bytes, so no corpus could
+ * have found it (`WrapProbeRestAwarenessSliceTest` pins it at the `Doc` level
+ * instead). The rule for both: every arm rebuilds AS ITSELF, and a shared arm is
+ * only ever legal when it RETURNS rather than reconstructs.
+ *
+ * Four more hand-written `Doc` switches keep `case _` DELIBERATELY and are outside
+ * the net: `MethodChainEmit.startsWithHardline`,
  * `WrapList.isOPLShape` and `WrapList.isArrowBrkShape` match one exact
  * structural signature each, so "anything else" is their answer, not a
  * hole. `ElseIfCommentReflow.scan` is the fourth and inverts the reason:

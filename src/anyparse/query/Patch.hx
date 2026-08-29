@@ -253,7 +253,11 @@ final class Patch {
 		final node: Null<QueryNode> = outermostAt(tree, from);
 		if (node == null) return from;
 		final span: Null<Span> = node.span;
-		return span == null ? from : RefactorSupport.declGroupSpan(node, TreePath.parentOf(tree, node), span).from;
+		// The RUN start, not `declGroupSpan`'s: that function no longer walks forward
+		// off an annotation, so it answers an annotation's own offset — and this guard
+		// then looked for a `/**` directly above the SECOND annotation of a run, found
+		// the first one, and let a doc-stealing insert through at rc 0.
+		return span == null ? from : RefactorSupport.declRunStart(node, TreePath.parentOf(tree, node), span);
 	}
 
 	/**
@@ -373,7 +377,15 @@ final class Patch {
 		}
 		if (exact.length > 0) return !all && exact.length > 1 ? fail(repeated(label, exact.length, kind)) : { ranges: exact, error: null };
 		final dedented: Array<Located> = findDedented(slice, oldText);
-		return if (dedented.length == 0)
+		final anchor: Null<String> = dedented.length == 0 ? midLineAnchor(slice, oldText) : null;
+		return if (anchor != null)
+			fail(
+				'${label}the old fragment does not occur in the resolved $kind node — its first line matches only the TAIL of '
+				+ '"$anchor", and the whitespace-insensitive fallback anchors on WHOLE lines, so a fragment starting mid-line has '
+				+ 'to match byte for byte. Widen it to whole lines (the replacement is then re-based onto that line\'s own '
+				+ 'indentation) or reproduce the whitespace exactly'
+			)
+		else if (dedented.length == 0)
 			fail('${label}the old fragment does not occur in the resolved $kind node — copy it verbatim from `apq source --select`')
 		else if (!all && dedented.length > 1)
 			fail(repeated(label, dedented.length, kind))
@@ -540,6 +552,41 @@ final class Patch {
 			if (ok) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The source line a failed fragment's FIRST line anchors inside, or `null` when
+	 * that line is not a mid-line tail. Both matching arms are blind to this shape and
+	 * for opposite reasons: the byte-exact arm is a substring search, so a fragment
+	 * whose whitespace was reformatted anywhere misses; the dedent-tolerant arm
+	 * compares TRIMMED WHOLE LINES, so a first line that is only the tail of a source
+	 * line (`alpha` of `return 'alpha`) never anchors. The standing refusal then sends
+	 * the caller to `apq source --select`, whose output is DEDENTED — exactly the form
+	 * that cannot match — so following the advice reproduces the failure. The remedy is
+	 * to widen the fragment to whole lines, which this probe exists to name; it only
+	 * reports, and never produces a range to splice.
+	 *
+	 * Deliberately ONE-SIDED for now: the mirror shape, a fragment truncating mid-line
+	 * on its LAST line, is invisible to both arms for the same reason and still gets
+	 * the generic message. Widening the probe to either boundary is a separate change
+	 * with its own fixtures.
+	 */
+	private static function midLineAnchor(slice: String, oldText: String): Null<String> {
+		final wanted: Array<String> = [for (l in oldText.split('\n')) l.trim()];
+		if (wanted.length < 2 || wanted[0] == '') return null;
+		final lines: Array<String> = slice.split('\n');
+		for (start in 0...lines.length - wanted.length + 1) {
+			final first: String = lines[start];
+			// A PROPER tail: an equal-length match is a whole line, which `findDedented` already tried.
+			if (first.length <= wanted[0].length || first.substring(first.length - wanted[0].length) != wanted[0]) continue;
+			var ok: Bool = true;
+			for (j in 1...wanted.length) if (lines[start + j].trim() != wanted[j]) {
+				ok = false;
+				break;
+			}
+			if (ok) return first.trim();
+		}
+		return null;
 	}
 
 }
