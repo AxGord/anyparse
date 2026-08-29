@@ -4,6 +4,7 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.FixVerifier;
 import anyparse.check.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -140,7 +141,7 @@ class FixVerifierBisectTest extends Test {
 			'a source the tree never canonicalised says nothing about the check — it is neither a revert nor its decline'
 		);
 		Assert.isFalse(
-			FixVerifier.isWriterCanonical(entry.source, new HaxeQueryPlugin(), null),
+			RefactorSupport.isWriterCanonical(entry.source, new HaxeQueryPlugin(), null),
 			'the fixture must actually be non-canonical, else the assertion above proves nothing'
 		);
 	}

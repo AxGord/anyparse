@@ -54,7 +54,11 @@ private enum Either<L, R> {
  *
  * Atomic: the superclass is assembled through `NewFile.createRaw` (canonical at
  * the WRITER FIXED POINT, under the format config governing where the file
- * lands) and the source re-parses before either is returned.
+ * lands) and the source re-parses before either is returned. The EDITED source
+ * comes back at the same fixed point when it went in at one — a cut can double a
+ * blank separator, and the writer is what gives one back without touching a run
+ * inside a literal or a comment. A source that was NOT canonical keeps its own
+ * layout.
  */
 @:nullSafety(Strict)
 final class ExtractSuperclass {
@@ -65,13 +69,13 @@ final class ExtractSuperclass {
 	 * CLI writes the returned changes. `Ok` carries two changes (the new
 	 * superclass, the modified source); `Err` a diagnostic.
 	 *
-	 * `optsJson` is the `hxformat.json` governing where `superFile` LANDS —
-	 * see `ExtractInterface.extract` for why omitting it is not a neutral
-	 * default.
+	 * `optsJson` is the `hxformat.json` governing where `superFile` LANDS,
+	 * `srcOptsJson` the one governing `srcFile` — see `ExtractInterface.extract`
+	 * for why omitting either is not a neutral default.
 	 */
 	public static function extract(
 		srcFile: String, srcTypeName: String, superName: String, superFile: String, memberNames: Array<String>, srcSource: String,
-		plugin: GrammarPlugin, ?optsJson: String
+		plugin: GrammarPlugin, ?optsJson: String, ?srcOptsJson: String
 	): MoveResult {
 		if (!RefactorSupport.isIdentifier(superName)) return Err('superclass name "$superName" is not a valid identifier');
 		if (superName == srcTypeName) return Err('superclass name must differ from the source type "$srcTypeName"');
@@ -115,7 +119,19 @@ final class ExtractSuperclass {
 			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add extends (nothing written)');
 		final edits: Array<{ span: Span, text: String }> = [for (m in moved) { span: m.cut, text: '' }];
 		edits.push(headerEdit);
-		final newSrc: String = collapseBlankRuns(RefactorSupport.applyEdits(srcSource, edits));
+		// The WRITER gives back the separator a cut left doubled, and it is the only thing
+		// that can: the hand-rolled newline-run collapse that stood here read the whole file
+		// as text, so it also rewrote a run inside a STRING LITERAL or a block comment —
+		// measured, `extract-superclass` on an untouched sibling member shortened a
+		// multi-line literal by one newline, and every gate stayed green because the result
+		// still parsed and was still canonical.
+		var srcRewrites: Null<Int> = null;
+		final newSrc: String = switch RefactorSupport.editKeepingCanonical(srcSource, edits, plugin, srcOptsJson) {
+			case Err(message): return Err('the rewritten $srcFile: $message');
+			case Ok(text, rewrites):
+				srcRewrites = rewrites;
+				text;
+		};
 
 		try
 			plugin.parseFile(newSrc)
@@ -125,9 +141,10 @@ final class ExtractSuperclass {
 			return Err('rewritten $srcFile does not parse: ${exception.message}');
 
 		final rewritesNote: Null<String> = FormatFixedPoint.rewritesNote(superRewrites);
+		final srcRewritesNote: Null<String> = FormatFixedPoint.rewritesNote(srcRewrites);
 		final advisory: String = 'pulled ${moved.length} member(s) up into new superclass "$superName'
 			+ '" — subclass access preserved by inheritance; the superclass has no constructor (the source constructor is unchanged)'
-			+ (rewritesNote == null ? '' : '; $superFile: $rewritesNote');
+			+ (rewritesNote == null ? '' : '; $superFile: $rewritesNote') + (srcRewritesNote == null ? '' : '; $srcFile: $srcRewritesNote');
 		final changes: Array<MoveChange> = [
 			{ file: superFile, newSource: superSource },
 			{ file: srcFile, newSource: newSrc }
@@ -338,28 +355,6 @@ final class ExtractSuperclass {
 				break;
 		}
 		return block.substring(from, to);
-	}
-
-
-	/**
-	 * Collapse any run of 3+ consecutive newlines to a single blank line —
-	 * cutting adjacent members can leave a doubled blank where they were, and
-	 * canonical Haxe never has more than one blank line in a row.
-	 */
-	private static function collapseBlankRuns(source: String): String {
-		final buf: StringBuf = new StringBuf();
-		var newlines: Int = 0;
-		for (i in 0...source.length) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '\n'.code) {
-				newlines++;
-				if (newlines <= 2) buf.addChar(c);
-			} else {
-				newlines = 0;
-				buf.addChar(c);
-			}
-		}
-		return buf.toString();
 	}
 
 }

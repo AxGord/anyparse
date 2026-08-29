@@ -37,9 +37,13 @@ private typedef IfaceMethod = {
  *    Built through `NewFile.createRaw`, so it is byte-canonical at the
  *    WRITER FIXED POINT under the format config governing where the file
  *    lands.
- *  - The source class gains an `implements <Iface>` clause (a verbatim
- *    header splice — no call sites change; an interface is purely
- *    additive, so nothing else in the scope needs rewriting).
+ *  - The source class gains an `implements <Iface>` clause — no call sites
+ *    change; an interface is purely additive, so nothing else in the scope
+ *    needs rewriting. A source that was already the writer fixed point comes
+ *    back at it: the splice can push the header past the line limit, where
+ *    only the writer knows to wrap the clause. A source that was NOT canonical
+ *    keeps its own layout (format-preserving), which is what a span-splice op
+ *    has always promised.
  *
  * ## Boundary
  *
@@ -63,14 +67,16 @@ final class ExtractInterface {
 	 * modified source) or an `Err`.
 	 *
 	 * `optsJson` is the `hxformat.json` governing where `ifaceFile` LANDS, and
-	 * omitting it is not a neutral default: the interface is then styled by the
+	 * `srcOptsJson` the one governing `srcFile` — two parameters because `--out` can
+	 * put the interface under a different config from the class it came from.
+	 * Omitting either is not a neutral default: the interface is then styled by the
 	 * writer's compiled defaults while `fmt --list` and the next writer-emit
 	 * op's canonical gate judge it under the project's config. That is the
 	 * defect this parameter exists to close.
 	 */
 	public static function extract(
 		srcFile: String, srcTypeName: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String,
-		plugin: GrammarPlugin, ?optsJson: String
+		plugin: GrammarPlugin, ?optsJson: String, ?srcOptsJson: String
 	): MoveResult {
 		if (!RefactorSupport.isIdentifier(ifaceName)) return Err('interface name "$ifaceName" is not a valid identifier');
 		if (ifaceName == srcTypeName) return Err('interface name must differ from the source type "$srcTypeName"');
@@ -108,7 +114,18 @@ final class ExtractInterface {
 		if (srcEdit == null)
 			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add implements (nothing written)');
 		final edit: { span: Span, text: String } = srcEdit;
-		final newSrc: String = srcSource.substring(0, edit.span.from) + edit.text + srcSource.substring(edit.span.to);
+		// A pure header INSERTION still changes what the writer would decide: ` implements
+		// IFoo` can push the class header past the line limit, where the writer wraps the
+		// clause onto a continuation line. A raw splice does not, so a source that was
+		// canonical one second earlier is drifted — the very defect this op's CREATED file
+		// was taught to avoid, one file over.
+		var srcRewrites: Null<Int> = null;
+		final newSrc: String = switch RefactorSupport.editKeepingCanonical(srcSource, [edit], plugin, srcOptsJson) {
+			case Err(message): return Err('the rewritten $srcFile: $message');
+			case Ok(text, rewrites):
+				srcRewrites = rewrites;
+				text;
+		};
 
 		try
 			plugin.parseFile(newSrc)
@@ -119,9 +136,10 @@ final class ExtractInterface {
 
 		final incomplete: Array<String> = [for (m in selected) if (m.signature.indexOf(':') < 0) m.name];
 		final rewritesNote: Null<String> = FormatFixedPoint.rewritesNote(ifaceRewrites);
+		final srcRewritesNote: Null<String> = FormatFixedPoint.rewritesNote(srcRewrites);
 		final advisory: String = 'extracted ${selected.length} method(s) into interface "$ifaceName"' + (
 			incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : ''
-		) + (rewritesNote == null ? '' : '; $ifaceFile: $rewritesNote');
+		) + (rewritesNote == null ? '' : '; $ifaceFile: $rewritesNote') + (srcRewritesNote == null ? '' : '; $srcFile: $srcRewritesNote');
 		final changes: Array<MoveChange> = [
 			{ file: ifaceFile, newSource: ifaceSource },
 			{ file: srcFile, newSource: newSrc }

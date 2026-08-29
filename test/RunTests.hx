@@ -143,6 +143,7 @@ import unit.FixVerifierBisectTest;
 import unit.FixVerifierCoverageE2ETest;
 import unit.FixVerifierGroupE2ETest;
 import unit.FixVerifierGroupTest;
+import unit.FixVerifierProbeRefusalE2ETest;
 import unit.FixVerifierScopeE2ETest;
 import unit.FmtSliceTest;
 import unit.FoldStringLiteralsCandidateGateTest;
@@ -1314,6 +1315,7 @@ class RunTests {
 		addCase(new FixVerifierBisectTest());
 		addCase(new FixVerifierGroupTest());
 		addCase(new FixVerifierGroupE2ETest());
+		addCase(new FixVerifierProbeRefusalE2ETest());
 		addCase(new OracleCoverageTest());
 		addCase(new CondRegionLivenessTest());
 		addCase(new HaxeSpawnTest());

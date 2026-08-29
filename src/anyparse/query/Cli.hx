@@ -13306,7 +13306,7 @@ final class Cli {
 		// `fmt --list` called it drifted the moment it was written.
 		final optsJson: Null<String> = discoverFormatConfig(ifaceFile);
 		final result: MoveResult = ExtractInterface.extract(
-			srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin, optsJson
+			srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin, optsJson, discoverFormatConfig(srcFileNN)
 		);
 		switch result {
 			case Ok(changes, advisory):
@@ -13488,7 +13488,7 @@ final class Cli {
 		// Discovered from the file being CREATED — see `runExtractInterface`.
 		final optsJson: Null<String> = discoverFormatConfig(superFile);
 		final result: MoveResult = ExtractSuperclass.extract(
-			srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin, optsJson
+			srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin, optsJson, discoverFormatConfig(srcFileNN)
 		);
 		switch result {
 			case Ok(changes, advisory):

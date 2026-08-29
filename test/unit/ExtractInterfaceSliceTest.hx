@@ -175,6 +175,51 @@ class ExtractInterfaceSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * The EDITED source must come back canonical, not just the CREATED one — the
+	 * asymmetry the sibling commit left standing.
+	 *
+	 * RED at the base commit. ` implements IBase` looks like the safest edit an op can
+	 * make, and it is still a WRITER decision: on a header already near the limit the
+	 * splice pushes the line past it, where the writer breaks the trailing clause onto
+	 * a continuation line. A verbatim splice cannot know that, so the source was
+	 * canonical one second before the op ran and drifted the moment it returned. The
+	 * created interface, in the same call, was already fixed-point canonical.
+	 *
+	 * Both halves are asserted together: the fixed point AND the wrap the raw splice
+	 * never produced, so neither can be satisfied by an op that did nothing.
+	 */
+	public function testTheEditedSourceComesBackCanonical(): Void {
+		final src: String = 'package pkg;\n\nclass Long implements AlphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXi'
+			+ ' implements OmicronPiRhoSigmaTauUpsilonPhiChiPsiOmegaAlphaBetaGamma {\n\tpublic function new() {}\n\n'
+			+ '\tpublic function alpha():Int {\n\t\treturn 1;\n\t}\n\n\tpublic function beta():Int {\n\t\treturn 2;\n\t}\n}\n';
+		Assert.equals(
+			src, plugin().writeRoundTrip(src, null), 'the fixture must be canonical BEFORE the op, else there is no drift to see'
+		);
+		final changes: Array<MoveChange> = okChanges('pkg/Long.hx', 'Long', 'IBase', 'pkg/IBase.hx', ['alpha'], src);
+		final newSrc: String = changeFor(changes, 'pkg/Long.hx').newSource;
+		Assert.equals(newSrc, plugin().writeRoundTrip(newSrc, null), 'the edited file must be the writer fixed point:\n<$newSrc>');
+		Assert.isTrue(newSrc.contains('\n\t\timplements IBase {'), 'the over-long header wrapped, which is what the raw splice never did');
+	}
+
+	/**
+	 * CONTROL — green at the base commit BY CONSTRUCTION, and it must stay green.
+	 *
+	 * A span-splice op is FORMAT-PRESERVING, and canonicalising the edited file must
+	 * not turn it into a reformatter: a source nobody ever ran `fmt` over keeps its own
+	 * layout, and only the spliced clause is new. `editKeepingCanonical` decides that
+	 * by re-asking the input gate, so the whole existing suite of non-canonical
+	 * fixtures in this class is the same control at scale — this one states it.
+	 */
+	public function testANonCanonicalSourceIsNotReformatted(): Void {
+		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a( ):Void {}\n}';
+		Assert.notEquals(src, plugin().writeRoundTrip(src, null), 'the fixture must be NON-canonical, else this control proves nothing');
+		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
+		final newSrc: String = changeFor(changes, 'pkg/S.hx').newSource;
+		Assert.isTrue(newSrc.contains('public function a( ):Void {}'), 'the odd spacing the user wrote is untouched:\n<$newSrc>');
+		Assert.isTrue(newSrc.contains('class S implements IS {'), 'and the clause still landed');
+	}
+
 	private function okChanges(
 		srcFile: String, srcType: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String
 	): Array<MoveChange> {

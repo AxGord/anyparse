@@ -1409,6 +1409,52 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Splice `edits` into `source` and hand back the result CANONICAL — but only when
+	 * `source` was already the writer's fixed point.
+	 *
+	 * The contract every writer-EMIT op states and the span-splice ops never did:
+	 * canonical in, canonical out. A format-preserving op that only moves bytes can
+	 * still leave a canonical file drifted, because the splice changes what the writer
+	 * would have decided — ` implements IFoo` pushes a class header past the line limit
+	 * and the writer would have wrapped it there. So a canonical input goes through
+	 * `canonicalize`, the same fixed-point loop the file such an op CREATES already
+	 * gets, and a drifted input keeps the plain splice: reformatting a file the user
+	 * never formatted is not a span-splice op's business, and refusing it would decline
+	 * work these ops have always done.
+	 *
+	 * The writer's OWN refusal — a parse failure, a comment loss, a source it cannot
+	 * settle — still propagates as `Err`. `isWriterCanonical` re-asks the input gate to
+	 * tell that apart from the tree's formatting state, rather than matching on the
+	 * message text.
+	 */
+	public static function editKeepingCanonical(
+		source: String, edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		return switch canonicalize(source, edits, false, plugin, optsJson) {
+			case Ok(text, rewrites):
+				Ok(text, rewrites);
+			// No `rewrites` argument: the writer loop never RAN on this path, and `null` is
+			// what `EditResult.Ok` documents for that. A `0` would read as a measurement.
+			case Err(message): isWriterCanonical(source, plugin, optsJson) ? Err(message) : Ok(applyEdits(source, edits));
+		};
+	}
+
+	/**
+	 * Does `source` already satisfy the one-pass canonical gate `canonicalize` puts on
+	 * its input?
+	 *
+	 * The discriminator between the two ways `canonicalize` can refuse: `false` means the
+	 * INPUT was never canonical, so the refusal is about the TREE and says nothing about
+	 * the edit; `true` means the input passed that gate and the refusal is the writer's
+	 * own — a parse failure, a comment loss, or a source it cannot settle on a fixed
+	 * point. Asked by re-running the gate rather than by matching on the message text,
+	 * which would break the day the wording changes.
+	 */
+	public static function isWriterCanonical(source: String, plugin: GrammarPlugin, ?optsJson: String): Bool {
+		return try plugin.writeRoundTrip(source, optsJson) == source catch (_: Exception) false;
+	}
+
+	/**
 	 * Stage a cross-file rename all-or-nothing: canonicalize each file's edit
 	 * `slice` through `canon` and return every file's rewritten source ONLY when
 	 * EVERY slice canonicalizes to a genuinely-changed result. Any `Err`, any
