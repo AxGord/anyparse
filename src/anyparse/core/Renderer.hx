@@ -362,7 +362,8 @@ class Renderer {
 				case IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _),
 					IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 					IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
-					IfArrowContinuationFits(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
+					IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _),
+					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
 					pushExceedsBranch(f, stack, ctx.col, pendingSpaceWidth(ctx), width, decisions);
 				case Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
@@ -691,7 +692,7 @@ class Renderer {
 				case IfBreak(brk, fl), IfWidthExceeds(_, brk, fl), IfFirstLineExceeds(_, brk, fl), IfLineExceeds(_, brk, fl),
 					IfResidualLineExceeds(_, brk, fl), IfFullLineExceeds(_, brk, fl), IfNaturalFirstLineExceeds(_, brk, fl),
 					IfNaturalFirstLineExceedsWithRest(_, brk, fl), IfNaturalFirstLineFitsOpenDelim(_, brk, fl),
-					IfArrowContinuationFits(_, _, _, brk, fl):
+					IfArrowContinuationFits(_, _, _, brk, fl), IfArrowContinuationFitsWithRest(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
@@ -1198,7 +1199,8 @@ class Renderer {
 			case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
 				IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
 				IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
-				IfArrowContinuationFits(_, _, _, _, fl), IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
+				IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
+				IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
 				inner.push({ doc: fl, mode: MFlat });
 				return null;
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
@@ -1281,9 +1283,10 @@ class Renderer {
 				IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner),
 				IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner), IfNaturalFirstLineExceedsWithRest(_, _, inner),
 				IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
-				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
+				IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+				ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend: structural wrappers (Nest /
 				// Group), the flat side of every render-time `If*` probe, the
 				// force-flat markers, and the cond-indent markers all contribute
@@ -1374,9 +1377,10 @@ class Renderer {
 				IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner),
 				IfNaturalFirstLineExceeds(_, _, inner), IfNaturalFirstLineExceedsWithRest(_, _, inner),
 				IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
-				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
+				IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+				ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend at the same indent in MFlat.
 				// A `Group`'s nested flat content; the flat side of every
 				// render-time `If*` probe (the column/first-line/rest-of-stack/
@@ -1509,7 +1513,8 @@ class Renderer {
 			case Group(innerDoc), GroupWithRestProbe(innerDoc), IfWidthExceeds(_, _, innerDoc), IfFirstLineExceeds(_, _, innerDoc),
 				IfLineExceeds(_, _, innerDoc), IfResidualLineExceeds(_, _, innerDoc), IfFullLineExceeds(_, _, innerDoc),
 				IfNaturalFirstLineFitsOpenDelim(_, _, innerDoc), IfArrowContinuationFits(_, _, _, _, innerDoc),
-				IfIndentWidthExceeds(_, _, _, innerDoc), IfGluedFirstLineExceeds(_, _, _, innerDoc):
+				IfArrowContinuationFitsWithRest(_, _, _, _, innerDoc), IfIndentWidthExceeds(_, _, _, innerDoc),
+				IfGluedFirstLineExceeds(_, _, _, innerDoc):
 				// Static walk: descend in MFlat. Runtime Group decision is
 				// unknowable here; flat-side measurement matches the cascade
 				// rule semantic. The natural-first-line / rest-of-stack probes
@@ -1768,9 +1773,10 @@ class Renderer {
 					forceFlat: false
 				});
 			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-				IfArrowContinuationFits(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
-				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
+				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+				ConditionalMarkerDecrease(inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds`), the
 				// nested cond-paren-glue probes (render-time, seen flat here),
@@ -2079,9 +2085,10 @@ class Renderer {
 					forceFlat: node.forceFlat
 				});
 			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-				IfArrowContinuationFits(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
-				CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
+				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+				ConditionalMarkerDecrease(inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds` — the
 				// NoWrap-pinned call paren is measured kept-flat for the parent
@@ -2232,14 +2239,15 @@ class Renderer {
 					stack.push(new Frame(f.indent, pushMode, commits ? breakDoc : flatDoc));
 				}
 			case IfNaturalFirstLineExceeds(_, _, _), IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
-				IfArrowContinuationFits(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
+				IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
+				IfGluedFirstLineExceeds(_, _, _, _):
 				// Natural-shape family — inner Groups resolve by their own
 				// `fitsFlat` (or a precomputed arrow width). Delegated to the
 				// static `pushNaturalBranch`.
 				pushNaturalBranch(f, stack, col, width);
 			case _:
-				// Unreachable: `render` routes only the eleven `If*` ctors here and
-				// every one has an arm above. Same contract as `pushFlatWidthBranch`'s
+				// Unreachable: `render` routes only the `If*` ctors here and every one
+				// has an arm above. Same contract as `pushFlatWidthBranch`'s
 				// tail — falling through would push no frame and silently delete the
 				// node's subtree from the output, so an unrouted ctor throws instead.
 				throw 'pushExceedsBranch: unrouted probe ctor ${f.doc.getName()}';
@@ -3280,6 +3288,24 @@ class Renderer {
 	 * accumulator (invariant #1).
 	 */
 	private static function pushNaturalBranch(f: Frame, stack: Array<Frame>, col: Int, width: Int): Void {
+		// ω-natural-trailwidth / ω-ternary-cuddle-tail: what rides the SAME rendered
+		// line after this probe's own doc — the statement terminator, the call closer,
+		// whatever the enclosing construct still owes — which the probe's own walk
+		// cannot reach. Only the two rest-aware ctors charge it, and which CONSUMER
+		// emitted the probe is the whole distinction (the `return` body does and the
+		// assignment RHS does not; the cuddle's two else probes do and its then-branch
+		// gate does not), so it travels in the node. Read ONCE here rather than inside
+		// each arm: both ctors answer it the same way, and the walk is skipped for
+		// every other member of the family. Taken before the `forceFlat` test rather
+		// than inside each arm's `else`, where a force-flat frame discards it: the walk
+		// is bounded by the pending stack and runs only for the two rest-aware ctors,
+		// and hoisting the branch out is what keeps this function under the complexity
+		// threshold it now sits one step below.
+		final trailWidth: Int = switch f.doc {
+			case IfNaturalFirstLineExceedsWithRest(_, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _):
+				flatTokenWidthOfRestStack(stack);
+			case _: 0;
+		};
 		switch (f.doc) {
 			case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc), IfNaturalFirstLineExceedsWithRest(n, breakDoc, flatDoc):
 				// Natural-shape first-line probe: render `flatDoc`
@@ -3306,16 +3332,6 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					// ω-natural-trailwidth: hand the walk what rides the same line
-					// after this probe's own doc — the statement terminator the
-					// value's Doc does not contain. The rest-aware ctor is the
-					// opt-in; which CONSUMER emitted it is the whole distinction
-					// (the `return` body does, the assignment RHS does not), and
-					// that cannot be read off the value, so it travels in the node.
-					final trailWidth: Int = switch f.doc {
-						case IfNaturalFirstLineExceedsWithRest(_, _, _): flatTokenWidthOfRestStack(stack);
-						case _: 0;
-					};
 					final naturalCrosses: Bool = naturalFirstLineWidth(flatDoc, col, f.indent, width, true, trailWidth) >= n;
 					final pushMode: Mode = naturalCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
@@ -3342,7 +3358,8 @@ class Renderer {
 					final pushMode: Mode = glue ? f.mode : MBreak;
 					stack.push(new Frame(f.indent, pushMode, glue ? flatDoc : breakDoc));
 				}
-			case IfArrowContinuationFits(extraIndent, flatWidth, n, breakDoc, flatDoc):
+			case IfArrowContinuationFits(extraIndent, flatWidth, n, breakDoc, flatDoc),
+				IfArrowContinuationFitsWithRest(extraIndent, flatWidth, n, breakDoc, flatDoc):
 				// ω-inc5-cont: render `flatDoc` (OPEN-paren shape, arrow on its
 				// own continuation line) iff the arrow's flat `(params) -> body`
 				// fits at the CONTINUATION indent `f.indent + extraIndent` — NOT
@@ -3358,7 +3375,13 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final contFits: Bool = f.indent + extraIndent + flatWidth < n;
+					// ω-ternary-cuddle-tail: `trailWidth` is the tail the cuddle's else
+					// probes owe — the statement terminator / call closer a ternary's last
+					// line always carries and a column-independent token width cannot see.
+					// Zero for the plain ctor, which the arrow head-glue and the cuddle's
+					// own then-branch gate both use: the line those ask about ends at the
+					// branch.
+					final contFits: Bool = f.indent + extraIndent + flatWidth + trailWidth < n;
 					final pushMode: Mode = contFits ? f.mode : MBreak;
 					stack.push(new Frame(f.indent, pushMode, contFits ? flatDoc : breakDoc));
 				}
@@ -3410,11 +3433,12 @@ class Renderer {
 				}
 			case _:
 				// Unreachable, and the one of these tails most likely to be TESTED:
-				// this helper owns the four PROBE FAMILY ctors the `Doc` header table
+				// this helper owns every PROBE FAMILY ctor the `Doc` header table
 				// documents, so a new member lands here first. `pushExceedsBranch`
-				// routes exactly five ctors in and every one has an arm above. Falling
-				// through would push no frame and silently delete the node's subtree
-				// from the output — same contract as its `pushFlatWidthBranch` sibling.
+				// hands seven ctors here through ONE arm and the five arms above cover
+				// all of them. Falling through would push no frame and silently delete
+				// the node's subtree from the output — same contract as its
+				// `pushFlatWidthBranch` sibling.
 				throw 'pushNaturalBranch: unrouted probe ctor ${f.doc.getName()}';
 		}
 	}
@@ -3522,10 +3546,10 @@ class Renderer {
 					IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner),
 					IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-					IfArrowContinuationFits(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
-					IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
-					CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-					ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
+					IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
+					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 			}
 		}

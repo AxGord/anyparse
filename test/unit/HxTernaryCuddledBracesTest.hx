@@ -314,6 +314,142 @@ final class HxTernaryCuddledBracesTest extends Test {
 		+ 'eldNameThatIsLong: 34\n\t\t\t}\n\t\t\t: {\n\t\t\t\talphaFieldNameThatIsQuiteLong: 9876543,\n\t\t\t\tbetaFieldNam'
 		+ 'eThatIsQuiteLong: 8765432,\n\t\t\t\tgammaFieldNameThatIsLong: 76\n\t\t\t};\n\t}\n}';
 
+	/**
+	 * A `callParameter` cascade that always OPENS the call paren, so a sole ternary argument sits on its own continuation lines and the
+	 * line its else rides ends where the else does — the host whose true tail width is ZERO, against which the pre-slice single reserved
+	 * column was one too many.
+	 */
+	private static final CALL_ARG_OPEN: String = '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": []}, ';
+
+	/**
+	 * The opposite `callParameter` cascade: the call paren stays glued, so the ternary's last line trails `);` — a tail of TWO columns,
+	 * against which the same single reserve is one too FEW. The two cascades
+	 * bracket the reserve from both sides, and they also render the else at
+	 * different indents, so the band sits at different widths under each — which
+	 * is what a probe reading the HOST cannot get wrong and a constant can.
+	 */
+	private static final CALL_ARG_GLUED: String = '"callParameter": {"defaultWrap": "noWrap", "rules": []}, ';
+
+	/** Render-pivot cascade with the call paren opened, knob on. */
+	private static final TAIL_OPEN_ON: String = config(KNOB + OBJECT_RENDER_PIVOT + CALL_ARG_OPEN);
+
+	/** The same with the knob absent. */
+	private static final TAIL_OPEN_OFF: String = config(OBJECT_RENDER_PIVOT + CALL_ARG_OPEN);
+
+	/** Render-pivot cascade with the call paren kept glued, knob on. */
+	private static final TAIL_GLUED_CALL_ON: String = config(KNOB + OBJECT_RENDER_PIVOT + CALL_ARG_GLUED);
+
+	/** The same with the knob absent. */
+	private static final TAIL_GLUED_CALL_OFF: String = config(OBJECT_RENDER_PIVOT + CALL_ARG_GLUED);
+
+	/**
+	 * The tail-aware band's lower edge at a host that trails NOTHING: the ternary is the sole argument of a call whose paren opens, so its
+	 * last line ends where the else does and the glued `} : {` line lands exactly on the 140-column limit. Free to cuddle, and the
+	 * pre-slice one-column reserve refused it.
+	 */
+	private static final SRC_TAIL_OPEN_GLUE_FITS: String = 'class T {\n\tprivate function f():Void {\n\t\tregisterHandler(flag ? { alphaFi'
+		+ 'eldNameThatIsQuiteLong: 1234567, betaFieldNameThatIsQuiteLong: 2345678, gammaFieldNameThatIsQuiteLong: 3456789, '
+		+ 'deltaFieldNameThatIsLong: 4 } : { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: 8765432, '
+		+ 'gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 });\n\t}\n}';
+
+	/**
+	 * Two characters wider, and the harmful edge of the same band: the else's
+	 * OWN separator line now lands exactly on the limit — it FITS — while the line
+	 * it would ride glued does not. The pre-slice reserve read that fitting line as over-wide,
+	 * concluded the else breaks anyway, cuddled, and turned one line into four.
+	 */
+	private static final SRC_TAIL_OPEN_ELSE_FITS_ALONE: String = 'class T {\n\tprivate function f():Void {\n\t\tregisterHandler(flag ? { a'
+		+ 'lphaFieldNameThatIsQuiteLong: 1234567, betaFieldNameThatIsQuiteLong: 2345678, gammaFieldNameThatIsQuiteLong: 3456789, '
+		+ 'deltaFieldNameThatIsLong: 4 } : { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: 8765432, '
+		+ 'gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 });\n\t}\n}';
+
+	/**
+	 * The same shape under a `callParameter` cascade that keeps the call glued,
+	 * so the ternary's last line trails `);` — two columns the pre-slice single
+	 * reserve under-charges. This else width sits INSIDE that host's band rather
+	 * than on an edge: its own separator line is 139 columns and fits, the line
+	 * it would ride glued is 141 and does not, and it is the only width in the
+	 * band the one-column reserve gets wrong. Both of this host's edges sit
+	 * two columns further out than the opened-paren host's, and the `);` is not
+	 * what moves them there: the glued cascade renders the else one indent level
+	 * shallower (3 tabs against 4), worth +4, while the tail pulls back -2.
+	 * Neither term is a constant, which is the whole point.
+	 */
+	private static final SRC_TAIL_GLUED_CALL_ELSE_FITS_ALONE: String = 'class T {\n\tprivate function f():Void {\n'
+		+ '\t\tregisterHandler(flag ? { alphaFieldNameThatIsQuiteLong: 1234567, betaFieldNameThatIsQuiteLong: 2345678, '
+		+ 'gammaFieldNameThatIsQuiteLong: 3456789, deltaFieldNameThatIsLong: 4 } : { alphaFieldNameThatIsQuiteLong: 9876543, '
+		+ 'betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 });\n\t}\n}';
+
+	/**
+	 * Two characters wider again: the else no longer fits its own separator line
+	 * ONCE the `);` is charged (139 columns without it, 141 with), so it breaks
+	 * either way and the cuddle is free. The pre-slice reserve, one column short,
+	 * stopped at 140 and read that line as fitting, so it paid for a separator
+	 * line that bought nothing.
+	 */
+	private static final SRC_TAIL_GLUED_CALL_ELSE_BREAKS: String = 'class T {\n\tprivate function f():Void {\n'
+		+ '\t\tregisterHandler(flag ? { alphaFieldNameThatIsQuiteLong: 1234567, betaFieldNameThatIsQuiteLong: 2345678, '
+		+ 'gammaFieldNameThatIsQuiteLong: 3456789, deltaFieldNameThatIsLong: 4 } : { alphaFieldNameThatIsQuiteLong: 9876543, '
+		+ 'betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 });\n\t}\n}';
+
+	/**
+	 * The lower edge cuddling — `} : {` glued, the else still one line, that line exactly 140 columns.
+	 */
+	private static final TAIL_OPEN_GLUE_FITS_CUDDLED: String = 'class T {\n\tprivate function f():Void {\n\t\tregisterHandler(\n\t\t\tflag'
+		+ '\n\t\t\t\t? {\n\t\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
+		+ '\t\t\t\t\tgamm' + 'aFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n'
+		+ '\t\t\t\t} : { alphaFieldNameThatIsQuiteLong: 9876543, '
+		+ 'betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 }\n\t\t);\n\t}\n}';
+
+	/**
+	 * The same input with the knob absent — one line longer.
+	 */
+	private static final TAIL_OPEN_GLUE_FITS_SEPARATE: String = 'class T {\n\tprivate function f():Void {\n\t\tregisterHandler(\n\t\t\tfla'
+		+ 'g\n\t\t\t\t? {\n\t\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
+		+ '\t\t\t\t\tgam' + 'maFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t\t}\n'
+		+ '\t\t\t\t: { alphaFieldNameThatIsQuiteLong:'
+		+ ' 9876543, betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 }\n\t\t);\n\t}\n}';
+
+	/**
+	 * The harmful edge, and the layout the knob must NOT change: the else keeps its own 140-column separator line. Identical with the knob
+	 * on and off, which is the assertion — the knob may only ever remove a line here, never add three.
+	 */
+	private static final TAIL_OPEN_ELSE_FITS_ALONE_SEPARATE: String = 'class T {\n\tprivate function f():Void {\n\t\tregisterHandler(\n\t'
+		+ '\t\tflag\n\t\t\t\t? {\n\t\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n'
+		+ '\t\t\t' + '\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n\t\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t\t}\n'
+		+ '\t\t\t\t: { alphaFieldNameThatIsQui'
+		+ 'teLong: 9876543, betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 }\n\t\t);\n\t}\n}';
+
+	/**
+	 * The same verdict at the glued-call host, one character out from the width
+	 * that gets it at the opened-paren host — the band itself moves +2 there (+4
+	 * from the shallower indent, -2 from the `);` the else rides) and this fixture
+	 * sits inside it rather than on an edge. Identical with the knob on and off.
+	 */
+	private static final TAIL_GLUED_CALL_ELSE_FITS_ALONE_SEPARATE: String = 'class T {\n\tprivate function f():Void {\n'
+		+ '\t\tregisterHandler(flag\n\t\t\t? {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n' + '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
+		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t}\n' + '\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, beta'
+		+ 'FieldNameIsLong: 8765432, ' + 'gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 });\n\t}\n}';
+
+	/**
+	 * The free cuddle at the glued-call host: the else breaks either way, so the separator line buys nothing and the knob removes it.
+	 */
+	private static final TAIL_GLUED_CALL_ELSE_BREAKS_CUDDLED: String = 'class T {\n\tprivate function f():Void {\n'
+		+ '\t\tregisterHandler(flag\n\t\t\t? {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n' + '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
+		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t} : {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 9876543,\n\t\t\t'
+		+ '\tbetaFieldNameIsLong: 8765432,\n' + '\t\t\t\tgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7\n' + '\t\t\t});\n\t}\n}';
+
+	/**
+	 * The same input with the knob absent.
+	 */
+	private static final TAIL_GLUED_CALL_ELSE_BREAKS_SEPARATE: String = 'class T {\n\tprivate function f():Void {\n'
+		+ '\t\tregisterHandler(flag\n\t\t\t? {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n' + '\t\t\t\tgammaFieldNameThatIsQuiteLong: 3456789,\n'
+		+ '\t\t\t\tdeltaFieldNameThatIsLong: 4\n\t\t\t}\n\t\t\t: {\n' + '\t\t\t\talphaFieldNameThatIsQuiteLong: 9876543,\n'
+		+ '\t\t\t\tbetaFieldNameIsLong: 8765432,\n' + '\t\t\t\tgaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7\n' + '\t\t\t});\n\t}\n}';
+
 	public function new(): Void {
 		super();
 	}
@@ -456,6 +592,54 @@ final class HxTernaryCuddledBracesTest extends Test {
 	public function testCommentOnThenOperandIsDeclined(): Void {
 		Assert.equals(COMMENT_ON_THEN, triviaWrite(SRC_COMMENT_ON_THEN, COMMITTED_ON), 'knob on must not glue past a line comment');
 		Assert.equals(COMMENT_ON_THEN, triviaWrite(SRC_COMMENT_ON_THEN, COMMITTED_OFF));
+	}
+
+	/**
+	 * The two ELSE probes measure the ternary's LAST rendered line, and a ternary never owns the end of that line: a statement host
+	 * trails `;`, a sole call argument whose paren opens trails NOTHING, and one whose call stays glued trails `);`. The pre-slice
+	 * probes compared a column-independent token width and reserved ONE column for all of them — exact for the statement host the knob
+	 * was calibrated on and wrong by `|tail - 1|` everywhere else. These two fixtures sit either side of the tail-0 edge and differ by
+	 * two characters in the else: the narrower one's glued line lands exactly on the limit and must cuddle (the reserve refused it), the
+	 * wider one's own separator line lands exactly on the limit and must therefore KEEP that line (the reserve read it as over-wide,
+	 * concluded the else breaks anyway and cuddled, turning one line into four).
+	 */
+	public function testOpenParenHostChargesNoTail(): Void {
+		Assert.equals(
+			TAIL_OPEN_GLUE_FITS_CUDDLED, triviaWrite(SRC_TAIL_OPEN_GLUE_FITS, TAIL_OPEN_ON),
+			'a glued line landing on the limit at a tail-free host must cuddle'
+		);
+		Assert.equals(TAIL_OPEN_GLUE_FITS_SEPARATE, triviaWrite(SRC_TAIL_OPEN_GLUE_FITS, TAIL_OPEN_OFF));
+		Assert.equals(
+			TAIL_OPEN_ELSE_FITS_ALONE_SEPARATE, triviaWrite(SRC_TAIL_OPEN_ELSE_FITS_ALONE, TAIL_OPEN_ON),
+			'an else whose own line lands on the limit must keep it'
+		);
+		Assert.equals(TAIL_OPEN_ELSE_FITS_ALONE_SEPARATE, triviaWrite(SRC_TAIL_OPEN_ELSE_FITS_ALONE, TAIL_OPEN_OFF));
+	}
+
+	/**
+	 * The same band on the same source SHAPE under a cascade that keeps the call
+	 * paren glued, so the else rides `);` and the true tail is TWO columns rather
+	 * than none. Both edges land two characters further out than they do with the
+	 * paren open, and the two fixtures below sit either side of the upper one:
+	 * the narrower is inside the band, the single width the one-column reserve
+	 * gets wrong there; the wider is just past it, the first width at which the
+	 * else breaks anyway. What that proves is not the tail alone — the shift is +4 from the shallower indent and
+	 * -2 from the tail — but that neither term is available to a constant: no
+	 * single reserve can be right for both cascades, and the pre-slice one was
+	 * wrong in OPPOSITE directions at the two hosts, refusing a free cuddle at the
+	 * opened-paren host and exploding a one-line else here.
+	 */
+	public function testGluedCallHostChargesItsClosingParen(): Void {
+		Assert.equals(
+			TAIL_GLUED_CALL_ELSE_FITS_ALONE_SEPARATE, triviaWrite(SRC_TAIL_GLUED_CALL_ELSE_FITS_ALONE, TAIL_GLUED_CALL_ON),
+			'this else fits its own 139-column line and must keep it'
+		);
+		Assert.equals(TAIL_GLUED_CALL_ELSE_FITS_ALONE_SEPARATE, triviaWrite(SRC_TAIL_GLUED_CALL_ELSE_FITS_ALONE, TAIL_GLUED_CALL_OFF));
+		Assert.equals(
+			TAIL_GLUED_CALL_ELSE_BREAKS_CUDDLED, triviaWrite(SRC_TAIL_GLUED_CALL_ELSE_BREAKS, TAIL_GLUED_CALL_ON),
+			'an else that breaks either way must not keep a separator line'
+		);
+		Assert.equals(TAIL_GLUED_CALL_ELSE_BREAKS_SEPARATE, triviaWrite(SRC_TAIL_GLUED_CALL_ELSE_BREAKS, TAIL_GLUED_CALL_OFF));
 	}
 
 	private inline function triviaWrite(src: String, config: String): String {

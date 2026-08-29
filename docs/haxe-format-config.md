@@ -62,9 +62,12 @@ delimited body for the `} : {` shape to be legible at all. It also declines when
 would COST lines: gluing shifts the else right by the then branch's whole closing-line
 closer run plus a space (two columns for a bare `}`, four for a `}))`), so an else that
 fits its own separator line but not the line it would ride keeps the separator. That
-width guard reserves ONE column for the statement terminator it cannot see, which is
-exact for `x = cond ? {…} : {…};` and off by the difference for any other host — see
-`BinaryChainEmit.cuddleShape` for the limit that leaves. Default `false`.
+width guard reads the ternary's REAL trailing width off the render stack — the `;` a
+statement host adds, the `);` a glued call argument adds, nothing at all when the host
+opened its own paren — so the band's edges move with the host instead of sitting on one
+reserved column (`Doc.IfArrowContinuationFitsWithRest`). Within the two break shapes it
+covers, only the `beforeLast` separator location is affected: the `afterLast` shapers
+never read the flag. Default `false`.
 
 A rules object holds `defaultWrap`, `defaultLocation`, `defaultAdditionalIndent` (Int),
 `rules` (an array of `{type, location, conditions}`) and `itemsAfterCloseParenOnly` (Bool,

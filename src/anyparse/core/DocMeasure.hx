@@ -111,10 +111,10 @@ final class DocMeasure {
 					IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
 					IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-					IfArrowContinuationFits(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
-					IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
-					CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-					ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
+					IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
+					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 			}
 		}
@@ -229,9 +229,9 @@ final class DocMeasure {
 					IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfIndentWidthExceeds(_, _, _, inner),
 					IfGluedFirstLineExceeds(_, _, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-					IfArrowContinuationFits(_, _, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
-					CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-					ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner), Flatten(inner),
+					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 			}
 		}
@@ -279,9 +279,9 @@ final class DocMeasure {
 					IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfIndentWidthExceeds(_, _, _, inner),
 					IfGluedFirstLineExceeds(_, _, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 					IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-					IfArrowContinuationFits(_, _, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
-					CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-					ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+					IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner), Flatten(inner),
+					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 			}
 		}
@@ -317,7 +317,8 @@ final class DocMeasure {
 				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
 					IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
 					IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
-					IfArrowContinuationFits(_, _, _, _, fl), IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
+					IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
+					IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
 					stack.push(fl);
 				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 					var k: Int = items.length;
@@ -390,8 +391,8 @@ final class DocMeasure {
 				case IfBreak(_, flatDoc), IfWidthExceeds(_, _, flatDoc), IfFirstLineExceeds(_, _, flatDoc), IfLineExceeds(_, _, flatDoc),
 					IfResidualLineExceeds(_, _, flatDoc), IfFullLineExceeds(_, _, flatDoc), IfNaturalFirstLineExceeds(_, _, flatDoc),
 					IfNaturalFirstLineExceedsWithRest(_, _, flatDoc), IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc),
-					IfArrowContinuationFits(_, _, _, _, flatDoc), IfIndentWidthExceeds(_, _, _, flatDoc),
-					IfGluedFirstLineExceeds(_, _, _, flatDoc):
+					IfArrowContinuationFits(_, _, _, _, flatDoc), IfArrowContinuationFitsWithRest(_, _, _, _, flatDoc),
+					IfIndentWidthExceeds(_, _, _, flatDoc), IfGluedFirstLineExceeds(_, _, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -479,7 +480,8 @@ final class DocMeasure {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 				firstVisibleText(flat);
 		};
 	}
@@ -520,8 +522,8 @@ final class DocMeasure {
 				case IfBreak(_, flatDoc), IfWidthExceeds(_, _, flatDoc), IfFirstLineExceeds(_, _, flatDoc), IfLineExceeds(_, _, flatDoc),
 					IfResidualLineExceeds(_, _, flatDoc), IfFullLineExceeds(_, _, flatDoc), IfNaturalFirstLineExceeds(_, _, flatDoc),
 					IfNaturalFirstLineExceedsWithRest(_, _, flatDoc), IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc),
-					IfArrowContinuationFits(_, _, _, _, flatDoc), IfIndentWidthExceeds(_, _, _, flatDoc),
-					IfGluedFirstLineExceeds(_, _, _, flatDoc):
+					IfArrowContinuationFits(_, _, _, _, flatDoc), IfArrowContinuationFitsWithRest(_, _, _, _, flatDoc),
+					IfIndentWidthExceeds(_, _, _, flatDoc), IfGluedFirstLineExceeds(_, _, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -564,8 +566,8 @@ final class DocMeasure {
 				case IfBreak(_, flatDoc), IfWidthExceeds(_, _, flatDoc), IfFirstLineExceeds(_, _, flatDoc), IfLineExceeds(_, _, flatDoc),
 					IfResidualLineExceeds(_, _, flatDoc), IfFullLineExceeds(_, _, flatDoc), IfNaturalFirstLineExceeds(_, _, flatDoc),
 					IfNaturalFirstLineExceedsWithRest(_, _, flatDoc), IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc),
-					IfArrowContinuationFits(_, _, _, _, flatDoc), IfIndentWidthExceeds(_, _, _, flatDoc),
-					IfGluedFirstLineExceeds(_, _, _, flatDoc):
+					IfArrowContinuationFits(_, _, _, _, flatDoc), IfArrowContinuationFitsWithRest(_, _, _, _, flatDoc),
+					IfIndentWidthExceeds(_, _, _, flatDoc), IfGluedFirstLineExceeds(_, _, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -802,7 +804,8 @@ final class DocMeasure {
 				IfLineExceeds(_, breakDoc, flatDoc), IfResidualLineExceeds(_, breakDoc, flatDoc), IfFullLineExceeds(_, breakDoc, flatDoc),
 				IfNaturalFirstLineExceeds(_, breakDoc, flatDoc), IfNaturalFirstLineExceedsWithRest(_, breakDoc, flatDoc),
 				IfNaturalFirstLineFitsOpenDelim(_, breakDoc, flatDoc), IfArrowContinuationFits(_, _, _, breakDoc, flatDoc),
-				IfIndentWidthExceeds(_, _, breakDoc, flatDoc), IfGluedFirstLineExceeds(_, _, breakDoc, flatDoc):
+				IfArrowContinuationFitsWithRest(_, _, _, breakDoc, flatDoc), IfIndentWidthExceeds(_, _, breakDoc, flatDoc),
+				IfGluedFirstLineExceeds(_, _, breakDoc, flatDoc):
 				scanTailAt(resolveForcedBreaks && hasForcedBreak(flatDoc) ? breakDoc : flatDoc, nest, resolveForcedBreaks, out);
 		};
 	}
@@ -866,9 +869,10 @@ final class DocMeasure {
 				IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner),
 				IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner), IfNaturalFirstLineExceedsWithRest(_, _, inner),
 				IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
-				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
+				IfGluedFirstLineExceeds(_, _, _, inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+				ConditionalMarkerDecrease(inner):
 				stack.push(inner);
 				return 0;
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
@@ -923,12 +927,16 @@ final class DocMeasure {
 				IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _):
 				stack.push(brk);
 				return { add: 0, stop: false, delim: null };
-			case IfArrowContinuationFits(_, _, _, _, fl):
-				// The ONE probe whose `breakDoc` is the wider shape (the arrow
-				// head GLUED to the open paren, body broken) while `flatDoc`
-				// opens the paren first — descending the break side here would
-				// make `width` an UPPER bound and break the lower-bound
-				// invariant this walk promises.
+			case IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl):
+				// The ONE probe PAIR read on its FLAT side. For the plain ctor that
+				// is because `breakDoc` is the wider shape (the arrow head GLUED to
+				// the open paren, body broken) while `flatDoc`
+				// opens the paren first — descending the break side would make
+				// `width` an UPPER bound and break the lower-bound invariant this
+				// walk promises. The rest-aware sibling is side-INDEPENDENT (its two
+				// layouts come from one `shape(…)` call with `cuddleLast` flipped and
+				// share every operand), so it takes the flat side to keep the pair on
+				// one side rather than because its own shapes demand it.
 				stack.push(fl);
 				return { add: 0, stop: false, delim: null };
 			case Nest(_, inner), Group(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner),
