@@ -364,13 +364,15 @@ typedef WriteOptions = {
 	 * columns for a bare `}`, four for a `}))`. An else that fits its own
 	 * separator line can overflow the line it rides once glued, and the renderer
 	 * then breaks a branch that was a single line, spending several to save one.
-	 * Two `IfArrowContinuationFits` probes BRACKET that band — both failing, or
-	 * both fitting, means the else lays out the same way either way and the cuddle
-	 * is free — and only inside the band does the separator line survive. Both
-	 * probes stop one column short of the limit, reserving the statement
-	 * terminator neither can see; `cuddleShape`'s own doc carries the arithmetic
-	 * and the KNOWN LIMIT that reserve leaves behind for a ternary whose host is
-	 * not a statement.
+	 * Two `IfArrowContinuationFitsWithRest` probes BRACKET that band — both
+	 * failing, or both fitting, means the else lays out the same way either way and
+	 * the cuddle is free — and only inside the band does the separator line
+	 * survive. The rest-aware ctor is what makes those two widths honest: the line
+	 * they measure ends where the HOST does, not where the branch does, so they
+	 * charge what the render stack still emits after the ternary — the `;` of a
+	 * statement, the `);` of a glued call argument, nothing at all when the host
+	 * opened its own paren. `cuddleShape`'s own doc carries the arithmetic and the
+	 * band a fixed one-column reserve straddled before it.
 	 *
 	 * Covers the two one-operand-per-line break shapes (`OnePerLineAfterFirst` /
 	 * `OnePerLine`) — what a broken ternary is — and within them only the

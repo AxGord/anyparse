@@ -648,7 +648,8 @@ class WrapList {
 				case IfBreak(b, _), IfWidthExceeds(_, b, _), IfFirstLineExceeds(_, b, _), IfLineExceeds(_, b, _),
 					IfResidualLineExceeds(_, b, _), IfFullLineExceeds(_, b, _), IfNaturalFirstLineExceeds(_, b, _),
 					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
-					IfArrowContinuationFits(_, _, _, b, _), IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
+					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
+					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
 					w(b, depth);
 				case Concat(items):
 					for (it in items) w(it, depth);
@@ -984,7 +985,8 @@ class WrapList {
 			case IfFullLineExceeds(_, brk, _):
 				node = brk;
 			case IfIndentWidthExceeds(_, _, brk, _), IfNaturalFirstLineExceeds(_, brk, _), IfNaturalFirstLineExceedsWithRest(_, brk, _),
-				IfNaturalFirstLineFitsOpenDelim(_, brk, _), IfArrowContinuationFits(_, _, _, brk, _):
+				IfNaturalFirstLineFitsOpenDelim(_, brk, _), IfArrowContinuationFits(_, _, _, brk, _),
+				IfArrowContinuationFitsWithRest(_, _, _, brk, _):
 				// Break-side leading-edge walk: descend the break branch
 				// (mirrors the If*Exceeds siblings).
 				node = brk;
@@ -1083,7 +1085,8 @@ class WrapList {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -1131,7 +1134,8 @@ class WrapList {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -1171,7 +1175,8 @@ class WrapList {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -1219,7 +1224,8 @@ class WrapList {
 				case IfBreak(b, _), IfWidthExceeds(_, b, _), IfFirstLineExceeds(_, b, _), IfLineExceeds(_, b, _),
 					IfResidualLineExceeds(_, b, _), IfFullLineExceeds(_, b, _), IfNaturalFirstLineExceeds(_, b, _),
 					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
-					IfArrowContinuationFits(_, _, _, b, _), IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
+					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
+					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
 					// Both branches of a chain cascade carry the same
 					// separators; walk only the break branch to avoid
 					// double-counting.
@@ -1273,7 +1279,8 @@ class WrapList {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -1310,7 +1317,8 @@ class WrapList {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last: Null<Doc> = findLastNonTrailingTransparent(items);
@@ -1374,15 +1382,18 @@ class WrapList {
 			case IfBreak(brk, _), IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _), IfLineExceeds(_, brk, _),
 				IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _), IfNaturalFirstLineExceeds(_, brk, _),
 				IfNaturalFirstLineExceedsWithRest(_, brk, _), IfNaturalFirstLineFitsOpenDelim(_, brk, _),
-				IfArrowContinuationFits(_, _, _, brk, _), IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _):
-				// PROBE FAMILY (Doc.hx header table), break side for all three — the
+				IfArrowContinuationFits(_, _, _, brk, _), IfArrowContinuationFitsWithRest(_, _, _, brk, _),
+				IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _):
+				// PROBE FAMILY (Doc.hx header table), break side for all four — the
 				// side this right-spine walk already takes, and side-independent for
 				// each: `IfArrowContinuationFits` closes BOTH of its layouts with the
-				// list's own `Text(close)`, and the two body-placement probes wrap the
+				// list's own `Text(close)`, its rest-aware sibling pairs two layouts
+				// that come from ONE `shape(…)` call with `cuddleLast` flipped and so
+				// end on the same operand, and the two body-placement probes wrap the
 				// SAME body object, differing only in the separator BEFORE it, which a
 				// right-spine walk never reaches. The file's two OTHER right-spine
 				// close-token walkers (`endsWithCloseDelim`, `endsWithCondEnd`) read the
-				// same three FLAT. Not a disagreement to resolve: side-independence is
+				// same four FLAT. Not a disagreement to resolve: side-independence is
 				// what makes both readings correct, and each walker keeps whichever side
 				// it already used for the eight older conditionals.
 				lastVisibleText(brk);
@@ -1853,8 +1864,9 @@ class WrapList {
 				case IfBreak(b, _), IfWidthExceeds(_, b, _), IfFirstLineExceeds(_, b, _), IfLineExceeds(_, b, _),
 					IfResidualLineExceeds(_, b, _), IfFullLineExceeds(_, b, _), IfNaturalFirstLineExceeds(_, b, _),
 					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
-					IfArrowContinuationFits(_, _, _, b, _), IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
-					// PROBE FAMILY (Doc.hx header table), break side for all three — the
+					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
+					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
+					// PROBE FAMILY (Doc.hx header table), break side for all four — the
 					// side this walk already takes, and side-independent for each. The
 					// operator `Text` this scan hunts only counts at `depth == 1`, i.e.
 					// past a `WrapBoundary`; no family member is one, so neither branch
@@ -1914,7 +1926,8 @@ class WrapList {
 					OptHardlineSkipBeforeHardline, Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _), IfBreak(_, _),
 					IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _),
 					IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _), IfNaturalFirstLineExceedsWithRest(_, _, _),
-					IfArrowContinuationFits(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
+					IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _),
+					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
 					// Every OTHER conditional stops the walk: this predicate asks whether
 					// the chain's own outermost wrap level IS the keep-flat probe, so a
 					// different probe there is a `false` answer, not a subtree to search.
@@ -2038,7 +2051,8 @@ class WrapList {
 				stack.push(flatDoc);
 			case IfIndentWidthExceeds(_, _, _, flatDoc), IfGluedFirstLineExceeds(_, _, _, flatDoc),
 				IfNaturalFirstLineExceeds(_, _, flatDoc), IfNaturalFirstLineExceedsWithRest(_, _, flatDoc),
-				IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc), IfArrowContinuationFits(_, _, _, _, flatDoc):
+				IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc), IfArrowContinuationFits(_, _, _, _, flatDoc),
+				IfArrowContinuationFitsWithRest(_, _, _, _, flatDoc):
 				stack.push(flatDoc);
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				var k: Int = items.length;
@@ -3124,7 +3138,8 @@ class WrapList {
 				case IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _), IfLineExceeds(_, _, _),
 					IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 					IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
-					IfArrowContinuationFits(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
+					IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _),
+					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
 					return true;
 				case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner), Flatten(inner),
 					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
@@ -3217,7 +3232,7 @@ class WrapList {
 			case IfBreak(brk, _), IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _), IfLineExceeds(_, brk, _),
 				IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _), IfNaturalFirstLineExceeds(_, brk, _),
 				IfNaturalFirstLineExceedsWithRest(_, brk, _), IfNaturalFirstLineFitsOpenDelim(_, brk, _),
-				IfArrowContinuationFits(_, _, _, brk, _):
+				IfArrowContinuationFits(_, _, _, brk, _), IfArrowContinuationFitsWithRest(_, _, _, brk, _):
 				isMethodChainItem(brk);
 			case IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
 				// PROBE FAMILY (Doc.hx header table). The two body-placement probes are
@@ -3272,7 +3287,8 @@ class WrapList {
 						IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _),
 						IfNaturalFirstLineExceeds(_, _, _), IfNaturalFirstLineExceedsWithRest(_, _, _),
 						IfNaturalFirstLineFitsOpenDelim(_, _, _), IfArrowContinuationFits(_, _, _, _, _),
-						IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _) if (arr.length == 2 && k == 1):
+						IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
+						IfGluedFirstLineExceeds(_, _, _, _) if (arr.length == 2 && k == 1):
 						hit = isMethodChainItem(arr[k]);
 					case _:
 				}
@@ -4051,7 +4067,8 @@ class WrapList {
 			case Text(_), OptSpace(_), OptSpaceSkipAfterHardline, IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _),
 				IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 				IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
-				IfArrowContinuationFits(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _): false;
+				IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
+				IfGluedFirstLineExceeds(_, _, _, _): false;
 			case _: null;
 		};
 	}
@@ -4098,11 +4115,14 @@ class WrapList {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
-				// PROBE FAMILY (Doc.hx header table), flat side for all three — this
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				// PROBE FAMILY (Doc.hx header table), flat side for all four — this
 				// walker's own side, and side-independent for each.
 				// `IfArrowContinuationFits` opens BOTH of its layouts with the list's
-				// own `Text(open)`; the two body-placement probes wrap the SAME body
+				// own `Text(open)` and its rest-aware sibling pairs two layouts from
+				// ONE `shape(…)` call with `cuddleLast` flipped, which share their head
+				// operand; the two body-placement probes wrap the SAME body
 				// behind separators (`Line('\n')` vs `OptSpace(' ')` / `Line(' ')`) that
 				// the Concat scan above skips as leading layout atoms, so either side
 				// reaches the same first token. Flat is also the family's content-walker
@@ -4205,11 +4225,13 @@ class WrapList {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
-				// PROBE FAMILY (Doc.hx header table), flat side for all three — this
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				// PROBE FAMILY (Doc.hx header table), flat side for all four — this
 				// walker's own side, and side-independent for each, by the same
 				// argument as `firstVisibleTextIsFunctionKw` above: both
-				// `IfArrowContinuationFits` layouts open with the list's `Text(open)`,
+				// `IfArrowContinuationFits` layouts open with the list's `Text(open)`
+				// and the rest-aware sibling's two share their head operand,
 				// and the two body-placement probes wrap the SAME body behind leading
 				// layout atoms this walk skips.
 				firstVisibleText(flat);
@@ -4268,7 +4290,7 @@ class WrapList {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat):
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat):
 				// PROBE FAMILY (Doc.hx header table): `IfArrowContinuationFits` keeps
 				// this walker's flat side, and here the choice is load-bearing rather
 				// than free. Its two layouts hold the same argument at DIFFERENT depths
@@ -4276,7 +4298,13 @@ class WrapList {
 				// the item at depth 0, the flat (opened) side buries it in the wrap
 				// engine's `Nest`. An `else` inside a call argument belongs to an inner
 				// `if`, so only the `Nest`-carrying side keeps this walk's depth
-				// counter honest.
+				// counter honest. The rest-aware sibling rides the same arm but NOT
+				// the same argument: its two branches are `cuddleShape`'s ternary
+				// shapes, built by ONE `shape(…)` call with `cuddleLast` flipped, so
+				// they carry the same operands at the same depth and the side is free
+				// there. It shares this arm because the family contract says a walker
+				// may not answer differently for the two, not because the depth
+				// argument transfers.
 				hasTopLevelElse(flat, depth);
 			case IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _):
 				// PROBE FAMILY: the two body-placement probes are read on their BREAK
@@ -4623,6 +4651,8 @@ class WrapList {
 				IfNaturalFirstLineFitsOpenDelim(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfArrowContinuationFits(ei, fw, n, b, f):
 				IfArrowContinuationFits(ei, fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfArrowContinuationFitsWithRest(ei, fw, n, b, f):
+				IfArrowContinuationFitsWithRest(ei, fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfIndentWidthExceeds(fw, n, b, f):
 				IfIndentWidthExceeds(fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfGluedFirstLineExceeds(n, bi, b, f):

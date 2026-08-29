@@ -17,8 +17,9 @@ package anyparse.core;
  * `IfWidthExceeds`, `IfFirstLineExceeds`, `IfLineExceeds`,
  * `IfResidualLineExceeds`, `IfFullLineExceeds`,
  * `IfNaturalFirstLineFitsOpenDelim` — are a separate population; they are
- * documented in the primitive list below and are NOT rows here.) Two of
- * the four carry a precomputed content width, two measure `flatDoc` at
+ * documented in the primitive list below and are NOT rows here.) Three of
+ * the five carry a precomputed content width — and one of those three also
+ * reads what trails on the same rendered line — two measure `flatDoc` at
  * render time, and the last also carries the indent its break branch lands
  * on. They look interchangeable and are not; each divergence below is
  * justified only at its own call sites, and re-deriving it from one member
@@ -28,13 +29,14 @@ package anyparse.core;
  * | ctor | probes | fits when | both-branch walkers descend |
  * |---|---|---|---|
  * | `IfArrowContinuationFits` | `indent + extraIndent + flatWidth` | `< n` (strict — calibrated to a continuation LINE, so the budget excludes the column `n` itself) | both branches (its two branches are genuinely different shapes: head glued vs paren opened) |
+ * | `IfArrowContinuationFitsWithRest` | the row above PLUS `Renderer.flatTokenWidthOfRestStack` — what the pending work stack still emits on the SAME rendered line after this subtree | `< n`, same strict budget; its consumers pass `lineWidth + 1` because the tail is CHARGED rather than reserved | both branches |
  * | `IfIndentWidthExceeds` | `indent + flatWidth` | `<= n` (the `Group` family convention) | FLAT branch only (both branches wrap the same body — see its own doc) |
  * | `IfNaturalFirstLineExceeds` | measures `flatDoc`'s natural first line at render time | `< n` | both branches |
  * | `IfGluedFirstLineExceeds` | measures `flatDoc`'s natural first line at render time — same measurer as the row above, but called WITHOUT `resolveOpenDelim`, and followed by a second re-measure at the break indent (see its own doc: the width test alone is not the whole verdict) | `<= n` (the `Group` family convention), PLUS two break-side gates that can keep the flat branch even when `n` is exceeded | FLAT branch only (both branches wrap the same body — see its own doc) |
  *
- * FITS-STRICTNESS ANOMALY, recorded rather than fixed: rows 3 and 4 run
- * the SAME measurer (`Renderer.naturalFirstLineWidth`) and disagree at
- * the boundary by one column — `IfNaturalFirstLineExceeds` crosses on
+ * FITS-STRICTNESS ANOMALY, recorded rather than fixed: the last two rows
+ * run the SAME measurer (`Renderer.naturalFirstLineWidth`) and disagree
+ * at the boundary by one column — `IfNaturalFirstLineExceeds` crosses on
  * `>= n`, `IfGluedFirstLineExceeds` on `> n`. Neither is a typo: the
  * first is calibrated to a continuation budget, the second to a whole
  * rendered LINE against `maxLineLength`, where landing exactly on the
@@ -49,7 +51,9 @@ package anyparse.core;
  * family because it promises a LOWER bound on head width (a break branch
  * leading with `Line` terminates the head at width 0) but the FLAT side
  * for `IfArrowContinuationFits`, the one probe whose break branch is the
- * WIDER shape.
+ * WIDER shape. Its rest-aware sibling shares that arm for the family
+ * contract rather than for that reason: both of ITS layouts come from one
+ * `shape(…)` call with `cuddleLast` flipped, so neither side is wider.
  *
  * THE COMPILE-TIME NET, and its exact edge. Thirteen hand-written SPINE
  * walkers carry an explicit arm per family member, and each one's OUTER
@@ -91,10 +95,15 @@ package anyparse.core;
  * with a hardline by construction, so a break-side read would answer
  * "leads with a newline" for every glued body in the tree (measured: two
  * corpus files changed their `if (…)` shape from it alone).
- * `DocProbeFamilyWalkerTest` pins every side of the eight walkers the
- * family sweep touched; the other five predate it and are pinned only by
- * the corpora. Before adding a member, fill in this row for it and check
- * every walker rather than copying a neighbour's alternative list.
+ * `DocProbeFamilyWalkerTest` pins every side of the eight walkers the family
+ * sweep touched; the other five predate it and are pinned only by the
+ * corpora. `IfArrowContinuationFitsWithRest` needs no rows of its own there:
+ * every one of the thirteen walkers reaches it through the SAME alternative
+ * list as its plain sibling, so the two cannot answer differently and a
+ * regression in either arm is a regression in both. Before adding a member,
+ * fill in this row for it and check every walker rather than copying a
+ * neighbour's alternative list — and if the new member merges into an existing
+ * arm, say so here instead of duplicating the sweep.
  *
  * Primitives:
  *
@@ -536,6 +545,43 @@ enum Doc {
 	 *    `HxCallParamOuterFirstWrapSliceTest.testNestedCallSoleArgHugsWhenTheInnerCallLeadingBreaks`.
 	 */
 	IfArrowContinuationFits(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Rest-of-stack-aware `IfArrowContinuationFits` (ω-ternary-cuddle-tail).
+	 * Identical to its plain sibling everywhere except the render arm, which also
+	 * counts `Renderer.flatTokenWidthOfRestStack(stack)` — the content the pending
+	 * work stack still emits on the SAME rendered line after this probe's subtree.
+	 * Rest-aware sibling of the plain ctor in exactly the sense
+	 * `IfNaturalFirstLineExceedsWithRest` is of `IfNaturalFirstLineExceeds`, and
+	 * every static Doc walker treats the two identically; the difference is
+	 * rendering-time only, so both share the plain ctor's PROBE FAMILY row above.
+	 *
+	 * The consumer is `BinaryChainEmit.cuddleShape`'s two ELSE probes. What they
+	 * measure is the ternary's LAST rendered line, and a ternary never owns the end
+	 * of the line it sits on: a statement host trails `;`, a call argument trails
+	 * `);`, one nested a call deeper trails `));`, and one whose host opened its own
+	 * paren trails nothing at all. The plain ctor compares a column-independent
+	 * token width that cannot see any of that, so the knob RESERVED one column and
+	 * was exact for the statement host alone. Measured on a swept adversarial
+	 * corpus, the two probes then straddled a band `|tail - 1|` columns wide in
+	 * which the cuddle exploded an else that had been a single line: one width at a
+	 * `f(<ternary>)` host whose paren opened (tail 0, +3 lines), two consecutive
+	 * widths at an `outer(inner(<ternary>));` host whose `));` the reserve
+	 * under-charges by two (+3 lines each).
+	 *
+	 * No constant closes that band, because the two probes want OPPOSITE
+	 * conservatism — a loose glue probe cuddles a line that overflows, and a strict
+	 * else probe reads a fitting else as "breaks anyway, so the cuddle is free" and
+	 * cuddles it too. The real tail width is the only answer and it lives in the
+	 * render stack, which is why this is a ctor and not a wider reserve.
+	 *
+	 * Both consumers pass `n = opt.lineWidth + 1`: the reserve is gone and the tail
+	 * is charged for real, so the arm's strict `<` still reads "the whole rendered
+	 * line, terminator included, fits inside `maxLineLength`". For the statement
+	 * host that is arithmetically the pre-slice behaviour (tail 1 against a
+	 * threshold one wider), which is why the calibrated fixtures do not move.
+	 */
+	IfArrowContinuationFitsWithRest(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
 	 * Sibling-coordinated placement decision (ω-case-sibling-symmetry).

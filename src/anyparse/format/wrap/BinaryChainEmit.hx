@@ -182,7 +182,7 @@ final class BinaryChainEmit {
 
 		function shapeAt(r: { mode: WrapMode, location: WrappingLocation }): Doc {
 			final plain: Doc = shapeWith(r, false);
-			return cuddleAdmitted && honoursCuddleLast(r.mode)
+			return cuddleAdmitted && honoursCuddleLast(r.mode, r.location)
 				? cuddleShape(cuddleProbed, cuddleCloserWidth, items, ops, opt, cols, cuddleProbeWidth, shapeWith(r, true), plain)
 				: plain;
 		}
@@ -352,21 +352,26 @@ final class BinaryChainEmit {
 	}
 
 	/**
-	 * Does `mode` reach a shaper that honours the `cuddleLast` flag? The two
-	 * one-operand-per-line shapes do; `Keep` is source-faithful by contract, the
-	 * fill family breaks its gaps by packing rather than at a fixed separator, and
-	 * `NoWrap` is already glued. Asked so a probe-gated cuddle wraps only the
-	 * shapes that CAN differ.
+	 * Does this `mode` at this `location` reach a shaper that honours the
+	 * `cuddleLast` flag? The two one-operand-per-line shapes do; `Keep` is
+	 * source-faithful by contract, the fill family breaks its gaps by packing rather
+	 * than at a fixed separator, and `NoWrap` is already glued. Asked so a
+	 * probe-gated cuddle wraps only the shapes that CAN differ.
 	 *
-	 * It answers about the mode alone, and that is one axis short of the truth:
-	 * both shapers read the flag only in their `BeforeLast` location arm, so under
-	 * `defaultLocation: "afterLast"` the two slots really are the same Doc twice.
-	 * Measured — the knob's output there is byte-identical to the knob off — so
-	 * what the missing axis costs is a pair of dead probe nodes, never a layout.
-	 * Widening it to take the location would drop them.
+	 * It takes the LOCATION as well as the mode, and the second axis is not
+	 * cosmetic even though it costs no layout: both shapers read the flag only in
+	 * their `BeforeLast` arm, so under `defaultLocation: "afterLast"` the two slots
+	 * a cuddle-gated shape wraps are the SAME layout twice and the pair of width
+	 * probes bracketing them can only ever pick between identical Docs. Asking
+	 * about the mode alone therefore built two dead probe nodes per admitted
+	 * ternary — three on the probe-gated leg, whose outer probe is dead there too
+	 * — with measured byte-identical output, which is why no write fixture can
+	 * pin it and `HxTernaryCuddleProbeShapeTest` counts the emitted nodes
+	 * instead. That class pins the structural leg's two; the gated leg's three is
+	 * unpinned.
 	 */
-	private static inline function honoursCuddleLast(mode: WrapMode): Bool {
-		return mode == WrapMode.OnePerLine || mode == WrapMode.OnePerLineAfterFirst;
+	private static inline function honoursCuddleLast(mode: WrapMode, location: WrappingLocation): Bool {
+		return (mode == WrapMode.OnePerLine || mode == WrapMode.OnePerLineAfterFirst) && location == WrappingLocation.BeforeLast;
 	}
 
 	/**
@@ -516,16 +521,20 @@ final class BinaryChainEmit {
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
-				IfArrowContinuationFits(_, _, _, _, flat), IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
-				// PROBE FAMILY (Doc.hx header table), flat side for all three:
-				//  - `IfArrowContinuationFits` is a two-SHAPE probe like the natural
-				//    siblings above, and its two shapes always share a leading token —
-				//    the list's own `Text(open)` at the three call-argument consumers,
-				//    `items[0]` at the chain consumer this file emits itself (`emit`'s
-				//    arrow-continuation glue, which pairs two layouts of the same
-				//    operand array and no delimiter at all). Side-independent either
-				//    way; flat keeps this walker on one side for the whole two-shape
-				//    population.
+				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
+				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
+				// PROBE FAMILY (Doc.hx header table), flat side for all four:
+				//  - `IfArrowContinuationFits` and its rest-aware sibling are two-SHAPE
+				//    probes like the natural siblings above, and their two shapes always
+				//    share a leading token — the list's own `Text(open)` at the three
+				//    call-argument consumers, `items[0]` at the chain consumer this file
+				//    emits itself (`emit`'s arrow-continuation glue, which pairs two
+				//    layouts of the same operand array and no delimiter at all), and
+				//    `cuddleShape`'s two else probes, whose two layouts come from ONE
+				//    `shape(…)` call with `cuddleLast` flipped and therefore share every
+				//    operand, differing only at the final separator. Side-independent
+				//    either way; flat keeps this walker on one side for the whole
+				//    two-shape population.
 				//  - the two body-placement probes wrap the SAME body object and
 				//    differ only in the separator before it (`Line('\n')` vs
 				//    `OptSpace(' ')` / `Line(' ')`), both of which this walker's
@@ -1248,27 +1257,31 @@ final class BinaryChainEmit {
 	 * whose break the renderer decides: such a branch reports its whole flat width,
 	 * fails both probes together, and lands in the first free case.
 	 *
-	 * Both else probes stop at `opt.lineWidth` rather than `opt.lineWidth + 1`, and
-	 * the missing column is a RESERVE, not an off-by-one: the line they measure
-	 * does not end where the branch does. A ternary is followed by whatever
-	 * terminates the statement or the call holding it, and
-	 * `IfArrowContinuationFits` compares a column-independent token width that
-	 * cannot see that tail. Measured without the reserve the whole band sat one
-	 * width too high — an else whose glued line reached 141 counting its `;`
-	 * passed a glue probe that stopped at 140, cuddled, and broke.
+	 * Both else probes are `IfArrowContinuationFitsWithRest`, and they stop at
+	 * `opt.lineWidth + 1` because the tail is now CHARGED rather than reserved. The
+	 * line they measure does not end where the branch does — a ternary is followed
+	 * by whatever terminates the statement or the call holding it — and the plain
+	 * ctor compares a column-independent token width that cannot see that tail. The
+	 * rest-aware sibling adds `Renderer.flatTokenWidthOfRestStack`, so the arm sums
+	 * the whole rendered line and the strict `<` still reads "fits inside
+	 * `maxLineLength`". For the statement host that is arithmetically what a single
+	 * reserved column against `opt.lineWidth` did, which is why no calibrated
+	 * fixture moves.
 	 *
-	 * KNOWN LIMIT, and no constant closes it. One reserved column is exact for a
-	 * STATEMENT-position ternary and wrong for every other host: one inside a call
-	 * trails `);` and wants two, one whose host opened its own paren trails nothing
-	 * and wants none. Widening the reserve does not make it safe either, because
-	 * the two probes want OPPOSITE conservatism — a loose glue probe cuddles a line
-	 * that overflows, and a strict else probe reads a fitting else as "breaks
-	 * anyway, so the cuddle is free" and cuddles it too. The honest fix is the real
-	 * tail width, which needs a continuation-fits probe that also reads the rest of
-	 * the render stack (`flatTokenWidthOfRestStack`, the way `IfFullLineExceeds`
-	 * does). Until then the knob is calibrated for the host it was asked for, and a
-	 * ternary in a call argument can still lose a couple of lines inside a
-	 * two-column window.
+	 * WHY THE TAIL IS MEASURED AND NOT RESERVED, since a constant looks so much
+	 * cheaper. One reserved column is exact for a STATEMENT-position ternary and
+	 * wrong for every other host: one inside a glued call trails `);` and wants
+	 * two, one nested a call deeper trails `));` and wants three, one whose host
+	 * opened its own paren trails nothing and wants none. Widening the reserve
+	 * cannot fix it either, because the two probes want OPPOSITE conservatism — a
+	 * loose glue probe cuddles a line that overflows, and a strict else probe reads
+	 * a fitting else as "breaks anyway, so the cuddle is free" and cuddles it too.
+	 * Swept adversarially at a 140-column limit, a fixed one-column reserve
+	 * exploded the else at every width of a band `|tail - 1|` columns wide,
+	 * costing 3 lines at EACH of them: one such width at a sole call argument
+	 * whose paren opened (tail 0), two consecutive widths at `outer(inner(<ternary>));` (tail 3).
+	 * With the tail read from the render stack the band is empty on both hosts,
+	 * and the knob is never longer than the knob off at any width.
 	 *
 	 * SLOT INVERSION on the `probeGated` layer, the pairing four other consumers of
 	 * this ctor already use: the arm renders `flatDoc` when the continuation FITS,
@@ -1283,7 +1296,14 @@ final class BinaryChainEmit {
 	 * flat slot holds the cuddle, which means a walker resolving that node reads
 	 * the CUDDLED layout rather than the pre-knob one. `Doc.hx`'s header records
 	 * the disagreement, because the three sites this function builds are the only
-	 * ones where the ctor's two conventions meet.
+	 * ones where the family's two conventions meet.
+	 *
+	 * The `probeGated` layer is also the one that stays on the PLAIN ctor, and
+	 * not by oversight: it asks about the THEN branch's own continuation line, and under
+	 * the pre-knob shape that line ends at the branch — the `: else` opens a line of
+	 * its own below it. Its tail is empty by construction, so charging the render
+	 * stack there would bill it for a terminator that lands several lines further
+	 * down.
 	 */
 	private static function cuddleShape(
 		probeGated: Bool, closerWidth: Int, items: Array<Doc>, ops: Array<String>, opt: WriteOptions, cols: Int, probeWidth: Int,
@@ -1291,8 +1311,9 @@ final class BinaryChainEmit {
 	): Doc {
 		final elseWidth: Int = ops[1].length + 1 + DocMeasure.flatTokenWidth(items[2]);
 		final gluedWidth: Int = elseWidth + closerWidth + 1;
-		final guarded: Doc = IfArrowContinuationFits(
-			cols, elseWidth, opt.lineWidth, cuddled, IfArrowContinuationFits(cols, gluedWidth, opt.lineWidth, plain, cuddled)
+		final guarded: Doc = IfArrowContinuationFitsWithRest(
+			cols, elseWidth, opt.lineWidth + 1, cuddled,
+			IfArrowContinuationFitsWithRest(cols, gluedWidth, opt.lineWidth + 1, plain, cuddled)
 		);
 		return probeGated ? IfArrowContinuationFits(cols, probeWidth, opt.lineWidth + 1, guarded, plain) : guarded;
 	}
