@@ -89,6 +89,26 @@ class PreferStaticExtensionCheckTest extends Test {
 		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext"], "addUsing": false}}}';
 		Assert.equals(1, violationsOf(importingFiles(), config).length);
 		Assert.equals(0, editsOf(importingFiles(), config).length);
+
+		// And it SAYS so. This decline is per-site and inside `fix`, on a finding `run` already judged
+		// `Fixable` — so `declineReasonFor` correctly wrote nothing and the gate here owes the sentence.
+		// `fix` is handed the caller's OWN violation objects, which is what makes a note here reach the
+		// `--fix` ledger. RED against the first draft of this slice, where all three of `fix`'s per-site
+		// gates declined in silence and the ledger reported the rule as withholding a fix without a reason.
+		final files: Array<{ file: String, source: String }> = importingFiles();
+		final own: Array<Violation> = violationsOf(files, config).filter(v -> v.file == files[0].file);
+		Assert.equals(1, own.length);
+		if (own.length != 1) return;
+		Assert.isNull(own[0].declineReason, 'run() wrote nothing — this verdict is Fixable');
+		final check: PreferStaticExtension = new PreferStaticExtension();
+		check.setConfigResolver(_ -> LintConfig.parse(config));
+		Assert.equals(0, check.fix(files[0].source, own, new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())).length);
+		final reason: Null<String> = own[0].declineReason;
+		if (reason == null) {
+			Assert.fail('the per-site gate inside fix() must say why it declined');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('addUsing:false') != -1, reason);
 	}
 
 	public function testInstanceShadowNotFlagged(): Void {
@@ -307,6 +327,54 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.equals(0, editsOf(files).length);
 		for (violation in violationsOf(files))
 			Assert.isTrue(violation.message.indexOf('verify the receiver type') != -1, violation.message);
+	}
+
+	/**
+	 * Each hedged verdict writes its OWN sentence onto `Violation.declineReason`, and the fixable
+	 * one writes none.
+	 *
+	 * The reason was in the finding's MESSAGE all along — that is what makes the silence expensive
+	 * rather than merely incomplete: `apq lint --fix`'s ledger reads `declineReason`, so a run that
+	 * declined 162 of these reported "it HAS an autofix and withheld it, without saying why" over
+	 * findings whose own text spelled the reason out.
+	 *
+	 * RED at base on the two `notNull` assertions (the field was never written); the third one —
+	 * a `Fixable` finding carrying no reason — is green at base BY CONSTRUCTION and is here as the
+	 * discriminator: wire the reason unconditionally and only it goes red.
+	 */
+	public function testHedgedVerdictsCarryTheirOwnDeclineReason(): Void {
+		final closureSource: String =
+			'using Ext;\n\nclass C {\n\tfunction f():Void {\n\t\tfinal make = () -> new Widget();\n\t\tExt.deco(make(), 1);\n\t}\n}\n';
+		final unresolved: Array<Violation> = violationsOf(fileSet(closureSource));
+		Assert.equals(1, unresolved.length);
+		final receiverReason: Null<String> = unresolved[0].declineReason;
+		if (receiverReason == null) {
+			Assert.fail('an unresolved-receiver finding carries no decline reason though its message states one');
+			return;
+		}
+		Assert.isTrue(receiverReason.indexOf('did not resolve') != -1, receiverReason);
+
+		final aliasSource: String = 'using Ext;\n\nclass C {\n\tfunction f(a:Alias):Void {\n\t\tExt.deco(a, 1);\n\t}\n}\n';
+		final aliasFiles: Array<{ file: String, source: String }> = fileSet(
+			aliasSource, 'class Widget {\n\tpublic function deco(n: Int): Widget return this;\n}\n',
+			[{ file: 'Alias.hx', source: 'typedef Alias = Widget;\n' }]
+		);
+		final hedged: Array<Violation> = violationsOf(aliasFiles);
+		Assert.isTrue(hedged.length > 0, 'the alias fixture reports a hedged finding');
+		for (violation in hedged) {
+			final reason: Null<String> = violation.declineReason;
+			if (reason == null) {
+				Assert.fail('a hedged finding carries no decline reason: ${violation.message}');
+				return;
+			}
+			Assert.isTrue(reason.indexOf('cannot be') != -1 || reason.indexOf('did not resolve') != -1, reason);
+		}
+
+		// The DISCRIMINATOR: a provably-safe site is not a decline, so it must stay silent — a
+		// reason written for every verdict would make the ledger claim the rule declined what it fixed.
+		final fixable: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);')));
+		Assert.equals(1, fixable.length);
+		Assert.isNull(fixable[0].declineReason, 'a fixable finding declines nothing and says nothing');
 	}
 
 	public function testTypedefAliasWithoutShadowStillFixable(): Void {

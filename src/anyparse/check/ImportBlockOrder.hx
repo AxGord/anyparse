@@ -340,13 +340,13 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	/**
 	 * Whether `wedge` may be merged. Four refusals:
 	 *
-	 *  - the two `reorderable` makes over the merged import union — an absorbed leading comment on
+	 *  - the two `reorderRefusal` makes over the merged import union — an absorbed leading comment on
 	 *    the block's first line, and two of the merged imports binding one simple name (the gate
 	 *    only a MERGE can trip: the colliding pair lives in two different runs);
 	 *  - every chained run HEAD must be comment-free too, not only the union's first. A head's
 	 *    absorbed comment labelled that run while the run was its own block, and the merge would
 	 *    either carry the label into the block's middle or strand it above a different import —
-	 *    the same misattribution `reorderable` refuses at the block's top, one run down;
+	 *    the same misattribution `reorderRefusal` refuses at the block's top, one run down;
 	 *  - a wedged `using` may not OVERTAKE an import that binds a name its module also declares.
 	 *    Below that import today the import wins the name; above it the `using` would, so the move
 	 *    is a silent rebind rather than a relayout;
@@ -359,7 +359,11 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 */
 	private static function mergeable(wedge: UsingWedge, source: String, moduleTypes: Map<String, Array<String>>): Bool {
 		if (reorderRefusal(wedge.imports, source, moduleTypes) != null) return false;
-		for (head in wedge.heads) if (head.chunkFrom != RefactorSupport.startOfLine(source, head.declFrom)) return false;
+		// `<`, matching `reorderRefusal`: an `ImportLine`'s `chunkFrom` can only reach BACKWARD off its
+		// line start (`ImportOrder.withLeadingComments`), so this asks the one question it can answer —
+		// does this run's head carry an absorbed leading comment. Spelled `!=`, it read as a
+		// line-boundary check, which is a question `ImportOrder.lineOf` has already refused to hand it.
+		for (head in wedge.heads) if (head.chunkFrom < RefactorSupport.startOfLine(source, head.declFrom)) return false;
 		for (statement in wedge.usings) {
 			final names: Null<Array<String>> = moduleTypes[statement.path];
 			if (names == null || names.length == 0) return false;
@@ -436,8 +440,17 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	private static function reorderRefusal(
 		block: Array<ImportLine>, source: String, moduleTypes: Map<String, Array<String>>
 	): Null<String> {
-		if (block[0].chunkFrom != RefactorSupport.startOfLine(source, block[0].declFrom))
-			return 'the block does not begin at a line boundary — its first import shares its line with something else';
+		// The condition is `<`, and the ONE thing it can mean is a leading comment: `ImportOrder.lineOf`
+		// sets `chunkFrom = withLeadingComments(source, lineStart)`, which starts AT the line start and
+		// only ever walks backward, so `chunkFrom > lineStart` is unreachable — and the case that would
+		// have produced it, a line carrying code before the import, never becomes an `ImportLine` at all
+		// (`lineOf` answers null for it). This guard used to be spelled `!=` and to report exactly that
+		// unreachable cause, so every refusal it ever explained was explained wrongly: two real files,
+		// each carrying a comment that says why its import order is deliberate, were told their first
+		// import shared its line with something else.
+		if (block[0].chunkFrom < RefactorSupport.startOfLine(source, block[0].declFrom))
+			return 'the block\'s first import carries an absorbed leading comment, written directly above it — such a comment belongs to '
+				+ 'the whole block, so permuting the block would relocate it into the middle or strand it above a different import';
 		final bound: Array<String> = [];
 		for (line in block) for (name in boundNames(line.path, moduleTypes)) {
 			if (bound.contains(name))

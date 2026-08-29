@@ -32,6 +32,31 @@ class RedundantMapExistsCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('cannot be ruled out') != -1, vs[0].message);
 	}
 
+	/**
+	 * The failed proof IS the decline, so it is written onto the finding as its `declineReason`;
+	 * a proven site carries none.
+	 *
+	 * The census's verdict was already the finding's message, and only the message — so
+	 * `apq lint --fix`'s ledger reported that this check "declares neither NoAutofix nor a decline
+	 * reason" for a site whose text says exactly why.
+	 *
+	 * RED at base on the `notNull`; the proven arm is green at base BY CONSTRUCTION and
+	 * discriminates a reason written for every finding rather than for the declined ones.
+	 */
+	public function testUnprovenSiteCarriesItsDeclineReason(): Void {
+		final unproven: Array<Violation> = violations(cls('m', "'a' => other", ''));
+		Assert.equals(1, unproven.length);
+		final reason: Null<String> = unproven[0].declineReason;
+		if (reason == null) {
+			Assert.fail('an unproven site carries no decline reason though its message states one: ${unproven[0].message}');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('stored null') != -1, reason);
+		final proven: Array<Violation> = violations(cls('safe', "'a' => 'b'", ''));
+		Assert.equals(1, proven.length);
+		Assert.isNull(proven[0].declineReason, 'a proven site is fixed, so it declines nothing');
+	}
+
 	public function testNonLiteralValueInTheInitializerLeavesTheSiteUnproven(): Void {
 		final vs: Array<Violation> = violations(cls('m', "'a' => other", ''));
 		Assert.equals(1, vs.length);

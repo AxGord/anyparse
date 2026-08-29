@@ -454,10 +454,12 @@ final class CompilerServer {
 	/** `file` with its symlink chain resolved — the form the compiler records a module under; the plain absolute form when it cannot be resolved. */
 	private static function realPath(file: String): String {
 		// The result is bridged through an explicit `Null<String>` because `FileSystem.fullPath`'s
-		// declared non-null `String` reads as nullable off a compilation-server cache. Both known
-		// sites of that mismatch (here and `StdResolver.resolveSymlink`) are `fullPath` in a
-		// try-expression; left unbridged, a warm recompile reports a null-safety error the cold
-		// compile does not.
+		// declared non-null `String` reads as nullable off a compilation-server cache — and, on
+		// hxnodejs, IS null for a path that does not exist. Four sites now bridge it the same way
+		// (here, `StdResolver.resolveSymlink`, `OracleCoverage.canonical`, `Cli.realPath`) and they
+		// differ only in the FALLBACK — this one's absolute form, StdResolver's input path,
+		// OracleCoverage's normalised join — which is why they are not yet one helper. Left unbridged,
+		// a warm recompile reports a null-safety error the cold compile does not.
 		final full: Null<String> = try sys.FileSystem.fullPath(file) catch (exception: haxe.Exception) null;
 		return full ?? absolute(file);
 	}

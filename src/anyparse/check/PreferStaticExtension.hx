@@ -204,7 +204,8 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 				span: candidate.callSpan,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: candidate.message
+				message: candidate.message,
+				declineReason: declineReasonFor(candidate.verdict)
 			});
 		}
 		return violations;
@@ -249,9 +250,30 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			if (candidate == null || candidate.verdict != Verdict.Fixable) continue;
 			// A rewrite without the module in scope does not compile, so a file that lacks the
 			// `using` and forbids inserting one is refused before any edit is built.
-			if (!options.addUsing && !UsingScan.hasUsingModule(header, candidate.module)) continue;
+			//
+			// These three gates are PER-SITE and they fire on a finding `run` already judged `Fixable`,
+			// so `declineReasonFor` wrote nothing on it — the reason has to be written here, at the gate
+			// that decided, on the caller's own violation objects (`Cli` hands `fix` the array `run`
+			// built, which is what makes a note here reach the reporter; `ImportBlockOrder.noteDecline`
+			// is the same mechanism). Left unset, the ledger reported these as a rule that "withheld it,
+			// without saying why" — the defect this rule's `run` side no longer has.
+			if (!options.addUsing && !UsingScan.hasUsingModule(header, candidate.module)) {
+				violation.declineReason = 'the file has no `using ${candidate.module}` and this project sets addUsing:false, so the'
+					+ ' extension call would not resolve';
+				continue;
+			}
 			final pair: Null<Array<{ span: Span, text: String }>> = rewriteEdits(candidate, source);
-			if (pair == null || RefactorSupport.editsOverlapAny(pair, edits)) continue;
+			if (pair == null) {
+				violation.declineReason = 'a comment sits inside the region the rewrite deletes, and dropping a comment silently is'
+					+ ' never acceptable';
+				continue;
+			}
+			// No reason on THIS one, and that is not an oversight: the gate can only fire once `edits`
+			// holds an accepted rewrite, so this `fix` call returns a non-empty edit set, and
+			// `Cli.noteFixOutcome` returns on `editCount != 0` before it reads any `declineReason`. A
+			// sentence here would be unreachable by construction — the site is genuinely deferred to the
+			// next fixpoint pass, and the pass that reports it is the one where it gets no edit.
+			if (RefactorSupport.editsOverlapAny(pair, edits)) continue;
 			for (edit in pair) edits.push(edit);
 			if (!rewritten.contains(candidate.module)) rewritten.push(candidate.module);
 		}
@@ -493,6 +515,30 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final firstRest: Null<Span> = call.children[REST_INDEX].span;
 		final lastRest: Null<Span> = call.children[call.children.length - 1].span;
 		return firstRest == null || lastRest == null ? null : '$receiver.$method(${excerpt(source, firstRest.from, lastRest.to)})';
+	}
+
+	/**
+	 * Why `verdict` gets no rewrite, in this check's own words, or null for the one that does.
+	 *
+	 * The two hedged verdicts already SAY why in the finding's message; what they did not do is put
+	 * it where `apq lint --fix`'s unfixed ledger reads it (`Violation.declineReason`), so a run that
+	 * declined every one of them reported "withheld it, without saying why" over findings whose text
+	 * spelled the reason out.
+	 *
+	 * `Fixable` gets NULL here, and that is not a gap: such a finding can still be declined, but only
+	 * by a PER-SITE gate inside `fix`, which writes its own reason there. Answering for those from
+	 * here would invent a reason at a site that did not decide.
+	 */
+	private static function declineReasonFor(verdict: Verdict): Null<String> {
+		return switch verdict {
+			case Verdict.Fixable: null;
+			case Verdict.UnresolvedReceiver:
+				'the receiver\'s nominal type did not resolve in scope, so whether it declares a same-name member — which Haxe would '
+					+ 'pick over the extension — cannot be answered';
+			case _:
+				'the receiver resolved but its member closure did not, so a same-name member the rewrite would silently retarget '
+					+ 'cannot be ruled out';
+		}
 	}
 
 	/** The finding text for `verdict`, carrying the suggested extension form. */

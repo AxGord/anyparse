@@ -121,7 +121,13 @@ final class RedundantToString implements Check implements DefaultOff {
 					span: found.span,
 					rule: 'redundant-tostring',
 					severity: Severity.Info,
-					message: blocker == null ? 'redundant .toString() — ${found.why}' : 'redundant .toString() — ${found.why}, but $blocker'
+					message: blocker == null
+						? 'redundant .toString() — ${found.why}'
+						: 'redundant .toString() — ${found.why}, but $blocker',
+					// The blocker is exactly what stops `fix` emitting an edit for this site, and it is
+					// already the second half of the message — carried here so the `--fix` ledger reads
+					// the check's own sentence instead of reporting that it declared none.
+					declineReason: blocker
 				});
 			}
 		}
