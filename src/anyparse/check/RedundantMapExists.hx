@@ -86,6 +86,10 @@ final class RedundantMapExists implements Check implements DefaultOff {
 	private static inline final UNPROVEN_MESSAGE: String =
 		'this exists-then-index map lookup reads like map[key] ?? default, but a stored null value cannot be ruled out';
 
+	/** Why an unproven site gets no edit, for `apq lint --fix`'s unfixed ledger — the same fact the message states. */
+	private static inline final DECLINE_REASON: String =
+		'the value census could not rule out a stored null, so map[key] ?? default would change the result for that key';
+
 	public function new() {}
 
 	public function id(): String {
@@ -120,17 +124,19 @@ final class RedundantMapExists implements Check implements DefaultOff {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(entry.source);
 			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);
-			collect(
-				root, entry.source, root, declaredTypes, declaredTypeSources, c, m -> violations.push({
+			collect(root, entry.source, root, declaredTypes, declaredTypeSources, c, m -> {
+				final proof: Bool = isProven(m, entry.file, entry.source, root, valueSeams, resolveSymbols(), plugin, proven);
+				violations.push({
 					file: entry.file,
 					span: m.span,
 					rule: RULE_ID,
 					severity: Severity.Info,
-					message: isProven(m, entry.file, entry.source, root, valueSeams, resolveSymbols(), plugin, proven)
-						? FIXABLE_MESSAGE
-						: UNPROVEN_MESSAGE
-				})
-			);
+					message: proof ? FIXABLE_MESSAGE : UNPROVEN_MESSAGE,
+					// The failed proof IS the decline — carried onto the finding so `apq lint --fix`'s
+					// ledger reads this check's own sentence rather than reporting that it declared none.
+					declineReason: proof ? null : DECLINE_REASON
+				});
+			});
 		}
 		return violations;
 	}

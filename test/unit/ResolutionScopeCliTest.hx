@@ -143,6 +143,47 @@ class ResolutionScopeCliTest extends Test {
 	}
 
 	/**
+	 * The SAME overlap reached through a SYMLINK, in both directions.
+	 *
+	 * The test above canonicalises its fixture dir through `getCwd` first, and says so — which is
+	 * exactly the case this one refuses to sidestep. `FileSystem.absolutePath` only prefixes the CWD:
+	 * it does not follow a link, so a `resolutionRoots` entry naming a linked tree (or a report scope
+	 * spelled through one) keeps a DIFFERENT string for the same file and the dedup misses entirely.
+	 * The shared files then land in the index twice, the resolver's ambiguity gate closes, and the
+	 * inherited-member finding vanishes — the failure mode is total silence, and the spelling that
+	 * causes it is one a user never thinks about (macOS `/tmp` -> `/private/tmp`, a linked checkout).
+	 *
+	 * RED at base on BOTH arms: exit 0, no finding, no diagnostic. `realPath` is what makes the two
+	 * spellings one identity. Skips where the platform will not make a symlink.
+	 */
+	public function testSymlinkedSpellingOfTheSameTreeStillDedups(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('ressym', [{ name: 'Base.hx', source: BASE }, { name: 'Derived.hx', source: DERIVED }]);
+		final link: String = '${haxe.io.Path.directory(dir)}/tmp_ressym_link_${haxe.io.Path.withoutDirectory(dir)}';
+		if (Sys.command('ln', ['-s', dir, link]) != 0 || !sys.FileSystem.exists(link)) {
+			CliFixture.removeDir(dir);
+			Assert.pass('this platform makes no symlink');
+			return;
+		}
+		// The ROOT is the linked spelling, the report scope the real one.
+		File.saveContent('$dir/apqlint.json', '{"resolutionRoots":["$link"]}');
+		Assert.equals(
+			1, Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', dir]),
+			'a resolutionRoots entry reaching the report tree through a symlink is the SAME tree, not a second copy of it'
+		);
+		// And the mirror: the report scope is the linked spelling, the root the real one.
+		File.saveContent('$dir/apqlint.json', '{"resolutionRoots":["$dir"]}');
+		Assert.equals(
+			1, Cli.run(['lint', '--rule', 'redundant-this', '--fail-on', 'info', link]), 'and so is a report scope spelled through one'
+		);
+		sys.FileSystem.deleteFile(link);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A `resolutionLibs` entry that does not resolve (a typo / uninstalled lib) must not crash the
 	 * run: the lazy thunk fires (redundant-this demands the resolution index), attempts the haxelib
 	 * lookup, gets nothing, and the lint proceeds as if the lib were absent — the out-of-scope base

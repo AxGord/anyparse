@@ -526,6 +526,7 @@ import unit.LintListRulesCliTest;
 import unit.LintModuleSecondaryTypeSliceTest;
 import unit.LintNoOracleCliTest;
 import unit.LintPerFileConfigCliTest;
+import unit.LintReportChannelSliceTest;
 import unit.LintScopeGateTest;
 import unit.LintSliceTest;
 import unit.LintUnusedImportDottedSliceTest;
@@ -1192,6 +1193,7 @@ class RunTests {
 		addCase(new ExtensionMethodsExtractionTest());
 		addCase(new StdResolverReturnTypeTest());
 		addCase(new LintPerFileConfigCliTest());
+		addCase(new LintReportChannelSliceTest());
 		addCase(new LintFixFixedPointCliTest());
 		addCase(new LintFixFollowUpRoundTest());
 		addCase(new LintConfigTest());

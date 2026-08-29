@@ -229,7 +229,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			// needs the check: a declaration found at or above this class forbids a subtype
 			// redeclaring the same field, so arm 1 cannot be reached this way.
 			if (!found.declared && scope.subtypeDeclaresMember(owner, prop)) return;
-			final reported: Null<Violation> = reportOrphan(out, file, span, name, prop, owner, wantGetter, found);
+			final reported: Null<Violation> = reportOrphan(out, file, span, name, prop, owner, wantGetter, found, ctx.reportIndex);
 			if (reported == null) return;
 			// AFTER `deletable`, so the reason below names the gate that actually closed: asked
 			// first, a `@:keep` accessor got the skip-parse sentence for a refusal its own metadata
@@ -249,6 +249,22 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			final span: Null<Span> = member.span;
 			if (span != null) _deletable.push(CheckScan.spanKey(file, span));
 		}
+	}
+
+	/**
+	 * A report-only `Info` finding: `message` for the reader and `reason` for `apq lint --fix`'s
+	 * unfixed ledger, which reads `declineReason` and nothing else.
+	 *
+	 * The two are deliberately NOT the same string, and the reason carries NO site detail. The message
+	 * explains the finding to someone looking at one accessor; the reason is aggregated by `Cli.bumpReason`
+	 * keyed on its exact TEXT, so interpolating an owner, a property or a file list would produce one
+	 * ledger row per site and push the real shape past the `DECLINED_REASONS_SHOWN` cap. It names the
+	 * gate; the message names the site.
+	 */
+	private static inline function reportOnly(file: String, span: Span, message: String, reason: String): Violation {
+		final reported: Violation = violation(file, span, Severity.Info, message);
+		reported.declineReason = reason;
+		return reported;
 	}
 
 	/** One finding of this rule. */
@@ -429,15 +445,48 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * Push the finding for an accessor no property serves and report whether the verdict was PROVEN:
 	 * an unresolvable supertype leaves it unproven, which is `Info` and never deletable, while a
 	 * fully resolved chain is a `Warning` whose method the deletion gate may then consider.
+	 *
+	 * The THIRD way the found-nothing arm can fail to be a proof is asked here:
+	 * `subtypeDeclaresMember` is structural, so a file which did not parse declares nothing as far as
+	 * it can tell, and a SUBTYPE declaring the property in such a file makes this accessor live. The
+	 * fix side has always asked that (`unreadableDecline` puts the PROPERTY in its name set, for this
+	 * exact reason); the report side did not, and answered `Warning`. Arm 1 never asks: a declaration
+	 * at or above this class forbids a subtype redeclaring the field, so no unparsed file can change
+	 * that verdict.
+	 *
+	 * The PROPERTY alone, not the fix side's three names — a skipped file merely CALLING the accessor
+	 * does not give it a property to serve, so the verdict stays true there and only the deletion is
+	 * blocked. Measured by sweeping this probe set over the rule's own tests: `[]` fails 3 of them,
+	 * `[name]` 5, `[name, prop, prefix]` 2, a match-everything probe 4,
+	 * dropping the arm-1 guard 2, and this one none.
 	 */
 	private static function reportOrphan(
-		out: Array<Violation>, file: String, span: Span, name: String, prop: String, owner: String, wantGetter: Bool, found: Resolution
+		out: Array<Violation>, file: String, span: Span, name: String, prop: String, owner: String, wantGetter: Bool, found: Resolution,
+		reportIndex: SymbolIndex
 	): Null<Violation> {
+		// Both report-only arms below carry their own `declineReason`. They are declines in the ledger's
+		// sense — `fix` is called for them and answers no edit — and the sentence that says why is right
+		// here, at the gate that decided. The unreadable arm REPLACED sites that used to reach
+		// `unreadableDecline` and get one, so leaving it unset would have moved this rule backwards in
+		// the very dimension the rest of this commit moves three others forwards.
 		if (!found.declared && found.unresolved) {
-			out.push(violation(
-				file, span, Severity.Info,
+			out.push(reportOnly(
+				file, span,
 				'$name may have no property to serve: no $prop is declared in $owner'
-				+ ' or in the supertypes that resolved, and an unresolvable supertype leaves it unproven'
+				+ ' or in the supertypes that resolved, and an unresolvable supertype leaves it unproven',
+				'a supertype did not resolve in scope, so the property\'s absence is not proven and the method cannot be deleted'
+			));
+			return null;
+		}
+		final unreadable: Array<String> = found.declared ? [] : reportIndex.skippedFilesMentioning([prop]);
+		if (unreadable.length > 0) {
+			out.push(reportOnly(
+				file, span,
+				'$name may have no property to serve: neither $owner nor its supertypes declare $prop, but ${unreadable.length} file(s)'
+				+ ' in scope did not parse and their text cannot be shown free of \'$prop\' — one of them may declare a subtype that'
+				+ ' does: ${unreadable.join(', ')}',
+				'a file in scope did not parse and could declare a subtype that declares the property, so the accessor is not proven'
+				+ ' orphaned and cannot be deleted'
 			));
 			return null;
 		}

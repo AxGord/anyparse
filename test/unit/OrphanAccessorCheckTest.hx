@@ -17,6 +17,9 @@ import utest.Test;
  */
 @:nullSafety(Strict) class OrphanAccessorCheckTest extends Test {
 
+	/** A class whose `get_data` serves no property of its own — the owner every unreadable-file arm starts from. */
+	private static inline final BARE_GETTER: String = 'class C {\n\tpublic function get_data():Int return 0;\n}';
+
 	public function testDefaultSetPropertyWithGetterFlagged(): Void {
 		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction set_data(v:Int):Int return data = v;\n'
 			+ '\tpublic inline function get_data():Int {\n\t\treturn data;\n\t}\n}';
@@ -234,6 +237,108 @@ import utest.Test;
 			{ file: 'C.hx', source: owner },
 			{ file: 'D.hx', source: 'class D extends C {\n\tpublic var data(get, never):Int;\n\tfunction q(: {{{\n}\n' }
 		]));
+	}
+
+	/**
+	 * The REPORT-side twin of the test above — the half the fix side had and the report side did not.
+	 *
+	 * `subtypeDeclaresMember` reads parsed trees, so a file that did not parse declares nothing as far
+	 * as it can tell, and the found-nothing arm then calls the accessor a PROVEN orphan (`Warning`)
+	 * over evidence the run does not have. The strongest honest answer is arm 3's: `Info`, naming the
+	 * file it could not read. The DELETION was already blocked (the test above); what a reader was
+	 * given was a confident wrong verdict rather than the absence of one.
+	 *
+	 * RED at base on the severity and on both message assertions — the base run answers
+	 * `Warning` / `neither C nor its supertypes declare data`.
+	 */
+	public function testUnreadableSubtypeDeclaringThePropertyDowngradesTheReport(): Void {
+		final found: Null<Violation> = loneFindingBeside(
+			BARE_GETTER, 'class D extends C {\n\tpublic var data(get, never):Int;\n\tfunction q(: {{{\n}\n'
+		);
+		if (found == null) return;
+		Assert.equals(Severity.Info, found.severity);
+		Assert.isTrue(found.message.indexOf('may have no property to serve') != -1, found.message);
+		Assert.isTrue(found.message.indexOf('D.hx') != -1, 'the report NAMES the file it could not read: ${found.message}');
+		// The downgrade REPLACED sites that used to reach `unreadableDecline` and get a reason, so the
+		// ledger must not lose one here: `apq lint --fix` reads `declineReason` and nothing else, and a
+		// finding without one is reported as a check that "declares neither NoAutofix nor a decline
+		// reason". RED against the first draft of this arm, which set only the message.
+		final reason: Null<String> = found.declineReason;
+		if (reason == null) {
+			Assert.fail('the downgraded finding must still say why no edit follows it');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('did not parse') != -1, reason);
+	}
+
+	/**
+	 * The OTHER report-only arm — an unresolvable supertype — owes the ledger a reason for the same
+	 * reason, and it is a DIFFERENT sentence: the two arms decline for different facts, and one
+	 * sentence covering both would be the "confident wrong answer" this rule keeps producing.
+	 *
+	 * RED at base (the arm has never written one) and killed by making the two arms share a reason.
+	 */
+	public function testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows(): Void {
+		final found: Null<Violation> = loneFinding([
+			{ file: 'C.hx', source: 'class C extends Missing {\n\tpublic function get_data():Int return 0;\n}' }
+		]);
+		if (found == null) return;
+		Assert.equals(Severity.Info, found.severity);
+		final reason: Null<String> = found.declineReason;
+		if (reason == null) {
+			Assert.fail('the unresolved-supertype arm must say why no edit follows it');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('did not resolve') != -1, reason);
+		Assert.equals(-1, reason.indexOf('did not parse'), 'and it is NOT the unreadable-file sentence: $reason');
+	}
+
+	/**
+	 * The DISCRIMINATOR for the arm above: an unreadable file that does NOT spell the property leaves
+	 * the proof intact, so the verdict stays a `Warning`.
+	 *
+	 * Green at base BY CONSTRUCTION (nothing downgraded anything there). It is what separates the fix
+	 * from "any unparseable file in scope silences this rule" — the failure mode the run-wide
+	 * `skippedFiles().length == 0` gate had on the fix side, which is documented in `unreadableDecline`.
+	 */
+	public function testUnreadableFileNotSpellingThePropertyKeepsTheWarning(): Void {
+		assertUndeclaredWarning(
+			loneFindingBeside(BARE_GETTER, 'class D extends C {\n\tpublic var other(get, never):Int;\n\tfunction q(: {{{\n}\n')
+		);
+	}
+
+	/**
+	 * ARM 1 never asks the unreadable question, and must not: `data` IS declared here, without the
+	 * `get` slot, and Haxe forbids a subtype redeclaring an inherited field — so no unparsed file can
+	 * put that slot anywhere. A skipped file spelling the property changes nothing.
+	 *
+	 * Green at base BY CONSTRUCTION. It is the pin on the `found.declared` arm of the probe: drop that
+	 * guard and this one test goes red while every other arm stays green.
+	 */
+	public function testUnreadableFileSpellingThePropertyKeepsTheDeclaredArmsWarning(): Void {
+		final owner: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction set_data(v:Int):Int return data = v;\n'
+			+ '\tpublic function get_data():Int return data;\n}';
+		final found: Null<Violation> = loneFindingBeside(owner, 'class D {\n\tpublic var data:Int;\n\tfunction q(: {{{\n}\n');
+		if (found == null) return;
+		Assert.equals(Severity.Warning, found.severity);
+		Assert.equals('get_data has no property to serve: data declares no get accessor', found.message);
+	}
+
+	/**
+	 * The SECOND discriminator, and the one that makes the property the only right question to ask
+	 * here: an unreadable file that spells the ACCESSOR but declares no property keeps the `Warning`.
+	 *
+	 * A direct call is not a property slot, so the verdict "no property declares this accessor" is
+	 * still TRUE — and the deletion it licenses is separately blocked by `unreadableDecline`, which
+	 * asks the accessor name for exactly that. Widen the report probe to the FIX side's three names
+	 * and this arm goes red while the downgrade arm stays green: the two questions are different, and
+	 * the wider set answers this one wrongly. `mentionsWord` is what separates the fixtures — the word
+	 * `data` does not occur inside `get_data`.
+	 *
+	 * Green at base BY CONSTRUCTION (nothing downgraded anything there).
+	 */
+	public function testUnreadableFileSpellingOnlyTheAccessorKeepsTheWarning(): Void {
+		assertUndeclaredWarning(loneFindingBeside(BARE_GETTER, 'class D {\n\tfunction q(: {{{\n\tc.get_data();\n}\n'));
 	}
 
 	/**
@@ -550,6 +655,28 @@ import utest.Test;
 	private function violationsOf(files: Array<{ file: String, source: String }>): Array<Violation> {
 		final check: Null<Check> = Linter.byId('orphan-accessor');
 		return check == null ? [] : check.run(files, new HaxeQueryPlugin());
+	}
+
+	/**
+	 * The rule's ONE finding for `owner` (as `C.hx`) beside an unreadable `D.hx` holding `broken`, or
+	 * null when the fixture did not produce exactly one — the shape every unreadable-file arm needs.
+	 */
+	private function loneFindingBeside(owner: String, broken: String): Null<Violation> {
+		return loneFinding([{ file: 'C.hx', source: owner }, { file: 'D.hx', source: broken }]);
+	}
+
+	/** The rule's ONE finding across `files`, or null when it did not produce exactly one. */
+	private function loneFinding(files: Array<{ file: String, source: String }>): Null<Violation> {
+		final vs: Array<Violation> = violationsOf(files);
+		Assert.equals(1, vs.length);
+		return vs.length == 1 ? vs[0] : null;
+	}
+
+	/** `found` is the PROVEN-orphan verdict for a `data` no chain declares — the answer every non-downgrading arm expects. */
+	private function assertUndeclaredWarning(found: Null<Violation>): Void {
+		if (found == null) return;
+		Assert.equals(Severity.Warning, found.severity);
+		Assert.equals('get_data has no property to serve: neither C nor its supertypes declare data', found.message);
 	}
 
 	/** The number of edits `fix` yields for `owner` after `run` over `files` — the deletion gate's verdict. */

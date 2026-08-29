@@ -326,6 +326,21 @@ typedef ResolvedInputs = {
 };
 
 /**
+ * What `expandInputs` answers: the deduped `.hx` paths the specs expanded to, whether the call
+ * named exactly ONE concrete file, and every spec that expanded to NOTHING.
+ *
+ * `unmatched` is what the union alone cannot say — a spec naming a file that is not there vanishes
+ * into `paths` the moment another spec matched, and the run analyses a scope short of what it was
+ * asked for. Named rather than spelled inline because the reporting seat and its pin both have to
+ * write it out.
+ */
+typedef ExpandedInputs = {
+	var paths: Array<String>;
+	var singleFile: Bool;
+	var unmatched: Array<String>;
+};
+
+/**
  * The outcome of one `lint --fix` pass over the active file set: `nextActive` is the file set (with rewritten sources) to feed the next fixpoint pass, and `fixedDelta` how many findings that pass resolved.
  */
 typedef LintPassResult = {
@@ -492,6 +507,15 @@ final class Cli {
 	#end
 
 	private static inline final SKIP_PATHS_SHOWN: Int = 5;
+
+	/** The `--format` value whose stdout is a JSON record array — a MACHINE reader, never capped by `--all`. */
+	private static inline final FORMAT_JSON: String = 'json';
+
+	/** The `--format` value whose stdout is a checkstyle XML document — a MACHINE reader, never capped by `--all`. */
+	private static inline final FORMAT_CHECKSTYLE: String = 'checkstyle';
+
+	/** The default `--format` value: the human report `--all` caps. */
+	private static inline final FORMAT_TEXT: String = 'text';
 
 	/**
 	 * Cap on the per-file DECLINE lines a `--fix` phase prints. A decline is the common case
@@ -1117,7 +1141,7 @@ final class Cli {
 			fix: false,
 			noOracle: false,
 			failOn: null,
-			format: 'text',
+			format: FORMAT_TEXT,
 			ruleFilters: [],
 			inputSpecs: [],
 			errExit: code
@@ -1339,10 +1363,10 @@ final class Cli {
 		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final shape: RefShape = plugin.refShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq refs: no input files matched ${o.inputSpecs.join(' ')}\n');
+			stderr('apq refs: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -1505,7 +1529,7 @@ final class Cli {
 	private static function runRenameScope(
 		filePath: String, source: String, line: Int, col: Int, newName: String, scope: String, write: Bool, plugin: GrammarPlugin
 	): Int {
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([scope], '.hx');
+		final expanded: ExpandedInputs = expandInputs([scope], '.hx');
 		final paths: Array<String> = expanded.paths;
 		// The cursor file's declaration must be covered even if it sits
 		// outside the scope directory — add it when expandInputs missed it.
@@ -1737,7 +1761,7 @@ final class Cli {
 		final io = resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq symbols: ${inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq symbols: ${quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -1802,7 +1826,7 @@ final class Cli {
 		final io = resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq importers: ${inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq importers: ${quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -1869,7 +1893,7 @@ final class Cli {
 		final io = resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq declares: ${inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq declares: ${quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -1922,7 +1946,7 @@ final class Cli {
 		final io = resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq lint: ${o.inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq lint: ${quotedSpecs(o.inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -1994,9 +2018,9 @@ final class Cli {
 		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
 		final all: Array<Violation> = Linter.run(files, cached, activeChecks, resolveConfig, applyEnablement);
 
-		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
+		final shown: Array<Violation> = reportedViolations(all, o.includeInfo, o.format);
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached);
-		lintSummary(all, paths, o.includeInfo, unparseableFiles(files, cached));
+		lintSummary(all, paths, shown.length == all.length, unparseableFiles(files, cached));
 
 		// `--no-oracle` skips the typecheck entirely rather than faking its verdict:
 		// the note below says the compiler was not asked, so nothing downstream can
@@ -2074,15 +2098,19 @@ final class Cli {
 	): Null<ResolutionScope> {
 		final declared: Bool = roots.length > 0 || libNames.length > 0;
 		if (!declared && !(stdEnabled && StdResolver.stdDir() != null)) return null;
-		// Dedup by ABSOLUTE path: a library glob path is always absolute, a report path keeps the
-		// CLI-arg spelling (often relative), so a raw-string compare misses an overlap and indexes
-		// the shared file TWICE — duplicate declarations that trip the resolver's ambiguity gate and
-		// silently suppress the cross-file finding. Normalise both sides; the report file keeps its
+		// Dedup by the SYMLINK-RESOLVED absolute path: a library glob path is always absolute, a report
+		// path keeps the CLI-arg spelling (often relative), so a raw-string compare misses an overlap and
+		// indexes the shared file TWICE — duplicate declarations that trip the resolver's ambiguity gate
+		// and silently suppress the cross-file finding. Normalise both sides; the report file keeps its
 		// original spelling in `files` (report/edit scope), the overlapping library copy is dropped.
+		// `absolutePath` alone is NOT enough, and the gap is not exotic: it only prefixes the CWD, so a
+		// root reached through a symlink (a `resolutionRoots` entry naming a linked tree, a report path
+		// spelled through macOS's `/tmp` -> `/private/tmp`) keeps a different string for the same file
+		// and the whole dedup misses. `realPath` resolves the link.
 		// A MAP, not an array: the library always carries the ~200 std files, so a linear `contains`
 		// over the report would be one string compare per (report x library) pair — ~160k on an
 		// 800-file project, for a lookup that is answered in one hash.
-		final reportPaths: Map<String, Bool> = [for (f in files) FileSystem.absolutePath(f.file) => true];
+		final reportPaths: Map<String, Bool> = [for (f in files) realPath(f.file) => true];
 		var library: Null<Array<{ file: String, source: String }>> = null;
 		return {
 			declared: declared,
@@ -2098,10 +2126,37 @@ final class Cli {
 	}
 
 	/**
+	 * `path` as the one string that names its file however the path was spelled — absolute, and with
+	 * every symlink on the way resolved.
+	 *
+	 * The identity the resolution-scope dedup compares by. `absolutePath` only prefixes the CWD, so
+	 * two spellings that traverse a symlink differently stay two strings for one file, which is a
+	 * dedup that misses in silence.
+	 *
+	 * Never null and never empty, whatever `path` was — see the body for why that is not what the
+	 * declared type of the call inside it promises.
+	 */
+	private static function realPath(path: String): String {
+		// `FileSystem.fullPath` is DECLARED to return a non-null `String` and on hxnodejs RETURNS NULL
+		// for a path that does not exist — it does not throw, so a bare try/catch never sees it and
+		// `@:nullSafety` trusts the declaration (measured on Haxe 4.3.7 / hxnodejs; the same fact is
+		// recorded at `OracleCoverage.hx`). Unbridged, a path that fails to resolve keys this map under
+		// the string "null", and two such paths — one report, one library — collapse onto ONE key, which
+		// silently drops a library file. The catch stays for the targets where it DOES throw.
+		//
+		// NOT also guarded against `''`, unlike `OracleCoverage.canonical`: probed on node,
+		// `fs.realpathSync('')` and `path.resolve('')` both answer the cwd, so neither branch can
+		// produce one, and a guard no input can reach is a claim about behaviour nobody measured.
+		// Mutations: dropping the null bridge fails 1 test, replacing the body with `absolutePath` 2.
+		final full: Null<String> = try FileSystem.fullPath(path) catch (exception: Exception) null;
+		return full ?? FileSystem.absolutePath(path);
+	}
+
+	/**
 	 * Read every `.hx` under the resolution scope's roots — `roots` verbatim, `libNames` resolved
 	 * to haxelib source dirs, plus the auto-discovered Haxe std — excluding the run's own report
-	 * files (`reportPaths`, absolute). The whole of `resolutionThunk`'s FIRST-DEMAND work, split
-	 * out so the thunk itself is the memo and nothing else.
+	 * files (`reportPaths`, keyed by `realPath`). The whole of `resolutionThunk`'s FIRST-DEMAND work,
+	 * split out so the thunk itself is the memo and nothing else.
 	 */
 	private static function readResolutionLibrary(
 		roots: Array<String>, libNames: Array<String>, stdEnabled: Bool, reportPaths: Map<String, Bool>
@@ -2132,7 +2187,7 @@ final class Cli {
 		final stdDir: Null<String> = stdEnabled ? StdResolver.stdDir() : null;
 		if (stdDir != null) for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) scanRoots.push(spec);
 		final libFiles: Array<{ file: String, source: String }> = [];
-		for (path in expandInputs(scanRoots, '.hx').paths) if (!reportPaths.exists(FileSystem.absolutePath(path))) {
+		for (path in expandInputs(scanRoots, '.hx').paths) if (!reportPaths.exists(realPath(path))) {
 			final src: Null<String> = try readSourceForParse(path) catch (exception: Exception) null;
 			if (src != null) libFiles.push({ file: path, source: src });
 		}
@@ -3765,10 +3820,10 @@ final class Cli {
 		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final shape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq uses: no input files matched ${o.inputSpecs.join(' ')}\n');
+			stderr('apq uses: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -3834,10 +3889,10 @@ final class Cli {
 		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final shape: MetaShape = plugin.metaShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq meta: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq meta: no input files matched ${quotedSpecs(inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -4460,7 +4515,7 @@ final class Cli {
 		final io = resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq lit: no input files matched ${o.inputSpecs.join(' ')}\n');
+			stderr('apq lit: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -4626,7 +4681,7 @@ final class Cli {
 		final io = resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq cases: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq cases: no input files matched ${quotedSpecs(inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -4712,10 +4767,10 @@ final class Cli {
 
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final shape: MetaShape = plugin.metaShape();
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(effectiveSpecs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(effectiveSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq gates: no input files matched ${effectiveSpecs.join(' ')}\n');
+			stderr('apq gates: no input files matched ${quotedSpecs(effectiveSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -4985,10 +5040,10 @@ final class Cli {
 		final refShape: RefShape = plugin.refShape();
 		final typeShape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq blast: no input files matched ${o.inputSpecs.join(' ')}\n');
+			stderr('apq blast: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -5075,10 +5130,10 @@ final class Cli {
 		final refShape: RefShape = plugin.refShape();
 		final typeShape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq mentions: no input files matched ${o.inputSpecs.join(' ')}\n');
+			stderr('apq mentions: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -5269,10 +5324,10 @@ final class Cli {
 			stderr(Text.render(parsed.root));
 		}
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq search: no input files matched ${o.inputSpecs.join(' ')}\n');
+			stderr('apq search: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -6095,12 +6150,23 @@ final class Cli {
 	 * mirroring `apq ast`) holds only when exactly one spec was given
 	 * and it resolved to exactly that one concrete file — multi-spec or
 	 * glob/dir scans skip unparseable files silently.
+	 *
+	 * `unmatched` is every spec that expanded to NOTHING, in the order given. The union alone cannot
+	 * answer for them: a spec naming a file that is not there disappears into it the moment any OTHER
+	 * spec matched, and the run then analyses a scope that is silently short of what was asked for.
+	 * The list is a fact about the arguments, so it is computed here and REPORTED by the caller that
+	 * owns the arguments (`resolveInputPaths`) — this function stays free of output.
 	 */
-	private static function expandInputs(specs: Array<String>, ext: String): { paths: Array<String>, singleFile: Bool } {
+	private static function expandInputs(specs: Array<String>, ext: String): ExpandedInputs {
 		final paths: Array<String> = [];
-		for (spec in specs) for (p in Glob.expand(spec, ext)) if (!paths.contains(p)) paths.push(p);
+		final unmatched: Array<String> = [];
+		for (spec in specs) {
+			final hits: Array<String> = Glob.expand(spec, ext);
+			if (hits.length == 0) unmatched.push(spec);
+			for (p in hits) if (!paths.contains(p)) paths.push(p);
+		}
 		final singleFile: Bool = specs.length == 1 && paths.length == 1 && paths[0] == specs[0];
-		return { paths: paths, singleFile: singleFile };
+		return { paths: paths, singleFile: singleFile, unmatched: unmatched };
 	}
 
 	/**
@@ -6293,7 +6359,7 @@ final class Cli {
 		final io = resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq stdlib-dup: ${inputSpecs.join(', ')} matched no source files\n');
+			stderr('apq stdlib-dup: ${quotedSpecs(inputSpecs)} matched no source files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -6450,7 +6516,9 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Run the analysis checks over the scope (one or more file/dir/glob specs) and\n');
 		sysPrint('report violations grouped by file as <line>:<col>: [severity] message (rule).\n');
-		sysPrint('Info advisories are hidden unless --all. The exit code is success unless\n');
+		sysPrint('Info advisories are hidden from the TEXT report unless --all; json and\n');
+		sysPrint('checkstyle always carry every finding, since their stdout is the answer a\n');
+		sysPrint('machine consumer gets. The exit code is success unless\n');
 		sysPrint('--fail-on selects a severity present in the findings. Run --list-rules for\n');
 		sysPrint('the full check list (id + description, one per line).\n');
 		sysPrint('\n');
@@ -6486,7 +6554,8 @@ final class Cli {
 		sysPrint('                    OracleAssisted rules are inert. Use it in an iteration loop\n');
 		sysPrint('                    (the only way to see the fixer raw), NEVER in a gate\n');
 		sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle\n');
-		sysPrint('  --all, -a        Include Info-severity advisories in the report\n');
+		sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
+		sysPrint('                   json and checkstyle are never capped)\n');
 		sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
 		sysPrint('  --lang <name>    Grammar plugin (default: haxe)\n');
 		sysPrint('  -h, --help       Show this help\n');
@@ -7733,7 +7802,7 @@ final class Cli {
 		final io = resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq fmt: ${o.inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq fmt: ${quotedSpecs(o.inputSpecs)} matched no .hx files\n');
 			return { exit: EXIT_RUNTIME, summary: '' };
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -8415,7 +8484,7 @@ final class Cli {
 		final io = resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq comment-rewrite: ${o.inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq comment-rewrite: ${quotedSpecs(o.inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -10152,7 +10221,7 @@ final class Cli {
 		var fix: Bool = false;
 		var noOracle: Bool = false;
 		var failOn: Null<Severity> = null;
-		var format: String = 'text';
+		var format: String = FORMAT_TEXT;
 		final ruleFilters: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 
@@ -10181,7 +10250,7 @@ final class Cli {
 					}
 				case '--format':
 					format = expectValue(args, ++i, '--format');
-					if (format != 'text' && format != 'json' && format != 'checkstyle') {
+					if (format != FORMAT_TEXT && format != FORMAT_JSON && format != FORMAT_CHECKSTYLE) {
 						stderr('apq lint: unknown --format value "$format" (expected text|json|checkstyle)\n');
 						return lintParseExit(EXIT_USAGE);
 					}
@@ -10231,6 +10300,21 @@ final class Cli {
 		return checks;
 	}
 
+	/**
+	 * The findings the REPORT carries, out of everything the run produced.
+	 *
+	 * `--all` off hides `Info` advisories — a READABILITY affordance for the text report, where a
+	 * terminal reader gets the errors and warnings and is TOLD on stderr what was withheld. A machine
+	 * format has no such reader: its stdout IS the answer, and a consumer redirecting it keeps nothing
+	 * of the stderr note. Capping there returned a truncated record set with nothing in band to say
+	 * so — `[]` for a run holding findings, while `--fail-on info` (which counts every finding, capped
+	 * or not) exits 1 on that same run. The payload and the exit code disagreed, and the payload was
+	 * the one that was wrong; `--all` now governs the human report alone.
+	 */
+	private static function reportedViolations(all: Array<Violation>, includeInfo: Bool, format: String): Array<Violation> {
+		return includeInfo || format == FORMAT_JSON || format == FORMAT_CHECKSTYLE ? all : all.filter(v -> v.severity != Severity.Info);
+	}
+
 	private static function renderLintReport(
 		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool,
 		plugin: CachingGrammarPlugin
@@ -10262,7 +10346,7 @@ final class Cli {
 		}
 
 		switch format {
-			case 'json':
+			case FORMAT_JSON:
 				// Each record carries the finding's canonical edit-stable selector
 				// (`address`) — directly usable as a mutation-op --select argument.
 				// The plugin is the one the CHECKS just ran through, so its parse cache
@@ -10292,7 +10376,7 @@ final class Cli {
 					final node: Null<QueryNode> = current.nodeAt(span.from);
 					return node == null ? null : current.describe(source, node);
 				}));
-			case 'checkstyle':
+			case FORMAT_CHECKSTYLE:
 				sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
 			case _:
 				for (path in paths) {
@@ -10302,7 +10386,15 @@ final class Cli {
 		}
 	}
 
-	private static function lintSummary(all: Array<Violation>, paths: Array<String>, includeInfo: Bool, ?skipped: Array<String>): Void {
+	/**
+	 * The stderr breakdown under a lint report: the files the grammar could not read, the severity
+	 * counts, and — when the report was CAPPED — how much it withheld.
+	 *
+	 * `reportedAll` is what the report actually carried, not the `--all` flag: a machine format is
+	 * never capped, so telling its reader that advisories were hidden would be a lie the run has no
+	 * way to make true.
+	 */
+	private static function lintSummary(all: Array<Violation>, paths: Array<String>, reportedAll: Bool, ?skipped: Array<String>): Void {
 		// A file the grammar cannot read is a hole in the analysis, and one that stays SILENT
 		// otherwise: the per-member confinement gates decline for anything such a file mentions,
 		// and nothing in the report says so. Naming the files is what lets a reader tell "no
@@ -10327,7 +10419,7 @@ final class Cli {
 			stderr('apq lint: no issues in ${paths.length} file(s)\n');
 		} else {
 			stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
-			if (!includeInfo && infos > 0) stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
+			if (!reportedAll && infos > 0) stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
 		}
 	}
 
@@ -12723,10 +12815,10 @@ final class Cli {
 		cmd: String, inputSpecs: Array<String>, lang: String
 	): Null<{ graph: CallGraph, sources: Map<String, String> }> {
 		final cached: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq $cmd: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq $cmd: no input files matched ${quotedSpecs(inputSpecs)}\n');
 			return null;
 		}
 		final files: Array<{ file: String, source: String }> = [];
@@ -13133,7 +13225,7 @@ final class Cli {
 	private static function collectScopeFiles(
 		cmd: String, scopeDir: String, extraFiles: Array<String>
 	): Null<Array<{ file: String, source: String }>> {
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([scopeDir], '.hx');
+		final expanded: ExpandedInputs = expandInputs([scopeDir], '.hx');
 		final paths: Array<String> = expanded.paths;
 		for (extra in extraFiles) if (!paths.contains(extra)) paths.push(extra);
 		return ([
@@ -13880,9 +13972,53 @@ final class Cli {
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
+	/**
+	 * `specs` rendered for a diagnostic, one quoted argument per entry.
+	 *
+	 * The quotes are load-bearing rather than decorative: an argument carrying whitespace or newlines
+	 * — a shell that did not word-split a file list into separate arguments — renders unquoted as
+	 * something that reads like the list the tool WAS given, so the message blames the tool for
+	 * losing a path it never received as its own argument.
+	 */
+	private static function quotedSpecs(specs: Array<String>): String {
+		// The inner quotes are escaped for the same reason the outer ones are added: a spec that
+		// CONTAINS a quote would otherwise render as two arguments, which is the exact misreading this
+		// helper exists to prevent.
+		//
+		// CONCATENATED, not interpolated. Written as `'"${StringTools.replace(spec, '"', '\\"')}"'` the
+		// escape is decoded by the OUTER literal before the nested one is read, so the replacement
+		// argument arrives as a bare `"` and the call is a silent no-op — it compiles, and the only
+		// symptom is unescaped output.
+		return [for (spec in specs) '"' + spec.replace('"', '\\"') + '"'].join(', ');
+	}
+
+	/**
+	 * The plugin plus the `.hx` paths `specs` name, and the place a spec that named nothing is
+	 * reported.
+	 *
+	 * The empty case has always been reported by the caller (`<specs> matched no .hx files`); what was
+	 * silent is the MIXED one — a spec that matched nothing beside one that did, which vanishes into
+	 * the union and leaves the run analysing less than it was asked for with no word about it. Each
+	 * unmatched spec is QUOTED: an argument carrying whitespace or newlines (a shell that failed to
+	 * word-split a file list into separate arguments) is otherwise indistinguishable from a list of
+	 * paths the tool was given, which is exactly how one such invocation read as a tool defect.
+	 *
+	 * SCOPE OF THAT REPORT: this covers the twelve commands that resolve their scope THROUGH
+	 * here. THIRTEEN other call sites reach `expandInputs` directly and still drop an unmatched spec in
+	 * silence — `refs`, `uses`, `meta`, `search`, `blast`, `mentions`, `gates`, `rename --scope`, the
+	 * call-graph builder, `extract-constant`, `collectScopeFiles`, `collectPermissiveCandidates`, and
+	 * `readResolutionLibrary`. The last is the one to fix next: a `resolutionRoots` entry that matches
+	 * no `.hx` is dropped there in exactly the silence this function just closed for the report scope,
+	 * one screen away. `unmatched` is computed for all of them — they simply do not read it yet.
+	 */
 	private static function resolveInputPaths(lang: String, specs: Array<String>): ResolvedInputs {
 		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(specs, '.hx');
+		final expanded: ExpandedInputs = expandInputs(specs, '.hx');
+		if (expanded.unmatched.length > 0 && expanded.paths.length > 0)
+			stderr(
+				'apq: ${expanded.unmatched.length} of ${specs.length} scope argument(s) matched no .hx files and were skipped: '
+				+ '${quotedSpecs(expanded.unmatched)}\n'
+			);
 		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
 	}
 
@@ -14381,7 +14517,7 @@ final class Cli {
 		}
 		final paths: Array<String> = resolveInputPaths(lang, specs).paths;
 		if (paths.length == 0) {
-			stderr('apq oracle: ${specs.join(', ')} matched no .hx files\n');
+			stderr('apq oracle: ${quotedSpecs(specs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final config: LintConfig = LintConfig.discover(paths[0]);
@@ -15806,7 +15942,7 @@ final class Cli {
 		final out: Array<PermissiveCandidate> = [];
 		final grammarDir: String = 'src/anyparse/grammar/$lang/';
 		if (!FileSystem.exists(grammarDir) || !FileSystem.isDirectory(grammarDir)) return out;
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([grammarDir], '.hx');
+		final expanded: ExpandedInputs = expandInputs([grammarDir], '.hx');
 		final shape: MetaShape = plugin.metaShape();
 		final skipEntries: Array<SkipEntry> = [];
 		for (path in expanded.paths) {
@@ -17425,7 +17561,7 @@ final class Cli {
 		final specs: Array<String> = opts.roots.length > 0 ? opts.roots : ['src'];
 		final io: ResolvedInputs = resolveInputPaths(opts.lang, specs);
 		if (io.paths.length == 0) {
-			stderr('apq self-status: ${specs.join(', ')} matched no .hx files\n');
+			stderr('apq self-status: ${quotedSpecs(specs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final walk: SelfStatusWalk = walkSelfStatus(io.plugin, io.paths, opts.showSource);

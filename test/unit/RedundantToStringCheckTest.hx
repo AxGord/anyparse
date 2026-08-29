@@ -86,6 +86,37 @@ class RedundantToStringCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
+	/**
+	 * The blocker that withheld the edit is written onto the finding as its `declineReason`, and a
+	 * FIXABLE finding carries none.
+	 *
+	 * The blocker is already the second half of the message ("…, but $blocker"), so the run had the
+	 * sentence and simply did not put it where `apq lint --fix`'s ledger reads it — the ledger then
+	 * reported that this check "declares neither NoAutofix nor a decline reason".
+	 *
+	 * RED at base on the first `notNull`; the fixable arm below is green at base BY CONSTRUCTION and
+	 * is the discriminator — writing a reason unconditionally turns only IT red.
+	 */
+	public function testBlockedSiteCarriesItsBlockerAsTheDeclineReason(): Void {
+		final blocked: String = '${DECL_K}class C { function f(x:K) { final s:String = \'$${x.toString()}\'; } }';
+		final found: Array<Violation> = violations(blocked);
+		Assert.equals(1, found.length);
+		final reason: Null<String> = found[0].declineReason;
+		if (reason == null) {
+			Assert.fail('a blocked site carries no decline reason though its message states one: ${found[0].message}');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('non-null') != -1, reason);
+		Assert.isTrue(found[0].message.indexOf(reason) != -1, 'the reason is the message\'s own blocker clause, verbatim');
+		Assert.equals(0, edits(blocked).length);
+
+		final fixable: String = '$DECL_K@:nullSafety(Strict) class C { function f(x:K) { final s:String = \'$${x.toString()}\'; } }';
+		final clean: Array<Violation> = violations(fixable);
+		Assert.equals(1, clean.length);
+		Assert.isNull(clean[0].declineReason, 'a site that DOES get an edit declines nothing');
+		Assert.equals(1, edits(fixable).length);
+	}
+
 	public function testNullLiteralReceiverReportedNotFixed(): Void {
 		final src: String = "class C { function f() { final s:String = '${null.toString()}'; } }";
 		Assert.equals(1, violations(src).length);

@@ -445,20 +445,70 @@ class ImportBlockOrderCheckTest extends Test {
 	 * `run`, because that is where the guard runs.
 	 */
 	public function testARefusedReorderNamesItsGuardOnTheFinding(): Void {
-		final src: String = 'package app;\n\nimport z.Widget;\nimport a.Widget;\nimport a.Alpha;\n\nclass C {}\n';
+		final reason: Null<String> =
+			refusalReasonFor('package app;\n\nimport z.Widget;\nimport a.Widget;\nimport a.Alpha;\n\nclass C {}\n');
+		if (reason == null) {
+			Assert.fail('a refused reorder must name its guard on the finding it refused');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('Widget') != -1, 'and name the colliding simple name, got: $reason');
+	}
+
+	/**
+	 * The OTHER refusal names the cause it actually has: an absorbed leading comment above the
+	 * block's first import.
+	 *
+	 * The guard reads `chunkFrom != startOfLine(declFrom)`, and it printed "its first import shares
+	 * its line with something else" — a cause it can NEVER see. `ImportOrder.lineOf` returns null for
+	 * a statement whose line carries code before it, so such a slot never becomes an `ImportLine` and
+	 * never reaches this guard; `chunkFrom` can only be LESS than the line start, which is the
+	 * leading-comment reach. Two real files (both explaining, in that very comment, why the order is
+	 * deliberate) were told their import shared a line with something else.
+	 *
+	 * RED at base on both assertions. The second fixture is the discriminator and is green at base:
+	 * drop the comment and the same block sorts, so the refusal is attributable to the comment and
+	 * not to the block's shape.
+	 */
+	public function testTheLeadingCommentRefusalNamesTheComment(): Void {
+		final reason: Null<String> = refusalReasonFor(
+			'package app;\n\n// JValue first: its @:build macros define the siblings below.\nimport z.Zed;\nimport a.Alpha;\n\n'
+			+ 'class C {}\n'
+		);
+		if (reason == null) {
+			Assert.fail('a refused reorder must name its guard on the finding it refused');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('leading comment') != -1, 'the reason names the comment, got: $reason');
+		Assert.equals(-1, reason.indexOf('shares its line'), 'and never the cause this guard cannot see, got: $reason');
+
+		// DISCRIMINATOR: the same two imports with no comment above them ARE reordered, so the
+		// refusal above is the comment's doing and not the block's.
+		Assert.equals(
+			'package app;\n\nimport a.Alpha;\nimport z.Zed;\n\nclass C {}\n',
+			fixed('package app;\n\nimport z.Zed;\nimport a.Alpha;\n\nclass C {}\n')
+		);
+	}
+
+	// --- helpers -------------------------------------------------------------------
+
+	/**
+	 * The reason `fix` wrote on `src`'s ONE finding after refusing to reorder it, or null when the
+	 * fixture did not produce exactly one finding.
+	 *
+	 * Asserts on the way through that `run` declined nothing (the guards belong to the fix path) and
+	 * that `fix` produced no edit — a reason without a refusal would be the opposite defect.
+	 */
+	private function refusalReasonFor(src: String): Null<String> {
 		final files: Array<{ file: String, source: String }> = scope(src);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
 		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'app/C.hx');
 		Assert.equals(1, own.length);
+		if (own.length != 1) return null;
 		Assert.isTrue(own[0].declineReason == null, 'run() declines nothing — the guard belongs to the fix path');
 		Assert.equals(0, check.fix(src, own, plugin, SymbolIndex.build(files, plugin)).length);
-		final reason: Null<String> = own[0].declineReason;
-		Assert.notNull(reason, 'a refused reorder must name its guard on the finding it refused');
-		Assert.isTrue(reason.indexOf('Widget') != -1, 'and name the colliding simple name, got: $reason');
+		return own[0].declineReason;
 	}
-
-	// --- helpers -------------------------------------------------------------------
 
 	/**
 	 * The scope `src` is read in: the file under test plus the stub library modules the `using`
