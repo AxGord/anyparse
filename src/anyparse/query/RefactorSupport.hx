@@ -1422,10 +1422,13 @@ final class RefactorSupport {
 	 * never formatted is not a span-splice op's business, and refusing it would decline
 	 * work these ops have always done.
 	 *
-	 * The writer's OWN refusal — a parse failure, a comment loss, a source it cannot
-	 * settle — still propagates as `Err`. `isWriterCanonical` re-asks the input gate to
-	 * tell that apart from the tree's formatting state, rather than matching on the
-	 * message text.
+	 * A refusal about the RESULT — an emptied body slot, a parse failure, a comment
+	 * loss, a splice the writer cannot settle — propagates as `Err`. A source the
+	 * writer cannot round-trip AT ALL falls back to the splice like a merely-drifted
+	 * one, because `isWriterCanonical` catches and answers `false` for it: that is the
+	 * pre-existing behaviour of these ops and this helper does not narrow it.
+	 * `isWriterCanonical` re-asks the input gate rather than matching on the message
+	 * text, which would break the day the wording changes.
 	 */
 	public static function editKeepingCanonical(
 		source: String, edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin, ?optsJson: String
@@ -1433,8 +1436,9 @@ final class RefactorSupport {
 		return switch canonicalize(source, edits, false, plugin, optsJson) {
 			case Ok(text, rewrites):
 				Ok(text, rewrites);
-			// No `rewrites` argument: the writer loop never RAN on this path, and `null` is
-			// what `EditResult.Ok` documents for that. A `0` would read as a measurement.
+			// The FALLBACK below carries no `rewrites` argument: the writer loop never ran on
+			// that path, and `null` is what `EditResult.Ok` documents for it. A `0` would read
+			// as a measurement.
 			case Err(message): isWriterCanonical(source, plugin, optsJson) ? Err(message) : Ok(applyEdits(source, edits));
 		};
 	}
@@ -1443,12 +1447,20 @@ final class RefactorSupport {
 	 * Does `source` already satisfy the one-pass canonical gate `canonicalize` puts on
 	 * its input?
 	 *
-	 * The discriminator between the two ways `canonicalize` can refuse: `false` means the
-	 * INPUT was never canonical, so the refusal is about the TREE and says nothing about
-	 * the edit; `true` means the input passed that gate and the refusal is the writer's
-	 * own — a parse failure, a comment loss, or a source it cannot settle on a fixed
-	 * point. Asked by re-running the gate rather than by matching on the message text,
-	 * which would break the day the wording changes.
+	 * `false` means the writer does not agree this source is already its output — either
+	 * because it is drifted, or because it cannot round-trip the source at all (a parse
+	 * failure, a comment loss, a grammar with no writer: the `catch` answers `false` for
+	 * every one). Either way the refusal is about the TREE and says nothing about an
+	 * edit. `true` means the input passed that gate, so a `canonicalize` refusal is
+	 * about the RESULT — an emptied body slot, a splice that does not parse, a splice
+	 * the writer cannot settle.
+	 *
+	 * Two consumers read it with OPPOSITE consequences and both are correct, because it
+	 * is a factual query and not a safety veto: `editKeepingCanonical` reads `false` as
+	 * "proceed with the plain splice", `FixVerifier.verifyEntry` reads it as "this
+	 * verdict is not the check's to own" (`SourceNotCanonical`). Asked by re-running
+	 * the gate rather than by matching on the message text, which would break the day
+	 * the wording changes.
 	 */
 	public static function isWriterCanonical(source: String, plugin: GrammarPlugin, ?optsJson: String): Bool {
 		return try plugin.writeRoundTrip(source, optsJson) == source catch (_: Exception) false;

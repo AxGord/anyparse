@@ -54,11 +54,17 @@ private enum Either<L, R> {
  *
  * Atomic: the superclass is assembled through `NewFile.createRaw` (canonical at
  * the WRITER FIXED POINT, under the format config governing where the file
- * lands) and the source re-parses before either is returned. The EDITED source
- * comes back at the same fixed point when it went in at one — a cut can double a
- * blank separator, and the writer is what gives one back without touching a run
- * inside a literal or a comment. A source that was NOT canonical keeps its own
- * layout.
+ * lands) and the source re-parses before either is returned. The EDITED source comes back at the same fixed point when it went in at one — a
+ * cut can double a blank separator, and the writer is what gives one back. It cannot
+ * damage a literal or a comment doing so, and not because it knows what one is: a
+ * canonical source cannot hold an over-long blank run ANYWHERE, literals included,
+ * so there is never one for it to shorten. The hand-rolled whole-file scan that
+ * stood here could, and did.
+ *
+ * A source that was NOT canonical takes the plain splice and keeps its own layout —
+ * including, where two blank lines already flanked the cut member, a run the scan
+ * used to trim. That trim is gone with the scan; `blankExtendedSpan` still gives
+ * back the single separator, which is the case that occurs on a canonical tree.
  */
 @:nullSafety(Strict)
 final class ExtractSuperclass {

@@ -221,9 +221,15 @@ class ExtractSuperclassSliceTest extends Test {
 	 * literal: the result still parsed, `fmt --list` still called it canonical, and the
 	 * only witness was the string's length at runtime (measured: 20 -> 19).
 	 *
-	 * The WRITER already gives back the separator a cut doubles, and it knows what a
-	 * literal is — which is the whole reason the hand-rolled pass is gone rather than
-	 * taught about quoting.
+	 * The WRITER already gives back the separator a cut doubles, and it cannot damage a
+	 * literal doing so — not because it knows what one is (it does not: see the config
+	 * note below), but because a CANONICAL source cannot hold an over-long run anywhere,
+	 * so the writer never has one to shorten. That is why the hand-rolled pass is gone
+	 * rather than taught about quoting.
+	 *
+	 * What this pins is therefore "no whole-file text scan", not "goes through the
+	 * writer": a bare `applyEdits` would pass it too, which is what the M4 mutation
+	 * showed. The two `testTheEditedSourceComesBackCanonical` pins carry the writer half.
 	 *
 	 * `maxAnywhereInFile: 2` is load-bearing: the compiled DEFAULT is 1, under which
 	 * the writer itself shortens the run, and the fixture would then prove nothing
@@ -267,7 +273,14 @@ class ExtractSuperclassSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('pkg/Long.hx', 'Long', 'Base', 'pkg/Base.hx', ['alpha'], src);
 		final newSrc: String = changeFor(changes, 'pkg/Long.hx').newSource;
 		Assert.equals(newSrc, plugin().writeRoundTrip(newSrc, null), 'the edited file must be the writer fixed point:\n<$newSrc>');
-		Assert.isTrue(newSrc.contains('\n\t\timplements Omicron'), 'the over-long header wrapped, which is what the raw splice never did');
+		// ONE string spanning both halves: the clause this op INSERTED and the wrap only the
+		// writer produces. Neither can be satisfied without the other.
+		Assert.isTrue(
+			newSrc.contains(
+				'class Long extends Base implements AlphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXiOm\n\t\timplements Omicron'
+			),
+			'the inserted `extends` sits on a header the writer then wrapped — the raw splice produced neither together'
+		);
 	}
 
 	private function okChanges(

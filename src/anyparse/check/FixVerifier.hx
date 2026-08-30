@@ -175,7 +175,7 @@ enum FixRevertCause {
  * in GROUPS, so a reader never has to know whether the rule grouped anything.
  * `oracleInvocations` is the total compiler SPAWNS spent verifying this
  * file: the initial full-set typecheck, the bisect probes that produced a
- * candidate, and the complement confirm. A probe the writer REFUSED never
+ * candidate, and the complement confirm when one ran. A probe the writer REFUSED never
  * reached a compiler and is not counted — it still costs the search BUDGET,
  * which is a different quantity and the one `spent` carries. Emitted
  * only for the bisect path; a fully-applied file or a single-unit file carries no
@@ -470,11 +470,14 @@ final class FixVerifier {
 	 * bisect this always did. The `Partial` counts stay EDIT counts either way.
 	 *
 	 * A budget overrun or an unexpectedly-failing complement falls back to a
-	 * whole-file revert, still reported as `Partial` with `appliedEdits == 0`. A
-	 * probe whose subset the WRITER refused counts as a failing subset — that is
+	 * whole-file revert, still reported as `Partial` with `appliedEdits == 0`.
+	 *
+	 * A probe whose subset the WRITER refused counts as a failing subset — that is
 	 * the honest answer to "can this subset be applied and still build?" — and the
-	 * search runs on; the refusal is kept only to name the cause when nothing
-	 * lands.
+	 * search runs on. The refusal decides the reported cause at exactly one seat: the
+	 * budget/blame-everything exit, which reaches no complement. Every later seat saw
+	 * a complement of its own and answers from that.
+	 *
 	 * Mutates `entry.source` and the disk (`write`) to the final decided text.
 	 */
 	private static function verifyEntry(
@@ -544,12 +547,13 @@ final class FixVerifier {
 		// candidate still has an honest answer for the question the bisect asks — "can this
 		// subset be applied and still build?" — which is no. So it counts as a failure and
 		// the search CONTINUES: the complement it settles on is confirm-typechecked before
-		// anything is written, so a mis-attributed unit can only cost that unit, never
-		// correctness. Abandoning here instead cost the whole file: measured on a four-edit
-		// set whose complement the compiler then CONFIRMED, the abandon applied 0 of 4 edits
-		// where the search applied 2. What the refusal is kept for is the REPORTED cause —
-		// with nothing applied, `NotCanonical` names the writer rather than pinning a
-		// rejection on a compiler that never read the subset.
+		// anything is KEPT (a probe writes its candidate to disk to typecheck it — every
+		// exit below then writes back either `before` or a confirmed text), so a
+		// mis-attributed unit can cost applied edits and never correctness. Abandoning here
+		// instead cost the whole file: measured on a four-edit set whose complement the
+		// compiler then CONFIRMED, the abandon applied 0 of 4 edits where the search applies
+		// 2. What the refusal is kept for is the REPORTED cause at the ONE seat that reaches
+		// no complement — see below.
 		var uncanonical: Null<String> = null;
 		function probe(indices: Array<Int>): Bool {
 			final subset: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, indices);
@@ -568,19 +572,25 @@ final class FixVerifier {
 		}
 		final failers: Null<Array<Int>> = isolateFailers(n, searchBudget, probe, spent);
 		final refusal: Null<String> = uncanonical;
-		// The cause to file when NOTHING lands. A refusal seen anywhere in the search is the
-		// honest answer there — the compiler never judged that subset — and `OracleRejected`
-		// otherwise, which the full set earned before the bisect began.
-		final unappliedCause: FixRevertCause = refusal == null ? OracleRejected : NotCanonical(refusal);
+		// The full-set typecheck plus every probe that produced a candidate — stated once
+		// because the whole point of the fix that introduced `spawns` is that this number is
+		// exact. The confirm adds its own `+ 1`, at the one seat where it ran.
+		final spawnsWithFullSet: Int = 1 + spawns[0];
 		if (failers == null || failers.length >= n) {
 			entry.source = before;
 			write(entry.file, before);
-			return Partial(0, edits.length, 1 + spawns[0], unappliedCause);
+			// The ONE seat where a refusal decides the cause, and the seat the abandoned bisect
+			// used to reach directly: no complement was ever built, so nothing here was
+			// compiler-judged and `NotCanonical` names the writer honestly. Every seat BELOW
+			// knows more than this one and must answer from what IT saw — a hoisted cause put
+			// `NotCanonical` on a complement the compiler had read and rejected, which is the
+			// mirror of the defect the split of `FixRevertCause` exists to prevent.
+			return Partial(0, edits.length, spawnsWithFullSet, refusal == null ? OracleRejected : NotCanonical(refusal));
 		}
 		final failerUnits: Array<Int> = failers;
 		final keptUnits: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
 		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, keptUnits);
-		final invocations: Int = 1 + spawns[0] + 1;
+		final invocations: Int = spawnsWithFullSet + 1;
 		return switch RefactorSupport.canonicalize(before, safe, false, plugin, opts) {
 			case Ok(safeText) if (safeText != before):
 				write(entry.file, safeText);
@@ -595,16 +605,21 @@ final class FixVerifier {
 					case _:
 						entry.source = before;
 						write(entry.file, before);
-						Partial(0, edits.length, invocations, unappliedCause);
+						// The compiler READ this complement and refused it — `OracleRejected` whatever
+						// happened earlier in the search. A refusal upstream says nothing about a
+						// candidate the compiler judged for itself.
+						Partial(0, edits.length, invocations, OracleRejected);
 				}
 			case Ok(_):
 				entry.source = before;
 				write(entry.file, before);
-				Partial(0, edits.length, 1 + spawns[0], unappliedCause);
+				// The complement canonicalises back to the input, so nothing new was judged — but
+				// the FULL SET was, and its rejection is what put us here.
+				Partial(0, edits.length, spawnsWithFullSet, OracleRejected);
 			case Err(message):
 				entry.source = before;
 				write(entry.file, before);
-				Partial(0, edits.length, 1 + spawns[0], NotCanonical(message));
+				Partial(0, edits.length, spawnsWithFullSet, NotCanonical(message));
 		};
 	}
 

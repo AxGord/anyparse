@@ -66,13 +66,19 @@ final class ExtractInterface {
 	 * changes. Returns an `Ok` with two changes (the new interface file, the
 	 * modified source) or an `Err`.
 	 *
-	 * `optsJson` is the `hxformat.json` governing where `ifaceFile` LANDS, and
-	 * `srcOptsJson` the one governing `srcFile` — two parameters because `--out` can
-	 * put the interface under a different config from the class it came from.
-	 * Omitting either is not a neutral default: the interface is then styled by the
-	 * writer's compiled defaults while `fmt --list` and the next writer-emit
-	 * op's canonical gate judge it under the project's config. That is the
-	 * defect this parameter exists to close.
+	 * `optsJson` is the `hxformat.json` governing where `ifaceFile` LANDS,
+	 * `srcOptsJson` the one governing `srcFile` — two parameters because `--out` can put
+	 * the interface under a different config from the class it came from. Neither is a
+	 * neutral default when omitted, and they fail DIFFERENTLY:
+	 *
+	 *  - no `optsJson`: the interface is styled by the writer's compiled defaults while
+	 *    `fmt --list` and the next writer-emit op's canonical gate judge it under the
+	 *    project's config — drifted from birth. That is the defect it exists to close.
+	 *  - no `srcOptsJson`: the SOURCE is measured for canonicality under compiled
+	 *    defaults, so a project-canonical file reads as drifted and the edit quietly
+	 *    falls back to the plain splice — the canonical-in/canonical-out half switches
+	 *    itself off, and in the rarer reverse case the file is rewritten in the wrong
+	 *    style.
 	 */
 	public static function extract(
 		srcFile: String, srcTypeName: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String,

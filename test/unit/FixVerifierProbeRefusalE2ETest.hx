@@ -54,9 +54,10 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 	/**
 	 * Order is the BISECT's, not the source's. `unitsOf` numbers units in ARRAY order and
 	 * the search splits at the midpoint, so [lead, benign | slot, poison] puts the two
-	 * halves of the interdependent deletion on opposite sides of the first split: the left
-	 * probe holds both halves of nothing and passes, the right probe holds the body
-	 * deletion WITHOUT its lead and is refused by the writer.
+	 * halves of the interdependent deletion on opposite sides of the first split: the
+	 * left probe holds the LEAD deletion plus the benign rewrite and passes (dropping
+	 * `if (flag) ` alone leaves `trace("in");` standing), while the right probe holds the
+	 * BODY deletion without its lead and is refused by the writer.
 	 */
 	private static final TABLE: Array<FakeEdit> = [
 		{ find: 'if (flag) ', text: '' },
@@ -81,6 +82,38 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		{ find: '"ccc"', text: 'NoSuchType.two' }
 	];
 
+	/**
+	 * The eight-unit fixture: the same brace-less `if`, four literals, and two methods
+	 * either of which can be renamed to `q` alone but not BOTH — a build break the bisect
+	 * cannot see, because no probe ever holds both renames.
+	 */
+	private static final WIDE_MAIN: String = 'class Main {\n\n\tstatic function main() {\n\t\tfinal flag:Bool = true;\n'
+		+ '\t\tfinal a:String = "aaa";\n\t\tfinal b:String = "bbb";\n\t\tfinal c:String = "ccc";\n\t\tfinal '
+		+ 'd:String = "ddd";\n\t\tif (flag) trace("in");\n\t\ttrace(a);\n\t\ttrace(b);\n\t\ttrace(c);\n'
+		+ '\t\ttrace(d);\n\t}\n\n\tstatic function p():Void {}\n\n\tstatic function r():Void {}\n\n}\n';
+
+	/**
+	 * Eight units laid out so the search reaches the ONE seat a refusal must not speak for:
+	 * the complement that is confirm-typechecked and REJECTED.
+	 *
+	 * `[lead, "aaa", p->q, "bbb" | slot, poison, r->q, "ddd"]`. The left half passes; the
+	 * right half is REFUSED (the body deletion without its lead), which is the refusal under
+	 * test. The search then isolates `{slot, poison}` in four more probes — exactly the
+	 * `2*ceil(log2(8)) = 6` budget — and settles on a complement holding BOTH renames, a
+	 * subset no probe ever tested. The compiler reads it and refuses it for a duplicate
+	 * field, so the verdict at that seat is the COMPILER's and must say so.
+	 */
+	private static final WIDE_TABLE: Array<FakeEdit> = [
+		{ find: 'if (flag) ', text: '' },
+		{ find: '"aaa"', text: '"AAA"' },
+		{ find: 'function p(', text: 'function q(' },
+		{ find: '"bbb"', text: '"BBB"' },
+		{ find: 'trace("in");', text: '' },
+		{ find: '"ccc"', text: 'NoSuchType.value' },
+		{ find: 'function r(', text: 'function q(' },
+		{ find: '"ddd"', text: '"DDD"' }
+	];
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 
@@ -95,11 +128,25 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final slot: Int = MAIN.indexOf('trace("in");');
 		final lead: Int = MAIN.indexOf('if (flag) ');
+		final poison: Int = MAIN.indexOf('"ccc"');
 		final slotOnly: Array<{ span: Span, text: String }> = [{ span: new Span(slot, slot + 'trace("in");'.length), text: '' }];
 		final both: Array<{ span: Span, text: String }> = slotOnly.concat([{ span: new Span(lead, lead + 'if (flag) '.length), text: '' }]);
+		// The subset the bisect ACTUALLY probes first is the body deletion beside the poison,
+		// not the body deletion alone — assert that one too, so the guard is not one step
+		// removed from the thing it guards.
+		final withPoison: Array<{ span: Span, text: String }> = slotOnly.concat([
+			{
+				span: new Span(poison, poison + '"ccc"'.length),
+				text: 'NoSuchType.value'
+			}
+		]);
 		Assert.isTrue(
 			RefactorSupport.canonicalize(MAIN, slotOnly, false, plugin, null).match(Err(_)),
 			'deleting the body of a brace-less `if` alone must be refused — that refusal IS the arm under test'
+		);
+		Assert.isTrue(
+			RefactorSupport.canonicalize(MAIN, withPoison, false, plugin, null).match(Err(_)),
+			'and refused in the company the bisect actually probes it in'
 		);
 		Assert.isTrue(
 			RefactorSupport.canonicalize(MAIN, both, false, plugin, null).match(Ok(_, _)),
@@ -149,8 +196,8 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		final after: String = File.getContent('$dir/Main.hx');
 		Assert.equals(2, result.appliedEdits, 'the complement the search reached is applied, not discarded');
 		Assert.equals(0, result.reverted.length, 'the file is not fully reverted');
-		Assert.equals(1, result.partials.length);
-		Assert.equals(2, result.partials[0].appliedEdits);
+		Assert.equals(1, result.partials.length, 'the file was bisected, not decided by an earlier gate');
+		Assert.equals(2, result.partials[0].appliedEdits, 'the kept complement is the lead deletion and the benign rewrite');
 		Assert.equals(2, result.partials[0].revertedEdits, 'the body deletion goes back WITH the poison');
 		Assert.equals(-1, after.indexOf('NoSuchType'), 'the poison reverts');
 		Assert.notEquals(-1, after.indexOf('"AAA"'), 'the benign rewrite lands');
@@ -194,7 +241,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		);
 		final spawns: Int = CompilerOracle.invocations - before;
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
-		Assert.equals(1, result.partials.length);
+		Assert.equals(1, result.partials.length, 'one bisected file, so the whole non-baseline spawn budget is its own');
 		Assert.equals(
 			spawns - 1, result.partials[0].oracleInvocations,
 			'every spawn but the baseline belongs to the one bisected file (spawned $spawns, reported ${result.partials[0].oracleInvocations})'
@@ -215,9 +262,14 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 	 * reader chasing that cause would otherwise go looking in the check's edit for a type
 	 * error that is not there.
 	 *
-	 * Every unit is doomed here (the refused body deletion plus two independent poisons),
-	 * so the search blames them all and the file reverts whole — the shape where the cause
-	 * is the only thing the reader gets.
+	 * Every unit is doomed here, and the WHOLE set still canonicalises (the lead
+	 * deletion is in it), so the run really enters the bisect rather than being turned
+	 * away by the full-set canonical gate — `partials.length` is what asserts that.
+	 * The search then blames everything, exhausts its budget and reverts the file whole,
+	 * which is the shape where the cause is the only thing the reader gets. That the
+	 * assertion below reads the SEAT and not some other `NotCanonical` is settled by
+	 * mutation: flattening that one seat's cause to `OracleRejected` flips this test and
+	 * nothing else.
 	 */
 	public function testARefusalStillNamesTheWriterWhenNothingLands(): Void {
 		#if (sys || nodejs)
@@ -243,12 +295,70 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		// below would prove nothing about the search. Measured: the first version of this
 		// fixture did exactly that, and a mutation that flattened the cause flipped nothing.
 		Assert.equals(1, result.partials.length, 'the full set reached the compiler and was bisected');
-		Assert.equals(1, result.reverted.length);
+		Assert.equals(1, result.reverted.length, 'one (file, rule) pair reverted whole');
 		Assert.equals(
 			'NotCanonical', result.reverted[0].cause.getName(),
 			'a refused probe is the writer declining a candidate, not the compiler rejecting one'
 		);
 		Assert.equals(MAIN, File.getContent('$dir/Main.hx'), 'disk is byte-identical to the input');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * RED at the base commit, and separately the guard on a regression this slice's own
+	 * first draft introduced — measured, not assumed: at base the search is ABANDONED on
+	 * the first refusal, so this seat is never reached at all (base reports
+	 * `oracleInvocations` 7 from the budget counter and a `NotCanonical` cause).
+	 *
+	 * A refusal seen ANYWHERE in the search must not be allowed to speak for a complement
+	 * the compiler read and refused for itself. Hoisting one cause for every zero-applied
+	 * seat did exactly that: `Cli.revertCauseText` then renders a compiler rejection as
+	 * `nothing reached the compiler — <writer message>`, which is the exact mirror of the
+	 * defect that splitting `FixRevertCause` exists to prevent, and it sends the reader to
+	 * the writer to look for a type error the compiler found.
+	 *
+	 * It stays valuable as a regression guard once the abandon is gone: reinstating the
+	 * hoisted cause at THIS seat alone flips this test and nothing else in the suite.
+	 *
+	 * The seat is expensive to reach and that is why it had no coverage: the complement must
+	 * be a subset NO probe ever tested, which needs failers isolated out of BOTH halves, and
+	 * every refusal on the way costs search budget. `WIDE_TABLE` gets there with one probe to
+	 * spare — `oracleInvocations` is asserted at 5 (full set + three candidate-producing
+	 * probes + the confirm) rather than the 4 the budget-exhaustion seat would report, so the
+	 * test pins WHICH seat answered and not merely what it said.
+	 */
+	public function testACompilerRefusedComplementIsNotBlamedOnTheWriter(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('fixverifrefusal', [
+			{ name: 'Main.hx', source: WIDE_MAIN },
+			{ name: 'check.hxml', source: HXML }
+		]);
+		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: WIDE_MAIN }];
+		final result: FixVerifyResult = FixVerifier.verify(
+			files,
+			[new TableFake(WIDE_TABLE)],
+			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+		);
+		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
+		Assert.equals(1, result.partials.length, 'the file was bisected');
+		Assert.equals(0, result.partials[0].appliedEdits, 'the complement failed its confirm, so nothing lands');
+		Assert.equals(
+			5, result.partials[0].oracleInvocations,
+			'the CONFIRM seat, not the budget seat — the confirm is the fifth spawn (spent ${result.partials[0].oracleInvocations})'
+		);
+		Assert.equals(1, result.reverted.length);
+		Assert.equals(
+			'OracleRejected', result.reverted[0].cause.getName(),
+			'the compiler read this complement and refused it — an earlier writer refusal says nothing about it'
+		);
+		Assert.equals(WIDE_MAIN, File.getContent('$dir/Main.hx'), 'disk is byte-identical to the input');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
