@@ -56,6 +56,9 @@ final class Address {
 	/** How many candidates an ambiguity error lists before eliding the rest. */
 	private static inline final CANDIDATE_LIMIT: Int = 5;
 
+	/** How many other-kind carriers of a name a `matched no nodes` refusal names before eliding the rest. */
+	private static inline final KIND_HINT_LIMIT: Int = 3;
+
 	private function new() {}
 
 	/**
@@ -215,7 +218,9 @@ final class Address {
 		};
 		final equiv: Null<KindEquivalence> = plugin.selectKindEquivalence();
 		final matches: Array<QueryNode> = Engine.select(tree, selector, equiv);
-		return pick(matches.map(describeNode.bind(source)), matches, '--select "$selectorExpr"', nth);
+		return matches.length == 0
+			? Err('--select "$selectorExpr" matched no nodes${kindHint(tree, source, plugin, selector)}')
+			: pick(matches.map(describeNode.bind(source)), matches, '--select "$selectorExpr"', nth);
 	}
 
 	/** An `apq search` pattern — the matched node is the target; same exactly-one / `nth` discipline. */
@@ -232,6 +237,41 @@ final class Address {
 			if (node != null && !nodes.contains(node)) nodes.push(node);
 		}
 		return pick(nodes.map(describeNode.bind(source)), nodes, '--match "$patternSource"', nth);
+	}
+
+	/**
+	 * What to append to a `matched no nodes` refusal when the selector's NAME does exist, under other
+	 * kinds — the selector to use instead, with the position it is at.
+	 *
+	 * A kind mismatch answered with nothing but "matched no nodes", which reads as "there is no such
+	 * declaration" and sends the caller looking for a typo. The sharpest case is a MODULE-LEVEL
+	 * function: every in-type habit spells `FnMember:<name>`, the grammar calls it `FnDecl`, and the
+	 * op said only that the name matched nothing.
+	 */
+	private static function kindHint(tree: QueryNode, source: String, plugin: GrammarPlugin, selector: Selector): String {
+		// A selector with an ANCESTOR chain constrains where the node may sit, and a hint read off a
+		// bare name cannot honour that: answering `ClassDecl:Foo >> FnMember:bar` with
+		// `try --select "FnMember:bar"` points at some OTHER class's `bar`, and an op run on the
+		// suggestion edits it. Say nothing rather than name the wrong declaration.
+		if (selector.segments.length != 1) return '';
+		final name: Null<String> = selector.segments[0].name;
+		if (name == null) return '';
+		// DECLARATION hosts only. `QueryNode.name` is set on named REFERENCES too, so a bare name walk
+		// answers with the call site (`IdentExpr:bar`) ahead of the method it calls, in document
+		// order — and that is what the suggestion would then have addressed.
+		final found: Array<QueryNode> = [];
+		collectNamed(tree, name, plugin.metaShape().declHostKinds, found);
+		if (found.length == 0) return '';
+		final shown: Int = found.length < KIND_HINT_LIMIT ? found.length : KIND_HINT_LIMIT;
+		final kinds: Array<String> = [for (i in 0...shown) describeNode(source, found[i])];
+		final more: String = found.length > shown ? ', …' : '';
+		return ' — "$name" exists as ${kinds.join(', ')}$more; try --select "${found[0].kind}:$name"';
+	}
+
+	/** Every DECLARATION node in `tree` carrying `name`, in document order. */
+	private static function collectNamed(node: QueryNode, name: String, hosts: Array<String>, out: Array<QueryNode>): Void {
+		if (node.name == name && hosts.contains(node.kind)) out.push(node);
+		for (c in node.children) collectNamed(c, name, hosts, out);
 	}
 
 	/** Apply the exactly-one / `nth` discipline to a candidate list; the ambiguity error lists positions ready for an `--nth` pick. */

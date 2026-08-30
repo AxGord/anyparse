@@ -1307,6 +1307,7 @@ final class Cli {
 			list: false,
 			reformat: false,
 			regex: false,
+			allowWide: false,
 			find: null,
 			replace: null,
 			inputSpecs: [],
@@ -8492,7 +8493,7 @@ final class Cli {
 		final listMode: Bool = o.list || (!o.write && !io.singleFile);
 
 		final tally: { changed: Int, failed: Int } = rewriteCommentFiles(
-			paths, findStr, replaceStr, plugin, o.write, listMode, o.regex, o.reformat
+			paths, findStr, replaceStr, plugin, o.write, listMode, o.regex, o.reformat, o.allowWide
 		);
 		final failed: Int = tally.failed;
 
@@ -8517,6 +8518,7 @@ final class Cli {
 
 	private static function printCommentRewriteUsage(): Void {
 		sysPrint('Usage: apq comment-rewrite <find> <replace> <file/dir/glob>... [--regex] [--write] [--list]\n');
+		sysPrint('       [--allow-wide]\n');
 		sysPrint('\n');
 		sysPrint('Text search-and-replace scoped to COMMENT bodies (the write-twin of\n');
 		sysPrint('apq lit). Code and comment delimiters are never touched; strings are\n');
@@ -8533,6 +8535,8 @@ final class Cli {
 		sysPrint('                 list of changed paths for a dir / multiple files)\n');
 		sysPrint('  --list, -l     Print paths whose comments would change; no rewrite\n');
 		sysPrint('  --reformat     Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --allow-wide   Accept a replacement that pushes a comment line past the\n');
+		sysPrint('                 configured wrapping.maxLineLength (refused by default)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('MATCHING. A LITERAL find is matched against a body whose line breaks — and the\n');
@@ -8543,9 +8547,17 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint("SPLICING. Write plain lines and real newlines (a shell $'a\\nb' literal): each\n");
 		sysPrint("new line gets the comment's own continuation, and a ` * ` you add yourself is\n");
-		sysPrint('stripped rather than doubled. What is NOT re-wrapped is line LENGTH — a long\n');
-		sysPrint('single-line replacement still produces an over-long line that neither\n');
-		sysPrint('`fmt --list` nor lint reports, so break it where you want it broken.\n');
+		sysPrint("stripped rather than doubled. The continuation is read off the block's own\n");
+		sysPrint('first interior line, so a GUTTER-LESS block keeps its indentation and a\n');
+		sysPrint('star-guttered one keeps its star; a one-line /** … */ that grows past one line\n');
+		sysPrint('is re-opened so its closer gets a line of its own.\n');
+		sysPrint('\n');
+		sysPrint('WIDTH is not re-wrapped either, but it is no longer silent: a replacement that\n');
+		sysPrint('leaves a comment line past wrapping.maxLineLength is REFUSED, naming the line,\n');
+		sysPrint('because neither `fmt --list` nor any lint rule reports one. An edit that only\n');
+		sysPrint('touches a line already over-width is fine — the gate compares how many such\n');
+		sysPrint('lines there are and how wide the widest is, so shortening one is not gaining\n');
+		sysPrint('one. Break it where you want it broken, or pass --allow-wide.\n');
 	}
 
 	/**
@@ -12495,6 +12507,7 @@ final class Cli {
 		var list: Bool = false;
 		var reformat: Bool = false;
 		var regex: Bool = false;
+		var allowWide: Bool = false;
 		var find: Null<String> = null;
 		var replace: Null<String> = null;
 		final inputSpecs: Array<String> = [];
@@ -12513,6 +12526,8 @@ final class Cli {
 					reformat = true;
 				case '--regex':
 					regex = true;
+				case '--allow-wide':
+					allowWide = true;
 				case '-h', '--help':
 					printCommentRewriteUsage();
 					return commentRewriteParseExit(EXIT_OK);
@@ -12536,6 +12551,7 @@ final class Cli {
 			list: list,
 			reformat: reformat,
 			regex: regex,
+			allowWide: allowWide,
 			find: find,
 			replace: replace,
 			inputSpecs: inputSpecs,
@@ -12545,7 +12561,7 @@ final class Cli {
 
 	private static function rewriteCommentFiles(
 		paths: Array<String>, findStr: String, replaceStr: String, plugin: GrammarPlugin, write: Bool, listMode: Bool, regex: Bool,
-		reformat: Bool
+		reformat: Bool, allowWide: Bool
 	): { changed: Int, failed: Int } {
 		final op: String = 'comment-rewrite';
 		var changed: Int = 0;
@@ -12557,7 +12573,7 @@ final class Cli {
 				continue;
 			};
 			final optsJson: Null<String> = discoverFormatConfig(path);
-			switch CommentRewrite.rewrite(source, findStr, replaceStr, regex, reformat, plugin, optsJson) {
+			switch CommentRewrite.rewrite(source, findStr, replaceStr, regex, reformat, plugin, optsJson, allowWide) {
 				case Ok(text, rewrites):
 					warnRewrites(op, path, rewrites);
 					final isChanged: Bool = text != source;
@@ -18651,7 +18667,9 @@ typedef GatesOpts = {
 };
 
 /**
- * Parsed options for `apq comment-rewrite` — `lang`, `write` / `list` / `reformat`, `regex` mode, the `find` / `replace` texts, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq comment-rewrite` — `lang`, `write` / `list` / `reformat`, `regex` mode,
+ * `allowWide`, the `find` / `replace` texts, and `inputSpecs`. `errExit` non-null means arg parsing
+ * hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef CommentRewriteOpts = {
@@ -18660,6 +18678,9 @@ typedef CommentRewriteOpts = {
 	var list: Bool;
 	var reformat: Bool;
 	var regex: Bool;
+	// A replacement is refused when it pushes a comment line past the configured width — the last
+	// half of this op no gate could see. `--allow-wide` waives it for a line meant to stay long.
+	var allowWide: Bool;
 	var find: Null<String>;
 	var replace: Null<String>;
 	var inputSpecs: Array<String>;

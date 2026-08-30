@@ -12,6 +12,7 @@ import utest.Assert;
 import utest.Test;
 
 using Lambda;
+using StringTools;
 
 /**
  * Unit tests for the shared target-address resolver (`Address.resolve`) — the
@@ -481,6 +482,66 @@ class AddressTest extends Test {
 		}
 		Assert.isTrue(shared > 10);
 		Assert.isTrue(claimed > 5);
+	}
+
+	/**
+	 * A selector whose NAME exists but under another KIND said only "matched no nodes", which reads
+	 * as "there is no such declaration". A module-level `function` is an `FnDecl`, not the `FnMember`
+	 * every in-type habit spells, so the tool answered a question about the KIND with an answer about
+	 * the NAME. The error names the kinds that DO carry it, with the selector to use.
+	 */
+	public function testSelectKindMismatchNamesTheRealKind(): Void {
+		final src: String = 'function topLevel(): Int {\n\treturn 1;\n}\n';
+		switch resolveIn(src, { select: 'FnMember:topLevel' }) {
+			case Ok(_, _):
+				Assert.fail('expected Err for a kind that does not carry this name');
+			case Err(message):
+				Assert.isTrue(message.contains('FnDecl:topLevel'), message);
+		}
+	}
+
+	/** A name that exists nowhere keeps the plain answer — there is no kind to suggest. */
+	public function testSelectUnknownNameStaysPlain(): Void {
+		final src: String = 'function topLevel(): Int {\n\treturn 1;\n}\n';
+		switch resolveIn(src, { select: 'FnMember:absent' }) {
+			case Ok(_, _):
+				Assert.fail('expected Err');
+			case Err(message):
+				Assert.isFalse(message.contains('exists as'), message);
+		}
+	}
+
+	/**
+	 * A name that also exists as a REFERENCE must not be suggested: `QueryNode.name` is set on named
+	 * references too, so a bare name walk answers the call site — `IdentExpr:topLevel` — ahead of the
+	 * declaration it calls, and an op run on that suggestion addresses an identifier read.
+	 */
+	public function testSelectKindMismatchNamesTheDeclarationNotAReference(): Void {
+		final src: String =
+			'function topLevel(): Int {\n\treturn 1;\n}\n\nclass C {\n\tfunction f(): Int {\n\t\treturn topLevel();\n\t}\n}\n';
+		switch resolveIn(src, { select: 'FnMember:topLevel' }) {
+			case Ok(_, _):
+				Assert.fail('expected Err for a kind that does not carry this name');
+			case Err(message):
+				Assert.isTrue(message.contains('FnDecl:topLevel'), message);
+				Assert.isFalse(message.contains('IdentExpr'), message);
+		}
+	}
+
+	/**
+	 * A selector with an ANCESTOR chain says WHERE the node must sit, and a hint read off the bare
+	 * name cannot honour it — suggesting `FnMember:bar` for a missed `ClassDecl:Foo >> FnMember:bar`
+	 * points at another class's `bar`, and a mutation op run on the suggestion rewrites that one.
+	 */
+	public function testSelectScopedKindMismatchStaysPlain(): Void {
+		final src: String = 'class Foo {\n\tfunction other(): Int {\n\t\treturn 1;\n\t}\n}\n\n'
+			+ 'class Baz {\n\tfunction bar(): Int {\n\t\treturn 2;\n\t}\n}\n';
+		switch resolveIn(src, { select: 'ClassDecl:Foo >> FnMember:bar' }) {
+			case Ok(_, _):
+				Assert.fail('expected Err');
+			case Err(message):
+				Assert.isFalse(message.contains('exists as'), message);
+		}
 	}
 
 	private function resolve(spec: AddressSpec): AddressResult {

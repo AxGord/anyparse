@@ -8,19 +8,20 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * The `doc-comment-continuation` check: an interior line of a STAR-GUTTERED block comment
- * that breaks the block's own ` * ` continuation prefix — lost it, carries it at the wrong
- * indent, or carries it twice.
+ * The `doc-comment-continuation` check: an interior line of a block comment that breaks the
+ * continuation prefix its own block uses — a STAR-GUTTERED block judged by its gutter (lost,
+ * carried at the wrong indent, or carried twice) and a GUTTER-LESS `/**` one by its INDENTATION.
  *
  * This is the only channel in the project that can see the class. The writer re-emits a
  * comment interior byte for byte, so a corrupted block is writer-canonical (`fmt --list`
  * clean) and every node-based rule is blind to trivia. The fixtures below are the shapes
  * three writer-emit ops actually produced on this repository's own tree.
  *
- * The CONTROLS are as load-bearing as the findings, because the rule reads prose: an
- * unguttered block comment, a markdown bullet, a bold marker, a deeper-indented code line
- * inside a doc, a comment shape inside a STRING literal, and a trailing comment after code
- * must all stay silent. Each of those is green at base BY CONSTRUCTION — the rule did not
+ * The CONTROLS are as load-bearing as the findings, because the rule reads prose: a `/*` block of
+ * commented-out code, a markdown bullet, a bold marker, a deeper-indented code line inside a doc, a
+ * comment shape inside a STRING literal, a trailing comment after code, and — for the gutter-less
+ * arm — a first line padded for prose, a tab-against-spaces mix and an interior written flush with
+ * its delimiters must all stay silent. Each of those is green at base BY CONSTRUCTION — the rule did not
  * exist — so their value is the mutation proof recorded in the slice report, not the pass.
  */
 class DocCommentContinuationCheckTest extends Test {
@@ -93,11 +94,18 @@ class DocCommentContinuationCheckTest extends Test {
 	}
 
 	/**
-	 * A block comment with NO gutter is a different, legitimate style — commented-out code, a
-	 * free-form paragraph — and the rule never inspects it. Green at base by construction.
+	 * A `/*` block with no gutter is commented-out code, where indentation is CONTENT, and the rule
+	 * does not judge it. The interior here steps BACK to the delimiter indent, which in a `/**` doc
+	 * block is the splice signature — so it is the `/*`-vs-`/**` clause that acquits this fixture and
+	 * not one of its neighbours.
+	 *
+	 * VACUITY, found by review: the original shape (every interior line at one indent) was acquitted
+	 * by the flush-with-delimiters clause instead, and stayed acquitted when re-spelled as `/**`. Its
+	 * doc also said the rule "never inspects" a gutter-less block, which the gutter-less arm made
+	 * false.
 	 */
 	public function testUngutteredBlockIgnored(): Void {
-		Assert.equals(0, violations('class C {\n\t/*\n\tfunction old() {}\n\tvar dead = 1;\n\t*/\n}').length);
+		Assert.equals(0, violations('class C {\n\t/*\n\t\tfunction old() {}\n\tvar dead = 1;\n\t\treturn;\n\t*/\n}').length);
 	}
 
 	/**
@@ -231,6 +239,151 @@ class DocCommentContinuationCheckTest extends Test {
 			out
 		);
 		Assert.equals(0, violations(out).length);
+	}
+
+	/**
+	 * A GUTTER-LESS block (`/**` … `**\/`, the Haxe-stdlib spelling) indents its interior one level
+	 * deeper than its delimiters and carries no star at all. The rule required a gutter star on the
+	 * first interior line, so this whole family fell through.
+	 *
+	 * ⚠️ The 227 lines in 23 files S23 measured are NOT this family's — that population is what the
+	 * STAR arm found on this repository's own ` * `-guttered tree, and an earlier draft of this doc
+	 * claimed it as evidence for the gutter-less arm. The arm's real evidence is a producer/detector
+	 * pair the slice ran end to end: `hxq comment-rewrite` at the base commit, splicing a line into
+	 * the stdlib's own `haxe/ds/StringMap.hx` doc, landed it at column 0; `fmt --list` called the
+	 * result canonical and the rule at base reported nothing; this arm reports exactly that line, and
+	 * its `--fix` reproduces byte for byte what the fixed splice writes. Across 4599 external files
+	 * the arm's own finding count is zero.
+	 */
+	public function testGutterlessBlockBrokenIndentReported(): Void {
+		final src: String = 'class C {\n\t/**\n\t\tOne line.\n\tLost a level.\n\t\tThree.\n\t**/\n\tfunction f() {}\n}';
+		final found: Array<Violation> = violations(src);
+		Assert.equals(1, found.length);
+		// The WORDING is the finding's whole payload here — a gutter-less block has no ` * ` to have
+		// lost, and the guttered arm's two messages both name one.
+		Assert.equals('doc-comment continuation line does not carry its block\'s own indentation', found[0].message);
+	}
+
+	/**
+	 * A line SHALLOWER than the delimiters, not merely at them — what a hand edit or a pre-S23 splice
+	 * into an indented block leaves. An earlier draft aborted the whole judgement on any line whose
+	 * indentation did not start with the block's, which acquitted this outright.
+	 */
+	public function testGutterlessLineUnderTheDelimiterIndentReported(): Void {
+		final src: String = 'class C {\n\t/**\n\t\tOne line.\nFlush left.\n\t\tThree.\n\t**/\n\tfunction f() {}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\t/**\n\t\tOne line.\n\t\tFlush left.\n\t\tThree.\n\t**/\n\tfunction f() {}\n}', fixed(src));
+	}
+
+	/** The gutter-less repair keeps a `\r`, so a CRLF file does not gain one bare-LF line. */
+	public function testFixKeepsCarriageReturnGutterless(): Void {
+		final src: String = 'class C {\r\n\t/**\r\n\t\tOne line.\r\n\tLost a level.\r\n\t\tThree.\r\n\t**/\r\n\tfunction f() {}\r\n}';
+		Assert.equals(
+			'class C {\r\n\t/**\r\n\t\tOne line.\r\n\t\tLost a level.\r\n\t\tThree.\r\n\t**/\r\n\tfunction f() {}\r\n}', fixed(src)
+		);
+	}
+
+	/**
+	 * A gutter-less block whose lines all agree is a house style, not a splice. The gutter arm reaches
+	 * that outcome through an explicit unanimity loop; this arm has none — a consistent block simply
+	 * has no line at or under its delimiter indent for `breakage` to report.
+	 */
+	public function testGutterlessBlockUnanimousIsClean(): Void {
+		final src: String = 'class C {\n\t/**\n\t\tOne line.\n\t\tTwo.\n\t\tThree.\n\t**/\n\tfunction f() {}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** A line indented DEEPER than the block's own interior is a code sample or a list — untouched. */
+	public function testGutterlessDeeperLineIsClean(): Void {
+		final src: String = 'class C {\n\t/**\n\t\tExample:\n\n\t\t\tfinal y = 2;\n\t\tDone.\n\t**/\n\tfunction f() {}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** A block at column 0 whose interior sits at one tab, with one line flush left — the S38 shape. */
+	public function testGutterlessTypeLevelFlushLeftLineReported(): Void {
+		final src: String = '/**\n\tOne line.\nLost every level.\n\tThree.\n**/\nclass C {}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	/** The fix restores the block's own interior indentation, keeping the line's content byte for byte. */
+	public function testFixRestoresGutterlessIndent(): Void {
+		final src: String = 'class C {\n\t/**\n\t\tOne line.\n\tLost a level.\n\t\tThree.\n\t**/\n\tfunction f() {}\n}';
+		final out: String = fixed(src);
+		Assert.equals('class C {\n\t/**\n\t\tOne line.\n\t\tLost a level.\n\t\tThree.\n\t**/\n\tfunction f() {}\n}', out);
+		// The repair is a fixed point, the way `testRealWorldShapeAllFourLines` proves it for the
+		// gutter arm — a fix that still reports is a fix that will be applied again next pass.
+		Assert.equals(0, violations(out).length);
+	}
+
+	/** A star-guttered block is still judged by the gutter arm — the two arms do not cross. */
+	public function testGutteredBlockStillJudgedByItsGutter(): Void {
+		final src: String = 'class C {\n\t/**\n\t * One line.\n\tLost the gutter.\n\t * Three.\n\t */\n\tfunction f() {}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\t/**\n\t * One line.\n\t * Lost the gutter.\n\t * Three.\n\t */\n\tfunction f() {}\n}', fixed(src));
+	}
+
+	/**
+	 * FIRST-LINE PROSE PADDING. Judging a gutter-less block against its first interior line's
+	 * indentation — the way the gutter arm judges a gutter — reported this shape across the Haxe
+	 * standard library: a first line whose extra leading spaces align prose, not structure
+	 * (`lua/lib/lrexlib/Rex.hx`). A gutter star anchors a prefix; bare indentation does not.
+	 */
+	public function testGutterlessProsePaddedFirstLineIgnored(): Void {
+		final src: String = 'class C {\n\t/**\n\t\t  This function searches for all matches of the pattern,\n'
+			+ '\t\tand replaces them according to the parameters.\n\t**/\n\tfunction f() {}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** The same shape one level up — the first line padded, the block at column 0 (`js/html/svg`). */
+	public function testGutterlessProsePaddedTypeLevelIgnored(): Void {
+		final src: String = '/**\n\t Creates a begin instance time for the current time.\n\n\t@throws DOMError\n**/\nclass C {}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * A `/*` block is commented-out code or a banner, where indentation is CONTENT — the standard
+	 * library keeps a whole C# method inside one at four different levels (`cs/internal/Runtime.hx`).
+	 * Only a `/**` doc block is judged by its indentation.
+	 *
+	 * VACUITY, FOUND BY MUTATION AND RECORDED: the first version of this fixture was the stdlib's own
+	 * `cs/internal/Runtime.hx` block verbatim, and dropping the `/**` clause killed NOTHING — that
+	 * block opens at column 0 and holds no line at column 0, so it is the delimiter-indent clause
+	 * that acquits it, not this one. The shape below is the one that needs this clause: a `/*` block
+	 * whose interior DOES step back to the delimiter indent, which in a doc block is the splice.
+	 */
+	public function testGutterlessCommentedOutCodeIgnored(): Void {
+		final src: String = 'class C {\n\t/*\n\t\tif (a) return b;\n\telse\n\t\treturn c;\n\t*/\n\tfunction g() {}\n}';
+		Assert.equals(0, violations(src).length);
+		// The identical shape as a DOC block is the splice signature, and does report.
+		Assert.equals(1, violations('class C {\n\t/**\n\t\tif (a) return b;\n\telse\n\t\treturn c;\n\t**/\n\tfunction g() {}\n}').length);
+	}
+
+	/** A block whose lines share no indentation at all (a tab against spaces) is not a splice. */
+	public function testGutterlessTabAgainstSpacesIgnored(): Void {
+		final src: String = '/**\n\tThis library is an extern for a polyfill library of common lua table\n    methods.\n**/\nclass C {}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** A block written FLUSH with its own delimiters has no deeper line to have fallen away from. */
+	public function testGutterlessFlushWithDelimitersIgnored(): Void {
+		final src: String =
+			'class C {\n\t/**\n\tText at the delimiter level.\n\t\tan indented sample\n\tMore text.\n\t**/\n\tfunction f() {}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * A block whose interior is SPACE-indented while its delimiters are tab-indented shares no
+	 * indentation with them, so there is no "its own" prefix to judge against and the rule stays out.
+	 *
+	 * HAND-ASSEMBLED after a zero-kill mutation arm: dropping the clause that requires an interior
+	 * line to start with the block's indent killed nothing against the fixtures then present, and
+	 * neither did the two stdlib shapes that motivated it — they are acquitted one clause earlier.
+	 * This is the shape that actually needs it, and no real file in 4599 external ones produced it.
+	 */
+	public function testGutterlessSpaceInteriorUnderTabDelimitersIgnored(): Void {
+		final src: String =
+			'class C {\n\t/**\n  Space line one.\n  Space line two.\n\tA line at the delimiter indent.\n\t**/\n\tfunction f() {}\n}';
+		Assert.equals(0, violations(src).length);
 	}
 
 	private function violations(src: String): Array<Violation> {
