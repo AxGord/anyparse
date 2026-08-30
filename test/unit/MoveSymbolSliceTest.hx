@@ -1183,6 +1183,386 @@ class MoveSymbolSliceTest extends Test {
 		);
 	}
 
+
+	public function testAGuardedStatementIsNeverTheOneCarried(): Void {
+		// `bindingOf` skips a guarded statement, so the ladder's answer always comes from the unguarded
+		// one — but both spell the same module path, and a `using` carried instead of an `import` would
+		// give the destination static extensions it never had.
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 8, 7, 'p/Host.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nimport q.Mod;\n#if neko\nusing q.Mod;\n#end\n\nclass Mover {\n\tvar d:Sub;\n}'
+			},
+			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' }
+		]);
+		final host: String = changeFor(changes, 'p/Host.hx').newSource;
+		Assert.isTrue(host.contains('import q.Mod;'), 'the unguarded import is the line carried');
+		Assert.isFalse(host.contains('using q.Mod;'), 'the guarded using is not');
+	}
+
+	public function testARootModuleLeadingSegmentIsNamedInTheRefusal(): Void {
+		// The refusal has to name what each side actually reaches; a root-package module is a real
+		// answer and reads differently from "the top level".
+		assertErrContains(MoveSymbol.moveType('p/Mover.hx', 3, 7, 's/Dest.hx', [
+			{ file: 'Root.hx', source: 'class Root {}\n\nclass Sub {}' },
+			{ file: 's/Root.hx', source: 'package s;\n\nclass Root {}\n\nclass Sub {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\tvar d:Root.Sub;\n}' },
+			{ file: 's/Dest.hx', source: 'package s;\n\nclass Dest {}' }
+		], plugin(), typeRefShape()), 'reaches Root and');
+	}
+
+	public function testAnImporterSpellingTheOldPathIsNotAlsoGivenOne(): Void {
+		// Both statements bind the moved type here, and the repoint of the explicit one already answers
+		// for it — emitting from the module statement too wrote the new import twice (review found it).
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{
+				file: 'r/Uses.hx',
+				source: 'package r;\n\nimport q.Mod;\nimport q.Mod.Sub;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Sub;\n}'
+			}
+		]);
+		Assert.equals(
+			'package r;\n\nimport q.Mod;\nimport q.Dest.Sub;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Sub;\n}',
+			changeFor(changes, 'r/Uses.hx').newSource
+		);
+	}
+
+	public function testAnAliasSpellingTheOldPathDoesNotSuppressTheMirror(): Void {
+		// `pathImportedBy` answers an ALIAS's TARGET, so an alias spells the old path — but it binds
+		// `S`, not `Sub`, and the bare name came from the module statement. Suppressing the mirror on it
+		// left `Type not found : Sub` (review found it).
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{
+				file: 'r/Uses.hx',
+				source: 'package r;\n\nimport q.Mod;\nimport q.Mod.Sub as S;\n\nclass Uses {\n\tvar a:Sub;\n\tvar b:S;\n}'
+			}
+		]);
+		Assert.equals(
+			'package r;\n\nimport q.Mod;\nimport q.Dest.Sub;\nimport q.Dest.Sub as S;\n\nclass Uses {\n\tvar a:Sub;\n\tvar b:S;\n}',
+			changeFor(changes, 'r/Uses.hx').newSource
+		);
+	}
+
+	public function testAGuardedStatementSpellingTheOldPathDoesNotSuppressTheMirror(): Void {
+		// A `#if`-guarded statement binds the name under its own flag and under no other, so the
+		// unconditional binding the module statement provided still has to be written — and the
+		// configuration that loses it is the DEFAULT one, which no single-configuration oracle sees.
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{
+				file: 'r/Uses.hx',
+				source: 'package r;\n\nimport q.Mod;\n#if flagx\nimport q.Mod.Sub;\n#end\n\nclass Uses {\n\tvar a:Sub;\n}'
+			}
+		]);
+		Assert.equals(
+			'package r;\n\nimport q.Mod;\nimport q.Dest.Sub;\n#if flagx\nimport q.Dest.Sub;\n#end\n\nclass Uses {\n\tvar a:Sub;\n}',
+			changeFor(changes, 'r/Uses.hx').newSource
+		);
+	}
+
+	public function testDestinationUsingIsRepointedNotDeleted(): Void {
+		// Static extension is granted by the STATEMENT, not by the declaration's module, and a module
+		// may `using` its own sub-type (compile-proved) — so the type becoming local does not make the
+		// statement redundant the way a plain import becomes redundant.
+		final sole: Array<MoveChange> = okChanges('q/Ext.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nusing q.Ext;\n\nclass Dest {}' }
+		]);
+		Assert.isTrue(changeFor(sole, 'q/Dest.hx').newSource.contains('using q.Dest.Ext;'), 'the sole-type using is repointed');
+		Assert.isFalse(changeFor(sole, 'q/Dest.hx').newSource.contains('using q.Ext;'), 'and the old path does not stand beside it');
+		final withOthers: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nusing q.Mod;\n\nclass Dest {}' }
+		]);
+		final kept: String = changeFor(withOthers, 'q/Dest.hx').newSource;
+		Assert.isTrue(kept.contains('using q.Mod;\nusing q.Dest.Mod;'), 'both statements stand when the module still has types');
+	}
+
+	public function testAPrivateSiblingIsNotAReasonToKeepAModuleImport(): Void {
+		// The remaining-name scan reads TEXT, so what reaches it is a name COLLISION, not a reference:
+		// the importer declares its own `Helper` while the source module holds a `private class Helper`,
+		// which no other module can name. Counting the private one would keep an import for a binding
+		// the language never granted.
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nprivate class Helper {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{
+				file: 'r/Uses.hx',
+				source: 'package r;\n\nimport q.Mod;\n\nclass Uses {\n\tvar a:Mod;\n\tvar h:Helper;\n}\n\nclass Helper {}'
+			}
+		]);
+		Assert.equals(
+			'package r;\n\nimport q.Dest.Mod;\n\nclass Uses {\n\tvar a:Mod;\n\tvar h:Helper;\n}\n\nclass Helper {}',
+			changeFor(changes, 'r/Uses.hx').newSource
+		);
+	}
+
+	public function testSoleTypeModuleUsingImporterIsPlainlyRepointed(): Void {
+		// The `using` arm keeps the statement without asking whether the file names anything — so what
+		// stops it is the module having nothing left to bind, and that has to be its own assertion.
+		final changes: Array<MoveChange> = okChanges('q/Ext.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{ file: 'r/Uses.hx', source: 'package r;\n\nusing q.Ext;\n\nclass Uses {}' }
+		]);
+		Assert.equals('package r;\n\nusing q.Dest.Ext;\n\nclass Uses {}', changeFor(changes, 'r/Uses.hx').newSource);
+	}
+
+	public function testSubTypeUsingImporterIsPlainlyRepointed(): Void {
+		// `using q.Mod.Sub;` spells the SUB-TYPE path and binds only `Sub`, so keeping it beside the
+		// repointed line would leave a statement naming a type its module no longer declares.
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{ file: 'r/Uses.hx', source: 'package r;\n\nusing q.Mod.Sub;\n\nclass Uses {}' }
+		]);
+		Assert.equals('package r;\n\nusing q.Dest.Sub;\n\nclass Uses {}', changeFor(changes, 'r/Uses.hx').newSource);
+	}
+
+	public function testDestinationModuleUsingIsKeptWithoutANameScan(): Void {
+		// The destination reaches the module's other types through EXTENSION CALLS, which no name scan
+		// sees — neither its own source nor the moved declaration mentions `Sub`.
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nusing q.Mod;\n\nclass Dest {\n\tvar n:Int = 1;\n}' }
+		]);
+		Assert.isTrue(
+			changeFor(changes, 'q/Dest.hx').newSource.contains('using q.Mod;\nusing q.Dest.Mod;'),
+			'the destination keeps its using AND gains the repointed one'
+		);
+	}
+
+	public function testAnImportStatementsOwnTextIsNotAReference(): Void {
+		// The remaining-name scan reads the whole file, and an import statement spells type names too —
+		// so a file whose ONLY occurrence of `Other` is another import must still be plainly repointed.
+		// The import has to be a ROOT-package one to make the point: a dotted path puts a `.` before the
+		// name, and the scan already declines a qualified occurrence, so only `import Other;` puts the
+		// bare name into the file's text.
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Other {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{ file: 'Other.hx', source: 'class Other {}' },
+			{ file: 'r/Only.hx', source: 'package r;\n\nimport q.Mod;\nimport Other;\n\nclass Only {\n\tvar a:Mod;\n}' }
+		]);
+		Assert.equals(
+			'package r;\n\nimport q.Dest.Mod;\nimport Other;\n\nclass Only {\n\tvar a:Mod;\n}', changeFor(changes, 'r/Only.hx').newSource
+		);
+	}
+
+	public function testAnIndentedImportStatementKeepsItsIndentation(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Other {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{
+				file: 'r/Guarded.hx',
+				source: 'package r;\n\n#if neko\n\timport q.Mod;\n#end\n\nclass Guarded {\n\tvar a:Mod;\n\tvar b:Other;\n}'
+			}
+		]);
+		Assert.equals(
+			'package r;\n\n#if neko\n\timport q.Mod;\n\timport q.Dest.Mod;\n#end\n\nclass Guarded {\n\tvar a:Mod;\n\tvar b:Other;\n}',
+			changeFor(changes, 'r/Guarded.hx').newSource
+		);
+	}
+
+	public function testASiblingThatNeverNamesTheTypeIsLeftAlone(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 3, 7, 'p/Dest.hx', [
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
+			{ file: 'p/Sibling.hx', source: 'package p;\n\nclass Sibling {\n\tvar m:Mover;\n}' },
+			{ file: 'p/Quiet.hx', source: 'package p;\n\nclass Quiet {\n\tvar n:Int = 1;\n}' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport p.Dest.Mover;\n\nclass Sibling {\n\tvar m:Mover;\n}', changeFor(changes, 'p/Sibling.hx').newSource
+		);
+		assertUnchanged(changes, 'p/Quiet.hx');
+	}
+
+	public function testASiblingTheRepointWalkAlreadyEditedIsNotImportedTwice(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 3, 7, 'p/Dest.hx', [
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
+			{ file: 'p/Explicit.hx', source: 'package p;\n\nimport p.Mover;\n\nclass Explicit {\n\tvar m:Mover;\n}' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport p.Dest.Mover;\n\nclass Explicit {\n\tvar m:Mover;\n}', changeFor(changes, 'p/Explicit.hx').newSource
+		);
+	}
+
+	public function testALowercaseLeadingSegmentIsAPackagePrefix(): Void {
+		// A lowercase module file is legal to have and unreachable by path (`Type not found : p.q.QType`,
+		// compile-proved), but the index still records its last segment — so without the lowercase
+		// short-circuit the leading segment of a FULLY-QUALIFIED `q.Mod.Sub` would match the module
+		// `p/q` on one side and nothing on the other, and a correct cross-package move would be refused.
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 3, 7, 's/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'p/q.hx', source: 'package p;\n\nclass QType {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\tvar d:q.Mod.Sub;\n}' },
+			{ file: 's/Dest.hx', source: 'package s;\n\nclass Dest {}' }
+		]);
+		Assert.isTrue(changeFor(changes, 's/Dest.hx').newSource.contains('var d:q.Mod.Sub;'), 'the qualified reference moves');
+	}
+
+	public function testModuleImporterKeepsTheStatementItsOtherTypesNeed(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Other {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{ file: 'r/Uses.hx', source: 'package r;\n\nimport q.Mod;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Other;\n}' },
+			{ file: 'r/Only.hx', source: 'package r;\n\nimport q.Mod;\n\nclass Only {\n\tvar a:Mod;\n}' }
+		]);
+		Assert.equals(
+			'package r;\n\nimport q.Mod;\nimport q.Dest.Mod;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Other;\n}',
+			changeFor(changes, 'r/Uses.hx').newSource
+		);
+		Assert.equals('package r;\n\nimport q.Dest.Mod;\n\nclass Only {\n\tvar a:Mod;\n}', changeFor(changes, 'r/Only.hx').newSource);
+	}
+
+	public function testModuleUsingImporterKeepsItsStatementUnconditionally(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Ext.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}\n\nclass More {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{ file: 'r/Uses.hx', source: 'package r;\n\nusing q.Ext;\n\nclass Uses {}' }
+		]);
+		Assert.equals('package r;\n\nusing q.Ext;\nusing q.Dest.Ext;\n\nclass Uses {}', changeFor(changes, 'r/Uses.hx').newSource);
+	}
+
+	public function testSoleTypeModuleImporterIsPlainlyRepointed(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{ file: 'r/Uses.hx', source: 'package r;\n\nimport q.Mod;\n\nclass Uses {\n\tvar a:Mod;\n}' }
+		]);
+		Assert.equals('package r;\n\nimport q.Dest.Mod;\n\nclass Uses {\n\tvar a:Mod;\n}', changeFor(changes, 'r/Uses.hx').newSource);
+	}
+
+	public function testModuleImporterGainsAnImportForASecondaryTypeThatLeft(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{ file: 'r/Uses.hx', source: 'package r;\n\nimport q.Mod;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Sub;\n}' },
+			{ file: 'r/Plain.hx', source: 'package r;\n\nimport q.Mod;\n\nclass Plain {\n\tvar a:Mod;\n}' }
+		]);
+		Assert.equals(
+			'package r;\n\nimport q.Mod;\nimport q.Dest.Sub;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Sub;\n}',
+			changeFor(changes, 'r/Uses.hx').newSource
+		);
+		assertUnchanged(changes, 'r/Plain.hx');
+	}
+
+	public function testDestinationModuleImportKeptForTheModulesOtherTypes(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {\n\tvar s:Sub;\n}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nimport q.Mod;\n\nclass Dest {}' }
+		]);
+		Assert.equals(
+			'package q;\n\nimport q.Mod;\n\nclass Dest {}\n\nclass Mod {\n\tvar s:Sub;\n}\n', changeFor(changes, 'q/Dest.hx').newSource
+		);
+	}
+
+	public function testDestinationModuleImportGoesWhenNothingElseNeedsIt(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nimport q.Mod;\n\nclass Dest {\n\tvar m:Mod;\n}' }
+		]);
+		// Asserted by absence rather than by full text: removing the statement leaves the blank line
+		// that stood above it, so the result is not writer-canonical — a pre-existing seam of the op
+		// that pinning the exact bytes here would freeze.
+		Assert.isFalse(changeFor(changes, 'q/Dest.hx').newSource.contains('import q.Mod;'), 'the redundant module import goes');
+		Assert.isTrue(changeFor(changes, 'q/Dest.hx').newSource.contains('class Mod {}'), 'the type landed');
+	}
+
+	public function testModuleImportProvidingADependencyIsCarried(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Mod;\n\nclass Mover {\n\tvar d:Sub;\n}' },
+			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport q.Mod;\n\nclass Host {}\n\nclass Mover {\n\tvar d:Sub;\n}\n', changeFor(changes, 'p/Host.hx').newSource
+		);
+	}
+
+	public function testAModuleImportTheLadderDoesNotAgreeWithIsNotCarried(): Void {
+		// The source module declares `Sub` itself, and a module's own type beats every import — so the
+		// module import that also declares one is NOT what the moved code means by the name, and
+		// carrying it would rebind the moved code to `q.Mod.Sub` with nothing said.
+		assertErrContains(MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Mod;\n\nclass Mover {\n\tvar d:Sub;\n}\n\nclass Sub {}' },
+			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' }
+		], plugin(), typeRefShape()), 'no import to carry');
+	}
+
+	public function testQualifiedTypeHeadRebindingAcrossPackagesRefused(): Void {
+		assertErrContains(MoveSymbol.moveType('p/Mover.hx', 3, 7, 's/Dest.hx', [
+			{ file: 'p/Mod.hx', source: 'package p;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 's/Mod.hx', source: 'package s;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\tvar d:Mod.Sub;\n}' },
+			{ file: 's/Dest.hx', source: 'package s;\n\nclass Dest {}' }
+		], plugin(), typeRefShape()), 'whose head "Mod"');
+	}
+
+	public function testQualifiedTypeHeadWithinOnePackageIsNotPriced(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 3, 7, 'p/Dest.hx', [
+			{ file: 'p/Mod.hx', source: 'package p;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\tvar d:Mod.Sub;\n}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		]);
+		Assert.isTrue(changeFor(changes, 'p/Dest.hx').newSource.contains('var d:Mod.Sub;'), 'the qualified reference moves as written');
+	}
+
+	public function testFullyQualifiedAndTopLevelHeadsAreNotPriced(): Void {
+		final qualified: Array<MoveChange> = okChanges('p/Mover.hx', 3, 7, 's/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\tvar d:q.Mod.Sub;\n}' },
+			{ file: 's/Dest.hx', source: 'package s;\n\nclass Dest {}' }
+		]);
+		Assert.isTrue(changeFor(qualified, 's/Dest.hx').newSource.contains('var d:q.Mod.Sub;'), 'a lowercase head is absolute');
+		final ambient: Array<MoveChange> = okChanges('p/Mover.hx', 3, 7, 's/Dest.hx', [
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\tvar d:Xml.XmlType;\n}' },
+			{ file: 's/Dest.hx', source: 'package s;\n\nclass Dest {}' }
+		]);
+		Assert.isTrue(changeFor(ambient, 's/Dest.hx').newSource.contains('var d:Xml.XmlType;'), 'a head no file declares is ambient');
+	}
+
+	public function testSamePackageSiblingGainsAnImportWhenTheTypeBecomesASubType(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 3, 7, 'p/Dest.hx', [
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
+			{ file: 'p/Sibling.hx', source: 'package p;\n\nclass Sibling {\n\tvar m:Mover;\n}' },
+			{ file: 'p/Other.hx', source: 'package p;\n\nimport z.Thing as Mover;\n\nclass Other {\n\tvar m:Mover;\n}' },
+			{ file: 'z/Thing.hx', source: 'package z;\n\nclass Thing {}' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport p.Dest.Mover;\n\nclass Sibling {\n\tvar m:Mover;\n}', changeFor(changes, 'p/Sibling.hx').newSource
+		);
+		assertUnchanged(changes, 'p/Other.hx');
+	}
+
+	public function testSamePackageSiblingsFollowTheTypeOutOfThePackage(): Void {
+		// Replaces a control this slice wrote and then found VACUOUS: it asserted a sibling keeps bare
+		// visibility when the moved type "stays a main type", over a fixture where the type was a
+		// SECONDARY type all along — `p/A.hx` declaring only `class Foo` makes `Foo` unreachable by its
+		// bare name from `p/Sibling.hx` (`Type not found : Foo`, compile-proved), so the test passed for
+		// a reason it did not name. The reachable half of that idea is this: the siblings follow the
+		// type into another PACKAGE, where nothing else could bind it for them.
+		final changes: Array<MoveChange> = okChanges('p/Foo.hx', 3, 7, 's/Foo.hx', [
+			{ file: 'p/Foo.hx', source: 'package p;\n\nclass Foo {}' },
+			{ file: 's/Foo.hx', source: 'package s;\n\nclass Helper {}' },
+			{ file: 'p/Sibling.hx', source: 'package p;\n\nclass Sibling {\n\tvar m:Foo;\n}' }
+		]);
+		Assert.equals('package p;\n\nimport s.Foo;\n\nclass Sibling {\n\tvar m:Foo;\n}', changeFor(changes, 'p/Sibling.hx').newSource);
+	}
+
+	private function assertUnchanged(changes: Array<MoveChange>, file: String): Void {
+		for (c in changes) if (c.file == file) Assert.fail('$file should not have been rewritten');
+		Assert.pass();
+	}
+
 	/**
 	 * Drive a successful move and return the changes, asserting the result
 	 * is `Ok`, the advisory is present, and every rewrite re-parses (the
