@@ -360,9 +360,10 @@ class MoveSymbolSliceTest extends Test {
 	/**
 	 * Guard for the `;`-TERMINATED form: the trail token is present, so the
 	 * parse span already ends at the `;` and the trailing trim has nothing to
-	 * cut. The cut stays exactly what it was — the decl's own lines plus one
-	 * newline — including the blank run it leaves behind, which is
-	 * pre-existing behaviour and NOT what the trim changes.
+	 * cut. The cut stays exactly what the trim leaves — the decl's own
+	 * lines plus one newline. The blank run it used to leave BEHIND was
+	 * frozen here as "pre-existing behaviour"; `cutEditSpan` now absorbs it,
+	 * so the two blanks that used to end up adjacent are one.
 	 */
 	public function testMoveSemicolonTerminatedTypedefUnchanged(): Void {
 		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n};\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n};';
@@ -373,7 +374,7 @@ class MoveSymbolSliceTest extends Test {
 		]);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
-		Assert.equals('package pkg;\n\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n};', newA);
+		Assert.equals('package pkg;\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n};', newA);
 		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n};\n', newB);
 	}
 
@@ -1556,6 +1557,269 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'p/Sibling.hx', source: 'package p;\n\nclass Sibling {\n\tvar m:Foo;\n}' }
 		]);
 		Assert.equals('package p;\n\nimport s.Foo;\n\nclass Sibling {\n\tvar m:Foo;\n}', changeFor(changes, 'p/Sibling.hx').newSource);
+	}
+
+	/**
+	 * The fully-qualified-reference refusal is asked in BOTH directions. A SAME-package move takes
+	 * `pkg.A.Foo` to `pkg.B.Foo` exactly as a cross-package one does, so a file spelling the path was
+	 * left dangling while the move reported success — the Pony shape is
+	 * `Module pony.net.rpc.IRPC does not define type RPCBuilder`, written at rc 0 by the base engine.
+	 */
+	public function testSamePackageFqnReferenceRefused(): Void {
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 5, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\nclass A {}\n\nclass Foo {}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' },
+			{ file: 'pkg/User.hx', source: 'package pkg;\n\nclass User {\n\tvar f:pkg.A.Foo;\n}' }
+		], plugin(), typeRefShape());
+		assertErrContains(result, 'by its fully-qualified path');
+	}
+
+	/**
+	 * Its one exemption, and the reason the guard could not simply be asked unconditionally: a
+	 * ROOT-package type's own import path IS its bare name, so the path scan matches the declaration
+	 * itself and every such move would be refused. Nothing is qualified there, so nothing can dangle.
+	 */
+	public function testRootPackageMoveIsNotAnFqnReference(): Void {
+		final changes: Array<MoveChange> = okChanges('Mover.hx', 1, 7, 'Host.hx', [
+			{ file: 'Mover.hx', source: 'class Mover {}\n' },
+			{ file: 'Host.hx', source: 'class Host {}\n' }
+		]);
+		Assert.equals('class Host {}\n\nclass Mover {}\n', changeFor(changes, 'Host.hx').newSource);
+		Assert.equals('', changeFor(changes, 'Mover.hx').newSource);
+	}
+
+	/**
+	 * And the half that exemption may NOT cover, because there the scan's answer was never about the
+	 * declaration: taking a root-package type INTO a package makes every bare `Mover` elsewhere stop
+	 * resolving, and the repair walk reaches only its TYPE positions — a `Mover.make()` static call is
+	 * left dangling (`Module Foo does not define type Foo`, compile-proved against both engines). The
+	 * base engine refused this through the cross-package gate; exempting every dotless path turned that
+	 * into a silent write of two files at rc 0.
+	 */
+	public function testRootPackageMoveIntoAPackageStillRefusesAnFqnReference(): Void {
+		final result: MoveResult = MoveSymbol.moveType('Mover.hx', 1, 7, 's/Dest.hx', [
+			{ file: 'Mover.hx', source: 'class Mover {\n\tpublic static function make(): Int return 1;\n}\n' },
+			{ file: 's/Dest.hx', source: 'package s;\n\nclass Dest {}\n' },
+			{ file: 'r/User.hx', source: 'package r;\n\nclass User {\n\tpublic function go(): Int return Mover.make();\n}\n' }
+		], plugin(), typeRefShape());
+		assertErrContains(result, 'by its fully-qualified path');
+	}
+
+	/**
+	 * A `#if … enum #else @:enum #end` region is the declaration's own prefix — it carries the `enum`
+	 * of `enum abstract` — and the grammar projects it as a SIBLING of the abstract, so a
+	 * modifier-and-annotation-only prefix test read it as a declaration of its own and the cut left it
+	 * standing in front of the NEXT declaration (`Unexpected @` at `pony/text/TextTools.hx:22` after
+	 * `AnsiForeground` moved out, rc 1 against Pony's own oracle; rc 0 with the region folded in).
+	 */
+	public function testConditionalEnumPrefixMovesWithTheType(): Void {
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 10, 'pkg/B.hx', [
+			{
+				file: 'pkg/A.hx',
+				source: 'package pkg;\n\n#if (haxe_ver >= 4.2) enum #else @:enum #end\nabstract E(Int) {\n\tfinal X = 1;\n}\n\nclass A {}'
+			},
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals('package pkg;\n\nclass A {}', changeFor(changes, 'pkg/A.hx').newSource);
+		Assert.equals(
+			'package pkg;\n\nclass B {}\n\n#if (haxe_ver >= 4.2) enum #else @:enum #end\nabstract E(Int) {\n\tfinal X = 1;\n}\n',
+			changeFor(changes, 'pkg/B.hx').newSource
+		);
+	}
+
+	/** The same for the `final` arm of the same grammar enum — `#if … final #else @:final #end class C`. */
+	public function testConditionalFinalPrefixMovesWithTheType(): Void {
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\n#if (haxe_ver >= 4.2) final #else @:final #end\nclass C {}\n\nclass A {}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals('package pkg;\n\nclass A {}', changeFor(changes, 'pkg/A.hx').newSource);
+		Assert.equals(
+			'package pkg;\n\nclass B {}\n\n#if (haxe_ver >= 4.2) final #else @:final #end\nclass C {}\n',
+			changeFor(changes, 'pkg/B.hx').newSource
+		);
+	}
+
+	/** And for the `abstract` arm — `#if flag abstract #end class C`, the Haxe 4.2 abstract-class modifier. */
+	public function testConditionalAbstractPrefixMovesWithTheType(): Void {
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\n#if (haxe_ver >= 4.2) abstract #end\nclass C {}\n\nclass A {}' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals('package pkg;\n\nclass A {}', changeFor(changes, 'pkg/A.hx').newSource);
+		Assert.equals(
+			'package pkg;\n\nclass B {}\n\n#if (haxe_ver >= 4.2) abstract #end\nclass C {}\n', changeFor(changes, 'pkg/B.hx').newSource
+		);
+	}
+
+	/**
+	 * An importer that reaches a moved ENUM only through its CONSTRUCTORS. `case Alpha(n):` names
+	 * the type nowhere, so the scan deciding whether the module statement still owes this file
+	 * anything answered no and the type left its scope — `Unknown identifier : A` on
+	 * `Pony/pony/ServiceProvider.hx` after `OrState` left `pony.Or`, rc 1 at base and rc 0 once the
+	 * constructors join the scan (compile-proved on Pony's own oracle, both ways).
+	 */
+	public function testModuleImporterGainsAnImportForAnEnumOnlyItsConstructorsName(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 6, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nenum Sub {\n\tAlpha(v:Int);\n\tBeta;\n}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{
+				file: 'r/Param.hx',
+				source: 'package r;\n\nimport q.Mod;\n\nclass Param {\n\tvar a:Mod;\n'
+				+ '\tfunction f(v:Dynamic) return switch v { case Alpha(n): n; case _: 2; }\n}'
+			},
+			{
+				file: 'r/Simple.hx',
+				source: 'package r;\n\nimport q.Mod;\n\nclass Simple {\n\tvar a:Mod;\n'
+				+ '\tfunction f(v:Dynamic) return switch v { case Beta: 1; case _: 2; }\n}'
+			},
+			{ file: 'r/Plain.hx', source: 'package r;\n\nimport q.Mod;\n\nclass Plain {\n\tvar a:Mod;\n}' }
+		]);
+		// One importer per constructor SPELLING — `Alpha(v:Int)` projects as `ParamCtor` and `Beta` as
+		// `SimpleCtor`, and a scan taught only one of the two kinds leaves the other file broken. The
+		// Pony case is a ParamCtor (`OrState.A(v:T1)`); every fixture the tree already had was a
+		// SimpleCtor, so the parameterised half had no killer at all until this one.
+		Assert.isTrue(changeFor(changes, 'r/Param.hx').newSource.contains('import q.Mod;\nimport q.Dest.Sub;\n'));
+		Assert.isTrue(changeFor(changes, 'r/Simple.hx').newSource.contains('import q.Mod;\nimport q.Dest.Sub;\n'));
+		assertUnchanged(changes, 'r/Plain.hx');
+	}
+
+	/**
+	 * The same names in the other direction: a MAIN-type move leaves the module statement standing for
+	 * the types it still declares, and an importer that reaches a REMAINING enum only through its
+	 * constructors was not counted as one of them — the statement was repointed away from under it.
+	 */
+	public function testModuleImporterKeepsTheStatementARemainingEnumsConstructorsNeed(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 3, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nenum Kept {\n\tGamma(v:Int);\n}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
+			{
+				file: 'r/Uses.hx',
+				source: 'package r;\n\nimport q.Mod;\n\nclass Uses {\n'
+				+ '\tfunction f(v:Dynamic) return switch v { case Gamma(n): n; case _: 0; }\n}'
+			}
+		]);
+		Assert.isTrue(changeFor(changes, 'r/Uses.hx').newSource.contains('import q.Mod;\nimport q.Dest.Mod;\n'));
+	}
+
+	/**
+	 * A cut with content directly above it owns only the separator BELOW, so nothing may be collapsed —
+	 * not even when the source file's own new import lands at the cut's own offset, which is what the
+	 * forward branch keys on. Without the leading-run guard that shape ate the trailing blank and left
+	 * the import region touching the next declaration.
+	 */
+	public function testACutWithNoLeadingBlankKeepsTheTrailingSeparator(): Void {
+		final changes: Array<MoveChange> = okChanges('p/A.hx', 4, 6, 'p/Dest.hx', [
+			{ file: 'p/A.hx', source: 'package p;\n\nimport p.C;\nenum Sub {\n\tAlpha;\n}\n\nclass A {\n\tvar s:Sub;\n}\n' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}\n' },
+			{ file: 'p/C.hx', source: 'package p;\n\nclass C {}\n' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport p.C;\nimport p.Dest.Sub;\n\nclass A {\n\tvar s:Sub;\n}\n', changeFor(changes, 'p/A.hx').newSource
+		);
+	}
+
+	/**
+	 * The destination-side mirror of that arm, for a `using`: `using q.Mod;` spells the MODULE, not the
+	 * moved type's path, so the destination walk never saw it — and a static extension is granted by
+	 * the STATEMENT, not by the declaration's module, so the moved type stopped being an extension at
+	 * the very file it moved into (`Int has no field twice`, compile-proved on 4.3.7; rc 0 with the
+	 * statement written, which also proves a module may `using` its own sub-type).
+	 */
+	public function testDestinationUsingGainsTheMovedSecondaryTypesExtension(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nusing q.Mod;\n\nclass Dest {}' }
+		]);
+		Assert.equals(
+			'package q;\n\nusing q.Mod;\nusing q.Dest.Sub;\n\nclass Dest {}\n\nclass Sub {}\n', changeFor(changes, 'q/Dest.hx').newSource
+		);
+	}
+
+	/**
+	 * Its duplicate guard, the destination-side twin of `spellsOldPath`: a destination that ALSO
+	 * `using`s the moved type's own path gets `using q.Dest.Sub;` from the repoint loop, and the mirror
+	 * must not write a second copy of the same line beside it. Only a `using` of the old path suppresses
+	 * it — a repointed ALIAS binds its alias rather than granting the extension, and a plain `import` of
+	 * the old path is removed rather than repointed.
+	 */
+	public function testDestinationUsingOfTheOldPathSuppressesTheMirror(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nusing q.Mod;\nusing q.Mod.Sub;\n\nclass Dest {}' }
+		]);
+		Assert.equals(
+			'package q;\n\nusing q.Mod;\nusing q.Dest.Sub;\n\nclass Dest {}\n\nclass Sub {}\n', changeFor(changes, 'q/Dest.hx').newSource
+		);
+	}
+
+	/**
+	 * Its control: a plain `import q.Mod;` at the destination owes nothing for a secondary move — the
+	 * type is declared in that module now, and a module's own declaration is what the file reads it
+	 * off. Only a `using` loses something.
+	 */
+	public function testDestinationModuleImportGainsNothingForASecondaryMove(): Void {
+		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
+			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
+			{ file: 'q/Dest.hx', source: 'package q;\n\nimport q.Mod;\n\nclass Dest {\n\tvar m:Mod;\n}' }
+		]);
+		Assert.equals(
+			'package q;\n\nimport q.Mod;\n\nclass Dest {\n\tvar m:Mod;\n}\n\nclass Sub {}\n', changeFor(changes, 'q/Dest.hx').newSource
+		);
+	}
+
+	/**
+	 * A wildcard `import p.*;` binds a module's MAIN type from ANY package, and it spells no path the
+	 * repoint walk can rewrite — so the repair walk that writes an import for such a file must not be
+	 * filtered to the cursor's own package. Compile-proved: `Type not found : Foo` at base, rc 0 with
+	 * the import written.
+	 */
+	public function testCrossPackageWildcardImporterFollowsTheType(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Foo.hx', 3, 7, 's/Dest.hx', [
+			{ file: 'p/Foo.hx', source: 'package p;\n\nclass Foo {}\n\nclass FooHelper {}' },
+			{ file: 'p/Kept.hx', source: 'package p;\n\nclass Kept {}' },
+			{ file: 's/Dest.hx', source: 'package s;\n\nclass Dest {}' },
+			{ file: 'r/Consumer.hx', source: 'package r;\n\nimport p.*;\n\nclass Consumer {\n\tvar v:Foo;\n}' },
+			// The control names the OTHER main type the same wildcard binds, so it models a real
+			// importer: a secondary type is not wildcard-visible at all and would not resolve even
+			// before the move.
+			{ file: 'r/Other.hx', source: 'package r;\n\nimport p.*;\n\nclass Other {\n\tvar h:Kept;\n}' }
+		]);
+		Assert.equals(
+			'package r;\n\nimport p.*;\nimport s.Dest.Foo;\n\nclass Consumer {\n\tvar v:Foo;\n}',
+			changeFor(changes, 'r/Consumer.hx').newSource
+		);
+		assertUnchanged(changes, 'r/Other.hx');
+	}
+
+	/**
+	 * A declaration with a blank line on BOTH sides left the two of them adjacent — a double separator
+	 * `fmt --list` rejects. It was reachable only at the end of a module until the conditional prefix
+	 * above stopped being left behind to fill the gap, which is why the widening read as an
+	 * end-of-file special case (and why the `;`-terminated typedef test froze the double blank as
+	 * "pre-existing behaviour").
+	 */
+	public function testABlankLineOnBothSidesOfTheCutCollapsesToOne(): Void {
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: 'package pkg;\n\nimport pkg.C;\n\nclass Foo {}\n\nclass A {}\n' },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}\n' }
+		]);
+		Assert.equals('package pkg;\n\nimport pkg.C;\n\nclass A {}\n', changeFor(changes, 'pkg/A.hx').newSource);
+	}
+
+	/**
+	 * And its counter-case, which is what makes the collapse conditional: when the source file still
+	 * uses the type, its own new import lands in exactly that gap. Widening the cut over the run then
+	 * overlaps the insert, and `applyEdits` — which sorts by start offset alone — spliced the two into
+	 * a file that no longer parsed, so the move refused itself. An import written into the gap fills
+	 * it, so there is nothing to collapse.
+	 */
+	public function testTheSourceFilesOwnImportLandsInTheCutGapWithoutOverlappingIt(): Void {
+		final changes: Array<MoveChange> = okChanges('p/A.hx', 3, 6, 'p/Dest.hx', [
+			{ file: 'p/A.hx', source: 'package p;\n\nenum Sub {\n\tAlpha;\n}\n\nclass A {\n\tvar s:Sub;\n}\n' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}\n' }
+		]);
+		Assert.equals('package p;\n\nimport p.Dest.Sub;\n\nclass A {\n\tvar s:Sub;\n}\n', changeFor(changes, 'p/A.hx').newSource);
 	}
 
 	private function assertUnchanged(changes: Array<MoveChange>, file: String): Void {

@@ -6906,20 +6906,21 @@ final class Cli {
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Move the TYPE declaration (class / interface / enum / typedef /\n');
-		sysPrint('abstract) at <line>:<col> in <file> into <dest-file>, which must be in\n');
-		sysPrint('the SAME PACKAGE. The decl is relocated verbatim — its leading\n');
-		sysPrint('doc-comment and @:meta lines move with it. Every file under --scope that\n');
-		sysPrint('imported the type through its old module path is repointed at the new\n');
-		sysPrint('path, and the type-position imports the moved body depends on are carried\n');
-		sysPrint('into the destination (best-effort: a dependency reached via a static\n');
+		sysPrint('abstract) at <line>:<col> in <file> into <dest-file>, in the same package\n');
+		sysPrint('or another one. The decl is relocated verbatim — its leading doc-comment,\n');
+		sysPrint('annotations and conditional modifier prefix move with it. Every file\n');
+		sysPrint('under --scope that reached the type through its old module path — an\n');
+		sysPrint('import, a `using`, a wildcard or bare package visibility — is repointed\n');
+		sysPrint('or given a statement, and the type-position imports the moved body\n');
+		sysPrint('depends on are carried into the destination (best-effort: a static\n');
 		sysPrint('receiver T.x() or a value position is not auto-detected and may need a\n');
 		sysPrint('manual import — surfaced in the advisory). <line>:<col> uses the same\n');
 		sysPrint('column convention `apq refs` prints.\n');
 		sysPrint('\n');
-		sysPrint('Refuses a cross-package move, an ambiguous / missing type, a decl that\n');
-		sysPrint('shares a source line with other code, any scope file that does not parse,\n');
-		sysPrint('or any rewritten file that fails to re-parse — the write is atomic\n');
-		sysPrint('(all changed files or none). Same-package moves only in this increment.\n');
+		sysPrint('Refuses a scope file that names the type by its fully-qualified path, an\n');
+		sysPrint('ambiguous / missing type, a decl that shares a source line with other code,\n');
+		sysPrint('any scope file that does not parse, or any rewritten file that fails to\n');
+		sysPrint('re-parse — the write is atomic (all changed files or none).\n');
 	}
 
 	private static function printInlineUsage(): Void {
