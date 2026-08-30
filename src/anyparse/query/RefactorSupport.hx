@@ -1396,13 +1396,15 @@ final class RefactorSupport {
 		)
 		catch (exception: Exception) return Err('result does not parse: ${exception.message}');
 		final settled: Null<String> = fixedPoint.text;
-		if (settled == null) return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
-		// Names the WRITER, because the user has no move that fixes this: `apq fmt
-		// --write` refuses the same file for the same reason, so pointing at it —
-		// the remedy the gate above offers — would send them in a circle.
-		return fixedPoint.converged
-			? Ok(settled, fixedPoint.rewrites)
-			: Err(
+		return if (settled == null)
+			Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result')
+		else if (fixedPoint.converged)
+			Ok(settled, fixedPoint.rewrites)
+		else
+			// Names the WRITER, because the user has no move that fixes this: `apq fmt
+			// --write` refuses the same file for the same reason, so pointing at it —
+			// the remedy the gate above offers — would send them in a circle.
+			Err(
 				'the writer cannot settle this file, so the edit was not written (${fixedPoint.failure})'
 				+ ' — edit it with ordinary tools and report the construct'
 			);
@@ -2233,10 +2235,17 @@ final class RefactorSupport {
 
 	/**
 	 * The text every NEW line of a splice into the comment token `tok` must begin with, so
-	 * the block keeps the continuation prefix it already has: the comment line's own
-	 * indentation, plus `// ` for a line comment and ` * ` for a star-guttered block. A block
-	 * comment with no gutter (commented-out code, a free-form paragraph) gets the indentation
-	 * alone — it has no prefix to keep.
+	 * the block keeps the continuation prefix it already has. It is read off the block's own
+	 * FIRST interior line — `// ` at the line comment's indent, everything up to and including
+	 * a star-guttered line's star plus one space, and for a block with no gutter (the
+	 * `/**` … `**\/` spelling, commented-out code, a free-form paragraph) that line's own
+	 * indentation.
+	 *
+	 * Reading it off the OPENER instead is what this function did until S39, and a gutter-less
+	 * block indents its interior one level DEEPER than its delimiters — so every line a splice
+	 * added landed one level short of the text it joined, and flush LEFT when the block sat at
+	 * column 0. Both spellings of the closer are skipped on the way, so a block with no interior
+	 * at all still falls through to the one-line case below rather than reading `*\/` as a gutter.
 	 *
 	 * The ops that splice into a comment splice RAW, and the writer re-emits a comment
 	 * interior byte for byte, so a replacement carrying a real newline started a line with no
@@ -2254,12 +2263,41 @@ final class RefactorSupport {
 		final body: String = source.substring(tok.from + 2, tok.to);
 		for (line in body.split('\n').slice(1)) {
 			final text: String = line.trim();
-			if (text == '') continue;
-			return text.fastCodeAt(0) == '*'.code ? '$indent * ' : indent;
+			if (text == '' || text == '*/' || text == '**/') continue;
+			return interiorContinuation(line);
 		}
 		// No interior line to read: a one-line `/** … */` whose replacement is about to become
 		// several. A doc opener means a guttered block; a plain one means none.
 		return tok.from + 2 < source.length && source.fastCodeAt(tok.from + 2) == '*'.code ? '$indent * ' : indent;
+	}
+
+	/**
+	 * A one-line `/** … *\/` whose body has just grown past one line, re-opened: the doc's text
+	 * moves off the opener onto its own continuation line and the closer gets one of its own.
+	 *
+	 * Leaving the closer on the last content line is writer-UNSTABLE. The writer re-bases a block
+	 * comment's continuation run, and a lone `\t * text *\/` line's common prefix is `\t ` rather
+	 * than `\t`, so the space before the star is eaten and the result reads `\t* text *\/`,
+	 * misaligned under the opener — canonical, and reported by nothing.
+	 *
+	 * `body` is the comment's interior INCLUDING the `/**`'s second star; `continuation` is what
+	 * every line after the first already carries.
+	 */
+	public static function openGrownDocBlock(body: String, continuation: String): String {
+		final nl: Int = body.indexOf('\n');
+		// `''.indexOf('\n')` is -1, so the empty body is already covered by `nl < 0`.
+		if (nl < 0 || body.fastCodeAt(0) != '*'.code || !continuation.endsWith('* ')) return body;
+		final first: String = body.substring(1, nl).ltrim();
+		// A replacement whose FIRST line is empty must leave the bare gutter, not a gutter and a
+		// trailing space — `reflowIntoComment` rtrims for the same reason, and the writer re-emits a
+		// comment interior verbatim, so `fmt --list` calls trailing whitespace in one canonical.
+		final head: String = first == '' ? continuation.rtrim() : continuation + first;
+		final tail: String = body.substring(nl).rtrim();
+		// The closer aligns under the gutter's star, so it sits at the continuation minus its `* ` —
+		// which is why a continuation that does not END in one is handed back untouched above rather
+		// than losing two characters of its own indentation.
+		final closer: String = continuation.substring(0, continuation.length - 2);
+		return '*\n$head$tail\n$closer';
 	}
 
 	/**
@@ -4232,6 +4270,21 @@ final class RefactorSupport {
 		return startSpan == null ? nodeSpan.from : startSpan.from;
 	}
 
+	/**
+	 * The index of `line`'s GUTTER star, or -1 when it has none. A gutter star is followed by
+	 * whitespace or nothing: `**BETA**` and `*emphasis*` open a gutter-less block's prose with a star
+	 * that is not one, and reading only the first character reported every line of 109 such blocks in
+	 * one library.
+	 *
+	 * Shared with `doc-comment-continuation`, which reports the lines this answer decides the prefix
+	 * for. Written twice it is the one predicate in this pair that must not drift: the ops splice by
+	 * it and that rule is the only gate that can see what they spliced.
+	 */
+	public static function gutterStarAt(line: String): Int {
+		final lead: Int = line.length - line.ltrim().length;
+		return line.fastCodeAt(lead) == '*'.code && (lead + 1 >= line.length || isSpace(line.fastCodeAt(lead + 1))) ? lead : -1;
+	}
+
 	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
 	private static inline function isHorizontalSpace(code: Int): Bool {
 		return code == ' '.code || code == '\t'.code || code == '\r'.code;
@@ -4286,6 +4339,17 @@ final class RefactorSupport {
 
 	private static inline function isUpperCode(code: Int): Bool {
 		return code >= 'A'.code && code <= 'Z'.code;
+	}
+
+	/**
+	 * The continuation prefix ONE interior line of a block comment already uses: its own
+	 * indentation, extended through the gutter star and the single space after it when the line
+	 * carries one. A star followed by anything but whitespace is prose (`**BETA**`), not a
+	 * gutter — the same discriminator `doc-comment-continuation` reports against.
+	 */
+	private static function interiorContinuation(line: String): String {
+		final star: Int = gutterStarAt(line);
+		return star < 0 ? line.substring(0, line.length - line.ltrim().length) : '${line.substring(0, star)}* ';
 	}
 
 	/**

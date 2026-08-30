@@ -1,11 +1,25 @@
 package anyparse.query;
 
+import anyparse.check.CheckScan;
+import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
 using StringTools;
+
+/**
+ * What one text says about its over-width comment lines: how many there are, the widest of them in
+ * rendered columns, and that line verbatim. The width gate compares two of these rather than two
+ * sets of line TEXTS — an edit necessarily changes the text of the line it edits, so text identity
+ * called every touched over-width line a new one.
+ */
+private typedef WideComments = {
+	var count: Int;
+	var widest: Int;
+	var worst: String;
+}
 
 /**
  * Text search-and-replace scoped to COMMENT bodies — the write-twin of `lit`
@@ -43,7 +57,8 @@ final class CommentRewrite {
 	 * parse).
 	 */
 	public static function rewrite(
-		source: String, find: String, replace: String, regex: Bool, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+		source: String, find: String, replace: String, regex: Bool, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String,
+		?allowWide: Bool
 	): EditResult {
 		if (find.length == 0) return Err('find pattern is empty');
 
@@ -76,16 +91,119 @@ final class CommentRewrite {
 				final next: String = compiled != null
 					? compiled.map(body, m -> RefactorSupport.reflowIntoComment(expandGroups(replace, m), continuation))
 					: literalReplace(body, find, RefactorSupport.reflowIntoComment(replace, continuation));
-				if (next != body) edits.push({ span: bodySpan, text: next });
+				if (next == body) continue;
+				// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the last
+				// content line and the writer eats the space before that line's star (`\t* text */`).
+				final grown: Bool = next.indexOf('\n') >= 0 && isOneLineDocBlock(source, tok);
+				edits.push({ span: bodySpan, text: grown ? RefactorSupport.openGrownDocBlock(next, continuation) : next });
 			}
 		} catch (exception: Exception)
 			return Err(exception.message);
 
-		return edits.length == 0 ? Ok(source) : RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
+		if (edits.length == 0) return Ok(source);
+		final result: EditResult = RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
+		if (allowWide == true) return result;
+		return switch result {
+			case Ok(text, _):
+				final wide: Null<String> = gainedWideCommentLine(source, text, reformat, plugin, optsJson);
+				wide == null ? result : Err(wide);
+			case Err(_): result;
+		};
 	}
 
 	private static inline function isDigit(c: Int): Bool {
 		return c >= '0'.code && c <= '9'.code;
+	}
+
+	/**
+	 * Whether `tok` is a doc block holding no line break — the shape whose closer would ride the last
+	 * content line once the replacement grows past one line.
+	 *
+	 * WHERE the block starts is deliberately NOT asked. A first draft required it to start its own
+	 * line, on the reasoning that the shape is a doc above a declaration; the closer rides the last
+	 * content line wherever the block sits, and a trailing `class C {} /** One liner. *\/` grown to
+	 * two lines came back from the writer as `* Second line. *\/` with the space before its star
+	 * eaten — byte for byte the corruption this re-open exists to prevent. The writer moves the
+	 * comment onto its own line during the same edit anyway, so the position the guard read no longer
+	 * held by the time the damage landed.
+	 */
+	private static function isOneLineDocBlock(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
+		return !tok.isLine && tok.from + 2 < source.length && source.fastCodeAt(tok.from + 2) == '*'.code
+			&& source.substring(tok.from, tok.to).indexOf('\n') < 0;
+	}
+
+	/**
+	 * The first comment line the edit pushed past the configured width, as the refusal to print, or
+	 * null when it pushed none.
+	 *
+	 * WIDTH was the last unguarded half of this op. The writer re-emits a comment interior byte for
+	 * byte, so an over-long one-line replacement leaves a doc line nothing in this project measures:
+	 * `fmt --list` is clean because the file IS what the writer emits, and no rule reads a comment
+	 * line's width. It bit two slices of this campaign, and both times a human reading the diff was
+	 * the only gate.
+	 *
+	 * A block that was ALREADY over-width keeps its own style — that is the caller's file, not this
+	 * op's to police; only a line the edit ADDED to that set is refused, and `--allow-wide` waives it.
+	 */
+	private static function gainedWideCommentLine(
+		source: String, after: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): Null<String> {
+		final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(optsJson);
+		if (metrics == null) return null;
+		final width: Int = metrics.lineWidth;
+		final tab: Int = metrics.indentWidth;
+		final got: WideComments = wideCommentLines(after, width, tab);
+		if (got.count == 0) return null;
+		// The baseline is the source CANONICALISED but UNEDITED, not the raw source. Under
+		// `--reformat` — the flag's whole use case being a file that is not canonical — the writer
+		// re-indents everything, so a comment the command never mentioned can cross the width on its
+		// own, and against the raw source that reads as this edit's doing. Measured: a 135-column
+		// `//` at column 0 that the writer moves to three tabs refused an edit to a different line.
+		final base: String = switch RefactorSupport.canonicalize(source, [], reformat, plugin, optsJson) {
+			case Ok(text, _): text;
+			case Err(_): source;
+		};
+		final had: WideComments = wideCommentLines(base, width, tab);
+		// COUNT and WIDEST, not line identity. Keying on the line's TEXT made every edit that touches
+		// an over-width line read as a new one — the text necessarily changed — so `comment-rewrite`
+		// refused a rename that SHORTENED a 155-column line to 154, in exactly the case this
+		// function's own doc promised to allow.
+		return got.count <= had.count && got.widest <= had.widest
+			? null
+			: 'the replacement leaves a comment line at ${got.widest} columns, past the configured $width'
+				+ ' — supply the line breaks yourself (with the prefix that position needs), or pass --allow-wide:\n${got.worst}';
+	}
+
+	/**
+	 * How many distinct physical lines of `text` lie in a comment and render wider than `width`, the
+	 * widest of them in columns, and that line verbatim. Two comments on ONE line count it once.
+	 */
+	private static function wideCommentLines(text: String, width: Int, tab: Int): WideComments {
+		final seen: Array<Int> = [];
+		var count: Int = 0;
+		var widest: Int = 0;
+		var worst: String = '';
+		for (tok in RefactorSupport.collectCommentTokens(text)) {
+			var from: Int = text.lastIndexOf('\n', tok.from) + 1;
+			while (from < tok.to) {
+				var to: Int = text.indexOf('\n', from);
+				if (to < 0) to = text.length;
+				// A trailing `\r` is not ink; `CheckScan.displayColumn` is the project's one answer to
+				// what a tab is worth, and it is the WRITER's (a flat `indentWidth`, not a tab stop).
+				final end: Int = to > from && text.fastCodeAt(to - 1) == '\r'.code ? to - 1 : to;
+				final cols: Int = CheckScan.displayColumn(text, from, end, tab);
+				if (cols > width && !seen.contains(from)) {
+					seen.push(from);
+					count++;
+					if (cols > widest) {
+						widest = cols;
+						worst = text.substring(from, end);
+					}
+				}
+				from = to + 1;
+			}
+		}
+		return { count: count, widest: widest, worst: worst };
 	}
 
 	/**

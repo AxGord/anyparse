@@ -2,7 +2,7 @@ package unit;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CommentRewrite;
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.RefactorSupport;
 import utest.Assert;
 import utest.Test;
 
@@ -186,6 +186,164 @@ class CommentRewriteSliceTest extends Test {
 		final text: String = okText(cr(src, 'quick brown fox', 'BF', false));
 		Assert.isTrue(text.contains('BF'));
 		Assert.isFalse(text.contains('quick brown'));
+	}
+
+	/**
+	 * A GUTTER-LESS block indents its interior one level DEEPER than its own delimiters, and the
+	 * continuation answered with the DELIMITERS' indent — so every line the splice added landed one
+	 * level short of the text it joined. `fmt --list` calls the result canonical (the writer re-emits
+	 * a comment interior byte for byte) and the rule that reads continuation prefixes only knew the
+	 * star-guttered spellings, so nothing in this project could see it.
+	 */
+	public function testMultilineReplacementKeepsGutterlessMemberIndent(): Void {
+		final src: String = 'class C {\n\t/**\n\t\tA member doc line.\n\t\tSecond line.\n\t**/\n\tfunction f() {}\n}';
+		final text: String = okText(cr(src, 'A member doc line.', 'A member doc line.\nAn added line.', false));
+		Assert.isTrue(text.contains('\t/**\n\t\tA member doc line.\n\t\tAn added line.\n\t\tSecond line.\n\t**/'), text);
+	}
+
+	/**
+	 * The same block at TYPE level, whose delimiters sit at column 0 — the shape whose added lines
+	 * landed flush left, which is what a slice of this campaign actually committed.
+	 */
+	public function testMultilineReplacementKeepsGutterlessTypeIndent(): Void {
+		final src: String = '/**\n\tA type doc line.\n\tSecond line.\n**/\nclass C {}';
+		final text: String = okText(cr(src, 'A type doc line.', 'A type doc line.\nAn added line.', false));
+		Assert.isTrue(text.contains('/**\n\tA type doc line.\n\tAn added line.\n\tSecond line.\n**/'), text);
+	}
+
+	/**
+	 * Growing a ONE-LINE `/** X *\/` past one line has to open the block, or the closer rides the last
+	 * content line — and the writer then re-bases that lone continuation onto the member indent,
+	 * eating the space before its star and leaving `\t* text *\/` misaligned under the opener.
+	 */
+	public function testOneLineDocGrownToSeveralOpensTheBlock(): Void {
+		final src: String = 'class C {\n\t/** One liner. */\n\tfunction f() {}\n}';
+		final text: String = okText(cr(src, 'One liner.', 'First line.\nSecond line.', false));
+		Assert.isTrue(text.contains('\t/**\n\t * First line.\n\t * Second line.\n\t */'), text);
+	}
+
+	/**
+	 * An over-long replacement produced a comment line past the configured width that NOTHING
+	 * measured — `fmt --list` clean, comment interiors verbatim, no rule reading doc line width.
+	 * The op refuses instead, unless the block was already over-width (its style is not this op's
+	 * to police) or the caller passes `--allow-wide`.
+	 */
+	public function testOverWideReplacementRefused(): Void {
+		final src: String = 'class C {\n\t/**\n\t * A short line.\n\t */\n\tfunction f() {}\n}';
+		final long: String = 'A rewritten sentence that runs on and on and on and on and on and on and on and on and on '
+			+ 'and on and on and on and on and on and on and on and on and on and on past every plausible width.';
+		Assert.isTrue(isErr(cr(src, 'A short line.', long, false)));
+	}
+
+	/**
+	 * The width gate is waived by `--allow-wide`, so the op still reaches a line the caller means to
+	 * leave long (a URL, a table row) without asking them to re-flow it.
+	 *
+	 * FALSE START, recorded because it is the trap this slice was told to look for in its own
+	 * fixtures: the first version of this control asserted that a block ALREADY carrying an
+	 * over-width line is exempt, so a second one may be added silently. That is a carve-out that
+	 * leaks exactly where a project's docs are already sloppy — the gate subtracts the lines that
+	 * were ALREADY over-width, not the blocks that hold them, and `testPreExistingWideLineNotRefused`
+	 * is what pins that half.
+	 */
+	public function testOverWideReplacementAllowedWithFlag(): Void {
+		final src: String = 'class C {\n\t/**\n\t * A short line.\n\t */\n\tfunction f() {}\n}';
+		final long: String = 'A rewritten sentence that runs on and on and on and on and on and on and on and on and on '
+			+ 'and on and on and on and on and on and on and on and on and on and on past every plausible width.';
+		final res: EditResult = CommentRewrite.rewrite(src, 'A short line.', long, false, true, new HaxeQueryPlugin(), null, true);
+		Assert.isTrue(okText(res).contains(long), okText(res));
+	}
+
+	/** An untouched over-width line elsewhere in the file is not the edit's doing — it does not refuse. */
+	public function testPreExistingWideLineNotRefused(): Void {
+		final wide: String = 'An existing line that already runs on and on and on and on and on and on and on and on and '
+			+ 'on and on and on and on and on and on and on and on and on and on and on past every plausible width.';
+		final src: String = 'class C {\n\t/**\n\t * $wide\n\t * A short line.\n\t */\n\tfunction f() {}\n}';
+		final text: String = okText(cr(src, 'A short line.', 'A shorter one.', false));
+		Assert.isTrue(text.contains('A shorter one.'), text);
+	}
+
+	/**
+	 * EDITING an over-width line is allowed as long as it does not get wider — a typo fix inside a
+	 * long doc line must not need `--allow-wide`.
+	 *
+	 * FOUND BY REVIEW, and it is why the gate compares COUNT and WIDEST rather than the set of line
+	 * TEXTS. An edit necessarily changes the text of the line it edits, so under text identity every
+	 * touched over-width line read as a newly gained one and the op refused a rename that SHORTENED a
+	 * 155-column line to 154 — in exactly the case the gate's own doc promised to allow.
+	 */
+	public function testEditingAWideLineShorterNotRefused(): Void {
+		final wide: String = 'An existing sentence that already runs on and on and on and on and on and on and on and on '
+			+ 'and on and on and on and on and on and on and on and on and on and on past every plausible width.';
+		final src: String = 'class C {\n\t/**\n\t * $wide\n\t */\n\tfunction f() {}\n}';
+		final text: String = okText(cr(src, 'An existing sentence', 'An old sentence', false));
+		Assert.isTrue(text.contains('An old sentence that already runs'), text);
+	}
+
+	/**
+	 * A one-line doc that does NOT start its own line is re-opened too. A first draft required it to,
+	 * and at column 0 the writer then ate the space before the continuation's star — `* Second line.
+	 * *\/` — which is the very corruption the re-open exists to prevent, reached through the guard
+	 * that was supposed to be the safe half of it.
+	 */
+	public function testTrailingOneLineDocGrownIsOpenedToo(): Void {
+		final text: String = okText(cr('class C {} /** One liner. */\nclass D {}', 'One liner.', 'First line.\nSecond line.', false));
+		Assert.isTrue(text.contains('/**\n * First line.\n * Second line.\n */'), text);
+		Assert.isFalse(text.contains('* Second line. */'), text);
+	}
+
+	/**
+	 * An EMPTY doc block has no interior line to read a continuation off, and the closer's own ` *\/`
+	 * is not one — read as a gutter it answers with a bare space and the next splice lands there.
+	 *
+	 * HAND-ASSEMBLED against `commentContinuation` directly, after the mutation that drops the
+	 * closer-skip killed nothing: no find can reach the body of a block that has no text in it, so
+	 * no `comment-rewrite` fixture can exercise the clause at all.
+	 */
+	public function testEmptyDocBlockContinuationIsTheDocGutter(): Void {
+		final src: String = 'class C {\n\t/**\n\t */\n\tfunction f() {}\n}';
+		final tok: { from: Int, to: Int, isLine: Bool } = { from: src.indexOf('/**'), to: src.indexOf('*/') + 2, isLine: false };
+		Assert.equals('\t * ', RefactorSupport.commentContinuation(src, tok));
+	}
+
+	/** The other closer spelling — an empty GUTTER-LESS block ends `**\/`, and it is skipped too. */
+	public function testEmptyGutterlessBlockContinuationIsTheDocGutter(): Void {
+		final src: String = 'class C {\n\t/**\n\t**/\n\tfunction f() {}\n}';
+		final tok: { from: Int, to: Int, isLine: Bool } = { from: src.indexOf('/**'), to: src.indexOf('**/') + 3, isLine: false };
+		Assert.equals('\t * ', RefactorSupport.commentContinuation(src, tok));
+	}
+
+	/**
+	 * Making an ALREADY over-width line wider is still refused — otherwise the gate would let a long
+	 * line grow without limit as long as no second one appeared, which is what a count-only
+	 * comparison does (measured: dropping the `widest` half killed no fixture until this one).
+	 */
+	public function testWideningAnAlreadyWideLineRefused(): Void {
+		final wide: String = 'An existing sentence that already runs on and on and on and on and on and on and on and on '
+			+ 'and on and on and on and on and on and on and on and on and on and on past every plausible width.';
+		final src: String = 'class C {\n\t/**\n\t * $wide\n\t */\n\tfunction f() {}\n}';
+		Assert.isTrue(isErr(cr(src, 'An existing sentence', 'An existing and considerably longer sentence', false)));
+	}
+
+	/**
+	 * A replacement whose FIRST line is empty leaves the BARE gutter, not a gutter and a trailing
+	 * space. `reflowIntoComment` rtrims for the same reason; the re-open did not, and the writer
+	 * re-emits a comment interior verbatim, so `fmt --list` calls trailing whitespace in one
+	 * canonical while the project's own `hxformat.json` sets `indentation.trailingWhitespace: false`.
+	 */
+	public function testOneLineDocGrownWithEmptyFirstLineHasNoTrailingSpace(): Void {
+		final src: String = 'class C {\n\t/** One liner. */\n\tfunction f() {}\n}';
+		final text: String = okText(cr(src, 'One liner.', '\nSecond line.', false));
+		Assert.isTrue(text.contains('\t/**\n\t *\n\t * Second line.\n\t */'), text);
+	}
+
+	/**
+	 * The re-open derives the closer by chopping the continuation's `* `, so a continuation that does
+	 * not end in one — a GUTTER-LESS block's bare indentation — would lose two characters of its own
+	 * indentation and put the closer under the block. It is handed back untouched instead.
+	 */
+	public function testOpenGrownDocBlockLeavesAGutterlessContinuationAlone(): Void {
+		Assert.equals('* A\n\t\tB', RefactorSupport.openGrownDocBlock('* A\n\t\tB', '\t\t'));
 	}
 
 	private function cr(src: String, find: String, replace: String, regex: Bool): EditResult {
