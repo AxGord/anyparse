@@ -393,6 +393,30 @@ final class RefactorSupport {
 	private static final CONDITIONAL_REGION_KIND: String = 'Conditional';
 
 	/**
+	 * The bare DECLARATION-STARTING keyword kinds a conditional region may contribute to the
+	 * declaration after its `#end`, mirroring `RefShape.condDeclPrefixKeywordKinds` (Haxe
+	 * `EnumKw` / `AbstractKw` / `FinalKw`, the `@:kw` arms of `HxCondDeclPrefix`). Each can itself
+	 * introduce a type, so the grammar captures it as a bare token INSIDE the region rather than
+	 * letting the parser commit to a whole declaration there — which is why it is neither a
+	 * `MODIFIER_META_KINDS` sibling nor an annotation, and why an annotation-and-modifier-only test
+	 * reads `#if (haxe_ver >= 4.2) enum #else @:enum #end` as a declaration of its own.
+	 *
+	 * Read here rather than off the shape because `declGroupSpan` and `declRunStart` are statics
+	 * with no `RefShape` in hand at any of their call sites; `MODIFIER_META_KINDS` above already
+	 * carries the same grammar knowledge in the same form.
+	 *
+	 * The widening reaches every `declGroupSpan` consumer, and for one of them it is a behaviour
+	 * CHANGE rather than a repair: `replace-node --select 'AbstractDecl:E'` now overwrites the
+	 * region too, so a replacement copied out of `source --select` — which prints the declaration
+	 * WITHOUT its folded prefix, exactly as it already does for a leading `@:meta` — silently drops
+	 * the `enum` of `enum abstract`. That is the documented `replace-node` contract (its span covers
+	 * the whole declaration including its leading modifiers) applied to one more shape, and the two
+	 * slices are still the ones that disagree; making them agree is the fix, and it belongs to
+	 * `SourceSlice`, not here.
+	 */
+	private static final COND_DECL_PREFIX_KEYWORD_KINDS: Array<String> = ['EnumKw', 'AbstractKw', 'FinalKw'];
+
+	/**
 	 * Node kinds an expression subtree may contain and still be
 	 * SIDE-EFFECT-FREE: literals, bare identifiers, parenthesised groups, and
 	 * the pure binary / unary / ternary operators. The string-payload leaf
@@ -500,8 +524,23 @@ final class RefactorSupport {
 	 * looking for member HOSTS has to recognise them or it descends into one.
 	 */
 	public static inline function isMemberDeclKind(kind: String): Bool {
-		return isFieldMemberKind(kind) || kind == 'SimpleCtor' || kind == 'ParamCtor' || kind == 'VarSemiCondInitMember'
-			|| isOpaqueMemberKind(kind);
+		return isFieldMemberKind(kind) || isEnumConstructorKind(kind) || kind == 'VarSemiCondInitMember' || isOpaqueMemberKind(kind);
+	}
+
+	/**
+	 * Is `kind` an ENUM CONSTRUCTOR — a member whose NAME the enum's declaration binds into every
+	 * scope the enum itself reaches, so that `case A(x)` names it with the enum nowhere in sight?
+	 *
+	 * The distinction a member-name scan cannot make for itself once the constructors are in the
+	 * index (`isMemberDeclKind` above is what puts them there, so that `unused-import` keeps a bare
+	 * `import pkg.Enum;` alive for a file that only uses them). `MoveSymbol` needs the other half:
+	 * a file that only ever spells `A` still loses the type when the enum leaves the module it
+	 * imported, so the constructors have to join the name scan that decides whether a module
+	 * statement still owes that file anything (`Unknown identifier : A` on
+	 * `Pony/pony/ServiceProvider.hx` after `OrState` left `pony.Or`, compile-proved both ways).
+	 */
+	public static inline function isEnumConstructorKind(kind: String): Bool {
+		return kind == 'SimpleCtor' || kind == 'ParamCtor';
 	}
 
 	/**
@@ -1270,14 +1309,18 @@ final class RefactorSupport {
 	/**
 	 * Apply a set of source edits, end-to-start. Edits are sorted
 	 * descending by `span.from` and spliced from the highest offset down,
-	 * so each splice leaves all lower offsets valid. The caller guarantees
-	 * the edits do not overlap. Each edit replaces `[span.from, span.to)`
+	 * so each splice leaves all lower offsets valid. Two edits at ONE offset are ordered by span
+	 * WIDTH, widest first, because a zero-width insert applied before the removal it shares an
+	 * offset with splices its text into the range that removal is about to take — and `Array.sort`
+	 * is documented as NOT stable, so array order cannot be the tie-break even where a target
+	 * happens to give it (js does, `java/_std/Array.hx` quicksorts). The caller guarantees the edits
+	 * do not overlap. Each edit replaces `[span.from, span.to)`
 	 * with `text` (empty `text` deletes the range). Generalises the
 	 * splice loop both refactoring operations need.
 	 */
 	public static function applyEdits(source: String, edits: Array<{ span: Span, text: String }>): String {
 		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
+		sorted.sort((a, b) -> b.span.from != a.span.from ? b.span.from - a.span.from : b.span.to - a.span.to);
 		var result: String = source;
 		for (edit in sorted) result = result.substring(0, edit.span.from) + edit.text + result.substring(edit.span.to);
 		return result;
@@ -5574,14 +5617,21 @@ final class RefactorSupport {
 	 * `inline inline` (`Duplicate access modifier inline`), and on
 	 * `Pony/pony/events/Listener0.hx`, where four `@:from #if ... extern #else
 	 * @:extern #end` prefixes were left behind and re-attached to unrelated
-	 * properties (`@:from cast functions must be static`). A region that declares a
-	 * MEMBER is a different construct entirely - it owns that member rather than
-	 * qualifying the next one - so a region with any non-modifier child is
-	 * deliberately not folded here.
+	 * properties (`@:from cast functions must be static`).
+	 *
+	 * A region that declares a MEMBER is a different construct entirely - it owns that
+	 * member rather than qualifying the next one - so a region with a child that is
+	 * neither a modifier / annotation nor one of the bare declaration-STARTING keywords
+	 * (`COND_DECL_PREFIX_KEYWORD_KINDS`) is deliberately not folded here. Those keywords
+	 * had to be added: `#if (haxe_ver >= 4.2) enum #else @:enum #end` carries a bare
+	 * `EnumKw` in its true branch, so a modifier-and-annotation-only test read the region
+	 * as a declaration of its own and `move` cut the abstract out from under it, leaving
+	 * `enum` standing in front of the next declaration (`Unexpected @` on
+	 * `Pony/pony/text/TextTools.hx` after moving `AnsiForeground` out).
 	 */
 	private static function isConditionalModifierRegion(node: QueryNode): Bool {
 		return node.kind == CONDITIONAL_REGION_KIND && node.children.length > 0
-			&& node.children.foreach(c -> MODIFIER_META_KINDS.contains(c.kind));
+			&& node.children.foreach(c -> MODIFIER_META_KINDS.contains(c.kind) || COND_DECL_PREFIX_KEYWORD_KINDS.contains(c.kind));
 	}
 
 	/**

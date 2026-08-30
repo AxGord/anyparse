@@ -44,11 +44,16 @@ package anyparse.grammar.haxe;
  * top-level declaration (`abstract A(Int) {}`, `final class C {}`), so
  * without a `HxCondDeclPrefix` arm the parser would try to parse a full
  * `HxDecl` starting at the bare keyword and then have nothing left to
- * consume `#end` with. Each new arm just captures the bare keyword
- * token verbatim, exactly like `EnumKw` — the declaration that follows
- * `#end` (`class C {}` above) is parsed independently by the ordinary
- * `HxDecl` dispatch, with no requirement that it semantically match the
- * captured keyword.
+ * consume `#end` with. Each new arm just captures the bare keyword token
+ * verbatim, exactly like `EnumKw` — the
+ * declaration that follows `#end` (`class C {}` above) is parsed independently by the ordinary
+ * `HxDecl` dispatch, with no requirement that it semantically match the captured keyword.
+ *
+ * A FOURTH arm here must also be added to `HaxeQueryPlugin.condDeclPrefixKeywordKinds` and to
+ * `RefactorSupport.COND_DECL_PREFIX_KEYWORD_KINDS`, which mirrors it for the two statics that
+ * hold no `RefShape`. Neither copy is checked against this enum, so a missing entry costs no
+ * compile error and shows up as `move` / `set-doc` / `replace-node` treating the region as a
+ * declaration of its own.
  *
  * Scope discipline mirrors `HxMemberModifier` (narrow, ordinary
  * position) vs `HxModifier` (broader, conditional-region bodies only):

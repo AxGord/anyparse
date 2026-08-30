@@ -7,6 +7,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -203,10 +204,13 @@ final class MoveSymbol {
 		final destSource: Null<String> = sourceOf[destFile];
 		if (destSource == null) return Err('destination file $destFile is not in the scope file set');
 		final oldImportPath: Null<String> = index.importPathOf(typeName);
-		if (cursorInfo.pkg != destInfo.pkg) {
-			final fqnErr: Null<String> = crossPackageFqnRefusal(index, sourceOf, oldImportPath, typeName);
-			if (fqnErr != null) return Err(fqnErr);
-		}
+		// Asked in BOTH directions. The path a fully-qualified code reference spells changes on every
+		// move, not only a cross-package one: a SAME-package move of a secondary type takes it from
+		// `p.Mod.Sub` to `p.Dest.Sub`, and of a main type from `p.Mod` to `p.Dest.Mod` — so the guard
+		// that was only asked cross-package let `pony.net.rpc.IRPC.RPCBuilder` stand over a move inside
+		// `pony.net.rpc` and wrote two files at rc 0 for a tree that no longer compiles.
+		final fqnErr: Null<String> = qualifiedPathRefusal(index, sourceOf, oldImportPath, typeName, cursorInfo.pkg == destInfo.pkg);
+		if (fqnErr != null) return Err(fqnErr);
 		final carried: Array<String> = switch dependencyImportLinesToCarry(
 			cursorSource, declSpan, cursorInfo, destInfo, destSource, index, plugin, typeRefShape, typeName
 		) {
@@ -221,31 +225,22 @@ final class MoveSymbol {
 		// 7. Assemble per-file edits, keyed by file path.
 		final editsByFile: Map<String, Array<{ span: Span, text: String }>> = [];
 
-		// 7a. Cut the decl from the source file. A decl cut from the END of its module leaves the
-		//     blank line that separated it from the previous declaration standing as the file's
-		//     trailing blank, which `fmt --list` rejects — `declText` is already taken, so the cut
-		//     span widens over that run and the destination is unaffected.
-		editsFor(editsByFile, cursorFile).push({
-			span: isBlank(cursorSource, cut.to, cursorSource.length) ? new Span(blankRunStart(cursorSource, cut.from), cut.to) : cut,
-			text: ''
-		});
-
-		// 7b. Insert the decl (plus carried imports) into the destination.
+		// 7a. Insert the decl (plus carried imports) into the destination.
 		//     The carried imports go at the destination's import region;
 		//     the decl text is appended after the existing content.
 		final destInsertEdits: Array<{ span: Span, text: String }> = buildDestInsertEdits(destSource, declText, carried, plugin);
 		for (e in destInsertEdits) editsFor(editsByFile, destFile).push(e);
 
-		// 7c. Rewrite cross-file importers: every file (other than dest)
+		// 7b. Rewrite cross-file importers: every file (other than dest)
 		//     whose import `raw` equals the old import path is repointed at
 		//     the new path, and every file that reached the moved type through
 		//     a MODULE import of the source keeps that statement or gains one.
 		//     Computed BEFORE the move via the index.
 		buildImporterEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName);
 		if (oldImportPath != null)
-			samePackageRepairEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, target, destFile, plugin, typeRefShape);
+			statementlessRepairEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, target, destFile, plugin, typeRefShape);
 
-		// 7d. Source-file local import: if the source still references the
+		// 7c. Source-file local import: if the source still references the
 		//     moved type after the cut, it now needs an import of the new
 		//     path (the type left the file). Destination-file import: if it
 		//     previously imported the type through the old path, that import
@@ -266,6 +261,14 @@ final class MoveSymbol {
 			}
 			destinationImportEdits(editsByFile, target, destSource, declText, oldImportPath, newImportPath);
 		}
+
+		// 7d. Cut the decl from the source file — LAST, because `cutEditSpan` has to see every other
+		//     edit this file already carries before it may widen over an adjacent blank run. The cut and
+		//     the source file's own new import share ONE offset whenever the declaration sat directly
+		//     under the import region; `applyEdits` orders that tie by span width so the removal goes
+		//     first, which is what keeps the insert's text out of the range being removed.
+		final cursorEdits: Array<{ span: Span, text: String }> = editsFor(editsByFile, cursorFile);
+		cursorEdits.push({ span: cutEditSpan(cursorSource, cut, cursorEdits), text: '' });
 
 		// 8-9. Apply edits per file, atomically re-parse, collect changed files.
 		return applyMoveEdits(editsByFile, sourceOf, plugin, typeName);
@@ -1005,10 +1008,39 @@ final class MoveSymbol {
 	}
 
 	/**
+	 * The span the cut actually removes: `cut` itself, widened BACK over the blank run in front of it
+	 * when the declaration had a blank line on both sides and the two would otherwise end up adjacent —
+	 * a trailing blank at the end of a module, a double separator anywhere else. `fmt --list` rejects
+	 * both, and `declText` has already been taken, so the destination is unaffected either way.
+	 *
+	 * The double separator was invisible until `move` stopped leaving a declaration's conditional
+	 * prefix behind to fill the gap; before that only the end-of-module shape was reachable, which is
+	 * why the widening read as an end-of-file special case.
+	 *
+	 * The widening goes FORWARD instead — over the ONE blank line after the declaration; a
+	 * writer-canonical file never has two — when another edit on this file lands anywhere in
+	 * `[runStart, cut.to]`, which is the leading run plus the declaration itself. Today only ONE writer
+	 * can land there — the source file's own new import, whenever the declaration sat directly under the
+	 * import region — and widening backward over that gap would leave the two spans overlapping: the
+	 * splice produced a `pony/Or.hx` that no longer parsed, which the move's own re-parse gate turned
+	 * into a refusal of the whole write. Either direction leaves exactly one separator standing,
+	 * which is what the declaration owned.
+	 */
+	private static function cutEditSpan(source: String, cut: Span, existing: Array<{ span: Span, text: String }>): Span {
+		final lineEnd: Int = source.indexOf('\n', cut.to);
+		if (!isBlank(source, cut.to, lineEnd < 0 ? source.length : lineEnd)) return cut;
+		final runStart: Int = blankRunStart(source, cut.from);
+		return if (runStart == cut.from)
+			cut
+		else if (existing.exists(e -> e.span.from >= runStart && e.span.from <= cut.to))
+			new Span(cut.from, lineEnd < 0 ? source.length : lineEnd + 1)
+		else
+			new Span(runStart, cut.to);
+	}
+
+	/**
 	 * The offset of the first byte of the run of BLANK lines that ends at `at` (a line start), or
-	 * `at` itself when the line above carries code. Used to absorb the separator blank line left
-	 * behind when a cut reaches the end of the module and there is no following declaration for it
-	 * to separate.
+	 * `at` itself when the line above carries code — the run `cutEditSpan` absorbs.
 	 */
 	private static function blankRunStart(source: String, at: Int): Int {
 		var start: Int = at;
@@ -1186,7 +1218,7 @@ final class MoveSymbol {
 	): Void {
 		final destInfo: FileInfo = target.destInfo;
 		final typeName: String = target.typeName;
-		final remaining: Array<String> = remainingTypeNames(target.cursorInfo, typeName);
+		final remaining: Array<String> = remainingBoundNames(target.cursorInfo, typeName);
 		final destExcluded: Array<Span> = [for (imp in destInfo.imports) imp.span];
 		for (imp in destInfo.imports) if (SymbolIndex.pathImportedBy(imp) == oldImportPath) {
 			// A MODULE statement here binds the source module's OTHER types too, so removing it as
@@ -1236,6 +1268,43 @@ final class MoveSymbol {
 				text: importStatementText(imp, newImportPath, destSource.substring(imp.span.from, imp.span.to))
 			});
 		}
+		destinationUsingMirror(editsByFile, target, destSource, oldImportPath, newImportPath);
+	}
+
+	/**
+	 * The destination-side mirror of the importer's SECONDARY-type arm: a `using <sourceModule>;` here
+	 * spells the module, not the moved type's path, so the loop above never sees it — and a static
+	 * extension is granted by the STATEMENT, not by the declaration's module, so the moved type stops
+	 * being an extension at the very file it moved INTO. Compile-proved: a destination holding
+	 * `using q.Mod;` and calling `3.twice()` through `Mod`'s secondary `Sub` loses the call.
+	 *
+	 * The old statement is kept unconditionally, as it is on the importer side and for the same reason
+	 * — the module's remaining types are reached through extension calls no name scan can see — and the
+	 * new one is written beside it. `using` only: a plain `import <sourceModule>;` needs nothing,
+	 * because a module's own declaration is what the destination now reads the type off.
+	 */
+	private static function destinationUsingMirror(
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, target: MoveTarget, destSource: String, oldImportPath: String,
+		newImportPath: String
+	): Void {
+		final destInfo: FileInfo = target.destInfo;
+		final sourceModule: String = target.cursorInfo.module;
+		// A MAIN-type move spells the module path itself, and then the statement IS the one the loop
+		// above already repointed — asking again would emit the new line twice.
+		if (oldImportPath == sourceModule) return;
+		// So does a destination `using` of the moved type's OWN path, which the loop repoints to
+		// exactly the line this mirror writes: `using q.Mod;` beside `using q.Mod.Sub;` came out with
+		// `using q.Dest.Sub;` twice. This is the same question `spellsOldPath` asks on the importer
+		// side, and only a `using` can answer yes — a repointed ALIAS binds its alias rather than
+		// granting the extension, and a plain `import` of the old path is REMOVED rather than repointed.
+		if (destInfo.imports.exists(imp -> imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == oldImportPath)) return;
+		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == sourceModule) {
+			final statement: String = destSource.substring(imp.span.from, imp.span.to);
+			editsFor(editsByFile, destInfo.file).push({
+				span: imp.span,
+				text: '$statement\n${importIndent(destSource, imp)}${importStatementText(imp, newImportPath, statement)}'
+			});
+		}
 	}
 
 	/**
@@ -1282,9 +1351,9 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * The types the source module still declares and another module can name — the binding set a MODULE
-	 * statement keeps after the move, and the reason such a statement cannot simply be repointed away or
-	 * dropped.
+	 * The names the source module still binds for another module — every type it still declares
+	 * plus their enum constructors — the binding set a MODULE statement keeps after the move, and the
+	 * reason such a statement cannot simply be repointed away or dropped.
 	 *
 	 * `!isPrivate` is load-bearing and cheap to get wrong, because the consumer is a TEXT scan: what
 	 * reaches it is a name COLLISION, not a reference. An importer that declares its own `Helper` while
@@ -1292,17 +1361,60 @@ final class MoveSymbol {
 	 * the scan reads that file's own `Helper` as a reason to keep an import for a binding the language
 	 * never granted.
 	 */
-	private static function remainingTypeNames(cursorInfo: FileInfo, typeName: String): Array<String> {
-		return [for (t in cursorInfo.types) if (t.name != typeName && !t.isPrivate) t.name];
+	private static function remainingBoundNames(cursorInfo: FileInfo, typeName: String): Array<String> {
+		return boundNamesOf([for (t in cursorInfo.types) if (t.name != typeName && !t.isPrivate) t]);
+	}
+
+	/**
+	 * Every name the given declarations bind into a scope that reaches them: each type's own name,
+	 * plus the ENUM CONSTRUCTORS an enum binds along with itself.
+	 *
+	 * A constructor is reachable as a bare `A` wherever its enum is — `case A(cb)` names it with the
+	 * enum nowhere in the line — so a file can depend entirely on an enum it never spells, and the
+	 * scan that decides whether a MODULE statement still has work to do reads only names. That is one
+	 * defect in each direction, and both are compile-proved on `pony.Or`: the module statement of a
+	 * file that only pattern-matches is dropped (`Unknown identifier : A` on
+	 * `Pony/pony/ServiceProvider.hx`), and the statement of a file that reaches a REMAINING enum the
+	 * same way would be repointed away from under it.
+	 *
+	 * Enum-ABSTRACT values bind the same way and are deliberately NOT collected: once the `enum`
+	 * keyword is the legacy `@:enum` — or, in this corpus, a `#if (haxe_ver >= 4.2) enum #else @:enum
+	 * #end` region — the index sees a plain `AbstractDecl`, so the values cannot be told from an
+	 * ordinary abstract's static constants, whose names (`Red`, `Default`, `White`) would spray
+	 * imports across every file that happens to spell one.
+	 *
+	 * `MemberInfo.guarded` is deliberately NOT filtered: a constructor declared inside a `#if`
+	 * region still binds its name under that flag, and every consumer of this set answers in the
+	 * direction where an extra name KEEPS or WRITES a statement. That is the opposite stance from
+	 * `addImportEdit`, which refuses to let a guarded import satisfy `already` — for the same
+	 * reason, since there the conservative answer is to write one anyway.
+	 */
+	private static function boundNamesOf(types: Array<TypeDeclInfo>): Array<String> {
+		final out: Array<String> = [];
+		for (t in types) {
+			out.push(t.name);
+			for (m in t.members) if (RefactorSupport.isEnumConstructorKind(m.kind)) out.push(m.name);
+		}
+		return out;
+	}
+
+	/**
+	 * The names the MOVED declaration takes with it — its own plus its enum constructors, and just its
+	 * own when the index carries no record of it, which is the answer the scan had before.
+	 */
+	private static function movedBoundNames(cursorInfo: FileInfo, typeName: String): Array<String> {
+		final moved: Null<TypeDeclInfo> = cursorInfo.types.find(t -> t.name == typeName);
+		return moved == null ? [typeName] : boundNamesOf([moved]);
 	}
 
 	/**
 	 * Repairs for files that named the moved type without a statement spelling its path — bare
 	 * same-package visibility, or an `import p.*;` wildcard, both of which the repoint walk cannot see
-	 * because it only ever rewrites statements that already spell the old path. A sibling module's
-	 * MAIN type is visible package-wide by its bare name, and a SUB-TYPE is not (`Type not found`,
-	 * compile-proved) — so a main type that lands as a sub-type of another module leaves every
-	 * same-package file that named it with an unresolved name. Measured on the Pony tree: moving
+	 * because it only ever rewrites statements that already spell the old path, and neither of which
+	 * is confined to the cursor's own package. A sibling module's MAIN type is visible package-wide
+	 * by its bare name, and a SUB-TYPE is not (`Type not found`, compile-proved) — so a main type that
+	 * lands as a sub-type of another module leaves every same-package file that named it with an
+	 * unresolved name. Measured on the Pony tree: moving
 	 * `ButtonCore` out of its own module left `pony/ui/gui/SwitchableList.hx` reading
 	 * `Type not found : ButtonCore`, on the base engine and on the repoint fix alike.
 	 *
@@ -1310,28 +1422,31 @@ final class MoveSymbol {
 	 * written into it — a file that means something else by `typeName` is a file this move does not
 	 * touch — and a file the repoint walk already edited is left to that walk.
 	 */
-	private static function samePackageRepairEdits(
+	private static function statementlessRepairEdits(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, index: SymbolIndex, sourceOf: Map<String, String>,
 		oldImportPath: String, newImportPath: String, target: MoveTarget, destFile: String, plugin: GrammarPlugin,
 		typeRefShape: TypeRefShape
 	): Void {
 		final cursorInfo: FileInfo = target.cursorInfo;
-		// Two guards this walk does NOT carry, both unreachable by construction rather than forgotten:
+		// One guard this walk does NOT carry, unreachable by construction rather than forgotten: "only
+		// a MAIN type was bare-visible". A SECONDARY type of a sibling module is `Type not found` from
+		// that sibling's neighbours (compile-proved) — a bare name resolves to a MODULE of that name in
+		// the package, never to another module's sub-type. A same-package file that DOES resolve
+		// `typeName` to `oldImportPath` for a secondary move did it through a STATEMENT (`import p.Mod;`
+		// answers `p.Mod.Sub` on the module rung), and the repoint walk has already edited that file —
+		// which is the `editsByFile` test below, not the ladder test. Both remaining statementless rungs
+		// carry `isMain` themselves.
 		//
-		//  - "only a MAIN type was bare-visible". A SECONDARY type of a sibling module is `Type not
-		//    found` from that sibling's neighbours (compile-proved) — a bare name resolves to a MODULE
-		//    of that name in the package, never to another module's sub-type. A same-package file that
-		//    DOES resolve `typeName` to `oldImportPath` for a secondary move did it through a STATEMENT
-		//    (`import p.Mod;` answers `p.Mod.Sub` on the module rung), and the repoint walk has already
-		//    edited that file — which is the `editsByFile` test below, not the ladder test.
-		//  - "it stays bare-visible at the destination". `importPathOf` spells a module path only for a
-		//    type whose name IS its module's basename, and `moveType` spells the destination's module
-		//    path only for a type whose name is the DESTINATION's basename — together they would need
-		//    two different files with one basename, which puts them in different packages, so the
-		//    moved type's new home is never the siblings' own package.
+		// The walk is NOT filtered to the cursor's package. A wildcard `import p.*;` reaches a main type
+		// from any package at all and has no statement spelling the old path either, so the same repair
+		// is owed to a file the package filter used to skip. The second guard the same-package version
+		// carried — "it stays bare-visible at the destination" — is dropped with the filter: a
+		// cross-package move CAN put `p/Foo.hx`'s `Foo` at `s/Foo.hx`, where a file of package `s` (or
+		// one holding `import s.*;`) already sees it. The import written there is then redundant rather
+		// than wrong, which is the direction this whole walk answers in.
 		final files: Array<FileInfo> = index.allFiles();
 		for (info in files) {
-			if (info.pkg != cursorInfo.pkg || info.file == cursorInfo.file || info.file == destFile) continue;
+			if (info.file == cursorInfo.file || info.file == destFile) continue;
 			if (editsByFile.exists(info.file)) continue;
 			final src: Null<String> = sourceOf[info.file];
 			if (src == null) continue;
@@ -1529,7 +1644,10 @@ final class MoveSymbol {
 			mainMoved: oldImportPath == cursorInfo.module,
 			// The names the source module still declares and another module can name. A MODULE import
 			// binds EVERY one of them, not the single name it looks like it names.
-			remaining: remainingTypeNames(cursorInfo, typeName)
+			remaining: remainingBoundNames(cursorInfo, typeName),
+			// The names the moved declaration takes away — its own plus its enum constructors, which
+			// may be the only thing an importer ever spells.
+			moved: movedBoundNames(cursorInfo, typeName)
 		};
 		for (importer in index.filesImportingModule(oldModule)) if (importer.file != destFile) { // dest handled separately.
 			final importerSource: Null<String> = sourceOf[importer.file];
@@ -1553,7 +1671,7 @@ final class MoveSymbol {
 			final spellsOldPath: Bool = importer.imports.exists(
 				imp -> !imp.guarded && imp.kind != ImportKind.Alias && SymbolIndex.pathImportedBy(imp) == plan.oldPath
 			);
-			final needsMoved: Bool = !plan.mainMoved && !spellsOldPath && namesAnyOf(src, [typeName], excluded);
+			final needsMoved: Bool = !plan.mainMoved && !spellsOldPath && namesAnyOf(src, plan.moved, excluded);
 			for (imp in importer.imports) {
 				final edit: Null<{ span: Span, text: String }> = importerStatementEdit(imp, src, plan, needsRemaining, needsMoved);
 				if (edit != null) editsFor(editsByFile, importer.file).push(edit);
@@ -1592,20 +1710,30 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * Cross-package refusal: a fully-qualified code reference to the moved
-	 * type (`a.b.T` in a type position, `new a.b.T()`, `a.b.T.staticCall()`)
-	 * cannot be safely repointed — the package segment would dangle after the
-	 * move, and the type's import path spans several representations. Bare
+	 * A fully-qualified code reference to the moved type (`a.b.T` in a type position,
+	 * `new a.b.T()`, `a.b.T.staticCall()`) cannot be safely repointed — the path it spells
+	 * is the one the move CHANGES, and the type's import path spans several representations.
+	 * Asked in both directions: a same-package move changes `p.Mod.Sub` to `p.Dest.Sub` and
+	 * `p.Mod` to `p.Dest.Mod` exactly as a cross-package one does, so the guard being asked
+	 * cross-package only was the whole of T340. Bare
 	 * `T` references (reached through an import) ARE handled; the import
 	 * statement itself is excluded. Returns a refusal listing the first
 	 * offending file, or null. Word-bounded so `a.b.Talon` / `xa.b.T` never
 	 * match; import / using statements of the same path are skipped.
 	 */
-	private static function crossPackageFqnRefusal(
-		index: SymbolIndex, sourceOf: Map<String, String>, oldImportPath: Null<String>, typeName: String
+	private static function qualifiedPathRefusal(
+		index: SymbolIndex, sourceOf: Map<String, String>, oldImportPath: Null<String>, typeName: String, samePackage: Bool
 	): Null<String> {
 		if (oldImportPath == null) return null;
 		final path: String = oldImportPath;
+		// An UNQUALIFIED path is a ROOT-package type's own module path, and the scan then matches the
+		// declaration's own bare name in its own file — so asking it over a same-package move refuses
+		// every such move outright. Only that direction is exempt. Cross-package the question is real
+		// and the answer was already no: a bare `Foo` somewhere else stops resolving the moment `Foo`
+		// enters a package, and the repair walk covers only its TYPE positions, so `Foo.make()` in a
+		// third file is left dangling (`Module Foo does not define type Foo`, compile-proved on both
+		// engines). Exempting the dotless path unconditionally turned that refusal into a silent write.
+		if (samePackage && path.indexOf('.') < 0) return null;
 		for (file => source in sourceOf) {
 			final info: Null<FileInfo> = index.fileInfo(file);
 			if (info == null) continue;
@@ -1627,8 +1755,8 @@ final class MoveSymbol {
 					SymbolIndex.pathImportedBy(imp) == path && at >= imp.span.from && at < imp.span.to
 				);
 				if (!inImport)
-					return 'cross-package move: "$file" references "$path" by its fully-qualified path — repointing it is unsafe; '
-						+ 'convert it to a bare "$typeName" (with an import) first';
+					return '"$file" references "$path" by its fully-qualified path — the move changes that path and '
+						+ 'repointing a code reference is unsafe; convert it to a bare "$typeName" (with an import) first';
 			}
 		}
 		return null;
@@ -1670,6 +1798,7 @@ private typedef ImporterRepoint = {
 	final sourceModule: String;
 	final mainMoved: Bool;
 	final remaining: Array<String>;
+	final moved: Array<String>;
 };
 
 /** Resolution outcome of `resolveMoveTarget`: the target or a refusal. */
