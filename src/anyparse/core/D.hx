@@ -226,9 +226,11 @@ class D {
 	}
 
 	/**
-	 * Mark every `Text` leaf of `d` as VERBATIM content, so the renderer
-	 * reproduces its bytes exactly — including a trailing blank run a line
-	 * break would otherwise strand and drop.
+	 * Mark every `Text` and every `Line` leaf of `d` as VERBATIM content: the
+	 * renderer reproduces a marked `Text`'s bytes exactly — including a trailing
+	 * blank run a line break would otherwise strand and drop — and treats a marked
+	 * `Line` as a break the author wrote rather than one the writer chose, so the
+	 * blank-line cap can neither count it nor delete it.
 	 *
 	 * One call at the boundary where a subtree is known to be content rather
 	 * than emitted syntax beats marking each leaf: the comment path builds
@@ -238,6 +240,7 @@ class D {
 	public static function verbatim(d: Doc): Doc {
 		return switch d {
 			case Text(s, _): Text(s, true);
+			case Line(s, _): Line(s, true);
 			case _: mapChildren(d, verbatim);
 		};
 	}

@@ -19,10 +19,11 @@ private typedef RenderCtx = {
 	final trailingWhitespace: Bool;
 	// One indent level in columns under a `ConditionalMarkerDecrease` scope.
 	final markerDecreaseUnit: Int;
-	// Buffer offsets at which a `lineEnd` reached `buf` as part of a `Text`
-	// node's OWN CONTENT — a multi-line string literal, a block comment the
-	// normalizer hands over whole — rather than as a layout line break the
-	// renderer chose.
+	// Buffer offsets at which a `lineEnd` reached `buf` as CONTENT rather than
+	// as a layout line break the renderer chose: inside a `Text` node's own
+	// bytes (a multi-line string literal, a block comment the normalizer hands
+	// over whole), or as a `Line` the comment path marked verbatim (the
+	// interior breaks of a comment the normalizer re-indents line by line).
 	// Ascending by construction (appended in emit order, and nothing is ever
 	// removed from `buf`). Read only by `capConsecutiveBlanks`, which must not
 	// count such a newline as a blank line: it is a byte of the program.
@@ -119,13 +120,42 @@ private function trailBlankStart(s: String): Int {
 }
 
 /**
+	Index of the first byte at or after `at` that is neither a space nor a tab —
+	the forward twin of `trailBlankStart` above, and the whole of what
+	`capConsecutiveBlanks` needs in order to look ACROSS a blank row that carries
+	the block's indent (`WriteOptions.trailingWhitespace`).
+
+	Deliberately blind to `\r`: with `lineEnd == "\r\n"` a `\r` is the first byte
+	of the line end itself, and skipping it as whitespace would leave the caller
+	comparing a bare `\n` against a two-byte `lineEnd` and reading the run as
+	finished.
+
+	A String scan rather than a rendering step, so it sits at module level beside
+	its twin for the same reason — `Renderer` is at the 50-member cap
+	`oversized-type` enforces.
+**/
+private function blankRunEnd(s: String, at: Int): Int {
+	final n: Int = s.length;
+	var i: Int = at;
+	while (i < n) {
+		final c: Int = s.fastCodeAt(i);
+		if (c != ' '.code && c != '\t'.code) break;
+		i++;
+	}
+	return i;
+}
+
+/**
 	Append to `ctx.textLineEnds` the buffer offset of every `lineEnd` inside
 	`body`, which the caller is about to append to `ctx.buf`.
 
-	This is the ONE place the renderer learns that a newline is program content
-	rather than layout: `emitText` is the sole writer of `Text` bytes, and every
-	other `\n` in the buffer was written by a line-break emitter. See
-	`capConsecutiveBlanks` for who reads it and why.
+	One of the two places the renderer learns that a newline is program content
+	rather than layout. `emitText` is the sole writer of `Text` bytes that can
+	hold a line end (`commitTrailBlank` writes some too, but a held run is
+	spaces and tabs by construction), so this covers every content newline that
+	arrives inside a leaf; `emitLine` records the other kind directly — a break
+	the comment path marked verbatim. See `capConsecutiveBlanks` for who reads
+	them and why.
 
 	A module-level function rather than a `Renderer` member for the same reason
 	as `trailBlankStart` above — that type already sits on the 50-member cap
@@ -749,24 +779,48 @@ class Renderer {
 		blank line at most, etc. Single-character `lineEnd` ("\n", "\r")
 		and multi-character ("\r\n") are both handled.
 
-		`textLineEnds` carries the buffer offsets of every `lineEnd` that reached
-		the output as a `Text` node's own CONTENT — the interior of a multi-line
-		string literal, of a block comment the normalizer hands over whole. Those are
-		program bytes, not layout, so they are never counted into a run and never
-		dropped: without them this scan reads the flattened buffer with no idea which
-		newline it is looking at, and shortens a literal's VALUE under the compiled
-		default of 1 (measured, compiled and run: `"one\n\n\nfour"` came back
-		`"one\n\nfour"`, `length` 10 -> 9).
+		`textLineEnds` carries the buffer offsets of every `lineEnd` the output owes
+		to CONTENT rather than to layout — the interior of a multi-line string
+		literal, of a block comment the normalizer hands over whole, and (below) of
+		one the normalizer re-indents line by line. Those are program bytes, not
+		layout, so they are never counted into a run and never dropped: without them
+		this scan reads the flattened buffer with no idea which newline it is looking
+		at, and shortens a literal's VALUE under the compiled default of 1
+		(measured, compiled and run: `"one\n\n\nfour"` came back `"one\n\nfour"`,
+		`length` 10 -> 9).
 
-		What this does NOT reach: a blank line inside a GUTTER-LESS multi-line block
-		comment. Those lines get re-indented, so `BlockCommentNormalizer` hands the
-		writer one `Text` PER LINE joined by the macro `@:sep` hardlines — layout
-		line-ends by construction, and a blank interior line is an EMPTY `Text` that
-		emits nothing at all. A doc comment is unaffected: its blank lines carry the
-		` * ` gutter, so they are not blank in the output. Telling those hardlines
-		apart from the ones between two statements needs a Doc-level region marker — a
-		new `Doc` ctor, whose nearest sister `ConditionalMarkerDecrease` is spelled at
-		49 sites across 9 files. Filed as T323, not taken here.
+		A blank line inside a GUTTER-LESS multi-line block comment reaches the same
+		array from the other end. Those lines get re-indented, so
+		`BlockCommentNormalizer` cannot hand the writer one `Text` holding the whole
+		body — it hands one `Text` PER LINE joined by hardlines, and a blank interior
+		line is an EMPTY `Text` that emits nothing at all. Those hardlines carry
+		`Doc.Line`'s own `verbatim` flag, set by `D.verbatim` over the comment's
+		whole Doc, so `emitLine` records them here too and the walk below treats them
+		exactly as it treats a literal's newline.
+
+		A DOC comment is not the exception the earlier note in this file claimed.
+		Its blank lines are safe only when the author put the ` * ` gutter on them;
+		a genuinely empty interior line inside a `/**` block reaches
+		`javadocBytePreserveDoc`, which emits the same empty `Text` between two
+		breaks. Measured on both arms at a cap of 0: base ate BOTH blank lines out
+		of `/**`, ` * one`, blank, blank, ` * four`, ` *\/`, and the flag restores
+		them.
+
+		The mark is on the LEAF, never on a region, and that is what stops the cap
+		UNDER-applying at a comment boundary. The breaks between two adjacent
+		comments, and the one before the code under a comment, belong to the
+		enclosing writer's Doc — never inside the subtree `D.verbatim` walks — so
+		they stay layout and stay cappable. A positional rule ("the run sits between
+		two verbatim `Text`s") cannot tell those apart and would protect them too.
+
+		A blank ROW is not always an EMPTY one. Under
+		`WriteOptions.trailingWhitespace` the renderer writes the block's indent
+		before every line end, so a run of blank rows reads as line-end, indent,
+		line-end, indent, … — the walk below skips that indent, and a capped run
+		keeps the indent of the rows it keeps. Without the skip the two knobs were
+		silently mutually exclusive: with `trailingWhitespace` on the scan matched no
+		run at all and `maxAnywhereInFile` did nothing at any value (measured: three
+		blank rows survived a cap of 0).
 
 		Pre-condition: `maxBlanks >= 0`; the caller guards `< 0` for
 		unbounded (no-cap) mode.
@@ -774,7 +828,6 @@ class Renderer {
 	private static function capConsecutiveBlanks(s: String, lineEnd: String, maxBlanks: Int, textLineEnds: Array<Int>): String {
 		final leLen: Int = lineEnd.length;
 		if (leLen == 0) return s;
-		final maxRunLen: Int = (maxBlanks + 1) * leLen;
 		final buf: StringBuf = new StringBuf();
 		final n: Int = s.length;
 		final contentEnds: Int = textLineEnds.length;
@@ -789,17 +842,29 @@ class Renderer {
 			if (startsWithAt(s, i, lineEnd) && (t >= contentEnds || textLineEnds[t] != i)) {
 				if (i > segStart) buf.addSub(s, segStart, i - segStart);
 				var runEnd: Int = i + leLen;
-				while (runEnd <= n - leLen && startsWithAt(s, runEnd, lineEnd)) {
-					while (t < contentEnds && textLineEnds[t] < runEnd) t++;
+				// End offset of the (maxBlanks + 1)-th line end in this run, i.e. the
+				// last byte the cap keeps; -1 until the run is that long.
+				var keepEnd: Int = maxBlanks == 0 ? runEnd : -1;
+				var ends: Int = 1;
+				while (true) {
+					// A blank ROW is not always an empty one: under
+					// `trailingWhitespace` the renderer writes the block's indent
+					// before each line end, so the run reads `\n<indent>\n<indent>…`.
+					// Skipping that indent is what lets the cap see those rows at all
+					// — without it the scan matched no run and the knob was a silent
+					// no-op whenever `trailingWhitespace` was on.
+					final probe: Int = blankRunEnd(s, runEnd);
+					if (probe + leLen > n || !startsWithAt(s, probe, lineEnd)) break;
+					while (t < contentEnds && textLineEnds[t] < probe) t++;
 					// A content newline TERMINATES the run rather than extending it:
-					// the run so far is layout and may be capped, the content byte is
-					// copied through by the `else` arm below.
-					if (t < contentEnds && textLineEnds[t] == runEnd) break;
-					runEnd += leLen;
+					// the run so far is layout and may be capped, the content byte and
+					// any indent before it are copied through by the `else` arm below.
+					if (t < contentEnds && textLineEnds[t] == probe) break;
+					runEnd = probe + leLen;
+					ends++;
+					if (ends == maxBlanks + 1) keepEnd = runEnd;
 				}
-				final runLen: Int = runEnd - i;
-				final emitLen: Int = runLen < maxRunLen ? runLen : maxRunLen;
-				buf.addSub(s, i, emitLen);
+				buf.addSub(s, i, (keepEnd >= 0 ? keepEnd : runEnd) - i);
 				i = runEnd;
 				segStart = i;
 			} else {
@@ -2800,8 +2865,14 @@ class Renderer {
 	 * `MFlat`) the line collapses to its `flat` replacement; in break mode it
 	 * becomes a real `\n+indent`, dropping any pending OptSpace and forward
 	 * hardline. Mutates `ctx`.
+	 *
+	 * `verbatim` marks a break the AUTHOR wrote inside content the writer only
+	 * reproduces — a block comment's interior. Both arms then record the line
+	 * end's buffer offset in `ctx.textLineEnds`, which is the sole thing the flag
+	 * does: `capConsecutiveBlanks` never counts such a line end into a blank run
+	 * and never deletes it. See the `Line` ctor doc in `Doc` for the mark set.
 	 */
-	private static function emitLine(ctx: RenderCtx, f: Frame, flat: String): Void {
+	private static function emitLine(ctx: RenderCtx, f: Frame, flat: String, verbatim: Bool): Void {
 		if (f.forceFlat || f.mode == MFlat) {
 			flushPendingHardline(ctx);
 			// Zero-width flat text writes nothing, so a run held before it stays
@@ -2815,6 +2886,10 @@ class Renderer {
 				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 				ctx.pendingIndent = -1;
 			}
+			// A verbatim break in flat mode still writes its own text, and that
+			// text can BE the line end — record it before the append, on the same
+			// terms as `emitText`'s content newlines.
+			if (verbatim) recordTextLineEnds(ctx, flat);
 			ctx.buf.add(flat);
 			ctx.col += flat.length;
 			if (flat.length > 0) {
@@ -2834,6 +2909,10 @@ class Renderer {
 			if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
 				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 			}
+			// AFTER the indent, so the offset is the one the line end lands on.
+			// Ascending by construction: `buf` only grows and this is the last
+			// read before the append.
+			if (verbatim) ctx.textLineEnds.push(ctx.buf.length);
 			ctx.buf.add(ctx.lineEnd);
 			ctx.lineCount++;
 			ctx.pendingIndent = f.indent;
@@ -3029,8 +3108,8 @@ class Renderer {
 				// nothing
 			case Text(s, verbatim):
 				emitText(ctx, s, verbatim == true);
-			case Line(flat):
-				emitLine(ctx, f, flat);
+			case Line(flat, verbatim):
+				emitLine(ctx, f, flat, verbatim == true);
 			case OptSpace(_), OptSpaceSkipAfterHardline, OptHardlineSkipBeforeHardline:
 				emitOptSpaceVariants(ctx, f);
 			case OptHardline, OptHardlineSkipAtOpenDelim:

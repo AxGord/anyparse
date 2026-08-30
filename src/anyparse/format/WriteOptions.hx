@@ -403,6 +403,11 @@ typedef WriteOptions = {
 	 * `emptyLines.maxAnywhereInFile` knob through
 	 * `HaxeFormatConfigLoader`; other grammars leave it unbounded.
 	 *
+	 * Orthogonal to `trailingWhitespace`, which makes a blank row carry the
+	 * block's indent: the cap counts such a row as blank and keeps the indent on
+	 * the rows it keeps. The two used to be silently mutually exclusive — with
+	 * `trailingWhitespace` on, no run matched and this knob did nothing.
+	 *
 	 *  - `maxConsecutiveBlanks = 0` — no blank lines anywhere; every
 	 *    inter-line gap collapses to a single line-end.
 	 *  - `maxConsecutiveBlanks = 1` — at most one blank line between
