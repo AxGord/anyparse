@@ -173,8 +173,11 @@ enum FixRevertCause {
  * check, every edit sharing their group — or all of them on a budget / confirm
  * fallback (`appliedEdits == 0`). Both stay EDIT counts even when the bisect worked
  * in GROUPS, so a reader never has to know whether the rule grouped anything.
- * `oracleInvocations` is the total compiler spawns spent verifying this file: the
- * initial full-set typecheck, the bisect probes, and the complement confirm. Emitted
+ * `oracleInvocations` is the total compiler SPAWNS spent verifying this
+ * file: the initial full-set typecheck, the bisect probes that produced a
+ * candidate, and the complement confirm when one ran. A probe the writer REFUSED never
+ * reached a compiler and is not counted — it still costs the search BUDGET,
+ * which is a different quantity and the one `spent` carries. Emitted
  * only for the bisect path; a fully-applied file or a single-unit file carries no
  * entry.
  */
@@ -468,6 +471,13 @@ final class FixVerifier {
 	 *
 	 * A budget overrun or an unexpectedly-failing complement falls back to a
 	 * whole-file revert, still reported as `Partial` with `appliedEdits == 0`.
+	 *
+	 * A probe whose subset the WRITER refused counts as a failing subset — that is
+	 * the honest answer to "can this subset be applied and still build?" — and the
+	 * search runs on. The refusal decides the reported cause at exactly one seat: the
+	 * budget/blame-everything exit, which reaches no complement. Every later seat saw
+	 * a complement of its own and answers from that.
+	 *
 	 * Mutates `entry.source` and the disk (`write`) to the final decided text.
 	 */
 	private static function verifyEntry(
@@ -491,7 +501,9 @@ final class FixVerifier {
 		final fullText: String = switch RefactorSupport.canonicalize(before, full, false, plugin, opts) {
 			case Ok(text) if (text != before): text;
 			case Ok(_): return NoChange;
-			case Err(message): return isWriterCanonical(before, plugin, opts) ? Reverted(NotCanonical(message)) : SourceNotCanonical;
+			case Err(message): return RefactorSupport.isWriterCanonical(before, plugin, opts)
+				? Reverted(NotCanonical(message))
+				: SourceNotCanonical;
 		};
 		// The candidate exists; whether anything could ever JUDGE it is a separate question,
 		// and it is asked here rather than earlier so that the decline count means what it says:
@@ -525,17 +537,30 @@ final class FixVerifier {
 		// never spuriously falls back.
 		final searchBudget: Int = 2 * ceilLog2(n);
 		final spent: Array<Int> = [0];
-		// `isolateFailers` reads a BOOLEAN oracle, so a probe that could not build a
-		// candidate has no honest answer to give it: `false` means "the compiler
-		// rejected this subset" and would blame these units for a failure they never
-		// caused. Record the refusal instead and abandon the bisect below — its search
-		// is only as sound as the answers it was fed.
+		// SPAWNS, not probes. `spent` is the BUDGET counter and every attempt costs one,
+		// including a probe the writer refused before any compiler ran — so reporting it as
+		// `oracleInvocations` overstated the compiler spawns this file cost, and the summary
+		// line that prints it says "oracle run(s)" in so many words. Measured on a four-edit
+		// set with two refusing probes: 5 reported against 3 real spawns.
+		final spawns: Array<Int> = [0];
+		// `isolateFailers` reads a BOOLEAN oracle, and a probe that could not build a
+		// candidate still has an honest answer for the question the bisect asks — "can this
+		// subset be applied and still build?" — which is no. So it counts as a failure and
+		// the search CONTINUES: the complement it settles on is confirm-typechecked before
+		// anything is KEPT (a probe writes its candidate to disk to typecheck it — every
+		// exit below then writes back either `before` or a confirmed text), so a
+		// mis-attributed unit can cost applied edits and never correctness. Abandoning here
+		// instead cost the whole file: measured on a four-edit set whose complement the
+		// compiler then CONFIRMED, the abandon applied 0 of 4 edits where the search applies
+		// 2. What the refusal is kept for is the REPORTED cause at the ONE seat that reaches
+		// no complement — see below.
 		var uncanonical: Null<String> = null;
 		function probe(indices: Array<Int>): Bool {
 			final subset: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, indices);
 			return switch RefactorSupport.canonicalize(before, subset, false, plugin, opts) {
 				case Ok(text):
 					write(entry.file, text);
+					spawns[0]++;
 					switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
 						case Confirmed: true;
 						case _: false;
@@ -547,20 +572,25 @@ final class FixVerifier {
 		}
 		final failers: Null<Array<Int>> = isolateFailers(n, searchBudget, probe, spent);
 		final refusal: Null<String> = uncanonical;
-		if (refusal != null) {
-			entry.source = before;
-			write(entry.file, before);
-			return Partial(0, edits.length, 1 + spent[0], NotCanonical(refusal));
-		}
+		// The full-set typecheck plus every probe that produced a candidate — stated once
+		// because the whole point of the fix that introduced `spawns` is that this number is
+		// exact. The confirm adds its own `+ 1`, at the one seat where it ran.
+		final spawnsWithFullSet: Int = 1 + spawns[0];
 		if (failers == null || failers.length >= n) {
 			entry.source = before;
 			write(entry.file, before);
-			return Partial(0, edits.length, 1 + spent[0], OracleRejected);
+			// The ONE seat where a refusal decides the cause, and the seat the abandoned bisect
+			// used to reach directly: no complement was ever built, so nothing here was
+			// compiler-judged and `NotCanonical` names the writer honestly. Every seat BELOW
+			// knows more than this one and must answer from what IT saw — a hoisted cause put
+			// `NotCanonical` on a complement the compiler had read and rejected, which is the
+			// mirror of the defect the split of `FixRevertCause` exists to prevent.
+			return Partial(0, edits.length, spawnsWithFullSet, refusal == null ? OracleRejected : NotCanonical(refusal));
 		}
 		final failerUnits: Array<Int> = failers;
 		final keptUnits: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
 		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, keptUnits);
-		final invocations: Int = 1 + spent[0] + 1;
+		final invocations: Int = spawnsWithFullSet + 1;
 		return switch RefactorSupport.canonicalize(before, safe, false, plugin, opts) {
 			case Ok(safeText) if (safeText != before):
 				write(entry.file, safeText);
@@ -575,16 +605,21 @@ final class FixVerifier {
 					case _:
 						entry.source = before;
 						write(entry.file, before);
+						// The compiler READ this complement and refused it — `OracleRejected` whatever
+						// happened earlier in the search. A refusal upstream says nothing about a
+						// candidate the compiler judged for itself.
 						Partial(0, edits.length, invocations, OracleRejected);
 				}
 			case Ok(_):
 				entry.source = before;
 				write(entry.file, before);
-				Partial(0, edits.length, 1 + spent[0], OracleRejected);
+				// The complement canonicalises back to the input, so nothing new was judged — but
+				// the FULL SET was, and its rejection is what put us here.
+				Partial(0, edits.length, spawnsWithFullSet, OracleRejected);
 			case Err(message):
 				entry.source = before;
 				write(entry.file, before);
-				Partial(0, edits.length, 1 + spent[0], NotCanonical(message));
+				Partial(0, edits.length, spawnsWithFullSet, NotCanonical(message));
 		};
 	}
 
@@ -685,22 +720,6 @@ final class FixVerifier {
 			k++;
 		}
 		return k;
-	}
-
-
-	/**
-	 * Does `source` already satisfy the one-pass canonical gate `canonicalize` puts on
-	 * its input?
-	 *
-	 * The discriminator between the two ways `canonicalize` can refuse: `false` means
-	 * the INPUT was never canonical, so the refusal is about the tree and says nothing
-	 * about the check's edit; `true` means the input passed that gate and the refusal
-	 * is the writer's own — a parse failure, a comment loss, or a source it cannot
-	 * settle on a fixed point. Asked by re-running the gate rather than by matching on
-	 * the message text, which would break the day the wording changes.
-	 */
-	private static function isWriterCanonical(source: String, plugin: GrammarPlugin, opts: Null<String>): Bool {
-		return try plugin.writeRoundTrip(source, opts) == source catch (_: Exception) false;
 	}
 
 }

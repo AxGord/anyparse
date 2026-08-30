@@ -1409,6 +1409,64 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Splice `edits` into `source` and hand back the result CANONICAL — but only when
+	 * `source` was already the writer's fixed point.
+	 *
+	 * The contract every writer-EMIT op states and the span-splice ops never did:
+	 * canonical in, canonical out. A format-preserving op that only moves bytes can
+	 * still leave a canonical file drifted, because the splice changes what the writer
+	 * would have decided — ` implements IFoo` pushes a class header past the line limit
+	 * and the writer would have wrapped it there. So a canonical input goes through
+	 * `canonicalize`, the same fixed-point loop the file such an op CREATES already
+	 * gets, and a drifted input keeps the plain splice: reformatting a file the user
+	 * never formatted is not a span-splice op's business, and refusing it would decline
+	 * work these ops have always done.
+	 *
+	 * A refusal about the RESULT — an emptied body slot, a parse failure, a comment
+	 * loss, a splice the writer cannot settle — propagates as `Err`. A source the
+	 * writer cannot round-trip AT ALL falls back to the splice like a merely-drifted
+	 * one, because `isWriterCanonical` catches and answers `false` for it: that is the
+	 * pre-existing behaviour of these ops and this helper does not narrow it.
+	 * `isWriterCanonical` re-asks the input gate rather than matching on the message
+	 * text, which would break the day the wording changes.
+	 */
+	public static function editKeepingCanonical(
+		source: String, edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		return switch canonicalize(source, edits, false, plugin, optsJson) {
+			case Ok(text, rewrites):
+				Ok(text, rewrites);
+			// The FALLBACK below carries no `rewrites` argument: the writer loop never ran on
+			// that path, and `null` is what `EditResult.Ok` documents for it. A `0` would read
+			// as a measurement.
+			case Err(message): isWriterCanonical(source, plugin, optsJson) ? Err(message) : Ok(applyEdits(source, edits));
+		};
+	}
+
+	/**
+	 * Does `source` already satisfy the one-pass canonical gate `canonicalize` puts on
+	 * its input?
+	 *
+	 * `false` means the writer does not agree this source is already its output — either
+	 * because it is drifted, or because it cannot round-trip the source at all (a parse
+	 * failure, a comment loss, a grammar with no writer: the `catch` answers `false` for
+	 * every one). Either way the refusal is about the TREE and says nothing about an
+	 * edit. `true` means the input passed that gate, so a `canonicalize` refusal is
+	 * about the RESULT — an emptied body slot, a splice that does not parse, a splice
+	 * the writer cannot settle.
+	 *
+	 * Two consumers read it with OPPOSITE consequences and both are correct, because it
+	 * is a factual query and not a safety veto: `editKeepingCanonical` reads `false` as
+	 * "proceed with the plain splice", `FixVerifier.verifyEntry` reads it as "this
+	 * verdict is not the check's to own" (`SourceNotCanonical`). Asked by re-running
+	 * the gate rather than by matching on the message text, which would break the day
+	 * the wording changes.
+	 */
+	public static function isWriterCanonical(source: String, plugin: GrammarPlugin, ?optsJson: String): Bool {
+		return try plugin.writeRoundTrip(source, optsJson) == source catch (_: Exception) false;
+	}
+
+	/**
 	 * Stage a cross-file rename all-or-nothing: canonicalize each file's edit
 	 * `slice` through `canon` and return every file's rewritten source ONLY when
 	 * EVERY slice canonicalizes to a genuinely-changed result. Any `Err`, any

@@ -13300,13 +13300,16 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		// Discovered from the file being CREATED, not from the source: `--out` can put the
-		// interface under a different `hxformat.json`, and the file is judged by the config
-		// that governs where it LANDS. Passing null here styled it by compiled defaults, so
-		// `fmt --list` called it drifted the moment it was written.
+		// One config per FILE, because each is judged by the one that governs where IT lands
+		// and `--out` can put the interface under a different `hxformat.json` from the class.
+		// Passing null for the created file styled it by compiled defaults, so `fmt --list`
+		// called it drifted the moment it was written; passing null for the source would make
+		// a project-canonical class read as drifted and silently forfeit the canonical-out
+		// half of the edit.
 		final optsJson: Null<String> = discoverFormatConfig(ifaceFile);
+		final srcOptsJson: Null<String> = discoverFormatConfig(srcFileNN);
 		final result: MoveResult = ExtractInterface.extract(
-			srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin, optsJson
+			srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin, optsJson, srcOptsJson
 		);
 		switch result {
 			case Ok(changes, advisory):
@@ -13485,10 +13488,11 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		// Discovered from the file being CREATED — see `runExtractInterface`.
+		// One config per FILE — see `runExtractInterface` for why each needs its own.
 		final optsJson: Null<String> = discoverFormatConfig(superFile);
+		final srcOptsJson: Null<String> = discoverFormatConfig(srcFileNN);
 		final result: MoveResult = ExtractSuperclass.extract(
-			srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin, optsJson
+			srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin, optsJson, srcOptsJson
 		);
 		switch result {
 			case Ok(changes, advisory):

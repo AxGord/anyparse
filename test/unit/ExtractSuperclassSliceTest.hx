@@ -210,6 +210,79 @@ class ExtractSuperclassSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * A blank-line run INSIDE a string literal must survive a cut somewhere else in
+	 * the file.
+	 *
+	 * RED at the base commit, where the edited source was finished by a hand-rolled
+	 * `collapseBlankRuns` — a whole-file scan that shortened any run of 3+ newlines to
+	 * one blank line, with no idea where literals and comments start. It ran over the
+	 * WHOLE file, so pulling up `alpha` silently deleted a newline from `banner`'s
+	 * literal: the result still parsed, `fmt --list` still called it canonical, and the
+	 * only witness was the string's length at runtime (measured: 20 -> 19).
+	 *
+	 * The WRITER already gives back the separator a cut doubles, and it cannot damage a
+	 * literal doing so — not because it knows what one is (it does not: see the config
+	 * note below), but because a CANONICAL source cannot hold an over-long run anywhere,
+	 * so the writer never has one to shorten. That is why the hand-rolled pass is gone
+	 * rather than taught about quoting.
+	 *
+	 * What this pins is therefore "no whole-file text scan", not "goes through the
+	 * writer": a bare `applyEdits` would pass it too, which is what the M4 mutation
+	 * showed. The two `testTheEditedSourceComesBackCanonical` pins carry the writer half.
+	 *
+	 * `maxAnywhereInFile: 2` is load-bearing: the compiled DEFAULT is 1, under which
+	 * the writer itself shortens the run, and the fixture would then prove nothing
+	 * about this op. (That the writer does that INSIDE a literal at all is a separate
+	 * defect of its own.)
+	 */
+	public function testABlankRunInsideAStringLiteralSurvivesACutElsewhere(): Void {
+		final config: String = '{"emptyLines": {"maxAnywhereInFile": 2}}';
+		final literal: String = '"one\n\n\nfour"';
+		final src: String = 'package pkg;\n\nclass Src {\n\tpublic function new() {}\n\n\tpublic function banner():String {\n'
+			+ '\t\treturn $literal;\n\t}\n\n\tpublic function alpha():Int {\n\t\treturn 1;\n\t}\n}\n';
+		Assert.equals(
+			src, plugin().writeRoundTrip(src, config), 'the fixture must be canonical under this config, else the cut is judged by nothing'
+		);
+		switch ExtractSuperclass.extract('pkg/Src.hx', 'Src', 'Base', 'pkg/Base.hx', ['alpha'], src, plugin(), config, config) {
+			case Ok(changes, _):
+				final newSrc: String = changeFor(changes, 'pkg/Src.hx').newSource;
+				Assert.isTrue(newSrc.contains(literal), 'the untouched literal keeps every newline it had:\n<$newSrc>');
+				Assert.isFalse(newSrc.contains('function alpha'), 'the cut still happened — else the assertion above is vacuous');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * The EDITED source must come back canonical, not just the CREATED one.
+	 *
+	 * RED at the base commit: `extends Base ` is a verbatim splice, and on a header
+	 * already near the limit it pushes the line past it — where the writer wraps the
+	 * trailing `implements` clause onto a continuation line. The source was canonical
+	 * one second before the op ran and drifted the moment it returned, which is the
+	 * defect the created file had already been taught to avoid, one file over.
+	 */
+	public function testTheEditedSourceComesBackCanonical(): Void {
+		final src: String = 'package pkg;\n\nclass Long implements AlphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXiOm'
+			+ ' implements OmicronPiRhoSigmaTauUpsilonPhiChiPsiOmegaAlphaBetaGamma {\n\tpublic function new() {}\n\n'
+			+ '\tpublic function alpha():Int {\n\t\treturn 1;\n\t}\n\n\tpublic function beta():Int {\n\t\treturn 2;\n\t}\n}\n';
+		Assert.equals(
+			src, plugin().writeRoundTrip(src, null), 'the fixture must be canonical BEFORE the op, else there is no drift to see'
+		);
+		final changes: Array<MoveChange> = okChanges('pkg/Long.hx', 'Long', 'Base', 'pkg/Base.hx', ['alpha'], src);
+		final newSrc: String = changeFor(changes, 'pkg/Long.hx').newSource;
+		Assert.equals(newSrc, plugin().writeRoundTrip(newSrc, null), 'the edited file must be the writer fixed point:\n<$newSrc>');
+		// ONE string spanning both halves: the clause this op INSERTED and the wrap only the
+		// writer produces. Neither can be satisfied without the other.
+		Assert.isTrue(
+			newSrc.contains(
+				'class Long extends Base implements AlphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXiOm\n\t\timplements Omicron'
+			),
+			'the inserted `extends` sits on a header the writer then wrapped — the raw splice produced neither together'
+		);
+	}
+
 	private function okChanges(
 		srcFile: String, srcType: String, superName: String, superFile: String, memberNames: Array<String>, srcSource: String
 	): Array<MoveChange> {
