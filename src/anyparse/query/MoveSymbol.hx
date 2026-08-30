@@ -152,7 +152,10 @@ final class MoveSymbol {
 		+ 'own. What is left is the case where NEITHER side is nameable: the move proceeds, which is right for the standard '
 		+ 'library (the same scope in every file) and NOT right for a wildcard of a package outside the scope, which is '
 		+ 'per-file and is the door still open. A dependency reached through a MODULE import (import pkg.Mod; binding '
-		+ 'pkg.Mod.Sub) is priced but never carried.';
+		+ 'pkg.Mod.Sub) is carried when the statement that produced the binding is one the index can name; a `#if`-guarded '
+		+ 'module import and a module OUTSIDE the scope produce none it can, so such a dependency is neither carried nor '
+		+ 'refused and the destination may need the import written by hand. A MODULE import at an importer keeps its '
+		+ 'statement beside the repointed one when the source module still declares types that file names.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -235,8 +238,12 @@ final class MoveSymbol {
 
 		// 7c. Rewrite cross-file importers: every file (other than dest)
 		//     whose import `raw` equals the old import path is repointed at
-		//     the new path. Computed BEFORE the move via the index.
-		buildImporterEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile);
+		//     the new path, and every file that reached the moved type through
+		//     a MODULE import of the source keeps that statement or gains one.
+		//     Computed BEFORE the move via the index.
+		buildImporterEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName);
+		if (oldImportPath != null)
+			samePackageRepairEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, target, destFile, plugin, typeRefShape);
 
 		// 7d. Source-file local import: if the source still references the
 		//     moved type after the cut, it now needs an import of the new
@@ -257,24 +264,7 @@ final class MoveSymbol {
 				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, plugin, newImportPath);
 				if (insert != null) editsFor(editsByFile, cursorFile).push(insert);
 			}
-			for (imp in destInfo.imports) if (SymbolIndex.pathImportedBy(imp) == oldImportPath) {
-				// An ALIAS import is not made redundant by the type becoming local — the
-				// destination's own code names it through the ALIAS, and nothing else binds that
-				// name — so it is repointed at the new path rather than deleted. Compiled on
-				// 4.3.7: a module may alias its own sub-type (`import pkg.B.Foo as F;` in
-				// `pkg/B.hx`) and its own MAIN type (`import pkg.B as F;` there).
-				//
-				// A SELF-alias is the exception: `import pkg.A.Foo as Foo;` binds the name the
-				// moved declaration itself now binds, so it is redundant in exactly the way a
-				// plain import is, and repointing it leaves the destination importing its own
-				// type under its own name. It compiles and no rule reports it — which is why it
-				// has to be decided here rather than left to one.
-				final redundant: Bool = imp.kind != ImportKind.Alias || imp.alias == typeName;
-				editsFor(editsByFile, destFile).push(redundant ? { span: removeImportSpan(destSource, imp), text: '' } : {
-					span: imp.span,
-					text: importStatementText(imp, newImportPath, destSource.substring(imp.span.from, imp.span.to))
-				});
-			}
+			destinationImportEdits(editsByFile, target, destSource, declText, oldImportPath, newImportPath);
 		}
 
 		// 8-9. Apply edits per file, atomically re-parse, collect changed files.
@@ -324,6 +314,28 @@ final class MoveSymbol {
 		final files: Array<FileInfo> = index.allFiles();
 		final carried: Array<String> = [];
 		for (dep in depNames) {
+			// A DOTTED type path is ONE leaf, so `dep` can be `Mod.Sub`. Its head is not resolved by
+			// any import — `import q.Mod;` does NOT make `Mod.Sub` legal (`Type not found : Mod` on
+			// 4.3.7) — it is a MODULE looked up in the file's own package and then at the top level.
+			// So the PACKAGE decides it, a same-package move cannot move it, and a cross-package one
+			// silently can: compile-run through the base engine, `Mod.Sub` went `p.Sub` -> `s.Sub`
+			// with rc 0. A lowercase head is a fully-qualified path and is absolute everywhere.
+			final dot: Int = dep.indexOf('.');
+			if (dot > 0) {
+				final head: String = dep.substring(0, dot);
+				if (!RefactorSupport.isUpperInitial(head)) continue;
+				final mineHead: Null<String> = headModuleOf(head, cursorInfo, files);
+				final theirsHead: Null<String> = headModuleOf(head, destInfo, files);
+				// Equal includes null == null: a head the index cannot see is a top-level module,
+				// which resolves the same from every package.
+				if (mineHead == theirsHead) continue;
+				return CarryErr(
+					'the moved code writes the qualified type "$dep", whose head "$head" is a module resolved through the '
+					+ 'file\'s own package: ${cursorInfo.file} reaches ${mineHead == null ? 'the top level' : '$mineHead'} and '
+					+ '${destInfo.file} reaches ${theirsHead == null ? 'the top level' : '$theirsHead'} — the reference would '
+					+ 'silently change meaning; spell it fully qualified, or move the head module too'
+				);
+			}
 			// The source's explicit TOP-LEVEL statement that BINDS `dep` — for a plain import /
 			// using that is a path whose last segment is `dep`, for an alias it is the alias
 			// itself, and `raw` is exactly the bound name in both. The kinds are listed rather
@@ -331,7 +343,7 @@ final class MoveSymbol {
 			// thought about yet must be refused, not admitted. An alias whose path did not decode
 			// names nothing to carry. A guarded (`#if`) provider is skipped: it would be carried
 			// into the destination as an unconditional import, which could be platform-inappropriate.
-			final provider: Null<ImportInfo> = cursorInfo.imports.find(
+			final direct: Null<ImportInfo> = cursorInfo.imports.find(
 				imp ->
 					!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
 					&& SymbolIndex.pathImportedBy(imp) != null && RefactorSupport.lastSegment(imp.raw) == dep
@@ -342,7 +354,12 @@ final class MoveSymbol {
 			// left the headline defect open through a second route (compile-proved: a bare `Dep` from
 			// `p/Dep.hx` moved into a `p/Host.hx` holding `import r.Dep;` returned `r.Dep` where it had
 			// returned `p.Dep`, rc 0, nothing carried, nothing reported).
-			final wanted: Null<String> = provider != null ? SymbolIndex.pathImportedBy(provider) : bindingOf(dep, cursorInfo, files)?.path;
+			final wanted: Null<String> = direct != null ? SymbolIndex.pathImportedBy(direct) : bindingOf(dep, cursorInfo, files)?.path;
+			// A MODULE import binds every type the module declares, so the statement that provides
+			// `dep` need not spell it. That rung has been PRICED by `bindingOf` since S29 and carried by
+			// nobody, which cost a refusal naming "no import to carry" over an import that was right
+			// there (compile-proved: the same move writes and the tree types clean once it is carried).
+			final provider: Null<ImportInfo> = direct ?? moduleStatementBinding(dep, wanted, cursorInfo);
 			// A binding the destination has and the moved code does not share is the one thing carrying
 			// cannot repair: whichever of the two wins, code that compiled before means a different
 			// type, with no diagnostic anywhere. `wanted == null` is NOT a licence to skip the gate —
@@ -363,7 +380,8 @@ final class MoveSymbol {
 			);
 			if (already) continue;
 			// De-dup the carry list (a single import line could provide more
-			// than one referenced name only via wildcards, which we skipped).
+			// than one referenced name only via wildcards, which we skipped —
+			// and via a MODULE import, which now reaches here and repeats).
 			final line: String = importLineFor(provider, source);
 			if (!carried.contains(line)) carried.push(line);
 		}
@@ -555,6 +573,71 @@ final class MoveSymbol {
 	}
 
 	/**
+	 * Whether `path` — a MODULE some file imports — could bind `name`. A module the index HOLDS is
+	 * asked and answers definitively; a module OUTSIDE the scope cannot be asked and answers YES,
+	 * because the constructed `<path>.<name>` is the only handle there is on `import haxe.macro.Expr;`
+	 * providing `Field`.
+	 *
+	 * The unproven YES cannot manufacture a FALSE agreement between two files, which is what every
+	 * membership test on `importCandidates` rests on. For the constructed path to EQUAL a real binding
+	 * path on the other side, that side must hold an import spelling `<path>.<name>` — and on 4.3.7
+	 * such an import means the SUB-TYPE of module `<path>` whenever a module `<path>` exists at all
+	 * (verified with a module `P.hx` and a package `P/` both declaring `Dep`: `import P.Dep;` bound the
+	 * module's sub-type). If `<path>` were only a package, the `import <path>;` this YES was read off
+	 * does not compile at all (`Type not found : P`, verified) — so no source Haxe accepts reaches the
+	 * disagreement, and two files that agree on such a path are naming the same type.
+	 *
+	 * A CARRY reads the answer rather than testing membership, so it cannot survive the unproven YES —
+	 * `moduleStatementBinding`, which picks the line a carry writes, deliberately does not call this,
+	 * and the measurement that forced that is recorded there.
+	 */
+	private static function moduleMayDeclare(path: String, name: String, files: Array<FileInfo>): Bool {
+		final known: Null<FileInfo> = files.find(fi -> fi.module == path);
+		return known == null || known.types.exists(t -> t.name == name && !t.isPrivate);
+	}
+
+	/**
+	 * The file's LAST unguarded MODULE statement whose sub-type rung spells `wanted` — the statement
+	 * that PRODUCED the binding `bindingOf` reports for `name`, and therefore the one line a carry may
+	 * write into another file. Null when the ladder's answer came from anywhere else (the module's own
+	 * types, an explicit import, a wildcard, the package), where this statement is not what the moved
+	 * code means by the name.
+	 *
+	 * Asking which statement produced the ANSWER, rather than which statement COULD have, is what keeps
+	 * an out-of-scope module out of the carry: nothing in the ladder ever constructs
+	 * `<out-of-scope-module>.<name>`, so such a statement can never match. Admitting them on their own —
+	 * the `moduleMayDeclare` answer, which is right for a membership test and wrong for a carry — makes
+	 * EVERY out-of-scope module import a candidate for EVERY unbound name, `String` / `Int` / `Void` /
+	 * `Array` included: measured over 285 same-package moves on the Pony tree, that priced ambient names
+	 * to paths like `StringTools.String` and `haxe.MainLoop.Void` and turned 62 of 147 accepted moves
+	 * into refusals.
+	 */
+	private static function moduleStatementBinding(name: String, wanted: Null<String>, info: FileInfo): Null<ImportInfo> {
+		if (wanted == null) return null;
+		var found: Null<ImportInfo> = null;
+		for (imp in info.imports) if (!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using)) {
+			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
+			if (path != null && '$path.$name' == wanted) found = imp;
+		}
+		return found;
+	}
+
+	/**
+	 * The module a QUALIFIED type path's head segment names from `info`'s position — its own package
+	 * first, then the top level. Imports do not enter this ladder: `import q.Mod;` does not make
+	 * `Mod.Sub` resolve (`Type not found : Mod` on 4.3.7), which is what makes a head PACKAGE-relative
+	 * and a cross-package move able to rebind it. Null means the head is not a module this index holds,
+	 * which for a head with no package of its own is the ambient top level — the same answer from every
+	 * file, so two nulls agree.
+	 */
+	private static function headModuleOf(head: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
+		for (fi in files) if (fi.pkg == info.pkg && RefactorSupport.lastSegment(fi.module) == head) return fi.module;
+		if (info.pkg == '') return null;
+		for (fi in files) if (fi.pkg == '' && RefactorSupport.lastSegment(fi.module) == head) return fi.module;
+		return null;
+	}
+
+	/**
 	 * Every module path an import / using statement of `info`'s file could bind `name` to — the
 	 * statement's own path when its last segment IS `name`, and `<path>.<name>` for a module import,
 	 * which brings the module's other types along. Guarded statements are included: this answers "could
@@ -581,12 +664,7 @@ final class MoveSymbol {
 				continue;
 			}
 			if (imp.kind == ImportKind.Alias) continue;
-			// A module the index HOLDS can be asked whether it declares `name`, and is only offered when
-			// it does — the same "do not invent a binding" rule the wildcard rung learned the hard way.
-			// A module OUTSIDE the scope cannot be asked, and the constructed path is the only handle
-			// there is on `#if macro import haxe.macro.Expr;` providing `Field`.
-			final known: Null<FileInfo> = files.find(fi -> fi.module == path);
-			if (known != null && !known.types.exists(t -> t.name == name && !t.isPrivate)) continue;
+			if (!moduleMayDeclare(path, name, files)) continue;
 			final candidate: String = '$path.$name';
 			if (!out.contains(candidate)) out.push(candidate);
 		}
@@ -1087,6 +1165,195 @@ final class MoveSymbol {
 		return importStatementText(imp, path, statementSource.substring(imp.span.from, imp.span.to));
 	}
 
+	/**
+	 * Does `source` name any of `names` by its bare name, outside `excluded` spans and its comments?
+	 * The question a MODULE statement's fate turns on: repointing or removing one takes away every type
+	 * the module declares, so what decides is whether the file still names ANY of them.
+	 */
+	private static function namesAnyOf(source: String, names: Array<String>, excluded: Array<Span>): Bool {
+		final comments: Array<Span> = RefactorSupport.collectCommentRegions(source);
+		return names.exists(n -> RefactorSupport.referencedUnqualifiedInRange(source, n, 0, source.length, excluded, comments));
+	}
+
+	/**
+	 * The DESTINATION's own statements that spelled the moved type's old path. The type is local there
+	 * now, so such a statement is redundant — except in the two shapes below, where dropping it takes a
+	 * binding away instead.
+	 */
+	private static function destinationImportEdits(
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, target: MoveTarget, destSource: String, declText: String,
+		oldImportPath: String, newImportPath: String
+	): Void {
+		final destInfo: FileInfo = target.destInfo;
+		final typeName: String = target.typeName;
+		final remaining: Array<String> = remainingTypeNames(target.cursorInfo, typeName);
+		final destExcluded: Array<Span> = [for (imp in destInfo.imports) imp.span];
+		for (imp in destInfo.imports) if (SymbolIndex.pathImportedBy(imp) == oldImportPath) {
+			// A MODULE statement here binds the source module's OTHER types too, so removing it as
+			// "redundant" takes them away — the destination-side twin of the importer defect, and the
+			// one that survived fixing that: moving `pony.ui.gui.ButtonCore` into `ButtonImgN.hx`, whose
+			// own `import pony.ui.gui.ButtonCore;` was what bound `ButtonState` for the moved code, left
+			// `Type not found : ButtonState`. The moved declaration is scanned beside the destination's
+			// own text because it is exactly the code the statement is being kept for; for a `using` no
+			// scan is asked at all, its other types being reached through extension calls no name scan
+			// sees.
+			final moduleWide: Bool = (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using)
+				&& oldImportPath == target.cursorInfo.module;
+			final keepsOthers: Bool = moduleWide && remaining.length > 0
+				&& (imp.kind == ImportKind.Using || namesAnyOf(destSource, remaining, destExcluded) || namesAnyOf(declText, remaining, []));
+			// A `using` is NOT made redundant by the type becoming local: the static extension is
+			// granted by the STATEMENT, not by the declaration's module, and a module may `using` its
+			// own sub-type (compile-proved on 4.3.7). Deleting it took `3.twice()` away from a
+			// destination whose whole reason for the statement was that call — and left the two sides
+			// disagreeing, since the IMPORTER side repoints the same statement. So it is repointed here
+			// too, and kept beside the repointed line when the source module still declares extensions
+			// this file had. Every shape this arm can emit was compiled on 4.3.7: a module `using` its
+			// own sub-type, a module `using` ITSELF (the destination-basename case), `using` a module
+			// with no type of its own name, and `using` a module the cut left empty.
+			if (imp.kind == ImportKind.Using) {
+				final statement: String = destSource.substring(imp.span.from, imp.span.to);
+				editsFor(editsByFile, destInfo.file).push({
+					span: imp.span,
+					text: (keepsOthers ? '$statement\n${importIndent(destSource, imp)}' : '')
+					+ importStatementText(imp, newImportPath, statement)
+				});
+				continue;
+			}
+			if (keepsOthers) continue;
+			// An ALIAS import is not made redundant by the type becoming local — the destination's own
+			// code names it through the ALIAS, and nothing else binds that name — so it is repointed at
+			// the new path rather than deleted. Compiled on 4.3.7: a module may alias its own sub-type
+			// (`import pkg.B.Foo as F;` in `pkg/B.hx`) and its own MAIN type (`import pkg.B as F;` there).
+			//
+			// A SELF-alias is the exception: `import pkg.A.Foo as Foo;` binds the name the moved
+			// declaration itself now binds, so it is redundant in exactly the way a plain import is, and
+			// repointing it leaves the destination importing its own type under its own name. It
+			// compiles and no rule reports it — which is why it has to be decided here rather than left
+			// to one.
+			final redundant: Bool = imp.kind != ImportKind.Alias || imp.alias == typeName;
+			editsFor(editsByFile, destInfo.file).push(redundant ? { span: removeImportSpan(destSource, imp), text: '' } : {
+				span: imp.span,
+				text: importStatementText(imp, newImportPath, destSource.substring(imp.span.from, imp.span.to))
+			});
+		}
+	}
+
+	/**
+	 * One importer statement's fate under a repoint. Null when the statement binds nothing the move
+	 * touches.
+	 *
+	 * A MODULE statement — `import pkg.Mod;` / `using pkg.Mod;` — binds every type the module declares,
+	 * compile-proved on 4.3.7 both ways: the module needs no type of its own name for the statement to
+	 * be legal, and the two statements may stand side by side. An ALIAS is NOT one:
+	 * `import pkg.Mod as M;` binds `M` and nothing else (`Type not found` on the module's other types),
+	 * so its repoint is already complete.
+	 */
+	private static function importerStatementEdit(
+		imp: ImportInfo, src: String, plan: ImporterRepoint, needsRemaining: Bool, needsMoved: Bool
+	): Null<{ span: Span, text: String }> {
+		final path: Null<String> = SymbolIndex.pathImportedBy(imp);
+		if (path == null) return null;
+		final moduleWide: Bool = imp.kind == ImportKind.Import || imp.kind == ImportKind.Using;
+		// The path an alias statement names is not its `raw` (which is the ALIAS), and the statement's
+		// own text is what tells `as` from `in`.
+		final statement: String = src.substring(imp.span.from, imp.span.to);
+		if (path == plan.oldPath) {
+			// Repointing a module statement at the moved type's SUB-TYPE path strips the module's other
+			// types from this file — the ButtonCore family, where eight importers lost `ButtonState`.
+			// Keep the module statement beside the new one when it still has something to bind here: a
+			// `using` unconditionally, because its other types are reached through EXTENSION CALLS that
+			// no name scan can see.
+			final keep: Bool = moduleWide && plan.mainMoved && plan.remaining.length > 0 && (
+				imp.kind == ImportKind.Using || needsRemaining
+			);
+			return {
+				span: imp.span,
+				text: (keep ? '$statement\n${importIndent(src, imp)}' : '') + importStatementText(imp, plan.newPath, statement)
+			};
+		}
+		// The mirror: a SECONDARY type leaving a module this file imports as a module. Nothing here
+		// spells the OLD path, so the repoint above never sees the statement and the moved type simply
+		// leaves this file's scope. The new statement goes in the old one's SLOT so that a later import
+		// binding the same name still wins.
+		return moduleWide && !plan.mainMoved && path == plan.sourceModule && needsMoved ? {
+			span: imp.span,
+			text: '$statement\n${importIndent(src, imp)}${importStatementText(imp, plan.newPath, statement)}'
+		} : null;
+	}
+
+	/**
+	 * The types the source module still declares and another module can name — the binding set a MODULE
+	 * statement keeps after the move, and the reason such a statement cannot simply be repointed away or
+	 * dropped.
+	 *
+	 * `!isPrivate` is load-bearing and cheap to get wrong, because the consumer is a TEXT scan: what
+	 * reaches it is a name COLLISION, not a reference. An importer that declares its own `Helper` while
+	 * the source module holds a `private class Helper` is a program Haxe accepts, and without the flag
+	 * the scan reads that file's own `Helper` as a reason to keep an import for a binding the language
+	 * never granted.
+	 */
+	private static function remainingTypeNames(cursorInfo: FileInfo, typeName: String): Array<String> {
+		return [for (t in cursorInfo.types) if (t.name != typeName && !t.isPrivate) t.name];
+	}
+
+	/**
+	 * Repairs for files that named the moved type without a statement spelling its path — bare
+	 * same-package visibility, or an `import p.*;` wildcard, both of which the repoint walk cannot see
+	 * because it only ever rewrites statements that already spell the old path. A sibling module's
+	 * MAIN type is visible package-wide by its bare name, and a SUB-TYPE is not (`Type not found`,
+	 * compile-proved) — so a main type that lands as a sub-type of another module leaves every
+	 * same-package file that named it with an unresolved name. Measured on the Pony tree: moving
+	 * `ButtonCore` out of its own module left `pony/ui/gui/SwitchableList.hx` reading
+	 * `Type not found : ButtonCore`, on the base engine and on the repoint fix alike.
+	 *
+	 * The file has to resolve the name to the MOVED type through its own ladder before an import is
+	 * written into it — a file that means something else by `typeName` is a file this move does not
+	 * touch — and a file the repoint walk already edited is left to that walk.
+	 */
+	private static function samePackageRepairEdits(
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, index: SymbolIndex, sourceOf: Map<String, String>,
+		oldImportPath: String, newImportPath: String, target: MoveTarget, destFile: String, plugin: GrammarPlugin,
+		typeRefShape: TypeRefShape
+	): Void {
+		final cursorInfo: FileInfo = target.cursorInfo;
+		// Two guards this walk does NOT carry, both unreachable by construction rather than forgotten:
+		//
+		//  - "only a MAIN type was bare-visible". A SECONDARY type of a sibling module is `Type not
+		//    found` from that sibling's neighbours (compile-proved) — a bare name resolves to a MODULE
+		//    of that name in the package, never to another module's sub-type. A same-package file that
+		//    DOES resolve `typeName` to `oldImportPath` for a secondary move did it through a STATEMENT
+		//    (`import p.Mod;` answers `p.Mod.Sub` on the module rung), and the repoint walk has already
+		//    edited that file — which is the `editsByFile` test below, not the ladder test.
+		//  - "it stays bare-visible at the destination". `importPathOf` spells a module path only for a
+		//    type whose name IS its module's basename, and `moveType` spells the destination's module
+		//    path only for a type whose name is the DESTINATION's basename — together they would need
+		//    two different files with one basename, which puts them in different packages, so the
+		//    moved type's new home is never the siblings' own package.
+		final files: Array<FileInfo> = index.allFiles();
+		for (info in files) {
+			if (info.pkg != cursorInfo.pkg || info.file == cursorInfo.file || info.file == destFile) continue;
+			if (editsByFile.exists(info.file)) continue;
+			final src: Null<String> = sourceOf[info.file];
+			if (src == null) continue;
+			if (bindingOf(target.typeName, info, files)?.path != oldImportPath) continue;
+			// An empty cut span makes the source walk count every type-position reference in the file.
+			if (!sourceStillUsesType(src, new Span(0, 0), plugin, typeRefShape, target.typeName)) continue;
+			final insert: Null<{ span: Span, text: String }> = addImportEdit(src, info, plugin, newImportPath);
+			if (insert != null) editsFor(editsByFile, info.file).push(insert);
+		}
+	}
+
+	/**
+	 * The whitespace an import statement's own line starts with — what a second statement written
+	 * into that slot has to repeat. Empty unless the run from the line start to the statement is
+	 * blank, so a statement sharing its line with code contributes no indentation.
+	 */
+	private static function importIndent(source: String, imp: ImportInfo): String {
+		final at: Int = imp.span.from;
+		final start: Int = lineStartOf(source, at);
+		return isBlank(source, start, at) ? source.substring(start, at) : '';
+	}
+
 	/** Start offset of the line containing `offset`. */
 	private static function lineStartOf(source: String, offset: Int): Int {
 		var i: Int = offset < source.length ? offset : source.length;
@@ -1241,21 +1508,56 @@ final class MoveSymbol {
 	 */
 	private static function buildImporterEdits(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, index: SymbolIndex, sourceOf: Map<String, String>,
-		oldImportPath: Null<String>, newImportPath: String, destFile: String
+		oldImportPath: Null<String>, newImportPath: String, destFile: String, cursorInfo: FileInfo, typeName: String
 	): Void {
 		if (oldImportPath == null || oldImportPath == newImportPath) return;
+		// `moduleOf` reads the path's SHAPE (up to its first upper-initial segment) while
+		// `cursorInfo.module` comes from the file path, which is what a statement's binding set
+		// actually follows. They coincide for every lower-initial package — every package in this
+		// project and in the corpus — so the shape-derived one only narrows the candidate importer
+		// set and the file-derived one decides what each statement binds.
 		final oldModule: String = SymbolIndex.moduleOf(oldImportPath);
+		// Re-bound: a narrowed local does not reach an anonymous-structure literal whose expected field
+		// type is non-nullable.
+		final oldPath: String = oldImportPath;
+		final plan: ImporterRepoint = {
+			oldPath: oldPath,
+			newPath: newImportPath,
+			sourceModule: cursorInfo.module,
+			// True when the moved type IS the source module's main type, so `import <sourceModule>;`
+			// spells the old path — and is the statement the repoint consumes.
+			mainMoved: oldImportPath == cursorInfo.module,
+			// The names the source module still declares and another module can name. A MODULE import
+			// binds EVERY one of them, not the single name it looks like it names.
+			remaining: remainingTypeNames(cursorInfo, typeName)
+		};
 		for (importer in index.filesImportingModule(oldModule)) if (importer.file != destFile) { // dest handled separately.
 			final importerSource: Null<String> = sourceOf[importer.file];
 			if (importerSource == null) continue;
 			final src: String = importerSource;
-			// The path an alias statement names is not its `raw` (which is the ALIAS), and the
-			// statement's own text is what tells `as` from `in`.
-			for (imp in importer.imports) if (SymbolIndex.pathImportedBy(imp) == oldImportPath) editsFor(editsByFile, importer.file)
-				.push({
-					span: imp.span,
-					text: importStatementText(imp, newImportPath, src.substring(imp.span.from, imp.span.to))
-				});
+			final excluded: Array<Span> = [for (imp in importer.imports) imp.span];
+			// Keeping an import this file no longer needs costs a lint advisory; dropping one it
+			// does need costs the build — so both scans answer conservatively, and a name reached
+			// through a QUALIFIED path (which needs no import) is not counted by either.
+			final needsRemaining: Bool = plan.mainMoved && namesAnyOf(src, plan.remaining, excluded);
+			// A file that ALSO spells the old path in a statement binding the type's OWN NAME gets the
+			// moved type from the repoint of that statement, so the module statement owes it nothing —
+			// without this the two both emitted the new path and the file came out with a duplicate
+			// import. The two exclusions are what makes the question the right one, and each costs a
+			// `Type not found` when it is missing: an ALIAS spelling the old path binds its alias and
+			// not the bare name (`pathImportedBy` answers an alias's TARGET, so it matches here), and a
+			// `#if`-guarded one binds the name under its own flag and under no other — which is worse
+			// than the duplicate it would suppress, because the default configuration is the one that
+			// stops compiling. It is the same filter `moduleStatementBinding` applies for the same
+			// reason.
+			final spellsOldPath: Bool = importer.imports.exists(
+				imp -> !imp.guarded && imp.kind != ImportKind.Alias && SymbolIndex.pathImportedBy(imp) == plan.oldPath
+			);
+			final needsMoved: Bool = !plan.mainMoved && !spellsOldPath && namesAnyOf(src, [typeName], excluded);
+			for (imp in importer.imports) {
+				final edit: Null<{ span: Span, text: String }> = importerStatementEdit(imp, src, plan, needsRemaining, needsMoved);
+				if (edit != null) editsFor(editsByFile, importer.file).push(edit);
+			}
 		}
 	}
 
@@ -1355,6 +1657,19 @@ private typedef MoveTarget = {
 	final cursorInfo: FileInfo;
 	final destInfo: FileInfo;
 	final sourceOf: Map<String, String>;
+};
+
+/**
+ * The per-move constants an importer repoint reads: the two import paths, the source module, whether
+ * the moved type was that module's MAIN type (which decides what a statement spelling `oldPath`
+ * binds), and the names the module still declares.
+ */
+private typedef ImporterRepoint = {
+	final oldPath: String;
+	final newPath: String;
+	final sourceModule: String;
+	final mainMoved: Bool;
+	final remaining: Array<String>;
 };
 
 /** Resolution outcome of `resolveMoveTarget`: the target or a refusal. */
