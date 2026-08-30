@@ -72,10 +72,17 @@ final class IntroduceParameterObject {
 	 * object parameter of a new typedef `typeName` (parameter name
 	 * `objName`, defaulting to the lower-camel of `typeName`). Returns
 	 * `Ok(rewritten)` or an `Err`. PURE.
+	 *
+	 * `optsJson` is the `hxformat.json` governing the file the caller will write
+	 * this back to. Omitting it is NOT a neutral default: the source then reads as
+	 * drifted under compiled defaults and the edit falls back to a plain splice,
+	 * which silently forfeits the canonical-out half. A canonical source instead
+	 * comes back canonical — and can now be REFUSED where it never was, when the
+	 * writer cannot settle the spliced result; that is the same contract `extract-interface` and `extract-superclass` took in `8576f7c2`.
 	 */
 	public static function introduce(
 		source: String, line: Int, col: Int, paramNames: Array<String>, typeName: String, objName: Null<String>, plugin: GrammarPlugin,
-		shape: RefShape
+		shape: RefShape, ?optsJson: String
 	): EditResult {
 		if (!RefactorSupport.isIdentifier(typeName)) return Err('type name "$typeName" is not a valid identifier');
 		if (paramNames.length == 0) return Err('no parameters named — nothing to fold');
@@ -100,7 +107,16 @@ final class IntroduceParameterObject {
 		final typedefText: String = 'typedef $typeName = { ${[for (f in prep.fields) '${f.name}:${f.type}'].join(', ')} }';
 		edits.push({ span: new Span(source.length, source.length), text: '\n\n$typedefText\n' });
 
-		final rewritten: String = collapseBlankRuns(RefactorSupport.applyEdits(source, edits));
+		// The WRITER gives back the separator the appended typedef doubles, and it is
+		// the only thing that can: the hand-rolled newline-run collapse that stood here
+		// read the WHOLE FILE as text, so it also shortened a run inside a string
+		// literal or a block comment anywhere in the file — measured, folding two
+		// parameters of one method took an untouched sibling's `"one\n\n\nfour"` down
+		// to `"one\n\nfour"` at rc 0, under this project's own `hxformat.json`.
+		final rewritten: String = switch RefactorSupport.editKeepingCanonical(source, edits, plugin, optsJson) {
+			case Err(message): return Err(message);
+			case Ok(text, _): text;
+		};
 		try
 			plugin.parseFile(rewritten)
 		catch (exception: ParseError)
@@ -275,23 +291,6 @@ final class IntroduceParameterObject {
 			edits.push({ span: new Span(from, to), text: literal });
 		}
 		return null;
-	}
-
-	/** Collapse runs of 3+ newlines to a single blank line (typedef-append tidy-up). */
-	private static function collapseBlankRuns(source: String): String {
-		final buf: StringBuf = new StringBuf();
-		var newlines: Int = 0;
-		for (i in 0...source.length) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '\n'.code) {
-				newlines++;
-				if (newlines <= 2) buf.addChar(c);
-			} else {
-				newlines = 0;
-				buf.addChar(c);
-			}
-		}
-		return buf.toString();
 	}
 
 }

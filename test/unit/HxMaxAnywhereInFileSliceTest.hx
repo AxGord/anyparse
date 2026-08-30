@@ -94,4 +94,40 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 		Assert.equals('package;\n\nclass Main {}\n', out);
 	}
 
+
+	/**
+	 * PIN. A blank run inside a multi-line STRING LITERAL is program content, not
+	 * layout — the cap must not reach it, at any cap value.
+	 *
+	 * RED at `a727f9d1`: the cap was a text scan over the flattened render buffer,
+	 * where a literal's newline is indistinguishable from a line break the renderer
+	 * chose, so base answers `"one\nfive"` — all three blank lines gone and the
+	 * string's VALUE changed.
+	 *
+	 * ONE assertion over the whole file so neither half can pass alone: the blank
+	 * line BETWEEN the two members is gone (proving the cap actually ran at 0) while
+	 * the literal's four newlines are all still there.
+	 */
+	public function testAStringLiteralBlankRunIsNotACapCandidate(): Void {
+		final src: String = 'class Main {\n\tstatic var s = "one\n\n\n\nfive";\n\n\tstatic function f() {}\n}\n';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"maxAnywhereInFile": 0}}');
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.equals('class Main {\n\tstatic var s = "one\n\n\n\nfive";\n\tstatic function f() {}\n}\n', out);
+	}
+
+	/**
+	 * PIN. The same file under the DEFAULT cap of 1, with an over-long blank run on
+	 * BOTH sides of the boundary: the code run collapses to one blank and the
+	 * literal's own run survives whole, in one assertion.
+	 *
+	 * RED at `a727f9d1` (base answers `"one\n\nfive"`). The code half is what keeps
+	 * the pin from passing on a build where the cap never runs at all.
+	 */
+	public function testTheCapTrimsCodeBlanksBesideALiteralThatKeepsItsOwn(): Void {
+		final src: String = 'class Main {\n\tstatic var s = "one\n\n\n\nfive";\n\n\n\n\tstatic function f() {}\n}\n';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.equals('class Main {\n\tstatic var s = "one\n\n\n\nfive";\n\n\tstatic function f() {}\n}\n', out);
+	}
+
 }
