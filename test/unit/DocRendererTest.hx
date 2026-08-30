@@ -1077,4 +1077,51 @@ class DocRendererTest extends Test {
 		Assert.equals('a\n\n\nbc', Renderer.render(doc, 80, Space, 1, 1, '\n', false, false, 0));
 	}
 
+
+	/**
+	 * PIN, and the ONLY exercise of the FLAT arm of `emitLine`'s content-newline
+	 * record: a verbatim break inside a render-time `Flatten` region still writes
+	 * its own `flat` text, and for every break the comment path builds that text
+	 * IS a newline.
+	 *
+	 * No source fixture reaches it. Removing the flat arm's `recordTextLineEnds`
+	 * call killed NOTHING in the whole suite until this pin existed — nothing in
+	 * it, and nothing in the corpus harness's 946 fixtures, renders a captured
+	 * block comment inside a force-flat region — so, like `testACapRunStopsAtTheFirstTextLineEnd`
+	 * above, the coverage has to be a Doc built by hand.
+	 *
+	 * One assertion over the whole render so neither half passes alone: the two
+	 * LAYOUT breaks before `c` collapse to one under `maxConsecutiveBlanks: 0`,
+	 * and the three verbatim breaks inside the flattened region are all still
+	 * there. Without the flat-arm record the cap answers `a\nc\nd`.
+	 */
+	private function testAVerbatimBreakInAFlatRegionIsStillContent(): Void {
+		final inner: Doc = D.verbatim(D.concat([D.text('c'), D.hardline(), D.hardline(), D.hardline(), D.text('d')]));
+		final doc: Doc = D.concat([D.text('a'), D.line(), D.line(), Flatten(inner)]);
+		Assert.equals('a\nc\n\n\nd', Renderer.render(doc, 80, Space, 1, 1, '\n', false, false, 0));
+	}
+
+
+	/**
+	 * PIN (T325) at the Doc level, and the ONLY exercise of `blankRunEnd`'s
+	 * blindness to `\r`. Under `trailingWhitespace` the renderer writes the frame
+	 * indent before every blank row's line end, so the buffer reads
+	 * `a` `\r\n` `  ` `\r\n` `  ` `\r\n` `  ` `b` — a run the old scan could not
+	 * see at all, because it required line ends with nothing between them.
+	 *
+	 * A multi-character `lineEnd` is what makes the skip's character class load-
+	 * bearing: teaching it to treat `\r` as blank makes it step INTO the next
+	 * `\r\n`, leaving the caller comparing a bare `\n` against a two-byte line end
+	 * and reading every run as finished. Adding `\r` to that class killed NOTHING
+	 * in the whole suite until this pin existed.
+	 *
+	 * One assertion over the whole render: at `maxConsecutiveBlanks: 1` the three
+	 * line ends collapse to two AND the kept blank row keeps its two columns of
+	 * indent. RED at `4ae8f42f`, which caps nothing here and answers all three.
+	 */
+	private function testACRLFBlankRunCarryingIndentIsStillCapped(): Void {
+		final doc: Doc = D.nest(2, D.concat([D.text('a'), D.line(), D.line(), D.line(), D.text('b')]));
+		Assert.equals('a\r\n  \r\n  b', Renderer.render(doc, 80, Space, 1, 1, '\r\n', false, true, 1));
+	}
+
 }

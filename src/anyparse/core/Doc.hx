@@ -397,7 +397,70 @@ enum Doc {
 	 * node for a `Text`.
 	 */
 	Text(s: String, ?verbatim: Bool);
-	Line(flat: String);
+
+	/**
+	 * A line break: a real `lineEnd` + indent in break mode, the `flat`
+	 * replacement in flat mode.
+	 *
+	 * `verbatim` is `Text`'s flag one ctor down, and it answers the same
+	 * question about the break that `Text`'s answers about the bytes: was
+	 * this line boundary WRITTEN BY THE AUTHOR inside content the writer
+	 * only reproduces — the interior of a multi-line block comment — or
+	 * CHOSEN BY THE WRITER as layout. Only the renderer reads it, and only
+	 * to record the break's buffer offset in `RenderCtx.textLineEnds`, so
+	 * `Renderer.capConsecutiveBlanks` neither counts it into a blank run
+	 * nor drops it. Omitted means layout, because layout is what nearly
+	 * every `Line` in the tree is.
+	 *
+	 * The whole mark set is again the comment path: `D.verbatim` over the
+	 * Doc `BlockCommentNormalizer` hands back. That covers all four of its
+	 * assembly shapes at once — the three hand-built ones and the macro-
+	 * generated `BlockCommentWriter.writeDoc`, whose `@:sep('\n')` join no
+	 * hand edit can reach.
+	 *
+	 * A GUTTER-LESS block comment is why the flag exists. Its lines are
+	 * re-indented, so the normalizer cannot hand the renderer one `Text`
+	 * holding the whole body — it hands one `Text` PER LINE joined by these
+	 * breaks, and a blank interior line is an EMPTY `Text` that emits
+	 * nothing at all. Without the flag the cap sees a bare run of layout
+	 * line-ends and deletes a line the author wrote. A DOC comment is not
+	 * the exception the flag's first write-up claimed: its blank lines are
+	 * safe only where the author put the ` * ` gutter on them, and a
+	 * genuinely empty interior line inside a `/**` block reaches
+	 * `javadocBytePreserveDoc`, which builds the same empty `Text` between
+	 * two breaks. Measured: base ate both blanks out of such a block.
+	 *
+	 * Marking the LEAF rather than opening a region is what keeps the mark
+	 * honest at a boundary. The breaks BETWEEN two adjacent comments, and
+	 * the one between a comment and the code under it, belong to the
+	 * enclosing writer's Doc and are never inside the subtree `D.verbatim`
+	 * walks — so they stay layout and stay cappable. A positional rule
+	 * ("the run sits between two verbatim `Text`s") cannot tell those two
+	 * cases apart and would silently under-apply the cap.
+	 *
+	 * Same shape and same reasons as `Text`'s flag: a trailing optional
+	 * parameter, invisible to `case Line(flat)` and to `Line(flat)`
+	 * construction, so none of the other Doc walkers change. And the same
+	 * standing obligation — a `Doc → Doc` rewriter must not rebuild a matched
+	 * break as `Line(flat)`, which would silently demote content to layout.
+	 * Today nothing does. Of the 62 `case Line` sites in `src`, exactly two
+	 * rebuild the node: `D.verbatim`, which IS the mark, and `D.flatten`,
+	 * carved out below. The other 60 only read it — `DocMeasure` 14,
+	 * `Renderer` 13, `CollapsePass` 5, `ElseIfCommentReflow` 1,
+	 * `D.mapChildren` 1 (it returns the original), and, the easy third to
+	 * forget, 26 under `format/wrap/`: `WrapList` 22, `BinaryChainEmit` 2,
+	 * `MatrixWrap` 1, `MethodChainEmit` 1. `hxq cases Line src` re-derives
+	 * that list; `src/anyparse/macro` holds no `Line` pattern at all.
+	 *
+	 * `D.flatten` is the one rewriter that does replace a `Line`, and it is
+	 * outside the obligation rather than an exception to it: a break whose flat
+	 * text is a newline becomes `Empty` — the force-flat transform DELETES the
+	 * line rather than demoting it, which is its documented line-oriented
+	 * behaviour and predates this flag. Its other arm, `Line(flat) -> Text(flat)`
+	 * for a non-newline flat text, WOULD drop the mark; nothing reaches it today
+	 * because every break the comment path builds is `Line('\n')`.
+	 */
+	Line(flat: String, ?verbatim: Bool);
 	Nest(indent: Int, inner: Doc);
 	Group(inner: Doc);
 	BodyGroup(inner: Doc);
