@@ -1,11 +1,15 @@
 package unit;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.IntroduceParameterObject;
 import anyparse.query.RefactorSupport.EditResult;
 import utest.Assert;
 import utest.Test;
+#if (sys || nodejs)
+import sys.io.File;
+#end
 
 using StringTools;
 
@@ -88,6 +92,109 @@ class IntroduceParameterObjectSliceTest extends Test {
 		Assert.isTrue(text.contains('\'$$$$a and $${t.a} and $$b\''), 'escaped dollar kept, braced read folded:\n$text');
 	}
 
+	/**
+	 * PIN. The op used to finish with `collapseBlankRuns` — a byte-identical private
+	 * copy of the whole-file text scan deleted from the two extract ops in `8576f7c2`
+	 * — so folding two parameters of ONE method also shortened every blank run
+	 * anywhere else in the file, including inside a string literal.
+	 *
+	 * RED at `a727f9d1`: base answers a body holding `"one\n\nfour"` for an untouched
+	 * sibling method, at `Ok`. The fold's own three assertions are in the same test
+	 * so the pin cannot pass on a build where the op refuses or does nothing.
+	 *
+	 * SCOPE, stated plainly because the mutation sweep proved it: this fixture is NOT
+	 * canonical under compiled defaults and the test passes no `optsJson`, so
+	 * `editKeepingCanonical` takes its plain-splice FALLBACK and the writer never
+	 * runs. So this pins "the op no longer runs a blind whole-file text scan" and
+	 * NOT "the op goes through the writer" — reinstating `collapseBlankRuns` kills
+	 * it, swapping `editKeepingCanonical` for a bare `applyEdits` does not. The
+	 * three assertions below are exactly the op's own raw-splice spelling
+	 * (`args:Args`, `{ a: 1, b: 2 }`) for that reason. `Renderer`'s side of the same
+	 * defect is pinned by `HxMaxAnywhereInFileSliceTest`, and the writer route by
+	 * `testTheRewrittenSourceComesBackCanonical` below.
+	 */
+	public function testAnUntouchedMultilineLiteralKeepsItsBlankRun(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\tpublic function new() {}\n'
+			+ '\tpublic function untouched():Int {\n\t\tfinal s = "one\n\n\nfour";\n\t\treturn s.length;\n\t}\n'
+			+ '\tpublic function f(a:Int, b:Int):Int return a + b;\n\tpublic function g():Int return f(1, 2);\n}';
+		final text: String = okFold(src, 'f', ['a', 'b'], 'Args', null);
+		Assert.isTrue(text.contains('"one\n\n\nfour"'), 'the untouched literal keeps every newline:\n$text');
+		Assert.isTrue(text.contains('f(args:Args)'), 'signature folded');
+		Assert.isTrue(text.contains('f({ a: 1, b: 2 })'), 'call site folded');
+	}
+
+	/**
+	 * PIN. Canonical in, canonical out — the contract every writer-emit op states and
+	 * this one did not, because it spliced raw text and then hand-collapsed newlines.
+	 * The generated typedef and the folded call now come back in the writer's own
+	 * spelling for the config that governs the file.
+	 *
+	 * RED at `a727f9d1`: base leaves the file drifted, so `writeRoundTrip(text)`
+	 * differs from `text`. The `contains` guard is in the same assertion chain so a
+	 * build that refuses the fold cannot satisfy it.
+	 */
+	public function testTheRewrittenSourceComesBackCanonical(): Void {
+		final src: String = 'package pkg;\n\nclass C {\n\n\tpublic function new() {}\n\n\tpublic function f(a: Int, b: Int): Int {\n'
+			+ '\t\treturn a + b;\n\t}\n\n\tpublic function g(): Int {\n\t\treturn f(1, 2);\n\t}\n\n}\n';
+		final opts: String = '{"whitespace": {"typeHintColonPolicy": "after"}}';
+		final canonicalSrc: String = plugin().writeRoundTrip(src, opts);
+		final text: String = switch IntroduceParameterObject.introduce(
+			canonicalSrc, posOf(canonicalSrc, 'f'), colOf(canonicalSrc, 'f'), ['a', 'b'], 'Args', null, plugin(), refShape(), opts
+		) {
+			case Ok(t): t;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				'';
+		};
+		Assert.isTrue(text.contains('f(args: Args)'), 'the folded signature carries the config\'s colon spacing:\n$text');
+		Assert.equals(text, plugin().writeRoundTrip(text, opts), 'the rewritten source is the writer\'s fixed point');
+	}
+
+	/**
+	 * PIN, CLI seam. The op is only canonical-out if it is TOLD which
+	 * `hxformat.json` governs the file: the fixture's own directory declares
+	 * `typeHintColonPolicy: "after"`, so the canonical spelling there is
+	 * `args: Args`. Drop `discoverFormatConfig(filePath)` at the call site and the
+	 * source reads as drifted under compiled defaults, `editKeepingCanonical` falls
+	 * back to the plain splice, and the file comes back `args:Args` — the
+	 * canonical-out half switched off with no diagnostic anywhere.
+	 *
+	 * RED at `a727f9d1`: the op has no such parameter there, and the raw splice
+	 * writes `args:Args` whatever the file's config says.
+	 */
+	public function testTheCliHandsTheOpTheFilesOwnFormatConfig(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('ipo_cfg', [
+			{ name: 'hxformat.json', source: '{"whitespace": {"typeHintColonPolicy": "after"}}' },
+			{
+				name: 'C.hx',
+				source: 'class C {\n\tpublic function new() {}\n\n\tpublic function f(a: Int, b: Int): Int {\n\t\treturn a + b;\n\t}\n\n'
+				+ '\tpublic function g(): Int {\n\t\treturn f(1, 2);\n\t}\n}\n'
+			}
+		]);
+		final rc: Int = Cli.run([
+			'introduce-parameter-object',
+			'$dir/C.hx',
+			'--select',
+			'FnMember:f',
+			'--params',
+			'a,b',
+			'--as',
+			'Args',
+			'--write'
+		]);
+		Assert.equals(0, rc);
+		final out: String = File.getContent('$dir/C.hx');
+		Assert.isTrue(
+			out.contains('f(args: Args)') && out.contains('typedef Args = {a: Int, b: Int}'),
+			'the file\'s own colon policy reached the op:\n$out'
+		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private function okFold(src: String, fnName: String, params: Array<String>, typeName: String, objName: Null<String>): String {
 		switch introduce(src, fnName, params, typeName, objName) {
 			case Ok(text):
@@ -141,6 +248,16 @@ class IntroduceParameterObjectSliceTest extends Test {
 
 	private static function refShape(): RefShape {
 		return new HaxeQueryPlugin().refShape();
+	}
+
+	/** 1-based line of the name token of `function <fnName>(` in `src`. */
+	private static function posOf(src: String, fnName: String): Int {
+		return lineColOf(src, src.indexOf('function $fnName(') + 'function '.length).line;
+	}
+
+	/** 1-based column of the name token of `function <fnName>(` in `src`. */
+	private static function colOf(src: String, fnName: String): Int {
+		return lineColOf(src, src.indexOf('function $fnName(') + 'function '.length).col;
 	}
 
 }

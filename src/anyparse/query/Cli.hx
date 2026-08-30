@@ -13853,8 +13853,12 @@ final class Cli {
 		if (pos == null) return EXIT_RUNTIME;
 		final paramNames: Array<String> = paramsNN.split(',').map(StringTools.trim).filter(n -> n != '');
 
+		// The `hxformat.json` governing THIS file: omitting it makes the source read as
+		// drifted under compiled defaults, and the edit then quietly falls back to the
+		// plain splice — switching the canonical-out half of `editKeepingCanonical` off
+		// without saying so.
 		final result: EditResult = IntroduceParameterObject.introduce(
-			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape()
+			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape(), discoverFormatConfig(filePath)
 		);
 		switch result {
 			case Ok(text):

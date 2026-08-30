@@ -1058,4 +1058,23 @@ class DocRendererTest extends Test {
 		Assert.equals('a\n  b', Renderer.render(doc, 80));
 	}
 
+
+	/**
+	 * PIN, and the ONLY exercise of the run-terminating `break` inside
+	 * `Renderer.capConsecutiveBlanks`: a run of LAYOUT line-ends running straight
+	 * into a `Text` whose first byte is a line-end. The Haxe grammar cannot build
+	 * that shape (a literal's newlines always follow its opening quote, a comment
+	 * line never starts with one), so no source-level fixture reaches it — a Doc
+	 * built by hand does.
+	 *
+	 * One assertion over the whole render so neither half passes alone: the two
+	 * layout line-ends collapse to one under `maxConsecutiveBlanks: 0`, and the two
+	 * that arrived as `Text` content are both still there. Without the `break` the
+	 * cap swallows the run across the boundary and answers `a\nbc`.
+	 */
+	private function testACapRunStopsAtTheFirstTextLineEnd(): Void {
+		final doc: Doc = D.concat([D.text('a'), D.line(), D.line(), D.text('\n\nb'), D.text('c')]);
+		Assert.equals('a\n\n\nbc', Renderer.render(doc, 80, Space, 1, 1, '\n', false, false, 0));
+	}
+
 }

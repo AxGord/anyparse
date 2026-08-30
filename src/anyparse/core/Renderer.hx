@@ -19,6 +19,14 @@ private typedef RenderCtx = {
 	final trailingWhitespace: Bool;
 	// One indent level in columns under a `ConditionalMarkerDecrease` scope.
 	final markerDecreaseUnit: Int;
+	// Buffer offsets at which a `lineEnd` reached `buf` as part of a `Text`
+	// node's OWN CONTENT — a multi-line string literal, a block comment the
+	// normalizer hands over whole — rather than as a layout line break the
+	// renderer chose.
+	// Ascending by construction (appended in emit order, and nothing is ever
+	// removed from `buf`). Read only by `capConsecutiveBlanks`, which must not
+	// count such a newline as a blank line: it is a byte of the program.
+	final textLineEnds: Array<Int>;
 	var col: Int;
 	var pendingIndent: Int;
 	var pendingOptSpace: Null<String>;
@@ -108,6 +116,31 @@ private function trailBlankStart(s: String): Int {
 		i--;
 	}
 	return i;
+}
+
+/**
+	Append to `ctx.textLineEnds` the buffer offset of every `lineEnd` inside
+	`body`, which the caller is about to append to `ctx.buf`.
+
+	This is the ONE place the renderer learns that a newline is program content
+	rather than layout: `emitText` is the sole writer of `Text` bytes, and every
+	other `\n` in the buffer was written by a line-break emitter. See
+	`capConsecutiveBlanks` for who reads it and why.
+
+	A module-level function rather than a `Renderer` member for the same reason
+	as `trailBlankStart` above — that type already sits on the 50-member cap
+	`oversized-type` enforces.
+**/
+private function recordTextLineEnds(ctx: RenderCtx, body: String): Void {
+	final le: String = ctx.lineEnd;
+	if (le.length == 0) return;
+	var at: Int = body.indexOf(le);
+	if (at < 0) return;
+	final base: Int = ctx.buf.length;
+	while (at >= 0) {
+		ctx.textLineEnds.push(base + at);
+		at = body.indexOf(le, at + le.length);
+	}
 }
 
 /**
@@ -307,6 +340,7 @@ class Renderer {
 			// scope: `indentSize` in Space mode, `tabWidth` in Tab mode (matches
 			// the writer's `_dn(_cols, …)` body-nest unit).
 			markerDecreaseUnit: indentChar == Space ? indentSize : tabWidth,
+			textLineEnds: [],
 			col: 0,
 			pendingIndent: -1,
 			pendingOptSpace: null,
@@ -407,7 +441,7 @@ class Renderer {
 		}
 
 		final raw: String = ctx.buf.toString();
-		final capped: String = maxConsecutiveBlanks >= 0 ? capConsecutiveBlanks(raw, lineEnd, maxConsecutiveBlanks) : raw;
+		final capped: String = maxConsecutiveBlanks >= 0 ? capConsecutiveBlanks(raw, lineEnd, maxConsecutiveBlanks, ctx.textLineEnds) : raw;
 		return finalNewline && !capped.endsWith(lineEnd) ? capped + lineEnd : capped;
 	}
 
@@ -715,22 +749,54 @@ class Renderer {
 		blank line at most, etc. Single-character `lineEnd` ("\n", "\r")
 		and multi-character ("\r\n") are both handled.
 
+		`textLineEnds` carries the buffer offsets of every `lineEnd` that reached
+		the output as a `Text` node's own CONTENT — the interior of a multi-line
+		string literal, of a block comment the normalizer hands over whole. Those are
+		program bytes, not layout, so they are never counted into a run and never
+		dropped: without them this scan reads the flattened buffer with no idea which
+		newline it is looking at, and shortens a literal's VALUE under the compiled
+		default of 1 (measured, compiled and run: `"one\n\n\nfour"` came back
+		`"one\n\nfour"`, `length` 10 -> 9).
+
+		What this does NOT reach: a blank line inside a GUTTER-LESS multi-line block
+		comment. Those lines get re-indented, so `BlockCommentNormalizer` hands the
+		writer one `Text` PER LINE joined by the macro `@:sep` hardlines — layout
+		line-ends by construction, and a blank interior line is an EMPTY `Text` that
+		emits nothing at all. A doc comment is unaffected: its blank lines carry the
+		` * ` gutter, so they are not blank in the output. Telling those hardlines
+		apart from the ones between two statements needs a Doc-level region marker — a
+		new `Doc` ctor, whose nearest sister `ConditionalMarkerDecrease` is spelled at
+		49 sites across 9 files. Filed as T323, not taken here.
+
 		Pre-condition: `maxBlanks >= 0`; the caller guards `< 0` for
 		unbounded (no-cap) mode.
 	**/
-	private static function capConsecutiveBlanks(s: String, lineEnd: String, maxBlanks: Int): String {
+	private static function capConsecutiveBlanks(s: String, lineEnd: String, maxBlanks: Int, textLineEnds: Array<Int>): String {
 		final leLen: Int = lineEnd.length;
 		if (leLen == 0) return s;
 		final maxRunLen: Int = (maxBlanks + 1) * leLen;
 		final buf: StringBuf = new StringBuf();
 		final n: Int = s.length;
+		final contentEnds: Int = textLineEnds.length;
+		// Monotone cursor into `textLineEnds`: every offset asked about here is >=
+		// the previous one (`runEnd` only grows, and `i` jumps to `runEnd`), so one
+		// forward walk answers all of them and the scan stays O(n).
+		var t: Int = 0;
 		var i: Int = 0;
 		var segStart: Int = 0;
 		while (i < n) {
-			if (startsWithAt(s, i, lineEnd)) {
+			while (t < contentEnds && textLineEnds[t] < i) t++;
+			if (startsWithAt(s, i, lineEnd) && (t >= contentEnds || textLineEnds[t] != i)) {
 				if (i > segStart) buf.addSub(s, segStart, i - segStart);
 				var runEnd: Int = i + leLen;
-				while (runEnd <= n - leLen && startsWithAt(s, runEnd, lineEnd)) runEnd += leLen;
+				while (runEnd <= n - leLen && startsWithAt(s, runEnd, lineEnd)) {
+					while (t < contentEnds && textLineEnds[t] < runEnd) t++;
+					// A content newline TERMINATES the run rather than extending it:
+					// the run so far is layout and may be capped, the content byte is
+					// copied through by the `else` arm below.
+					if (t < contentEnds && textLineEnds[t] == runEnd) break;
+					runEnd += leLen;
+				}
 				final runLen: Int = runEnd - i;
 				final emitLen: Int = runLen < maxRunLen ? runLen : maxRunLen;
 				buf.addSub(s, i, emitLen);
@@ -2711,7 +2777,10 @@ class Renderer {
 				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
 				ctx.pendingIndent = -1;
 			}
-			ctx.buf.add(bodyEnd == s.length ? s : s.substring(0, bodyEnd));
+			final body: String = bodyEnd == s.length ? s : s.substring(0, bodyEnd);
+			// BEFORE the append, so the offsets are the ones `body` is about to land on.
+			recordTextLineEnds(ctx, body);
+			ctx.buf.add(body);
 		} else if (ctx.pendingOptSpace != null) {
 			// An all-blank leaf commits nothing, so a pending optional space would
 			// be stranded AFTER the run it precedes. Fold it into the run instead
