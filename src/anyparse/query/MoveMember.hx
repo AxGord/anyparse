@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.MoveSymbol.CarriedEdits;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.ModulePath;
@@ -218,9 +219,15 @@ private enum ViaResult {
 @:nullSafety(Strict)
 final class MoveMember {
 
-	private static final ADVISORY: String = 'import-carrying is best-effort (type-position dependencies only) '
-		+ '— a missed import fails the destination compile loudly; references through strings, Reflect, or '
-		+ 'macro-built identifiers are not rewritten.';
+	private static final ADVISORY: String = 'import-carrying is best-effort — it shares MoveSymbol\'s carry, so a type '
+		+ 'position and an UPPER-initial static receiver (T.go()) are priced, and every unguarded `using` of the source file '
+		+ 'the destination lacks is carried when the moved body holds a member access at all. A dependency reached through a '
+		+ 'VALUE position (Type.createInstance(Dep, [])), a constructor pattern (case Red:) or a LOWERCASE receiver is not, '
+		+ 'a carried `using` is declared FIRST in the destination\'s own `using` run so it ranks last, and a destination '
+		+ 'whose run offers no seat above it (a `#if`-guarded one below the anchor, or one sharing its line) is refused, '
+		+ 'and a missed import is NOT always loud: measured on 4.3.7, a body reaching r.Helper through the source file\'s '
+		+ 'import and moved into a destination whose own package declares p.Helper came back bound to p.Helper at rc 0. '
+		+ 'References through strings, Reflect, or macro-built identifiers are not rewritten.';
 	private static final FINAL_FIELD_KINDS: Array<String> = ['FinalMember', 'FinalField'];
 
 	/**
@@ -805,9 +812,11 @@ final class MoveMember {
 	}
 
 	/**
-	 * Imports: carry the moved body's type-position dependencies to the
-	 * destination file; give a rewritten caller file in another package an
-	 * import of the destination type.
+	 * Imports: carry the moved body's dependencies to the destination file —
+	 * type positions, upper-initial member-access receivers, and the source
+	 * file's unguarded `using` statements, all through `MoveSymbol`'s own
+	 * carry; give a rewritten caller file in another package an import of
+	 * the destination type.
 	 */
 	private static function pushImportEdits(
 		prep: MovePrep, typeRefShape: TypeRefShape, callerFilesNeedingImport: Array<String>, plugin: GrammarPlugin,
@@ -827,7 +836,15 @@ final class MoveMember {
 				for (line in lines) if (!carried.contains(line))
 					carried.push(line);
 		}
-		final carriedEdit: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(prep.destSource, carried, plugin);
+		// One seat decides where a carried `using` goes — see `MoveSymbol.carriedDestEdits`. A
+		// destination whose own `using` run cannot be ranked above is a REFUSAL here too, for the same
+		// reason: the only remaining order gives the destination's own calls the carried module.
+		final destEdits: CarriedEdits = MoveSymbol.carriedDestEdits(prep.destSource, prep.destInfo, carried, plugin);
+		if (destEdits.unseated.length > 0) return MoveSymbol.unseatedUsingRefusal(prep.destFile, destEdits.unseated);
+		// Captured into locals: a narrowed FIELD does not stay narrowed across the call that reads it.
+		final usingEdit: Null<{ span: Span, text: String }> = destEdits.usingEdit;
+		if (usingEdit != null) editsFor(editsByFile, prep.destFile).push(usingEdit);
+		final carriedEdit: Null<{ span: Span, text: String }> = destEdits.importEdit;
 		if (carriedEdit != null) editsFor(editsByFile, prep.destFile).push(carriedEdit);
 		final destImportPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);
 		for (file in callerFilesNeedingImport) {
