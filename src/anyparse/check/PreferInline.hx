@@ -456,6 +456,10 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// overridden") — another file, possibly another project.
 		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
 		final subtypeMembers: Array<String> = index.hasSubtype(owner) ? index.subtypeMemberNames(owner) : [];
+		// Read OUT of the closure below and defaulted to a kind no modifier run can hold: a grammar
+		// that names no static modifier then answers `false` for every member, which is this rule's
+		// safe direction (the framework carve-out stays as wide as it was).
+		final staticKind: String = plugin.refShape().staticModifierKind ?? '';
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
 			if (!isCandidateMethod(name, fn, mods, metas, relaxed, retained)) return;
@@ -488,8 +492,13 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// stayed at 0.13s — a whole-tree lint hides that (other rules force the index anyway),
 			// the edit loop and `tools/mutation-check.sh` do not. Every OTHER question this check
 			// asks is answered on the report index, unchanged by this slice.
+			// The modifier run decides `static`, and the contract cannot claim one: utest discovers with
+			// `!isStatic && isTestName(...)`, so a `public static function testX()` in a `Test` subclass
+			// is called by nobody and the carve-out would be a free pass. The adapter used to hand
+			// `nominated` an EMPTY modifier list, so this rule and `unused-public-member` exempted every
+			// such method while `unused-private` — which passes the projected declaration — did not.
 			if (CheckScan.frameworkReachableMethod(
-				naming, name, owner, span, () -> RefactorSupport.resolutionIndexOf(plugin) ?? index, contracts
+				naming, name, owner, span, () -> RefactorSupport.resolutionIndexOf(plugin) ?? index, contracts, mods.contains(staticKind)
 			))
 				return;
 			out.push({

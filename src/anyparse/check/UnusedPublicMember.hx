@@ -158,6 +158,9 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	/** The modifier sibling `override` projects as. */
 	private static inline final OVERRIDE_MODIFIER: String = 'Override';
 
+	/** The modifier sibling `static` projects as — the one modifier no framework contract claims. */
+	private static inline final STATIC_MODIFIER: String = 'Static';
+
 	/**
 	 * Method names the runtime or the compiler reaches with NO call token anywhere in source —
 	 * so the reference test, which only ever sees written text, cannot possibly find one.
@@ -309,7 +312,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		final deleting: Array<QueryNode> = [];
 		for (candidate in candidates) {
 			final name: String = candidate.name;
-			if (frameworkReachable(ctx, name, owner, candidate.span, scope)) continue;
+			if (frameworkReachable(ctx, name, owner, candidate.span, scope, candidate.isStatic)) continue;
 			out.push({
 				file: host.file,
 				span: candidate.span,
@@ -346,8 +349,10 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 * A grammar exposing no naming support answers `false` and the member is judged on the text scan
 	 * alone.
 	 */
-	private static inline function frameworkReachable(ctx: Ctx, name: String, owner: String, span: Span, scope: SymbolIndex): Bool {
-		return CheckScan.frameworkReachableMethod(ctx.naming, name, owner, span, () -> scope, ctx.contracts);
+	private static inline function frameworkReachable(
+		ctx: Ctx, name: String, owner: String, span: Span, scope: SymbolIndex, isStatic: Bool
+	): Bool {
+		return CheckScan.frameworkReachableMethod(ctx.naming, name, owner, span, () -> scope, ctx.contracts, isStatic);
 	}
 
 	/**
@@ -374,9 +379,11 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			if (name == null || span == null) return;
 			var isPublic: Bool = false;
 			var isOverride: Bool = false;
+			var isStatic: Bool = false;
 			var annotated: Bool = false;
 			for (mod in run) {
 				if (mod.kind == PUBLIC_MODIFIER) isPublic = true;
+				if (mod.kind == STATIC_MODIFIER) isStatic = true;
 				// A conditional region never reaches the run any more — `eachMember` descends into it
 				// and the annotations written inside surface as ordinary `Meta` siblings, while a
 				// region that merely CARRIES a modifier out makes the run uncertain and the member is
@@ -390,8 +397,12 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			final memberSpan: Span = span;
 			final host: QueryNode = RefactorSupport.memberHostOf(cls, child);
 			final region: Span = RefactorSupport.docExtendedSpan(source, RefactorSupport.declGroupSpan(child, host, memberSpan));
-			if (provablyUnreferenced(memberName, file, source, region, index, ctx))
-				out.push({ name: memberName, span: memberSpan, node: child });
+			if (provablyUnreferenced(memberName, file, source, region, index, ctx)) out.push({
+				name: memberName,
+				span: memberSpan,
+				node: child,
+				isStatic: isStatic
+			});
 		});
 		return out;
 	}
@@ -541,6 +552,9 @@ private typedef Candidate = {
 
 	/** The declaration node — read to tell whether deleting it would empty a `#if` region. */
 	final node: QueryNode;
+
+	/** Whether the declaration carries `static` — no framework INVOCATION contract can claim one. */
+	final isStatic: Bool;
 
 };
 

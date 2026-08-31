@@ -10,15 +10,14 @@ import haxe.Exception;
 using StringTools;
 
 /**
- * What one text says about its over-width comment lines: how many there are, the widest of them in
- * rendered columns, and that line verbatim. The width gate compares two of these rather than two
- * sets of line TEXTS — an edit necessarily changes the text of the line it edits, so text identity
- * called every touched over-width line a new one.
+ * One physical line of a text that lies in a comment and renders wider than the configured width:
+ * its verbatim text and its width in rendered columns. The width gate compares two LISTS of these
+ * rather than two counts, because the decision and the line it names are different questions — the
+ * count and the widest decide, and the multiset difference by text decides which line to quote.
  */
-private typedef WideComments = {
-	var count: Int;
-	var widest: Int;
-	var worst: String;
+private typedef WideLine = {
+	var text: String;
+	var cols: Int;
 }
 
 /**
@@ -144,6 +143,11 @@ final class CommentRewrite {
 	 *
 	 * A block that was ALREADY over-width keeps its own style — that is the caller's file, not this
 	 * op's to police; only a line the edit ADDED to that set is refused, and `--allow-wide` waives it.
+	 *
+	 * Two questions, not one. WHETHER to refuse is the aggregate — the count of over-width comment
+	 * lines and the widest of them, against the same file canonicalised but unedited. WHICH line to
+	 * name is the multiset difference by line text, so the message can never quote a line the edit
+	 * left byte-identical.
 	 */
 	private static function gainedWideCommentLine(
 		source: String, after: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
@@ -152,8 +156,8 @@ final class CommentRewrite {
 		if (metrics == null) return null;
 		final width: Int = metrics.lineWidth;
 		final tab: Int = metrics.indentWidth;
-		final got: WideComments = wideCommentLines(after, width, tab);
-		if (got.count == 0) return null;
+		final got: Array<WideLine> = wideCommentLines(after, width, tab);
+		if (got.length == 0) return null;
 		// The baseline is the source CANONICALISED but UNEDITED, not the raw source. Under
 		// `--reformat` — the flag's whole use case being a file that is not canonical — the writer
 		// re-indents everything, so a comment the command never mentioned can cross the width on its
@@ -163,26 +167,66 @@ final class CommentRewrite {
 			case Ok(text, _): text;
 			case Err(_): source;
 		};
-		final had: WideComments = wideCommentLines(base, width, tab);
+		final had: Array<WideLine> = wideCommentLines(base, width, tab);
 		// COUNT and WIDEST, not line identity. Keying on the line's TEXT made every edit that touches
 		// an over-width line read as a new one — the text necessarily changed — so `comment-rewrite`
 		// refused a rename that SHORTENED a 155-column line to 154, in exactly the case this
 		// function's own doc promised to allow.
-		return got.count <= had.count && got.widest <= had.widest
-			? null
-			: 'the replacement leaves a comment line at ${got.widest} columns, past the configured $width'
-				+ ' — supply the line breaks yourself (with the prefix that position needs), or pass --allow-wide:\n${got.worst}';
+		if (got.length <= had.length && widestOf(got) <= widestOf(had)) return null;
+		// The DECISION is that aggregate; the LINE NAMED is not. Reporting the file's widest
+		// over-width comment line quoted a line the replacement never touched whenever the file
+		// already held a wider one — measured on this tree's own `LoopGuard.hx`, where an edit that
+		// joined two doc lines into one of 173 columns was refused with "at 279 columns" over a
+		// typedef doc 320 lines away. Blame the widest line the edit ADDED to the set instead.
+		final blamed: WideLine = gainedLine(got, had);
+		return 'the replacement leaves a comment line at ${blamed.cols} columns, past the configured $width'
+			+ ' — supply the line breaks yourself (with the prefix that position needs), or pass --allow-wide:\n${blamed.text}';
+	}
+
+	/** The widest of `lines` in rendered columns, 0 when there is none. */
+	private static function widestOf(lines: Array<WideLine>): Int {
+		return lines.length == 0 ? 0 : widestLine(lines).cols;
+	}
+
+	/** The widest of a NON-EMPTY `lines`. */
+	private static function widestLine(lines: Array<WideLine>): WideLine {
+		var best: WideLine = lines[0];
+		for (line in lines) if (line.cols > best.cols) best = line;
+		return best;
 	}
 
 	/**
-	 * How many distinct physical lines of `text` lie in a comment and render wider than `width`, the
-	 * widest of them in columns, and that line verbatim. Two comments on ONE line count it once.
+	 * The widest over-width comment line the edit is answerable for: `got` minus `had` as a MULTISET
+	 * keyed by line text, so a line the edit left byte-identical is matched off against its own
+	 * counterpart in the baseline and never blamed. A line whose text changed is by construction one
+	 * the edit touched.
+	 *
+	 * The remainder cannot be empty when the caller refuses — a higher count leaves an unmatched
+	 * line, and a wider widest is a text no baseline line can carry at that width — but the fallback
+	 * is the file's widest rather than a throw: this runs on the refusal path, where the worst a
+	 * wrong line costs is a misleading message, and the worst a throw costs is the refusal itself.
 	 */
-	private static function wideCommentLines(text: String, width: Int, tab: Int): WideComments {
+	private static function gainedLine(got: Array<WideLine>, had: Array<WideLine>): WideLine {
+		final unmatched: Array<String> = [for (line in had) line.text];
+		var blamed: Null<WideLine> = null;
+		for (line in got) {
+			final at: Int = unmatched.indexOf(line.text);
+			if (at >= 0) {
+				unmatched.splice(at, 1);
+				continue;
+			}
+			if (blamed == null || line.cols > blamed.cols) blamed = line;
+		}
+		return blamed ?? widestLine(got);
+	}
+
+	/**
+	 * Every distinct physical line of `text` that lies in a comment and renders wider than `width`, in
+	 * document order. Two comments on ONE line yield it once.
+	 */
+	private static function wideCommentLines(text: String, width: Int, tab: Int): Array<WideLine> {
 		final seen: Array<Int> = [];
-		var count: Int = 0;
-		var widest: Int = 0;
-		var worst: String = '';
+		final lines: Array<WideLine> = [];
 		for (tok in RefactorSupport.collectCommentTokens(text)) {
 			var from: Int = text.lastIndexOf('\n', tok.from) + 1;
 			while (from < tok.to) {
@@ -194,16 +238,12 @@ final class CommentRewrite {
 				final cols: Int = CheckScan.displayColumn(text, from, end, tab);
 				if (cols > width && !seen.contains(from)) {
 					seen.push(from);
-					count++;
-					if (cols > widest) {
-						widest = cols;
-						worst = text.substring(from, end);
-					}
+					lines.push({ text: text.substring(from, end), cols: cols });
 				}
 				from = to + 1;
 			}
 		}
-		return { count: count, widest: widest, worst: worst };
+		return lines;
 	}
 
 	/**

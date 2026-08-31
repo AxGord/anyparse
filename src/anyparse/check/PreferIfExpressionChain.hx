@@ -47,12 +47,15 @@ import anyparse.runtime.Span;
  *
  * Gating `prefer-ternary-return` on the crossing was BUILT AND REJECTED: it removed 70 findings
  * across 13251 external files, every one of them a step the composed `--fix` uses to reach this
- * canon, and it regressed `LintFixFixedPointCliTest.testElseIfChainConverges`. The fix belongs
- * where the canon is reachable in ONE step instead — `prefer-if-expression-return` owning the 3+
- * fall-through cascade, and `redundant-else-after-return` not taking an else-chain away from it
- * (measured: `prefer-if-expression-return` alone turns
- * `LintFixFixedPointCliTest`'s fixture into the canon in ONE fix, and loses the chain to
- * `redundant-else` in a composed run).
+ * canon, and it regressed `LintFixFixedPointCliTest.testElseIfChainConverges`. S46 put the fix ONE step away instead,
+ * and left this check's trigger alone: `prefer-if-expression-return` now owns the fall-through
+ * CASCADE and folds a terminal ternary spine into rungs, and `redundant-else-after-return` and
+ * `prefer-ternary-return` both defer to it by ASKING it (`claimsChain` / `claimsCascade`), gates
+ * and all. Over 8645 external files that moved 202 findings out of those two rules and 149 into
+ * this one, exactly one of them losing its site to a double-report removal; a `--fix` driven to a
+ * fixed point over the 1029 files holding any of these findings differs from the base in 9, each
+ * one either the canon the base could not reach or an author's ternary the base unrolled and this
+ * route keeps.
  *
  * ## Disjoint from `prefer-ternary-expression` by RUNG COUNT
  *

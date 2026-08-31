@@ -34,8 +34,18 @@ import anyparse.runtime.Span;
  *   both (`++` / `--`, being single-operand, never match either);
  * - the two l-values are TEXTUALLY IDENTICAL (whitespace-normalized source).
  *
- * A null-narrowing guard condition (`x != null && x.f`) is refused ONLY when an
- * r-value is a bool literal -- that collapse hands off to
+ * The canon crossing this rule has and `prefer-ternary-return` no longer does: collapsing onto an
+ * r-value that is ALREADY a ternary writes a three-rung spine `prefer-if-expression-chain` then
+ * reports. Measured over the 1029 external files holding any of these findings, a `--rule
+ * prefer-ternary-assignment --fix` run alone takes that rule from 93 findings to 107 - 14 sites,
+ * 3.3% of this rule's 421. It is NOT gated: the gate S45 built for the `return` twin destroyed
+ * every finding it touched with no replacement, and the replacement here needs
+ * `prefer-if-expression-assignment` to claim a 2-branch if/else whose r-value spine supplies the
+ * third leaf - which means unrolling a terminal ternary inside `AssignmentTreeHoist.ifChainValue`,
+ * a recursion this slice did not touch. Filed rather than half-done.
+ *
+ * A null-narrowing guard condition (`x != null && x.f`) is refused ONLY when an r-value is a bool
+ * literal -- that collapse hands off to
  * `simplify-boolean-ternary`, whose boolean flattening would lose the
  * in-condition narrowing under `@:nullSafety(Strict)`; a VALUE collapse keeps
  * the narrowing (the ternary condition types exactly like the if) and is

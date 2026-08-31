@@ -671,6 +671,28 @@ class PreferInlineCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A STATIC method a contract would otherwise claim by name is a candidate again: a framework
+	 * INVOCATION contract claims the instances its root\'s subtypes produce, and no instance reaches
+	 * a static member - utest cuts at the same place (`!isStatic && isTestName(...)`), so a
+	 * `public static function testX()` in a `Test` subclass is called by nobody.
+	 *
+	 * The adapter used to hand `NamingSupport.frameworkReachable` an EMPTY modifier list, so a
+	 * `static` gate on the shared predicate would have fixed `unused-private` - which passes the
+	 * projected declaration - and silently missed this rule and `unused-public-member`. The instance
+	 * half is the control: it is still carved out.
+	 */
+	public function testStaticFrameworkNameIsNotCarvedOut(): Void {
+		Assert.equals(
+			1, violations('class T extends Test {\n\tpublic static function testThing():Void _other.ping();\n}').length,
+			'utest skips a static method, so nothing reaches it and the fold buys what it always did'
+		);
+		Assert.equals(
+			0, violations('class T extends Test {\n\tpublic function testThing():Void _other.ping();\n}').length,
+			'the INSTANCE method of the same class is still the framework\'s'
+		);
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t$members\n}';
 	}

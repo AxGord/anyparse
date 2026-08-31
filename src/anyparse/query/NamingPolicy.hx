@@ -193,6 +193,10 @@ typedef NamedDecl = {
  * One framework's INVOCATION contract: the root type whose subtypes the framework drives, and the
  * member names it reaches BY NAME with no call written anywhere in the project.
  *
+ * A member the framework reaches is an INSTANCE member: what a contract states is the root type
+ * whose SUBTYPES it drives, and `nominated` proves the claim by walking that supertype closure, so
+ * no `static` member is ever claimed - by the built-in contract or by a declared one.
+ *
  * A project states these in `apqlint.json` (`frameworks`), because that is the only place the fact
  * lives: WHICH framework drives a tree is a property of the project, not of the language, and the
  * metadata that looks like it answers this does not. Measured on one Unity tree, 29 files carry a

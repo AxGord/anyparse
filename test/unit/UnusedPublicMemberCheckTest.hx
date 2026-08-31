@@ -432,6 +432,31 @@ import utest.Test;
 		Assert.equals(1, fixEditCount(owner, [{ file: 'C.hx', source: owner }, { file: 'B.hx', source: skipped }]));
 	}
 
+	/**
+	 * The STATIC twin of the test above, and the pin that holds the modifier NAME to one spelling across
+	 * two modules: `CheckScan.frameworkReachableMethod` writes the literal `'static'` into the
+	 * `NamedDecl` it builds and `HaxeNamingSupport.nominated` reads it, with no shared constant possible
+	 * - this module may not import the grammar that owns the vocabulary. This stops flagging the moment
+	 * either side drifts.
+	 *
+	 * utest discovers with `!isStatic && isTestName(...)`, so a `public static function testX()` in a
+	 * `Test` subclass is reached by nobody and is exactly the dead public member this rule reports. The
+	 * adapter used to pass an EMPTY modifier list, so the carve-out applied to it too.
+	 */
+	public function testStaticUtestMethodStillFlagged(): Void {
+		final base: String = 'class Test {}';
+		final statics: String = 'class MySuite extends Test {\n\tpublic static function testZqxwvAlpha():Void {}\n}';
+		final instance: String = 'class MySuite extends Test {\n\tpublic function testZqxwvAlpha():Void {}\n}';
+		Assert.equals(
+			1, violationsOf([{ file: 'Test.hx', source: base }, { file: 'MySuite.hx', source: statics }]).length,
+			'a static test method is discovered by nothing'
+		);
+		Assert.equals(
+			0, violationsOf([{ file: 'Test.hx', source: base }, { file: 'MySuite.hx', source: instance }]).length,
+			'the instance twin is still the framework\'s'
+		);
+	}
+
 	/** Findings over `C.hx` plus a second file whose `main` (implicitly reachable, never flagged) carries `body`. */
 	private function withUser(body: String): Array<Violation> {
 		final owner: String = 'class C {\n\tpublic function orphaned():Void {}\n}';

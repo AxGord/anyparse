@@ -86,13 +86,29 @@ class RedundantElseCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\tvar x = if (a) 1 else 2;\n\t\treturn x;\n\t}\n}').length);
 	}
 
-	public function testElseIfChainFlagsOuterOnly(): Void {
-		// The inner `if` sits in the outer's else slot (not a block statement), so
-		// only the outer else is flagged; the inner surfaces after a de-nest pass.
+	/**
+	 * The else of an if/else-if chain whose every branch is ONE valued return is NOT flagged here: it
+	 * is `prefer-if-expression-return`'s, and that rule turns the whole chain into the canon in one fix
+	 * where the de-nest starts a three-rung march the chain rule then condemns. The second half is the
+	 * control - one branch that is not a single valued return, so the other rule does not claim it and
+	 * the finding is this rule's again.
+	 *
+	 * The deferral asks that rule directly (`claimsChain`), not its shape, so a chain it refuses keeps
+	 * its finding here.
+	 */
+	public function testElseIfChainOfValuedReturnsIsDeferred(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f():Int {\n\t\tif (a) return 1;\n\t\telse if (b) return 2;\n\t\telse return 3;\n\t}\n}')
+				.length,
+			'a chain of valued returns belongs to prefer-if-expression-return, whose single fix is the canon'
+		);
 		Assert.equals(
 			1,
-			violations('class C {\n\tfunction f():Int {\n\t\tif (a) return 1;\n\t\telse if (b) return 2;\n\t\telse return 3;\n\t}\n}')
-				.length
+			violations(
+				'class C {\n\tfunction f():Int {\n\t\tif (a) return 1;\n\t\telse if (b) return 2;\n\t\telse { g(); return 3; }\n\t}\n}'
+			).length,
+			'a branch that is not ONE valued return is not claimed there, so the else stays this rule\'s'
 		);
 	}
 

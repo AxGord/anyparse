@@ -21,8 +21,13 @@ using Lambda;
  *
  * ## What is flagged
  *
- * Only an `if` STATEMENT that is a DIRECT child of a statement list, has an `else`, and
- * whose then-branch always exits: the then-branch is itself terminal
+ * An else-CHAIN whose every branch is ONE valued `return` is `prefer-if-expression-return`'s and is
+ * NOT flagged here: that rule's single fix IS the canon, where this de-nest starts a pairwise
+ * march to the same text through a ternary chain the `prefer-if-expression-chain` rule condemns.
+ * The deferral asks that rule (`claimsChain`), so a chain it refuses keeps its finding here.
+ *
+ * Only an `if` STATEMENT that is a DIRECT child of a statement list, has an `else`, and whose
+ * then-branch always exits: the then-branch is itself terminal
  * (`ControlFlowSupport.isTerminal`) or is a block whose last direct child is
  * terminal. The block-direct-child restriction is the correctness gate — an
  * inline `if (outer) if (a) return; else b();` (the inner `if` being the
@@ -93,7 +98,7 @@ final class RedundantElse implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, seams, RefactorSupport.collectCommentTokens(entry.source));
+			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, RefactorSupport.collectCommentTokens(entry.source));
 		}
 		return violations;
 	}
@@ -127,12 +132,13 @@ final class RedundantElse implements Check {
 	 * is redundant. The whole tree is walked so nested blocks are reached.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, seams: Seams, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: Seams,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Void {
 		if (seams.support.blockKinds().contains(node.kind))
 			for (stmt in node.children)
-				if (seams.ifKinds.contains(stmt.kind)) flagIf(out, file, stmt, seams.support, comments);
-		for (c in node.children) walk(out, file, c, seams, comments);
+				if (seams.ifKinds.contains(stmt.kind)) flagIf(out, file, source, stmt, seams, comments);
+		for (c in node.children) walk(out, file, source, c, seams, comments);
 	}
 
 	/**
@@ -140,18 +146,26 @@ final class RedundantElse implements Check {
 	 * the message when a comment the de-nest cannot carry keeps the finding report-only.
 	 */
 	private static function flagIf(
-		out: Array<Violation>, file: String, ifNode: QueryNode, support: ControlFlowSupport,
+		out: Array<Violation>, file: String, source: String, ifNode: QueryNode, seams: Seams,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Void {
 		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
-		if (!CheckScan.branchAlwaysExits(ifNode.children[1], support)) return;
+		if (!CheckScan.branchAlwaysExits(ifNode.children[1], seams.support)) return;
+		// An else-CHAIN of valued returns is `prefer-if-expression-return`'s, and that rule's single fix
+		// IS the canon. De-nesting it here takes the chain away from it: the cascade left behind is
+		// collapsed pairwise into a three-rung ternary, which `prefer-if-expression-chain` then unrolls
+		// back into the very text one `prefer-if-expression-return` edit would have written — three
+		// findings and six passes for one rewrite, and a reader who applies the first is shown a
+		// finding the run before it never mentioned. Asked of that rule directly, gates and all, so a
+		// chain it refuses (a comment in a folded region) keeps its `redundant-else` finding.
+		if (PreferIfExpressionReturn.claimsChain(ifNode, source, comments, seams.shape)) return;
 		final elseSpan: Null<Span> = ifNode.children[2].span;
 		if (elseSpan != null) out.push({
 			file: file,
 			span: elseSpan,
 			rule: 'redundant-else-after-return',
 			severity: Severity.Info,
-			message: deNestDropsComment(ifNode, support, comments) ? MESSAGE + COMMENT_NOTE : MESSAGE
+			message: deNestDropsComment(ifNode, seams.support, comments) ? MESSAGE + COMMENT_NOTE : MESSAGE
 		});
 	}
 
@@ -334,6 +348,7 @@ final class RedundantElse implements Check {
 		return support == null ? null : {
 			ifKinds: ifKinds,
 			support: support,
+			shape: shape,
 			blockKinds: support.blockKinds(),
 			localDeclKinds: shape.localDeclKinds ?? [],
 			functionKinds: shape.functionKinds ?? [],
@@ -358,6 +373,9 @@ final class RedundantElse implements Check {
 private typedef Seams = {
 	final ifKinds: Array<String>;
 	final support: ControlFlowSupport;
+
+	/** Read by nothing here — handed to `PreferIfExpressionReturn.claimsChain`, which reads its own. */
+	final shape: RefShape;
 	final blockKinds: Array<String>;
 	final localDeclKinds: Array<String>;
 	final functionKinds: Array<String>;
