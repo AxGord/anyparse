@@ -1,6 +1,7 @@
 package unit;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
 import anyparse.query.CommentRewrite;
 import anyparse.query.RefactorSupport;
 import utest.Assert;
@@ -346,6 +347,57 @@ class CommentRewriteSliceTest extends Test {
 		Assert.equals('* A\n\t\tB', RefactorSupport.openGrownDocBlock('* A\n\t\tB', '\t\t'));
 	}
 
+	/**
+	 * The width refusal names the line the EDIT added, not the file\'s widest. The decision is still
+	 * the aggregate - how many over-width comment lines there are and how wide the widest is, against
+	 * the same source canonicalised but unedited - so a file that already holds a wider line is not
+	 * refused for holding it. What changed is WHICH line the message quotes.
+	 *
+	 * At the base commit this refusal read `at 253 columns` and quoted a doc line the replacement
+	 * never touched, in a file whose only fault was owning it. That is how the guard blocked S45 on
+	 * two files and read as broken.
+	 */
+	public function testWidthRefusalNamesTheLineTheEditAdded(): Void {
+		final untouched: String = ''.rpad('w', 250);
+		final grown: String = ''.rpad('g', 180);
+		final src: String = '/**\n * $untouched\n * padme\n */\nclass C {}';
+		final message: String = errText(cr(src, 'padme', grown, false));
+		Assert.isTrue(message.contains(grown), 'the refusal quotes the line the replacement wrote: $message');
+		Assert.isFalse(message.contains(untouched), 'and not the wider one it never touched: $message');
+		Assert.isTrue(message.contains('at 183 columns'), 'with that line\'s own width: $message');
+	}
+
+	/** The same file, edited so nothing new crosses the width: the pre-existing 250-column line refuses nothing. */
+	public function testPreExistingWideLineAloneDoesNotRefuse(): Void {
+		final untouched: String = ''.rpad('w', 250);
+		final src: String = '/**\n * $untouched\n * padme\n */\nclass C {}';
+		Assert.isTrue(okText(cr(src, 'padme', 'short', false)).contains('short'));
+	}
+
+	/**
+	 * The single-file default is a PREVIEW, and the preview arm did not count what it printed. So
+	 * every `apq comment-rewrite <find> <replace> <one file>` wrote the rewritten source to stdout and
+	 * then said on stderr that no comment body in the file contained the find text - a false negative
+	 * on the op\'s own diagnostic, in the shape a user reaches for first.
+	 *
+	 * Both halves in one test, so neither passes alone: a find that MATCHES must not say it did not,
+	 * and a find that does not match must still say so - that line exists because `rewrote 0 file(s)`
+	 * used to read as "the text was already right".
+	 */
+	public function testPreviewCountsWhatItPrinted(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('crprev', [{ name: 'C.hx', source: '/**\n * Alpha beta gamma.\n */\nclass C {}\n' }]);
+		final path: String = '$dir/C.hx';
+		final hit: String = captureStderr(() -> Assert.equals(0, Cli.run(['comment-rewrite', 'beta', 'BETA', path])));
+		Assert.equals(-1, hit.indexOf('contains the find text'), 'a matching preview does not claim it matched nothing: $hit');
+		final miss: String = captureStderr(() -> Assert.equals(0, Cli.run(['comment-rewrite', 'zqxwv', 'BETA', path])));
+		Assert.isTrue(miss.indexOf('contains the find text') != -1, 'a real miss still says so: $miss');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('stderr capture needs the node target');
+		#end
+	}
+
 	private function cr(src: String, find: String, replace: String, regex: Bool): EditResult {
 		return CommentRewrite.rewrite(src, find, replace, regex, true, new HaxeQueryPlugin());
 	}
@@ -364,6 +416,38 @@ class CommentRewriteSliceTest extends Test {
 			case Ok(_): false;
 			case Err(_): true;
 		};
+	}
+
+	/** The `Err` message of `res`, or a failure when it was `Ok`. */
+	private function errText(res: EditResult): String {
+		return switch res {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok: $text');
+				'';
+			case Err(message): message;
+		};
+	}
+
+	/** Everything the CLI writes to fd 2 while `fn` runs — the only place these diagnostics live. */
+	private static function captureStderr(fn: () -> Void): String {
+		#if nodejs
+		final buffer: Array<String> = [];
+		final fs: Dynamic = js.Syntax.code('require("fs")'); // noqa: avoid-dynamic
+		final original: Dynamic = fs.writeSync; // noqa: avoid-dynamic
+		fs.writeSync = js.Syntax.code(
+			'function(fd, data) { if (fd === 2) { {0}.push(String(data)); return 0; } return {1}.apply(null, arguments); }', buffer,
+			original
+		);
+		try fn() catch (exception: haxe.Exception) {
+			fs.writeSync = original;
+			throw exception;
+		}
+		fs.writeSync = original;
+		return buffer.join('');
+		#else
+		fn();
+		return '';
+		#end
 	}
 
 }

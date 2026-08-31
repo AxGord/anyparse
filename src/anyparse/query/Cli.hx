@@ -12697,8 +12697,15 @@ final class Cli {
 							sysPrint('$path\n');
 							changed++;
 						}
-					} else
+					} else {
+						// The PREVIEW arm counts too. It did not, and the single-file default is a
+						// preview, so every `apq comment-rewrite <find> <replace> <one file>` printed
+						// the rewritten file on stdout and then said on stderr that no comment body
+						// contained the find text — a false negative on the op's own diagnostic, and
+						// the shape a user reaches for first when checking what an edit would do.
 						previewEdit(op, path, text);
+						if (isChanged) changed++;
+					}
 				case Err(message):
 					stderr('apq comment-rewrite: $path: $message\n');
 					failed++;

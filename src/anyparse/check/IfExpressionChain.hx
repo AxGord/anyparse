@@ -146,6 +146,12 @@ final class IfExpressionChain {
 	/** A real chain is a head plus at least one `else if` — a 2-branch `if`/`else` (one branch) is left to the ternary rules. */
 	private static inline final MIN_CHAIN_BRANCHES: Int = 2;
 
+	/** A no-`else` `if` has exactly [condition, then-branch] children. */
+	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
+
+	/** The else-slot of a conditional and of a ternary alike — `children[2]`, past condition and then-value. */
+	private static inline final ELSE_SLOT_INDEX: Int = 2;
+
 	/** A conditional's then-branch is `children[1]`, between the condition and the else-branch. */
 	private static inline final THEN_BRANCH_INDEX: Int = 1;
 
@@ -184,6 +190,79 @@ final class IfExpressionChain {
 					null;
 			}
 		}
+	}
+
+	/**
+	 * Recognise the FALL-THROUGH cascade that starts at `kids[at]`: the longest run of consecutive
+	 * no-`else` `if`s, each with a single-statement then-branch, plus the sibling that follows the run
+	 * as the terminal. Returns null when the run is shorter than `minBranches` or reaches the end of
+	 * the statement list with no sibling left to be the terminal.
+	 *
+	 * The cascade and the `if / else if / … / else` chain `collect` reads are the SAME control flow
+	 * whenever every branch exits — `redundant-else-after-return` rewrites one into the other — so both
+	 * yield an `IfChain` and the rules that consume one need no second shape. Rule-agnostic like
+	 * `collect`: the branch statements and the terminal come back raw, uninspected.
+	 *
+	 * The terminal's index is `at + branches.length`, so a caller that needs the replaced span can
+	 * derive it without a second return value.
+	 */
+	public static function collectCascade(
+		kids: Array<QueryNode>, at: Int, ifKinds: Array<String>, blockStmtKind: String, ?minBranches: Int
+	): Null<IfChain> {
+		final min: Int = minBranches ?? MIN_CHAIN_BRANCHES;
+		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
+		var i: Int = at;
+		while (i < kids.length) {
+			final node: QueryNode = kids[i];
+			final thenStmt: Null<QueryNode> = cascadeRungStatement(node, ifKinds, blockStmtKind);
+			if (thenStmt == null) break;
+			branches.push({ cond: node.children[0], stmt: thenStmt });
+			i++;
+		}
+		return branches.length < min || i >= kids.length ? null : { branches: branches, terminal: kids[i] };
+	}
+
+	/**
+	 * The single then-statement of one RUNG of a fall-through cascade - a no-`else` `if` whose
+	 * then-branch holds exactly one statement - or null when `node` is no such rung.
+	 *
+	 * The STATEMENT rather than a yes/no, because the head of a run is the index whose PREDECESSOR is
+	 * not a rung and the caller has to look at that predecessor's statement to know: the collector is
+	 * greedy, so every later index of a run would collect a shorter cascade of its own and report the
+	 * same code twice - while a shape-only answer hid a whole cascade behind one leading
+	 * `if (x) g();`, which is a rung by shape and by nothing else.
+	 */
+	public static function cascadeRungStatement(node: QueryNode, ifKinds: Array<String>, blockStmtKind: String): Null<QueryNode> {
+		return ifKinds.contains(node.kind) && node.children.length == IF_NO_ELSE_CHILD_COUNT
+			? singleStmt(node.children[THEN_BRANCH_INDEX], blockStmtKind)
+			: null;
+	}
+
+	/**
+	 * Peel a terminal VALUE that is itself a right-nested ternary spine into extra chain rungs: one
+	 * `(condition, value)` pair per `?:` and the value the spine ends on. A value that is no ternary
+	 * comes back as an empty pair list and itself as the terminal.
+	 *
+	 * Folding is what keeps the collapse rules' own output equal to the COMPOSED `--fix` fixed point.
+	 * Left unfolded, `if (c) return a; return p ? q : r;` collapses to
+	 * `return if (c) a else p ? q : r`, which `prefer-if-expression-chain` deliberately leaves alone
+	 * (a terminal rung VALUE holding a ternary is the author's emphasis, not a nested `?:` anyone
+	 * wrote) — while the pairwise route through `prefer-ternary-return` reaches the full
+	 * `return if (c) a else if (p) q else r`. Measured on this tree: both spellings of the same
+	 * control flow converge there today, and only the one-step rewrite reaches it without writing the
+	 * three-rung ternary `prefer-if-expression-chain` then condemns.
+	 *
+	 * Conditions come back paren-UNWRAPPED: the emitted `if (` … `)` supplies its own delimiters, so a
+	 * copied pair would only draw a `redundant-parens` finding on the result.
+	 */
+	public static function unrollTernaryTail(value: QueryNode, ternaryKind: Null<String>, parenKind: Null<String>): TernaryTail {
+		final pairs: Array<{ cond: QueryNode, value: QueryNode }> = [];
+		var cur: QueryNode = value;
+		while (ternaryKind != null && cur.kind == ternaryKind && cur.children.length == IF_ELSE_CHILD_COUNT) {
+			pairs.push({ cond: RefactorSupport.unwrapParens(cur.children[0], parenKind), value: cur.children[THEN_BRANCH_INDEX] });
+			cur = cur.children[ELSE_SLOT_INDEX];
+		}
+		return { pairs: pairs, terminal: cur };
 	}
 
 	/**
@@ -553,4 +632,14 @@ final class IfExpressionChain {
 		return true;
 	}
 
+}
+
+/**
+ * A terminal chain value peeled of its ternary spine (`IfExpressionChain.unrollTernaryTail`): one
+ * `(condition, value)` rung per `?:` it held, in source order, and the value the spine ends on.
+ * Empty `pairs` with `terminal` the input value means it was no ternary at all.
+ */
+typedef TernaryTail = {
+	var pairs: Array<{ cond: QueryNode, value: QueryNode }>;
+	var terminal: QueryNode;
 }

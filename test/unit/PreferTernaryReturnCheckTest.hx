@@ -367,6 +367,57 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals('return c ? true : !d && g();', es[0].text);
 	}
 
+	/**
+	 * A pair that is the TAIL of a cascade `prefer-if-expression-return` claims is deferred to it:
+	 * collapsing it alone writes the three-rung ternary `prefer-if-expression-chain` then condemns,
+	 * so the reader is shown one finding, applies it, and the next run reports something the first
+	 * never mentioned. The control is the same pair with no rung in front of it, which stays here
+	 * because two leaf values ARE the ternary canon.
+	 */
+	public function testTailOfClaimedCascadeDeferred(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f():Int {\n\t\tif (a) return e();\n\t\tif (b) return g();\n\t\treturn h();\n\t}\n}').length,
+			'the tail pair belongs to the cascade the other rule rewrites whole'
+		);
+		Assert.equals(
+			1, violations('class C {\n\tfunction f():Int {\n\t\tif (b) return g();\n\t\treturn h();\n\t}\n}').length,
+			'the same pair alone is this rule\'s'
+		);
+	}
+
+	/**
+	 * The head of the run comes from `prefer-if-expression-return` itself, so a statement that is a
+	 * rung by SHAPE but not one it collects — a no-`else` `if` that does not return a value — cannot
+	 * pull this rule's walk-back past the real head. Derived locally it did: the deferral asked about
+	 * an index the claiming rule never uses, answered `false`, and both rules reported one control
+	 * flow. Measured on heaps' `poly2tri/Point.hx`, `cpp/_std/StringBuf.hx` and `php/_std/EReg.hx`.
+	 *
+	 * Both spellings of that statement, plus the control with nothing in front of the cascade.
+	 */
+	public function testNonReturnRungDoesNotBreakTheDeferral(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Int {\n\t\tif (x) g();\n\t\tif (a) return e();\n\t\tif (b) return g();\n\t\treturn h();\n\t}\n}'
+			).length,
+			'a non-returning if in front of the cascade does not break the deferral'
+		);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Int {\n\t\tif (x) return;\n\t\tif (a) return e();\n\t\tif (b) return g();\n\t\treturn h();\n'
+				+ '\t}\n}'
+			).length,
+			'nor does a bare `return;` rung, which is a rung by shape and by nothing else'
+		);
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f():Int {\n\t\tif (a) return e();\n\t\tif (b) return g();\n\t\treturn h();\n\t}\n}').length,
+			'and the bare cascade is deferred as before'
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

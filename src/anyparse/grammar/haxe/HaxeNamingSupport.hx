@@ -755,6 +755,14 @@ final class HaxeNamingSupport implements NamingSupport {
 		decl: NamedDecl, index: () -> Null<SymbolIndex>, contracts: Array<FrameworkContract>, wholeName: Bool
 	): Bool {
 		if (decl.category != NamingCategory.Method) return false;
+		// A contract claims the INSTANCES its root's subtypes produce — `transitivelyExtends` below is
+		// the whole proof, and no instance reaches a STATIC member. utest cuts at the same place in its
+		// own discovery (`!isStatic && isTestName(...)`, verified live), so a
+		// `public static function testX()` in a `Test` subclass is called by nobody and carries no
+		// framework carve-out. The gate is HERE rather than in each rule because all four consumers —
+		// `unused-private`, `unused-public-member`, `prefer-inline` and `naming` — reach the question
+		// through this one function.
+		if (decl.mods.contains('static')) return false;
 		final owner: Null<String> = decl.enclosingType;
 		if (owner == null) return false;
 		final ownerName: String = owner;

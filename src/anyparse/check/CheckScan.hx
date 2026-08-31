@@ -700,14 +700,24 @@ final class CheckScan {
 	 */
 	public static function frameworkReachableMethod(
 		naming: Null<NamingSupport>, name: String, owner: String, span: Span, index: () -> Null<SymbolIndex>,
-		contracts: Array<FrameworkContract>
+		contracts: Array<FrameworkContract>, isStatic: Bool
 	): Bool {
 		if (naming == null) return false;
 		final decl: NamedDecl = {
 			span: span,
 			name: name,
 			category: NamingCategory.Method,
-			mods: [],
+			// The ONE modifier the predicate reads, carried as a resolved BOOLEAN rather than a
+			// modifier array: the two callers hold the member's modifier run as grammar KINDS
+			// (`Static`) and `NamedDecl.mods` spells NAMES (`static`), so an array parameter would
+			// hand the translation to each call site and the wrong spelling would answer `false`
+			// silently — the same shape as the empty list it replaces. A gate on a SECOND modifier
+			// must widen this parameter, not read `decl.mods` and find it absent.
+			// The literal, not a constant: this module may not import the grammar that OWNS the
+			// vocabulary, so the spelling stands in two places by construction. Its pair is
+			// `HaxeNamingSupport.nominated`, and `UnusedPublicMemberCheckTest`'s static fixture stops
+			// flagging the moment either side drifts.
+			mods: isStatic ? ['static'] : [],
 			enclosingType: owner
 		};
 		return naming.frameworkReachable(decl, index, contracts);

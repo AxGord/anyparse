@@ -21,8 +21,13 @@ using StringTools;
  *
  * ## What is flagged
  *
- * Only an `if` STATEMENT that is a DIRECT child of a block, has NO `else`, whose
- * then-branch is a value-returning `return` (or a `{ … }` wrapping exactly one),
+ * A pair that CLOSES a cascade `prefer-if-expression-return` claims is DEFERRED to that rule, which
+ * rewrites the whole run in one edit; collapsing that pair alone writes the three-rung ternary
+ * `prefer-if-expression-chain` then condemns. The question is put to that rule directly, not
+ * mirrored here.
+ *
+ * Only an `if` STATEMENT that is a DIRECT child of a block, has NO `else`, whose then-branch is a
+ * value-returning `return` (or a `{ … }` wrapping exactly one),
  * and whose immediately-following block sibling is also a value-returning
  * `return`. A value-less `return;` is a distinct kind and never matches (a
  * ternary needs two values). The direct-block-child restriction is the
@@ -80,7 +85,8 @@ final class PreferTernaryReturn implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, null);
+			if (tree != null)
+				walk(violations, entry.file, entry.source, tree, seams, null, RefactorSupport.collectCommentTokens(entry.source));
 		}
 		return violations;
 	}
@@ -99,7 +105,7 @@ final class PreferTernaryReturn implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectFixes(tree, source, seams, null, flagged, edits);
+		collectFixes(tree, source, seams, null, flagged, edits, RefactorSupport.collectCommentTokens(source));
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -115,13 +121,14 @@ final class PreferTernaryReturn implements Check {
 	 * an inner lambda never inherits the outer method's declared `Bool`.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, s: Seams, retType: Null<String>
+		out: Array<Violation>, file: String, source: String, node: QueryNode, s: Seams, retType: Null<String>,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Void {
 		final childRetType: Null<String> = childReturnType(node, source, s, retType);
 		if (s.support.blockKinds().contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
-				final match: Null<TernaryMatch> = pairAt(kids, i, s, retType);
+				final match: Null<TernaryMatch> = pairAt(kids, i, s, retType, source, comments);
 				if (match == null) continue;
 				final span: Null<Span> = match.ifNode.span;
 				if (span != null) out.push({
@@ -133,19 +140,19 @@ final class PreferTernaryReturn implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(out, file, source, c, s, childRetType);
+		for (c in node.children) walk(out, file, source, c, s, childRetType, comments);
 	}
 
 	/** Mirror `walk` — including its `retType` rebinding: collect one replacement edit per flagged `if`/`return` pair. */
 	private static function collectFixes(
 		node: QueryNode, source: String, s: Seams, retType: Null<String>, flagged: Array<String>,
-		edits: Array<{ span: Span, text: String }>
+		edits: Array<{ span: Span, text: String }>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Void {
 		final childRetType: Null<String> = childReturnType(node, source, s, retType);
 		if (s.support.blockKinds().contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
-				final match: Null<TernaryMatch> = pairAt(kids, i, s, retType);
+				final match: Null<TernaryMatch> = pairAt(kids, i, s, retType, source, comments);
 				if (match == null) continue;
 				final ifSpan: Null<Span> = match.ifNode.span;
 				if (!(ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}'))) continue;
@@ -153,14 +160,17 @@ final class PreferTernaryReturn implements Check {
 				if (edit != null) edits.push(edit);
 			}
 		}
-		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits);
+		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments);
 	}
 
 	/**
 	 * If `kids[i]` is a no-else `if` whose then-branch value-returns and `kids[i+1]`
 	 * is a value-returning `return`, return the match parts; otherwise null.
 	 */
-	private static function pairAt(kids: Array<QueryNode>, i: Int, s: Seams, retType: Null<String>): Null<TernaryMatch> {
+	private static function pairAt(
+		kids: Array<QueryNode>, i: Int, s: Seams, retType: Null<String>, source: String,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Null<TernaryMatch> {
 		final shape: RefShape = s.shape;
 		final returnKind: String = s.returnKind;
 		final ifNode: QueryNode = kids[i];
@@ -171,6 +181,20 @@ final class PreferTernaryReturn implements Check {
 		final next: QueryNode = kids[i + 1];
 		if (next.kind != returnKind || next.children.length < 1) return null;
 		final elseValue: QueryNode = next.children[0];
+		// A pair that is the TAIL of a cascade `prefer-if-expression-return` claims belongs to that
+		// rewrite whole. Collapsing it alone writes the three-rung ternary chain
+		// `prefer-if-expression-chain` then condemns — the reader is shown one finding, applies it, and
+		// the next run reports something the first run never mentioned.
+		//
+		// The head is walked back to, because the claim covers the WHOLE run and the pair sits at its
+		// end. The question is put to that rule rather than mirrored here: gating on the SHAPE would
+		// silence this rule wherever that one refuses on a comment, and S45 measured what that costs —
+		// 14 findings of 69 with no replacement anywhere.
+		// The head comes FROM that rule, not from a walk-back mirrored here: a no-`else` `if` that does
+		// not return is a rung by shape and not one it collects, so a local walk-back runs past it and
+		// asks about an index the claiming rule never uses — answering `false` on a cascade it claims
+		// one index later, and both rules then report the same control flow.
+		final head: Int = PreferIfExpressionReturn.returnRunHead(kids, i, shape);
 		// EITHER value being a ternary MID-REDUCTION blocks the pair, whatever the collapse would
 		// be. `simplify-boolean-ternary` is about to flatten such a ternary into `&&` / `||`, and
 		// this collapse would bury it one level deeper, where it stops being the function's direct
@@ -194,6 +218,15 @@ final class PreferTernaryReturn implements Check {
 			|| RefactorSupport.pendingBooleanTernaryTail(thenValue, shape) || RefactorSupport.pendingBooleanTernaryTail(elseValue, shape)
 			|| RefactorSupport.statementLikeValue(thenValue, shape) || RefactorSupport.statementLikeValue(elseValue, shape)
 			|| isStuckBooleanCollapse(thenValue, elseValue, shape, retType)
+			|| PreferIfExpressionReturn.claimsCascade(
+				// LAST, because it is the only disjunct that walks a whole cascade and re-runs another
+				// rule's gates: every cheap shape refusal above short-circuits it away.
+				kids,
+				head,
+				source,
+				comments,
+				shape
+			)
 			? null
 			: {
 				ifNode: ifNode,
