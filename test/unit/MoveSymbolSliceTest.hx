@@ -1996,6 +1996,577 @@ class MoveSymbolSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * Haxe resolves an unqualified type name through the file's own package and then through every
+	 * ANCESTOR package, so `p/sub/deep/C.hx` reaches `p.Moved` with no import at all — and when the
+	 * type leaves `p`, that file owes an import exactly as a same-package sibling does. Compile-proved
+	 * on 4.3.7 in both directions: the descendant sees it, a sibling package (`q`) reads
+	 * `Type not found : Moved`.
+	 */
+	public function testADescendantPackageFileFollowsTheTypeThroughAnAncestorPackage(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Moved.hx', 3, 7, 'p/Dest.hx', [
+			{ file: 'p/Moved.hx', source: 'package p;\n\nclass Moved {}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
+			{ file: 'p/sub/deep/C.hx', source: 'package p.sub.deep;\n\nclass C {\n\tvar m:Moved;\n}' }
+		]);
+		Assert.equals(
+			'package p.sub.deep;\n\nimport p.Dest.Moved;\n\nclass C {\n\tvar m:Moved;\n}', changeFor(changes, 'p/sub/deep/C.hx').newSource
+		);
+	}
+
+	/**
+	 * The chain is the file's OWN ancestors, not every package in the index: a file of package `q`
+	 * never reached `p.Moved` by a simple name, so it is owed nothing and writing it an import would
+	 * be a statement for a reference that does not exist. The control is discriminating because `q/D.hx`
+	 * DOES spell `Moved` — the walk's other two gates (the ladder answer and the name scan) cannot tell
+	 * this case from the one above.
+	 */
+	public function testASiblingPackageIsNotAnAncestorSoItIsLeftAlone(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Moved.hx', 3, 7, 'p/Dest.hx', [
+			{ file: 'p/Moved.hx', source: 'package p;\n\nclass Moved {}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
+			{ file: 'q/D.hx', source: 'package q;\n\nclass D {\n\tvar m:Moved;\n}' }
+		]);
+		assertUnchanged(changes, 'q/D.hx');
+	}
+
+	/**
+	 * The NEAREST ancestor wins, measured rather than assumed: with both `p.Dep` and `p.sub.Dep`
+	 * present, a `p.sub.deep` file prints `p.sub.Dep` on 4.3.7. The refusal has to name THAT one — a
+	 * chain walked root-first answers `p.Dep`, which is what the destination already binds, and the
+	 * gate then finds no collision at all and lets the rebind through.
+	 */
+	public function testTheNearestAncestorOwnsTheNameSoTheRefusalNamesIt(): Void {
+		assertErrContains(MoveSymbol.moveType('p/sub/deep/Mover.hx', 3, 7, 'q/Host.hx', [
+			{ file: 'p/sub/deep/Mover.hx', source: 'package p.sub.deep;\n\nclass Mover {\n\tvar d:Dep;\n}' },
+			{ file: 'q/Host.hx', source: 'package q;\n\nimport p.Dep;\n\nclass Host {\n\tvar d:Dep;\n}' },
+			{ file: 'p/Dep.hx', source: 'package p;\n\nclass Dep {}' },
+			{ file: 'p/sub/Dep.hx', source: 'package p.sub;\n\nclass Dep {}' }
+		], plugin(), typeRefShape()), 'reaches "Dep" as p.sub.Dep');
+	}
+
+	/**
+	 * A QUALIFIED path's head is a module resolved through the same chain — compile-proved on its own
+	 * account: `p/sub/deep/C.hx` resolves `Mod.Sub` against `p.Mod` while a sibling `q/D.hx` reads
+	 * `Type not found : Mod`. Modelling only the same package and the root made both sides answer "the
+	 * top level", the two nulls agreed, and a cross-package move rebound the reference in silence.
+	 */
+	public function testAQualifiedHeadReachedThroughAnAncestorPackageIsPriced(): Void {
+		assertErrContains(MoveSymbol.moveType('p/sub/deep/Mover.hx', 3, 7, 'q/Host.hx', [
+			{ file: 'p/sub/deep/Mover.hx', source: 'package p.sub.deep;\n\nclass Mover {\n\tvar s:Mod.Sub;\n}' },
+			{ file: 'q/Host.hx', source: 'package q;\n\nclass Host {}' },
+			{ file: 'p/Mod.hx', source: 'package p;\n\nclass Mod {}\n\nclass Sub {}' }
+		], plugin(), typeRefShape()), 'whose head "Mod" is a module resolved through');
+	}
+
+	/**
+	 * A dependency reached through a STATIC RECEIVER is a dependency, and the layer that used to answer
+	 * this question sees type POSITIONS only — `apq uses Helper` returns 0 hits on a file whose one
+	 * reference is `Helper.go()`. The op's own doc called the residue LOUD ("never a silent semantic
+	 * change") and that is false: run through the base engine, a `Moved` reaching `r.Helper` through
+	 * the source file's import, moved into a destination whose own package declares `p.Helper`, came
+	 * back bound to `p.Helper` and `Moved.use()` went from 42 to 7 at rc 0.
+	 */
+	public function testAStaticReceiverDependencyIsCarried(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nimport r.Helper;\n\nclass Mover {\n\tpublic static function use():Int return Helper.go();\n}'
+			},
+			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' },
+			{ file: 'p/Helper.hx', source: 'package p;\n\nclass Helper {}' },
+			{ file: 'r/Helper.hx', source: 'package r;\n\nclass Helper {}' }
+		]);
+		Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('import r.Helper;'));
+	}
+
+	/**
+	 * The same widening turns a silent break into a refusal where carrying cannot help: a SECONDARY
+	 * type of the module the declaration is leaving is `Type not found` from anywhere else, so there is
+	 * no statement to write. Compile-proved on the shape — the base engine writes two files at rc 0 and
+	 * the tree then reads `Type not found : Sib` — and it is the whole refusal cost this arm adds to the
+	 * Pony census (2 of 133), both of them exactly this.
+	 */
+	public function testAStaticReceiverOnASiblingSubTypeIsRefused(): Void {
+		assertErrContains(MoveSymbol.moveType('p/Mover.hx', 3, 7, 'p/Host.hx', [
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nclass Mover {\n\tpublic static function use():Int return Sib.go();\n}\n\nclass Sib {}'
+			},
+			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' }
+		], plugin(), typeRefShape()), 'no import to carry');
+	}
+
+	/**
+	 * Only the RECEIVER slot. A bare upper-initial identifier in a VALUE position is an enum
+	 * CONSTRUCTOR far more often than a module, and nothing in the index can tell the two apart — so
+	 * `Type.createInstance(Dep, [])` does not price `Dep`, and the destination's differing binding for
+	 * `Dep` is not a refusal.
+	 *
+	 * Only the `Dep` half is observable here: `Type` resolves to nothing on either side and produces no
+	 * refusal either way. The control is the boundary this slice deliberately did not cross; widening the
+	 * scan to every upper-initial identifier flips it, and that arm was measured on the Pony census — 4
+	 * more refusals of 131 accepted, every one of them compile-proved correct, and ZERO changed diffs.
+	 */
+	public function testAValuePositionIsStillNotPriced(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nimport r.Dep;\n\nclass Mover {\n'
+				+ '\tpublic static function use():Dynamic return Type.createInstance(Dep, []);\n}'
+			},
+			{ file: 'p/Host.hx', source: 'package p;\n\nimport z.Dep;\n\nclass Host {\n\tvar d:Dep;\n}' },
+			{ file: 'r/Dep.hx', source: 'package r;\n\nclass Dep {}' },
+			{ file: 'z/Dep.hx', source: 'package z;\n\nclass Dep {}' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport z.Dep;\n\nclass Host {\n\tvar d:Dep;\n}\n\nclass Mover {\n'
+			+ '\tpublic static function use():Dynamic return Type.createInstance(Dep, []);\n}\n',
+			changeFor(changes, 'p/Host.hx').newSource
+		);
+	}
+
+	/**
+	 * A scope file that reaches the moved type ONLY through a static receiver is owed the same repair
+	 * import a type-position reference gets. The repoint walk already answered with a text scan while
+	 * the statementless walk answered with the type-position projection — two answers to one question,
+	 * and this file's `Moved.use()` fell through the second: `Type not found : Moved` in a file the
+	 * move never touched, at rc 0.
+	 */
+	public function testAStaticReceiverReferenceIsRepairedInAStatementlessFile(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Moved.hx', 3, 7, 'p/Dest.hx', [
+			{ file: 'p/Moved.hx', source: 'package p;\n\nclass Moved {\n\tpublic static function use():Int return 5;\n}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
+			{ file: 'p/Main.hx', source: 'package p;\n\nclass Main {\n\tpublic static function go():Int return Moved.use();\n}' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport p.Dest.Moved;\n\nclass Main {\n\tpublic static function go():Int return Moved.use();\n}',
+			changeFor(changes, 'p/Main.hx').newSource
+		);
+	}
+
+	/**
+	 * The SOURCE file's own re-import is the third reader of that one question, and it fell through the
+	 * same way: a `Moved.use()` left standing after the cut got no `import p.Dest.Moved;` and the file
+	 * the op had just rewritten did not compile.
+	 */
+	public function testTheSourceFileGainsAnImportForAStaticReceiverItKeeps(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 7, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nclass Src {\n\tpublic static function ask():Int return Moved.use();\n}\n\nclass Moved {\n'
+				+ '\tpublic static function use():Int return 5;\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		]);
+		Assert.isTrue(changeFor(changes, 'p/Src.hx').newSource.contains('import p.Dest.Moved;'));
+	}
+
+	/**
+	 * The source file's own re-import reads the same name set for the same reason: a `case Red:` it
+	 * keeps is a reference to the enum that left, and the file may never spell `Colour` anywhere. A
+	 * scan of the type name alone leaves the file the op has just rewritten without the import its own
+	 * remaining code needs.
+	 */
+	public function testTheSourceFileGainsAnImportForAMovedEnumsConstructorItKeeps(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 10, 6, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nclass Src {\n\tpublic static function tag(b:Box):Int return switch b.v {\n\t\tcase Red: 1;\n'
+				+ '\t\tcase _: 0;\n\t}\n}\n\nenum Colour {\n\tRed;\n\tGreen;\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
+			{ file: 'p/Box.hx', source: 'package p;\n\ntypedef Box = {\n\tvar v:Colour;\n}' }
+		]);
+		Assert.isTrue(changeFor(changes, 'p/Src.hx').newSource.contains('import p.Dest.Colour;'));
+	}
+
+	/**
+	 * A mention that appears ONLY in a COMMENT counts as a reference, and this pins that rather than
+	 * leaving it to a doc claim: `namesAnyOf` passes the comment spans to decide whether a leading `.`
+	 * is a real qualifier, and never tests the occurrence itself against them. The direction is the
+	 * family's deliberate one — keeping an import a file no longer needs costs a lint advisory, dropping
+	 * one it does need costs the build — and it is now the source file's answer too, where the
+	 * type-position walk it replaced could not see a comment at all. Measured: 4 of the 89 statements
+	 * this slice newly writes over the Pony census are for a comment-only mention.
+	 */
+	public function testACommentOnlyMentionStillCountsAsAReference(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 8, 7, 'p/Dest.hx', [
+			{ file: 'p/Src.hx', source: 'package p;\n\n/**\n * Companion of Moved.\n */\nclass Src {}\n\nclass Moved {}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		]);
+		Assert.isTrue(changeFor(changes, 'p/Src.hx').newSource.contains('import p.Dest.Moved;'));
+	}
+
+	/**
+	 * A carried `using` is declared FIRST inside the destination's own `using` run, so Haxe — which
+	 * tries static extensions in reverse declaration order — ranks it LAST and the destination's own
+	 * calls keep their meaning.
+	 *
+	 * The ordinary import anchor cannot decide this: it answers the last plain `import` when the file
+	 * has one and the last statement of ANY import kind otherwise, so the same carried line landed on
+	 * opposite sides of the run depending on a shape that has nothing to do with the question. Both
+	 * halves were measured at rc 0 on 4.3.7 — `q.Ext -> q.Other` for the moved body with an import
+	 * present, `q.Other -> q.Ext` for the DESTINATION's own call without one. Both fixtures are here
+	 * because only the pair discriminates.
+	 */
+	public function testACarriedUsingIsDeclaredFirstSoItRanksLast(): Void {
+		inline function move(destHeader: String): Array<MoveChange> {
+			return okChanges('p/Src.hx', 7, 7, 'p/Dest.hx', [
+				{
+					file: 'p/Src.hx',
+					source: 'package p;\n\nusing q.Ext;\n\nclass Src {}\n\nclass Moved {\n'
+					+ '\tpublic static function use(s:String):String return s.go();\n}'
+				},
+				{ file: 'p/Dest.hx', source: '$destHeader\nclass Dest {\n\tpublic static function d(s:String):String return s.go();\n}' },
+				{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+				{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' },
+				{ file: 'q/Third.hx', source: 'package q;\n\nclass Third {}' }
+			]);
+		}
+		Assert.isTrue(changeFor(move('package p;\n\nusing q.Other;\n\n'), 'p/Dest.hx').newSource.contains('using q.Ext;\nusing q.Other;'));
+		Assert.isTrue(
+			changeFor(move('package p;\n\nimport q.Other;\n\nusing q.Other;\n\n'), 'p/Dest.hx')
+				.newSource.contains('using q.Ext;\nusing q.Other;')
+		);
+		// A run of TWO: the anchor is the FIRST of them, which one `using` cannot tell from the last.
+		Assert.isTrue(
+			changeFor(move('package p;\n\nusing q.Other;\nusing q.Third;\n\n'), 'p/Dest.hx')
+				.newSource.contains('using q.Ext;\nusing q.Other;\nusing q.Third;')
+		);
+	}
+
+	/**
+	 * A destination whose own `using` run sits inside a `#if` region with a plain import BELOW it
+	 * offers no seat: the region cannot be entered (the carried statement must be unconditional) and
+	 * the ordinary anchor is under the import, hence under the region. Writing there was measured at
+	 * rc 0 taking `Dest.d("x")` from `OTHER` to `EXT` — the destination's OWN call, which is the half
+	 * the seat exists to protect — so the answer is a refusal naming the statement.
+	 */
+	public function testAGuardedDestinationUsingRunBelowTheAnchorIsRefused(): Void {
+		assertErrContains(MoveSymbol.moveType('p/Src.hx', 7, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing q.Ext;\n\nclass Src {}\n\nclass Moved {\n'
+				+ '\tpublic static function use(s:String):String return s.go();\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\n#if eval\nusing q.Other;\n#end\nimport a.B;\n\nclass Dest {}' },
+			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+			{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' },
+			{ file: 'a/B.hx', source: 'package a;\n\nclass B {}' }
+		], plugin(), typeRefShape()), 'offers no seat above it');
+	}
+
+	/**
+	 * The same refusal for the other seatless shape: a `using` SHARING its line with the package
+	 * declaration has no line start above it that is still below `package`, and the carried statement
+	 * was written ABOVE `package` — which anyparse re-parses happily and Haxe rejects with
+	 * `Unexpected keyword "package"`, at rc 0 with two files written.
+	 */
+	public function testADestinationUsingSharingItsLineIsRefused(): Void {
+		assertErrContains(MoveSymbol.moveType('p/Src.hx', 7, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing q.Ext;\n\nclass Src {}\n\nclass Moved {\n'
+				+ '\tpublic static function use(s:String):String return s.go();\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p; using q.Other;\n\nclass Dest {}' },
+			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+			{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' }
+		], plugin(), typeRefShape()), 'offers no seat above it');
+	}
+
+	/**
+	 * String interpolation is executable code, and the UNBRACED `'$Moved'` form projects as its own
+	 * kind — `RefShape.stringInterpIdentKind`, which the shape names and ~20 checks already read. A
+	 * proven scan that asked only for `identKind` caught the braced `'${Moved}'` and lost this one, so
+	 * a module-private type whose last reference was `'v=$Moved'` moved at rc 0 and the source then
+	 * read `Unknown identifier : Moved`.
+	 */
+	public function testAPrivateTypeReachedByUnbracedInterpolationIsRefused(): Void {
+		assertErrContains(MoveSymbol.moveType('p/Src.hx', 7, 15, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nclass Src {\n\tpublic static function tag():String return \'v=$$Moved\';\n}\n\n'
+				+ 'private class Moved {}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		], plugin(), typeRefShape()), 'is module-private and');
+	}
+
+	/**
+	 * The SPLIT path: a carry holding both a plain import and a `using` puts each at its own seat — the
+	 * import at the ordinary anchor, the `using` at the head of the destination's run. Nothing else in
+	 * the suite carries both at once, so `carriedImportLines` and the two-edit branch had no coverage.
+	 */
+	public function testACarriedImportAndUsingTakeSeparateSeats(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 9, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nimport a.Dep;\n\nusing q.Ext;\n\nclass Src {}\n\nclass Moved {\n\tvar d:Dep;\n\n'
+				+ '\tpublic static function use(s:String):String return s.go();\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nusing q.Other;\n\nclass Dest {}' },
+			{ file: 'a/Dep.hx', source: 'package a;\n\nclass Dep {}' },
+			{ file: 'q/Ext.hx', source: 'package q;\n\nclass Ext {}' },
+			{ file: 'q/Other.hx', source: 'package q;\n\nclass Other {}' }
+		]);
+		Assert.equals(
+			'package p;\n\nusing q.Ext;\nusing q.Other;\nimport a.Dep;\n\nclass Dest {}\n\nclass Moved {\n\tvar d:Dep;\n\n'
+			+ '\tpublic static function use(s:String):String return s.go();\n}\n',
+			changeFor(changes, 'p/Dest.hx').newSource
+		);
+	}
+
+	/**
+	 * The module-private refusal asks the PROVEN scan, so a mention that lives only in a COMMENT is
+	 * neither a reason to refuse nor something an import could repair — the base engine moved this
+	 * cleanly and the text scan the import branch uses would have refused it. The sibling fixture
+	 * `testACommentOnlyMentionStillCountsAsAReference` is the same shape with a PUBLIC type, where the
+	 * loose answer is the safe one; the pair is what makes the split visible.
+	 */
+	public function testACommentOnlyMentionDoesNotRefuseAPrivateType(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 8, 15, 'p/Dest.hx', [
+			{ file: 'p/Src.hx', source: 'package p;\n\n/**\n * Companion of Moved.\n */\nclass Src {}\n\nprivate class Moved {}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		]);
+		Assert.equals('package p;\n\n/**\n * Companion of Moved.\n */\nclass Src {}\n', changeFor(changes, 'p/Src.hx').newSource);
+	}
+
+	/**
+	 * …and a RECEIVER reference still refuses it, which is the half the proven scan must not lose: the
+	 * base engine's type-position walk could not see `Moved.use()` either, so it wrote the source file
+	 * back without the import it needs and without a refusal.
+	 */
+	public function testAPrivateTypeStillReachedByAStaticReceiverIsRefused(): Void {
+		assertErrContains(MoveSymbol.moveType('p/Src.hx', 7, 15, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nclass Src {\n\tpublic static function ask():Int return Moved.use();\n}\n\nprivate class Moved {\n'
+				+ '\tpublic static function use():Int return 5;\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		], plugin(), typeRefShape()), 'is module-private and');
+	}
+
+	/**
+	 * A `using` grants STATIC EXTENSIONS and an extension call spells the method name and nothing else,
+	 * so no name scan can see which module supplied it — the same evidence on which S40 keeps a
+	 * DESTINATION `using` unconditionally. Without the mirror the moved body's `s.trim()` arrived at a
+	 * destination with no `using StringTools;` and read `String has no field trim` at rc 0.
+	 */
+	public function testASourceUsingIsCarriedIntoTheDestination(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 7, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing StringTools;\n\nclass Src {}\n\nclass Moved {\n'
+				+ '\tpublic static function use(s:String):String return s.trim();\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		]);
+		Assert.isTrue(changeFor(changes, 'p/Dest.hx').newSource.contains('using StringTools;'));
+	}
+
+	/**
+	 * The one necessary condition the tree can answer: an extension is reached as `expr.method(...)`,
+	 * so a declaration with no member access anywhere inside it needs no `using` and gets none. This is what keeps the
+	 * statement off the pure-data moves rather than a guess about which extension a body uses, which
+	 * nothing here could make. The fixture puts an extension call in the SIBLING declaration, so a gate
+	 * that asked the whole file rather than the declaration's own span would carry the line anyway.
+	 */
+	public function testADeclarationWithNoMemberAccessCarriesNoUsing(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 9, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing StringTools;\n\nclass Src {\n\tpublic static function s(v:String):String return v.trim();\n'
+				+ '}\n\nclass Moved {\n\tvar n:Int;\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+		]);
+		Assert.equals('package p;\n\nclass Dest {}\n\nclass Moved {\n\tvar n:Int;\n}\n', changeFor(changes, 'p/Dest.hx').newSource);
+	}
+
+	/**
+	 * A `using` the destination already holds is not written a second time, and a `#if`-guarded one is
+	 * not carried at all — it binds under its own flag and under no other, which an unconditional line
+	 * at the destination would not reproduce. Both halves in one fixture, because either alone leaves
+	 * the other's arm free.
+	 */
+	public function testAnAlreadyPresentOrGuardedSourceUsingIsNotCarried(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 10, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing StringTools;\n#if cpp\nusing Lambda;\n#end\n\nclass Src {}\n\nclass Moved {\n'
+				+ '\tpublic static function use(s:String):String return s.trim();\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nusing StringTools;\n\nclass Dest {}' }
+		]);
+		Assert.equals(
+			'package p;\n\nusing StringTools;\n\nclass Dest {}\n\nclass Moved {\n'
+			+ '\tpublic static function use(s:String):String return s.trim();\n}\n',
+			changeFor(changes, 'p/Dest.hx').newSource
+		);
+	}
+
+	/**
+	 * The moved type's OWN name is not a dependency on itself, in the receiver slot as in a type
+	 * position. Without the filter every type that calls one of its own
+	 * statics — `Mover.n` inside `Mover` — prices `Mover` against a destination that does not yet
+	 * declare it. The move has to be CROSS-package for that to bite: the index is built BEFORE the cut,
+	 * so a same-package destination answers `p.Mover` through the package rung and the two agree, and
+	 * only a destination outside the chain reaches nothing and refuses with "no import to carry" for a
+	 * name that travels with the declaration.
+	 */
+	public function testTheMovedTypesOwnStaticReceiverIsNotPriced(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 3, 7, 'q/Host.hx', [
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nclass Mover {\n\tstatic var n:Int = 1;\n\n\tpublic static function use():Int return Mover.n;\n}'
+			},
+			{ file: 'q/Host.hx', source: 'package q;\n\nclass Host {}' }
+		]);
+		Assert.isTrue(changeFor(changes, 'q/Host.hx').newSource.contains('class Mover {'));
+	}
+
+	/**
+	 * A carried `using` binds its module's own TYPE name beside the extensions, so it faces the same
+	 * collision gate a carried import does — and a collision SKIPS the line rather than refusing the
+	 * move.
+	 *
+	 * The asymmetry with the dependency carry is the point: there the moved code PROVABLY names the
+	 * dependency, so an unrepairable binding must be refused; here the need is unproven, the gate fires
+	 * for a `using` the declaration may never touch, and refusing would cost a correct refactor — review
+	 * found the refusing version aborting whole moves on this shape. What skipping costs is bounded but
+	 * not nothing: it cannot rebind a TYPE name, and its worst case is either a missing extension (loud,
+	 * which is what this fixture produces) or the moved call landing on an extension the destination
+	 * already supplies.
+	 */
+	public function testACarriedUsingCollidingWithADestinationBindingIsSkippedNotRefused(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 7, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing q.Tools;\n\nclass Src {}\n\nclass Moved {\n'
+				+ '\tpublic static function use(s:String):String return s.trim();\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\nimport z.Tools;\n\nclass Dest {\n\tvar t:Tools;\n}' },
+			{ file: 'q/Tools.hx', source: 'package q;\n\nclass Tools {}' },
+			{ file: 'z/Tools.hx', source: 'package z;\n\nclass Tools {}' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport z.Tools;\n\nclass Dest {\n\tvar t:Tools;\n}\n\nclass Moved {\n'
+			+ '\tpublic static function use(s:String):String return s.trim();\n}\n',
+			changeFor(changes, 'p/Dest.hx').newSource
+		);
+	}
+
+	/**
+	 * A `#if`-guarded `using` at the DESTINATION satisfies nothing: it binds under its own flag and
+	 * under no other, so a build without that flag still needs the unconditional line. Compile-proved —
+	 * with a `#if js using StringTools; #end` at the destination and the guard absent from the
+	 * `already` test, the move wrote two files at rc 0 and the tree read `String has no field trim` on
+	 * neko. It is the filter `addImportEdit` has always applied for the same reason.
+	 */
+	public function testAGuardedDestinationUsingDoesNotSatisfyTheCarry(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Src.hx', 7, 7, 'p/Dest.hx', [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\nusing StringTools;\n\nclass Src {}\n\nclass Moved {\n'
+				+ '\tpublic static function use(s:String):String return s.trim();\n}'
+			},
+			{ file: 'p/Dest.hx', source: 'package p;\n\n#if js\nusing StringTools;\n#end\n\nclass Dest {}' }
+		]);
+		Assert.equals(
+			'package p;\n\nusing StringTools;\n#if js\nusing StringTools;\n#end\n\nclass Dest {}\n\nclass Moved {\n'
+			+ '\tpublic static function use(s:String):String return s.trim();\n}\n',
+			changeFor(changes, 'p/Dest.hx').newSource
+		);
+	}
+
+	/**
+	 * A LOWERCASE receiver is not priced, and that is a trade rather than a truth: Haxe permits a
+	 * lowercase type name (it only warns), so `tools.go()` COULD be a real dependency — but every local
+	 * variable is lowercase too, and pricing them would put a `carryCollision` question against every
+	 * `s.trim()` in the body. The guard buys that at the cost of the rare lowercase type, which the
+	 * compiler itself discourages.
+	 */
+	public function testALowercaseReceiverIsNotPriced(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nimport r.tools;\n\nclass Mover {\n\tpublic static function use():Int return tools.go();\n}'
+			},
+			{ file: 'p/Host.hx', source: 'package p;\n\nimport z.tools;\n\nclass Host {\n\tvar t:tools;\n}' },
+			{ file: 'r/tools.hx', source: 'package r;\n\nclass tools {}' },
+			{ file: 'z/tools.hx', source: 'package z;\n\nclass tools {}' }
+		]);
+		Assert.equals(
+			'package p;\n\nimport z.tools;\n\nclass Host {\n\tvar t:tools;\n}\n\nclass Mover {\n'
+			+ '\tpublic static function use():Int return tools.go();\n}\n',
+			changeFor(changes, 'p/Host.hx').newSource
+		);
+	}
+
+	/**
+	 * A DOTLESS path no module in the index spells is the AMBIENT TOP LEVEL, and both sides mean the
+	 * same type by it — so a destination that merely WRITES `StringTools.lpad(...)` is not a collision.
+	 * Green at base only because nothing priced a receiver there at all; once `StringTools.trim(s)` is
+	 * a dependency the ambient arm of the collision gate fires on it, and 2 of 15 accepted Pony
+	 * `move-member` cases were refused before this exemption existed.
+	 */
+	public function testAnAmbientTopLevelDependencyIsNotACollision(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nusing StringTools;\n\nclass Mover {\n'
+				+ '\tpublic static function use(s:String):String return StringTools.trim(s);\n}'
+			},
+			{
+				file: 'p/Host.hx',
+				source: 'package p;\n\nclass Host {\n\tpublic static function pad(s:String):String return StringTools.lpad(s, " ", 3);\n}'
+			}
+		]);
+		Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('using StringTools;'));
+	}
+
+	/**
+	 * The exemption is DOTLESS-and-UNKNOWN, not dotless: a root module the index DOES hold is a real
+	 * binding the carried statement would outrank, and the gate still refuses it.
+	 *
+	 * The fixture is CONSTRUCTED rather than found in the corpus — a root module whose only type is not
+	 * its own name is the one shape that reaches this arm, since a root module that DOES declare its own
+	 * type is visible from every package and answers `standing` itself.
+	 */
+	public function testARootPackageModuleTheIndexHoldsIsStillACollision(): Void {
+		assertErrContains(MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', [
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nimport Dep;\n\nclass Mover {\n\tpublic static function use():Int return Dep.go();\n}'
+			},
+			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {\n\tpublic static function ask():Int return Dep.go();\n}' },
+			{ file: 'Dep.hx', source: 'class Other {}' }
+		], plugin(), typeRefShape()), 'references "Dep" while nothing in the indexed scope binds it there');
+	}
+
+	/**
+	 * A statementless file can reach a moved ENUM through its CONSTRUCTORS and never spell the type at
+	 * all — S41's own Pony case was `pony/ServiceProvider.hx` reaching `pony.Or.OrState` only through
+	 * `case A(cb)`. The repoint walk was taught the constructor names then; the repair walk scans the
+	 * same set now, and a scan of the type name alone leaves this file unrepaired.
+	 */
+	public function testAStatementlessFileNamingOnlyAMovedEnumsConstructorIsRepaired(): Void {
+		final changes: Array<MoveChange> = okChanges('p/Colour.hx', 3, 6, 'p/Dest.hx', [
+			{ file: 'p/Colour.hx', source: 'package p;\n\nenum Colour {\n\tRed;\n\tGreen;\n}' },
+			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' },
+			{ file: 'p/Box.hx', source: 'package p;\n\ntypedef Box = {\n\tvar v:Colour;\n}' },
+			{
+				file: 'p/Reader.hx',
+				source: 'package p;\n\nclass Reader {\n\tpublic static function tag(b:Box):Int return switch b.v {\n\t\tcase Red: 1;\n'
+				+ '\t\tcase _: 0;\n\t}\n}'
+			}
+		]);
+		Assert.isTrue(changeFor(changes, 'p/Reader.hx').newSource.contains('import p.Dest.Colour;'));
+	}
+
 	private function assertUnchanged(changes: Array<MoveChange>, file: String): Void {
 		for (c in changes) if (c.file == file) Assert.fail('$file should not have been rewritten');
 		Assert.pass();

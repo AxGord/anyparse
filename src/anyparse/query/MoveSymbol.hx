@@ -59,6 +59,16 @@ typedef NameBinding = {
 }
 
 /**
+ * The destination-file edits a carry list becomes, plus the `using` statements it found no seat for.
+ * `unseated` non-empty is a REFUSAL the caller owes — never a silent drop.
+ */
+typedef CarriedEdits = {
+	var usingEdit: Null<{ span: Span, text: String }>;
+	var importEdit: Null<{ span: Span, text: String }>;
+	var unseated: Array<String>;
+}
+
+/**
  * A simple name paired with the source span it is written at. Two readings, both needing the span
  * the bare name loses: a type-POSITION occurrence inside the moved declaration, and the REGION a
  * function's type parameter shadows that name over.
@@ -93,36 +103,40 @@ enum CarryResult {
 
 /**
  * Scope-correct, format-preserving move of a TYPE declaration from one
- * file to another within the SAME PACKAGE, fixing imports across a
- * scope. The largest cross-file refactoring op in the query suite — it
- * relocates a type's source verbatim, carries the imports the type's
- * body depends on, and rewrites every importer that named the type
- * through its old module path.
+ * file to another, in the same package or across packages, fixing
+ * imports across a scope. The largest cross-file refactoring op in the
+ * query suite — it relocates a type's source verbatim, carries the
+ * imports the type's body depends on, and rewrites every importer that
+ * named the type through its old module path.
  *
- * ## Same-package only — the correctness boundary
+ * ## The correctness boundary — refuse rather than guess
  *
- * A cross-package move is REFUSED. The moved type's body may reference
- * other types in its original package that are auto-visible WITHOUT an
- * import (Haxe same-package visibility). Moving the type to a different
- * package would silently break those references — they would need new
- * imports the op cannot derive syntactically (it has no type system to
- * resolve a bare same-package name to its declaring module). Restricting
- * to same-package moves keeps the moved type's same-package dependencies
- * auto-visible at the destination, so no new same-package import is ever
- * required. Cross-package is documented future work.
+ * A cross-package move is SUPPORTED and has been since S40: the moved body's bare same-package
+ * names are priced through the resolution ladder `bindingOf` walks, carried when the source has a
+ * statement to carry and REFUSED when the two sides would mean different things by one name. What
+ * the boundary now protects is that gate — the op refuses rather than guesses whenever one side can
+ * name its binding and the other cannot. The paragraph this replaces claimed cross-package was
+ * refused outright and called it future work; the CLI help said the same until S41 corrected it.
  *
- * ## Import-carrying is best-effort — the loud residual
+ * ## Import-carrying is best-effort — and the residual is not always loud
  *
- * The op carries the source file's EXPLICIT imports that the moved
- * type's body depends on (a `D` referenced in a type position inside the
- * decl, for which the source has an `import …D;` / `using …D;` and the
- * destination does not). This is conservative and syntactic: a
- * dependency reached via a static receiver (`T.staticMethod()`) or a
- * bare value position is NOT in the type-position set `Uses.find`
- * surfaces, so its import may be missed. A missed import is a LOUD
- * residual — the destination fails to COMPILE, surfacing as an error the
- * user sees, never a silent semantic change. The advisory (always
- * non-null on success) names this gap.
+ * The op carries the source file's EXPLICIT imports that the moved type's body depends on — a `D`
+ * written in a type POSITION or as the RECEIVER of a member access (`D.go()`) inside the decl, for
+ * which the source has an `import …D;` / `using …D;` and the destination does not — plus every
+ * unguarded `using` of the source module the destination lacks, whenever the declaration contains a
+ * member access at all.
+ *
+ * "A missed import is a LOUD residual — the destination fails to COMPILE, never a silent semantic
+ * change" is what this paragraph asserted until 2026-08-31, and it is FALSE. Measured through the
+ * base engine on 4.3.7: a `Moved` reaching `r.Helper` through its source file's import, moved into
+ * a destination whose own package declares `p.Helper`, came back bound to `p.Helper` — the value
+ * `Moved.use()` returns went from 42 to 7, rc 0, three files written and no diagnostic anywhere.
+ * The upper-initial receiver form is priced now and that move carries the import.
+ * Three shapes are still missed and each is silent in the same way: a bare VALUE position
+ * (`Type.createInstance(Dep, [])`), a constructor PATTERN (`case Red:`, indistinguishable from a
+ * module name to `bindingOf`), and a LOWERCASE receiver (`tools.go()`), which is deliberately
+ * traded away so that every local variable does not reach the collision gate. The advisory names
+ * the first and the third.
  *
  * ## Atomicity
  *
@@ -147,24 +161,31 @@ final class MoveSymbol {
 	 * The advisory appended to every successful move — the residual gaps a caller must check by
 	 * hand, each one a case the op deliberately declines to guess at rather than one it forgot.
 	 */
-	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a static receiver ('
-		+ 'T.staticMethod()) or a value position are not auto-detected and may need a manual import. A '
-		+ 'cross-package move repoints importers and the source/dest imports; a fully-qualified pkg.Type code reference is '
-		+ 'refused. The bound-name collision gate reads the SCOPE index and REFUSES rather than guesses whenever ONE file can '
-		+ 'name its binding for a dependency and the other cannot — unless the two spell the same import statement for it, or '
-		+ 'the destination never names it at all. A `#if`-guarded destination import is named separately and refused on its '
-		+ 'own. What is left is the case where NEITHER side is nameable: the move proceeds, which is right for the standard '
-		+ 'library (the same scope in every file) and NOT right for a wildcard of a package outside the scope, which is '
-		+ 'per-file and is the door still open. A dependency reached through a MODULE import (import pkg.Mod; binding '
-		+ 'pkg.Mod.Sub) is carried when the statement that produced the binding is one the index can name; a `#if`-guarded '
-		+ 'module import and a module OUTSIDE the scope produce none it can, so such a dependency is neither carried nor '
-		+ 'refused and the destination may need the import written by hand. A MODULE import at an importer keeps its '
-		+ 'statement beside the repointed one when the source module still declares types that file names. The SOURCE file '
-		+ 'keeps every import it had, including one the departed declaration was the last user of: whether an import is now '
-		+ 'unused is a whole-file question (a module import binds the sibling types of its module, a wildcard binds no single '
-		+ 'name, and a `using` grants extension methods no name scan sees), and this layer sees only type positions — a drop '
-		+ 'decided on that evidence deletes the import a remaining `T.staticMethod()` needs, at rc 0 with a file that still '
-		+ 'parses. Run `apq lint <file> --rule unused-import --fix`, which answers it with the resolution index.';
+	private static final ADVISORY: String = 'verify imports in the destination — a dependency reached through a VALUE position ('
+		+ 'Type.createInstance(Dep, [])), a CONSTRUCTOR PATTERN (case Red:, which no index can tell from a module name) '
+		+ 'or a LOWERCASE receiver (tools.go(), traded away so that every local variable does not reach the collision gate) is not '
+		+ 'auto-detected and may need a manual import. An UPPER-initial static receiver (T.go()) IS priced — carried, or refused when the '
+		+ 'two sides disagree about the name. So is every unguarded `using` of the source FILE the destination lacks, whenever the '
+		+ 'declaration holds a member access at all: an extension call names only its method, so nothing can tell which `using` supplies '
+		+ 'it, and a carried one whose bound TYPE name collides at the destination is SKIPPED rather than refused. A carried `using` is '
+		+ 'declared FIRST in the destination\'s own `using` run, so Haxe (which tries static extensions in reverse declaration order) '
+		+ 'ranks it LAST: where two `using` modules supply one method name for one type, the MOVED body takes the destination\'s and the '
+		+ 'destination\'s own calls are untouched. That is the deliberate half — the other placement rebinds the destination instead, '
+		+ 'measured q.Other -> q.Ext at rc 0 — and where the destination offers no such seat (a `#if`-guarded run below the anchor, a '
+		+ '`using` sharing its line) the move is REFUSED rather than written in an order picked by accident. A cross-package move repoints '
+		+ 'importers and the source/dest imports; a fully-qualified pkg.Type code reference is refused. The bound-name collision gate '
+		+ 'reads the SCOPE index and REFUSES rather than guesses whenever ONE file can name its binding for a dependency and the other '
+		+ 'cannot — unless the two spell the same import statement for it, or the destination never names it at all. A `#if`-guarded '
+		+ 'destination import is named separately and refused on its own. What is left is the case where NEITHER side is nameable: the '
+		+ 'move proceeds, which is right for the standard library (the same scope in every file) and NOT right for a wildcard of a package '
+		+ 'outside the scope, which is per-file and is the door still open. A dependency reached through a MODULE import (import pkg.Mod; '
+		+ 'binding pkg.Mod.Sub) is carried when the statement that produced the binding is one the index can name; a `#if`-guarded module '
+		+ 'import and a module OUTSIDE the scope produce none it can, so such a dependency is neither carried nor refused and the '
+		+ 'destination may need the import written by hand. A MODULE import at an importer keeps its statement beside the repointed one '
+		+ 'when the source module still declares types that file names. The SOURCE file keeps every import it had, including one the '
+		+ 'departed declaration was the last user of: whether an import is now unused is a whole-file question (a module import binds the '
+		+ 'sibling types of its module, a wildcard binds no single name, and a `using` grants extension methods no name scan sees). Run '
+		+ '`apq lint <file> --rule unused-import --fix`, which answers it with the resolution index.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -206,9 +227,10 @@ final class MoveSymbol {
 		final cut: Span = cutInfo.span;
 		final declText: String = cursorSource.substring(cut.from, cutInfo.textEnd);
 
-		// 5. Dependency imports to carry: type-position names referenced
-		//    INSIDE the decl that the source imports explicitly and the
-		//    destination lacks.
+		// 5. Dependency imports to carry: type-position and member-access-RECEIVER
+		//    names referenced INSIDE the decl that the source imports explicitly
+		//    and the destination lacks, plus the source file's own unguarded
+		//    `using` statements when the decl holds a member access at all.
 		final destSource: Null<String> = sourceOf[destFile];
 		if (destSource == null) return Err('destination file $destFile is not in the scope file set');
 		final oldImportPath: Null<String> = index.importPathOf(typeName);
@@ -236,7 +258,12 @@ final class MoveSymbol {
 		// 7a. Insert the decl (plus carried imports) into the destination.
 		//     The carried imports go at the destination's import region;
 		//     the decl text is appended after the existing content.
-		final destInsertEdits: Array<{ span: Span, text: String }> = buildDestInsertEdits(destSource, declText, carried, plugin);
+		// A `using` the destination cannot seat is a refusal, and it is asked BEFORE any edit is built:
+		// the alternative is an order picked by accident, which was measured rebinding the destination's
+		// own calls at rc 0.
+		final unseated: Array<String> = carriedDestEdits(destSource, destInfo, carried, plugin).unseated;
+		if (unseated.length > 0) return Err(unseatedUsingRefusal(destFile, unseated));
+		final destInsertEdits: Array<{ span: Span, text: String }> = buildDestInsertEdits(destSource, destInfo, declText, carried, plugin);
 		for (e in destInsertEdits) editsFor(editsByFile, destFile).push(e);
 
 		// 7b. Rewrite cross-file importers: every file (other than dest)
@@ -246,7 +273,7 @@ final class MoveSymbol {
 		//     Computed BEFORE the move via the index.
 		buildImporterEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName);
 		if (oldImportPath != null)
-			statementlessRepairEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, target, destFile, plugin, typeRefShape);
+			statementlessRepairEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, target, destFile, plugin);
 
 		// 7c. Source-file local import: if the source still references the
 		//     moved type after the cut, it now needs an import of the new
@@ -255,15 +282,21 @@ final class MoveSymbol {
 		//     is now redundant (the type is local) and is removed — unless it
 		//     is an ALIAS, whose binding the destination still needs.
 		if (oldImportPath != null) {
-			if (sourceStillUsesType(cursorSource, cut, plugin, typeRefShape, typeName)) {
-				// A module-`private` type is invisible outside its own module, so the
-				// import that would repair the remaining references cannot be written
-				// at all — refuse instead of emitting one that does not compile.
-				if (target.declPrivate)
+			final moved: Array<String> = movedBoundNames(cursorInfo, typeName);
+			if (target.declPrivate) {
+				// A module-`private` type is invisible outside its own module, so the import that would
+				// repair the remaining references cannot be written at all — refuse instead of emitting one
+				// that does not compile. This arm asks the PROVEN scan, not the text one the import below
+				// uses, and the split is the point: the text scan counts a mention in a comment or a string
+				// literal, which is the conservative direction when the answer WRITES an import and the
+				// wrong one when it REFUSES a move. A `/** Companion of Moved. */` above a sibling was
+				// enough to refuse a move the base engine performed.
+				if (namesAnyNodeOf(plugin.parseFileTypeRefs(cursorSource), moved, cut, provenRefKinds(plugin, typeRefShape)))
 					return Err(
 						'the type "$typeName" is module-private and $cursorFile still references it after the move — '
 						+ 'a private type cannot be imported from another module; make it public or move its uses too'
 					);
+			} else if (namesAnyOf(cursorSource, moved, referenceExclusions(cursorInfo, cut))) {
 				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, plugin, newImportPath);
 				if (insert != null) editsFor(editsByFile, cursorFile).push(insert);
 			}
@@ -284,13 +317,18 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * The explicit imports the moved decl's body depends on that the
-	 * destination lacks. A dependency name `D` is a type-position
-	 * reference (`Uses.find` on the `parseFileTypeRefs` tree) whose span
-	 * falls INSIDE the decl's span. For each such `D` the source binds by
-	 * an explicit statement (any kind but `Wild`) whose BOUND name is `D`,
-	 * and that the destination does not already carry verbatim, the
+	 * The explicit statements the moved decl's body depends on that the
+	 * destination lacks. A dependency name `D` is a reference INSIDE the
+	 * decl's span that is either a TYPE POSITION or the upper-initial
+	 * RECEIVER of a member access (`D.go()`). For each such `D` the source
+	 * binds by an explicit statement (any kind but `Wild`) whose BOUND name
+	 * is `D`, and that the destination does not already carry verbatim, the
 	 * statement is returned as READY TEXT for the destination.
+	 *
+	 * Beside those, EVERY unguarded `using` of the source file the destination
+	 * lacks is returned when the decl holds a member access at all — see
+	 * `usingLinesToCarry`, which is where the skip-rather-than-refuse rule for
+	 * a colliding `using` lives.
 	 *
 	 * Text rather than the `ImportInfo`, because two callers used to spell
 	 * that statement themselves and `raw` is the ALIAS for an `Alias` one:
@@ -299,10 +337,10 @@ final class MoveSymbol {
 	 * (`SymbolIndex.pathImportedBy`) and the `as` / `in` suffix from the
 	 * statement's own text, so a bound name is never re-spelled twice.
 	 *
-	 * Same-package dependencies are auto-visible at the destination (the move is same-package), so
-	 * an `import` for them is neither present in the source's explicit set in a way that resolves
-	 * to a different module, nor needed — only the source's genuine cross-module explicit imports
-	 * are carried.
+	 * A same-package dependency is auto-visible at the destination only when the destination is in that
+	 * same package — the claim here read "the move is same-package" until 2026-08-31, which stopped
+	 * being true at S40. A cross-package move prices such a name through `bindingOf` like any other and
+	 * refuses when the two sides disagree.
 	 *
 	 * A carry is REFUSED, not performed, when the destination already binds that simple name to a
 	 * different module. Three shapes, all measured on the base engine at 11f22a25, all compiled and
@@ -320,7 +358,13 @@ final class MoveSymbol {
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, index: SymbolIndex,
 		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
 	): CarryResult {
-		final depNames: Array<String> = dependencyNames(source, declSpan, cursorInfo, plugin, typeRefShape, typeName);
+		// The type-ref projection and the grammar shape are built ONCE here and threaded down: the
+		// dependency walk and the `using` carry both read them, and a plugin without a parse cache
+		// (which is what the unit suite passes) would otherwise parse the file twice and rebuild a
+		// 227-field shape struct for each.
+		final tree: QueryNode = plugin.parseFileTypeRefs(source);
+		final shape: RefShape = plugin.refShape();
+		final depNames: Array<String> = dependencyNames(tree, shape, source, declSpan, cursorInfo, plugin, typeRefShape, typeName);
 		// One copy of the file list for the whole carry — `allFiles()` copies, and the binding walk
 		// runs once per dependency name on each side.
 		final files: Array<FileInfo> = index.allFiles();
@@ -397,7 +441,9 @@ final class MoveSymbol {
 			final line: String = importLineFor(provider, source);
 			if (!carried.contains(line)) carried.push(line);
 		}
-		return CarryOk(carried);
+		return CarryOk(
+			usingLinesToCarry(source, tree, memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried)
+		);
 	}
 
 	/**
@@ -437,6 +483,65 @@ final class MoveSymbol {
 	}
 
 	/**
+	 * The destination-file edits a carry list becomes: at most one for the `using` half and one for the
+	 * rest, plus the `using` lines the file offers no seat for, which the caller must REFUSE on.
+	 *
+	 * Haxe tries static extensions in REVERSE declaration order, so where a carried `using` lands decides
+	 * which of two modules wins a method name they share. The ordinary import anchor cannot decide it:
+	 * `ImportOrder.lastHeaderEnd` answers the last plain `import` when the file has one and the last
+	 * statement of ANY import kind otherwise, so the same carried line ranked LAST in a destination
+	 * holding `import a.B; using q.Other;` and FIRST in one holding only `using q.Other;`. Both were
+	 * measured at rc 0 on 4.3.7 and they lose opposite halves: `q.Ext -> q.Other` for the MOVED body in
+	 * the first, `q.Other -> q.Ext` for the destination's OWN call in the second.
+	 *
+	 * Declaring the carried line FIRST makes it rank last, deterministically. That is the half worth
+	 * keeping: the destination's existing code is left exactly as it was, and the residual — the moved
+	 * body taking the destination's extension where the two collide — is the one the user is looking at
+	 * and the one the advisory names. Where no such seat exists the answer is a refusal, not an order
+	 * picked by accident; `usingSeatOf` says which shapes have none and what each cost.
+	 */
+	public static function carriedDestEdits(
+		destSource: String, destInfo: FileInfo, carried: Array<String>, plugin: GrammarPlugin
+	): CarriedEdits {
+		final usings: Array<String> = carriedUsingLines(carried);
+		final ranked: Bool = destInfo.imports.exists(imp -> imp.kind == ImportKind.Using);
+		// Nothing to rank, or nothing to rank AGAINST: the ordinary anchor is the whole answer, and a
+		// lone carried `using` is then the only one the destination has.
+		if (usings.length == 0 || !ranked)
+			return { usingEdit: null, importEdit: carriedImportEdit(destSource, carried, plugin), unseated: [] };
+		final ordinary: Int = importAnchor(destSource, plugin).offset;
+		final seat: Int = usingSeatOf(destSource, destInfo, ordinary);
+		final rest: Array<String> = carriedImportLines(carried);
+		// The seat and the ordinary anchor COINCIDE whenever no statement of the destination's own run
+		// offers a lower one — a guarded region the anchor already sits above, or a last plain import on
+		// the line directly over the run. Two zero-width inserts at one offset would be separated only
+		// by `applyEdits`' width tie-break, which cannot tell them apart, leaving the order to
+		// `Array.sort` — which Haxe does not guarantee stable. ONE edit removes the question, and the
+		// `using` lines lead it so they still rank last.
+		return if (seat < 0)
+			{ usingEdit: null, importEdit: carriedImportEdit(destSource, rest, plugin), unseated: usings };
+		else if (seat == ordinary)
+			{ usingEdit: null, importEdit: carriedImportEdit(destSource, usings.concat(rest), plugin), unseated: [] };
+		else
+			{
+				usingEdit: { span: new Span(seat, seat), text: '${usings.join('\n')}\n' },
+				importEdit: carriedImportEdit(destSource, rest, plugin),
+				unseated: []
+			};
+	}
+
+	/**
+	 * The refusal a non-empty `unseated` list owes, naming the statements and why no seat exists.
+	 */
+	public static function unseatedUsingRefusal(destFile: String, unseated: Array<String>): String {
+		return 'the moved code needs ${unseated.join(' ')} at $destFile, and that file\'s own `using` run offers no seat above '
+			+ 'it — one of its `using` statements is `#if`-guarded or shares its line with other code, so the carried statement '
+			+ 'could only be written below it, where Haxe (which tries static extensions in reverse declaration order) would '
+			+ 'give the destination\'s own calls the carried module instead; put the destination\'s `using` on its own '
+			+ 'unguarded line, or add the statement by hand';
+	}
+
+	/**
 	 * Where a fresh import line of `path` goes in `source` — `ImportOrder.insertionFor`, the one seat
 	 * every inserting caller shares (its doc holds the slot-then-fallbacks ladder). `path` is omitted
 	 * by a caller with nothing to place, which asks only where the header ends.
@@ -446,6 +551,10 @@ final class MoveSymbol {
 	 * region — a shape `FileInfo`'s flat import list, with only a `guarded` flag per statement, cannot
 	 * describe. An unparseable source anchors at the file start, which the caller's own re-parse
 	 * validation then rejects.
+	 *
+	 * A carried `using` needs a second question this one cannot answer — where the destination's own
+	 * `using` RUN begins, so the new statement can be declared above it — and `usingSeatOf` answers
+	 * that from `FileInfo`, falling back to this offset when the run offers no candidate of its own.
 	 */
 	public static function importAnchor(source: String, plugin: GrammarPlugin, ?path: String): ImportAnchor {
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
@@ -455,6 +564,56 @@ final class MoveSymbol {
 			trail: '',
 			order: -1
 		} : ImportOrder.insertionFor(source, tree, plugin, path);
+	}
+
+	/**
+	 * The offset a carried `using` may be written at so that it is declared BEFORE every `using` the
+	 * destination already has — or -1 when the file offers no such seat.
+	 *
+	 * The candidates are the destination's own unguarded, own-line `using` statements, and `ordinary` (the
+	 * anchor every other carried line takes) is the floor. A `#if`-GUARDED run offers no candidate of its
+	 * own — writing the carried line at its line start would put it INSIDE the region — but the ordinary
+	 * anchor often sits above it already, and then the seat is fine. It is only when some `using` ends up
+	 * ABOVE the best candidate that there is nothing to do, and each such shape was a corrupting write
+	 * before this asked.
+	 *
+	 * Measured at rc 0 on 4.3.7, both in `move` and in `move-member`: a destination reading
+	 * `#if eval using q.Other; #end import a.B;` anchors below the region, so the carried `using` landed
+	 * under the import and `Dest.d("x")` went from `OTHER` to `EXT` — the destination's own call, which
+	 * is the half this seat exists to protect. And `package p; using q.Other;` on ONE line has no line
+	 * start above the statement that is still below the package declaration, so the carried statement was
+	 * written above `package`, which anyparse re-parses happily and Haxe rejects with
+	 * `Unexpected keyword "package"`.
+	 */
+	private static function usingSeatOf(destSource: String, destInfo: FileInfo, ordinary: Int): Int {
+		// An UNGUARDED statement on its own line offers a seat directly above itself, and the FIRST of
+		// them is preferred over `ordinary` even where the ordinary anchor is already high enough: it
+		// puts the carried statement adjacent to the run it joins instead of a blank line above it.
+		var seat: Int = -1;
+		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && !imp.guarded) {
+			final at: Int = imp.span.from;
+			final start: Int = lineStartOf(destSource, at);
+			if (isBlank(destSource, start, at) && (seat < 0 || start < seat)) seat = start;
+		}
+		// A guarded statement, and one sharing its line, offer no candidate of their own — but the
+		// ordinary anchor may already sit above them, which is why this asks rather than refusing on the
+		// shape.
+		if (seat < 0) seat = ordinary;
+		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && imp.span.from < seat) return -1;
+		return seat;
+	}
+
+	/**
+	 * The `using` half of a carry list, and its complement, split on the keyword `importStatementText`
+	 * writes — an exact test on generated text, not a guess about a user's spelling.
+	 */
+	private static function carriedUsingLines(carried: Array<String>): Array<String> {
+		return carried.filter(line -> line.startsWith('using '));
+	}
+
+	/** The lines of a carry list that are NOT `using` statements. */
+	private static function carriedImportLines(carried: Array<String>): Array<String> {
+		return carried.filter(line -> !line.startsWith('using '));
 	}
 
 	/**
@@ -513,12 +672,18 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * The two IMPLICIT rungs of the ladder, in their measured order: a sibling MODULE of `info`'s own
-	 * package first, then the TOP LEVEL — a module of the root package, visible by simple name from
-	 * every file in the project exactly as the standard library's own top-level types are. The root
-	 * package's own files skip the second walk; the first has already answered for them.
+	 * The IMPLICIT rungs of the ladder, in their measured order: a sibling MODULE of `info`'s own
+	 * package first, then each ANCESTOR package above it, nearest first, ending with the TOP LEVEL — a
+	 * module of the root package, visible by simple name from every file in the project exactly as the
+	 * standard library's own top-level types are.
 	 *
-	 * `isMain` FILTERS both, where the module-own branch of `bindingOf` only spells a path with it: a
+	 * The ancestor rungs are not an extrapolation from the root one: compiled on 4.3.7, `p.sub.deep.C`
+	 * names `p.A` with no import at all while a sibling `q.D` does not (`Type not found : A`), and with
+	 * both `p.A` and `p.sub.A` present the deep file answers `p.sub.A` — nearest first. Modelling only
+	 * the same package and the root left a descendant-package file out of `statementlessRepairEdits`
+	 * entirely, so a move wrote two files at rc 0 over a tree that then read `Type not found`.
+	 *
+	 * `isMain` FILTERS every rung, where the module-own branch of `bindingOf` only spells a path with it: a
 	 * sibling module's SUB-module type is not visible by simple name from another file of the package
 	 * — this file's own header proves it, importing `SymbolIndex.ImportKind` from its own package — so
 	 * counting one was a refusal against a binding that does not exist (`Type not found : Dep` on
@@ -526,14 +691,26 @@ final class MoveSymbol {
 	 * `p/Dep.hx` is equally `Type not found` from `p/Host.hx`.
 	 */
 	private static function packageOrTopLevelBinding(name: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
-		for (fi in files) if (fi.pkg == info.pkg && fi.file != info.file) {
-			for (t in fi.types) if (t.name == name && t.isMain && !t.isPrivate) return fi.module;
-		}
-		if (info.pkg == '') return null;
-		for (fi in files) if (fi.pkg == '') {
+		for (pkg in packageChainOf(info.pkg)) for (fi in files) if (fi.pkg == pkg && fi.file != info.file) {
 			for (t in fi.types) if (t.name == name && t.isMain && !t.isPrivate) return fi.module;
 		}
 		return null;
+	}
+
+	/**
+	 * `pkg` and every ANCESTOR package above it, nearest first, ending with the root — the chain Haxe
+	 * walks for an unqualified type name. The root is the last rung rather than a separate one, which
+	 * is why a root-package file's chain has exactly one entry.
+	 */
+	private static function packageChainOf(pkg: String): Array<String> {
+		final out: Array<String> = [pkg];
+		var at: String = pkg;
+		while (at != '') {
+			final dot: Int = at.lastIndexOf('.');
+			at = dot < 0 ? '' : at.substring(0, dot);
+			out.push(at);
+		}
+		return out;
 	}
 
 	/**
@@ -635,17 +812,20 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * The module a QUALIFIED type path's head segment names from `info`'s position — its own package
-	 * first, then the top level. Imports do not enter this ladder: `import q.Mod;` does not make
+	 * The module a QUALIFIED type path's head segment names from `info`'s position — the same package chain
+	 * `packageChainOf` walks for a bare type name — its own package, each ancestor above it, then the
+	 * top level, and compile-proved on the head form of its own accord (`p.sub.deep.C` resolves
+	 * `Mod.Sub` against `p.Mod` while a sibling `q.D` reads `Type not found : Mod`). Imports do not
+	 * enter this ladder: `import q.Mod;` does not make
 	 * `Mod.Sub` resolve (`Type not found : Mod` on 4.3.7), which is what makes a head PACKAGE-relative
 	 * and a cross-package move able to rebind it. Null means the head is not a module this index holds,
 	 * which for a head with no package of its own is the ambient top level — the same answer from every
 	 * file, so two nulls agree.
 	 */
 	private static function headModuleOf(head: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
-		for (fi in files) if (fi.pkg == info.pkg && RefactorSupport.lastSegment(fi.module) == head) return fi.module;
-		if (info.pkg == '') return null;
-		for (fi in files) if (fi.pkg == '' && RefactorSupport.lastSegment(fi.module) == head) return fi.module;
+		for (pkg in packageChainOf(info.pkg))
+			for (fi in files)
+				if (fi.pkg == pkg && RefactorSupport.lastSegment(fi.module) == head) return fi.module;
 		return null;
 	}
 
@@ -729,6 +909,17 @@ final class MoveSymbol {
 		final standing: Null<NameBinding> = bindingOf(dep, destInfo, files);
 		final guardedDest: Null<String> = guardedImportPath(dep, destInfo);
 		if (wanted == null) return unnameableSourceCollision(dep, cursorInfo, destInfo, files, standing, guardedDest);
+		// A DOTLESS path no module in the index spells is the AMBIENT TOP LEVEL — `StringTools`, `Std`,
+		// `Math`. A top-level module name is unique across a classpath, so it resolves to the same type
+		// from every file: neither side can be rebound by carrying it, and the destination's own
+		// unqualified references to that name already mean exactly what the carried statement gives them.
+		// The index holding a module of that name (a root-package `StringTools.hx` of the project's own)
+		// takes the exemption away, which is the case the gate below is really for.
+		//
+		// Dormant until the receiver scan started pricing `Std.int(...)` and `StringTools.trim(...)`:
+		// measured, without this a `using StringTools;` carried past a destination that merely WRITES
+		// `StringTools.trim(x)` was refused, and 2 of 15 accepted Pony `move-member` cases were lost.
+		if (standing == null && guardedDest == null && wanted.indexOf('.') < 0 && !files.exists(fi -> fi.module == wanted)) return null;
 		// A guarded import at the destination is a rung of SOME build's ladder and of no other, so
 		// whether the carried line wins or loses is a per-configuration question. Refuse either way:
 		// both directions were compile-run to a changed runtime class with rc 0.
@@ -832,14 +1023,138 @@ final class MoveSymbol {
 		if (
 			name != null && span != null && typeRefShape.typeRefKinds.contains(node.kind) && span.from >= declSpan.from
 			&& span.to <= declSpan.to && name != typeName
-		) {
-			// Re-bound: a narrowed local does not reach an anonymous-structure literal whose expected
-			// field type is non-nullable.
-			final at: Span = span;
-			final spelled: String = name;
-			out.push({ name: spelled, span: at });
-		}
+		)
+			pushNameSpan(out, name, span);
 		for (c in node.children) collectDependencyNames(c, declSpan, typeRefShape, typeName, out);
+	}
+
+	/**
+	 * The kinds a MEMBER ACCESS projects as — the node whose receiver child is the head of a
+	 * `Helper.go()`. Read off the shape rather than spelled here, so a second grammar's own spellings
+	 * arrive with it; a shape that declares none contributes no receiver names at all.
+	 */
+	private static function memberAccessKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		for (kind in [shape.fieldAccessKind, shape.nullSafeAccessKind, shape.forceFieldAccessKind]) if (kind != null && !out.contains(kind))
+			out.push(kind);
+		return out;
+	}
+
+	/**
+	 * Every UPPER-INITIAL name written as the RECEIVER of a member access inside `declSpan` —
+	 * the `Helper` of `Helper.go()`, of `Helper.CONST` and of `@:build(Helper.make())`.
+	 *
+	 * These are dependencies exactly as a type position is, and until 2026-08-31 the carry could not
+	 * see them at all: the projection it reads answers TYPE positions, so `apq uses Helper` returns 0
+	 * hits on a file whose only reference is `Helper.go()`. The op's own doc called the residue LOUD —
+	 * "the destination fails to COMPILE, never a silent semantic change" — and that claim is FALSE in
+	 * the direction that matters. Measured on 4.3.7 through the base engine: a `Moved` reaching
+	 * `r.Helper` through the source file's `import r.Helper;`, moved into a destination whose own
+	 * package declares a `p.Helper`, came back bound to `p.Helper` — `Moved.use()` went from 42 to 7,
+	 * rc 0, three files written and nothing to read. Priced here, the same move carries the import.
+	 *
+	 * Only the receiver slot, not every upper-initial identifier: a VALUE position
+	 * (`Type.createInstance(Bar, [])`) and a constructor pattern (`case Red:`) are the same gap one
+	 * step further out, and both are named in `NEW BACKLOG` rather than smuggled in — a bare `Red` is
+	 * an enum CONSTRUCTOR far more often than a module, and `bindingOf` cannot tell the two apart.
+	 *
+	 * A dotted receiver needs no special case: `p.Mod.go()` projects the receiver as a nested member
+	 * access whose own receiver is the lower-initial `p`, so only the innermost head is ever an
+	 * `identKind` child and a package prefix is filtered by its case.
+	 */
+	private static function collectReceiverNames(
+		node: QueryNode, declSpan: Span, identKind: String, accessKinds: Array<String>, typeName: String, out: Array<NameSpan>
+	): Void {
+		if (accessKinds.contains(node.kind)) for (child in node.children) {
+			final name: Null<String> = child.name;
+			final span: Null<Span> = child.span;
+			if (
+				name != null && span != null && child.kind == identKind && RefactorSupport.isUpperInitial(name)
+				&& span.from >= declSpan.from && span.to <= declSpan.to && name != typeName
+			)
+				pushNameSpan(out, name, span);
+		}
+		for (c in node.children) collectReceiverNames(c, declSpan, identKind, accessKinds, typeName, out);
+	}
+
+	/**
+	 * Record `name` at `span` — the re-bind an anonymous-structure literal needs, in ONE place.
+	 *
+	 * Both collectors reach here with a narrowed `Null<String>` / `Null<Span>` pair, and a narrowed
+	 * local does not reach a literal whose expected field type is non-nullable; a non-null PARAMETER
+	 * does. `collectDependencyNames` spelled the two re-binding locals inline, and
+	 * `collectReceiverNames` (new in this slice) repeated them, which is the shape `duplicate-code`
+	 * names.
+	 */
+	private static function pushNameSpan(out: Array<NameSpan>, name: String, span: Span): Void {
+		out.push({ name: name, span: span });
+	}
+
+	/**
+	 * Does the declaration at `declSpan` write a member access anywhere inside it?
+	 *
+	 * The one necessary condition a `using` carry can be gated on. A static extension is only ever
+	 * reached as `expr.method(...)`, so a declaration with no member access needs no `using` — and
+	 * WHICH `using` supplies a given method is a question the tree cannot answer at all, which is why
+	 * this asks the weaker one.
+	 */
+	private static function declHasMemberAccess(node: QueryNode, declSpan: Span, accessKinds: Array<String>): Bool {
+		final span: Null<Span> = node.span;
+		if (accessKinds.contains(node.kind) && span != null && span.from >= declSpan.from && span.to <= declSpan.to) return true;
+		return node.children.exists(c -> declHasMemberAccess(c, declSpan, accessKinds));
+	}
+
+	/**
+	 * The source module's `using` statements the destination lacks, appended to `carried`.
+	 *
+	 * A `using` grants STATIC EXTENSIONS, and an extension call spells the METHOD name and nothing else
+	 * — no name scan can see which module supplied it. S40 settled the destination side on exactly that
+	 * evidence (a destination `using` is KEPT unconditionally rather than name-scanned), and the source
+	 * side is the mirror it did not close: the moved body's `s.trim()` arrived at a destination holding
+	 * no `using StringTools;` and read `String has no field trim` at rc 0, one of four census cases
+	 * (`Int has no field hex`, `Array<String> has no field exists`, `Float has no field int`).
+	 *
+	 * Carried unconditionally, with ONE necessary condition the tree can actually answer: a static
+	 * extension is invoked as `expr.method(...)`, so a declaration holding no member access at all can
+	 * need none. That keeps the line off the pure-data moves — a typedef, an enum of bare constructors
+	 * — without ever guessing WHICH extension a body uses, which is the guess this exists to avoid.
+	 *
+	 * A `#if`-guarded statement is skipped for the reason every other carry skips one: it binds under
+	 * its own flag and under no other, and an unconditional line at the destination does not reproduce
+	 * that.
+	 */
+	private static function usingLinesToCarry(
+		source: String, tree: QueryNode, accessKinds: Array<String>, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo,
+		destSource: String, files: Array<FileInfo>, carried: Array<String>
+	): Array<String> {
+		if (!declHasMemberAccess(tree, declSpan, accessKinds)) return carried;
+		for (imp in cursorInfo.imports) if (!imp.guarded && imp.kind == ImportKind.Using) {
+			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
+			if (path == null) continue;
+			// `!other.guarded` is what makes this the right question. A guarded statement is a rung of
+			// SOME build's ladder and of no other, so a `#if js using StringTools; #end` at the
+			// destination satisfies nothing for the default configuration — compile-proved: without the
+			// filter the move wrote two files at rc 0 and the tree read `String has no field trim` on
+			// neko. It is the same filter `addImportEdit` applies for the same reason.
+			final already: Bool = destInfo.imports.exists(
+				other -> !other.guarded && other.kind == ImportKind.Using && SymbolIndex.pathImportedBy(other) == path
+			);
+			if (already) continue;
+			// The statement binds its module's own TYPE name beside the extensions, so it faces the same
+			// collision gate a carried import does. But a collision SKIPS the line instead of refusing
+			// the move, and the asymmetry with the dependency carry above is the whole point: there the
+			// moved code PROVABLY names the dependency, so a destination that means something else by
+			// that name is unrepairable and must be refused; here the need is unproven — the gate fired
+			// on `using pony.Tools;` for a declaration that only ever writes `this.x` — so refusing
+			// would cost a correct refactor for a statement nothing shows the moved code wants.
+			// Skipping cannot rebind a TYPE name. It can leave the moved body's `x.f()` on whatever
+			// extension the destination already supplies — the same residual `carriedDestEdits` names —
+			// and otherwise it is a missing extension, which is loud.
+			if (carryCollision(RefactorSupport.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, files, true) != null) continue;
+			final line: String = importLineFor(imp, source);
+			if (!carried.contains(line)) carried.push(line);
+		}
+		return carried;
 	}
 
 	/**
@@ -857,10 +1172,12 @@ final class MoveSymbol {
 	 * to a changed runtime class with rc 0 on a move the base engine refused.
 	 */
 	private static function dependencyNames(
-		source: String, declSpan: Span, cursorInfo: FileInfo, plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
+		tree: QueryNode, shape: RefShape, source: String, declSpan: Span, cursorInfo: FileInfo, plugin: GrammarPlugin,
+		typeRefShape: TypeRefShape, typeName: String
 	): Array<String> {
 		final refs: Array<NameSpan> = [];
-		collectDependencyNames(plugin.parseFileTypeRefs(source), declSpan, typeRefShape, typeName, refs);
+		collectDependencyNames(tree, declSpan, typeRefShape, typeName, refs);
+		collectReceiverNames(tree, declSpan, shape.identKind, memberAccessKinds(shape), typeName, refs);
 		final shadows: Array<NameSpan> = functionTypeParamNames(plugin, source, declSpan);
 		for (t in cursorInfo.types)
 			if (t.span.from <= declSpan.from && t.span.to >= declSpan.to)
@@ -1160,11 +1477,19 @@ final class MoveSymbol {
 	 * blank line.
 	 */
 	private static function buildDestInsertEdits(
-		destSource: String, declText: String, carried: Array<String>, plugin: GrammarPlugin
+		destSource: String, destInfo: FileInfo, declText: String, carried: Array<String>, plugin: GrammarPlugin
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 
-		final carriedEdit: Null<{ span: Span, text: String }> = carriedImportEdit(destSource, carried, plugin);
+		// The `using` half takes its own seat when the destination has a `using` run to rank against;
+		// only then is the remainder what the ordinary anchor gets. That seat is the line start of a
+		// statement the destination already holds, so it is strictly inside the header and cannot reach
+		// the append point the branch below reasons about. `unseated` is handled by the caller, which
+		// refuses — `buildDestInsertEdits` only ever builds edits.
+		final carriedEdits: CarriedEdits = carriedDestEdits(destSource, destInfo, carried, plugin);
+		final usingEdit: Null<{ span: Span, text: String }> = carriedEdits.usingEdit;
+		if (usingEdit != null) edits.push(usingEdit);
+		final carriedEdit: Null<{ span: Span, text: String }> = carriedEdits.importEdit;
 
 		// Append the decl after the file content. Ensure exactly one blank
 		// line of separation from the prior content.
@@ -1202,30 +1527,6 @@ final class MoveSymbol {
 		edits.push({ span: new Span(trimmedEnd, destSource.length), text: '$sep$decl$eof' });
 
 		return edits;
-	}
-
-	/**
-	 * Does the source file STILL reference `typeName` in a type position
-	 * after the moved decl is cut? Counts type-position hits OUTSIDE the
-	 * cut range. When true, the source needs an import of the moved type's
-	 * new path.
-	 */
-	private static function sourceStillUsesType(
-		source: String, cut: Span, plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
-	): Bool {
-		final typeRefTree: QueryNode = plugin.parseFileTypeRefs(source);
-		var used: Bool = false;
-		function walk(node: QueryNode): Void {
-			final span: Null<Span> = node.span;
-			if (
-				!used && node.name == typeName && span != null && typeRefShape.typeRefKinds.contains(node.kind)
-				&& (span.from < cut.from || span.from >= cut.to)
-			)
-				used = true;
-			for (c in node.children) walk(c);
-		}
-		walk(typeRefTree);
-		return used;
 	}
 
 	/**
@@ -1282,13 +1583,81 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * Does `source` name any of `names` by its bare name, outside `excluded` spans and its comments?
+	 * Does `source` name any of `names` by its bare name, outside `excluded` spans?
+	 *
 	 * The question a MODULE statement's fate turns on: repointing or removing one takes away every type
-	 * the module declares, so what decides is whether the file still names ANY of them.
+	 * the module declares, so what decides is whether the file still names ANY of them. Since 2026-08-31
+	 * it is also the question the statementless repair walk and the source file's own re-import ask, so
+	 * the three answer alike.
+	 *
+	 * Comments are NOT excluded, and the doc here claimed they were until that date. `collectCommentRegions`
+	 * is passed for ONE job — deciding whether a `.` in front of an occurrence is a real qualifier or
+	 * comment text — and `scanReference` never tests the occurrence itself against those spans; the
+	 * contract `referencedInDest` states ("it counts a mention in a comment or a string literal as a use")
+	 * is the true one for the whole family, and the direction is deliberate: keeping an import a file no
+	 * longer needs costs a lint advisory, dropping one it does need costs the build. Measured over the
+	 * 285-case Pony census, 4 of the 89 statements this slice newly writes are for a mention that appears
+	 * ONLY in a comment.
 	 */
 	private static function namesAnyOf(source: String, names: Array<String>, excluded: Array<Span>): Bool {
 		final comments: Array<Span> = RefactorSupport.collectCommentRegions(source);
 		return names.exists(n -> RefactorSupport.referencedUnqualifiedInRange(source, n, 0, source.length, excluded, comments));
+	}
+
+	/**
+	 * The kinds a PROVEN reference projects as: every type position, plus the bare identifier — which
+	 * is what a static receiver, a constructor pattern (`case Red:`) and a value position all reduce to.
+	 *
+	 * The complement of `namesAnyOf`'s text scan, and the two exist for opposite reasons. The text scan
+	 * over-counts on purpose (a comment, a string literal), which is the safe direction when the answer
+	 * WRITES an import; this one under-counts nothing a compiler would see and is the answer a REFUSAL
+	 * needs.
+	 */
+	private static function provenRefKinds(plugin: GrammarPlugin, typeRefShape: TypeRefShape): Array<String> {
+		final shape: RefShape = plugin.refShape();
+		final out: Array<String> = typeRefShape.typeRefKinds.copy();
+		// `identKind` is the braced interpolation's inner kind as well as the plain one, but the
+		// UNBRACED `'$Moved'` form projects as its own kind, which the shape already names and ~20
+		// checks already read. Re-deriving the question here instead of asking cost the refusal on a
+		// module-private type whose only remaining reference was `'v=$Moved'` — compile-proved:
+		// `Unknown identifier : Moved` after a move this arm reported at rc 0.
+		for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null && !out.contains(kind)) out.push(kind);
+		return out;
+	}
+
+	/**
+	 * Does `tree` carry a node of one of `kinds` named by one of `names`, outside `cut`?
+	 *
+	 * A string literal is a literal node and a comment is no node at all, so neither answers here —
+	 * which is the whole difference from `namesAnyOf`.
+	 */
+	private static function namesAnyNodeOf(node: QueryNode, names: Array<String>, cut: Span, kinds: Array<String>): Bool {
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (
+			name != null && span != null && kinds.contains(node.kind) && names.contains(name)
+			&& (span.from < cut.from || span.from >= cut.to)
+		)
+			return true;
+		return node.children.exists(c -> namesAnyNodeOf(c, names, cut, kinds));
+	}
+
+	/**
+	 * The spans a reference scan over `info`'s file must not count: its own import statements, plus
+	 * the span a move is about to cut out of it when one is given.
+	 *
+	 * Every "does this file still name the type" question in the op goes through `namesAnyOf` over
+	 * THIS exclusion set — the importer walk, the statementless repair walk and the source file's own
+	 * re-import. Until 2026-08-31 the last two asked a DIFFERENT question: a type-position walk over
+	 * `parseFileTypeRefs`, which sees `Dep` in `var d: Dep` and NOT in `Dep.go()`. Both answers were
+	 * compile-proved wrong on the receiver form at rc 0 — a scope file that reached the moved type
+	 * only through `Moved.use()` got no repair import (`Type not found : Moved` in a file the move
+	 * never touched), and a source file that kept one after the cut got none either.
+	 */
+	private static function referenceExclusions(info: FileInfo, ?cut: Span): Array<Span> {
+		final out: Array<Span> = [for (imp in info.imports) imp.span];
+		if (cut != null) out.push(cut);
+		return out;
 	}
 
 	/**
@@ -1508,8 +1877,7 @@ final class MoveSymbol {
 	 */
 	private static function statementlessRepairEdits(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, index: SymbolIndex, sourceOf: Map<String, String>,
-		oldImportPath: String, newImportPath: String, target: MoveTarget, destFile: String, plugin: GrammarPlugin,
-		typeRefShape: TypeRefShape
+		oldImportPath: String, newImportPath: String, target: MoveTarget, destFile: String, plugin: GrammarPlugin
 	): Void {
 		final cursorInfo: FileInfo = target.cursorInfo;
 		// One guard this walk does NOT carry, unreachable by construction rather than forgotten: "only
@@ -1529,14 +1897,17 @@ final class MoveSymbol {
 		// one holding `import s.*;`) already sees it. The import written there is then redundant rather
 		// than wrong, which is the direction this whole walk answers in.
 		final files: Array<FileInfo> = index.allFiles();
+		final moved: Array<String> = movedBoundNames(cursorInfo, target.typeName);
 		for (info in files) {
 			if (info.file == cursorInfo.file || info.file == destFile) continue;
 			if (editsByFile.exists(info.file)) continue;
 			final src: Null<String> = sourceOf[info.file];
 			if (src == null) continue;
 			if (bindingOf(target.typeName, info, files)?.path != oldImportPath) continue;
-			// An empty cut span makes the source walk count every type-position reference in the file.
-			if (!sourceStillUsesType(src, new Span(0, 0), plugin, typeRefShape, target.typeName)) continue;
+			// The same scan the repoint walk runs, over the same names — the moved type's own plus the
+			// enum constructors an importer may be the only thing to spell. No cut: nothing of this
+			// file moves.
+			if (!namesAnyOf(src, moved, referenceExclusions(info))) continue;
 			final insert: Null<{ span: Span, text: String }> = addImportEdit(src, info, plugin, newImportPath);
 			if (insert != null) editsFor(editsByFile, info.file).push(insert);
 		}
@@ -1602,9 +1973,11 @@ final class MoveSymbol {
 	 * Build the source-text lookup, resolve the type declaration the cursor sits
 	 * on, and run every move guard: the scope must fully parse, the cursor file
 	 * must be in the scope set and on a type declaration, that type must be
-	 * uniquely declared at the cursor, source and destination must differ, and
-	 * both must be indexed in the SAME package (cross-package is refused). Returns
-	 * the validated `MoveTarget` or a `PErr` with the precise refusal reason.
+	 * uniquely declared at the cursor, source and
+	 * destination must differ, and both must be indexed. Cross-package is NOT
+	 * refused here and has not been since S40 — this doc said it was until
+	 * 2026-08-31. Returns the validated `MoveTarget` or a `PErr` with the
+	 * precise refusal reason.
 	 */
 	private static function resolveMoveTarget(
 		index: SymbolIndex, scopeFiles: Array<{ file: String, source: String }>, cursorFile: String, destFile: String, line: Int, col: Int,
@@ -1739,7 +2112,7 @@ final class MoveSymbol {
 			final importerSource: Null<String> = sourceOf[importer.file];
 			if (importerSource == null) continue;
 			final src: String = importerSource;
-			final excluded: Array<Span> = [for (imp in importer.imports) imp.span];
+			final excluded: Array<Span> = referenceExclusions(importer);
 			// Keeping an import this file no longer needs costs a lint advisory; dropping one it
 			// does need costs the build — so both scans answer conservatively, and a name reached
 			// through a QUALIFIED path (which needs no import) is not counted by either.
