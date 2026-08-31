@@ -1,10 +1,13 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -53,6 +56,21 @@ using Lambda;
  *   method into subclasses with no `override` keyword for the modifier gate to read and no declared
  *   member for the subtype lookup to find, and Haxe reports it at the GENERATED override site, in
  *   another file and possibly another project.
+ * - A method a FRAMEWORK reaches by NAME rather than through a written call —
+ *   `NamingSupport.frameworkReachable` through `CheckScan.frameworkReachableMethod`, the same
+ *   predicate and the same `apqlint.json` `frameworks` roster the two unused-* rules read. NOT a
+ *   soundness gate: marking a utest `test*` method `inline` is legal and changes nothing — utest
+ *   discovers by NAME out of `Context.getBuildFields()` at compile time, and an A/B of a `setup` /
+ *   sync test / async test / `spec` probe with and without `inline` gave identical discovery and
+ *   identical results. It is a BENEFIT gate: the framework does emit a real call
+ *   (`execute: function() { this.$test(); }`), one the compiler would fold an inline body into —
+ *   but it is ONE call site, run once, so the fold buys nothing the rule exists to buy. The shape
+ *   is the rule's largest false-positive class on a test tree.
+ *   What the shared predicate costs in the other direction: `transitivelyExtends` matches a
+ *   contract root by SIMPLE NAME and a prefix contract by bare `startsWith`, so a domain class
+ *   extending a project type of its own called `Test` exempts its `spec…` / `setup…` / `test…`
+ *   members too. Pre-existing for the two unused-* rules, and safe in the same direction for all
+ *   three (a spurious yes only ever withholds a report), but it is a lost opportunity, not nothing.
  * - A `dynamic` method (re-bindable at runtime), a constructor (`new`), a `macro` method, a
  *   `@:keep` method, and any method whose name is passed to `Reflect.*` as a string literal
  *   anywhere in scope (reflection-accessed) — all skipped conservatively.
@@ -69,7 +87,7 @@ using Lambda;
  * methods are skipped (nothing to do). The gates mirror `trivial-getter`'s soundness model.
  */
 @:nullSafety(Strict)
-final class PreferInline implements Check implements RiskyFix implements OracleRelaxable {
+final class PreferInline implements Check implements RiskyFix implements OracleRelaxable implements ConfigAware {
 
 	/**
 	 * The inline-candidate body budget in AST nodes. Calibrated on a large real tree: trivial getters
@@ -167,7 +185,14 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	private var _oracleRelaxed: Bool = false;
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	/**
 	 * Enable RELAXED candidate selection: drop the null-safety gate (`bodyHasNullSafetyRisk`) so a
@@ -197,6 +222,11 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final shape: RefShape = plugin.refShape();
+		// The framework carve-out's two halves: the grammar's own naming seam (which knows the
+		// frameworks its language ships) and the project's declared roster. Resolved once per run
+		// — `frameworksFor` reads a config per file, and the answer is the same for every method.
+		final naming: Null<NamingSupport> = plugin.namingSupport();
+		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		// The grammar's RETAINED tag (Haxe `@:keep`). Asked separately from the inline-neutral
 		// whitelist below it: that set is about what a body MEANS, this is about reachability.
 		final retained: Null<String> = shape.retainedDeclMetaName;
@@ -227,7 +257,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		for (t in trees) {
 			final metaBlocked: Array<QueryNode> = metaBlockedClasses(t.tree, t.branch);
 			for (cls in CheckScan.classBodies(t.tree)) if (!metaBlocked.contains(cls))
-				considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed, t.branch, retained);
+				considerClass(
+					out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed, t.branch, retained, naming, contracts, plugin
+				);
 		}
 		return out;
 	}
@@ -409,7 +441,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	private static function considerClass(
 		out: Array<Violation>, cls: QueryNode, file: String, index: SymbolIndex, valueBlocked: Array<String>,
-		reflectBlocked: Array<String>, relaxed: Bool, branch: MemberBranchSeams, retained: Null<String>
+		reflectBlocked: Array<String>, relaxed: Bool, branch: MemberBranchSeams, retained: Null<String>, naming: Null<NamingSupport>,
+		contracts: Array<FrameworkContract>, plugin: GrammarPlugin
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
@@ -436,6 +469,29 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (interfaceRequires(index, ifaces, name, file)) return;
 			final span: Null<Span> = fn.span;
 			if (span == null) return;
+			// A method a FRAMEWORK reaches by name has ONE call site, the one that framework's own
+			// macro writes or its runtime dispatches, and it runs once — so the fold buys nothing
+			// and the rule's premise ("inlining BUYS something") is unmet. Asked through the shared
+			// adapter over `NamingSupport.frameworkReachable`, so a project that declares a
+			// framework in `apqlint.json` gets the carve-out here and from the two unused-* rules at
+			// once, and no framework NAME appears in this file.
+			//
+			// The index is the report UNION RESOLUTION scope, like the sibling rule's: a contract's
+			// root can sit behind a base declared in a configured library
+			// (`class T extends TestBase extends Test`), and the report index alone stops at the
+			// first supertype it cannot name — which answers "no framework" and flags the method.
+			// It is a THUNK built HERE rather than once per run, and that is the whole reason the
+			// seam takes one: forcing the resolution index reads and parses the configured scope,
+			// and `nominated` demands it only after a contract has CLAIMED the name. Measured with
+			// it forced once per run instead, on this project's own config, a one-file
+			// `--rule prefer-inline` run went 0.12s -> 2.88s while `--rule prefer-single-quotes`
+			// stayed at 0.13s — a whole-tree lint hides that (other rules force the index anyway),
+			// the edit loop and `tools/mutation-check.sh` do not. Every OTHER question this check
+			// asks is answered on the report index, unchanged by this slice.
+			if (CheckScan.frameworkReachableMethod(
+				naming, name, owner, span, () -> RefactorSupport.resolutionIndexOf(plugin) ?? index, contracts
+			))
+				return;
 			out.push({
 				file: file,
 				span: span,

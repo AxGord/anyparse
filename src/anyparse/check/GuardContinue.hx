@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
+import anyparse.check.IfExpressionChain.ShieldSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
@@ -48,11 +49,16 @@ using Lambda;
  * it touches is touched by the `if`) — but only when the then-branch cannot escape the
  * iteration early (no `return` / `throw` / grammar exit outside nested functions, no
  * `break` / `continue` outside an inner loop): an escaping path SKIPPED the tail in the
- * original, so hoisting would newly execute it. The `if` must also be preceded by ≥1
- * statement (or a non-empty tail) (a SOLE-`if` body is the
- * positive `for (…) if (cond) …` combine form — a different, non-`continue` shape this
- * check leaves to `loop-guard` and does not fight), with NO `else` (an `else` branch the
- * `continue` form would lose), and a braced, non-empty then-branch. It must be a DIRECT
+ * original, so hoisting would newly execute it. The `if` must also be preceded by ≥1 statement (or a
+ * non-empty tail), with NO `else` (an `else` branch the `continue` form would lose), and a braced,
+ * non-empty then-branch. What precedes it must ALSO not be `loop-guard`'s own shape,
+ * which has two spellings and two separate gates here: a SOLE-`if` body is the positive
+ * `for (…) if (cond) …` combine form (the `ifIndex == 0` bail above), and a body OPENING with a
+ * liftable `if (g) continue;` guard is the same claim written the other way (`loopGuardClaims`,
+ * which asks `LoopScan.leadingContinueGuard` — the predicate `loop-guard` itself reads — plus the
+ * site conditions that predicate cannot see). Without the second, the two checks reported one loop
+ * body and disagreed, and the winner was argument order. A CASCADE of leading guards is NOT
+ * loop-guard's and stays here, and neither is a `do … while`, which `loop-guard` never visits. It must be a DIRECT
  * child of the loop's own body block — an `if` nested in an inner loop / `switch` / `try`
  * targets a different `continue` or `finally` and is never reached. Additionally refused:
  *
@@ -128,9 +134,11 @@ final class GuardContinue implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			// The module root is shielded, for the reason `loop-guard` seeds the same flag true
+			// there: nothing follows a top-level declaration but another one.
 			if (tree != null)
 				walk(
-					tree, tree, violations, entry.file, entry.source, seams,
+					tree, tree, violations, entry.file, entry.source, seams, true,
 					CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
 				);
 		}
@@ -146,7 +154,7 @@ final class GuardContinue implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byIf: Map<String, Candidate> = [];
-		indexCandidates(tree, tree, source, seams, byIf);
+		indexCandidates(tree, tree, source, seams, byIf, true);
 		final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
 			? null
 			: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
@@ -172,7 +180,8 @@ final class GuardContinue implements Check {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		if (ifKinds.length == 0) return null;
-		if (shape.continueStatementKind == null) return null;
+		final continueKind: Null<String> = shape.continueStatementKind;
+		if (continueKind == null) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return null;
 		final loopKinds: Array<String> = shape.loopStatementKinds ?? [];
@@ -182,12 +191,15 @@ final class GuardContinue implements Check {
 			doWhileKinds: doWhileKinds,
 			ifKinds: ifKinds,
 			blockKinds: support.blockKinds(),
+			blockStmtKind: shape.blockStmtKind,
+			continueKind: continueKind,
 			localDeclKinds: shape.localDeclKinds ?? [],
 			localDeclExprKinds: shape.localDeclExprKinds ?? [],
 			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			hoist: hoistSeams(shape),
 			negation: NegationScan.negationSeams(shape),
+			shield: IfExpressionChain.shieldSeams(shape, support.blockKinds()),
 			support: plugin.booleanLogicSupport()
 		};
 	}
@@ -248,12 +260,12 @@ final class GuardContinue implements Check {
 
 	/** Walk `node`, flagging each loop whose body ends in a de-nestable trailing `if`. */
 	private static function walk(
-		node: QueryNode, root: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams,
+		node: QueryNode, root: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams, shielded: Bool,
 		?types: (QueryNode) -> Null<String>
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (isLoop(node, s)) {
-			final m: Null<Candidate> = match(node, root, source, s);
+			final m: Null<Candidate> = match(node, root, source, s, shielded, types);
 			// An inversion that cannot shed its `!( … )` wrap reads worse than the nesting it
 			// removes — the guard form buys nothing there, so the site is left alone.
 			if (m != null && NegationScan.negationIsClean(m.cond, source, s.support, types)) {
@@ -267,20 +279,30 @@ final class GuardContinue implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(c, root, out, file, source, s, types);
+		for (i => c in node.children)
+			walk(c, root, out, file, source, s, IfExpressionChain.childShielded(node, i, s.shield, shielded), types);
 	}
 
 	/** Index every de-nestable loop's candidate by its `if`'s `from:to` span key (for `fix` to re-find it). */
-	private static function indexCandidates(node: QueryNode, root: QueryNode, source: String, s: Seams, out: Map<String, Candidate>): Void {
+	private static function indexCandidates(
+		node: QueryNode, root: QueryNode, source: String, s: Seams, out: Map<String, Candidate>, shielded: Bool
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (isLoop(node, s)) {
-			final m: Null<Candidate> = match(node, root, source, s);
+			// No type resolver, deliberately: `run` builds one from the ENTRY source and `fix` one that
+			// can also carry the report index, and where the two disagree about a guard's inversion
+			// they disagree about `loopGuardClaims` — which would drop from `byIf` a candidate `run`
+			// reported, and `fix` would then skip that edit in silence. Asked type-blind, the deferral
+			// can only ever answer "not claimed" here, so this map stays the SUPERSET of what `run`
+			// reported that `fix` has always relied on.
+			final m: Null<Candidate> = match(node, root, source, s, shielded);
 			if (m != null) {
 				final span: Null<Span> = m.ifNode.span;
 				if (span != null) out['${span.from}:${span.to}'] = m;
 			}
 		}
-		for (c in node.children) indexCandidates(c, root, source, s, out);
+		for (i => c in node.children)
+			indexCandidates(c, root, source, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
 	}
 
 	private static function isLoop(node: QueryNode, s: Seams): Bool {
@@ -294,7 +316,9 @@ final class GuardContinue implements Check {
 	 * holds (tail-hoist safety, name-collision, glue-comment), return that `if`, its
 	 * then-branch, its condition and the tail; else null.
 	 */
-	private static function match(loop: QueryNode, root: QueryNode, source: String, s: Seams): Null<Candidate> {
+	private static function match(
+		loop: QueryNode, root: QueryNode, source: String, s: Seams, shielded: Bool, ?types: (QueryNode) -> Null<String>
+	): Null<Candidate> {
 		final body: Null<QueryNode> = LoopScan.loopBody(loop, s.doWhileKinds);
 		if (body == null || !s.blockKinds.contains(body.kind)) return null;
 		final stmts: Array<QueryNode> = body.children;
@@ -305,6 +329,19 @@ final class GuardContinue implements Check {
 		// A SOLE trailing if (no preceding statement, no tail) is the positive
 		// `for (…) if (cond) …` combine form — loop-guard's territory.
 		if (ifIndex == 0 && tail.length == 0) return null;
+		// …and so is a body that OPENS with a liftable `if (g) continue;` guard, which is the other
+		// half of the same claim and was missing. `loop-guard` lifts that guard into the header, and
+		// the trailing `if` then sits inside the emitted header's block — no longer a direct child of
+		// the loop's own body, so this check could never reach it again. Both rules therefore
+		// reported one loop body and told the reader opposite things, and MEASURED, the one that won
+		// was whichever came first: the registry order in a full run, the `--rule` FLAG order under a
+		// filtered one (`--rule loop-guard --rule guard-continue` lifted the header, the two flags
+		// swapped produced the `continue` cascade, same input, same engine). Neither pair could
+		// CYCLE — each rule's output is the other's fixed point — so this is non-confluence, not
+		// oscillation, and the fix is to make the claim single. A CASCADE (a second `if`-continue
+		// right after the first) stays THIS rule's, which is exactly what the shared predicate
+		// excludes.
+		if (loopGuardClaims(loop, body, source, s, shielded, types)) return null;
 		final ifNode: QueryNode = stmts[ifIndex];
 		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final cond: QueryNode = ifNode.children[0];
@@ -622,6 +659,37 @@ final class GuardContinue implements Check {
 		return out;
 	}
 
+	/**
+	 * Whether `loop-guard` CLAIMS this loop — its leading `if (g) continue;` guard is one that rule
+	 * LIFTS into the loop header. Where it does, this check must stay silent: the lift moves the
+	 * trailing `if` inside the emitted header's block, out of the loop's own statement list, so this
+	 * check could never reach it again, and reporting both told the reader to do opposite things.
+	 *
+	 * FIVE conjuncts, and the list is meant to be exhaustive — a missing one silences BOTH rules on a
+	 * site, which is the failure this predicate exists to prevent and which it shipped with twice in
+	 * review. Two are about REACH: `loop-guard` reads `loopStatementKinds` only, so a `do … while` is
+	 * never its business (measured — deferring on one left the site reported by nobody), and its LIFT
+	 * arm demands the body be exactly `blockStmtKind` where this check accepts any block kind. Three
+	 * are about the SITE: `LoopScan.leadingContinueGuard` for the body-level shape (guard first, no
+	 * cascade after it, no comment before or inside it), `IfExpressionChain.childShielded`'s flag for
+	 * the dangling-`else` position gate, and `NegationScan.negationIsClean` for the inversion the
+	 * lifted header has to emit. Dropping either of the last two makes this check defer where
+	 * `loop-guard` declines — measured at 14 such sites over 13251 external files, every one an
+	 * ordered-comparison guard whose flip the negation engine refuses.
+	 *
+	 * What it does NOT ask is whether `loop-guard` is ENABLED. A config that disables it, or a
+	 * `--rule guard-continue` run, therefore silences this shape entirely. That is the same trade every
+	 * rule-to-rule deferral in the tree makes; the alternative is reading another rule's enablement,
+	 * which no check does.
+	 */
+	private static function loopGuardClaims(
+		loop: QueryNode, body: QueryNode, source: String, s: Seams, shielded: Bool, ?types: (QueryNode) -> Null<String>
+	): Bool {
+		if (!s.loopKinds.contains(loop.kind) || body.kind != s.blockStmtKind || !shielded) return false;
+		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, source, s.ifKinds, s.blockStmtKind, s.continueKind);
+		return guard != null && NegationScan.negationIsClean(guard.children[0], source, s.support, types);
+	}
+
 }
 
 /** The `RefShape` kinds `GuardContinue` reads, bundled once so the walkers take one argument. */
@@ -630,12 +698,26 @@ private typedef Seams = {
 	var doWhileKinds: Array<String>;
 	var ifKinds: Array<String>;
 	var blockKinds: Array<String>;
+
+	/**
+	 * The block kind `loop-guard`'s LIFT arm demands EXACTLY — narrower than `blockKinds`, which is
+	 * what this check accepts — and the one `LoopScan.leadingContinueGuard` reads for a braced
+	 * `{ continue; }`. Nullable because this check works without it; `loop-guard` does not.
+	 */
+	var blockStmtKind: Null<String>;
+
+	/** The `continue` statement kind, required: without it this check has no guard form to emit. */
+	var continueKind: String;
 	var localDeclKinds: Array<String>;
 	var localDeclExprKinds: Array<String>;
 	var metaKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var hoist: Null<HoistSeams>;
 	var negation: NegationSeams;
+
+	/** The dangling-`else` position gate's inputs — read only to mirror `loop-guard`'s own claim. */
+	var shield: ShieldSeams;
+
 	var support: Null<BooleanLogicSupport>;
 }
 

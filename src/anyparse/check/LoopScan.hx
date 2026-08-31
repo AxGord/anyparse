@@ -35,6 +35,12 @@ final class LoopScan {
 	/** The one numeric literal a counter / range may start from. */
 	private static inline final ZERO_LITERAL: String = '0';
 
+	/** An `if` with no `else` has exactly [condition, then-branch] children. */
+	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
+
+	/** The shortest loop body a leading guard can be lifted out of: the guard plus one statement. */
+	private static inline final GUARD_PLUS_ONE: Int = 2;
+
 	/** The name `node` carries when it is a bare identifier, else null. */
 	public static inline function bareIdentName(node: QueryNode, s: LoopSeams): Null<String> {
 		return node.kind == s.identKind ? node.name : null;
@@ -247,6 +253,59 @@ final class LoopScan {
 		return out;
 	}
 
+	/**
+	 * The LEADING `if (g) continue;` guard of a loop body block — the shape `loop-guard` lifts into the
+	 * loop header — or null when the body does not open with one. Both the check that CLAIMS the shape
+	 * and the check that must NOT claim it read this one predicate, so neither can drift from the
+	 * other's idea of what the shape IS.
+	 *
+	 * It answers about a BODY, which is all it can see. `loop-guard`'s claim on a SITE is wider — the
+	 * loop kind, the body kind, the shielded position and a clean inversion — and `GuardContinue.loopGuardClaims`
+	 * is where those are asked, from state a body-level predicate does not have. Splitting it that way
+	 * is what the deferral costs: get the site-level list wrong and NOBODY reports the site (measured
+	 * twice — 14 ordered-comparison guards over 13251 external files, and every `do … while`).
+	 *
+	 * Three conditions beyond the guard itself, and all three are load-bearing:
+	 *
+	 * - There must be a statement AFTER the guard. A guard-only body is a no-op loop and the lift would
+	 *   produce an empty one.
+	 * - That statement must not be ANOTHER `if`-continue. `loop-guard` deliberately leaves a CASCADE
+	 *   alone (the user keeps sequential `continue` guards, each introducing its own checks), so the
+	 *   cascade is the one leading-guard shape `guard-continue` still owns. Reading the cascade as
+	 *   claimed would silence BOTH rules on it.
+	 * - No comment may sit in `[body.from, guard.to)` — before the guard OR inside it. The lift drops
+	 *   that text, so `loop-guard` refuses there, and a `guard-continue` that deferred anyway would
+	 *   silence both.
+	 *
+	 * The guard's then-branch is `continue;` bare or braced-single — the two spellings the loop-guard
+	 * rewrite treats identically. A null `blockStmtKind` or `continueKind` answers null: a grammar that
+	 * names neither cannot express the shape, and `loop-guard` is itself a no-op without both, so the
+	 * caller must keep whatever it would have done without the question.
+	 */
+	public static function leadingContinueGuard(
+		body: QueryNode, source: String, ifKinds: Array<String>, blockStmtKind: Null<String>, continueKind: Null<String>
+	): Null<QueryNode> {
+		if (continueKind == null || blockStmtKind == null) return null;
+		final stmts: Array<QueryNode> = body.children;
+		if (stmts.length < GUARD_PLUS_ONE) return null;
+		final guard: QueryNode = stmts[0];
+		if (!isIfContinue(guard, ifKinds, blockStmtKind, continueKind)) return null;
+		if (isIfContinue(stmts[1], ifKinds, blockStmtKind, continueKind)) return null;
+		final gs: Null<Span> = guard.span;
+		final bs: Null<Span> = body.span;
+		if (gs == null || bs == null) return null;
+		// The span runs to the guard's END, so a comment INSIDE the guard counts as well as one before
+		// it — both are text the lift drops, and both are what `loop-guard` refuses on.
+		//
+		// Named rather than folded into the return: the folded form is an `if`/return pair
+		// `prefer-ternary-return` collapses onto the ternary below it, and the chain that writes is a
+		// `prefer-if-expression-chain` finding. That cascade is confluent (both `--rule` orders give
+		// the same bytes), so it is not this slice's order-dependent crossing — it is the tool telling
+		// the reader to write something it then reports, on this very file.
+		final glued: Bool = CheckScan.hasCommentMarker(source, bs.from, gs.to);
+		return glued ? null : guard;
+	}
+
 	/** Recursive body of `usedOnlyAsStableCollection`, carrying the two ancestors a position verdict needs. */
 	private static function stableUseScan(
 		node: QueryNode, parent: Null<QueryNode>, grandParent: Null<QueryNode>, name: String, sizeMember: String, s: LoopSeams
@@ -276,6 +335,14 @@ final class LoopScan {
 	/** Whether `node` is the l-value of an assignment / increment — the first child of a `writeParentKinds` parent. */
 	private static function isWriteTarget(node: QueryNode, parent: Null<QueryNode>, s: LoopSeams): Bool {
 		return parent != null && s.writeParentKinds.contains(parent.kind) && parent.children.length >= 1 && parent.children[0] == node;
+	}
+
+	/** Whether `stmt` is an else-less `if` whose then-branch is exactly `continue;`, bare or braced-single. */
+	private static function isIfContinue(stmt: QueryNode, ifKinds: Array<String>, blockStmtKind: Null<String>, continueKind: String): Bool {
+		if (!ifKinds.contains(stmt.kind) || stmt.children.length != IF_NO_ELSE_CHILD_COUNT) return false;
+		final thenBranch: QueryNode = stmt.children[1];
+		return thenBranch.kind == continueKind
+			|| (thenBranch.kind == blockStmtKind && thenBranch.children.length == 1 && thenBranch.children[0].kind == continueKind);
 	}
 
 }

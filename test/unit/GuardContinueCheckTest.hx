@@ -3,6 +3,7 @@ package unit;
 import anyparse.check.Check.Violation;
 import anyparse.check.GuardContinue;
 import anyparse.check.Linter;
+import anyparse.check.LoopGuard;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
@@ -631,6 +632,80 @@ class GuardContinueCheckTest extends Test {
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('guard-continue'));
 		Assert.equals(176, Linter.builtins().length);
+	}
+
+	/**
+	 * The DISAGREEMENT pin, asserted from both sides in one test: a loop body that opens with a
+	 * guard `loop-guard` lifts is reported by `loop-guard` and by NOBODY else. Before the shared
+	 * claim both rules reported this body and told the reader opposite things, and which one won
+	 * a `--fix` was decided by argument order (`--rule loop-guard --rule guard-continue` lifted
+	 * the header; the two flags swapped produced the `continue` cascade — same input, same engine).
+	 */
+	public function testDefersALoopBodyLoopGuardWouldLift(): Void {
+		final source: String = wrap(
+			'for (x in xs) {\n\t\t\tif (a != null) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n\t\t}'
+		);
+		Assert.equals(0, new GuardContinue().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * The other half of the same claim: a CASCADE of leading guards is one `loop-guard` refuses by
+	 * its own rule (the user keeps sequential `continue` guards), so the trailing `if` stays THIS
+	 * check's. Deferring on the leading guard's SHAPE alone would silence both rules here.
+	 */
+	public function testKeepsALeadingGuardCascadeLoopGuardRefuses(): Void {
+		final source: String = wrap(
+			'for (x in xs) {\n\t\t\tif (a != null) continue;\n\t\t\tif (c != null) continue;\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n'
+			+ '\t\t\t}\n\t\t}'
+		);
+		Assert.equals(1, new GuardContinue().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * A leading guard whose ORDERED comparison the inversion refuses to flip (an unresolvable
+	 * operand type leaves `<` NaN-unsafe): `loop-guard` declines the lift, so this check must keep
+	 * its finding. Shape-only deferral dropped 14 such sites across 13251 external files with
+	 * nothing reporting them, which is what made the deferral ask for `loop-guard`'s whole claim.
+	 */
+	public function testKeepsASiteWhoseLeadingGuardInvertsUncleanly(): Void {
+		final source: String = wrap(
+			'for (x in xs) {\n\t\t\tif (x.lo < x.hi) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n\t\t}'
+		);
+		Assert.equals(1, new GuardContinue().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * An UNSHIELDED loop — one whose trailing `else` would rebind to the header `loop-guard` emits,
+	 * so its LIFT arm refuses on POSITION. This check keeps the site, and reads that position
+	 * through the same `IfExpressionChain.childShielded` flag rather than a rule of its own.
+	 */
+	public function testKeepsASiteInAnUnshieldedPosition(): Void {
+		final source: String = wrap(
+			'if (p) for (x in xs) {\n\t\t\tif (a != null) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n'
+			+ '\t\t} else other();'
+		);
+		Assert.equals(1, new GuardContinue().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, new LoopGuard().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * A `do … while` whose body opens with a guard `loop-guard` WOULD lift if it visited do-while
+	 * loops — which it does not: it reads `loopStatementKinds` only, while this check also reads
+	 * `doWhileLoopKinds`. The first draft of the deferral asked a body-level predicate that cannot
+	 * see the loop kind, and the site went unreported by BOTH rules. The identical `for` body is the
+	 * discriminator beside it: there the deferral is right.
+	 */
+	public function testKeepsADoWhileLoopGuardNeverVisits(): Void {
+		final body: String = '{\n\t\t\tif (a != null) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n\t\t}';
+		final doWhile: String = wrap('do $body while (ok);');
+		Assert.equals(1, new GuardContinue().run([{ file: 'C.hx', source: doWhile }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, new LoopGuard().run([{ file: 'C.hx', source: doWhile }], new HaxeQueryPlugin()).length);
+		final forLoop: String = wrap('for (x in xs) $body');
+		Assert.equals(0, new GuardContinue().run([{ file: 'C.hx', source: forLoop }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, new LoopGuard().run([{ file: 'C.hx', source: forLoop }], new HaxeQueryPlugin()).length);
 	}
 
 	// --- helpers -------------------------------------------------------------------

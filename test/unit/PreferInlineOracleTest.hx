@@ -12,6 +12,7 @@ import utest.Test;
 using Lambda;
 
 #if (sys || nodejs)
+import sys.FileSystem;
 import sys.io.File;
 #end
 
@@ -29,7 +30,6 @@ class PreferInlineOracleTest extends Test {
 	// `one` / `two` and revert only `box`.
 	private static final PARTIAL_LIB: String = 'class Lib {\n\n\tpublic static function box(x:Null<Int>):Int\n\t\treturn x;\n\n'
 		+ '\tpublic static function one():Int\n\t\treturn 1;\n\n\tpublic static function two():Int\n\t\treturn 2;\n\n}\n';
-
 	private static final PARTIAL_MAIN: String = '@:nullSafety(Strict)\nclass Main {\n\n\tstatic function main() {\n\t\t'
 		+ 'final n:Null<Int> = Std.random(2) == 0 ? 1 : null;\n\t\ttrace(Lib.box(n));\n'
 		+ '\t\ttrace(Lib.one());\n\t\ttrace(Lib.two());\n\t}\n\n}\n';
@@ -171,6 +171,28 @@ class PreferInlineOracleTest extends Test {
 		#end
 	}
 
+	/**
+	 * The framework question goes to the report UNION RESOLUTION scope, not the report index alone.
+	 * A two-hop chain `T extends TestBase extends Test` whose middle link lives ONLY in a configured
+	 * `resolutionRoots` directory is invisible to the report index, which answers "no framework" and
+	 * flags the method; the wide index closes the chain and the carve-out holds. Both corpora this
+	 * slice measured declare no resolution scope and spell every test class as a DIRECT subclass, so
+	 * this is the one arm that can move the widening at all — it is here because a change nothing can
+	 * flip is dead code however correct it reads.
+	 */
+	public function testFrameworkChainThroughTheResolutionScopeCarvesOut(): Void {
+		#if (sys || nodejs)
+		Assert.equals(0, lintChainUnder('{\n\t"resolutionRoots": ["lib"]\n}\n', 'Test'), 'the wide index closes T -> TestBase -> Test');
+		Assert.equals(1, lintChainUnder('{}\n', 'Test'), 'without a resolution scope the middle link is unseen and the method is flagged');
+		Assert.equals(
+			1, lintChainUnder('{\n\t"resolutionRoots": ["lib"]\n}\n', 'NotTest'),
+			'the scope alone proves nothing — with the chain ending somewhere else the method is flagged again'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private function mentions(vs: Array<Violation>, name: String): Bool {
 		return vs.exists(v -> v.message.indexOf('\'$name\'') >= 0);
 	}
@@ -187,6 +209,33 @@ class PreferInlineOracleTest extends Test {
 		};
 		CliFixture.removeDir(dir);
 		return ok;
+	}
+
+	/**
+	 * Lint `app/T.hx` alone under `config`, with a `lib/TestBase.hx` extending `root` beside it, and
+	 * answer the `--fail-on info` exit status: 0 when nothing is reported, 1 when `prefer-inline` is.
+	 * `root` is the third arm's variable — with it set to a non-contract type the resolution scope is
+	 * still declared and the chain still resolves, so a 1 there proves the 0 above came from the
+	 * framework claim and not from the scope's mere presence.
+	 */
+	private function lintChainUnder(config: String, root: String): Int {
+		final dir: String = CliFixture.writeDir('piwide', [{ name: 'apqlint.json', source: config }]);
+		FileSystem.createDirectory('$dir/lib');
+		FileSystem.createDirectory('$dir/app');
+		File.saveContent('$dir/lib/TestBase.hx', 'class TestBase extends $root {\n\n\tpublic function new() super();\n\n}\n');
+		File.saveContent('$dir/app/T.hx', 'class T extends TestBase {\n\n\tpublic function testThing(): Void _other.ping();\n\n}\n');
+		final code: Int = Cli.run([
+			'lint',
+			'$dir/app/T.hx',
+			'--rule',
+			'prefer-inline',
+			'--all',
+			'--no-oracle',
+			'--fail-on',
+			'info'
+		]);
+		CliFixture.removeDir(dir);
+		return code;
 	}
 	#end
 
