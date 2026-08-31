@@ -6,6 +6,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -172,13 +173,15 @@ final class Patch {
 		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call, and
 		// asking it per edit cost ~19% on a 17 000-line file with 135 ranges under `--all`.
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
-		final watched: Array<{ shifted: Int, owner: String }> = [];
+		final watched: Array<{ shifted: Int, owner: String, declared: Int }> = [];
 		var delta: Int = 0;
 		for (edit in sorted) {
 			final end: Int = docBlockEnd(source, comments, declGroupStart(source, tree, edit.span.from));
 			if (end >= 0) {
-				final owner: Null<String> = docOwnerName(source, tree, comments, end);
-				if (owner != null) watched.push({ shifted: end + delta, owner: owner });
+				final node: Null<QueryNode> = docOwnerNode(source, tree, comments, end);
+				final owner: Null<String> = node?.name;
+				if (node != null && owner != null)
+					watched.push({ shifted: end + delta, owner: owner, declared: declSiblingCount(tree, node) });
 			}
 			delta += edit.text.length - (edit.span.to - edit.span.from);
 		}
@@ -188,8 +191,30 @@ final class Patch {
 		final after: QueryNode = try plugin.parseFile(spliced) catch (exception: Exception) return null;
 		final splicedComments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(spliced);
 		for (w in watched) {
-			final now: Null<String> = docOwnerName(spliced, after, splicedComments, w.shifted);
-			if (now != null && now != w.owner)
+			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, w.shifted);
+			if (ownerNode == null) continue;
+			final owner: QueryNode = ownerNode;
+			final now: Null<String> = owner.name;
+			// A RENAME of the documented declaration reaches this point by construction —
+			// the doc's owner name changed because the declaration was renamed, not because
+			// a new one was pushed between them — and refusing it made `patch` decline the
+			// single most ordinary edit a documented member ever gets. Two independent
+			// signals separate it from a TRANSFER, and each covers the other's hole:
+			//
+			// - `siblingDeclares`: a transfer leaves the original declaration standing
+			//   beside the insertion, so BOTH names survive in the container.
+			// - the container GREW: a transfer adds a declaration, a rename does not. This
+			//   half is what catches the COMPOUND payload that inserts a declaration AND
+			//   renames the one it stole the doc from — there the old name is gone, so the
+			//   name test alone reads it as a rename and lets the theft through at rc 0.
+			//
+			// A payload that renames the documented declaration and adds an unrelated one to
+			// the same container in one call is refused by the second signal even though
+			// nothing was orphaned. That is the conservative side of a guard whose whole
+			// purpose is to refuse, and the refusal's own remedy — widen the fragment over
+			// the doc block — applies unchanged.
+			final grew: Bool = w.declared >= 0 && declSiblingCount(after, owner) > w.declared;
+			if (now != null && now != w.owner && (siblingDeclares(after, owner, w.owner) || grew))
 				return 'the edit moves the `/**` block above `${w.owner}` onto `$now` — the doc would '
 					+ 'silently transfer to the insertion and `${w.owner}` would be left undocumented. Widen the old fragment upward to '
 					+ 'include the doc block and repeat it in the replacement, so the doc travels with the declaration it documents; a '
@@ -282,32 +307,66 @@ final class Patch {
 	}
 
 	/**
-	 * The NAME of the declaration a doc block ending at `docEnd` documents, or null when the
-	 * position is not followed by a named declaration.
+	 * The declaration a doc block ending at `docEnd` documents — the node itself, so a caller can
+	 * ask about its NEIGHBOURS and not only its name.
 	 *
-	 * This is `RefactorSupport.declGroupSpan`'s forward walk asked in reverse: the doc attaches
-	 * to whatever starts after it, and a modifier / `@:meta` / conditional-region sibling in
-	 * between belongs to that same declaration rather than replacing it
-	 * (`RefactorSupport.isDeclPrefixSibling` is the same predicate the group span uses, so the
-	 * two cannot drift). Comparing this NAME across the edit is what makes the guard structural:
-	 * wrapping the member in `#if`, prepending `@:noCompletion` or a `//` note all leave the name
-	 * unchanged and are not refused, while an inserted declaration changes it and is.
+	 * The forward skip over the modifier / annotation run is the INNER walk `declGroupSpan` does;
+	 * the ENTRY condition is not shared. `declGroupSpan` stops on an annotation element and
+	 * answers its own span, while a doc block above an annotation run documents the declaration
+	 * under it — so this walk goes past the annotations on purpose.
 	 */
-	private static function docOwnerName(
+	private static function docOwnerNode(
 		source: String, tree: QueryNode, comments: Array<{ from: Int, to: Int, isLine: Bool }>, docEnd: Int
-	): Null<String> {
+	): Null<QueryNode> {
 		final at: Int = skipTrivia(source, comments, docEnd);
 		if (at >= source.length) return null;
 		final resolved: Null<QueryNode> = outermostAt(tree, at);
 		if (resolved == null) return null;
 		final node: QueryNode = resolved;
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		if (parent == null) return node.name;
+		if (parent == null) return node;
 		final siblings: Array<QueryNode> = parent.children;
 		var i: Int = siblings.indexOf(node);
-		if (i < 0) return node.name;
+		if (i < 0) return node;
 		while (i < siblings.length && RefactorSupport.isDeclPrefixSibling(siblings[i])) i++;
-		return i < siblings.length ? siblings[i].name : null;
+		return i < siblings.length ? siblings[i] : null;
+	}
+
+	/**
+	 * Whether any SIBLING of `node` still declares `name` — the discriminator between a
+	 * doc TRANSFER and a RENAME, the two edits that both change the name the watched doc
+	 * block sits above.
+	 *
+	 * A transfer pushes a NEW declaration between the doc and its owner, so the owner
+	 * stands beside the insertion and both names survive. A rename changes the name in
+	 * place, so the old one is gone from the container entirely — nothing was orphaned,
+	 * and the doc still documents the same declaration it always did.
+	 *
+	 * Scoped to the SIBLING set, not the file: renaming `Type.foo` while a different type
+	 * in the same module also declares `foo` is a rename, and a file-wide survival test
+	 * would refuse it. The one shape this reads as a transfer and is not is an `overload`
+	 * extern's repeated member name — renaming one arm of `extern overload function f`
+	 * leaves a sibling still called `f`; refusing there is the conservative answer for an
+	 * edit whose target is ambiguous by name anyway.
+	 */
+	private static function siblingDeclares(tree: QueryNode, node: QueryNode, name: String): Bool {
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
+		return parent != null && parent.children.exists(c -> c != node && c.name == name);
+	}
+
+	/**
+	 * How many DECLARATIONS `node`'s container holds — every sibling that is not a modifier /
+	 * annotation prefix, since those are not elements of their own. `-1` when the node has no
+	 * container, i.e. the count carries no signal and the caller must not read one into it.
+	 *
+	 * The second half of the transfer/rename discriminator: a transfer ADDS a declaration to the
+	 * container, a rename does not. Asked separately from the name test because a payload can
+	 * erase the old name and insert in the same call, which the name test alone reads as a plain
+	 * rename.
+	 */
+	private static function declSiblingCount(tree: QueryNode, node: QueryNode): Int {
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
+		return parent == null ? -1 : parent.children.count(c -> !RefactorSupport.isDeclPrefixSibling(c));
 	}
 
 	/**

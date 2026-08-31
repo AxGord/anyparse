@@ -91,6 +91,123 @@ class PatchSliceTest extends Test {
 		assertPatch(source, BySelector('ClassDecl:C'), 'function b() {}', 'function c() {}\n\n\tfunction b() {}', expected);
 	}
 
+	/**
+	 * RENAMING a documented declaration was refused by the doc-attachment guard, which is the
+	 * single most ordinary edit a documented member ever gets: the doc's owner NAME changes by
+	 * construction, and the guard read any name change as the doc having moved onto something
+	 * else. The discriminator is what happened to the OLD name — a transfer leaves the original
+	 * declaration standing beside the insertion, a rename removes it from the container.
+	 */
+	public function testRenamingADocumentedMemberAccepted(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final expected: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction bee() {}\n}\n';
+		assertPatch(source, BySelector('ClassDecl:C'), 'function b() {}', 'function bee() {}', expected);
+	}
+
+	/** The same at module level, where the doc's owner is a type and the container is the module. */
+	public function testRenamingADocumentedTypeAccepted(): Void {
+		final source: String = '/**\n * About T.\n */\nclass T {}\n';
+		final expected: String = '/**\n * About T.\n */\nclass U {}\n';
+		assertPatch(source, BySelector('ClassDecl:T'), 'class T {}', 'class U {}', expected);
+	}
+
+	/**
+	 * The survival test is scoped to the doc owner's own SIBLINGS, not to the file: a second
+	 * type in the same module declaring the same member name is not evidence that anything was
+	 * orphaned. A file-wide survival test — the obvious cheaper spelling — refuses this and
+	 * nothing else.
+	 */
+	public function testRenamingADocumentedMemberWhoseNameASiblingTypeAlsoUsesAccepted(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n\nclass D {\n\tfunction b() {}\n}\n';
+		final expected: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction bee() {}\n}\n\nclass D {\n\tfunction b() {}\n}\n';
+		assertPatch(source, BySelector('ClassDecl:C'), 'function b() {}', 'function bee() {}', expected);
+	}
+
+	/**
+	 * The COMPOUND payload, and the hole the name test alone leaves: insert a declaration above
+	 * the documented member AND rename that member in one call. The old name is gone, so the
+	 * transfer/rename discriminator reads it as a rename — and lets S23's theft through at rc 0,
+	 * doc sitting above the insertion, file parsing, every gate green. Found by review of the
+	 * relaxation, not by any pin the relaxation shipped with; the two pure shapes it was mutated
+	 * against cannot see it. The container-GREW signal is what refuses it, and dropping that
+	 * disjunct flips exactly this test.
+	 *
+	 * GREEN at base by construction — the base guard refused every name change — so this is a
+	 * regression pin for the pass that introduced it, not for the defect the slice set out to fix.
+	 */
+	public function testInsertAheadOfADocumentedMemberThatIsAlsoRenamedRefused(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		switch Patch.patchNode(
+			source, BySelector('ClassDecl:C'), 'function b() {}', 'function c() {}\n\n\tfunction bee() {}', false, new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `c`', message);
+		}
+	}
+
+	/**
+	 * The conservative edge of that second signal, pinned so a later attempt to make the guard
+	 * precise has to flip a test rather than a user's file: renaming the documented declaration
+	 * while ALSO adding an unrelated one to the same container is refused, even though nothing
+	 * was orphaned. The refusal's own remedy — widen the fragment over the doc block — still
+	 * applies, which is what makes over-refusing here the safe side.
+	 */
+	public function testRenamePlusAnUnrelatedInsertInTheSameContainerRefused(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		switch Patch.patchNode(
+			source, BySelector('ClassDecl:C'), 'function b() {}', 'function bee() {}\n\n\tfunction extra() {}', false,
+			new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `bee`', message);
+		}
+	}
+
+	/**
+	 * The hole the container-GREW signal leaves, and why the name test stays beside it: a payload
+	 * that inserts a declaration above the documented member AND deletes a different one keeps the
+	 * count level, so growth sees nothing — but the original name survives, so `siblingDeclares`
+	 * refuses. Dropping the name test and keeping only growth flips exactly this.
+	 */
+	public function testInsertAheadOfADocumentedMemberWhileDeletingAnotherRefused(): Void {
+		final source: String = 'class C {\n\tfunction a() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'function a() {}\n\n', newText: '' },
+			{ oldText: 'function b() {}', newText: 'function c() {}\n\n\tfunction b() {}' }
+		];
+		switch Patch.patchNodeMany(source, BySelector('ClassDecl:C'), pairs, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `c`', message);
+		}
+	}
+
+	/**
+	 * The growth signal counts DECLARATIONS, not children: a modifier keyword projects its own
+	 * sibling, so a payload that renames the documented member and adds `public` to a neighbour
+	 * grows `parent.children` by one while declaring nothing new. Counting raw children instead
+	 * refuses this, which is a false refusal on an edit that orphans nothing.
+	 */
+	public function testRenamePlusAModifierAddedToASiblingAccepted(): Void {
+		final source: String = 'class C {\n\tfunction a() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final expected: String = 'class C {\n\tpublic function a() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction bee() {}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'function a() {}', newText: 'public function a() {}' },
+			{ oldText: 'function b() {}', newText: 'function bee() {}' }
+		];
+		switch Patch.patchNodeMany(source, BySelector('ClassDecl:C'), pairs, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	public function testPatchByPosition(): Void {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Int {\n\t\treturn 3;\n\t}\n}\n';
