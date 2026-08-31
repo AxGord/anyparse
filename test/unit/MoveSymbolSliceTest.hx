@@ -1184,7 +1184,6 @@ class MoveSymbolSliceTest extends Test {
 		);
 	}
 
-
 	public function testAGuardedStatementIsNeverTheOneCarried(): Void {
 		// `bindingOf` skips a guarded statement, so the ladder's answer always comes from the unguarded
 		// one — but both spell the same module path, and a `using` carried instead of an `import` would
@@ -1820,6 +1819,181 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}\n' }
 		]);
 		Assert.equals('package p;\n\nimport p.Dest.Sub;\n\nclass A {\n\tvar s:Sub;\n}\n', changeFor(changes, 'p/A.hx').newSource);
+	}
+
+	/**
+	 * A declaration at the END of a `#if … #end` region owns no blank against the `#end`, so the
+	 * cut has to take the one in front of it. The old rule keyed on whether the line AFTER the cut
+	 * was blank — true only between siblings — so it returned early and left `}` + blank + `#end`.
+	 * Driven through the PURE op, so the canonical-in / canonical-out gate at the CLI seam (which
+	 * repaired the OUTPUT for a file that happened to be canonical on disk) is not what is being
+	 * measured.
+	 */
+	public function testCuttingTheLastDeclarationOutOfARegionTakesItsSeparator(): Void {
+		final a: String =
+			'package pkg;\n\n#if macro\nclass Keep {\n\tpublic var k:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}\n#end\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 8, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals(
+			'package pkg;\n\n#if macro\nclass Keep {\n\tpublic var k:Int = 1;\n}\n#end\n', changeFor(changes, 'pkg/A.hx').newSource
+		);
+	}
+
+	/**
+	 * The mirror: a declaration at the START of the region owns no blank against the `#if`, and
+	 * there the cut has to widen FORWARD — the leading run is empty, so the backward widening the
+	 * old rule offered had nothing to take and left `#if macro` + blank.
+	 */
+	public function testCuttingTheFirstDeclarationOutOfARegionTakesItsSeparator(): Void {
+		final a: String =
+			'package pkg;\n\n#if macro\nclass Gone {\n\tpublic var g:Int = 1;\n}\n\nclass Keep {\n\tpublic var k:Int = 1;\n}\n#end\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals(
+			'package pkg;\n\n#if macro\nclass Keep {\n\tpublic var k:Int = 1;\n}\n#end\n', changeFor(changes, 'pkg/A.hx').newSource
+		);
+	}
+
+	/**
+	 * CONTROL, green at base: a declaration BETWEEN two siblings owns exactly one separator, and
+	 * exactly one must survive. With a blank on BOTH sides the "keep one" branch is taken whatever
+	 * the container answer is, so this pins the OUTPUT and not that mechanism —
+	 * `testAMiddleDeclarationWithOneBlankSideKeepsIt` is the one that pins the answer itself.
+	 * Forcing the container answer to "needed" flips the two region pins above; a no-op forward
+	 * blank-run scan flips this one.
+	 */
+	public function testCuttingAMiddleDeclarationLeavesExactlyOneSeparator(): Void {
+		final a: String = 'package pkg;\n\n#if macro\nclass A {\n\tpublic var a:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}'
+			+ '\n\nclass B {\n\tpublic var b:Int = 1;\n}\n#end\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 8, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B2 {}' }
+		]);
+		Assert.equals(
+			'package pkg;\n\n#if macro\nclass A {\n\tpublic var a:Int = 1;\n}\n\nclass B {\n\tpublic var b:Int = 1;\n}\n#end\n',
+			changeFor(changes, 'pkg/A.hx').newSource
+		);
+	}
+
+	/**
+	 * CONTROL, green at base: the end-of-MODULE shape the widening was first written for — the same
+	 * question with no container directive, so the trailing blank goes with the declaration.
+	 * Forcing the container answer to "separator needed" leaves it standing and flips this.
+	 */
+	public function testCuttingTheLastDeclarationOfAModuleTakesItsSeparator(): Void {
+		final a: String = 'package pkg;\n\nclass Keep {\n\tpublic var k:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 7, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals('package pkg;\n\nclass Keep {\n\tpublic var k:Int = 1;\n}\n', changeFor(changes, 'pkg/A.hx').newSource);
+	}
+
+	/**
+	 * The SOURCE keeps every import it had, including the one the departed declaration was the
+	 * last TYPE-POSITION user of. This is a decision, not an omission: the only reference
+	 * machinery this layer has for the source file is `sourceStillUsesType`, which reads type
+	 * positions only — measured, `apq uses Helper` returns 0 hits on a file whose only reference
+	 * is `Helper.go()`. An arm that dropped the import on that evidence was built and run, and it
+	 * deleted the import this fixture's remaining `Helper.go()` needs, at rc 0 with a file that
+	 * still parses; `unused-import` answers the same question with the resolution index and is
+	 * silent here. The advisory names the hand-off.
+	 */
+	public function testTheSourceKeepsAnImportTheMovedDeclarationLeftBehind(): Void {
+		final a: String = 'package pkg;\n\nimport dep.Helper;\n\nclass Stay {\n\tpublic function s():Void {\n\t\tHelper.go();\n\t}\n}'
+			+ '\n\nclass Movee {\n\tpublic var h:Helper;\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 11, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' },
+			{ file: 'dep/Helper.hx', source: 'package dep;\n\nclass Helper {\n\tpublic static function go():Void {}\n}' }
+		]);
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		Assert.isFalse(newA.contains('class Movee'), 'the move did not actually cut the declaration');
+		Assert.isTrue(newA.contains('import dep.Helper;'), 'the import a remaining Helper.go() needs was dropped');
+		Assert.isTrue(newA.contains('Helper.go();'), 'the remaining value-position use was lost');
+		Assert.isTrue(changeFor(changes, 'pkg/B.hx').newSource.contains('import dep.Helper;'), 'the dependency import was not carried');
+	}
+
+	/**
+	 * CONTROL for the container-end rule: a container's end is not always a directive or EOF. A
+	 * trailing COMMENT is trivia, so it is no sibling and the declaration still reads as the last
+	 * in its container — but the blank in front of the comment is a real separator. Taking BOTH
+	 * runs there, the obvious spelling of "a declaration at the end owns no blank", glued the
+	 * comment onto the previous declaration's closing brace, and flips exactly this. Found by a
+	 * review probe of this slice's own first cut, not by any pin it shipped with.
+	 */
+	public function testACutBeforeATrailingCommentKeepsOneSeparator(): Void {
+		final a: String =
+			'package pkg;\n\nclass Keep {\n\tpublic var k:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}\n\n// a trailing note\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 7, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals(
+			'package pkg;\n\nclass Keep {\n\tpublic var k:Int = 1;\n}\n\n// a trailing note\n', changeFor(changes, 'pkg/A.hx').newSource
+		);
+	}
+
+	/**
+	 * A `#if … #else … #end` region flattens EVERY branch into ONE child list, so two declarations
+	 * either side of an `#else` are adjacent children of one node and a child-INDEX test reads the
+	 * last of the `#if` branch as mid-container — leaving `}` + blank + `#else`, the very shape the
+	 * region pins above exist to remove. The neighbour test therefore asks the SOURCE as well:
+	 * a sibling only counts when nothing but whitespace stands between it and the cut. Found by
+	 * review, not by any pin the first cut shipped with.
+	 */
+	public function testCuttingTheLastDeclarationOfAConditionalBranchTakesItsSeparator(): Void {
+		final a: String = 'package pkg;\n\n#if macro\nclass A {\n\tpublic var a:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}\n'
+			+ '#else\nclass C {\n\tpublic var c:Int = 1;\n}\n#end\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 8, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals(
+			'package pkg;\n\n#if macro\nclass A {\n\tpublic var a:Int = 1;\n}\n#else\nclass C {\n\tpublic var c:Int = 1;\n}\n#end\n',
+			changeFor(changes, 'pkg/A.hx').newSource
+		);
+	}
+
+	/**
+	 * The mirror at the other branch edge: the FIRST declaration after an `#else` owes no blank
+	 * against it either, and its trailing run is the one that has to go.
+	 */
+	public function testCuttingTheFirstDeclarationOfAConditionalBranchTakesItsSeparator(): Void {
+		final a: String = 'package pkg;\n\n#if macro\nclass A {\n\tpublic var a:Int = 1;\n}\n#else\nclass Gone {\n'
+			+ '\tpublic var g:Int = 1;\n}\n\nclass C {\n\tpublic var c:Int = 1;\n}\n#end\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 8, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' }
+		]);
+		Assert.equals(
+			'package pkg;\n\n#if macro\nclass A {\n\tpublic var a:Int = 1;\n}\n#else\nclass C {\n\tpublic var c:Int = 1;\n}\n#end\n',
+			changeFor(changes, 'pkg/A.hx').newSource
+		);
+	}
+
+	/**
+	 * CONTROL, and the one shape the `needsSeparator` answer alone decides: a MIDDLE declaration
+	 * with a blank on exactly ONE side. With both sides blank the "keep one" branch is taken
+	 * whatever the answer is, which is why the four-fixture controls above cannot see it. Here
+	 * `needsSeparator` is the whole decision — forcing it false takes the leading blank and glues
+	 * `class B` onto `class A`'s brace.
+	 */
+	public function testAMiddleDeclarationWithOneBlankSideKeepsIt(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic var a:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}\nclass B {\n'
+			+ '\tpublic var b:Int = 1;\n}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 7, 7, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B2 {}' }
+		]);
+		Assert.equals(
+			'package pkg;\n\nclass A {\n\tpublic var a:Int = 1;\n}\n\nclass B {\n\tpublic var b:Int = 1;\n}\n',
+			changeFor(changes, 'pkg/A.hx').newSource
+		);
 	}
 
 	private function assertUnchanged(changes: Array<MoveChange>, file: String): Void {

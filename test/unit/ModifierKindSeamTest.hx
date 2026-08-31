@@ -154,6 +154,25 @@ class ModifierKindSeamTest extends Test {
 		);
 	}
 
+	/**
+	 * The bare-modifier guard is a hand-copy no more: `replace-node`'s own list of the keywords a
+	 * `newSource` must never consist of knew nine and the grammar declares eleven (ten modifier
+	 * siblings plus the folded `final`), so the ONE guard against this footgun did not cover
+	 * `overload` or `abstract`. `replace-node --at <the overload keyword> 'overload'` resolved the
+	 * whole member and replaced it with the word, deleting the declaration and donating the
+	 * keyword to the next one — at rc 0, with a file that still parses. Read from
+	 * `RefShape.modifierKinds` plus `finalModifierRankKind` it cannot drift again.
+	 */
+	public function testABareOverloadKeywordIsRefusedAsAWholeNodeReplacement(): Void {
+		final source: String = 'extern class C {\n\tpublic overload function f(a:Int):Void;\n\tpublic function keep():Void;\n}\n';
+		switch ReplaceNode.replaceNode(source, ReplaceTarget.ByPosition(2, 9), 'overload', true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok: $text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('bare modifier keyword') >= 0, message);
+		}
+	}
+
 	private function assertRemove(source: String, line: Int, col: Int, expected: String): Void {
 		switch RemoveElement.removeElement(source, line, col, true, new HaxeQueryPlugin()) {
 			case Ok(text):

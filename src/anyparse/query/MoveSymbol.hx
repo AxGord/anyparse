@@ -143,7 +143,10 @@ enum CarryResult {
 @:nullSafety(Strict)
 final class MoveSymbol {
 
-	/** The advisory appended to every successful move. */
+	/**
+	 * The advisory appended to every successful move — the residual gaps a caller must check by
+	 * hand, each one a case the op deliberately declines to guess at rather than one it forgot.
+	 */
 	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a static receiver ('
 		+ 'T.staticMethod()) or a value position are not auto-detected and may need a manual import. A '
 		+ 'cross-package move repoints importers and the source/dest imports; a fully-qualified pkg.Type code reference is '
@@ -156,7 +159,12 @@ final class MoveSymbol {
 		+ 'pkg.Mod.Sub) is carried when the statement that produced the binding is one the index can name; a `#if`-guarded '
 		+ 'module import and a module OUTSIDE the scope produce none it can, so such a dependency is neither carried nor '
 		+ 'refused and the destination may need the import written by hand. A MODULE import at an importer keeps its '
-		+ 'statement beside the repointed one when the source module still declares types that file names.';
+		+ 'statement beside the repointed one when the source module still declares types that file names. The SOURCE file '
+		+ 'keeps every import it had, including one the departed declaration was the last user of: whether an import is now '
+		+ 'unused is a whole-file question (a module import binds the sibling types of its module, a wildcard binds no single '
+		+ 'name, and a `using` grants extension methods no name scan sees), and this layer sees only type positions — a drop '
+		+ 'decided on that evidence deletes the import a remaining `T.staticMethod()` needs, at rc 0 with a file that still '
+		+ 'parses. Run `apq lint <file> --rule unused-import --fix`, which answers it with the resolution index.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -268,7 +276,8 @@ final class MoveSymbol {
 		//     under the import region; `applyEdits` orders that tie by span width so the removal goes
 		//     first, which is what keeps the insert's text out of the range being removed.
 		final cursorEdits: Array<{ span: Span, text: String }> = editsFor(editsByFile, cursorFile);
-		cursorEdits.push({ span: cutEditSpan(cursorSource, cut, cursorEdits), text: '' });
+		final needsSeparator: Bool = hasSiblingsOnBothSides(cursorSource, target.declParent, target.declNode, cut);
+		cursorEdits.push({ span: cutEditSpan(cursorSource, cut, cursorEdits, needsSeparator), text: '' });
 
 		// 8-9. Apply edits per file, atomically re-parse, collect changed files.
 		return applyMoveEdits(editsByFile, sourceOf, plugin, typeName);
@@ -971,18 +980,7 @@ final class MoveSymbol {
 		if (!isBlank(source, lineStart, declSpan.from)) return null;
 
 		// Walk backward over contiguous preceding trivia / meta lines.
-		var cutStart: Int = lineStart;
-		while (cutStart > 0) {
-			// `cutStart` is at the start of the current line; step to the
-			// previous line.
-			final prevLineEnd: Int = cutStart - 1; // the '\n' terminating the previous line
-			final prevLineStart: Int = lineStartOf(source, prevLineEnd);
-			final prevLine: String = source.substring(prevLineStart, prevLineEnd);
-			if (isContiguousTriviaLine(prevLine))
-				cutStart = prevLineStart;
-			else
-				break;
-		}
+		final cutStart: Int = triviaStartOf(source, declSpan.from);
 
 		// Extend forward over one trailing newline so the cut removes the
 		// whole decl block including its line terminator. Everything up to here is
@@ -1008,34 +1006,120 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * The span the cut actually removes: `cut` itself, widened BACK over the blank run in front of it
-	 * when the declaration had a blank line on both sides and the two would otherwise end up adjacent —
-	 * a trailing blank at the end of a module, a double separator anywhere else. `fmt --list` rejects
-	 * both, and `declText` has already been taken, so the destination is unaffected either way.
+	 * The span the cut actually removes — `cut` widened over the blank run in front of it, or behind it,
+	 * so that exactly the separation the REMAINING structure needs survives. `declText` has already been
+	 * taken, so the destination is unaffected either way.
 	 *
-	 * The double separator was invisible until `move` stopped leaving a declaration's conditional
-	 * prefix behind to fill the gap; before that only the end-of-module shape was reachable, which is
-	 * why the widening read as an end-of-file special case.
+	 * With a blank run on BOTH sides one of them goes, whatever the neighbours are: that is the one
+	 * blank a declaration between two siblings owned, and it is also the one a trailing COMMENT below
+	 * still needs. With a run on exactly ONE side, `needsSeparator` decides — a declaration between two
+	 * siblings keeps it, a declaration at either END of its container does not, and there the cut takes
+	 * it. With no run at all the cut stands as computed.
 	 *
-	 * The widening goes FORWARD instead — over the ONE blank line after the declaration; a
-	 * writer-canonical file never has two — when another edit on this file lands anywhere in
-	 * `[runStart, cut.to]`, which is the leading run plus the declaration itself. Today only ONE writer
-	 * can land there — the source file's own new import, whenever the declaration sat directly under the
-	 * import region — and widening backward over that gap would leave the two spans overlapping: the
-	 * splice produced a `pony/Or.hx` that no longer parsed, which the move's own re-parse gate turned
-	 * into a refusal of the whole write. Either direction leaves exactly one separator standing,
-	 * which is what the declaration owned.
+	 * The end case is what `#if macro … #end` made reachable: cutting the LAST declaration out of a
+	 * region left `}` + blank + `#end`, cutting the FIRST left `#if macro` + blank, because the old rule
+	 * keyed on whether the line AFTER the cut was blank — true only between siblings, and a directive
+	 * line is neither blank nor a declaration. Both shapes `fmt --list` rejects, and the canonical-in /
+	 * canonical-out gate at the CLI seam hid them only where the file was canonical to begin with; a
+	 * move into a file that already drifted kept them.
+	 *
+	 * The end-of-module shape the widening was first written for is the same question with no container
+	 * directive: a trailing blank, which is why it read as an end-of-file special case.
 	 */
-	private static function cutEditSpan(source: String, cut: Span, existing: Array<{ span: Span, text: String }>): Span {
-		final lineEnd: Int = source.indexOf('\n', cut.to);
-		if (!isBlank(source, cut.to, lineEnd < 0 ? source.length : lineEnd)) return cut;
+	private static function cutEditSpan(
+		source: String, cut: Span, existing: Array<{ span: Span, text: String }>, needsSeparator: Bool
+	): Span {
 		final runStart: Int = blankRunStart(source, cut.from);
-		return if (runStart == cut.from)
+		final runEnd: Int = blankRunEnd(source, cut.to);
+		final leading: Bool = runStart < cut.from;
+		final trailing: Bool = runEnd > cut.to;
+		// Widening BACKWARD would overlap another edit this file already carries — today only the
+		// source file's own new import, whenever the declaration sat directly under the import
+		// region. The splice then produced a `pony/Or.hx` that no longer parsed, which the move's own
+		// re-parse gate turned into a refusal of the whole write.
+		final backwardBlocked: Bool = existing.exists(e -> e.span.from >= runStart && e.span.from <= cut.to);
+		// Taking BOTH runs is only ever right when at most one of them exists. A container's end is
+		// not always a directive or EOF: a trailing COMMENT is trivia, so it is no sibling and the
+		// declaration still reads as the last in its container, while the blank in front of the
+		// comment is a real separator — taking both glued `// note` onto the previous declaration's
+		// closing brace. With both runs present exactly one survives, the same answer as between two
+		// sibling declarations.
+		if (needsSeparator || (leading && trailing)) return if (!leading || !trailing)
 			cut
-		else if (existing.exists(e -> e.span.from >= runStart && e.span.from <= cut.to))
-			new Span(cut.from, lineEnd < 0 ? source.length : lineEnd + 1)
+		else if (backwardBlocked)
+			new Span(cut.from, runEnd)
 		else
 			new Span(runStart, cut.to);
+		return new Span(leading && !backwardBlocked ? runStart : cut.from, runEnd);
+	}
+
+	/**
+	 * End of the run of whole BLANK lines starting at `at`. `at` is a line start for every cut whose
+	 * declaration was followed by a newline, which is the shape the caller normally hands it; where it
+	 * is not — a declaration ending at EOF with no terminator, or one whose closing line carries
+	 * trailing spaces — the remainder of that line is read as the first blank line, and it belongs to
+	 * the removed declaration either way. A final line with no terminator is never one: there is no
+	 * separator there to take.
+	 */
+	private static function blankRunEnd(source: String, at: Int): Int {
+		var end: Int = at;
+		while (end < source.length) {
+			final lineEnd: Int = source.indexOf('\n', end);
+			if (lineEnd < 0 || !isBlank(source, end, lineEnd)) break;
+			end = lineEnd + 1;
+		}
+		return end;
+	}
+
+	/**
+	 * Whether the declaration `node` has a NEIGHBOUR on both sides inside `parent` — a sibling with
+	 * nothing but whitespace between it and the cut. Its own leading modifier / `@:meta` run does not
+	 * count as one on the backward side, since `RefactorSupport.isDeclPrefixSibling` is what the cut
+	 * span already folds in; on the forward side no such walk is needed, because a prefix sibling there
+	 * belongs to the NEXT declaration and its presence proves one follows.
+	 *
+	 * False at either end of a container, and at a `#if … #else … #end` BRANCH edge, which a child index
+	 * alone cannot see: the grammar flattens every branch into one child list, so two declarations
+	 * either side of an `#else` are adjacent children of one node. `adjoins` asks the source instead.
+	 *
+	 * False is where the blank line the declaration carried may not be a separator at all: at the end of
+	 * a module it can be a trailing blank, and against a directive it is a blank a writer-canonical file
+	 * never has. Both `fmt --list` rejects. It is only MAY — a container's end can also be a trailing
+	 * COMMENT, which is trivia and so no sibling, and there the blank still separates — which is why
+	 * `cutEditSpan` consults this answer only when ONE side carries a blank run.
+	 */
+	private static function hasSiblingsOnBothSides(source: String, parent: Null<QueryNode>, node: QueryNode, cut: Span): Bool {
+		if (parent == null) return true;
+		final siblings: Array<QueryNode> = parent.children;
+		final index: Int = siblings.indexOf(node);
+		if (index < 0) return true;
+		var start: Int = index;
+		while (start > 0 && RefactorSupport.isDeclPrefixSibling(siblings[start - 1])) start--;
+		return adjoins(source, siblings, start - 1, cut.from, true) && adjoins(source, siblings, index + 1, cut.to, false);
+	}
+
+	/**
+	 * Whether `siblings[at]` exists AND nothing but whitespace lies between it and the cut edge at
+	 * `edge` — so it is a NEIGHBOUR this declaration owns a blank line against, rather than a sibling
+	 * the container's own text stands between.
+	 *
+	 * The whitespace half is what a child INDEX cannot answer. A `#if … #else … #end` region flattens
+	 * EVERY branch into one child list, so two declarations either side of an `#else` are adjacent
+	 * children of one node while the source has a directive between them; the text is the only
+	 * evidence the tree keeps. The same test answers the region's outer ends, a module's start and
+	 * end, and — read against the CUT rather than the declaration — leaves a swallowed doc comment on
+	 * the declaration's own side.
+	 */
+	private static function adjoins(source: String, siblings: Array<QueryNode>, at: Int, edge: Int, before: Bool): Bool {
+		if (at < 0 || at >= siblings.length) return false;
+		final span: Null<Span> = siblings[at].span;
+		if (span == null) return false;
+		// The NEXT sibling's own leading trivia — its doc comment, its `@:meta` — is bytes that
+		// declaration owns, not text standing between the two: measuring to its `span.from` read a
+		// neighbour's doc block as a container boundary and cut the blank line above it away.
+		final from: Int = before ? span.to : edge;
+		final to: Int = before ? edge : triviaStartOf(source, span.from);
+		return from <= to && source.substring(from, to).trim().length == 0;
 	}
 
 	/**
@@ -1591,6 +1675,8 @@ final class MoveSymbol {
 			typeName: typeName,
 			declSpan: RefactorSupport.trailingTrimmedSpan(cursorSourceNN, groupSpan),
 			declGroupEnd: groupSpan.to,
+			declNode: declMatch.declNode,
+			declParent: declParent,
 			declPrivate: hasPrivateModifier(declParent, groupSpan, parseSpan),
 			cursorSource: cursorSourceNN,
 			cursorInfo: cursorInfoNN,
@@ -1762,6 +1848,23 @@ final class MoveSymbol {
 		return null;
 	}
 
+	/**
+	 * Start of the run of contiguous trivia / meta lines immediately above `at`'s line — the doc
+	 * comment and annotations a whole-line cut of that declaration takes with it. A BLANK line is
+	 * not trivia, so the walk stops at the separator rather than swallowing it.
+	 */
+	private static function triviaStartOf(source: String, at: Int): Int {
+		var start: Int = lineStartOf(source, at);
+		while (start > 0) {
+			// `start` is at the start of the current line; step to the previous line.
+			final prevLineEnd: Int = start - 1; // the n terminating the previous line
+			final prevLineStart: Int = lineStartOf(source, prevLineEnd);
+			if (!isContiguousTriviaLine(source.substring(prevLineStart, prevLineEnd))) break;
+			start = prevLineStart;
+		}
+		return start;
+	}
+
 }
 
 /**
@@ -1780,6 +1883,8 @@ private typedef MoveTarget = {
 	final typeName: String;
 	final declSpan: Span;
 	final declGroupEnd: Int;
+	final declNode: QueryNode;
+	final declParent: Null<QueryNode>;
 	final declPrivate: Bool;
 	final cursorSource: String;
 	final cursorInfo: FileInfo;
