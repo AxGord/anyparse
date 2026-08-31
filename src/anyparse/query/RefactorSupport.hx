@@ -366,16 +366,31 @@ final class RefactorSupport {
 	private static final DOLLAR_ESCAPES: Array<String> = ['\\x24', '\\u0024'];
 
 	/**
-	 * Sibling node kinds a declaration's modifiers and metadata project to —
-	 * emitted BEFORE the decl they modify (`public static function` is
-	 * `(Public)(Static)(FnMember)`; annotations are the `META_KINDS` forms).
-	 * `declGroupSpan` folds a run of these plus the decl into one logical
-	 * element so a structural edit treats the whole `[@:meta modifiers… decl]`
-	 * as a unit, not the decl keyword alone. The member-level `abstract`
-	 * modifier (Haxe 4.2 abstract classes) projects as its own `(Abstract)`
-	 * sibling and IS here. `final` is NOT — it WRAPS its decl (`FinalDecl` /
-	 * `FinalModifiedMember` / `FinalMember`) instead of projecting to a
-	 * separate sibling.
+	 * Sibling node kinds a declaration's modifiers and metadata project to — emitted BEFORE the
+	 * decl they modify (`public static function` is `(Public)(Static)(FnMember)`; annotations are
+	 * the `META_KINDS` forms). `declGroupSpan` folds a run of these plus the decl into one logical
+	 * element so a structural edit treats the whole `[@:meta modifiers… decl]` as a unit, not the
+	 * decl keyword alone. The member-level `abstract` modifier (Haxe 4.2 abstract classes)
+	 * projects as its own `(Abstract)` sibling and IS here. `final` is NOT — it WRAPS its decl
+	 * (`FinalDecl` / `FinalModifiedMember` / `FinalMember`) instead of projecting to a separate
+	 * sibling.
+	 *
+	 * The AUTHORITY for the modifier half is the grammar's own `RefShape.modifierKinds`
+	 * (`HaxeNamingSupport.MOD_KIND_TO_NAME`'s key set, whose doc calls them "the kinds a
+	 * leading-run walk crosses without ending the run"). This list is a hand-copy of it, kept
+	 * because neither `declGroupSpan` nor `declRunStart` ACCEPTS a shape — NOT because their
+	 * callers lack one: several already hold a `RefShape` or a plugin, and threading one through
+	 * is a thirteen-call-site change.
+	 *
+	 * A hand-copy DRIFTS. `Overload` (`overload function f()`, carried by all three modifier
+	 * enums — `HxMemberModifier`, `HxModifier`, `HxCondModPrefix`) was declared by the grammar and
+	 * missing here, so a run stopped at the `overload` keyword and every consumer of the folded
+	 * span truncated there: `remove-element` on a member left the leftover modifiers standing and
+	 * the next declaration silently absorbed them (`extern overload public function keep()`), at
+	 * rc 0 with a file that still parses.
+	 * `ModifierKindSeamTest.testEveryModifierSeamKindIsADeclPrefixSibling` now re-asserts the
+	 * inclusion against the live plugin shape, so the next modifier a grammar enum gains fails a
+	 * test rather than a user's file.
 	 */
 	private static final MODIFIER_META_KINDS: Array<String> = META_KINDS.concat([
 		'Public',
@@ -386,7 +401,8 @@ final class RefactorSupport {
 		'Macro',
 		'Extern',
 		'Dynamic',
-		'Abstract'
+		'Abstract',
+		'Overload'
 	]);
 
 	/** The grammar kind a block-level `#if … #end` region projects as - the host of a conditional-modifier prefix (`isConditionalModifierRegion`). */
@@ -394,25 +410,28 @@ final class RefactorSupport {
 
 	/**
 	 * The bare DECLARATION-STARTING keyword kinds a conditional region may contribute to the
-	 * declaration after its `#end`, mirroring `RefShape.condDeclPrefixKeywordKinds` (Haxe
-	 * `EnumKw` / `AbstractKw` / `FinalKw`, the `@:kw` arms of `HxCondDeclPrefix`). Each can itself
-	 * introduce a type, so the grammar captures it as a bare token INSIDE the region rather than
-	 * letting the parser commit to a whole declaration there — which is why it is neither a
+	 * declaration after its `#end`, mirroring `RefShape.condDeclPrefixKeywordKinds` (Haxe `EnumKw`
+	 * / `AbstractKw` / `FinalKw`, the `@:kw` arms of `HxCondDeclPrefix`). Each can itself introduce
+	 * a type, so the grammar captures it as a bare token INSIDE the region rather than letting the
+	 * parser commit to a whole declaration there — which is why it is neither a
 	 * `MODIFIER_META_KINDS` sibling nor an annotation, and why an annotation-and-modifier-only test
 	 * reads `#if (haxe_ver >= 4.2) enum #else @:enum #end` as a declaration of its own.
 	 *
-	 * Read here rather than off the shape because `declGroupSpan` and `declRunStart` are statics
-	 * with no `RefShape` in hand at any of their call sites; `MODIFIER_META_KINDS` above already
-	 * carries the same grammar knowledge in the same form.
+	 * A hand-copy for the same reason `MODIFIER_META_KINDS` above is one — neither
+	 * `declGroupSpan` nor `declRunStart` accepts a shape — and guarded the same way, by
+	 * `ModifierKindSeamTest.testEveryCondDeclPrefixKeywordIsADeclPrefixSibling`, which asks the
+	 * predicate over the live `RefShape` rather than comparing two lists.
 	 *
 	 * The widening reaches every `declGroupSpan` consumer, and for one of them it is a behaviour
-	 * CHANGE rather than a repair: `replace-node --select 'AbstractDecl:E'` now overwrites the
-	 * region too, so a replacement copied out of `source --select` — which prints the declaration
-	 * WITHOUT its folded prefix, exactly as it already does for a leading `@:meta` — silently drops
-	 * the `enum` of `enum abstract`. That is the documented `replace-node` contract (its span covers
-	 * the whole declaration including its leading modifiers) applied to one more shape, and the two
-	 * slices are still the ones that disagree; making them agree is the fix, and it belongs to
-	 * `SourceSlice`, not here.
+	 * CHANGE rather than a repair: `replace-node --select 'AbstractDecl:E'` overwrites the region
+	 * too. That is the documented `replace-node` contract — its span covers the whole declaration
+	 * including its leading modifiers — applied to one more shape, and the read now agrees with it:
+	 * `Cli.resolveNodeLineBounds` folds the printed window through `declGroupSpan` in `Patch`'s own
+	 * order, so a replacement copied out of `source --select` carries the `enum` of `enum abstract`
+	 * instead of silently dropping it. `SourceSlice` — the `--source` render opt-in behind
+	 * `ast` / `refs` / `uses` / `meta` — still cuts the bare node span: it takes a `Span` and no
+	 * tree by design, so folding it needs a parent threaded to four renderer call sites and is its
+	 * own slice.
 	 */
 	private static final COND_DECL_PREFIX_KEYWORD_KINDS: Array<String> = ['EnumKw', 'AbstractKw', 'FinalKw'];
 

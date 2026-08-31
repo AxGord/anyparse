@@ -549,6 +549,7 @@ import unit.MisplacedTypeDocGuardedMetaTest;
 import unit.MissingVisibilityCheckTest;
 import unit.ModifierKindSeamTest;
 import unit.ModifierOrderCheckTest;
+import unit.MoveCanonicalOutputSliceTest;
 import unit.MoveMemberSliceTest;
 import unit.MoveSymbolSliceTest;
 import unit.MutationVerdictTest;
@@ -1459,6 +1460,7 @@ class RunTests {
 		addCase(new CommentRewriteSliceTest());
 		addCase(new SetModifierSliceTest());
 		addCase(new MoveSymbolSliceTest());
+		addCase(new MoveCanonicalOutputSliceTest());
 		addCase(new MoveMemberSliceTest());
 		addCase(new ApqMetaTest());
 		addCase(new ApqMetaEnumCtorSliceTest());

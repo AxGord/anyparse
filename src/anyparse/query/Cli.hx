@@ -11,6 +11,7 @@ import anyparse.check.Severity;
 import anyparse.core.EnvFlag;
 import anyparse.format.WhitespaceInvariant;
 import anyparse.format.comment.CommentInventory;
+import anyparse.format.comment.CommentLossException;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddElement;
 import anyparse.query.AddImport;
@@ -1714,7 +1715,7 @@ final class Cli {
 
 		final typeRefShape: TypeRefShape = plugin.typeRefShape();
 		final result: MoveResult = MoveSymbol.moveType(cursorFile, pos.line, pos.col, destFile, scopeFiles, plugin, typeRefShape);
-		return emitMoveResult('move', result, cursorFile, destFile, o.write);
+		return emitMoveResult('move', result, cursorFile, destFile, o.write, plugin);
 	}
 
 	/**
@@ -8562,12 +8563,15 @@ final class Cli {
 	}
 
 	/**
-	 * Resolve a `source --select <sel>` / `--at <line>:<col>` address to the
-	 * 1-based inclusive line range spanning the matched node. Parses `content`
-	 * with the `lang` plugin (so it works only on a parseable file, unlike the
-	 * raw `--range` reader). Returns `null` after printing a specific
-	 * `apq source: …` diagnostic (no match / ambiguous selector / position not on
-	 * a node / parse failure).
+	 * Resolve a `source --select <sel>` / `--at <line>:<col>` address to the 1-based inclusive
+	 * line range spanning the matched node WITH its modifier / annotation / conditional-prefix
+	 * run — the same `declGroupSpan` fold `patch` searches and `replace-node` overwrites, so text
+	 * copied out of this read goes back into either op unchanged. An annotation addressed on its
+	 * own still spans only itself, and the fold never reaches the doc block above the run.
+	 *
+	 * Parses `content` with the `lang` plugin (so it works only on a parseable file, unlike the
+	 * raw `--range` reader). Returns `null` after printing a specific `apq source: …` diagnostic
+	 * (no match / ambiguous selector / position not on a node / parse failure).
 	 */
 	private static function resolveNodeLineBounds(
 		path: String, content: String, lang: String, selectExpr: Null<String>, atSpec: Null<String>
@@ -8624,7 +8628,21 @@ final class Cli {
 		// optional trail is absent parses with a span running on to the next declaration,
 		// and printing that showed a neighbour's doc comment as part of this node — the
 		// same range `patch` searches, which is where a fragment is copied from.
-		final span: Span = RefactorSupport.trailingTrimmedSpan(content, rawSpan);
+		//
+		// `declGroupSpan` FIRST, in `Patch`'s own order: the range `patch` searches and the
+		// span `replace-node` overwrites are the MODIFIER-FOLDED one, and printing the bare
+		// node span made the read disagree with both. A one-line prefix hid it — the window
+		// is widened to whole LINES, so `@:keep public function f()` printed the annotation
+		// anyway — but with the prefix on its own line the read handed back a declaration
+		// WITHOUT its `@:keep` / `#if (haxe_ver >= 4.2) enum #end`, and feeding that straight
+		// back to `replace-node` dropped it at rc 0. An ANNOTATION addressed on its own still
+		// prints alone: `declGroupSpan` stops at one (S36), so the read follows the ops there
+		// too. The fold also stops BELOW the doc block, which plain `replace-node` leaves
+		// alone as well — its `--with-doc` arm and a replacement opening with a block comment
+		// are the two that do reach it.
+		final span: Span = RefactorSupport.trailingTrimmedSpan(
+			content, RefactorSupport.declGroupSpan(resolved, TreePath.parentOf(tree, resolved), rawSpan)
+		);
 		final endOffset: Int = span.to > span.from ? span.to - 1 : span.from;
 		return { from: span.lineCol(content).line, to: new Span(endOffset, endOffset).lineCol(content).line };
 	}
@@ -11871,9 +11889,15 @@ final class Cli {
 		return moveParseExit(EXIT_USAGE);
 	}
 
-	private static function emitMoveResult(cmd: String, result: MoveResult, cursorFile: String, destFile: String, write: Bool): Int {
+	private static function emitMoveResult(
+		cmd: String, result: MoveResult, cursorFile: String, destFile: String, write: Bool, plugin: GrammarPlugin
+	): Int {
 		switch result {
-			case Ok(changes, advisory):
+			case Ok(rawChanges, advisory):
+				// Only the WRITE path consumes `newSource`; a preview prints file names and a
+				// count, so canonicalising there would pay two writer passes per changed file
+				// for nothing observable.
+				final changes: Array<MoveChange> = write ? [for (c in rawChanges) canonicalMoveChange(cmd, c, plugin)] : rawChanges;
 				if (write) {
 					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
 					stderr('apq $cmd: wrote ${changes.length} file(s)\n');
@@ -11891,6 +11915,62 @@ final class Cli {
 				stderr('apq $cmd: $message\n');
 				return EXIT_RUNTIME;
 		}
+	}
+
+	/**
+	 * One move-produced file, canonicalised when — and only when — the file it replaces was
+	 * canonical to begin with.
+	 *
+	 * A move is a VERBATIM span splice: `MoveSymbol` cuts a declaration out with `cutEditSpan` and
+	 * pastes it in, and the writer never runs. So a file that was writer-canonical before the move
+	 * can come back with whitespace the writer would never emit. Measured on Pony at the base
+	 * commit: cutting the last declaration out of a `#if macro … #end` region left `}` + blank +
+	 * `#end`, and cutting the FIRST one left `#if macro` + blank — a blank line immediately inside
+	 * a region boundary, which the writer collapses. One of 15 successful moves over the first 60
+	 * modules produced a file `fmt --list` then flagged; the whole family is invisible to the op's
+	 * own gate, which only re-parses.
+	 *
+	 * Canonical-in / canonical-out, decided PER FILE against that file's own discovered
+	 * `hxformat.json` — the same config `apq fmt` would use, because canonicality asked under
+	 * compiled defaults answers about a style the project does not use. A file already
+	 * non-canonical on disk keeps exactly what the splice produced, so a move inside a repo whose
+	 * layout another formatter owns rewrites nothing it was not asked to. That gate is also what
+	 * makes this a provable no-op wherever the spliced result is already canonical — every case
+	 * the census measured green.
+	 *
+	 * The write goes through `FormatFixedPoint`, not one round trip, because a writer whose output
+	 * is not its own fixed point would leave the file one pass short of where the next `fmt --list`
+	 * looks — the very symptom this exists to remove. A run that does not converge keeps the raw
+	 * splice rather than writing a text no round trip reproduces.
+	 */
+	private static function canonicalMoveChange(cmd: String, change: MoveChange, plugin: GrammarPlugin): MoveChange {
+		// `readSourceForParse`, not `readFile`: it is the reader `collectScopeFiles` used to
+		// build the very sources this move was computed from, and it is `.hxtest`-aware. Reading
+		// the raw three-section file instead would answer "not canonical" for every `.hxtest`
+		// fixture and silently switch the gate off there.
+		final original: Null<String> = try readSourceForParse(change.file) catch (exception: Exception) null;
+		if (original == null) return change;
+		final opts: Null<String> = discoverFormatConfig(change.file);
+		if (!RefactorSupport.isWriterCanonical(original, plugin, opts)) return change;
+		// The FIXED POINT, not one round trip — the same loop `apq fmt` and
+		// `RefactorSupport.canonicalize` run, and for the same recorded reason: a writer whose
+		// output is not its own fixed point leaves the file one pass short of where the next
+		// `fmt --list` looks, which is the very symptom this gate exists to remove.
+		final fixed: FormatFixedPointResult = try FormatFixedPoint.run(
+			text -> plugin.writeRoundTrip(text, opts), change.newSource
+		) catch (exception: CommentLossException) {
+			// The one failure worth a word: the writer refuses to drop an author's comment
+			// rather than emitting lossy output. Keeping the raw splice is right for a span
+			// splice (the move's own re-parse already validated it), but silence here would
+			// leave a file `fmt --list` flags with nothing said about why.
+			stderr(
+				'apq $cmd: ${change.file} kept the raw splice — canonicalising it would lose the comment '
+				+ '`${exception.comment}`; run `apq fmt --list` on it\n'
+			);
+			return change;
+		}
+		final canon: Null<String> = fixed.text;
+		return fixed.converged && canon != null ? { file: change.file, newSource: canon } : change;
 	}
 
 	private static function parseRefsArgs(args: Array<String>): RefsOpts {
@@ -13210,7 +13290,7 @@ final class Cli {
 		final result: MoveResult = MoveMember.move(
 			srcFileNN, srcTypeName, memberNames, destTypeName, via, closure, scaffold, scopeFiles, plugin, plugin.typeRefShape()
 		);
-		return emitMoveResult('move-member', result, srcFileNN, srcFileNN, write);
+		return emitMoveResult('move-member', result, srcFileNN, srcFileNN, write, plugin);
 	}
 
 	private static function printMoveMemberUsage(): Void {
@@ -13420,7 +13500,7 @@ final class Cli {
 		final result: MoveResult = up
 			? InheritanceMove.pullUp(srcFileNN, srcTypeName, memberName, targetTypeName, scopeFiles, plugin)
 			: InheritanceMove.pushDown(srcFileNN, srcTypeName, memberName, targetTypeName, scopeFiles, plugin);
-		return emitMoveResult(cmd, result, srcFileNN, srcFileNN, write);
+		return emitMoveResult(cmd, result, srcFileNN, srcFileNN, write, plugin);
 	}
 
 	private static function printInheritanceMoveUsage(up: Bool): Void {
@@ -17736,7 +17816,9 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');
 		sysPrint('works on any file (parseable or skip-parse). `--select` / `--at` parse the\n');
-		sysPrint('file and print the full lines spanning the matched node — the clean way to\n');
+		sysPrint('file and print the full lines spanning the matched node together with its\n');
+		sysPrint('leading modifier / annotation / conditional-prefix run — the span `patch`\n');
+		sysPrint('searches and `replace-node` overwrites — the clean way to\n');
 		sysPrint("read ONE function by name (no line numbers, no S-expr): apq source f.hx --select 'FnMember:foo'.\n");
 		sysPrint('\n');
 		sysPrint('By default the common leading indentation shared by the shown lines is\n');
