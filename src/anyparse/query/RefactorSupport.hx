@@ -428,10 +428,11 @@ final class RefactorSupport {
 	 * including its leading modifiers — applied to one more shape, and the read now agrees with it:
 	 * `Cli.resolveNodeLineBounds` folds the printed window through `declGroupSpan` in `Patch`'s own
 	 * order, so a replacement copied out of `source --select` carries the `enum` of `enum abstract`
-	 * instead of silently dropping it. `SourceSlice` — the `--source` render opt-in behind
-	 * `ast` / `refs` / `uses` / `meta` — still cuts the bare node span: it takes a `Span` and no
-	 * tree by design, so folding it needs a parent threaded to four renderer call sites and is its
-	 * own slice.
+	 * instead of silently dropping it. `ast --select` / `ast --at` fold the same way now: their
+	 * `--source` window is computed in `Cli.sourceWindows` and handed to `SourceSlice`, which keeps
+	 * its span-only contract — WHICH span is the caller's decision. `refs` / `uses` `--source`
+	 * deliberately stay on the bare hit span, and `SourceSlice`'s own doc says why: a hit is an
+	 * occurrence in a listing rather than a node the caller addressed.
 	 */
 	private static final COND_DECL_PREFIX_KEYWORD_KINDS: Array<String> = ['EnumKw', 'AbstractKw', 'FinalKw'];
 
@@ -1774,6 +1775,16 @@ final class RefactorSupport {
 	 * written inside a comment's TEXT is content, not an opener.
 	 */
 	public static function trailingTrimmedSpan(source: String, span: Span): Span {
+		// The loop below can only move `to` when the span's LAST byte is whitespace, or the `/` that
+		// closes a block comment; anything else — `}`, `;`, `)`, an identifier byte — is the node's own
+		// last token and the answer is `span` unchanged. Testing that one byte first keeps the
+		// whole-file comment lex off the common path, which matters because a caller may ask once per
+		// MATCH: `ast --select 'IdentExpr' --source` over `Cli.hx` asks 14337 times, and the lex is
+		// O(file). Measured on that query: 23.8s -> 0.4s, with `--select 'FnMember' --source` 1.08s ->
+		// 0.34s and every window byte-identical.
+		if (span.to <= span.from || span.to > source.length) return span;
+		final lastByte: Int = source.fastCodeAt(span.to - 1);
+		if (!isSpace(lastByte) && lastByte != '/'.code) return span;
 		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(source);
 		var to: Int = span.to;
 		while (true) {
@@ -4345,6 +4356,26 @@ final class RefactorSupport {
 	public static function gutterStarAt(line: String): Int {
 		final lead: Int = line.length - line.ltrim().length;
 		return line.fastCodeAt(lead) == '*'.code && (lead + 1 >= line.length || isSpace(line.fastCodeAt(lead + 1))) ? lead : -1;
+	}
+
+	/**
+	 * The span an EDIT of `node` covers, and the bytes a READ of it should hand back:
+	 * `declGroupSpan` folds in the modifier / `@:meta` run the grammar projects as siblings of a
+	 * declaration, then `trailingTrimmedSpan` drops the run a `@:trailOpt` decl written without its
+	 * terminator swallows past its own closing brace.
+	 *
+	 * ONE spelling, because the promise the ops make is that they agree byte-for-byte:
+	 * `replace-node` overwrites this, `patch` searches inside it, `apq source --select` prints it
+	 * widened to whole lines, and `ast --select --source` prints it exactly. Four hand-copies of
+	 * the two calls made that promise prose; a fifth read the bare node span and the two reads of
+	 * one declaration disagreed, which is what let a replacement copied out of one of them drop the
+	 * declaration's `@:keep` at rc 0.
+	 *
+	 * `MoveSymbol` and `removeElement` still call the two halves themselves: the first needs the
+	 * UNTRIMMED group end and the modifier run separately, the second already holds the parent.
+	 */
+	public static function declEditSpan(source: String, tree: QueryNode, node: QueryNode, nodeSpan: Span): Span {
+		return trailingTrimmedSpan(source, declGroupSpan(node, TreePath.parentOf(tree, node), nodeSpan));
 	}
 
 	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */

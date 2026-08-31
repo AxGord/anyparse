@@ -51,13 +51,22 @@ final class Text {
 		return '${SValueWriter.write(toSValue(node, spans), SExprFormat.instance.defaultWriteOptions)}\n';
 	}
 
-	public static function renderMatches(matches: Array<QueryNode>, source: String, doc: Bool, src: Bool, spans: Bool = false): String {
+	/**
+	 * `windows` is parallel to `matches` — same length, same order — or EMPTY, and each entry is the
+	 * span the `--doc` / `--source` blocks are cut from (`Cli.sourceWindows`). An index past its end
+	 * falls back to the node's own span, which is what an empty array means and what this printed
+	 * before the window existed. A SHORTER-but-non-empty array is not a supported shape: the caller
+	 * builds both from one list.
+	 */
+	public static function renderMatches(
+		matches: Array<QueryNode>, source: String, windows: Array<Null<Span>>, doc: Bool, src: Bool, spans: Bool = false
+	): String {
 		if (matches.length == 0) return '(no matches)\n';
 		final buf: StringBuf = new StringBuf();
-		for (m in matches) {
+		for (i => m in matches) {
 			buf.add(SValueWriter.write(toSValue(m, spans), SExprFormat.instance.defaultWriteOptions));
 			buf.add('\n');
-			appendDocSource(buf, source, m.span, doc, src);
+			appendDocSource(buf, source, i < windows.length ? windows[i] : m.span, doc, src);
 		}
 		return buf.toString();
 	}

@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.check.CheckScan;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -65,19 +67,6 @@ enum ResolvedTarget {
 @:nullSafety(Strict)
 final class ReplaceNode {
 
-	/** Modifier keywords a `newSource` must never consist of (see the guard in `replaceNode`). */
-	private static final MODIFIER_KEYWORDS: Array<String> = [
-		'public',
-		'private',
-		'static',
-		'inline',
-		'override',
-		'final',
-		'macro',
-		'extern',
-		'dynamic'
-	];
-
 	/**
 	 * Replace the node addressed by `target` in `source` with `newSource`.
 	 * `reformat` opts into a whole-file canonicalisation when the source is
@@ -93,8 +82,16 @@ final class ReplaceNode {
 		// resolved target is the co-starting wrapper spanning the ENTIRE
 		// declaration, so `'public'` would silently drop the declaration body
 		// (the orphan keyword attaches to the next decl and may still parse).
+		// WHICH keywords those are is the grammar's answer, read through `RefShape.modifierKinds`
+		// plus the `final` the grammar folds INTO a declaration rather than emitting as a sibling
+		// (`finalModifierRankKind`). The nine-entry hand-copy that stood here was missing `abstract`
+		// and `overload`, so the guard let through exactly the shape it exists to refuse.
+		final shape: RefShape = plugin.refShape();
+		final bareKeywords: Array<String> = [for (kind in CheckScan.modifierKinds(shape)) kind.toLowerCase()];
+		final foldedKeyword: Null<String> = shape.finalModifierRankKind;
+		if (foldedKeyword != null) bareKeywords.push(foldedKeyword.toLowerCase());
 		final trimmedNew: String = newSource.trim();
-		if (MODIFIER_KEYWORDS.contains(trimmedNew))
+		if (bareKeywords.contains(trimmedNew))
 			return Err(
 				'newSource is the bare modifier keyword "$trimmedNew" — this would replace the WHOLE resolved node with it, '
 				+ 'silently dropping the declaration body. Flip modifiers with `apq set-modifier`, '
@@ -119,9 +116,7 @@ final class ReplaceNode {
 		// (modifiers included), not a fragment that would duplicate the
 		// surviving modifier siblings. A non-decl node (expression, statement,
 		// package) has no modifier run, so `declGroupSpan` returns it intact.
-		final groupSpan: Span = RefactorSupport.trailingTrimmedSpan(
-			source, RefactorSupport.declGroupSpan(node, TreePath.parentOf(tree, node), span)
-		);
+		final groupSpan: Span = RefactorSupport.declEditSpan(source, tree, node, span);
 		// `--with-doc` extends the replaced range back over the leading doc / block
 		// comment run (trivia the grammar keeps outside the node span) so the new
 		// source carries the declaration documentation. The same extension applies

@@ -52,18 +52,27 @@ final class Json {
 		return '${AstDumpJsonWriter.write(dump, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
 
-	public static function renderMatches(file: String, source: String, matches: Array<QueryNode>, doc: Bool, src: Bool): String {
+	/**
+	 * `windows` is parallel to `matches` — same length, same order — or EMPTY; see
+	 * `Text.renderMatches`. The `span` key is unaffected either way: it describes the NODE, while
+	 * `source` describes the declaration that node belongs to, so a consumer slicing the file by
+	 * `span` and one reading `source` get different bytes for the same match by design.
+	 */
+	public static function renderMatches(
+		file: String, source: String, matches: Array<QueryNode>, windows: Array<Null<Span>>, doc: Bool, src: Bool
+	): String {
 		final out: AstMatchesJson = {
 			file: file,
 			matches: [
-				for (n in matches) {
+				for (i => n in matches) {
 					final ast: AstNodeJson = toAst(n, source);
+					final window: Null<Span> = i < windows.length ? windows[i] : n.span;
 					if (doc) {
-						final d: Null<String> = SourceSlice.leadingDoc(source, n.span);
+						final d: Null<String> = SourceSlice.leadingDoc(source, window);
 						if (d != null) ast.doc = d;
 					}
 					if (src) {
-						final s: String = SourceSlice.slice(source, n.span);
+						final s: String = SourceSlice.slice(source, window);
 						if (s.length > 0) ast.source = s;
 					}
 					ast;

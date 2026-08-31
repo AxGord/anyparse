@@ -7138,7 +7138,13 @@ final class Cli {
 		sysPrint('  --select <path>     Subtree(s) matching a selector (e.g. "ClassDecl > FnDecl:foo")\n');
 		sysPrint('  --at <line>:<col>   Innermost node enclosing the 1-indexed position\n');
 		sysPrint('  --doc               With --select/--at: emit the match\'s leading doc-comment\n');
-		sysPrint('  --source            With --select/--at: emit the match\'s verbatim source slice\n');
+		sysPrint('  --source            With --select/--at: emit the match\'s verbatim source — the\n');
+		sysPrint('                      bytes replace-node overwrites, so a declaration arrives\n');
+		sysPrint('                      with the modifier / @:meta run the grammar projects as its\n');
+		sysPrint('                      siblings, and stopping below its doc block as replace-node\n');
+		sysPrint('                      does without --with-doc (apq source --select means the same\n');
+		sysPrint('                      declaration, widened to whole lines; --json carries it\n');
+		sysPrint('                      un-indented under the "source" key)\n');
 		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
 		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
 		sysPrint(
@@ -8222,7 +8228,15 @@ final class Cli {
 		sysPrint('Changes:\n');
 		sysPrint('  public | private    Set the visibility\n');
 		sysPrint('  +<mod> | -<mod>     Add / remove a boolean modifier\n');
-		sysPrint('                      (static, inline, override, macro, extern, dynamic)\n');
+		// Read off the DEFAULT grammar's own set rather than spelled here: a seventh hand-copy of
+		// the modifier vocabulary is how `overload` and `abstract` stayed unmentioned while the
+		// grammar projected them.
+		final shape: RefShape = pickPlugin('haxe').refShape();
+		final visibility: Array<String> = [for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase()];
+		final booleans: Array<String> = [
+			for (kind in CheckScan.modifierKinds(shape)) if (!visibility.contains(kind.toLowerCase())) kind.toLowerCase()
+		];
+		sysPrint('                      (${booleans.join(', ')})\n');
 		printSelectorAddressingSection();
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
@@ -8640,9 +8654,7 @@ final class Cli {
 		// too. The fold also stops BELOW the doc block, which plain `replace-node` leaves
 		// alone as well — its `--with-doc` arm and a replacement opening with a block comment
 		// are the two that do reach it.
-		final span: Span = RefactorSupport.trailingTrimmedSpan(
-			content, RefactorSupport.declGroupSpan(resolved, TreePath.parentOf(tree, resolved), rawSpan)
-		);
+		final span: Span = sourceWindows(tree, [resolved], content)[0] ?? rawSpan;
 		final endOffset: Int = span.to > span.from ? span.to - 1 : span.from;
 		return { from: span.lineCol(content).line, to: new Span(endOffset, endOffset).lineCol(content).line };
 	}
@@ -9562,11 +9574,12 @@ final class Cli {
 			if (node != null) sysPrint('${node.children.length}\n');
 			return EXIT_OK;
 		}
+		final windows: Array<Null<Span>> = node == null || !(o.wantDoc || o.wantSource) ? [] : sourceWindows(tree, [node], source);
 		final matches: Array<QueryNode> = node == null ? [] : [shapeAstOutput(node, o.depth, o.childrenLimit)];
 		sysPrint(
 			o.json
-				? Json.renderMatches(fileLabel, source, matches, o.wantDoc, o.wantSource)
-				: Text.renderMatches(matches, source, o.wantDoc, o.wantSource, o.spans)
+				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource)
+				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, o.spans)
 		);
 		return EXIT_OK;
 	}
@@ -9646,11 +9659,15 @@ final class Cli {
 			for (m in raw) sysPrint('${m.children.length}\n');
 			return EXIT_OK;
 		}
+		// The `--source` / `--doc` windows come from the RAW matches, before the reshape below: a
+		// `--depth` / `--children-limit` copy has no parent in the tree, so the fold could not be
+		// asked of it.
+		final windows: Array<Null<Span>> = o.wantDoc || o.wantSource ? sourceWindows(tree, raw, source) : [];
 		final matches: Array<QueryNode> = [for (m in raw) shapeAstOutput(m, o.depth, o.childrenLimit)];
 		sysPrint(
 			o.json
-				? Json.renderMatches(fileLabel, source, matches, o.wantDoc, o.wantSource)
-				: Text.renderMatches(matches, source, o.wantDoc, o.wantSource, o.spans)
+				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource)
+				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, o.spans)
 		);
 		return EXIT_OK;
 	}
@@ -14067,7 +14084,11 @@ final class Cli {
 
 	private static function printDocSourceFlatLimitLangHelp(): Void {
 		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
-		sysPrint('  --source            Also emit each hit\'s verbatim source slice\n');
+		sysPrint('  --source            Also emit each hit\'s verbatim source slice — the HIT\'s own\n');
+		sysPrint('                      span, NOT a declaration group, so a decl hit prints without\n');
+		sysPrint('                      its modifiers. This is a listing snippet; copy from\n');
+		sysPrint('                      apq source --select (or apq ast --select --source) when the\n');
+		sysPrint('                      text is going back into an op.\n');
 		printFlatLimitLangHelp();
 	}
 
@@ -18273,6 +18294,46 @@ final class Cli {
 		for (line in unfixedFixLedger(ledger, reasons, oracleIds, riskyIds)) stderr(line);
 	}
 	#end
+
+	/**
+	 * The window each match's `--source` / `--doc` block is cut from — one per match, in `Patch`'s own
+	 * order: `declGroupSpan` folds in the modifier / `@:meta` run the grammar projects as SIBLINGS of a
+	 * declaration, then `trailingTrimmedSpan` drops the run a `@:trailOpt` decl written without its
+	 * terminator swallows past its own closing brace.
+	 *
+	 * That is byte-for-byte the span `patch` searches and `replace-node` overwrites, and the same fold
+	 * `resolveNodeLineBounds` applies before widening it to whole LINES for `apq source --select` — so
+	 * the two reads agree about which declaration they mean, though `source --select` prints whole
+	 * lines and this prints exact bytes. Cutting the BARE node span instead handed back a declaration
+	 * without its `@:keep` / `public` / `#if … enum #end`, and feeding that straight to `replace-node`
+	 * dropped them at rc 0 — the hazard the ops' documentation blames on the caller, produced by a read
+	 * the documentation offers as the copy source. `--doc` and `--source` also stopped agreeing about
+	 * the same declaration: the doc block is found by walking BACK over the annotation lines, so with
+	 * both flags on the `@:keep` between them was printed by neither, and below a `#if … enum #end`
+	 * prefix the walk hit the `#end` and reported no doc at all.
+	 *
+	 * `--spans` is untouched: it reports the node's own span, which is what an AST view owes. So does
+	 * the JSON `span` key, which is emitted unconditionally — a JSON consumer that slices `span` out of
+	 * the file and one that reads the `source` key get different bytes for the same match, by design:
+	 * `span` describes the NODE, `source` describes the declaration it belongs to.
+	 *
+	 * The `refs` / `uses` `--source` opt-in still cuts the bare hit span. A hit is an OCCURRENCE in a
+	 * multi-file listing rather than a node the caller addressed, its entry record carries no tree to
+	 * fold against, and for every non-declaration hit the fold is a no-op; a caller that wants op-ready
+	 * text should read it with `apq source --select` or `apq ast --select`.
+	 *
+	 * The spans are taken from the RAW matches, before `--depth` / `--children-limit` reshape them: a
+	 * reshaped node is a COPY and has no parent in the tree. The caller computes them only when a flag
+	 * asks, since `trailingTrimmedSpan` lexes the whole file per match.
+	 */
+	private static function sourceWindows(tree: QueryNode, nodes: Array<QueryNode>, source: String): Array<Null<Span>> {
+		return [
+			for (n in nodes) {
+				final raw: Null<Span> = n.span;
+				raw == null ? null : RefactorSupport.declEditSpan(source, tree, n, raw);
+			}
+		];
+	}
 
 }
 

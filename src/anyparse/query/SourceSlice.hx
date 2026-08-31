@@ -11,9 +11,24 @@ using StringTools;
  * Deliberately depends only on the raw source string and a `Span`
  * (offset pair) — never on `QueryNode` or any parse tree. This mirrors
  * the `parseFileTypeRefs` separate-projection discipline at the slice
- * layer: `ast` / `refs` / `uses` / `meta` default output is untouched;
- * the doc / source text is reconstructed from offsets only when a flag
- * asks for it.
+ * layer: `ast` / `refs` / `uses` default output is untouched; the doc /
+ * source text is reconstructed from offsets only when a flag asks for it.
+ *
+ * WHICH span it is handed is therefore the CALLER's decision, and the two
+ * callers deliberately answer differently. `ast --select` / `ast --at`
+ * hand the DECLARATION-GROUP window — `RefactorSupport.declGroupSpan`
+ * then `trailingTrimmedSpan`, `Patch`'s own order — because `--select`
+ * and `--at` are the address grammar `patch` and `replace-node` take, so
+ * the text a user copies out of `ast --source` has to be the text those
+ * ops overwrite; cutting the bare node span instead handed back a
+ * declaration without its `@:keep` / `public` / `#if … enum #end` and
+ * `replace-node` dropped them at rc 0, and `--doc --source` together
+ * printed the run between the two blocks in neither. `refs` / `uses` `--source` hand the HIT's own span: a hit is an
+ * occurrence in a multi-file listing rather than a node the caller
+ * addressed, its record carries no tree to fold against, and for every
+ * non-declaration hit the fold would be a no-op anyway. A caller that
+ * wants op-ready text reads it with `source --select` or
+ * `ast --select --source`.
  *
  * `slice` is the verbatim span cut. `leadingDoc` walks backward over
  * blank and single-line `@…` annotation lines (a decl's recorded

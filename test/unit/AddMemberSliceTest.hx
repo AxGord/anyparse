@@ -22,6 +22,14 @@ using StringTools;
  */
 class AddMemberSliceTest extends Test {
 
+	/**
+	 * The `emptyLines` keys this project sets that decide the shape: a blank RUN may be two lines
+	 * long, and a blank before a closing brace is KEPT. Under the compiled defaults the run
+	 * collapses to one and the brace blank is removed, which is why nothing in this suite saw the
+	 * doubling.
+	 */
+	private static inline final TWO_BLANK_LINES: String = '{"emptyLines": {"maxAnywhereInFile": 2, "beforeRightCurly": "keep"}}';
+
 	/** Append a method to a class that already has a member. */
 	public function testAppendToClassWithMembers(): Void {
 		final source: String = 'class C {\n\tvar x:Int;\n}\n';
@@ -255,6 +263,29 @@ class AddMemberSliceTest extends Test {
 		final source: String = 'class C {\n\tpublic static var get:Int = #if nodejs\n\t1; #else 2; #end\n}\n';
 		final expected: String = source.replace('#end\n}\n', '#end\n\n\tvar y:Int;\n}\n');
 		assertAdd(source, 'C', 'var y:Int;', expected);
+	}
+
+	/**
+	 * The separator is emitted only when one is MISSING. A body already carrying a blank line
+	 * before its closing brace — what this project's own config makes canonical — got a second
+	 * one, and nothing reported it: the writer re-emits a blank run verbatim, so `fmt --list`
+	 * called the result canonical and every lint rule stayed silent. The other direction — a body
+	 * with no blank before its brace, which still owes one — is guarded by `testAppendToEnum`,
+	 * `testAppendToTypedefAnon`, `testReformatProceedsOnNonCanonical` and the three guarded-region
+	 * cases: suppressing the separator unconditionally flips exactly those six.
+	 */
+	public function testAppendAfterABlankLineDoesNotDoubleIt(): Void {
+		final source: String = 'class C {\n\tvar x:Int;\n\n}\n';
+		final expected: String = 'class C {\n\tvar x:Int;\n\n\tvar y:Int;\n\n}\n';
+		// Under the compiled DEFAULTS a blank RUN collapses to one line on the way out, which hid
+		// the doubling; this project's own config allows two, and that is where it survived.
+		final res: EditResult = AddMember.addMember(source, 'C', 'var y:Int;', false, new HaxeQueryPlugin(), TWO_BLANK_LINES);
+		switch res {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
 	}
 
 	/**

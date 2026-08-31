@@ -83,7 +83,19 @@ final class AddMember {
 		if (bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code)
 			return Err('"$typeName" has no brace body to add a member to');
 
-		final edit: { span: Span, text: String } = { span: new Span(bodyClose, bodyClose), text: '\n$trimmed\n' };
+		// The leading newline is the SEPARATOR the new member needs from the one above it. Under a
+		// config that KEEPS the blank line before a closing brace — this project's and Pony's — a
+		// canonical body already carries one, so emitting the separator unconditionally produced TWO:
+		// `fmt --list` calls the result canonical (the writer re-emits a blank run verbatim), so
+		// nothing reported it and the file silently drifted from the layout every other member in it
+		// has. Emit only what is missing.
+		// When one is already there the new member takes it as its OWN separator and re-emits one
+		// below, so the body keeps the shape it had on BOTH sides: consuming it instead moved the
+		// drift to the other end, leaving the closing brace with no blank above it under a config
+		// that keeps but never emits one.
+		final edit: { span: Span, text: String } = blankLinePrecedes(source, bodyClose)
+			? { span: new Span(bodyClose, bodyClose), text: '$trimmed\n\n' }
+			: { span: new Span(bodyClose, bodyClose), text: '\n$trimmed\n' };
 		final refusal: Null<String> = spliceRefusal(source, edit, typeName, plugin);
 		return refusal != null ? Err(refusal) : RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
@@ -171,6 +183,34 @@ final class AddMember {
 		RefactorSupport.eachMemberHost(typeBody, host -> for (child in host.children) if (RefactorSupport.isOpaqueMemberKind(child.kind))
 			found = true);
 		return found;
+	}
+
+	/**
+	 * Whether the whitespace immediately before `at` already spans a whole BLANK line — i.e. the
+	 * insertion point is separated from the text above it by at least one empty line. Two newlines,
+	 * because the first ends the line that text sits on and the second ends an empty one; anything
+	 * between them must be indentation only.
+	 *
+	 * Whether a canonical body HAS that blank line is a config question, not a universal one, and so is
+	 * whether the writer would put it back: measured, this project's own options re-emit it while
+	 * `{"emptyLines": {"maxAnywhereInFile": 2, "beforeRightCurly": "keep"}}` alone only PRESERVES what
+	 * it is given. So the op owes both sides — take the blank as the new member's separator and re-emit
+	 * one below it — and neither the doubling this guards against nor the bare brace the first fix left
+	 * behind was visible to any fixture in this suite until one passed options in.
+	 */
+	private static function blankLinePrecedes(source: String, at: Int): Bool {
+		var newlines: Int = 0;
+		var i: Int = at - 1;
+		while (i >= 0) {
+			final code: Int = source.fastCodeAt(i);
+			if (code == '\n'.code) {
+				newlines++;
+				if (newlines >= 2) return true;
+			} else if (!RefactorSupport.isSpace(code))
+				return false;
+			i--;
+		}
+		return false;
 	}
 
 }
