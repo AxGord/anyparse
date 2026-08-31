@@ -7,8 +7,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.FrameworkContract;
-import anyparse.query.NamingPolicy.NamedDecl;
-import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -331,6 +329,28 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	}
 
 	/**
+	 * Whether a FRAMEWORK reaches `name` with no written call — a utest `test*` method of a class
+	 * transitively extending `Test`, or any member a contract the project declared in `apqlint.json`
+	 * (`frameworks`) names. Routed through `CheckScan.frameworkReachableMethod` — the shared adapter
+	 * over `NamingSupport.frameworkReachable`, the same predicate `unused-private` consults and the
+	 * one `prefer-inline` reads for its own carve-out — and asked with the same roster, so the three
+	 * rules cannot disagree about one member's framework status.
+	 *
+	 * They do not all reach the same INDEX, and the difference is the GATE, not the scope: this rule
+	 * and `prefer-inline` take `RefactorSupport.resolutionIndexOf`, which answers on
+	 * `hasAnyResolutionScope()` (a std-only scope counts), while `unused-private` takes
+	 * `widestScopeIndex`, which demands `hasDeclaredResolutionScope()`. On a project that declares
+	 * roots or libs — this one does — all three resolve through the same wide index; on one that
+	 * declares neither, `unused-private` falls back to its report index and the other two may not.
+	 *
+	 * A grammar exposing no naming support answers `false` and the member is judged on the text scan
+	 * alone.
+	 */
+	private static inline function frameworkReachable(ctx: Ctx, name: String, owner: String, span: Span, scope: SymbolIndex): Bool {
+		return CheckScan.frameworkReachableMethod(ctx.naming, name, owner, span, () -> scope, ctx.contracts);
+	}
+
+	/**
 	 * The class's public methods that clear every CHEAP gate — the modifier / metadata run, the
 	 * implicitly-reachable name list, and the two-mechanism reference test — each paired with the
 	 * span its own declaration occupies.
@@ -391,30 +411,6 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		// Short-circuit deliberate: the confirm is a per-candidate scan of every report file, so
 		// it must never run for a name the cheap map already saw somewhere else.
 		return ctx.tokens[name] == own[name] && !index.nameOccursOutside(name, file, region);
-	}
-
-	/**
-	 * Whether a FRAMEWORK reaches `name` with no written call — a utest `test*` method of a class
-	 * transitively extending `Test`, or any member a contract the project declared in `apqlint.json`
-	 * (`frameworks`) names. Routed through `NamingSupport.frameworkReachable`, the same predicate
-	 * `unused-private` consults, and asked with the same roster — so the two unused-* rules share the
-	 * PREDICATE and the contracts, not the resolution scope: this one resolves through the wide report
-	 * UNION scope (so a `Test` base living in a configured library still counts), `unused-private`
-	 * through its report index, and a member visible to one index and not the other can still get
-	 * different answers. A grammar exposing no naming support answers `false` and the member is judged
-	 * on the text scan alone.
-	 */
-	private static function frameworkReachable(ctx: Ctx, name: String, owner: String, span: Span, scope: SymbolIndex): Bool {
-		final naming: Null<NamingSupport> = ctx.naming;
-		if (naming == null) return false;
-		final decl: NamedDecl = {
-			span: span,
-			name: name,
-			category: NamingCategory.Method,
-			mods: [],
-			enclosingType: owner
-		};
-		return naming.frameworkReachable(decl, () -> scope, ctx.contracts);
 	}
 
 	/**

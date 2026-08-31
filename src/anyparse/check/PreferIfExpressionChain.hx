@@ -25,11 +25,34 @@ import anyparse.runtime.Span;
  * Purely structural (no type information). `Info` — the code is correct, this is the
  * convergence half of the project's documented conditional canon: a TWO-branch value
  * conditional is a ternary, a THREE-or-more-branch one an if-expression chain, and an
- * equality-shaped chain a `switch`. The statement-side rules (`prefer-ternary-return` /
- * `-assignment`, `prefer-if-expression-return` / `-assignment`) already produce that canon
- * from `if` STATEMENTS; `prefer-ternary-expression` produces the 2-branch half from an
- * if-EXPRESSION. This check owns the remaining direction — a chain the author wrote as
- * nested `?:` in the first place, which no statement-side rule can see.
+ * equality-shaped chain a `switch`. `prefer-ternary-expression` produces the 2-branch half from an
+ * if-EXPRESSION. This check owns the remaining direction — a chain the author wrote as nested `?:`
+ * in the first place, which no statement-side rule can see.
+ *
+ * ## What this check ALSO cleans up, and should not have to (S45, measured)
+ *
+ * The statement-side rules (`prefer-ternary-return` / `-assignment`,
+ * `prefer-if-expression-return` / `-assignment`) were documented here as already producing that
+ * canon from `if` STATEMENTS. They do not. `prefer-ternary-return` collapses onto a value that is
+ * ALREADY a ternary, which writes a three-rung chain — a violation of THIS check, on code the
+ * collapse just wrote. So a share of what arrives here is not an author's nested `?:` at all; it
+ * is a sibling rule's output.
+ *
+ * It is not an oscillation and cannot be: this check's own output holds no ternary rung, so it is
+ * its own fixed point, and `--fix` with both enabled converged in four passes. What it costs is
+ * the READER. On `if (a) return 1; if (b) return 2; return 3;` the report shows ONE
+ * `prefer-ternary-return`; applying it by hand exposes a second whose fix produces
+ * `return a ? 1 : b ? 2 : 3` — and the next run condemns that. A `--rule prefer-ternary-return
+ * --fix` run alone leaves the tree holding a finding that did not exist before it.
+ *
+ * Gating `prefer-ternary-return` on the crossing was BUILT AND REJECTED: it removed 70 findings
+ * across 13251 external files, every one of them a step the composed `--fix` uses to reach this
+ * canon, and it regressed `LintFixFixedPointCliTest.testElseIfChainConverges`. The fix belongs
+ * where the canon is reachable in ONE step instead — `prefer-if-expression-return` owning the 3+
+ * fall-through cascade, and `redundant-else-after-return` not taking an else-chain away from it
+ * (measured: `prefer-if-expression-return` alone turns
+ * `LintFixFixedPointCliTest`'s fixture into the canon in ONE fix, and loses the chain to
+ * `redundant-else` in a composed run).
  *
  * ## Disjoint from `prefer-ternary-expression` by RUNG COUNT
  *

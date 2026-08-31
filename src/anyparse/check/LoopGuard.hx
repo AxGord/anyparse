@@ -283,41 +283,22 @@ final class LoopGuard implements Check {
 	}
 
 	/**
-	 * If braced block `body` opens with a bare `if (c) continue;` guard followed by at least one
-	 * non-cascade statement, the candidate; else null. Bails when a comment sits in the dropped
-	 * `[body-open, guard-end)` region (a leading comment before the guard, or one inside it, the
-	 * rewrite would drop). `header` is the lifted header-if's condition on the merge arm, null
-	 * when the loop's own body is this block.
+	 * The leading guard `body` opens with, bundled with the header condition the MERGE arm joins it
+	 * to — or null when the body is not loop-guard's shape, or a comment before or inside that guard
+	 * would be lost by the rewrite.
+	 *
+	 * The shape test itself is `LoopScan.leadingContinueGuard`, and it lives there rather than here
+	 * because `guard-continue` must read the SAME answer to know what it may not claim: the two rules
+	 * fired on one loop body and gave opposite advice until they shared it.
 	 */
 	private static function matchBlock(body: QueryNode, source: String, s: Seams, headerCond: Null<QueryNode>): Null<Candidate> {
-		if (body.children.length < IF_NO_ELSE_CHILD_COUNT) return null;
-		final guard: QueryNode = body.children[0];
-		final cond: Null<QueryNode> = ifContinueCond(guard, s);
-		if (cond == null) return null;
-		if (ifContinueCond(body.children[1], s) != null) return null;
-		final gs: Null<Span> = guard.span;
-		final bs: Null<Span> = body.span;
-		if (gs == null || bs == null) return null;
-		final hasComment: Bool = CheckScan.hasCommentMarker(source, bs.from, gs.to);
-		return hasComment ? null : {
+		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, source, s.ifKinds, s.blockStmtKind, s.continueKind);
+		return guard == null ? null : {
 			guard: guard,
 			body: body,
-			cond: cond,
+			cond: guard.children[0],
 			headerCond: headerCond
 		};
-	}
-
-	/** The condition of a bare `if (c) continue;` (no `else`, then-branch exactly `continue`, braced-single allowed), else null. */
-	private static function ifContinueCond(stmt: QueryNode, s: Seams): Null<QueryNode> {
-		return s.ifKinds.contains(stmt.kind) && stmt.children.length == IF_NO_ELSE_CHILD_COUNT && isContinue(stmt.children[1], s)
-			? stmt.children[0]
-			: null;
-	}
-
-	/** Whether `node` is a `continue` statement — bare, or a single-statement block wrapping one. */
-	private static function isContinue(node: QueryNode, s: Seams): Bool {
-		return node.kind == s.continueKind
-			|| (node.kind == s.blockStmtKind && node.children.length == 1 && node.children[0].kind == s.continueKind);
 	}
 
 	/**

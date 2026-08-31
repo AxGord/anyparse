@@ -3,6 +3,10 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.query.NamingPolicy.NamedDecl;
+import anyparse.query.NamingPolicy.NamingCategory;
+import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -666,6 +670,47 @@ final class CheckScan {
 			if (edit != null) edits.push(edit);
 		}
 		return edits;
+	}
+
+	/**
+	 * Whether a FRAMEWORK reaches the METHOD `name` of type `owner` with no written call —
+	 * `NamingSupport.frameworkReachable` asked with the project's declared roster, which the
+	 * implementation unions with the frameworks its own language ships (in Haxe, a utest
+	 * `test` / `spec` / `setup` / `teardown` method of a class transitively extending `Test`).
+	 *
+	 * The predicate itself has one home and always did; what was copied was this ADAPTER — the
+	 * three lines that lift a `(name, owner, span)` a check already holds into the `NamedDecl`
+	 * the seam takes. `unused-public-member` grew it first, `prefer-inline` needed the same
+	 * question, and a second private copy is how a roster reaches one rule and not its sibling.
+	 * `unused-private` does not route through here: it holds a REAL projected `NamedDecl` with
+	 * the declaration's own modifiers, and synthesising a blank-modifier one over it would
+	 * discard information the seam is free to read.
+	 *
+	 * That `mods: []` is a real gap for the two callers that DO route here, not a harmless
+	 * simplification: utest skips a STATIC method (`!isStatic && isTestName(...)`), verified live,
+	 * yet a `public static function testX()` in a `Test` subclass is exempted by both of them today.
+	 * A `static` gate added to `nominated` would fix `unused-private` and silently miss these two.
+	 * Closing it means passing the real modifiers, which both call sites hold.
+	 *
+	 * `index` is a THUNK for the reason the seam declares: naming the declaration is a string
+	 * test, the supertype closure a whole-scope index, and a caller that has built none pays
+	 * only when a contract actually claims the name. A grammar with no naming support answers
+	 * `false` — the framework question is unprovable, and every caller's safe direction there is
+	 * to keep judging the member on its own evidence.
+	 */
+	public static function frameworkReachableMethod(
+		naming: Null<NamingSupport>, name: String, owner: String, span: Span, index: () -> Null<SymbolIndex>,
+		contracts: Array<FrameworkContract>
+	): Bool {
+		if (naming == null) return false;
+		final decl: NamedDecl = {
+			span: span,
+			name: name,
+			category: NamingCategory.Method,
+			mods: [],
+			enclosingType: owner
+		};
+		return naming.frameworkReachable(decl, index, contracts);
 	}
 
 	/**

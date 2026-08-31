@@ -1,6 +1,7 @@
 package unit;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.LintConfig;
 import anyparse.check.PreferInline;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -608,6 +609,66 @@ class PreferInlineCheckTest extends Test {
 		final vs: Array<Violation> = violations('class C {\n\tpublic function __helper():Void _other.stop();\n}');
 		Assert.equals(1, vs.length);
 		if (vs.length == 1) Assert.isTrue(hasMethod(vs, '__helper'), vs[0].message);
+	}
+
+	/**
+	 * A method a FRAMEWORK discovers by name is not a candidate, and the SAME body in a class the
+	 * framework does not drive still is — one assertion pair, so neither half passes on its own.
+	 * The claim is `NamingSupport.frameworkReachable` through `CheckScan.frameworkReachableMethod`,
+	 * the predicate `unused-private` and `unused-public-member` already read; no framework name
+	 * appears in the check.
+	 *
+	 * NOT a soundness gate. Marking a utest `test*` method `inline` is legal and changes nothing —
+	 * utest discovers by NAME out of `Context.getBuildFields()` at compile time, and a probe with a
+	 * `setup` / sync test / async test / `spec` method printed byte-identical utest output with and
+	 * without `inline`. It is a BENEFIT gate: the method's only call site is the one the framework's
+	 * own macro writes, so `inline` has nothing to fold it into.
+	 */
+	public function testFrameworkDiscoveredMethodNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class T extends Test {\n\tpublic function testThing():Void _other.ping();\n}').length,
+			'a utest test method is reached by the framework, never by a written call'
+		);
+		Assert.equals(
+			1, violations('class T extends Helper {\n\tpublic function testThing():Void _other.ping();\n}').length,
+			'the same body in a class no contract drives is still a candidate'
+		);
+	}
+
+	/** The accessory names a contract claims by PREFIX are covered too, not only `test`. */
+	public function testFrameworkAccessoryMethodNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class T extends Test {\n\tpublic function setup():Void _other.reset();\n}').length,
+			'`setup` is one of the prefixes the built-in contract claims'
+		);
+		Assert.equals(
+			1, violations('class T extends Test {\n\tpublic function reset():Void _other.reset();\n}').length,
+			'a name no prefix claims is still a candidate in the same class'
+		);
+	}
+
+	/**
+	 * The roster is the PROJECT's, not a hardcoded name: a contract declared through the linter's
+	 * config resolver carves out a member of a class extending ITS root, and the same member of a
+	 * class extending anything else stays a candidate.
+	 */
+	public function testDeclaredFrameworkContractCarvesOut(): Void {
+		final check: PreferInline = new PreferInline();
+		check.setConfigResolver(_ -> LintConfig.parse('{"frameworks":[{"root":"MonoBehaviour","names":["Start"],"prefixes":[]}]}'));
+		Assert.equals(
+			0,
+			check.run([
+				{ file: 'C.hx', source: 'class T extends MonoBehaviour {\n\tpublic function Start():Void _other.ping();\n}' }
+			], new HaxeQueryPlugin())
+				.length
+		);
+		Assert.equals(
+			1,
+			check.run([
+				{ file: 'C.hx', source: 'class T extends Helper {\n\tpublic function Start():Void _other.ping();\n}' }
+			], new HaxeQueryPlugin())
+				.length
+		);
 	}
 
 	private function cls(members: String): String {
