@@ -1527,7 +1527,45 @@ class RunTests {
 		// `failures:` on stdout.
 		//
 		// `APQ_TEST_VERBOSE=1` restores the per-method listing for a human reading one run.
+		// A passing test's own stdout is noise. The CLI e2e tests drive `Cli.run`,
+		// which prints progress and summaries; on a green suite that is ~119 KB nobody
+		// reads, and for a delegated run it is pure token cost. Buffer each test's
+		// stdout and DISCARD it when the test passes; a test with any non-Success
+		// assertation gets its buffer flushed verbatim, so a failure keeps the context
+		// that explains it.
+		//
+		// Only stdout is interceptable. `Sys.stderr()` on hxnodejs writes a RAW FD and
+		// bypasses `process.stderr.write` entirely — measured: patching both captured
+		// 118 706 bytes of stdout and 0 of stderr, while 74 514 bytes still reached the
+		// terminal. That half can only be dropped at the shell (`2>/dev/null`), which
+		// is why the protocol says so rather than this code pretending to handle it.
 		final verbose: Bool = Sys.getEnv('APQ_TEST_VERBOSE') != null;
+		#if nodejs
+		if (!verbose) {
+			final out = js.Node.process.stdout;
+			final passThrough: Dynamic = untyped out.write;
+			var buffer: Null<StringBuf> = null;
+			untyped out.write = function(chunk: Dynamic, ?enc: Dynamic, ?cb: Dynamic): Bool {
+				final buf = buffer;
+				if (buf == null) return passThrough.call(out, chunk, enc, cb);
+				buf.add(Std.string(chunk));
+				if (cb != null) cb();
+				return true;
+			};
+			runner.onTestStart.add(function(_): Void buffer = new StringBuf());
+			runner.onTestComplete.add(function(h): Void {
+				final buf = buffer;
+				buffer = null;
+				if (buf == null) return;
+				for (a in h.results) switch a {
+					case Success(_), Ignore(_):
+					case _:
+						passThrough.call(out, buf.toString(), null, null);
+						return;
+				}
+			});
+		}
+		#end
 		utest.ui.Report.create(runner, verbose ? AlwaysShowSuccessResults : NeverShowSuccessResults, AlwaysShowHeader);
 		runner.run();
 	}
