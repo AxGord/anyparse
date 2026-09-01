@@ -39,8 +39,17 @@ import anyparse.runtime.Span;
  * both branches a plain assignment) and emits a ternary. This rule handles the CHAIN (≥1
  * `else if`, terminating in a plain `else`) AND a 2-branch `if`/`else` whose branches are not
  * both plain assignments -- one is a nested `switch` / `if`-chain construct a ternary cannot
- * express. So a flat 2-branch stays the ternary rule's; a 2-branch carrying a nested construct
- * is this rule's. A given `if` matches at most one of the two.
+ * express, OR whose TERMINAL r-value is itself a ternary whose spine supplies the third leaf.
+ * A given `if` matches at most one of the two, and the ternary rule enforces that by ASKING
+ * this one (`claims`) rather than mirroring the split.
+ *
+ * That last case is the crossing S46 measured and filed as T381. Collapsed as ONE leaf the
+ * ternary rule writes `x = c ? a : p ? q : r`, a three-rung chain `prefer-if-expression-chain`
+ * then reports -- on text that fix had just written; 14 sites over 1029 external files took that
+ * rule from 93 findings to 107. Unrolled here (`AssignmentTreeHoist.terminalTernaryRungs` decides,
+ * `ifChainValue` emits) the same site reaches the canon in ONE edit, and over 8645 external files
+ * exactly 8 findings move -- each to the SAME line:col the ternary rule reported, so nothing is
+ * orphaned.
  *
  * ## What is flagged
  *
@@ -148,6 +157,26 @@ final class PreferIfExpressionAssignment implements Check {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	/**
+	 * Whether this check claims `head` — its whole derivation, gates and all.
+	 *
+	 * Asked by `prefer-ternary-assignment`, which owns the FLAT 2-branch `if`/`else` this rule
+	 * now takes over when the terminal r-value's ternary spine supplies the third leaf. Asked
+	 * rather than mirrored: a shape this rule REFUSES (a comment in a folded region, an
+	 * else-less conditional in a rung) must keep its ternary finding rather than fall through
+	 * to nobody, and a mirror is a second implementation of one question that drifts the moment
+	 * a gate here moves.
+	 * The answer is a STRUCTURAL claim only — the writer-emit gate runs much later and this cannot
+	 * see it, which is why `AssignmentTreeHoist.terminalTernaryRungs` keeps its own comment refusal
+	 * rather than letting a site reach that gate and lose its finding on the way.
+	 */
+	public static function claims(
+		head: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, shape: RefShape
+	): Bool {
+		final seams: Null<Seams> = readSeams(shape);
+		return seams != null && seams.ifKinds.contains(head.kind) && match(head, source, comments, seams) != null;
+	}
+
 	/** Bundle the required `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(shape: RefShape): Null<Seams> {
 		final tree: Null<TreeSeams> = AssignmentTreeHoist.readTreeSeams(shape);
@@ -187,10 +216,15 @@ final class PreferIfExpressionAssignment implements Check {
 		final chain: Null<IfChain> = IfExpressionChain.collect(head, s.ifKinds, s.tree.blockStmtKind, 1);
 		if (chain == null) return null;
 		// Disjointness with `prefer-ternary-assignment`: a FLAT 2-branch `if`/`else` (both plain-assign
-		// leaves) is the ternary rule's; claim a 2-branch only when a branch is a nested construct.
-		if (chain.branches.length < MIN_CHAIN_BRANCHES && !AssignmentTreeHoist.chainHasConstruct(chain, s.tree)) return null;
+		// leaves) is the ternary rule's; claim a 2-branch only when a branch is a nested construct, or
+		// when the TERMINAL r-value's own ternary spine supplies the third leaf — that one the ternary
+		// rule can only spell as a nested `?:`, which is a `prefer-if-expression-chain` finding on the
+		// text it just wrote.
+		final terminalRungs: Int = AssignmentTreeHoist.terminalTernaryRungs(chain, comments, s.tree);
+		if (chain.branches.length < MIN_CHAIN_BRANCHES && terminalRungs == 0 && !AssignmentTreeHoist.chainHasConstruct(chain, s.tree))
+			return null;
 		final ref: LvalueRef = { lvalue: null };
-		final probe: Null<UnitValue> = AssignmentTreeHoist.ifChainValue(chain, ref, source, s.tree);
+		final probe: Null<UnitValue> = AssignmentTreeHoist.ifChainValue(chain, ref, source, s.tree, terminalRungs > 0);
 		if (probe == null) return null;
 		final lvalue: Null<QueryNode> = ref.lvalue;
 		final headSpan: Null<Span> = head.span;
@@ -204,7 +238,7 @@ final class PreferIfExpressionAssignment implements Check {
 		// different chain -- and with an empty carry the two are byte-identical.
 		final carried: Null<Carried> = IfExpressionChain.carriedComments(headSpan, kept, probe.gaps, source, comments);
 		if (carried == null) return null;
-		final unit: Null<UnitValue> = AssignmentTreeHoist.ifChainValue(chain, ref, source, s.tree, carried);
+		final unit: Null<UnitValue> = AssignmentTreeHoist.ifChainValue(chain, ref, source, s.tree, terminalRungs > 0, carried);
 		return unit == null ? null : { lvalue: lvalue, value: unit.text };
 	}
 

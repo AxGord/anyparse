@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import haxe.Exception;
 import utest.Assert;
 import utest.Test;
 
@@ -20,6 +21,10 @@ import utest.Test;
  * flagged — the if-expression preserves the narrowing.
  */
 class PreferIfExpressionAssignmentCheckTest extends Test {
+
+	/** A flat 2-branch assignment whose ELSE r-value is a ternary — its spine supplies the third leaf. */
+	private static inline final TERNARY_TAILED_ELSE: String =
+		'class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : r;\n\t}\n}';
 
 	public function testBasicChainFlagged(): Void {
 		final vs: Array<Violation> = violations(wrap('if (a) x = 1;\n\t\telse if (b) x = 2;\n\t\telse x = 3;'));
@@ -187,6 +192,134 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/**
+	 * A flat 2-branch `if`/`else` whose TERMINAL r-value is a ternary is this rule's, unrolled.
+	 *
+	 * RED at base: the 2-branch gate asked only `chainHasConstruct`, so a plain-assign terminal
+	 * whose r-value happens to be a ternary fell through to `prefer-ternary-assignment` — which
+	 * collapsed onto a value that is ALREADY a ternary and wrote a three-rung chain
+	 * `prefer-if-expression-chain` then reported. The spine supplies the third leaf here instead,
+	 * in ONE edit.
+	 */
+	public function testTerminalTernaryTailSuppliesTheThirdRung(): Void {
+		final vs: Array<Violation> = violations(TERNARY_TAILED_ELSE);
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-if-expression-assignment', vs[0].rule);
+		final es: Array<{ span: Span, text: String }> = edits(TERNARY_TAILED_ELSE);
+		Assert.equals(1, es.length);
+		Assert.equals('x = if (a) 1 else if (p) q else r;', es[0].text);
+	}
+
+	/** A DEEPER terminal spine unrolls every rung, not just the first. */
+	public function testTerminalTernarySpineUnrollsEveryRung(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : s ? t : r;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('x = if (a) 1 else if (p) q else if (s) t else r;', es[0].text);
+	}
+
+	/**
+	 * FAIL-CLOSED: a comment anywhere inside that r-value leaves the site unclaimed.
+	 *
+	 * Not by a gate of its own — `terminalTernaryRungs` deliberately has none — but because the
+	 * unroll narrows `kept` to the pieces the rebuild actually copies, so a comment in the `?` /
+	 * `:` glue is inside no kept span and no carry gap and `IfExpressionChain.carriedComments`
+	 * refuses the site. `prefer-ternary-assignment` keeps its finding instead, which is what makes
+	 * the deferral there orphan nothing.
+	 */
+	public function testCommentInTheTerminalTernaryLeavesItUnclaimed(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p /* why */ ? q : r;\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q /* why */ : r;\n\t}\n}').length);
+		// DISCRIMINATOR: the SAME fixture with the comment gone IS claimed, so the zeroes above are
+		// the gate and not the unroll being absent. Without this the pin passes with the whole
+		// feature disabled, which `testFlatTwoBranchStillNotFlagged` proves is also an answer of 0.
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : r;\n\t}\n}').length);
+	}
+
+	/**
+	 * A LINE comment in a rung CONDITION leaves it unclaimed, and that is why the gate reads the
+	 * whole r-value span rather than trusting the copied pieces to be token-tight.
+	 *
+	 * A rung condition is not a leaf: `p == 1 /* why *\/ ? q : r` projects `(Eq @48-65 …)` whose
+	 * span runs THROUGH the comment to the `?`, so a raw `source.substring` of that piece welds it
+	 * into an emitted `if ( … )` head. A LINE comment then swallows the `)` the rebuild puts after
+	 * it and the writer refuses the whole file — measured end to end before the gate existed: the
+	 * site lost a `prefer-ternary-assignment` finding whose own rewrite round-trips fine and gained
+	 * an unfixable one here.
+	 */
+	public function testLineCommentInARungConditionLeavesItUnclaimed(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p == 1 // why\n\t\t\t? q\n\t\t\t: r;\n\t}\n}').length
+		);
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p == 1 ? q : r;\n\t}\n}').length);
+	}
+
+	/**
+	 * CONTROL: a BLOCK comment in the same position IS claimed, and the rewrite keeps it.
+	 *
+	 * Only a line comment breaks the emission; a block one rides inline and the result round-trips.
+	 * The first gate refused both, and that cost whole sites: a shape which ALSO carries a comment in
+	 * the if/else glue is declined by `prefer-ternary-assignment` as well, so nobody reported it.
+	 * Found by review after the blanket gate shipped.
+	 */
+	public function testBlockCommentInARungConditionIsClaimedAndKept(): Void {
+		// ONE assertion over both halves: the comment survives INSIDE the emitted condition, which
+		// nothing that merely declined could produce. The space before the `)` is the copied piece's
+		// own trailing trivia — the writer closes it up, and the file `--fix` writes reads
+		// `if (p == 1 /* why */)` and is canonical.
+		Assert.equals(
+			'x = if (a) 1 else if (p == 1 /* why */ ) q else r;',
+			soleEdit('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p == 1 /* why */ ? q : r;\n\t}\n}')
+		);
+	}
+
+	/**
+	 * An else-less conditional in an UNROLLED rung value leaves the site unclaimed.
+	 *
+	 * Those pairs become NON-terminal rungs, and the ` else ` emitted after each is absorbed by an
+	 * `if` that has none of its own — the rest of the chain silently becomes that `if`'s else
+	 * branch, in output that still re-parses. The scan `ifChainValue` already runs covers the
+	 * chain's own BRANCHES, and a spine the terminal r-value supplies is not one of them.
+	 */
+	public function testElseLessConditionalInAnUnrolledRungLeavesItUnclaimed(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? (if (z) 1) : r;\n\t}\n}').length);
+		// DISCRIMINATOR: the same rung value WITH its else IS claimed, so the zero above is the gate
+		// rather than the unroll being absent.
+		Assert.equals(
+			1, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? (if (z) 1 else 2) : r;\n\t}\n}').length
+		);
+	}
+
+	/**
+	 * An else-less conditional as the NEW terminal leaves the site unclaimed.
+	 *
+	 * The parser folds the statement's own `;` INTO such a conditional, so copying it into the
+	 * chain terminal and appending the rebuild's own `;` writes `… else if (z) 2;;` — which
+	 * anyparse re-parses and Haxe rejects. `unitValue` applies that gate to the r-value ROOT,
+	 * which after the unroll is a different node; measured by deleting both gates, where exactly
+	 * that text is what the fixer wrote.
+	 */
+	public function testElseLessConditionalAsTheNewTerminalLeavesItUnclaimed(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : if (z) 2;\n\t}\n}').length);
+		// DISCRIMINATOR: the same terminal WITH its else IS claimed, so the zero above is the gate
+		// rather than the unroll being absent.
+		Assert.equals(
+			1, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : if (z) 2 else 3;\n\t}\n}').length
+		);
+	}
+
+	/**
+	 * CONTROL: a flat 2-branch with two plain leaves stays `prefer-ternary-assignment`'s.
+	 *
+	 * Green at base by arithmetic — `terminalTernaryRungs` answers 0 for an r-value that is not a
+	 * ternary, so the widened gate is byte-identical to the old one here. Killed by making
+	 * `terminalTernaryRungs` answer a positive count unconditionally.
+	 */
+	public function testFlatTwoBranchStillNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = 2;\n\t}\n}').length);
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('prefer-if-expression-assignment'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
@@ -200,13 +333,10 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * branch is not a plain assignment, so this rule claims it.
 	 */
 	public function testSwitchInElseFlagged(): Void {
-		final src: String = wrap(
-			'if (a) x = f();\n\t\telse switch line {\n\t\t\tcase \'3.1\': x = \'a\';\n\t\t\tcase _: x = \'b\';\n\t\t}'
+		Assert.equals(
+			'x = if (a) f() else switch line { case \'3.1\': \'a\'; case _: \'b\'; };',
+			soleEdit(wrap('if (a) x = f();\n\t\telse switch line {\n\t\t\tcase \'3.1\': x = \'a\';\n\t\t\tcase _: x = \'b\';\n\t\t}'))
 		);
-		Assert.equals(1, violations(src).length);
-		final es: Array<{ span: Span, text: String }> = edits(src);
-		Assert.equals(1, es.length);
-		Assert.equals('x = if (a) f() else switch line { case \'3.1\': \'a\'; case _: \'b\'; };', es[0].text);
 	}
 
 	/** End-to-end through the canonical writer: the emitted file holds the hoisted if-expression whose else value is a switch-expression. */
@@ -299,6 +429,21 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	/** Wrap a statement body in a minimal parseable class + method. */
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
+	}
+
+	/**
+	 * The ONE edit this check produces for `src`, having asserted it reported exactly one finding.
+	 *
+	 * Throws rather than returning a sentinel when the edit list is empty: a helper that answered
+	 * `''` there would make every text comparison built on it pass vacuously the moment the check
+	 * stopped fixing anything.
+	 */
+	private function soleEdit(src: String): String {
+		Assert.equals(1, violations(src).length);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		if (es.length == 0) throw new Exception('the fixture produced no edit');
+		return es[0].text;
 	}
 
 	private function violations(src: String): Array<Violation> {

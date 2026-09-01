@@ -4,6 +4,7 @@ import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.CarryGap;
 import anyparse.check.IfExpressionChain.CarrySeat;
 import anyparse.check.IfExpressionChain.IfChain;
+import anyparse.check.IfExpressionChain.TernaryTail;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
@@ -66,6 +67,7 @@ final class AssignmentTreeHoist {
 		final parenKind: Null<String> = shape.parenKind;
 		return parenKind == null ? null : {
 			identKind: shape.identKind,
+			ternaryKind: shape.ternaryKind,
 			exprStmtKind: exprStmtKind,
 			blockStmtKind: blockStmtKind,
 			assignKind: assignKind,
@@ -224,7 +226,10 @@ final class AssignmentTreeHoist {
 		final ifKinds: Null<Array<String>> = s.ifKinds;
 		if (ifKinds == null) return null;
 		final chain: Null<IfChain> = IfExpressionChain.collect(ifNode, ifKinds, s.blockStmtKind, 1);
-		return chain == null ? null : ifChainValue(chain, ref, source, s, carried);
+		// A NESTED chain never unrolls its terminal r-value: the crossing this family had is with
+		// `prefer-ternary-assignment`, which only ever owns a TOP-LEVEL flat `if`/`else`, and the
+		// switch rule reaches this same recursion.
+		return chain == null ? null : ifChainValue(chain, ref, source, s, false, carried);
 	}
 
 	/**
@@ -250,7 +255,9 @@ final class AssignmentTreeHoist {
 	 * else-less `if` there could absorb nothing -- consistent with the family's stance that proving
 	 * which is which costs more than the rare cleanup it buys.
 	 */
-	public static function ifChainValue(chain: IfChain, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried): Null<UnitValue> {
+	public static function ifChainValue(
+		chain: IfChain, ref: LvalueRef, source: String, s: TreeSeams, unrollTerminal: Bool, ?carried: Carried
+	): Null<UnitValue> {
 		final kept: Array<Span> = [];
 		final gaps: Array<CarryGap> = [];
 		final built: Array<{ cond: String, value: String }> = [];
@@ -272,18 +279,90 @@ final class AssignmentTreeHoist {
 		}
 		final term: Null<UnitValue> = unitValue(chain.terminal, ref, source, s, carried);
 		if (term == null) return null;
-		for (k in term.kept) kept.push(k);
-		for (g in term.gaps) gaps.push(g);
-		leafCount += term.leafCount;
+		// The terminal r-value's own ternary SPINE becomes rungs of this chain when the caller says
+		// so (`terminalTernaryRungs`), which is what keeps the collapse from writing the three-rung
+		// `x = c ? a : p ? q : r` that `prefer-if-expression-chain` then reports. Every piece is
+		// copied from its own span, so `kept` names the pieces rather than the whole r-value and a
+		// comment in the `?` / `:` glue fails the site closed at `carriedComments` — the same
+		// fail-closed the caller already applied.
+		final tail: Null<TernaryTail> = unrollTerminal ? terminalTail(chain, s) : null;
+		var terminalText: String = term.text;
+		if (tail == null) {
+			for (k in term.kept) kept.push(k);
+			for (g in term.gaps) gaps.push(g);
+			leafCount += term.leafCount;
+		} else {
+			for (pair in tail.pairs) {
+				final condSpan: Null<Span> = pair.cond.span;
+				final valueSpan: Null<Span> = pair.value.span;
+				if (condSpan == null || valueSpan == null) return null;
+				built.push({
+					cond: source.substring(condSpan.from, condSpan.to),
+					value: source.substring(valueSpan.from, valueSpan.to)
+				});
+				kept.push(condSpan);
+				kept.push(valueSpan);
+				leafCount++;
+			}
+			final tailSpan: Null<Span> = tail.terminal.span;
+			if (tailSpan == null) return null;
+			kept.push(tailSpan);
+			leafCount++;
+			terminalText = source.substring(tailSpan.from, tailSpan.to);
+		}
 		for (g in seatGaps(seatParts, chain.terminal)) gaps.push(g);
 		return {
-			text: IfExpressionChain.buildValue(built, term.text),
+			text: IfExpressionChain.buildValue(built, terminalText),
 			kept: kept,
 			gaps: gaps,
 			atom: null,
 			leafCount: leafCount
 		};
 	}
+
+	/**
+	 * How many rungs the TERMINAL branch's r-value ternary spine adds to the collapsed chain, or 0
+	 * when there is nothing to unroll or unrolling would not be sound.
+	 *
+	 * The `else <lvalue> = p ? q : r;` shape is where this family crossed
+	 * `prefer-ternary-assignment`: taken as ONE leaf the collapse writes
+	 * `<lvalue> = c ? a : p ? q : r`, a three-rung ternary chain `prefer-if-expression-chain` then
+	 * reports — on code the collapse just wrote. Unrolled, the same site reaches that canon in ONE
+	 * edit, which is what lets the ternary rule defer instead of being gated.
+	 *
+	 * The unrolled pair VALUES become NON-terminal rungs and inherit the family's else-less gate,
+	 * which `ifChainValue` applies to the chain's own BRANCHES and to nothing a terminal r-value
+	 * supplies; the NEW terminal inherits the root gate `unitValue` applies to a leaf r-value, which
+	 * after the unroll is a different node. Both are load-bearing: without the second, `x = p ? q : if
+	 * (z) 2;` collapses to `… else if (z) 2;;`, which anyparse re-parses and Haxe rejects.
+	 *
+	 * FAIL-CLOSED on a comment anywhere inside the r-value span, and that gate is NOT redundant with
+	 * `IfExpressionChain.carriedComments` — a review proved the redundancy argument wrong after a
+	 * mutation arm deleting it killed nothing across six placements. The argument was that every
+	 * copied piece is a token-tight LEAF, so a comment is either inside a piece copied verbatim or
+	 * inside no `kept` span at all. A rung CONDITION is not a leaf: `p == 1 /* why *\/ ? q : r`
+	 * projects `(Eq @48-65 …)` whose span runs THROUGH the comment to the `?`, so the raw `source.substring` of that piece
+	 * carries it into an emitted `if ( … )` head. Only a LINE comment breaks that: it runs to the end
+	 * of its line and swallows the `)` the rebuild welds after it, and the writer then refuses the
+	 * whole file. A BLOCK comment in the same position rides inline and the result round-trips, so the
+	 * gate asks `tok.isLine` — refusing those too cost whole sites, because a shape that ALSO carries
+	 * a comment in the if/else glue is declined by `prefer-ternary-assignment` as well and then
+	 * nobody reports it. Measured end to end: the site lost a
+	 * `prefer-ternary-assignment` finding whose own rewrite round-trips fine and gained an
+	 * unfixable one here, because `claims` answers before the writer ever sees the shape.
+	 */
+	public static function terminalTernaryRungs(chain: IfChain, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: TreeSeams): Int {
+		final tail: Null<TernaryTail> = terminalTail(chain, s);
+		if (tail == null) return 0;
+		final rhsSpan: Null<Span> = terminalRvalue(chain, s)?.span;
+		if (rhsSpan == null) return 0;
+		// Re-bind: a narrowed Null<T> read does not carry its narrowing into the closure.
+		final span: Span = rhsSpan;
+		if (comments.exists(tok -> tok.isLine && tok.from >= span.from && tok.to <= span.to)) return 0;
+		for (pair in tail.pairs) if (IfExpressionChain.holdsElseLessConditional(pair.value, s.conditionalKinds)) return 0;
+		return IfExpressionChain.isElseLessConditional(tail.terminal, s.conditionalKinds) ? 0 : tail.pairs.length;
+	}
+
 
 	/** Whether any branch / terminal of `chain` is a nested switch / if construct (not a plain-assign leaf) -- the if-rule's 2-branch disjointness gate. */
 	public static function chainHasConstruct(chain: IfChain, s: TreeSeams): Bool {
@@ -428,6 +507,19 @@ final class AssignmentTreeHoist {
 		return s.switchKinds != null;
 	}
 
+	/** The terminal branch's plain-assign r-value node, or null when the terminal is not a plain assignment. */
+	private static function terminalRvalue(chain: IfChain, s: TreeSeams): Null<QueryNode> {
+		return plainAssign(chain.terminal, s)?.children[1];
+	}
+
+	/** The terminal r-value's unrolled ternary spine, or null when it is not a ternary at all. */
+	private static function terminalTail(chain: IfChain, s: TreeSeams): Null<TernaryTail> {
+		final rhs: Null<QueryNode> = terminalRvalue(chain, s);
+		if (rhs == null) return null;
+		final tail: TernaryTail = IfExpressionChain.unrollTernaryTail(rhs, s.ternaryKind, s.parenKind);
+		return tail.pairs.length == 0 ? null : tail;
+	}
+
 	/**
 	 * The borrowed value for a completely empty default arm -- `emptyDefault` unchanged. Null when
 	 * no fallback was given, `branch` is not a default arm (`isDefaultArm`), or it is not truly
@@ -505,6 +597,7 @@ final class AssignmentTreeHoist {
  */
 typedef TreeSeams = {
 	var identKind: String;
+	var ternaryKind: Null<String>;
 	var exprStmtKind: String;
 	var blockStmtKind: String;
 	var assignKind: String;

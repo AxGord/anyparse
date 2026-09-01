@@ -2,6 +2,7 @@ package unit;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
+import anyparse.check.PreferIfExpressionAssignment;
 import anyparse.check.PreferTernaryAssignment;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -19,6 +20,14 @@ import utest.Test;
  * the condition is parenthesised only when it binds no tighter than `?:`.
  */
 class PreferTernaryAssignmentCheckTest extends Test {
+
+	/** A flat 2-branch assignment whose ELSE r-value is a ternary — the third leaf, so `prefer-if-expression-assignment`'s. */
+	private static inline final TERNARY_TAILED_ELSE: String =
+		'class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : r;\n\t}\n}';
+
+	/** The same shape with a comment inside the ternary — the claiming rule fails closed, so this one keeps it. */
+	private static inline final COMMENTED_TERNARY_TAIL: String =
+		'class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p /* why */ ? q : r;\n\t}\n}';
 
 	public function testBasicFlagged(): Void {
 		final vs: Array<Violation> = violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = 2;\n\t}\n}');
@@ -131,6 +140,43 @@ class PreferTernaryAssignmentCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	/**
+	 * A flat `if`/`else` whose ELSE r-value is already a ternary is not this check's.
+	 *
+	 * RED at base, where this rule claimed it and collapsed it onto a value that is ALREADY a
+	 * ternary — writing the three-rung `x = a ? 1 : p ? q : r`, which `prefer-if-expression-chain`
+	 * then reports, on the text this fix had just written. Measured by S46 at 14 sites over 1029
+	 * external files, taking that rule from 93 findings to 107. The site keeps a finding at the
+	 * SAME line, from `prefer-if-expression-assignment`, whose single edit IS the canon.
+	 */
+	public function testTernaryTailedElseIsNotFlagged(): Void {
+		Assert.equals(0, violations(TERNARY_TAILED_ELSE).length);
+		Assert.equals(0, edits(TERNARY_TAILED_ELSE).length);
+		// DETECT-PROOF, in one assertion with the deferral: the claiming rule really does own this
+		// exact site, so the zeroes above are a deferral rather than a fixture this walk never
+		// reached — and its edit is the canon, not another ternary.
+		final claiming: PreferIfExpressionAssignment = new PreferIfExpressionAssignment();
+		final own: Array<Violation> = claiming.run([{ file: 'C.hx', source: TERNARY_TAILED_ELSE }], new HaxeQueryPlugin());
+		Assert.equals(1, own.length, 'prefer-if-expression-assignment claims the site: $own');
+		final es: Array<{ span: Span, text: String }> = claiming.fix(TERNARY_TAILED_ELSE, own, new HaxeQueryPlugin());
+		Assert.equals(1, es.length);
+		Assert.equals('x = if (a) 1 else if (p) q else r;', es[0].text);
+	}
+
+	/**
+	 * A comment inside that ternary keeps the site HERE, because the claiming rule refuses it.
+	 *
+	 * The deferral asks the other rule for its whole derivation, gates and all — the shape S46
+	 * measured a mirror losing 14 of 69 sites to. A shape-only deferral would silence this check
+	 * wherever the other one fails closed on a comment, and nobody would report the site at all.
+	 */
+	public function testCommentInTheTernaryTailKeepsTheFindingHere(): Void {
+		Assert.equals(1, violations(COMMENTED_TERNARY_TAIL).length);
+		Assert.equals(
+			0, new PreferIfExpressionAssignment().run([{ file: 'C.hx', source: COMMENTED_TERNARY_TAIL }], new HaxeQueryPlugin()).length
+		);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

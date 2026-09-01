@@ -8,6 +8,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a class / abstract member declared without an explicit `public` or
  * `private` modifier. Haxe defaults an unmodified member to `private`, so the
@@ -238,7 +240,10 @@ final class MissingVisibility implements Check {
 				sawVisibility = true;
 			else if (ctx.seams.members.contains(child.kind)) {
 				final span: Null<Span> = child.span;
-				if (!sawVisibility && span != null && !EnumAbstractForms.isValue(span, ctx.guarded)) ctx.out.push({
+				if (
+					!sawVisibility && !statesOwnVisibility(child, ctx.seams) && span != null
+					&& !EnumAbstractForms.isValue(span, ctx.guarded)
+				) ctx.out.push({
 					file: ctx.file,
 					span: span,
 					rule: 'missing-visibility',
@@ -380,7 +385,15 @@ final class MissingVisibility implements Check {
 	 */
 	private static function insertMember(ctx: FixCtx, member: QueryNode, typeName: Null<String>, state: RunState): Void {
 		final span: Null<Span> = member.span;
-		if (span == null || !ctx.flagged.contains(span.from) || EnumAbstractForms.isValue(span, ctx.guarded)) return;
+		// `statesOwnVisibility` is re-asked here, exactly as the extern check is: `fix` is handed the
+		// CALLER's violation list, so a hand-built one naming a member that already carries its
+		// visibility would otherwise get a second keyword prepended — the invalid `private final
+		// private function f()` this whole guard exists to stop.
+		if (
+			span == null || !ctx.flagged.contains(span.from) || EnumAbstractForms.isValue(span, ctx.guarded)
+			|| statesOwnVisibility(member, ctx.seams)
+		)
+			return;
 		final memberName: Null<String> = member.name;
 		final index: Null<SymbolIndex> = ctx.index;
 		final insert: Null<String> = if (!state.sawOverride)
@@ -436,6 +449,27 @@ final class MissingVisibility implements Check {
 		final out: Array<String> = CheckScan.modifierKinds(shape);
 		for (k in meta.metaKinds) if (!out.contains(k)) out.push(k);
 		return out;
+	}
+
+	/**
+	 * Whether `member` CARRIES its own visibility modifier rather than following one in the
+	 * container's modifier run.
+	 *
+	 * A member is normally PRECEDED by its modifiers as siblings, which is what `scanRun`
+	 * accumulates. But when `final` leads the run the parser projects one node that swallows the
+	 * rest: `final private function f()` is `(FinalModifiedMember f (Private) …)` while `private
+	 * final function f()` is `(Private) (FinalModifiedMember f …)`. Reading only the siblings
+	 * therefore saw no visibility on the first spelling and reported a member that states it — and
+	 * the fix then PREPENDED a second keyword, writing `private final private function f()`, which
+	 * anyparse re-parses and Haxe rejects. Pre-existing and reachable with no writer refusal
+	 * anywhere: `--fix --rule missing-visibility` on a one-member file wrote exactly that, and no
+	 * gate in the pipeline objected. `static private` was never affected — only `final` swallows.
+	 *
+	 * DIRECT children only: a visibility node deeper inside belongs to a nested declaration, and
+	 * counting it would exempt the enclosing member for its neighbour's modifier.
+	 */
+	private static function statesOwnVisibility(member: QueryNode, seams: Seams): Bool {
+		return member.children.exists(kid -> seams.visibility.contains(kid.kind));
 	}
 
 }

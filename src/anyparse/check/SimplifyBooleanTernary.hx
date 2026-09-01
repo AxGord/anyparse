@@ -20,6 +20,18 @@ import anyparse.runtime.Span;
  * `return !cond && x;` — so a boolean-returning guard chain collapses all the way
  * to a single flat boolean `return`, with no `if` and no ternary left.
  *
+ * ## It owns a boolean-reducible CHAIN HEAD
+ *
+ * `a ? false : b ? c : d` is both this shape and a three-value chain, and both rules used to
+ * report the same span: whichever ran first decided the file's fixed point (`--rule
+ * prefer-if-expression-chain --rule simplify-boolean-ternary` wrote the six-line `if (a) false
+ * else if (b) c else d`, the two flags swapped wrote `!a && (b ? c : d)` -- same input, same
+ * engine). The reduction wins, because after it BOTH canons hold: no boolean-literal branch for
+ * this rule, and whatever remains is still reachable by the chain rule, which converts it when it
+ * is still three values. The chain rewrite instead leaves a `false` leaf nothing can ever reach
+ * again. `prefer-if-expression-chain` defers by asking `claimedSpans`, which shares `walkClaims`
+ * -- and therefore `claims` -- with `run`, so the two answers cannot drift apart.
+ *
  * ## Grammar-agnostic
  *
  * Locates ternary nodes via `RefShape.ternaryKind` and delegates the rewrite to
@@ -43,10 +55,11 @@ final class SimplifyBooleanTernary implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final ternaryKind: Null<String> = shape.ternaryKind;
-		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
-		if (ternaryKind == null || support == null) return [];
+		final seams: Null<Seams> = readSeams(plugin);
+		if (seams == null) return [];
+		final shape: RefShape = seams.shape;
+		final ternaryKind: String = seams.ternaryKind;
+		final support: BooleanLogicSupport = seams.support;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -58,13 +71,14 @@ final class SimplifyBooleanTernary implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final ternaryKind: Null<String> = plugin.refShape().ternaryKind;
-		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
-		if (ternaryKind == null || support == null || violations.length == 0) return [];
+		final seams: Null<Seams> = readSeams(plugin);
+		if (seams == null || violations.length == 0) return [];
+		final ternaryKind: String = seams.ternaryKind;
+		final support: BooleanLogicSupport = seams.support;
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
-		final shape: RefShape = plugin.refShape();
+		final shape: RefShape = seams.shape;
 		final nodeBySpan: Map<String, QueryNode> = [];
 		final licenceBySpan: Map<String, Bool> = [];
 		indexTernaries(tree, source, ternaryKind, shape, null, false, nodeBySpan, licenceBySpan);
@@ -88,6 +102,42 @@ final class SimplifyBooleanTernary implements Check {
 	}
 
 	/**
+	 * Whether this check claims `node` — its whole trigger, in one place.
+	 *
+	 * `run` asks it through `walkClaims` and `prefer-if-expression-chain` asks it through
+	 * `claimedSpans`, so the deferral there can never rest on a mirrored gate that drifts
+	 * when this one moves. The `retType` / `isReturnValue` pair is the context
+	 * `boolReturnLicence` needs and no caller can reconstruct at the node.
+	 */
+	public static function claims(
+		node: QueryNode, source: String, ternaryKind: String, support: BooleanLogicSupport, shape: RefShape, retType: Null<String>,
+		isReturnValue: Bool
+	): Bool {
+		return node.kind == ternaryKind && !condGuarded(node, shape)
+			&& support.simplifyBooleanTernary(node, source, null, boolReturnLicence(node, source, shape, retType, isReturnValue)) != null;
+	}
+
+	/**
+	 * The `"$from:$to"` span key of every ternary this check claims in `source`, for a rule that
+	 * must defer to it.
+	 *
+	 * A SET rather than a per-node predicate because the claim needs the enclosing function's
+	 * declared return type and whether the node sits in a value-return slot — context only a walk
+	 * from the root carries. The caller holds the tree already, so the set costs one extra
+	 * traversal per file and is memoised at the call site.
+	 */
+	public static function claimedSpans(source: String, tree: QueryNode, plugin: GrammarPlugin): Map<String, Bool> {
+		final out: Map<String, Bool> = [];
+		final seams: Null<Seams> = readSeams(plugin);
+		if (seams == null) return out;
+		walkClaims(tree, source, seams.ternaryKind, seams.support, seams.shape, null, false, claimed -> {
+			final span: Null<Span> = claimed.span;
+			if (span != null) out['${span.from}:${span.to}'] = true;
+		});
+		return out;
+	}
+
+	/**
 	 * Walk `node`, flagging each ternary the seam can reduce, except a null-narrowing-guarded one.
 	 *
 	 * No type resolver is passed, and none is needed: the probe only decides whether a negated
@@ -99,11 +149,8 @@ final class SimplifyBooleanTernary implements Check {
 		out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String, support: BooleanLogicSupport,
 		shape: RefShape, retType: Null<String>, isReturnValue: Bool
 	): Void {
-		if (
-			node.kind == ternaryKind && !condGuarded(node, shape)
-			&& support.simplifyBooleanTernary(node, source, null, boolReturnLicence(node, source, shape, retType, isReturnValue)) != null
-		) {
-			final span: Null<Span> = node.span;
+		walkClaims(node, source, ternaryKind, support, shape, retType, isReturnValue, claimed -> {
+			final span: Null<Span> = claimed.span;
 			if (span != null) out.push({
 				file: file,
 				span: span,
@@ -111,10 +158,35 @@ final class SimplifyBooleanTernary implements Check {
 				severity: Severity.Info,
 				message: 'this ternary can be a boolean expression'
 			});
-		}
+		});
+	}
+
+	/**
+	 * The three grammar seams every entry point reads, or null when the grammar lacks one — the
+	 * check is then a no-op. Read in ONE place so `run`, `fix` and `claimedSpans` cannot disagree
+	 * about whether this check is live at all.
+	 */
+	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final ternaryKind: Null<String> = shape.ternaryKind;
+		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
+		return ternaryKind == null || support == null ? null : { shape: shape, ternaryKind: ternaryKind, support: support };
+	}
+
+	/**
+	 * Visit every ternary this check claims under `node`, threading the return-type context
+	 * `boolReturnLicence` needs. The ONE traversal behind both `run`'s report and
+	 * `claimedSpans`, so a deferring rule can never be told a different answer from the one
+	 * this check acts on.
+	 */
+	private static function walkClaims(
+		node: QueryNode, source: String, ternaryKind: String, support: BooleanLogicSupport, shape: RefShape, retType: Null<String>,
+		isReturnValue: Bool, onClaim: (QueryNode) -> Void
+	): Void {
+		if (claims(node, source, ternaryKind, support, shape, retType, isReturnValue)) onClaim(node);
 		eachChild(
 			node, source, shape, retType,
-			(kid, kidRet, kidIsReturnValue) -> walk(out, file, source, kid, ternaryKind, support, shape, kidRet, kidIsReturnValue)
+			(kid, kidRet, kidIsReturnValue) -> walkClaims(kid, source, ternaryKind, support, shape, kidRet, kidIsReturnValue, onClaim)
 		);
 	}
 
@@ -206,4 +278,11 @@ final class SimplifyBooleanTernary implements Check {
 		);
 	}
 
+}
+
+/** The grammar seams this check needs to be live at all: the ternary kind, the boolean-logic engine, and the shape. */
+private typedef Seams = {
+	var shape: RefShape;
+	var ternaryKind: String;
+	var support: BooleanLogicSupport;
 }

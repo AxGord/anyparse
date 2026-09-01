@@ -34,6 +34,32 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(0, violations('class C { private function f():Void {} }').length);
 	}
 
+	/**
+	 * A member whose visibility keyword comes AFTER `final` states it, and is not flagged.
+	 *
+	 * RED at base, and the FIX there wrote invalid Haxe: when `final` leads the run the parser
+	 * projects one node that swallows the rest — `final private function f()` is
+	 * `(FinalModifiedMember f (Private) …)` while `private final function f()` is `(Private)
+	 * (FinalModifiedMember f …)` — so the sibling-only scan saw no visibility and the fix
+	 * PREPENDED a second keyword, producing `private final private function f()`. anyparse
+	 * re-parses that and Haxe rejects it; no gate in the `--fix` pipeline objected. Reachable
+	 * with no writer refusal anywhere, on a one-member file.
+	 */
+	public function testVisibilityAfterFinalNotFlagged(): Void {
+		Assert.equals(0, violations('class C { final private function f():Void {} }').length);
+		Assert.equals(0, violations('class C { final public function f():Void {} }').length);
+		// An IDENTITY assertion, so a no-op fix satisfies it — which is the point here: what makes
+		// this red at base is `run` FLAGGING there and the fix then prepending a second keyword. The
+		// pin a no-op fix cannot satisfy is the control below, which asserts a CHANGED result.
+		Assert.equals('class C { final private function f():Void {} }', fixedSource('class C { final private function f():Void {} }'));
+	}
+
+	/** CONTROL: `final` with NO visibility anywhere is still flagged, and the fix still inserts one. */
+	public function testFinalWithoutVisibilityStillFlagged(): Void {
+		Assert.equals(1, violations('class C { final function f():Void {} }').length);
+		Assert.equals('class C { private final function f():Void {} }', fixedSource('class C { final function f():Void {} }'));
+	}
+
 	public function testStaticWithoutVisibilityFlagged(): Void {
 		// static / inline modifiers present, but no public / private.
 		Assert.equals(1, violations('class C { static inline function f():Void {} }').length);
@@ -183,6 +209,19 @@ class MissingVisibilityCheckTest extends Test {
 	public function testFixRefusesForcedExternViolation(): Void {
 		final src: String = 'extern class C { function f():Void; }';
 		Assert.equals(src, fixedSourceForced(src, src.indexOf('function f')));
+	}
+
+	/**
+	 * The fix re-asks `statesOwnVisibility` too, for the same caller the extern arm above serves.
+	 *
+	 * `fix` is handed the CALLER's violation list, so an embedder naming a member that already
+	 * carries its visibility would otherwise get the invalid `private final private function f()`
+	 * this guard exists to stop. Unreachable through `Cli`, where the list comes from this check's
+	 * own `run` — which is exactly why the extern arm has a pin of its own.
+	 */
+	public function testFixRefusesForcedOwnVisibilityViolation(): Void {
+		final src: String = 'class C { final private function f():Void {} }';
+		Assert.equals(src, fixedSourceForced(src, src.indexOf('final private')));
 	}
 
 	/** The control for the refusal above: the same forced violation DOES insert in a plain class. */
