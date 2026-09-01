@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -26,7 +26,7 @@ class ApqAstChildCountTest extends Test {
 		+ '	Three(a:Int, b:Int, c:Int);\n' + '}\n';
 
 	public function testMinChildrenKeepsMultiArgOnly(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture(FIXTURE);
 		// All 3 ParamCtors (One, Two, Three) match before the filter; only
 		// Two + Three survive --min-children=2 (Required count >= 2).
@@ -41,7 +41,7 @@ class ApqAstChildCountTest extends Test {
 	}
 
 	public function testMaxChildrenKeepsSingleArgOnly(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture(FIXTURE);
 		Assert.equals(
 			0, Cli.run(['ast', '--select', 'ParamCtor', '--max-children', '1', fixture]),
@@ -54,7 +54,7 @@ class ApqAstChildCountTest extends Test {
 	}
 
 	public function testBoundsAreInclusive(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture(FIXTURE);
 		// min=2 max=2 → only Two survives (Three has 3 Requireds, One has 1).
 		Assert.equals(0, Cli.run([
@@ -74,7 +74,7 @@ class ApqAstChildCountTest extends Test {
 	}
 
 	public function testEmptyResultStaysCleanExit(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture(FIXTURE);
 		// No ParamCtor has 10+ children; clean EXIT_OK with empty result —
 		// the not-found hint includes the filter description.
@@ -89,7 +89,7 @@ class ApqAstChildCountTest extends Test {
 	}
 
 	public function testRejectsNegativeValue(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture(FIXTURE);
 		Assert.equals(
 			2, Cli.run(['ast', '--select', 'ParamCtor', '--min-children', '-1', fixture]), '--min-children rejects negative integers'
@@ -103,7 +103,7 @@ class ApqAstChildCountTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static inline function writeFixture(source: String): String {
 		return CliFixture.write('apq_ast_childcount', source);
 	}

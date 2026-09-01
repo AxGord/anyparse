@@ -1,12 +1,13 @@
 package unit;
 
 import anyparse.query.Cli;
+import haxe.Exception;
 import utest.Assert;
 import utest.Test;
 
 using StringTools;
 
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -36,7 +37,7 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 class ApqDxTier4CliTest extends Test {
 
-	#if sys
+	#if (sys || nodejs)
 	private static var counter: Int = 0;
 	#end
 
@@ -132,7 +133,7 @@ class ApqDxTier4CliTest extends Test {
 	}
 
 	public function testGatesOnEmptyDirEmitsEmpty(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_gates_empty');
 		// No `.hx` files → walker emits empty result with stderr note.
 		// Exit code is 0 (not finding files isn't an error in walker-style
@@ -148,17 +149,30 @@ class ApqDxTier4CliTest extends Test {
 	// --- 3. recon --predict-relax ---
 
 	public function testPredictRelaxAccepted(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `--predict-relax` without --probe / <dir> falls back to
 		// `$ANYPARSE_HXFORMAT_FORK/test/testcases` — scope the env so
 		// the usage-error path is reachable. Twin of
 		// `ApqReconCliTest.testReconNoArgsAndNoEnvIsUsageError`.
 		final saved: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
-		Sys.putEnv('ANYPARSE_HXFORMAT_FORK', '');
-		Assert.equals(
-			2, Cli.run(['recon', '--predict-relax']), '--predict-relax without --probe or a dir still needs a target (here: usage error)'
-		);
-		if (saved != null) Sys.putEnv('ANYPARSE_HXFORMAT_FORK', saved);
+		final savedHome: Null<String> = Sys.getEnv('HOME');
+		// Scope HOME too — `resolveForkPath` falls back to the `$HOME/.config/anyparse/fork_path`
+		// cache (`2ff3a397`), which resolves a fork and turns this into a clean run. Restore is
+		// inline and re-raises, for the reason spelled out in the twin.
+		var raised: Null<Exception> = null;
+		try {
+			Sys.putEnv('ANYPARSE_HXFORMAT_FORK', '');
+			Sys.putEnv('HOME', '');
+			Assert.equals(
+				2, Cli.run(['recon', '--predict-relax']),
+				'--predict-relax without --probe or a dir still needs a target (here: usage error)'
+			);
+		} catch (exception: Exception) {
+			raised = exception;
+		}
+		Sys.putEnv('ANYPARSE_HXFORMAT_FORK', saved ?? '');
+		Sys.putEnv('HOME', savedHome ?? '');
+		if (raised != null) throw raised;
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -198,7 +212,7 @@ class ApqDxTier4CliTest extends Test {
 		Assert.equals(0, Cli.run(['--help']), 'top-level --help exits clean');
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static function mkTempDir(prefix: String): String {
 		counter++;
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');

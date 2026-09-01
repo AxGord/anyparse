@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -17,7 +17,7 @@ import sys.FileSystem;
 class ApqMetaCliTest extends Test {
 
 	public function testHelpReturnsOk(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(0, Cli.run(['meta', '--help']));
 		#else
 		Assert.pass('non-sys target');
@@ -25,7 +25,7 @@ class ApqMetaCliTest extends Test {
 	}
 
 	public function testMissingArgsReturnsUsageError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(2, Cli.run(['meta']));
 		// One positional with neither a real glob nor --on: no scope.
 		Assert.equals(2, Cli.run(['meta', '@:foo']));
@@ -35,7 +35,7 @@ class ApqMetaCliTest extends Test {
 	}
 
 	public function testJsonOutputSucceeds(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { @:foo var n:Int; }');
 		Assert.equals(0, Cli.run(['meta', '@:foo', '--json', fixture]));
 		FileSystem.deleteFile(fixture);
@@ -45,7 +45,7 @@ class ApqMetaCliTest extends Test {
 	}
 
 	public function testEndToEndAnnotationFilter(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { @:foo var n:Int; @:bar function y():Void {} }');
 		Assert.equals(0, Cli.run(['meta', '@:foo', fixture]));
 		FileSystem.deleteFile(fixture);
@@ -55,7 +55,7 @@ class ApqMetaCliTest extends Test {
 	}
 
 	public function testOnKindModeWithoutAnnotation(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { @:foo var n:Int; }');
 		Assert.equals(0, Cli.run(['meta', '--on', 'VarMember', fixture]));
 		FileSystem.deleteFile(fixture);
@@ -65,7 +65,7 @@ class ApqMetaCliTest extends Test {
 	}
 
 	public function testArgContainsFilter(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { @:foo(groupRestProbe) var n:Int; }');
 		Assert.equals(0, Cli.run(['meta', '@:foo', '--arg-contains', 'groupRestProbe', fixture]));
 		FileSystem.deleteFile(fixture);
@@ -75,7 +75,7 @@ class ApqMetaCliTest extends Test {
 	}
 
 	public function testUnknownLangFailsCleanly(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X {}');
 		try {
 			Cli.run(['meta', '@:foo', '--lang', 'pyx', fixture]);
@@ -92,7 +92,7 @@ class ApqMetaCliTest extends Test {
 	// ===== Parse-failure contract (scan vs single-file) =====
 
 	public function testSingleUnparseableFileIsHardError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// A single explicit file the user named that does not parse is
 		// the query's answer: it must be a hard error (EXIT_RUNTIME),
 		// mirroring `apq ast` — not a silent EXIT_OK "no matches".
@@ -105,7 +105,7 @@ class ApqMetaCliTest extends Test {
 	}
 
 	public function testScanModeSkipsUnparseableFilesSilently(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Directory-walk (scan) mode: an unparseable file is out of scope
 		// by nature — the walk must continue, exit EXIT_OK, and still
 		// process the parseable sibling (no per-file error noise, no
@@ -121,7 +121,7 @@ class ApqMetaCliTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static inline function writeFixture(source: String): String {
 		return CliFixture.write('apq_meta', source);
 	}

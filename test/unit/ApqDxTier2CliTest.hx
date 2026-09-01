@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -24,7 +24,7 @@ class ApqDxTier2CliTest extends Test {
 	// -- apq sweep --
 
 	public function testSweepReadsTotals(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final snapshot: String = CliFixture.writeAs(
 			'apq_sweep', 'json', '{"pass":42,"fail":7,"skipParse":3,"skipWrite":0,"skipConfig":1,"skipMalformed":1}'
 		);
@@ -36,7 +36,7 @@ class ApqDxTier2CliTest extends Test {
 	}
 
 	public function testSweepMissingFileExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(1, Cli.run(['sweep', '--file', '/tmp/definitely_does_not_exist.json']), 'missing file → EXIT_RUNTIME');
 		#else
 		Assert.pass('non-sys target');
@@ -44,7 +44,7 @@ class ApqDxTier2CliTest extends Test {
 	}
 
 	public function testSweepDeltaVsPrev(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final cur: String = CliFixture.writeAs(
 			'apq_sweep_cur', 'json', '{"pass":533,"fail":267,"skipParse":98,"skipWrite":0,"skipConfig":1,"skipMalformed":1}'
 		);
@@ -60,7 +60,7 @@ class ApqDxTier2CliTest extends Test {
 	}
 
 	public function testSweepAcceptsInjectedLangFlag(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// hxq shim auto-injects `--lang haxe`; sweep must accept and
 		// ignore it (snapshot reading has no language concern).
 		final snapshot: String = CliFixture.writeAs(
@@ -76,7 +76,7 @@ class ApqDxTier2CliTest extends Test {
 	// -- apq cases --
 
 	public function testCasesFindsCallPattern(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final src: String = 'class C { function f() { switch x { case VarMember(d): trace(d); case _: } } }';
 		final f: String = CliFixture.write('apq_cases', src);
 		Assert.equals(0, Cli.run(['cases', 'VarMember', f]), 'case VarMember(d): → exit 0 with hits');
@@ -87,7 +87,7 @@ class ApqDxTier2CliTest extends Test {
 	}
 
 	public function testCasesFindsBareIdentPattern(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final src: String = 'class C { function f() { switch x { case FinalMember: 1; case _: 0; } } }';
 		final f: String = CliFixture.write('apq_cases', src);
 		Assert.equals(0, Cli.run(['cases', 'FinalMember', f]), 'case FinalMember: (bare ident) → exit 0');
@@ -98,7 +98,7 @@ class ApqDxTier2CliTest extends Test {
 	}
 
 	public function testCasesSkipsImports(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `import unit.VarMember` + `new VarMember()` must NOT match —
 		// they are not case-patterns. `mentions` would over-match these;
 		// `cases` deliberately doesn't.
@@ -119,7 +119,7 @@ class ApqDxTier2CliTest extends Test {
 	// -- apq ast --children-limit --
 
 	public function testAstChildrenLimitClampsHorizontalWidth(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Module with 5 top-level decls → with --children-limit 2, only
 		// 2 are rendered + a `(... 3 more)` sentinel.
 		final src: String = 'class A {} class B {} class C {} class D {} class E {}';
@@ -134,7 +134,7 @@ class ApqDxTier2CliTest extends Test {
 	}
 
 	public function testAstChildrenLimitRejectsNegative(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final f: String = CliFixture.write('apq_ast_climit', 'class C {}');
 		Assert.equals(2, Cli.run(['ast', f, '--children-limit', '-1']), 'negative integer → EXIT_USAGE');
 		FileSystem.deleteFile(f);
@@ -144,7 +144,7 @@ class ApqDxTier2CliTest extends Test {
 	}
 
 	public function testAstChildrenLimitRejectsNonInt(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final f: String = CliFixture.write('apq_ast_climit', 'class C {}');
 		Assert.equals(2, Cli.run(['ast', f, '--children-limit', 'foo']), 'non-int value → EXIT_USAGE');
 		FileSystem.deleteFile(f);
@@ -156,7 +156,7 @@ class ApqDxTier2CliTest extends Test {
 	// -- apq lit auto-widen --
 
 	public function testLitAutoWidensOnDefault0Hit(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `HxSharpErrorSliceTest` is a CamelCase TypeName — default kind
 		// (Literal,IdentExpr per smart-default) misses it as ImportDecl /
 		// NewExpr. Auto-widen retries with --any-kind and shows hits.
@@ -170,7 +170,7 @@ class ApqDxTier2CliTest extends Test {
 	}
 
 	public function testLitExplicitKindDoesNotAutoWiden(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Explicit `--kind Literal` must NOT auto-widen — user picked
 		// the filter deliberately. 0-hit nudge fires instead.
 		final src: String = 'import unit.HxSharpErrorSliceTest;\n';

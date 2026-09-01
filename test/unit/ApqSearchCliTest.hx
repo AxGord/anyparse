@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -20,7 +20,7 @@ import sys.FileSystem;
 class ApqSearchCliTest extends Test {
 
 	public function testHelpReturnsOk(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(0, Cli.run(['search', '--help']));
 		#else
 		Assert.pass('non-sys target');
@@ -28,7 +28,7 @@ class ApqSearchCliTest extends Test {
 	}
 
 	public function testMissingArgsReturnsUsageError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(2, Cli.run(['search']));
 		Assert.equals(2, Cli.run(['search', 'just-pattern']));
 		#else
@@ -37,7 +37,7 @@ class ApqSearchCliTest extends Test {
 	}
 
 	public function testUnknownLangFailsCleanly(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X {}');
 		// pickPlugin throws — Cli.run does not wrap pattern parse errors
 		// from pickPlugin yet, so we accept either a usage exit or a
@@ -55,7 +55,7 @@ class ApqSearchCliTest extends Test {
 	}
 
 	public function testEndToEndSearchOnFixture(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X {\n\t\t\tstatic function a() { throw new IoError("oops"); }\n\t\t}');
 		final rc: Int = Cli.run(['search', "throw new $E($_)", fixture]);
 		Assert.equals(0, rc, 'cli must exit 0 on successful search');
@@ -66,7 +66,7 @@ class ApqSearchCliTest extends Test {
 	}
 
 	public function testDegeneratePatternStillExitsOk(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `Anon` is a bare identifier — degenerate. The CLI emits a
 		// non-fatal stderr nudge and still runs the search (exit 0),
 		// not a usage/runtime error.
@@ -80,7 +80,7 @@ class ApqSearchCliTest extends Test {
 	}
 
 	public function testKindFlagAcceptedAndExitsOk(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X {\n\t\t\tvar field = 0;\n\t\t\tstatic function f() { var local = 0; }\n\t\t}');
 		final rc: Int = Cli.run(['search', '--kind', 'VarStmt', "var $v = 0", fixture]);
 		Assert.equals(0, rc, '--kind flag must be accepted and exit 0');
@@ -91,7 +91,7 @@ class ApqSearchCliTest extends Test {
 	}
 
 	public function testDashDashSentinelAllowsOptionLikePattern(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X {\n\t\t\tstatic function a() { var i = 0; --i; }\n\t\t}');
 		// Without `--`, a pattern starting with `--` is mistaken for an
 		// option and rejected (EXIT_USAGE). The `--` end-of-options
@@ -109,7 +109,7 @@ class ApqSearchCliTest extends Test {
 	}
 
 	public function testDashDashSentinelStillValidatesPriorOptions(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X {}');
 		// Regression guard: the sentinel must NOT disable option
 		// validation for tokens BEFORE it.
@@ -125,7 +125,7 @@ class ApqSearchCliTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static inline function writeFixture(source: String): String {
 		return CliFixture.write('apq_search', source);
 	}

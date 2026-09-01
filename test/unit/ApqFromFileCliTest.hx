@@ -24,7 +24,7 @@ import sys.io.File;
 class ApqFromFileCliTest extends Test {
 
 	public function testAddMemberFromFile(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
 		// Member text carries both `$` (interpolation) and single quotes —
 		// the exact shape the shell would mangle as a positional argument.
@@ -43,11 +43,13 @@ class ApqFromFileCliTest extends Test {
 	}
 
 	public function testAddElementFromFile(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
 		final element: String = CliFixture.write('apq_element', "function f():Void { trace('$x'); }");
-		// Append into the class body (point at the `class` keyword).
-		Assert.equals(0, Cli.run(['add-element', fixture, '--append', '1:0', '--from-file', element, '--write']));
+		// Append into the class body (point at the `class` keyword). `1:1`, not the `1:0` this
+		// test was born with: `aee95f54` (addressing v2) moved every position argument onto
+		// `Address`, which rejects a 0 column as malformed — 1-based is the unified convention.
+		Assert.equals(0, Cli.run(['add-element', fixture, '--append', '1:1', '--from-file', element, '--write']));
 		final result: String = File.getContent(fixture);
 		Assert.isTrue(result.indexOf('function f') >= 0, 'element from file must be appended');
 		FileSystem.deleteFile(fixture);
@@ -58,7 +60,7 @@ class ApqFromFileCliTest extends Test {
 	}
 
 	public function testReplaceNodeFromFile(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tfunction f():Void {\n\t\tvar y = 0;\n\t}\n}\n');
 		final repl: String = CliFixture.write('apq_repl', 'var y = 42');
 		Assert.equals(0, Cli.run(['replace-node', fixture, '--at', '3:2', '--from-file', repl, '--write']));
@@ -97,7 +99,7 @@ class ApqFromFileCliTest extends Test {
 	}
 
 	public function testInlineAndFromFileConflict(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
 		final member: String = CliFixture.write('apq_member', 'var z:Int;');
 		// Both an inline member and --from-file → runtime error, file untouched.
@@ -110,7 +112,7 @@ class ApqFromFileCliTest extends Test {
 	}
 
 	public function testFromFileMissingPath(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
 		Assert.equals(1, Cli.run(['add-member', fixture, '--type', 'C', '--from-file', '/no/such/file.hx']));
 		FileSystem.deleteFile(fixture);

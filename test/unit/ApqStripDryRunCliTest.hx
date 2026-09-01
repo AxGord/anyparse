@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -23,7 +23,7 @@ import sys.FileSystem;
 class ApqStripDryRunCliTest extends Test {
 
 	public function testMatchingPatternExitsOk(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_strip_dry', 'class C { var x:Int = 1; }');
 		Assert.equals(0, Cli.run(['strip', input, '--replace', 'var x', '--with', 'final x', '--dry-run']));
 		FileSystem.deleteFile(input);
@@ -33,7 +33,7 @@ class ApqStripDryRunCliTest extends Test {
 	}
 
 	public function testTypoPatternExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_strip_dry', 'class C { var x:Int = 1; }');
 		Assert.equals(1, Cli.run(['strip', input, '--replace', 'NOPATTERN', '--with', '', '--dry-run']));
 		FileSystem.deleteFile(input);
@@ -46,7 +46,7 @@ class ApqStripDryRunCliTest extends Test {
 		// Per-pattern strictness: even when one pattern matches, a
 		// sibling zero-match pattern still fails the dry-run (the
 		// typo-guard's whole purpose).
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_strip_dry', 'class C { var x:Int = 1; }');
 		Assert.equals(1, Cli.run([
 			'strip',
@@ -70,7 +70,7 @@ class ApqStripDryRunCliTest extends Test {
 	public function testDeleteShortcutCounts(): Void {
 		// `--delete <pat>` is `--replace <pat> --with ''` — same
 		// match-count semantics under --dry-run.
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_strip_dry', 'class C { @:meta var x:Int; }');
 		Assert.equals(0, Cli.run(['strip', input, '--delete', '@:meta ', '--dry-run']));
 		FileSystem.deleteFile(input);
@@ -83,7 +83,7 @@ class ApqStripDryRunCliTest extends Test {
 		// One pattern, two files — one has the match, the other
 		// doesn't. As long as the GLOBAL total > 0 AND every supplied
 		// pattern has ≥1 match across the whole input set, exit 0.
-		#if sys
+		#if (sys || nodejs)
 		final f1: String = CliFixture.write('apq_strip_dry_batch_a', 'class A { var x = 1; }');
 		final f2: String = CliFixture.write('apq_strip_dry_batch_b', 'class B {}');
 		Assert.equals(0, Cli.run(['strip', f1, f2, '--replace', 'var x', '--with', 'final x', '--dry-run']));
@@ -101,7 +101,7 @@ class ApqStripDryRunCliTest extends Test {
 		// step is skipped — only pattern-match matters — so an
 		// otherwise-broken substitution still exits 0 when the
 		// pattern matched.
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_strip_dry', 'class C {}');
 		Assert.equals(0, Cli.run(['strip', input, '--replace', '}', '--with', '', '--dry-run']));
 		FileSystem.deleteFile(input);
@@ -114,7 +114,7 @@ class ApqStripDryRunCliTest extends Test {
 		// Regression: --dry-run is purely additive; the existing
 		// non-dry-run strip path must still succeed on a benign
 		// substitution.
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_strip_dry', 'class C { var x:Int = 1; }');
 		Assert.equals(0, Cli.run(['strip', input, '--replace', 'var x', '--with', 'final x']));
 		FileSystem.deleteFile(input);

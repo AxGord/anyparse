@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -26,7 +26,7 @@ import sys.FileSystem;
 class ApqSkipParseLocusTest extends Test {
 
 	public function testLitScanWithBrokenFileExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = writeMixedDir();
 		Assert.equals(0, Cli.run(['lit', 'nothingHere', dir]), 'scan with broken sibling file is a clean 0-hit, not an error');
 		CliFixture.removeDir(dir);
@@ -36,7 +36,7 @@ class ApqSkipParseLocusTest extends Test {
 	}
 
 	public function testRefsScanWithBrokenFileExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = writeMixedDir();
 		Assert.equals(0, Cli.run(['refs', 'nothingHere', dir]), 'refs scan with broken sibling file is a clean 0-hit');
 		CliFixture.removeDir(dir);
@@ -46,7 +46,7 @@ class ApqSkipParseLocusTest extends Test {
 	}
 
 	public function testUsesScanWithBrokenFileExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = writeMixedDir();
 		Assert.equals(0, Cli.run(['uses', 'NotHere', dir]), 'uses scan with broken sibling file is a clean 0-hit');
 		CliFixture.removeDir(dir);
@@ -56,7 +56,7 @@ class ApqSkipParseLocusTest extends Test {
 	}
 
 	public function testMetaScanWithBrokenFileExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = writeMixedDir();
 		Assert.equals(0, Cli.run(['meta', '@:absentMeta', dir]), 'meta scan with broken sibling file is a clean 0-hit');
 		CliFixture.removeDir(dir);
@@ -71,7 +71,7 @@ class ApqSkipParseLocusTest extends Test {
 	// guard against the parseWalked signature change.
 
 	public function testSingleBrokenFileIsRuntimeError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final path: String = CliFixture.write('apq_skip_parse_single_broken', 'class C { var x:');
 		Assert.notEquals(0, Cli.run(['lit', 'nothing', path]), 'single broken file is a runtime error, not a 0-hit warning');
 		FileSystem.deleteFile(path);
@@ -80,7 +80,7 @@ class ApqSkipParseLocusTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static function writeMixedDir(): String {
 		return CliFixture.writeDir('apq_skip_parse_locus', [
 			{ name: 'Good.hx', source: 'class Good { var y:Int = 0; }' },

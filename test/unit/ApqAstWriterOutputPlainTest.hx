@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -24,7 +24,7 @@ import sys.FileSystem;
 class ApqAstWriterOutputPlainTest extends Test {
 
 	public function testPlainFlagIsAccepted(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class C {}');
 		Assert.equals(0, Cli.run(['ast', '--writer-output-plain', fixture]), '--writer-output-plain must exit 0 on a valid file');
 		FileSystem.deleteFile(fixture);
@@ -34,7 +34,7 @@ class ApqAstWriterOutputPlainTest extends Test {
 	}
 
 	public function testBothPipelinesExitCleanOnAnonStruct(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Smoke-level: both dispatch paths exit cleanly on the same
 		// anon-struct input. Byte-level divergence between the two
 		// pipelines (the actual Slice-26 regression check) lives in
@@ -50,7 +50,7 @@ class ApqAstWriterOutputPlainTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static inline function writeFixture(source: String): String {
 		return CliFixture.write('apq_ast_plain', source);
 	}

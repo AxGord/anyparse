@@ -6,7 +6,7 @@ import utest.Test;
 
 using StringTools;
 
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -24,12 +24,12 @@ import sys.io.File;
 @:nullSafety(Strict)
 class ApqStripFromClusterCliTest extends Test {
 
-	#if sys
+	#if (sys || nodejs)
 	private static var counter: Int = 0;
 	#end
 
 	public function testFromClusterRequiresCorpusRoot(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final saved: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
 		Sys.putEnv('ANYPARSE_HXFORMAT_FORK', '');
 		Assert.equals(
@@ -43,7 +43,7 @@ class ApqStripFromClusterCliTest extends Test {
 	}
 
 	public function testFromClusterMissingDirIsRuntimeError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(
 			1, Cli.run(['strip', '--from-cluster', 'X', '/no/such/dir/xyz123', '--delete', 'foo']),
 			'--from-cluster with a non-existent root is a runtime error'
@@ -54,7 +54,7 @@ class ApqStripFromClusterCliTest extends Test {
 	}
 
 	public function testFromClusterRequiresSubstitution(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_strip_fc_no_subs');
 		Assert.equals(
 			2, Cli.run(['strip', '--from-cluster', 'X', dir]), '--from-cluster without --replace/--with or --delete is a usage error'
@@ -66,7 +66,7 @@ class ApqStripFromClusterCliTest extends Test {
 	}
 
 	public function testFromClusterMultiplePositionalsIsUsageError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(
 			2, Cli.run(['strip', '--from-cluster', 'X', '/a', '/b', '--delete', 'foo']),
 			'--from-cluster takes at most one positional (the corpus root)'
@@ -77,7 +77,7 @@ class ApqStripFromClusterCliTest extends Test {
 	}
 
 	public function testFromClusterEmptyCorpusIsCleanExit(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_strip_fc_empty');
 		// Empty corpus → recon walk finds 0 skip-parse files → cluster
 		// key never matches. resolveStripFromCluster surfaces the
@@ -93,7 +93,7 @@ class ApqStripFromClusterCliTest extends Test {
 	}
 
 	public function testFromClusterUnknownKeyIsRuntimeError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_strip_fc_unknown_key');
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
 		Assert.equals(
@@ -106,7 +106,7 @@ class ApqStripFromClusterCliTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static function mkTempDir(prefix: String): String {
 		counter++;
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');

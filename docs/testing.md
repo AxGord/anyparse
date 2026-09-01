@@ -373,6 +373,41 @@ output for a human reading one run.
 
 ## Guidelines for new tests
 
+### A guard on `#if sys` is a test that does not run
+
+`sys` is NOT defined by an hxnodejs build, and js/node is the only runner the suite has.
+So a test method whose body sits inside a bare `#if sys` compiles to its `#else` arm — by
+local convention `Assert.pass('non-sys target')` — and reports a success while asserting
+nothing. It compiles, it is green, and it is dead. Guard anything that needs a filesystem
+or a process with `#if (sys || nodejs)`.
+
+The rule was written down years before anything enforced it, and the pre-existing
+population was never swept: at `1514f108` the tree carried **218 bare `#if sys` guard
+sites across 23 test classes — 167 whole test methods**, and the emitted `bin/test.js`
+held exactly **178** `Assert.pass('non-sys target')` calls (a preprocessor simulation over
+`test/` and a text count over the bundle agreed on that number). Widening every guard took
+the bundle's count to 0 and the real assertions in those 23 classes from 76 to 318.
+
+`unit.DeadTestGuardTest` is what makes the return loud. It walks `test/`, reads every
+directive through `CondDirectives.scan` (the shared reader, so a `#if` inside a comment or
+a string fixture is not a guard) and evaluates each condition with
+`CondRegionLiveness.evaluate` against the flag set `unit.BuildDefines` reads out of the
+running build via `#if <flag>`. Any guard the build cannot prove LIVE fails the suite,
+naming the file, the line and the remedy — with one disclosed exception, `BuildDefines`'
+own `#if <flag>` probes, which are unprovable by construction because they ARE the
+question. Note "cannot prove live", not "is dead": a condition the reader cannot delimit
+(`#if (a` continued on the next line is legal Haxe that still compiles its body out)
+carries no condition span, and is reported rather than skipped.
+
+Two design points worth keeping: it is a suite gate rather than a lint check because
+"`sys` is dead" is a property of ONE build, not of the language — `src/` carries
+`#elseif sys` on purpose at six sites for the neko/hxcpp targets — so a rule would need a
+`deadDefines` config key, which is the original defect one level up: a claim about the
+build that nothing verifies. And `BuildDefines` is a separate module holding no test
+method, because asking `#if sys` is unprovable by construction and therefore has to be
+exempt; keeping the exemption in a module with nothing to swallow keeps it from becoming a
+hiding place.
+
 ### Test names describe what they assert
 
 Bad: `testCase1`, `testParsing`.
@@ -406,10 +441,15 @@ When adding a grammar, the PR includes a round-trip test with at least 20 curate
 
 ```sh
 haxe test-js.hxml           # compile the runner to bin/test.js
-node bin/test.js            # the whole suite, one process (~21s)
-tools/suite-shard.sh -n 4   # the same suite across 4 processes (~9s)
+node bin/test.js            # the whole suite, one process (~30s)
+tools/suite-shard.sh -n 4   # the same suite across 4 processes (~14s)
 APQ_TEST=RemoveParam node bin/test.js   # one class, for the edit loop
 ```
+
+Those two figures were ~21s and ~9s until the `#if sys` guard sweep above revived 167
+test methods that had been compiling to `Assert.pass`. The 23 revived classes cost 7.5s
+together, of which `ApqAstIntegrationTest` — a whole-tree engine walk that nothing had
+run since it was written — is 6.0s. `DeadTestGuardTest` itself is 0.06s.
 
 js/node is the only runner. The suite itself is not target-independent —
 `CompilerOracleE2ETest` calls `js.node.Fs` directly to pin fixture mtimes —

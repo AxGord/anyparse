@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -29,7 +29,7 @@ class ApqDxTier3CliTest extends Test {
 	// --- 1. --regex on strip ---
 
 	public function testStripRegexBackrefReplacement(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_regex_strip', 'class M { var x = new Foo<A, B, C>(1); var y = new Bar<X>(2); }');
 		final exit: Int = Cli.run([
 			'strip',
@@ -48,7 +48,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testStripRegexCompileErrorExitsUsage(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_regex_strip', 'class M {}');
 		// Unterminated character class — EReg construction throws. The
 		// arg-validation path catches it before any FS apply and exits
@@ -63,7 +63,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testStripRegexDryRunCountsMatches(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Three calls to `new T<...>(` — regex `g` flag counts every one.
 		final input: String = CliFixture.write(
 			'apq_regex_strip', 'class M { var a = new Foo<X>(1); var b = new Foo<Y>(2); var c = new Bar<Z>(3); }'
@@ -82,7 +82,7 @@ class ApqDxTier3CliTest extends Test {
 	// --- 1b. --regex on recon predict-strip ---
 
 	public function testReconRegexRequiresPredictStrip(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `--regex` outside `--predict-strip` is a usage error — no
 		// other mode in recon takes substitution patterns, so the flag
 		// would be silently ignored otherwise. Surfacing it as USAGE
@@ -97,7 +97,7 @@ class ApqDxTier3CliTest extends Test {
 	// --- 2. sweep --save ---
 
 	public function testSweepSaveCopiesSnapshot(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Round-trip: write a known snapshot to the default file, ask
 		// sweep to --save it to a temp path, verify the bytes match.
 		final fakeJson: String = '{"pass":1,"fail":2,"skipParse":3,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[]}';
@@ -117,7 +117,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testSweepSaveMissingFileExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Source snapshot doesn't exist → exit 1 before the copy.
 		final missing: String = CliFixture.writeAs('apq_sweep_missing', 'json', '');
 		FileSystem.deleteFile(missing);
@@ -132,7 +132,7 @@ class ApqDxTier3CliTest extends Test {
 	// --- 3. test-summary ---
 
 	public function testTestSummaryParsesUtestTranscript(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final transcript: String = '  testFoo: OK ...\n  testBar: OK .\n  testBaz: FAIL: expected 1\n  testQux: ERROR: NPE\n';
 		final path: String = CliFixture.writeAs('apq_test_summary', 'log', transcript);
 		Assert.equals(0, Cli.run(['test-summary', path]));
@@ -143,7 +143,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testTestSummaryMissingDefaultExitsUsage(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// No positional + /tmp/test.out absent → usage error.
 		if (FileSystem.exists('/tmp/test.out')) {
 			Assert.pass('/tmp/test.out exists, skipping default-missing probe');
@@ -160,7 +160,7 @@ class ApqDxTier3CliTest extends Test {
 	// stdout-capture round-trip through Cli.run.
 
 	public function testTestSummaryFirstFailureCapturesClassAndLine(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// utest 1.13.x FAILURE shape: `  testName: FAILURE F\n    line: N, <msg>`.
 		// Class header sits one line above the test group at column 0.
 		final transcript: String = 'FailProbe\n  testOk: OK .\n  testIntentionalFail: FAILURE F\n    line: 9, intentional\n';
@@ -186,7 +186,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testTestSummaryFirstErrorCapturesMessage(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// utest ERROR shape: `  testName: ERROR E\n    <bare message>` —
 		// no `line:` prefix, just the thrown payload. line stays -1.
 		final transcript: String = 'FailProbe\n  testIntentionalError: ERROR E\n    intentional error\n';
@@ -206,7 +206,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testTestSummaryFirstFailureOnlyCapturesFirst(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Mixed transcript with both FAILURE and ERROR — counters bump for
 		// both, firstFailure stays on the earliest (FAILURE before ERROR
 		// in source order).
@@ -226,7 +226,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testTestSummaryNoFailuresHasNullLocus(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final transcript: String = '  testFoo: OK ...\n  testBar: OK .\n';
 		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
 		Assert.equals(2, r.tests);
@@ -238,7 +238,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testTestSummaryFailureWithoutDetailDoesNotEatNextRow(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Two adjacent failures with NO detail row between them —
 		// awaitingDetail must NOT silently consume the second fail's
 		// header line.
@@ -260,7 +260,7 @@ class ApqDxTier3CliTest extends Test {
 	// --- 4. recon --candidates ---
 
 	public function testReconCandidatesMutexWithOtherModes(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Combinable-with-nothing guard — surfaces a usage error
 		// instead of silently picking one mode.
 		Assert.equals(2, Cli.run(['recon', '--candidates', 'foo', '--predict-strip', '--delete', 'x']));
@@ -270,7 +270,7 @@ class ApqDxTier3CliTest extends Test {
 	}
 
 	public function testReconCandidatesInvalidRegexExitsUsage(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// EReg compile error reported with the same shape as strip --regex.
 		Assert.equals(2, Cli.run(['recon', '--candidates', 'foo[']));
 		#else

@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -22,7 +22,7 @@ import sys.FileSystem;
 class ApqWriterEqualsCliTest extends Test {
 
 	public function testTriviaMatch(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_writer_equals', 'typedef T = {\n\tvar x:Int;\n}');
 		final expected: String = CliFixture.writeAs('apq_writer_equals_expected', 'txt', 'typedef T = {\n\tvar x:Int;\n}\n');
 		Assert.equals(0, Cli.run(['writer-equals', input, expected]), 'trivia writer must round-trip a simple typedef byte-identically');
@@ -34,7 +34,7 @@ class ApqWriterEqualsCliTest extends Test {
 	}
 
 	public function testPlainFlattensAnonStruct(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Captures the Slice-26 lesson: plain writer flattens the
 		// anon-struct body and emits a trailing `;`. The trivia writer
 		// preserves source layout — the two pipelines diverge by these
@@ -55,7 +55,7 @@ class ApqWriterEqualsCliTest extends Test {
 	}
 
 	public function testByteMismatchExits1(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_writer_equals', 'class C {}');
 		final wrong: String = CliFixture.writeAs('apq_writer_equals_expected', 'txt', 'class WRONG {}\n');
 		Assert.equals(1, Cli.run(['writer-equals', input, wrong]), 'byte mismatch must exit 1, not 0 and not 2');

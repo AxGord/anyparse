@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -20,7 +20,7 @@ import sys.FileSystem;
 class ApqAstSelectFuzzyTest extends Test {
 
 	public function testUnknownKindIsCleanExit(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(0, Cli.run(['ast', '--select', 'NotAKind', fixture]), 'unknown --select kind is an empty result, not an error');
 		FileSystem.deleteFile(fixture);
@@ -30,7 +30,7 @@ class ApqAstSelectFuzzyTest extends Test {
 	}
 
 	public function testTypoNearKindStillCleanExit(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `ClassDeclX` is one edit away from `ClassDecl` (Levenshtein
 		// tier 1: dist=1, well inside FUZZY_MAX_DIST). The substring
 		// tier needs the candidate to CONTAIN the query, not the
@@ -48,7 +48,7 @@ class ApqAstSelectFuzzyTest extends Test {
 	}
 
 	public function testChainStillSurfaceFuzzy(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// First kind segment `ClassDeclX` is the fuzzy-source; the
 		// chain syntax must not break extraction. (The selector itself
 		// still matches no nodes, exit 0.)
@@ -62,7 +62,7 @@ class ApqAstSelectFuzzyTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static inline function writeFixture(source: String): String {
 		return CliFixture.write('apq_ast_select_fuzzy', source);
 	}

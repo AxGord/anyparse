@@ -6,7 +6,7 @@ import utest.Test;
 
 using StringTools;
 
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -31,13 +31,16 @@ import sys.io.File;
 class ApqHxtestSection1ConfigTest extends Test {
 
 	public function testEmptyConfigOnHxtestIsNoOp(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `loadHxFormatJson('{}')` is byte-identical to defaults per the
 		// loader's docstring. So writer-equals against an .hxtest whose
 		// section-1 is `{}` is byte-equal whenever section-3 matches the
 		// default writer's output — there's no special path here.
 		final src: String = 'class C { var x:Int = 0; }';
-		final expected: String = 'class C {\n\tvar x:Int = 0;\n}';
+		// Trailing `\n`: the writer always terminates a module with one (the same
+		// behaviour `writer-probe`'s "writer-fidelity gap" NOTE reports), so section 3
+		// must carry it. This fixture was born without it and never ran to say so.
+		final expected: String = 'class C {\n\tvar x:Int = 0;\n}\n';
 		final fixture: String = makeHxtest('{}', src, expected);
 		final path: String = writeFixture('apq_h1_empty', fixture);
 		Assert.equals(0, Cli.run(['writer-equals', '--plain', path, path]), 'empty section-1 config → defaults → byte-equal vs section-3');
@@ -48,13 +51,13 @@ class ApqHxtestSection1ConfigTest extends Test {
 	}
 
 	public function testSpaceIndentConfigOverridesDefaults(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Defaults are tab+1. Section-1 requests 4-space indent — IF
 		// section-1 routes through the writer, section-3 (4-space body)
 		// matches; if it's dropped, the writer emits tab-indented bytes
 		// and writer-equals fails.
 		final src: String = 'class C { var x:Int = 0; }';
-		final expected: String = 'class C {\n    var x:Int = 0;\n}';
+		final expected: String = 'class C {\n    var x:Int = 0;\n}\n';
 		final fixture: String = makeHxtest('{"indentation": {"character": "    "}}', src, expected);
 		final path: String = writeFixture('apq_h1_space', fixture);
 		Assert.equals(0, Cli.run(['writer-equals', '--plain', path, path]), 'section-1 4-space config overrides default tab indent');
@@ -65,7 +68,7 @@ class ApqHxtestSection1ConfigTest extends Test {
 	}
 
 	public function testInlineProbeIgnoresSection1(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `apq probe '<code>'` has no path → no section-1 to extract,
 		// always plugin defaults. Smoke-checking the CLI exit; the
 		// real "no section-1 wired" assertion is covered by writer-
@@ -80,7 +83,7 @@ class ApqHxtestSection1ConfigTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static inline function makeHxtest(config: String, source: String, expected: String): String {
 		return '$config\n---\n\n$source\n\n---\n\n$expected\n';
 	}
