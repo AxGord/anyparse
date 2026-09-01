@@ -336,6 +336,41 @@ Chosen over tink_unittest and buddy for reasons of:
 
 Test cases extend `utest.Test`, assertions use `utest.Assert`. Each test method begins with `test`.
 
+### The runner is quiet by default, and one of the two arguments is load-bearing
+
+`RunTests.main` calls `utest.ui.Report.create(runner, NeverShowSuccessResults,
+AlwaysShowHeader)` and installs a per-test stdout capture. Both halves exist for
+one reason: a raw suite run printed **807 979 bytes** where every gate in this
+project reads **six lines**, and for a delegated agent that difference dominates
+the whole cost of a slice.
+
+- `NeverShowSuccessResults` drops the per-method `: OK` listing — 13 488 lines.
+  It drops only PASSING lines: `ReportTools.skipResult` returns `false` for
+  `!stats.isOk` before it ever reads the mode, so failures, errors and warnings
+  still print in full with message and stack.
+- **`AlwaysShowHeader` is load-bearing, not decoration.** Under the default
+  `ShowHeaderWithResults`, `ReportTools.hasHeader` returns FALSE for a green run
+  once success results are hidden — the `successes:` / `errors:` / `failures:`
+  summary would vanish along with the noise and every gate that greps it would
+  silently pass on nothing. Never drop that argument.
+- The **per-test stdout capture** buffers what each test prints and discards it
+  when the test passes; any non-`Success`/`Ignore` assertation flushes the
+  buffer verbatim first. The CLI e2e tests drive `Cli.run`, which is chatty, and
+  a passing run's chatter explains nothing.
+
+Measured: stdout **807 979 → 359 bytes**.
+
+⚠️ **Only stdout is interceptable, and the asymmetry is measured, not assumed.**
+Patching both `process.stdout.write` and `process.stderr.write` captured
+**118 706 bytes of stdout and ZERO of stderr**, while 74 514 bytes still reached
+the terminal — `Sys.stderr()` on hxnodejs writes a raw fd and bypasses the JS
+stream entirely (the same fact that makes an fd-2-only line unassertable by any
+in-process test). Drop that half at the shell with `2>/dev/null`; no code in the
+runner can do it.
+
+`APQ_TEST_VERBOSE=1` restores both the per-method listing and the captured
+output for a human reading one run.
+
 ## Guidelines for new tests
 
 ### Test names describe what they assert
