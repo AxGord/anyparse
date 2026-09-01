@@ -428,10 +428,35 @@ interface NoAutofix {
  * editing the consumer. That inversion is the point; the hard-coded pair of rule ids it
  * replaced could only ever be right for the rules someone had already tripped over.
  *
- * What must NOT be masked: a quantity that IS the finding. `oversized-type`'s member count,
- * `string-literal-dup`'s repetition count and `complexity`'s score all change only when the
- * code changes, and masking them would turn the gate off for exactly the movement it exists
- * to catch. `MessageMask`'s anchored primitives are narrow for that reason.
+ * What must NOT be masked — and the criterion here is NOT "does this number change only
+ * when the code changes". That was the original rule, and it was wrong: it kept
+ * `oversized-type`'s member count, `string-literal-dup`'s repetition count and
+ * `complexity`'s score, and across three consecutive blast-radius verdicts SIX of the six
+ * lines those verdicts reported were bumps of exactly those numbers, with the finding
+ * standing unchanged on both sides. A quantity that moves with the code is not thereby a
+ * finding; the finding APPEARED when the threshold was crossed, which the key already shows
+ * on its own.
+ *
+ * Two things must survive the mask instead:
+ *
+ *  • a CONFIGURED threshold (`(max 50)`, `(max 20)`) — changing it IS a change.
+ *  • a number that is the last DISCRIMINATOR between two neighbouring findings. `lint-diff`
+ *    keys on `(file, rule, severity, message)` with no span, so if masking a number lets two
+ *    findings in one file collide, a substitution between them goes invisible.
+ *    Two rules are kept out of the map for this reason. `duplicate-code`: whichever wording a
+ *    finding uses, its ONE coordinate is already masked and its partner path is shared by
+ *    every clone against the same file, so the statement COUNT is all that is left, and
+ *    blanking it merged 57% (anyparse) / 78% (tm) of that rule's findings into shared keys.
+ *    `fragmented-doc-comment`: its message carries no name and no position at all, so the
+ *    block tally is not merely the last discriminator, it is the only one. For the rules
+ *    that ARE masked the same collapse costs 3 of 355 keys at this gate's own scope, all
+ *    `extract-repeated-expression` (one expression, two bodies of one file) — see
+ *    `LintDiff` for why that number is scope-dependent.
+ *
+ * The price paid knowingly: the mask has no MAGNITUDE bound, so a type going 52 -> 301
+ * members now reports no movement, exactly as 52 -> 53 does. The gate answers "did a finding
+ * appear or disappear", not "by how much"; the two REPORTS still carry every number.
+ * `MessageMask`'s anchored primitives stay narrow so that only the intended quantity leaves.
  */
 @:nullSafety(Strict)
 interface VolatileMessage {
@@ -440,8 +465,9 @@ interface VolatileMessage {
 	 * `message` — one this check's own `run` produced — with every source MEASUREMENT in it
 	 * masked, and everything else left byte-identical. Must be idempotent, must be derived
 	 * from `message` alone — not from instance state, which is why the registry may bind this
-	 * method on a check it never configured — and must keep every quantity a reader would call
-	 * a finding.
+	 * method on a check it never configured — and must keep the two quantities named above: a configured
+	 * threshold, and any number that is the last discriminator between two neighbouring
+	 * findings.
 	 *
 	 * Build it with `MessageMask.maskAfter` / `maskBefore`, anchored on the SAME constant the
 	 * message was built from, so the two cannot drift apart; and pin it in the check's own

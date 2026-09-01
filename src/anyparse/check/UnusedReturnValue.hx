@@ -37,6 +37,32 @@ import anyparse.runtime.Span;
  * argument, a `return` value, or a condition keeps its result and is not flagged, and
  * only the OUTERMOST call of a chain (`a().b()`) is the discarded one.
  *
+ * ## The index is the REPORT SCOPE, and the finding COUNT depends on it
+ *
+ * `run` builds its `SymbolIndex` from the files it was HANDED, so "absent from the project
+ * index" above is a statement about the lint's report scope, not about the project.
+ * Measured here on 2026-09-02: `lint test` reports 6, `lint src` 13, `lint src test` 87 —
+ * the extra 68 are calls from a test file into a `src/` type (`Cli.run()`,
+ * `plugin.parseFile()`, `p.print()`) that resolve only when both trees are in one run.
+ * Neither answer is wrong; the narrow one is blind, and every miss is a miss, never a false
+ * positive.
+ *
+ * The obvious repair — resolve through `RefactorSupport.resolutionIndexOf`, the way
+ * `prefer-static-extension` and the guard family do, so the project's declared
+ * `resolutionRoots` are honoured at any scope — is REFUSED on the measurement. That index
+ * is report UNION resolutionRoots UNION resolutionLibs UNION the Haxe std, undivided, and
+ * wiring it in takes `lint test` from 6 findings to 9595, of which 9469 are `utest.Assert.*`
+ * calls whose `Bool` result the framework's own idiom discards (`Assert.equals` alone is
+ * 6556); `src` moves 13 to 14. The `unused-return-value.allow` list cannot express "the
+ * `utest.Assert` type", only "anything named `equals`", which would silence the rule
+ * everywhere.
+ *
+ * So the fix belongs one level up, in whoever owns `ResolutionScope`:
+ * `Cli.readResolutionLibrary` folds the project's OWN `resolutionRoots` and the external
+ * `resolutionLibs` into one undivided `library` array, so a check cannot ask for "my
+ * project, wider than the report scope" without also getting every library. Split those two
+ * and this check resolves against report UNION roots — which is exactly the 87.
+ *
  * ## Side-effect idioms — a configurable allowlist
  *
  * Mutators whose non-`Void` result is idiomatically discarded (`push` returns the new

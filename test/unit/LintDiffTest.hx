@@ -189,10 +189,11 @@ class LintDiffTest extends Test {
 	 * The case this seam was built for: a type's LINE EXTENT drifts under any edit to the
 	 * file, so the gate reported movement on a writer slice whose findings had not moved
 	 * (`WrapList` 4184 -> 4194, and three more, against a total of 2256 versus a base of
-	 * 2256). Both arms are here — the extent alone must not move the key, and the member
-	 * count must.
+	 *  2256). Since S15 the MEMBER count is masked as well, so both arms here read 0/0; the
+	 *  arm pinning the difference between a masked measurement and a kept one lives on
+	 *  `duplicate-code`, whose count is the last discriminator its key has.
 	 */
-	public function testOversizedTypeLineExtentIsMaskedAwayButMembersAreNot(): Void {
+	public function testOversizedTypeLineExtentAndMemberCountAreBothMasked(): Void {
 		final before: String = reportOf([
 			record('src/W.hx', 'warning', 'oversized-type', oversized('WrapList', '108 members (max 50) and 4184 lines (max 2000)'))
 		]);
@@ -206,8 +207,15 @@ class LintDiffTest extends Test {
 			record('src/W.hx', 'warning', 'oversized-type', oversized('WrapList', '109 members (max 50) and 4184 lines (max 2000)'))
 		]);
 		final growth: LintDiffResult = diff(before, grown, '');
-		Assert.equals(1, growth.addedTotal, 'a member the type gained IS the finding this rule reports');
-		Assert.equals(1, growth.removedTotal);
+		// The member count LEAVES the key too, since S15. It used to stay, on the argument that
+		// crossing the limit is the finding — but crossing it is what makes the finding APPEAR,
+		// which the key shows on its own, while the count then drifts on every unrelated member
+		// added anywhere in the type. Measured across the campaign's last three blast-radius
+		// verdicts, that drift produced two of the six lines reported and none was real
+		// movement. The type NAME stays in the message, so nothing else here discriminates by
+		// the number — unlike `duplicate-code`, whose count is kept for exactly that reason.
+		Assert.equals(0, growth.addedTotal, 'a member count drift is not a finding either');
+		Assert.equals(0, growth.removedTotal);
 	}
 
 	public function testOversizedTypeCrossingTheLineThresholdIsReported(): Void {
@@ -232,10 +240,23 @@ class LintDiffTest extends Test {
 		// declaring `VolatileMessage` on itself. Assert both directions — the three declaring
 		// rules are in the map, and a rule that quotes digits which ARE the finding is not.
 		final identities: LintMessageIdentities = Linter.messageIdentities();
-		for (rule in ['duplicate-code', 'unused-local', 'oversized-type'])
-			Assert.notNull(identities[rule], 'a declaring check must reach lint-diff through the registry');
-		for (rule in ['complexity', 'string-literal-dup', 'anon-type-dup', 'magic-number'])
-			Assert.isNull(identities[rule], 'a rule whose digits are the finding must not be normalized');
+		final declaring: Array<String> = [
+			'duplicate-code',
+			'unused-local',
+			'oversized-type',
+			'complexity',
+			'string-literal-dup',
+			'anon-type-dup',
+			'extract-repeated-expression'
+		];
+		for (rule in declaring) Assert.notNull(identities[rule], 'a declaring check must reach lint-diff through the registry');
+		// Two rules stay OUT of the map, for the two different reasons the contract names.
+		// `magic-number` quotes the literal VALUE it found, which is the finding itself and not
+		// a measurement of it — nothing to mask. `fragmented-doc-comment` DOES quote a
+		// measurement, but its message carries no name and no position, so that tally is the
+		// only thing telling two fragmented declarations in one file apart.
+		for (rule in ['magic-number', 'fragmented-doc-comment'])
+			Assert.isNull(identities[rule], 'a rule whose number must survive the key is not in the map');
 	}
 
 	public function testASeverityFlipIsReported(): Void {
@@ -332,6 +353,21 @@ class LintDiffTest extends Test {
 
 	public function testParseReportRefusesADocumentThatIsNotAnArray(): Void {
 		Assert.raises(LintDiff.parseReport.bind('{"findings": []}'));
+	}
+
+	public function testOversizedTypeMemberBumpIsMaskedAway(): Void {
+		// The movement the S15 mask absorbs, in the shape that actually reached the campaign's
+		// verdicts: `type 'Cli' has 518 -> 519 members`, printed as one added plus one removed
+		// on two consecutive slices that had not touched the rule at all.
+		final before: String = reportOf([
+			record('src/C.hx', 'warning', 'oversized-type', oversized('Cli', '518 members (max 50)'))
+		]);
+		final after: String = reportOf([
+			record('src/C.hx', 'warning', 'oversized-type', oversized('Cli', '519 members (max 50)'))
+		]);
+		final result: LintDiffResult = diff(before, after, '');
+		Assert.equals(0, result.addedTotal, 'a member the type gained is not a NEW finding');
+		Assert.equals(0, result.removedTotal);
 	}
 
 	private static function diff(before: String, after: String, root: String): LintDiffResult {

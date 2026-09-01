@@ -57,13 +57,47 @@ using StringTools;
  * oversized-type case at all, where one number in the message drifts and the
  * one beside it IS the finding.
  *
- * What is still deliberately NOT normalized: `string-literal-dup`'s repetition
- * count, `complexity`'s score, `anon-type-dup`'s occurrence tally,
- * `oversized-type`'s MEMBER count. Those digits move only when the code moves,
- * so a file crossing from 50 to 51 members reports one added and one removed,
- * and that is the gate working rather than noise. Masking them would turn the
- * gate off for the movement it exists to catch — which is the failure mode to
- * watch for in any future `VolatileMessage`.
+ * Every MEASUREMENT a message quotes is masked, and that includes the tallies this
+ * paragraph once listed as deliberately kept (`string-literal-dup`'s repetition count,
+ * `complexity`'s score, `anon-type-dup`'s occurrence and file counts, `oversized-type`'s
+ * member count). The argument for keeping them was that such a digit moves only when the
+ * code moves. True, and beside the point: the finding it belongs to was already there
+ * before the digit changed and is still there after, so the gate printed one added plus
+ * one removed for no movement at all. Measured over the campaign's three consecutive
+ * blast-radius verdicts before this change, SIX of six reported lines were exactly that
+ * — two `oversized-type` member bumps and four `string-literal-dup` repetition
+ * bumps — and none was a real change. `anon-type-dup` was the worst latent case:
+ * both its numbers are project-wide POPULATIONS, so one new anonymous structure anywhere
+ * re-keyed all 32 of its findings.
+ *
+ * What is still deliberately NOT normalized, and the question to ask before masking a
+ * future tally: `duplicate-code`'s statement COUNT, and the `(max N)` THRESHOLD every
+ * limit rule quotes. The threshold is configuration — changing it IS a change. The
+ * statement count is the last DISCRIMINATOR its key has: both coordinates in that message
+ * are masked and the partner path is shared by every clone against the same file, so
+ * blanking the count merges two different clones in one file into one key (the 57% / 78%
+ * above). So the test is not "does this digit move only with the code" but "is anything else in
+ * this message telling two neighbouring findings apart".
+ *
+ * Two prices are paid knowingly, both measured. There is no MAGNITUDE bound: a type going
+ * 52 -> 301 members now reports the same nothing as 52 -> 53, because this gate answers "did
+ * a finding appear or disappear", not "by how much" — the numbers are still in both reports.
+ *
+ * And masking a number can COLLAPSE two keys into one. At the scope this gate actually runs
+ * (`lint src test --all`, the project's own config) that costs 3 of 355 keys, every one of
+ * them `extract-repeated-expression`, whose message names the expression but not the
+ * function, so one expression repeated in two bodies of a single file merges. But the bound
+ * is SCOPE-DEPENDENT and the mechanism is not confined to that rule: `string-literal-dup`
+ * elides its literal preview at 40 characters, so two long literals in one file sharing a
+ * 40-character prefix render the same text and the repetition count was the last thing
+ * between them. Zero such pairs exist in the gate's scope today (8 of its 262 findings carry
+ * an elided preview and none collide), but forcing the rule on over `test/` as well — where
+ * the nested config disables it — surfaces 14 more collapsed keys, and an end-to-end probe
+ * over such a pair reports 0 added / 0 removed for a genuine substitution. Treat 3 as the
+ * figure for THIS gate, not as a property of the policy.
+ *
+ * Against the 57% / 78% the same masking would have cost on `duplicate-code`, that is the
+ * trade this policy makes.
  *
  * Everything here is pure — the CLI layer reads the files, builds the identity
  * map, calls `parseReport` / `tally` / `compare` / `render` and prints. That

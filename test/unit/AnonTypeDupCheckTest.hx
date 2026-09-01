@@ -171,6 +171,21 @@ class AnonTypeDupCheckTest extends Test {
 		Assert.equals(0, new AnonTypeDup().fix(SHAPE, vs, new HaxeQueryPlugin()).length);
 	}
 
+	public function testMessageIdentityMasksBothTallies(): Void {
+		// THE 1-TO-32 AMPLIFIER, closed. Both numbers in this message are PROJECT-WIDE
+		// populations, so one new anonymous structure anywhere re-keyed every finding the rule
+		// had. Pinned against messages `run` produced, as `Check.VolatileMessage` requires.
+		final check: AnonTypeDup = new AnonTypeDup();
+		final three: String = check.run([for (i in 0...3) { file: 'a$i.hx', source: SHAPE }], new HaxeQueryPlugin())[0].message;
+		final four: String = check.run([for (i in 0...4) { file: 'a$i.hx', source: SHAPE }], new HaxeQueryPlugin())[0].message;
+		Assert.isTrue(three.contains('written 3 times across 3 files'), three);
+		Assert.notEquals(three, four);
+		final identity: String = check.messageIdentity(three);
+		Assert.isTrue(identity.contains('written # times across # files'), identity);
+		Assert.equals(identity, check.messageIdentity(four));
+		Assert.equals(identity, check.messageIdentity(identity));
+	}
+
 	private function violations(sources: Array<String>): Array<Violation> {
 		return new AnonTypeDup().run([for (i in 0...sources.length) { file: 'a$i.hx', source: sources[i] }], new HaxeQueryPlugin());
 	}

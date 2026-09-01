@@ -136,6 +136,24 @@ class ExtractRepeatedExpressionTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	public function testMessageIdentityMasksTheOccurrenceTally(): Void {
+		// Pinned against messages `run` produced, as `Check.VolatileMessage` requires: an
+		// expression going from three occurrences to four is the same standing advisory about
+		// the same body, so the tally leaves the blast-radius key.
+		final check: ExtractRepeatedExpression = new ExtractRepeatedExpression();
+		final three: String = check.run([
+			{ file: 'C.hx', source: 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); } }' }
+		], new HaxeQueryPlugin())[0].message;
+		final four: String = check.run([
+			{ file: 'C.hx', source: 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); k(a.b.c); } }' }
+		], new HaxeQueryPlugin())[0].message;
+		Assert.notEquals(three, four);
+		final identity: String = check.messageIdentity(three);
+		Assert.isTrue(identity.indexOf('repeated # times in one function body') != -1);
+		Assert.equals(identity, check.messageIdentity(four));
+		Assert.equals(identity, check.messageIdentity(identity));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ExtractRepeatedExpression().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

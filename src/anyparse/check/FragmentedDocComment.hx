@@ -32,6 +32,18 @@ typedef CommentTok = { from: Int, to: Int, isLine: Bool };
 @:nullSafety(Strict)
 final class FragmentedDocComment implements Check {
 
+	/**
+	 * The fragment that precedes the BLOCK TALLY in a message. Spelled once, but NOT used as a
+	 * `Check.VolatileMessage` mask anchor, and the reason is the criterion that interface
+	 * states: keep a number that is the last DISCRIMINATOR between two neighbouring findings.
+	 * This message carries no name and no position — the tally is not merely the last
+	 * discriminator it has, it is the ONLY one — so masking it collapsed every finding of this
+	 * rule in one file onto a single key and made a substitution between two fragmented
+	 * declarations invisible to `apq lint-diff`. S15 masked it, a review caught it, and it was
+	 * reverted here rather than in the consumer.
+	 */
+	private static inline final BLOCK_COUNT_LEAD: String = 'documented by ';
+
 	public function new() {}
 
 	public function id(): String {
@@ -42,6 +54,7 @@ final class FragmentedDocComment implements Check {
 		return 'a declaration documented by several adjacent comment blocks instead of one';
 	}
 
+
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [
 			for (entry in files) for (run in adjacentBlockRuns(entry.source))
@@ -50,7 +63,7 @@ final class FragmentedDocComment implements Check {
 					span: new Span(run[0].from, run[run.length - 1].to),
 					rule: 'fragmented-doc-comment',
 					severity: Severity.Info,
-					message: 'this declaration is documented by ${run.length} adjacent comment blocks; merge them into one'
+					message: 'this declaration is $BLOCK_COUNT_LEAD${run.length} adjacent comment blocks; merge them into one'
 				}
 		];
 	}

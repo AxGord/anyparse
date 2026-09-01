@@ -27,8 +27,11 @@ import anyparse.runtime.Span;
  *   three-grams; the cross-file pass concatenates every scoped file's blocks into ONE
  *   global three-gram index built in a single pass (no O(N²) file-pair comparison) and
  *   reports a clone only when its two occurrences sit in DIFFERENT files, pointing the
- *   later at the globally-earliest occurrence. Same-file pairs are skipped by the
- *   cross-file pass, so the two passes partition the clone space with no double-report.
+ *   later at the PATH-earliest occurrence — path-earliest and not scan-earliest,
+ *   because the scan order is the order the caller listed the scope, and picking by
+ *   it made `lint src test` and `lint test src` name opposite ends of the same
+ *   clone. Same-file pairs are skipped by the cross-file pass, so the two passes
+ *   partition the clone space with no double-report.
  * - **Whitespace-only normalization.** Two statements are equal when their source
  *   text matches after every run of spaces / tabs / newlines is collapsed to a
  *   single space (and the ends trimmed). There is NO identifier normalization
@@ -86,11 +89,29 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	private static inline final RULE_ID: String = 'duplicate-code';
 
 	/**
+	 * The prefix both wordings share, spelled once so the two message builders cannot drift.
+	 *
+	 * The statement COUNT in front of it is deliberately NOT masked, unlike every other tally
+	 * S15 masked. The reason is local to this rule. `lint-diff` keys on
+	 * `(file, rule, severity, message)` with no span; whichever wording a finding uses, its
+	 * one coordinate is already masked (the partner's line in the cross-file form, the
+	 * original's line in the same-file form), and the cross-file partner PATH is shared by
+	 * every clone against that file while the same-file form names no path at all. So the
+	 * count is the LAST thing distinguishing two different clones of one file, and blanking
+	 * it made a substitution invisible — 57% of this rule's findings on anyparse and 78% on
+	 * tm shared a key with a sibling under the old blanket digit mask. Its noise cost is also
+	 * zero where the others' was not: across the campaign's last three blast-radius verdicts
+	 * this rule contributed no lines at all, while `oversized-type` and `string-literal-dup`
+	 * contributed all six.
+	 */
+	private static inline final STATEMENT_COUNT_UNIT: String = ' statements duplicated from ';
+
+	/**
 	 * The fragment that precedes the ORIGINAL's line in a same-file message, and the one that
 	 * follows it in a cross-file message. Shared by the message builders and by
 	 * `messageIdentity`, so an anchor cannot drift away from the wording it points at.
 	 */
-	private static inline final SAME_FILE_ORIGIN: String = ' statements duplicated from line ';
+	private static inline final SAME_FILE_ORIGIN: String = '${STATEMENT_COUNT_UNIT}line ';
 
 	/**
 	 * Anchors the OTHER direction: the cross-file message writes its coordinate before this
@@ -317,7 +338,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 			span: f.span,
 			rule: RULE_ID,
 			severity: Severity.Info,
-			message: '${f.count} statements duplicated from ${f.origFile}:${f.origLine}$CROSS_FILE_TAIL'
+			message: '${f.count}$STATEMENT_COUNT_UNIT${f.origFile}:${f.origLine}$CROSS_FILE_TAIL'
 		});
 	}
 
@@ -332,9 +353,26 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	private static function collectCrossFindings(
 		blocks: Array<Array<DupStmt>>, blockFile: Array<Int>, perFile: Array<DupFile>, bucket: Array<DupPos>, findings: Array<DupFinding>
 	): Void {
-		bucket.sort((a, b) ->
-			blockFile[a.b] != blockFile[b.b] ? blockFile[a.b] - blockFile[b.b] : blocks[a.b][a.i].span.from - blocks[b.b][b.i].span.from
-		);
+		// Ordered by file PATH, never by the index the file happened to get from the scan: the
+		// index is the order the CLI handed the scope over, so `lint src test` and `lint test src`
+		// picked opposite ends of every cross-tree clone as the "original" — measured on this
+		// project, 9 findings moved from `test/` to `src/` and back purely on argument order, each
+		// one an added + a removed line in the blast-radius gate. The path is a property of the
+		// file SET, so the pair now agrees. `fa - fb` breaks a tie only when one path is listed
+		// twice, which keeps the comparator total.
+		bucket.sort((a, b) -> {
+			final fa: Int = blockFile[a.b];
+			final fb: Int = blockFile[b.b];
+			if (fa == fb) return blocks[a.b][a.i].span.from - blocks[b.b][b.i].span.from;
+			final pa: String = perFile[fa].file;
+			final pb: String = perFile[fb].file;
+			return if (pa < pb)
+				-1
+			else if (pa > pb)
+				1
+			else
+				fa - fb;
+		});
 		final anchor: DupPos = bucket[0];
 		final anchorFile: Int = blockFile[anchor.b];
 		for (k in 1...bucket.length) {

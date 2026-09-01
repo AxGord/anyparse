@@ -301,12 +301,70 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 		Assert.notEquals(withDigit, check.messageIdentity('4 statements duplicated from src/v3.hx:9$tail'));
 	}
 
+	public function testAnchorIsPathEarliestNotScanEarliest(): Void {
+		// The ORDER the caller listed the scope in must not decide which end of a clone is the
+		// "original". At base it did: the anchor was `bucket[0]` after a sort on the file's
+		// SCAN INDEX, so handing the same two files over in the other order moved the finding
+		// from `Z.hx` to `A.hx` and swapped the path the message names. Measured on this
+		// project, `lint src test` and `lint test src` disagreed on 9 findings each way.
+		final a: { file: String, source: String } = file('A.hx', clone('A'));
+		final z: { file: String, source: String } = file('Z.hx', clone('Z'));
+		final forward: Array<Violation> = violations([a, z]);
+		final reversed: Array<Violation> = violations([z, a]);
+		Assert.equals(1, forward.length);
+		Assert.equals(1, reversed.length);
+		Assert.equals('Z.hx', forward[0].file);
+		Assert.equals('Z.hx', reversed[0].file);
+		Assert.equals(forward[0].message, reversed[0].message);
+		Assert.isTrue(forward[0].message.indexOf('from A.hx:') != -1, forward[0].message);
+	}
+
+	public function testMessageIdentityKeepsTheStatementCount(): Void {
+		// The one tally S15 did NOT mask, and the arm that proves the decision was made rather
+		// than forgotten. `lint-diff` keys on `(file, rule, severity, message)` with no span; both
+		// coordinates in this message are already masked and the partner path is shared by every
+		// clone against that file, so the COUNT is the last thing telling two different clones in
+		// one file apart. Blanking it made a substitution invisible — 57% of this rule's findings
+		// on anyparse shared a key with a sibling under the old blanket digit mask — and its noise
+		// cost is zero: over the campaign's last three blast-radius verdicts this rule contributed
+		// no lines while two masked rules contributed all six.
+		final check: DuplicateCode = new DuplicateCode();
+		final three: String = check.run([file('A.hx', clone('A')), file('Z.hx', clone('Z'))], new HaxeQueryPlugin())[0].message;
+		final four: String = check.run([file('A.hx', longerClone('A')), file('Z.hx', longerClone('Z'))], new HaxeQueryPlugin())[0].message;
+		Assert.isTrue(three.indexOf('3 statements') == 0, three);
+		Assert.isTrue(four.indexOf('4 statements') == 0, four);
+		final identity: String = check.messageIdentity(three);
+		Assert.isTrue(identity.indexOf('3 statements duplicated from A.hx:#') == 0, identity);
+		Assert.notEquals(identity, check.messageIdentity(four));
+		Assert.equals(identity, check.messageIdentity(identity));
+	}
+
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
 		return new DuplicateCode().run(files, new HaxeQueryPlugin());
 	}
 
 	private function file(name: String, lines: Array<String>): { file: String, source: String } {
 		return { file: name, source: lines.join('\n') };
+	}
+
+	/** A one-method class named `t` holding the three-statement clone body. */
+	private function clone(t: String): Array<String> {
+		return [
+			'class $t {',
+			'\tfunction f():Void {',
+			'\t\ttrace(alpha, beta);',
+			'\t\ttrace(gamma, delta);',
+			'\t\ttrace(epsilon, zeta);',
+			'\t}',
+			'}'
+		];
+	}
+
+	/** `clone` with a fourth shared statement, so the same pair reports a count of 4. */
+	private function longerClone(t: String): Array<String> {
+		final lines: Array<String> = clone(t);
+		lines.insert(lines.length - 2, '\t\ttrace(eta, theta);');
+		return lines;
 	}
 
 }
