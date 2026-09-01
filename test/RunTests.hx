@@ -742,6 +742,7 @@ import utest.Runner;
 import unit.DefaultRepeatedArgumentCheckTest;
 import unit.DeadTestGuardTest;
 import unit.DocOwnerGuardSliceTest;
+import unit.HxFileHeaderCommentSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -953,6 +954,7 @@ class RunTests {
 		addCase(new HxFormatterOffTest());
 		addCase(new HxBlankAroundMultilineMembersTest());
 		addCase(new HxMeasuredMultilineDeclBlankSliceTest());
+		addCase(new HxFileHeaderCommentSliceTest());
 		addCase(new HxVarTypeHintAnonIndentTest());
 		addCase(new HxTypedefBetweenBlankTest());
 		addCase(new HxArrowFnTypeSliceTest());
