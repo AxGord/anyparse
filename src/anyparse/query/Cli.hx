@@ -350,6 +350,24 @@ typedef LintPassResult = {
 };
 
 /**
+ * What ONE check answered for ONE file's share of its own findings, before the writer-emit gate
+ * has had its say: the `findings` it was asked about, the `edits` it produced, whether an earlier
+ * check this pass already claimed an overlapping region, and the sentence of whatever gate
+ * refused those edits (null while nothing has).
+ *
+ * The group exists so a refusal can be attributed. `RefactorSupport.canonicalize` round-trips the
+ * WHOLE spliced file, so its verdict is per FILE, and a flat edit array left the driver no way to
+ * say which check's edits the writer would not write — or to keep the rest.
+ */
+typedef RuleEdits = {
+	final rule: String;
+	final findings: Array<Violation>;
+	final edits: Array<{ span: Span, text: String }>;
+	var overlapped: Bool;
+	var refusal: Null<String>;
+};
+
+/**
  * The `lint --fix` check sets, split by how each is applied: `risky` is verified against the compiler oracle, `safe` runs in the unverified fixpoint loop, and `safe` in turn splits into `activeScope` (re-linted only over the files a prior pass changed) and `fullScope` (re-linted over the whole file set every pass).
  */
 typedef CheckPartition = {
@@ -10760,39 +10778,43 @@ final class Cli {
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
 			if (fileViolations.length == 0) continue;
-			final disjoint: Array<{ span: Span, text: String }> = computeFileLintEdits(
-				entry.source, fileViolations, checks, cached, index, ledger, passes == 1
-			);
-			if (disjoint.length == 0) continue;
-			switch RefactorSupport.canonicalize(entry.source, disjoint, false, cached, optsByFile[entry.file]) {
+			final groups: Array<RuleEdits> = collectFileLintEdits(entry.source, fileViolations, checks, cached, index);
+			if (contributedEdits(groups).length == 0) {
+				ledgerFileLintEdits(ledger, groups, passes == 1);
+				continue;
+			}
+			var settled: Null<{ text: String, rewrites: Null<Int> }> = null;
+			switch RefactorSupport.canonicalize(entry.source, contributedEdits(groups), false, cached, optsByFile[entry.file]) {
 				case Ok(text, rewrites):
-					// `notedRewrites`, NOT `noted`: --fix runs several passes and a writer that
-					// needs two rewrites on a file needs them on every pass that touches it, so
-					// the note needs a dedupe set — but `noted` is the SKIPPED-file set the run
-					// summary counts, and a file that merely tripped this note was fixed.
-					if (FormatFixedPoint.rewritesNote(rewrites) != null && !notedRewrites.contains(entry.file)) {
-						warnRewrites('lint --fix', entry.file, rewrites);
-						notedRewrites.push(entry.file);
-					}
-					if (text != entry.source) {
-						entry.source = text;
-						if (!changedFiles.contains(entry.file)) changedFiles.push(entry.file);
-						fixedDelta += disjoint.length;
-						nextActive.push(entry);
-					}
+					settled = { text: text, rewrites: rewrites };
 				case Err(message):
+					// PER-EDIT, not per-FILE. The gate round-trips the whole spliced file, so one
+					// check's un-writable fix used to discard every other check's edits for this
+					// file — on every pass, since each pass recomputes the same set and is refused
+					// again. Measured over 8645 external files: 2 files where one refused edit set
+					// (`modifier-order` reordering across a `/*inline*/`, `cond-region-merge`
+					// emitting text that does not re-parse) cost 100+ landable edits from twenty-odd
+					// other rules. The salvage runs ONLY here, so a file nothing refuses pays exactly
+					// the one round trip it always did.
+					final blamed: Array<String> = [];
+					settled = salvageFileLintEdits(entry.source, groups, message, cached, optsByFile[entry.file], blamed);
 					// EVERY pass, not just the first: `noted` already dedupes per file, so the
 					// `passes == 1` this used to also carry bought nothing and cost the one place a
 					// slot emptied BETWEEN two checks can land — a per-check look cannot see that
 					// pair, so this backstop is its only report, and it was muted exactly where the
 					// backstop is the whole point. It is also what the run summary counts as
 					// `N file(s) skipped`, so a later-pass refusal used to leave the file unwritten
-					// AND uncounted.
+					// AND uncounted (`skippedTail` says `partly fixed first, then refused` when the
+					// salvage did land the rest).
 					if (!noted.contains(entry.file)) {
-						stderr('apq lint --fix: ${entry.file}: $message\n');
+						stderr('apq lint --fix: ${entry.file}: ${blamed.length == 0 ? message : blamed.join('; ')}\n');
 						noted.push(entry.file);
 					}
 			}
+			// AFTER the gate, never during collection: a check whose edits the writer refuses achieved
+			// nothing, and counting them as `edits` there claimed the rule had fixed those findings.
+			ledgerFileLintEdits(ledger, groups, passes == 1);
+			if (settled != null) fixedDelta += commitLintPassFile(entry, groups, settled, notedRewrites, changedFiles, nextActive);
 		}
 		return { nextActive: nextActive, fixedDelta: fixedDelta };
 	}
@@ -10901,14 +10923,18 @@ final class Cli {
 	}
 
 	/**
-	 * Collect every check's fix edits for one file's violations and drop the
-	 * contained (overlapping) ones, returning a disjoint edit set ready for
-	 * canonicalization.
+	 * Ask every check for its fix edits over one file's violations, returning ONE GROUP PER CHECK —
+	 * the edits, the findings they answer, whether an earlier check this pass already claimed an
+	 * overlapping region, and the sentence of any gate that refused them.
+	 *
+	 * Grouped rather than flattened because the writer-emit gate's verdict is per FILE: without the
+	 * attribution the driver could neither say which check's edits it would not write nor keep the
+	 * others. `contributedEdits` flattens the survivors into the disjoint set the gate is handed.
 	 */
-	private static function computeFileLintEdits(
-		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex,
-		ledger: Map<String, RuleFixOutcome>, countDeclines: Bool
-	): Array<{ span: Span, text: String }> {
+	private static function collectFileLintEdits(
+		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex
+	): Array<RuleEdits> {
+		final groups: Array<RuleEdits> = [];
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (check in checks) {
 			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
@@ -10925,10 +10951,6 @@ final class Cli {
 			// pass, while a gate refusal is a standing fact about those edits, so recording the
 			// refusal rather than "1 edit produced" is the truer of the two readings.
 			final refused: Null<String> = checkEdits.length > 0 ? BodySlotGuard.emptiedSlot(source, checkEdits, cached) : null;
-			// The ONE place in the tool that knows what a check answered for a given set of its own
-			// findings. Recorded here rather than inferred later: "no edit came back" is a fact only
-			// this call site holds, and every reading of it downstream was a guess.
-			noteFixOutcome(ledger, check.id(), own, refused == null ? checkEdits.length : 0, countDeclines, refused);
 			// Accept a check's edits only when none overlaps an edit already accepted from
 			// an earlier check this pass — applying a subset would break an atomic fix
 			// (e.g. unused-parameter's signature edit without its call-site arg edit, when
@@ -10938,11 +10960,139 @@ final class Cli {
 			// the same way an overlap does — per CHECK, so one `unused-local` inside an
 			// `if (c) var y = 1;` costs its own fix and not the other rules' work on the file.
 			// `canonicalize` refuses the same shape for the whole file; that stays the backstop
-			// for a slot two checks empty between them, which no per-check look can see.
-			if (checkEdits.length > 0 && refused == null && !RefactorSupport.editsOverlapAny(checkEdits, edits)) for (e in checkEdits)
-				edits.push(e);
+			// for a slot two checks empty between them, which no per-check look can see —
+			// and `salvageFileLintEdits` now asks it per check when it fires.
+			final overlapped: Bool = checkEdits.length > 0 && refused == null && RefactorSupport.editsOverlapAny(checkEdits, edits);
+			final group: RuleEdits = {
+				rule: check.id(),
+				findings: own,
+				edits: checkEdits,
+				overlapped: overlapped,
+				refusal: refused
+			};
+			if (contributes(group)) for (e in checkEdits) edits.push(e);
+			groups.push(group);
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return groups;
+	}
+
+	/**
+	 * Write one file's settled text back into the in-memory set and mark it for the next pass,
+	 * answering how many edits that commits. Split out of `applyLintPass` to keep that function
+	 * under the complexity budget.
+	 */
+	private static function commitLintPassFile(
+		entry: { file: String, source: String }, groups: Array<RuleEdits>, settled: { text: String, rewrites: Null<Int> },
+		notedRewrites: Array<String>, changedFiles: Array<String>, nextActive: Array<{ file: String, source: String }>
+	): Int {
+		// `notedRewrites`, NOT `noted`: --fix runs several passes and a writer that needs two rewrites
+		// on a file needs them on every pass that touches it, so the note needs a dedupe set — but
+		// `noted` is the SKIPPED-file set the run summary counts, and a file that merely tripped this
+		// note was fixed.
+		if (FormatFixedPoint.rewritesNote(settled.rewrites) != null && !notedRewrites.contains(entry.file)) {
+			warnRewrites('lint --fix', entry.file, settled.rewrites);
+			notedRewrites.push(entry.file);
+		}
+		if (settled.text == entry.source) return 0;
+		entry.source = settled.text;
+		if (!changedFiles.contains(entry.file)) changedFiles.push(entry.file);
+		nextActive.push(entry);
+		return contributedEdits(groups).length;
+	}
+
+	/** Whether `group`'s edits reach the file's edit set: the check answered, no gate refused it, no earlier check overlapped it. */
+	private static inline function contributes(group: RuleEdits): Bool {
+		return group.edits.length > 0 && group.refusal == null && !group.overlapped;
+	}
+
+	/** The disjoint edit set `groups` currently contribute, in check order — recomputed, so a refusal recorded later shrinks it. */
+	private static function contributedEdits(groups: Array<RuleEdits>): Array<{ span: Span, text: String }> {
+		return RefactorSupport.dropContainedEdits([for (group in groups) if (contributes(group)) for (e in group.edits) e]);
+	}
+
+	/**
+	 * Re-ask the writer-emit gate one CHECK at a time after it refused the file's whole edit set:
+	 * returns the canonicalized text of the largest subset that survives (null when none does), and
+	 * names each refused rule in `blamed`.
+	 *
+	 * `RefactorSupport.canonicalize` round-trips the whole spliced file, so its verdict is per FILE
+	 * and one check's un-writable fix cost every other check's work on that file, every pass.
+	 *
+	 * A source the writer cannot round-trip AT ALL is told apart FIRST, by asking the gate with an
+	 * EMPTY edit set: no subset of edits changes that answer, so there is nothing to bisect and every
+	 * contributing group takes the file-level sentence. That case is the bulk of it — 50 of the 54
+	 * refusals measured over 8645 external files, the same files `apq fmt --write` refuses — which is
+	 * why "the rule proposed what the writer refuses" explains almost none of this defect.
+	 *
+	 * The granularity is the CHECK, not the edit, because that is where a fix is atomic: splitting one
+	 * check's set would apply a signature edit without its call-site edits. Greedy in check order, so
+	 * the surviving set is MAXIMAL rather than maximum (checks whose pairs A+B and A+C are refused
+	 * while B+C is fine keep A and blame both others), and a refusal caused by the COMBINATION of two
+	 * checks is charged to the later one — the same first-come rule the overlap test applies.
+	 */
+	private static function salvageFileLintEdits(
+		source: String, groups: Array<RuleEdits>, message: String, cached: GrammarPlugin, optsJson: Null<String>, blamed: Array<String>
+	): Null<{ text: String, rewrites: Null<Int> }> {
+		switch RefactorSupport.canonicalize(source, [], false, cached, optsJson) {
+			case Ok(_, _):
+			case Err(_):
+				// The loop's OWN predicate, never `contributes` — that one excludes an OVERLAPPED
+				// group, and on this arm nothing is ever written, so such a group's edits did not land
+				// either. Read through `contributes` it got no refusal row and the ledger then credited
+				// it with edits on a run that wrote nothing. This arm is 50 of the 54 refusals measured
+				// over 8645 files, so it is the common path, not the corner.
+				for (group in groups) if (group.edits.length > 0 && group.refusal == null) group.refusal = message;
+				return null;
+		}
+		// Overlap is RE-DERIVED on the bisect arm against the SURVIVING set, never read off the collection pass. A
+		// group deferred because it overlapped one the gate then REFUSES would otherwise never be
+		// offered at all — and every pass recomputes the same state, so its edits would be lost for
+		// ever: the very defect this salvage exists to close, one level down. Measured before the
+		// re-derivation: a `redundant-parens` edit inside the region a refused
+		// `prefer-if-expression-assignment` fix covered stayed unwritten across every pass, and the run
+		// blamed only the rule that was actually refused.
+		final kept: Array<RuleEdits> = [];
+		final keptEdits: Array<{ span: Span, text: String }> = [];
+		var settled: Null<{ text: String, rewrites: Null<Int> }> = null;
+		for (group in groups) if (group.edits.length > 0 && group.refusal == null) {
+			if (RefactorSupport.editsOverlapAny(group.edits, keptEdits)) {
+				group.overlapped = true;
+				continue;
+			}
+			group.overlapped = false;
+			kept.push(group);
+			switch RefactorSupport.canonicalize(source, contributedEdits(kept), false, cached, optsJson) {
+				case Ok(text, rewrites):
+					settled = { text: text, rewrites: rewrites };
+					for (e in group.edits) keptEdits.push(e);
+				case Err(why):
+					kept.pop();
+					group.refusal = why;
+					blamed.push('${group.rule}: $why');
+			}
+		}
+		return settled;
+	}
+
+	/**
+	 * Fold one file's per-check outcomes into the run's fix ledger, AFTER the writer-emit gate has
+	 * answered.
+	 *
+	 * The ONE place in the tool that knows what a check answered for a given set of its own findings,
+	 * and now also whether the driver could write it: "no edit came back" and "the edits were refused"
+	 * are both facts only this path holds, and every reading of them downstream was a guess. An
+	 * OVERLAPPED group still counts its edits, deliberately: on the paths where the file IS written an
+	 * overlap is temporary — the salvage re-derives it against the survivors, so a check deferred
+	 * behind a refused one is offered in the same pass and one deferred behind a WRITTEN one fires on
+	 * the next. Where nothing is written at all (a source the writer cannot round-trip) the salvage
+	 * gives every group that produced edits the file-level refusal instead, so none of them reaches
+	 * this row claiming an edit.
+	 */
+	private static function ledgerFileLintEdits(ledger: Map<String, RuleFixOutcome>, groups: Array<RuleEdits>, countDeclines: Bool): Void {
+		for (group in groups)
+			noteFixOutcome(
+				ledger, group.rule, group.findings, group.refusal == null ? group.edits.length : 0, countDeclines, group.refusal
+			);
 	}
 
 	/**

@@ -7,6 +7,7 @@ import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -51,6 +52,19 @@ class LintFixDeclineWiringSliceTest extends Test {
 		'package p;\n\nclass C {\n    public function f(): Void {\n        var y: Int = 1;\n    }\n}\n';
 
 	/**
+	 * Canonical under COMPILED DEFAULTS (which is what a null `optsJson` gives these pins), with a
+	 * comment INSIDE a modifier run and one unrelated fixable finding: `modifier-order`'s reorder
+	 * moves the modifiers around `/*inline*\/` and the writer will not re-emit it, while
+	 * `prefer-single-quotes` has nothing to do with any of that.
+	 */
+	private static final REFUSED_BY_WRITER: String =
+		'package p;\n\nclass G {\n\n\tfinal private /*inline*/ function f():String {\n\t\treturn "x";\n\t}\n\n}\n';
+
+	/** Canonical under compiled defaults, with one string literal a hand-built edit set can straddle. */
+	private static final OVERLAP_SOURCE: String =
+		'package p;\n\nclass C {\n\n\tpublic function f():String {\n\t\treturn "aaa";\n\t}\n\n}\n';
+
+	/**
 	 * The guard's refusal is the rule's ledger row, and it carries the guard's own sentence.
 	 *
 	 * RED at base on all four assertions but the first: the edits were dropped either way, while
@@ -68,9 +82,9 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = check.run(files, plugin);
 		Assert.isTrue(own.length > 0, 'the fixture reports at least one unused-local finding');
 		final ledger: Map<String, RuleFixOutcome> = [];
-		final edits: Array<{ span: Span, text: String }> = Cli.computeFileLintEdits(
-			REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin), ledger, true
-		);
+		final groups: Array<RuleEdits> = Cli.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin));
+		Cli.ledgerFileLintEdits(ledger, groups, true);
+		final edits: Array<{ span: Span, text: String }> = Cli.contributedEdits(groups);
 		Assert.equals(0, edits.length, 'the guard drops the check edits');
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
@@ -146,9 +160,9 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = check.run(files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
 		// `countDeclines` false IS "this is not pass 1" — the driver passes `passes == 1`.
-		final edits: Array<{ span: Span, text: String }> = Cli.computeFileLintEdits(
-			REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin), ledger, false
-		);
+		final groups: Array<RuleEdits> = Cli.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin));
+		Cli.ledgerFileLintEdits(ledger, groups, false);
+		final edits: Array<{ span: Span, text: String }> = Cli.contributedEdits(groups);
 		Assert.equals(0, edits.length, 'the guard drops the check edits on this pass too');
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
@@ -161,6 +175,218 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final lines: String = Cli.unfixedFixLedger(ledger, declared, [], []).join('');
 		Assert.isTrue(lines.indexOf('unused-local') != -1, 'the rule reaches the report: $lines');
 		Assert.isTrue(lines.indexOf('IfStmt') != -1, 'and the block carries the guard\'s own sentence: $lines');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * One rule's un-writable fix no longer costs the file's other rules their work.
+	 *
+	 * The writer-emit gate round-trips the WHOLE spliced file, so its verdict is per FILE: at base
+	 * `modifier-order`'s reorder across a `/*inline*\/` comment took `prefer-single-quotes`'s edit
+	 * down with it, on every pass, and the file was written not at all. Measured over 8645 external
+	 * files: 2 files, 310 landable edits from twenty-odd rules thrown away between them.
+	 *
+	 * RED at base on every assertion — `salvageFileLintEdits` does not exist there, so the file
+	 * does not compile.
+	 */
+	public function testARefusedRuleCostsOnlyItsOwnEdits(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final order: Null<Check> = Linter.byId('modifier-order');
+		final quotes: Null<Check> = Linter.byId('prefer-single-quotes');
+		if (order == null || quotes == null) {
+			Assert.fail('modifier-order / prefer-single-quotes are not both registered');
+			return;
+		}
+		final checks: Array<Check> = [order, quotes];
+		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: REFUSED_BY_WRITER }];
+		final own: Array<Violation> = Linter.run(files, plugin, checks, _ -> LintConfig.parse('{}'), false);
+		final groups: Array<RuleEdits> = Cli.collectFileLintEdits(REFUSED_BY_WRITER, own, checks, plugin, SymbolIndex.build(files, plugin));
+		Assert.equals(2, groups.length, 'both rules answered with edits: $groups');
+		// DETECT-PROOF: the whole set really is refused, so the salvage below is doing work rather
+		// than restating an `Ok` the gate would have given anyway.
+		switch RefactorSupport.canonicalize(REFUSED_BY_WRITER, Cli.contributedEdits(groups), false, plugin, null) {
+			case Ok(_, _):
+				Assert.fail('the fixture no longer trips the writer-emit gate');
+			case Err(message):
+				final blamed: Array<String> = [];
+				final settled: Null<{ text: String, rewrites: Null<Int> }> = Cli.salvageFileLintEdits(
+					REFUSED_BY_WRITER, groups, message, plugin, null, blamed
+				);
+				if (settled == null) {
+					Assert.fail('the salvage kept nothing: $message');
+					return;
+				}
+				Assert.equals(1, blamed.length, 'exactly one rule is blamed: $blamed');
+				Assert.isTrue(blamed[0].indexOf('modifier-order: ') == 0, 'and it is the refused one: ${blamed[0]}');
+				// ONE assertion over both halves, so neither can be satisfied alone: the surviving
+				// rule's rewrite sits inside the modifier run the refused rule wanted to reorder and
+				// did not.
+				Assert.isTrue(
+					settled.text.indexOf('final private /*inline*/ function f():String {\n\t\treturn \'x\';') != -1,
+					'the other rule\'s edit landed and the refused one did not: ${settled.text}'
+				);
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A group DEFERRED for overlapping one the gate then refuses is still offered.
+	 *
+	 * `overlapped` is decided during collection against an accumulating set that still holds the
+	 * edits the writer has not yet been asked about, so a check deferred behind a doomed one was
+	 * never handed to the salvage at all — and since every pass recomputes the identical state, its
+	 * edits were lost for ever. That is the defect this whole salvage exists to close, one level
+	 * down, and it is why the overlap is RE-DERIVED here against the surviving set.
+	 *
+	 * The groups are hand-built rather than collected, so the overlap and the refusal are exactly
+	 * the two facts under test: the wide edit leaves an unbalanced quote (the gate's `result does
+	 * not parse`), the narrow one sits INSIDE its span and is writable on its own. RED at base,
+	 * where `salvageFileLintEdits` does not exist.
+	 */
+	public function testAGroupDeferredByARefusedOverlapIsStillOffered(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final outer: Int = OVERLAP_SOURCE.indexOf('"aaa"');
+		final inner: Int = OVERLAP_SOURCE.indexOf('aaa');
+		Assert.isTrue(outer >= 0 && inner == outer + 1, 'the fixture holds the straddled literal');
+		final refused: RuleEdits = {
+			rule: 'r-refused',
+			findings: [],
+			edits: [{ span: new Span(outer, outer + 5), text: '\'aaa' }],
+			overlapped: false,
+			refusal: null
+		};
+		final deferred: RuleEdits = {
+			rule: 'r-deferred',
+			findings: [],
+			edits: [{ span: new Span(inner, inner + 3), text: 'bbb' }],
+			overlapped: true,
+			refusal: null
+		};
+		final blamed: Array<String> = [];
+		final settled: Null<{ text: String, rewrites: Null<Int> }> = Cli.salvageFileLintEdits(
+			OVERLAP_SOURCE, [refused, deferred], 'FILE LEVEL SENTENCE', plugin, null, blamed
+		);
+		if (settled == null) {
+			Assert.fail('the deferred group was never offered to the gate');
+			return;
+		}
+		// ONE assertion over both halves: the deferred rule's rewrite landed and the refused one's
+		// did not, so neither can be satisfied alone.
+		Assert.isTrue(settled.text.indexOf('return "bbb";') != -1, 'the deferred edit landed: ${settled.text}');
+		Assert.equals(1, blamed.length, 'only the refused rule is blamed: $blamed');
+		Assert.isTrue(blamed[0].indexOf('r-refused: ') == 0, 'and it is the refused one: ${blamed[0]}');
+		Assert.isNull(deferred.refusal, 'the deferred group is not blamed for its neighbour');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A source the WRITER cannot round-trip is not bisected, and every contributing rule is told
+	 * the file-level reason.
+	 *
+	 * This is the bulk of the defect, not the headline: 50 of the 54 refusals measured over 8645
+	 * external files are the file's own bytes, the same ones `apq fmt --write` refuses — and no
+	 * subset of edits changes that answer, so asking the gate once per check would only pay N round
+	 * trips to learn it again. RED at base (no `salvageFileLintEdits`).
+	 */
+	public function testASourceLevelRefusalIsNotBisected(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final check: Null<Check> = Linter.byId('prefer-single-quotes');
+		if (check == null) {
+			Assert.fail('prefer-single-quotes is not registered');
+			return;
+		}
+		final source: String = 'package p;\n\nclass C {\n    public function f(): String {\n        return "x";\n    }\n}\n';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
+		final own: Array<Violation> = check.run(files, plugin);
+		Assert.isTrue(own.length > 0, 'the fixture reports a fixable finding');
+		final groups: Array<RuleEdits> = Cli.collectFileLintEdits(source, own, [check], plugin, SymbolIndex.build(files, plugin));
+		Assert.equals(1, Cli.contributedEdits(groups).length, 'and the check produced its edit');
+		final blamed: Array<String> = [];
+		Assert.isNull(
+			Cli.salvageFileLintEdits(source, groups, 'FILE LEVEL SENTENCE', plugin, null, blamed),
+			'a source the writer cannot round-trip salvages nothing'
+		);
+		Assert.equals(0, blamed.length, 'and no rule is blamed for the file\'s own bytes: $blamed');
+		Assert.equals('FILE LEVEL SENTENCE', groups[0].refusal, 'the rule is told the file-level reason instead');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * On the source-level arm an OVERLAPPED group is told the reason too.
+	 *
+	 * Nothing is written on that arm, so a group deferred at collection did not land its edits
+	 * either — but the loop read `contributes`, which excludes an overlapped group, so it got no
+	 * refusal row and `ledgerFileLintEdits` then credited it with edits on a run that wrote
+	 * nothing. This is the arm that fires for 50 of the 54 refusals measured over 8645 files, so
+	 * it is the common path. Found by review after the bisect arm's own re-derivation shipped.
+	 */
+	public function testASourceLevelRefusalBlamesAnOverlappedGroupToo(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final accepted: RuleEdits = {
+			rule: 'r-accepted',
+			findings: [],
+			edits: [{ span: new Span(0, 1), text: 'p' }],
+			overlapped: false,
+			refusal: null
+		};
+		final deferred: RuleEdits = {
+			rule: 'r-deferred',
+			findings: [],
+			edits: [{ span: new Span(0, 1), text: 'p' }],
+			overlapped: true,
+			refusal: null
+		};
+		final blamed: Array<String> = [];
+		Assert.isNull(
+			Cli.salvageFileLintEdits(NOT_CANONICAL, [accepted, deferred], 'FILE LEVEL SENTENCE', plugin, null, blamed),
+			'a source the writer will not round-trip salvages nothing'
+		);
+		Assert.equals(0, blamed.length, 'and no rule is blamed for the file\'s own bytes: $blamed');
+		Assert.equals('FILE LEVEL SENTENCE', accepted.refusal);
+		Assert.equals('FILE LEVEL SENTENCE', deferred.refusal, 'the OVERLAPPED group is told the reason too');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * CONTROL: a file whose whole edit set the gate accepts is written, blames nobody, and is not
+	 * counted as skipped.
+	 *
+	 * Green at base by arithmetic — the salvage runs ONLY in the `Err` arm, which this input never
+	 * reaches, so the pass is byte-identical to the base's. Killed by running the salvage
+	 * unconditionally, or by blaming a rule the gate never refused.
+	 */
+	public function testAnAcceptedFileIsWrittenAndBlamesNobody(): Void {
+		#if (sys || nodejs)
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final check: Null<Check> = Linter.byId('prefer-single-quotes');
+		if (check == null) {
+			Assert.fail('prefer-single-quotes is not registered');
+			return;
+		}
+		final source: String = 'package p;\n\nclass C {\n\n\tpublic function f():String {\n\t\treturn "x";\n\t}\n\n}\n';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
+		final noted: Array<String> = [];
+		final changed: Array<String> = [];
+		Cli.applyLintPass(
+			files, files, plugin, [check], [], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 1, noted, [], changed, [], []
+		);
+		Assert.equals(0, noted.length, 'nothing was refused: $noted');
+		Assert.isTrue(changed.contains('C.hx'), 'and the file was written');
+		Assert.isTrue(files[0].source.indexOf('\'x\'') != -1, 'with the edit in it: ${files[0].source}');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -225,7 +451,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: REFUSED }];
 		final own: Array<Violation> = check.run(files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
-		Cli.computeFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin), ledger, true);
+		Cli.ledgerFileLintEdits(ledger, Cli.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin)), true);
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
 			Assert.fail('the refused rule has no ledger row');

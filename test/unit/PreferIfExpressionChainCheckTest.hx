@@ -6,6 +6,7 @@ import anyparse.check.PreferIfExpressionChain;
 import anyparse.check.PreferSwitchExpression;
 import anyparse.check.PreferTernaryExpression;
 import anyparse.check.Severity;
+import anyparse.check.SimplifyBooleanTernary;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
@@ -39,6 +40,26 @@ class PreferIfExpressionChainCheckTest extends Test {
 	/** A ternary chain as the value of a `case` arm — the shape TM's `getColorPickerType` writes five times over. */
 	private static inline final CASE_ARM_CHAIN: String =
 		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
+
+	/** A three-value chain whose HEAD is a boolean-literal ternary — claimed by `simplify-boolean-ternary`, not here. */
+	private static inline final BOOL_REDUCIBLE_CHAIN_HEAD: String =
+		'class C {\n\tfunction f(a:Bool, b:Bool, c:Bool, d:Bool):Bool {\n\t\treturn a ? false : b ? c : d;\n\t}\n}';
+
+	/** The same chain with no boolean literal anywhere — the control the deferral must not touch. */
+	private static inline final NON_BOOLEAN_CHAIN_HEAD: String =
+		'class C {\n\tfunction f(a:Bool, b:Bool, c:Int, d:Int):Int {\n\t\treturn a ? 0 : b ? c : d;\n\t}\n}';
+
+	/** The claimed ternary is a RUNG, not the head — the rewrite consumes it just the same. */
+	private static inline final BOOL_REDUCIBLE_CHAIN_RUNG: String =
+		'class C {\n\tfunction f(a:Bool, b:Bool, x:Int, y:Int, c:Int, d:Int):Bool {\n\t\treturn a ? x == y : b ? false : c == d;\n\t}\n}';
+
+	/** The claimed ternary is in the head's THEN arm — off the else-spine, but the INVERSION folds it in. */
+	private static inline final BOOL_REDUCIBLE_FOLDED_RUNG: String =
+		'class C {\n\tfunction f(a:Bool, b:Bool, c:Int, d:Int, e:Bool):Bool {\n\t\treturn a ? b ? false : c == d : e;\n\t}\n}';
+
+	/** The same nested ternary in a rung the inversion never reaches — copied verbatim, so its finding survives. */
+	private static inline final BOOL_REDUCIBLE_UNFOLDED_RUNG: String =
+		'class C {\n\tfunction f(a:Bool, b:Bool, c:Int, d:Int, g:Bool, e:Int, h:Int):Dynamic {\n\t\treturn a ? (b ? false : c == d) : g ? e : h;\n\t}\n}';
 
 	/** anyparse's own `ShardPlan.compareEntries`: an if-chain the author wrote, whose LAST rung value is a ternary. */
 	private static inline final CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE: String =
@@ -508,6 +529,98 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals(1, es.length);
 		final rewritten: String = src.substring(0, es[0].span.from) + es[0].text + src.substring(es[0].span.to);
 		Assert.isTrue(rewritten.indexOf('(if (!a) 3.0 else if (b) 1.0 else 2.0) / k') >= 0);
+	}
+
+	/**
+	 * A chain head the BOOLEAN reduction claims is not this check's.
+	 *
+	 * RED at base, where both rules reported the SAME span and whichever ran FIRST decided the
+	 * file's fixed point: `--rule prefer-if-expression-chain --rule simplify-boolean-ternary`
+	 * wrote the six-line `if (a) false else if (b) c else d`, the two flags swapped wrote
+	 * `!a && (b ? c : d)` — same input, same engine, two fixed points, and a reader shown two
+	 * findings for one expression. The reduction wins because BOTH canons then hold: its result
+	 * has no boolean-literal branch for `simplify-boolean-ternary` and no nested ternary for this
+	 * check, while the chain rewrite leaves a `false` leaf nothing can ever reach again.
+	 */
+	public function testBooleanReducibleChainHeadIsNotFlagged(): Void {
+		Assert.equals(0, violations(BOOL_REDUCIBLE_CHAIN_HEAD).length);
+		Assert.equals(0, edits(BOOL_REDUCIBLE_CHAIN_HEAD).length);
+		// DETECT-PROOF, in one assertion with the deferral: the other check really does claim this
+		// exact span, so the zeroes above are a deferral and not a fixture the chain walk never
+		// reached. Without it a typo in the fixture would pass this pin vacuously.
+		final claimed: Array<Violation> = new SimplifyBooleanTernary().run(
+			[{ file: 'C.hx', source: BOOL_REDUCIBLE_CHAIN_HEAD }], new HaxeQueryPlugin()
+		);
+		Assert.equals(1, claimed.length, 'simplify-boolean-ternary claims the head: $claimed');
+	}
+
+	/**
+	 * A claimed ternary anywhere ON THE SPINE stops this rewrite, not only at the head.
+	 *
+	 * The rewrite consumes every rung, so a claimed RUNG is destroyed as surely as a claimed head:
+	 * `a ? x == y : b ? false : c == d` became `if (a) x == y else if (b) false else c == d`, whose
+	 * `false` leaf `simplify-boolean-ternary` can never see again — and the two rule orders reached
+	 * two different fixed points, one rung below where the head guard looks. Found by review after
+	 * the head-only guard shipped.
+	 */
+	public function testBooleanReducibleChainRungIsNotFlagged(): Void {
+		Assert.equals(0, violations(BOOL_REDUCIBLE_CHAIN_RUNG).length);
+		Assert.equals(0, edits(BOOL_REDUCIBLE_CHAIN_RUNG).length);
+		// DETECT-PROOF: the other rule claims the RUNG (not the head), so the zeroes are a deferral
+		// and not a fixture this walk never reached.
+		final claimed: Array<Violation> = new SimplifyBooleanTernary().run(
+			[{ file: 'C.hx', source: BOOL_REDUCIBLE_CHAIN_RUNG }], new HaxeQueryPlugin()
+		);
+		Assert.equals(1, claimed.length, 'simplify-boolean-ternary claims one node: $claimed');
+	}
+
+	/**
+	 * A claimed ternary the INVERSION folds in stops this rewrite too, though it is off the spine.
+	 *
+	 * `invertTail` pulls a THEN-arm nested ternary into the chain, so it is consumed exactly as an
+	 * else-spine link is — and a walk of the spine alone could not see it: `a ? b ? false : c == d
+	 * : e` still reached two fixed points under the two rule orders, and the SHIPPED order took the
+	 * losing one (`if (!a) e else if (b) false else c == d`, whose `false` leaf the other check can
+	 * never see again). Found by review after the spine walk shipped. The consumed set is asked of
+	 * `chain.folded`, which `invertTail` records, rather than predicted from the shape — the fold
+	 * has gates of its own.
+	 */
+	public function testBooleanReducibleFoldedRungIsNotFlagged(): Void {
+		Assert.equals(0, violations(BOOL_REDUCIBLE_FOLDED_RUNG).length);
+		final claimed: Array<Violation> = new SimplifyBooleanTernary().run(
+			[{ file: 'C.hx', source: BOOL_REDUCIBLE_FOLDED_RUNG }], new HaxeQueryPlugin()
+		);
+		Assert.equals(1, claimed.length, 'simplify-boolean-ternary claims the then-arm ternary: $claimed');
+	}
+
+	/**
+	 * CONTROL: a claimed ternary in a rung the inversion never reaches keeps BOTH findings.
+	 *
+	 * Only the LAST rung's value folds; an earlier one is copied verbatim into its branch, so the
+	 * chain rewrite does not consume it and the deferral must not fire. Green at base by
+	 * arithmetic — neither the head nor any spine node is claimed there — and killed by widening
+	 * the deferral to every ternary under the head.
+	 */
+	public function testBooleanReducibleUnfoldedRungStillConverts(): Void {
+		Assert.equals(1, violations(BOOL_REDUCIBLE_UNFOLDED_RUNG).length);
+		Assert.equals(
+			1, new SimplifyBooleanTernary().run([{ file: 'C.hx', source: BOOL_REDUCIBLE_UNFOLDED_RUNG }], new HaxeQueryPlugin()).length,
+			'and the other check still reports its own node'
+		);
+	}
+
+	/**
+	 * CONTROL: the same three-value chain with a NON-boolean leaf is nobody else's and converts.
+	 *
+	 * Green at base by arithmetic — the deferral asks `SimplifyBooleanTernary.claimedSpans`, which
+	 * holds nothing for a chain no boolean literal appears in, so the added gate cannot fire here.
+	 * Killed by widening the deferral to every chain head.
+	 */
+	public function testChainWithNoBooleanLeafStillFlagged(): Void {
+		Assert.equals(1, violations(NON_BOOLEAN_CHAIN_HEAD).length);
+		final es: Array<{ span: Span, text: String }> = edits(NON_BOOLEAN_CHAIN_HEAD);
+		Assert.equals(1, es.length);
+		Assert.equals('if (a) 0 else if (b) c else d', es[0].text);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

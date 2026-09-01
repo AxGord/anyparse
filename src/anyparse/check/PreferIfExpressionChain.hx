@@ -12,6 +12,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a RIGHT-NESTED ternary chain of three or more values already written in value
  * position, and rewrites it to the equivalent if-expression chain:
@@ -56,6 +58,20 @@ import anyparse.runtime.Span;
  * fixed point over the 1029 files holding any of these findings differs from the base in 9, each
  * one either the canon the base could not reach or an author's ternary the base unrolled and this
  * route keeps.
+ *
+ * S47 closed the ASSIGNMENT half the same way: `prefer-if-expression-assignment` now claims a flat
+ * 2-branch whose terminal r-value is a ternary supplying the third leaf, and
+ * `prefer-ternary-assignment` defers to it by asking. Over 8645 external files that moved 8
+ * findings, each to the SAME line:col, and this check's own count did not change.
+ *
+ * ## No claim by `simplify-boolean-ternary`
+ *
+ * A head that reduces to boolean logic (`a ? false : b ? c : d`) is that check's, asked directly
+ * through `SimplifyBooleanTernary.claimedSpans`. Both rules used to report the SAME span and
+ * whichever ran first decided the file's fixed point -- registry order under the full set, flag
+ * order under `--rule`, same input and same engine. The reduction wins because after it BOTH
+ * canons hold, and because whatever it leaves is still reachable here (a `&&` operand IS a host,
+ * measured), while the chain rewrite leaves a boolean-literal leaf that check can never see again.
  *
  * ## Disjoint from `prefer-ternary-expression` by RUNG COUNT
  *
@@ -317,7 +333,16 @@ final class PreferIfExpressionChain implements Check {
 			asked = true;
 			return cached = CheckScan.typeNominalResolver(source, plugin, root, file, index);
 		}
-		return { switchScope: { root: root, resolveIndex: resolveIndex }, types: types };
+		var boolClaims: Null<Map<String, Bool>> = null;
+		function boolTernaryClaims(): Map<String, Bool> {
+			if (boolClaims == null) boolClaims = SimplifyBooleanTernary.claimedSpans(source, root, plugin);
+			return boolClaims ?? [];
+		}
+		return {
+			switchScope: { root: root, resolveIndex: resolveIndex },
+			types: types,
+			boolTernaryClaims: boolTernaryClaims
+		};
 	}
 
 	/**
@@ -397,6 +422,13 @@ final class PreferIfExpressionChain implements Check {
 		final emitted: Null<Array<Emitted>> = emit(chain, source, comments, s, lazy, inverted);
 		if (emitted == null || emitted.length < MIN_RUNGS) return null;
 		if (PreferSwitchExpression.claims(source, head, parentKind, plugin, lazy.switchScope)) return null;
+		// The BOOLEAN reduction owns any ternary ON THE SPINE, head or rung. Asked of
+		// `simplify-boolean-ternary` itself rather than mirrored: both rules rewrote the same node and
+		// the winner was whichever ran first, so one input reached two different fixed points under two
+		// rule orders. Rungs matter as much as the head, because this rewrite consumes every one of
+		// them: `a ? x == y : b ? false : c == d` kept its `false` leaf as an if-expression branch that
+		// check can never see again, while reducing first leaves `a ? x == y : !b && c == d`.
+		if (spineClaimed(head, chain, s, lazy)) return null;
 		final kept: Array<Span> = [terminalSpan];
 		for (rung in emitted) {
 			kept.push(rung.condSpan);
@@ -431,6 +463,36 @@ final class PreferIfExpressionChain implements Check {
 
 
 	/**
+	 * Whether `simplify-boolean-ternary` claims any ternary this rewrite CONSUMES under `head`.
+	 *
+	 * Every consumed node becomes an if-expression rung, so a claimed one is destroyed along with the
+	 * finding it carried — and the shipped rule order then decides the file's fixed point, which is
+	 * the whole defect the deferral exists to end.
+	 *
+	 * The consumed set is the else-spine PLUS everything `invertTail` folded in, and reading only the
+	 * spine was wrong: `a ? b ? false : c == d : e` has its claimed ternary in the head's THEN arm,
+	 * which the fold pulls into the chain, so the two rule orders still reached two fixed points one
+	 * construct across. `chain.folded` is asked rather than predicted, because the fold has gates of
+	 * its own — and each folded root is walked as a spine of its own, since the fold splices that
+	 * node's whole else-chain in.
+	 */
+	private static function spineClaimed(head: QueryNode, chain: Chain, s: Seams, lazy: Lazy): Bool {
+		final claims: Map<String, Bool> = lazy.boolTernaryClaims();
+		return spineHoldsClaim(head, s, claims) || chain.folded.exists(node -> spineHoldsClaim(node, s, claims));
+	}
+
+	/** Whether any node on `head`'s else-spine carries a claim, mirroring `spine`'s own descent. */
+	private static function spineHoldsClaim(head: QueryNode, s: Seams, claims: Map<String, Bool>): Bool {
+		var cur: QueryNode = head;
+		while (s.chainKinds.contains(cur.kind) && cur.children.length == CHAIN_WITH_ELSE_CHILD_COUNT) {
+			final span: Null<Span> = cur.span;
+			if (span != null && claims.exists('${span.from}:${span.to}')) return true;
+			cur = cur.children[ELSE_SLOT_INDEX];
+		}
+		return false;
+	}
+
+	/**
 	 * The chain rooted at `head` read as a SPINE: one rung per `else`-nested link, the terminal
 	 * the last `else` holds, and how many of those links the author wrote as a TERNARY. Reading
 	 * the spine of a NESTED value is exactly what the inversion below recurses with, so the walk
@@ -448,7 +510,12 @@ final class PreferIfExpressionChain implements Check {
 			rungs.push({ cond: RefactorSupport.unwrapParens(cur.children[0], s.parenKind), value: cur.children[1], invert: false });
 			cur = cur.children[ELSE_SLOT_INDEX];
 		}
-		return { rungs: rungs, terminal: cur, ternaryRungs: ternaryRungs };
+		return {
+			rungs: rungs,
+			terminal: cur,
+			ternaryRungs: ternaryRungs,
+			folded: []
+		};
 	}
 
 	/**
@@ -501,6 +568,7 @@ final class PreferIfExpressionChain implements Check {
 			// to take was the whole condition DUPLICATED — worse than one wrap on every axis.
 			if (count >= MIN_RUNGS && !NegationScan.negationIsClean(last.cond, source, s.logic, lazy.types())) break;
 			final inner: Chain = spine(nested, s);
+			chain.folded.push(nested);
 			chain.rungs.pop();
 			chain.rungs.push({ cond: last.cond, value: chain.terminal, invert: true });
 			for (rung in inner.rungs) chain.rungs.push(rung);
@@ -578,6 +646,17 @@ private typedef Chain = {
 	var rungs: Array<Rung>;
 	var terminal: QueryNode;
 	var ternaryRungs: Int;
+
+	/**
+	 * The nested ternary NODES `invertTail` folded into this chain, in fold order.
+	 *
+	 * Recorded rather than predicted: the fold has gates of its own (a comment in the rung's
+	 * condition, the negation engine's worth test), so mirroring "would it fold?" at a second site
+	 * would be a second implementation of one question. Its only reader is `spineClaimed`, which
+	 * must know the FULL set of nodes the rewrite consumes — a folded ternary is consumed exactly
+	 * as an else-spine link is, and reading only the spine let a claimed one be destroyed.
+	 */
+	var folded: Array<QueryNode>;
 }
 
 /**
@@ -598,6 +677,7 @@ private typedef Emitted = {
 private typedef Lazy = {
 	var switchScope: ChainScope;
 	var types: () -> Null<(QueryNode) -> Null<String>>;
+	var boolTernaryClaims: () -> Map<String, Bool>;
 }
 
 /** A convertible chain: the finding key span, the (trivia-trimmed) replaced span, and the if-chain text. */

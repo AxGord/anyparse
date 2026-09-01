@@ -15,6 +15,16 @@ import anyparse.runtime.Span;
  * simplification (the sibling of `prefer-ternary-return`, for assignment rather
  * than `return`).
  *
+ * ## Boundary with `prefer-if-expression-assignment`
+ *
+ * A flat 2-branch whose TERMINAL r-value is ALREADY a ternary belongs to that rule, whose one
+ * edit unrolls the spine into rungs. Collapsing onto such a value writes `x = c ? a : p ? q : r`
+ * -- a three-rung chain `prefer-if-expression-chain` then reports, on text this fix just wrote
+ * (S46 measured 14 sites over 1029 external files taking that rule from 93 findings to 107).
+ * The deferral ASKS that rule (`PreferIfExpressionAssignment.claims`), gates and all, rather than
+ * mirroring its shape: a site it refuses -- a comment in a folded region, an else-less conditional
+ * in a rung -- keeps its finding here instead of falling through to nobody.
+ *
  * ## What is flagged
  *
  * An `if` STATEMENT with an `else` (exactly `[condition, then, else]`) whose:
@@ -179,8 +189,12 @@ final class PreferTernaryAssignment implements Check {
 		};
 		// The narrowing-guard refusal fires only for a bool-literal collapse (see
 		// RefactorSupport.refusesNullNarrowingBoolCollapse).
+		// The r-value spine's third leaf belongs to `prefer-if-expression-assignment`: collapsing onto
+		// a value that is ALREADY a ternary writes the three-rung `x = c ? a : p ? q : r`, which
+		// `prefer-if-expression-chain` then reports — on code this fix just wrote. Asked of that rule
+		// directly, gates and all, so a shape it refuses keeps its finding here.
 		return RefactorSupport.refusesNullNarrowingBoolCollapse(m.thenRhs, m.elseRhs, condition, s.shape)
-			|| droppedComment(ifNode, m, comments)
+			|| droppedComment(ifNode, m, comments) || PreferIfExpressionAssignment.claims(ifNode, source, comments, s.shape)
 			? null
 			: m;
 	}

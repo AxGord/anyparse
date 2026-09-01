@@ -1,10 +1,12 @@
 package unit;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.CheckScan;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -82,6 +84,46 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		Assert.equals(
 			0, new SimplifyBooleanTernary().run([{ file: 'Bad.hx', source: 'class Bad { function f() { ' }], new HaxeQueryPlugin()).length
 		);
+	}
+
+	/**
+	 * `claimedSpans` answers exactly what `run` reports, span for span.
+	 *
+	 * The shared claim IS the fix for the order-dependence with `prefer-if-expression-chain`, and
+	 * its whole value is that the two answers cannot diverge: a deferral built on a second walk
+	 * carrying its own copy of this check's gate would drift the moment one of them moved — the
+	 * defect S46's review found after correcting one side of a two-sided derivation. Both go
+	 * through `walkClaims`, so there is one gate and one traversal.
+	 *
+	 * CANNOT COMPILE at base: no `claimedSpans` exists there.
+	 */
+	public function testClaimedSpansAnswerTheReportedSpans(): Void {
+		final source: String = hosted('Bool', '{ return c ? false : p; }');
+		final claimed: Null<Map<String, Bool>> = claimsOf(source);
+		if (claimed == null) return;
+		final reported: Array<Violation> = new SimplifyBooleanTernary().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		Assert.equals(1, reported.length, 'the fixture reports exactly one claim: $reported');
+		final span: Null<Span> = reported[0].span;
+		if (span == null) {
+			Assert.fail('the finding carries no span');
+			return;
+		}
+		Assert.isTrue(claimed.exists('${span.from}:${span.to}'), 'the claim set holds the reported span');
+		Assert.equals(1, [for (k in claimed.keys()) k].length, 'and holds nothing else');
+	}
+
+	/**
+	 * CONTROL: a ternary this check does NOT claim is absent from the set too.
+	 *
+	 * Without it the pin above passes for a `claimedSpans` that answers EVERY ternary — which is
+	 * exactly the mutation that would silence `prefer-if-expression-chain` wholesale.
+	 */
+	public function testClaimedSpansHoldNothingForARealValuedTernary(): Void {
+		final source: String = hosted('Int', '{ return c ? a : b; }');
+		final claimed: Null<Map<String, Bool>> = claimsOf(source);
+		if (claimed == null) return;
+		Assert.equals(0, new SimplifyBooleanTernary().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+		Assert.equals(0, [for (k in claimed.keys()) k].length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -230,6 +272,15 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	/** A branch that is itself a mid-reduction ternary is refused: reducing the outer would strand it. */
 	public function testPendingBooleanTernaryBranchNotSimplified(): Void {
 		Assert.equals('', boolFnSimplifyOf('return p ? true : (c ? false : g());'));
+	}
+
+	/** `claimedSpans` over `source`, or null after failing the test when the fixture does not parse. */
+	private function claimsOf(source: String): Null<Map<String, Bool>> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (tree != null) return SimplifyBooleanTernary.claimedSpans(source, tree, plugin);
+		Assert.fail('the fixture does not parse');
+		return null;
 	}
 
 	private function violations(body: String): Array<Violation> {
