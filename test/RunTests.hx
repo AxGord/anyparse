@@ -741,6 +741,7 @@ import unit.WriterTrailingWhitespaceTest;
 import utest.Runner;
 import unit.DefaultRepeatedArgumentCheckTest;
 import unit.DeadTestGuardTest;
+import unit.DocOwnerGuardSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1514,6 +1515,7 @@ class RunTests {
 		addCase(new PreferCaseGuardCheckTest());
 		addCase(new PreferCaseGuardOracleE2ETest());
 		addCase(new SplitVarDeclarationCheckTest());
+		addCase(new DocOwnerGuardSliceTest());
 		// Quiet by DEFAULT. utest's own default is `ShowSuccessResultsWithNoErrors`,
 		// which prints one line per passing method: on this suite that is 13 488 lines
 		// / ~800 KB, against the six-line summary every gate actually reads. For a
@@ -1570,6 +1572,22 @@ class RunTests {
 			});
 		}
 		#end
+		// utest's own end-of-run block carries assertions but no test total, and
+		// the quiet reporter prints no row for a passing test — so a green
+		// transcript used to carry NO countable test count at all: `apq
+		// test-summary` read `0 tests / 0 assertions` off one and
+		// `tools/suite-shard.sh` hard-failed on that zero. Emit the total here,
+		// counted off the runner's own completion events rather than off
+		// `runner.length`, so a run that dies mid-way prints neither this line
+		// nor utest's block and the transcript stays visibly UNCOUNTABLE instead
+		// of reporting a plausible registered-fixture number.
+		//
+		// Registered before `Report.create` on purpose: the report's own
+		// `onComplete` handler calls `process.exit` from inside the dispatch, so
+		// a listener added after it never runs.
+		var executed: Int = 0;
+		runner.onTestComplete.add(_ -> executed++);
+		runner.onComplete.add(_ -> Sys.println('tests executed: $executed'));
 		utest.ui.Report.create(runner, verbose ? AlwaysShowSuccessResults : NeverShowSuccessResults, AlwaysShowHeader);
 		runner.run();
 	}

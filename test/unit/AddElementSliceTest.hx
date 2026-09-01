@@ -337,6 +337,73 @@ class AddElementSliceTest extends Test {
 		assertAdd(source, 4, 4, After, 'b();', false, expected);
 	}
 
+	// A doc comment is trivia OUTSIDE the declaration's node span, so both
+	// insertion offsets used to land on the wrong side of one: `Before` at
+	// `span.from` sits BELOW the target's own doc, and a MODULE-level span
+	// runs to the first token of the NEXT declaration, so `After` at
+	// `span.to` sits BELOW that neighbour's doc. Either way the doc came to
+	// document the insertion and the declaration was left bare — while the
+	// result parsed, stayed byte-canonical and drew no lint finding.
+
+	/** `--before` a doc'd type: the insert goes ABOVE the doc, which stays with its class. */
+	public function testInsertBeforeTypeGoesAboveItsDoc(): Void {
+		final source: String = 'using StringTools;\n\n/**\n * Doc for C.\n */\nclass C {\n\n\tpublic function new() {}\n\n}\n';
+		final expected: String =
+			'using StringTools;\nusing haxe.io.Path;\n\n/**\n * Doc for C.\n */\nclass C {\n\n\tpublic function new() {}\n\n}\n';
+		assertAdd(source, 6, 1, Before, 'using haxe.io.Path;', true, expected);
+	}
+
+	/** `--before` a doc'd MEMBER: same offset defect, inside a type body. */
+	public function testInsertBeforeMemberGoesAboveItsDoc(): Void {
+		final source: String = 'class C {\n\n\t/**\n\t * Doc m1.\n\t */\n\tpublic function m1(): Int return 1;\n\n}\n';
+		final expected: String = 'class C {\n\n\tpublic function mx():Int\n\t\treturn 0;\n\n\t/**\n\t * Doc m1.\n\t */\n'
+			+ '\tpublic function m1():Int\n\t\treturn 1;\n\n}\n';
+		assertAdd(source, 6, 2, Before, 'public function mx(): Int return 0;', true, expected);
+	}
+
+	/** `--after` a module-level type: the insert stops SHORT of the next declaration's doc. */
+	public function testInsertAfterTypeStopsShortOfTheNeighboursDoc(): Void {
+		final source: String =
+			'/**\n * Doc A.\n */\ntypedef A = {\n\tvar a: Int;\n}\n\n/**\n * Doc B.\n */\ntypedef B = {\n\tvar b: Int;\n}\n';
+		final expected: String = '/**\n * Doc A.\n */\ntypedef A = {\n\tvar a:Int;\n}\n\ntypedef Mid = {var m:Int;}\n\n'
+			+ '/**\n * Doc B.\n */\ntypedef B = {\n\tvar b:Int;\n}\n';
+		assertAdd(source, 4, 1, After, 'typedef Mid = { var m: Int; }', true, expected);
+	}
+
+	/** CONTROL — a type MEMBER's span is tight, so `--after` there never overshot. */
+	public function testInsertAfterMemberStillLandsBeforeTheNextDoc(): Void {
+		final source: String = 'class C {\n\n\tpublic function m1(): Int return 1;\n\n\t/**\n\t * Doc m2.\n\t */\n'
+			+ '\tpublic function m2(): Int return 2;\n\n}\n';
+		final expected: String = 'class C {\n\n\tpublic function m1():Int\n\t\treturn 1;\n\n\tpublic function mx():Int\n'
+			+ '\t\treturn 0;\n\n\t/**\n\t * Doc m2.\n\t */\n\tpublic function m2():Int\n\t\treturn 2;\n\n}\n';
+		assertAdd(source, 3, 2, After, 'public function mx(): Int return 0;', true, expected);
+	}
+
+	// The first shape this fix took trimmed the WHOLE span with
+	// `trailingTrimmedSpan`, which cuts trailing comment tokens off `span.to`.
+	// That is right for a delete (it PRESERVES what it excludes) and exactly
+	// wrong for an insert: the two shapes below then landed BETWEEN an element
+	// and its own trailing comment, moving the comment onto the insertion — the
+	// same defect in the other direction, and equally invisible to every gate.
+	// Both offsets now ask `docExtendedSpan`, which walks back only over `/**`
+	// blocks that START THEIR LINE, so a trailing comment is never crossed.
+
+	/** `--after` a module type whose span swallows its own trailing line comment. */
+	public function testInsertAfterTypeKeepsItsTrailingComment(): Void {
+		final source: String = 'typedef A = {\n\tvar a:Int;\n} // trailing note about A\n\ntypedef B = {var b:Int;}\n';
+		final expected: String =
+			'typedef A = {\n\tvar a:Int;\n} // trailing note about A\n\ntypedef Mid = {var m:Int;}\ntypedef B = {var b:Int;}\n';
+		assertAdd(source, 1, 1, After, 'typedef Mid = {var m: Int;}', true, expected);
+	}
+
+	/** `--after` a comma-list element whose span swallows its own trailing block comment. */
+	public function testInsertAfterCommaElementKeepsItsTrailingComment(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfinal o = {\n\t\t\ta: 1 /* about a */,\n\t\t\tb: 2\n\t\t};\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tfunction f():Void {\n\t\tfinal o = {\n\t\t\ta: 1 /* about a */,\n\t\t\tc: 3,\n\t\t\tb: 2\n\t\t};\n\t}\n}\n';
+		assertAdd(source, 4, 4, After, 'c: 3', true, expected);
+	}
+
 	private function assertAppend(source: String, line: Int, col: Int, code: String, reformat: Bool, expected: String): Void {
 		final result: EditResult = appendOf(source, line, col, code, reformat);
 		switch result {
