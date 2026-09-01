@@ -38,20 +38,34 @@ final class HxComprehension {
 	/**
 	 * `HxExpr` constructors that make a bracketed list a comprehension rather than an array literal.
 	 *
-	 * `ForReifExpr` — the reified twin, projected only when the loop HEAD carries reification
-	 * metavariables (`macro [for ($i{n} in $e{xs}) if (c) n]`; a `for` written with a literal head
-	 * inside `macro { … }` is a plain `ForExpr`) — is DELIBERATELY absent, and the measurement is
-	 * the reason. Adding it is one token and it does answer a real gap: a wide reified filter
-	 * comprehension keeps its bracket shut and breaks inside the filter's `if (` where the fork
-	 * opens the bracket. But it also turns `other/for_with_macro_reification.hxtest` PASS -> FAIL.
-	 * That fixture is a MAP comprehension (`[for (key => $i{…} in $i{r}) key => ${…}]`), which the
-	 * fork calls a map LITERAL — it scans for any `=>` at bracket depth 0, where `arrayBracketKind`
-	 * only asks whether the FIRST ELEMENT is an `Arrow`. Today that first element is neither, so the
-	 * predicate answers 0, array literal, which happens to render exactly what the fork's 1 does;
-	 * a 2 would not. The divergence is recorded in `HxAstPredLowering.arrayBracketKindField` as
-	 * costing nothing — the append is what makes it cost. And it buys nothing measurable: byte-inert
-	 * across the Pony tree (868 files) and this one (1493). Land it with the depth-0 `=>` scan, not
-	 * before.
+	 * `ForReifExpr` — the twin projected whenever the loop head goes beyond what `HxForExpr` models.
+	 * That production DOES take an arrow head, but its value slot is a bare `HxKeyValueBinder`
+	 * (one `HxIdentLit`), so `[for (k => v.f in m) …]` and `macro [for ($i{n} in xs) …]` both fall
+	 * through to the reified ctor — is DELIBERATELY absent, and the measurement is the reason.
+	 * Adding it is one token and it answers a real gap: the fork reads the token that FOLLOWS `[`
+	 * and calls every `for`-headed list a comprehension, this list does not. But it turns
+	 * `other/for_with_macro_reification.hxtest` PASS -> FAIL, and S16 measured where.
+	 *
+	 * NOT in `arrayBracketKind`: under that fixture config `comprehensionBrackets` and
+	 * `arrayLiteralBrackets` are the same policy, and an arm giving only the predicate the new ctor
+	 * leaves the fixture PASSING. The consumer that flips it is the first-element source-newline scan
+	 * in `TriviaSepLowering.triviaSepPredicateScanExpr`, whose carve-out — a comprehension element
+	 * genuinely starts on its own line after `[` — fires on a newline preceding the whole ENCLOSING
+	 * statement, because the first element inherits the pending trivia captured before the `[`. That
+	 * defect is already live for a plain `ForExpr`: the same source shape with
+	 * `[for (key in o_ref) key => exprs[0].expr]` breaks its bracket open on the BASE engine while
+	 * the fork keeps it flat. Deleting the carve-out makes the fixture pass and costs
+	 * `wrapping/issue_238_keep_wrapping_nowrap.hxtest`, which needs it for a genuinely multi-line
+	 * nested comprehension — so the fix is POSITIONAL (is the newline inside the bracket), not a
+	 * classifier one.
+	 *
+	 * The note that stood here before said the fixture is a map comprehension the fork calls a map
+	 * LITERAL, and that the append should land with a depth-0 `=>` scan. Both halves are measured
+	 * wrong: `determinBkChildren` returns `Comprehension` from its first-child loop before it ever
+	 * scans for `=>` — under a comprehension-padded config the fork pads that very fixture. What S16
+	 * landed is only the reachable HALF of that scan, a wrapper recursion on the FIRST element; the
+	 * whole-list half stays open by design (see `HxAstPredLowering.arrayBracketKindField`), and with
+	 * the partial scan in place the append still flips the fixture.
 	 */
 	public static final GENERATOR_CTORS: Array<String> = ['ForExpr', 'WhileExpr'];
 

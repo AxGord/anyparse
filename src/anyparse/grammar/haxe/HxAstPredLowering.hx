@@ -29,6 +29,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static inline final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
 	private static inline final HX_VAR_DECL: String = 'anyparse.grammar.haxe.HxVarDecl';
 	private static inline final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
+	private static inline final HX_COND_ARGS: String = 'anyparse.grammar.haxe.HxConditionalArgs';
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
 
 	/**
@@ -292,7 +293,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		final body: Expr = nullSwitch(ident('e'), macro false, [
 			caseOf(HX_EXPR, ['SwitchExpr', 'SwitchExprBare', 'BlockExpr', 'ObjectLit', 'MacroClassExpr'], macro true),
 			caseBind(HX_EXPR, 'MacroExpr', [0 => '_o'], rec(ident('_o'))),
-			caseBind(HX_EXPR, 'MetaExpr', [0 => '_m'], rec(field(ident('_m'), 'expr'))),
+			metaOperandCase(o -> rec(o)),
 			caseBind(HX_EXPR, 'Ternary', [2 => '_e2'], rec(ident('_e2'))),
 			caseBind(HX_EXPR, 'ForExpr', [0 => '_s'], rec(field(ident('_s'), 'body'))),
 			caseBind(HX_EXPR, 'WhileExpr', [0 => '_s'], rec(field(ident('_s'), 'body'))),
@@ -541,7 +542,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseBind(HX_EXPR, 'MacroExpr', [0 => '_o'], macro operandIsBlockExpr(_o) || ${at(ident('_o'), ident('nested'))}),
 			// `@:meta expr` — the statement's last token is the inner
 			// expr's last token (transparent wrapper).
-			caseBind(HX_EXPR, 'MetaExpr', [0 => '_m'], at(field(ident('_m'), 'expr'), ident('nested'))),
+			metaOperandCase(o -> at(o, ident('nested'))),
 			// `return expr` — reaches ExprStmt only via MetaExpr.
 			caseBind(HX_EXPR, 'ReturnExpr', [0 => '_v'], at(ident('_v'), macro true)),
 			// `if (c) then else else'` — see the worker doc for the
@@ -841,20 +842,39 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	/**
 	 * Classify a `HxExpr.ArrayExpr` by its first element so the writer
-	 * picks the matching `whitespace.bracketConfig.*` inner-padding
-	 * policy. One grammar ctor covers three fork bracket kinds; the
-	 * distinction lives in the first element's shape (mirrors the
-	 * fork's token-based `TokenTreeCheckUtils.getBkOpenType`):
+	 * picks the matching `whitespace.bracketConfig.*` inner-padding policy
+	 * and the matching wrap cascade. One grammar ctor covers three fork
+	 * bracket kinds; the distinction lives in the first element shape:
 	 *
-	 *  - `Arrow` (`k => v`) → map literal (1);
-	 *  - the `HxComprehension.GENERATOR_CTORS` constructors (`[for …]` /
-	 *    `[while …]`) → comprehension (2). It has a
-	 *    module of its own because `HaxeFormat.isComprehensionGenerator`
-	 *    reads it too and neither side can host it — the measurement is
-	 *    recorded there;
+	 *  - a `HxComprehension.GENERATOR_CTORS` constructor (`[for …]` /
+	 *    `[while …]`) as the BARE first element → comprehension (2). That
+	 *    list has a module of its own because
+	 *    `HaxeFormat.isComprehensionGenerator` reads it too and neither
+	 *    side can host it — the measurement is recorded there;
+	 *  - `Arrow` (`k => v`) as the first element, reached through any run
+	 *    of the transparent wrappers `ParenExpr` / `MetaExpr` /
+	 *    `ConditionalExpr` / `ConditionalArgs` → map literal (1);
 	 *  - anything else, or a null first element (empty list) → array
 	 *    literal (0) — the default tight bracket has no padding either
 	 *    way.
+	 *
+	 * Why a wrapper is transparent to the MAP answer and opaque to the
+	 * COMPREHENSION one: `@:foo k => v`, `(k => v)` and a `#if`-guarded
+	 * `k => v` are all still map ENTRIES — the wrapper decorates the entry,
+	 * not the list. A generator ctor behind a wrapper is not an array
+	 * comprehension at all but a `for` / `while` EXPRESSION used as an
+	 * element (`[(for (k in ks) k)]` is a parenthesised loop), so the
+	 * recursion clamps every wrapped answer to 1-or-0. That clamp is also
+	 * where the fork lands: `determinBkChildren` returns `Comprehension`
+	 * only when the first non-comment CHILD TOKEN of `[` is `for` / `while`,
+	 * and `@:foo`, `(` and `#if` each break that loop out into the arrow
+	 * scan, which finds no arrow and answers `ArrayLiteral`.
+	 *
+	 * Three of the four wrappers carry COMPILING Haxe — `[@:foo 1 => 2,
+	 * 3 => 4]`, `[#if flag 1 => 2, #end 3 => 4]` and `[#if flag 1 => 2
+	 * #else 3 => 4 #end]` all type as `Map<Int, Int>` on 4.3.7. The paren
+	 * form does not (`Unexpected =>`); it is carried anyway so the bracket
+	 * kind does not flip while an edit is half-typed.
 	 *
 	 * Consumed by `@:fmt(bracketKindPad)` emission
 	 * (`WriterLowering.arrayBracketInsidePolicySpace`), whose runtime
@@ -865,26 +885,96 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * knobs, ONE answer — a list that is a map to the padding and an array
 	 * to the cascade would read as arbitrary to the user.
 	 *
-	 * Where it diverges from the fork's token scan: `determineBkChildren`
-	 * looks for ANY `=>` at bracket depth 0, not just a first element, so
-	 * it sees through wrappers this does not — `[(1 => 2), (3 => 4)]`
-	 * (`ParenExpr` first) and `[@:foo 1 => 2]` (`MetaExpr` first) are map
-	 * literals upstream and array literals here, as is any list that MIXES
-	 * arrows with non-arrows. None of those compile as Haxe, and the array
-	 * answer is where every list went before either consumer existed, so
-	 * the gap costs nothing today; it is recorded because it is invisible
-	 * from the call sites.
+	 * What still diverges from the fork token scan
+	 * (`TokenTreeCheckUtils.determinBkChildren`, which looks for ANY `=>`
+	 * at BRACKET depth 0 — only `[` / `]` count there, so parens and braces
+	 * are transparent to it): a list whose arrow is not on the FIRST
+	 * element (`[x, a => b]`); an arrow nested deeper than a wrapper chain
+	 * (`[c ? (a => b) : (c => d)]`, `[f({a: 1 => 2})]`); and an arrow that
+	 * lives only in an `#elseif` branch, which neither conditional arm
+	 * walks. Closing the first needs the whole ELEMENT LIST, and no call
+	 * site hands one over — every one passes the first element alone
+	 * (`_arr[0].node` from `mapWrapFor` and from the trivia padding path,
+	 * `_args[0]` from the plain one) — so it would cost one
+	 * `arrayBracketKind` call per element on the array-emit path. Closing
+	 * the second needs a general subtree walk that stops at every nested
+	 * `[`. Neither buys a shape that compiles as Haxe (all three are
+	 * `Unexpected =>` on 4.3.7), so both stay open. The `#elseif` tail
+	 * does compile, and it is open only for want of a fixture — but it is
+	 * two LOOPS, not two reads: `elseifs` is an array, and each
+	 * `HxElseifArgs` carries a body list of its own.
 	 */
 	private function arrayBracketKindField(): Field {
+		inline function rec(e: Expr): Expr return { expr: ECall(ident('arrayBracketKind'), [e]), pos: Context.currentPos() };
+		// Only the MAP answer survives a wrapper. A generator ctor reached
+		// through one is not an array comprehension but a `for`/`while`
+		// EXPRESSION used as an element — `[(for (k in ks) k)]` is a
+		// parenthesised loop, `[#if flag for (k in ks) k #end]` a guarded
+		// one — and the comprehension padding would be a lie about the
+		// construct. A wrapped `k => v` is still a map entry, so 1 rides
+		// out.
+		// The `o -> mapOnly(o)` spelling at the `metaOperandCase` arm below is
+		// load-bearing, not noise a bind-style cleanup may collapse: Haxe
+		// refuses a closure ON an inline local function, so passing `mapOnly`
+		// itself is `Cannot create closure on inline closure`. Calling it from
+		// inside a fresh lambda is what compiles.
+		inline function mapOnly(e: Expr): Expr {
+			final kindCall: Expr = rec(e);
+			return macro $kindCall == 1 ? 1 : 0;
+		}
+		final condExprArm: Expr = macro {
+			final _x = _ce.elseExpr;
+			final _k = ${mapOnly(field(ident('_ce'), 'expr'))};
+			_k == 0 && _x != null ? ${mapOnly(ident('_x'))} : _k;
+		};
+		final condArgsArm: Expr = macro {
+			final _b = _ca.body;
+			final _k = _b.length > 0 ? ${mapOnly(starElem(HX_COND_ARGS, 'body', macro _b[0]))} : 0;
+			if (_k == 1)
+				1;
+			else {
+				final _eb = _ca.elseBody;
+				if (_eb == null || _eb.length == 0)
+					0;
+				else
+					${mapOnly(starElem(HX_COND_ARGS, 'elseBody', macro _eb[0]))};
+			}
+		};
 		final body: Expr = nullSwitch(ident('e'), macro 0, [
 			caseOf(HX_EXPR, ['Arrow'], macro 1),
-			caseOf(HX_EXPR, HxComprehension.GENERATOR_CTORS, macro 2)
+			caseOf(HX_EXPR, HxComprehension.GENERATOR_CTORS, macro 2),
+			caseBind(HX_EXPR, 'ParenExpr', [0 => '_p'], mapOnly(ident('_p'))),
+			metaOperandCase(o -> mapOnly(o)),
+			caseBind(HX_EXPR, 'ConditionalExpr', [0 => '_ce'], condExprArm),
+			caseBind(HX_EXPR, 'ConditionalArgs', [0 => '_ca'], condArgsArm)
 		], macro 0);
 		return predField(
 			'arrayBracketKind',
 			[valueArg('e', HX_EXPR)],
-			macro :Int, body, 'Bracket kind of an array-`[…]` ctor by its first element: 1 map literal, 2 comprehension, 0 array literal.'
+			macro :Int, body,
+			'Bracket kind of an array-`[…]` ctor by its first element, through wrappers: 1 map, 2 comprehension, 0 array.'
 		);
+	}
+
+	/**
+	 * `case MetaExpr(_m):` with `body` applied to the ANNOTATED OPERAND —
+	 * the transparent-wrapper arm the three recursive predicates in THIS
+	 * class need (`endsWithCloseBrace`, `stmtExprNoSemiAt`,
+	 * `arrayBracketKind`). The ctor and the operand field it hides behind
+	 * are spelled once here, so a grammar rename cannot leave one of them
+	 * reading `@:meta expr` as an opaque node while the others see through
+	 * it.
+	 *
+	 * That guarantee stops at the class boundary: the sibling lowering
+	 * `HxCasePredLowering.caseBodyControlFlowExprField` carries a FOURTH
+	 * copy of the same unwrap and does not call this. Hoisting the helper
+	 * to `AstPredLowering` would close that and break the
+	 * grammar-as-plugin invariant — the ctor name would move into
+	 * `anyparse.macro` — so a fifth copy, if one is ever needed, wants a
+	 * grammar-side shared home, not the base class.
+	 */
+	private function metaOperandCase(body: Expr -> Expr): Case {
+		return caseBind(HX_EXPR, 'MetaExpr', [0 => '_m'], body(field(ident('_m'), 'expr')));
 	}
 
 }
