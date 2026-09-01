@@ -177,6 +177,7 @@ final class Linter {
 			// this one needs the argument list to BE the parameter list, and the only lambda both
 			// could see — `() -> f()` — is the zero-argument call `prefer-bind` refuses outright.
 			new RedundantLambdaWrapper(),
+			new DefaultRepeatedArgument(),
 			new RedundantMapIterKey(),
 			new UnusedParameter(),
 			new SwallowedException(),

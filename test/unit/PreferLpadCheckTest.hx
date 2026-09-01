@@ -191,7 +191,7 @@ class PreferLpadCheckTest extends Test {
 		Assert.isFalse(check is RiskyFix);
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('prefer-lpad'));
-		Assert.equals(176, Linter.builtins().length);
+		Assert.equals(177, Linter.builtins().length);
 	}
 
 	private function violations(src: String): Array<Violation> {
