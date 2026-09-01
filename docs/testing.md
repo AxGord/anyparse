@@ -629,14 +629,25 @@ The checks read like a sequence, but their dependencies are far sparser than
 their order, so they run as four concurrent branches:
 
 ```
-build ──┬─ suite ── corpus          corpus reads the sweep snapshot the suite wrote
+build ──┬─ suite ── corpus          build = apq.js + test.js + a recon typecheck
+        │                           corpus reads the snapshot the suite wrote
         ├─ fmt
         ├─ jvm probe                only when the core moved
         └─ oracle ── lint ── blast  lint reuses the oracle's verdict;
                                     blast diffs lint's own output
 ```
 
-`build` stays sequential because everything else executes what it produces.
+`build` stays sequential because everything else executes what it produces. Its
+third compile is a TYPECHECK, not a build: `haxe recon.hxml --no-output` is the
+only gate that reaches `test/_ReconSkipParse.hx`. `-main RunTests` types what the
+suite references and no test references the corpus drill's harness, so that module
+had no gate at all and could rot against any `src/` signature it calls — measured
+by planting `private static function s17PlantedDefect(): Int { return 'not an Int'; }`
+in it: `haxe test-js.hxml` and `haxe bin/apq-js.hxml` both stayed exit 0, the new
+step failed the run with `recon.hxml did not typecheck`. `--no-output` writes no
+`/tmp/recon.js`, so concurrent workers do not share one artifact, and it costs
+~2.6s inside a stretch the ~25s test compile already owns.
+
 Inside a branch the order is a real dependency; across branches there is none
 that matters: all four read `src`, and each branch's writes are read only by
 itself. The suite branch is not read-only — it rewrites `bin/.last-sweep.json`,
@@ -1707,6 +1718,24 @@ scanned a whole project and a run that matched three files look identical. The
 fourth mode still reports no count: `fmt <one-file>` with no flags writes the
 formatted source to stdout, gofmt-style, and the output IS the answer.
 
+And the denominator alone was not enough, because one word still spoke for two
+causes. A file the run could not answer FOR (it did not parse, its re-emission
+would drop a comment) and a file the HOST refused to write are different facts,
+and the second one was reported as the first:
+
+```
+apq fmt: rewrote 0 of 3 file(s), 1 failed, 2 could not be written
+```
+
+That cost a fourth measurement arm. A `cp -R` copy of the Haxe stdlib kept its
+`444` mode bits, so `fmt --write` wrote NOTHING and said `rewrote 0 of 2625
+file(s), 1692 failed` — read as a source-side verdict, which let a before/after
+comparison be accepted while both of its sides were the same untouched copy. The
+exit status was never the half that lied: a write failure rides in `failed` and
+has always exited non-zero, and it stays that way — a `--write` run that could
+write nothing did not leave the tree canonical. Only `--write` can produce an
+unwritable file, so the clause is absent by construction in every other mode.
+
 The counts themselves were re-measured over the Pony tree with the engine at
 `0c2dbdfa`, in the context the reports came from — 870 files reached through
 per-file config discovery, 3 of them unparseable — against a `cmp` of
@@ -1715,8 +1744,10 @@ the under-report reproduces; what did was the missing denominator, and one
 direction nobody had filed: a write that THROWS (a read-only file) took the
 whole run down with an uncaught host error, so a run that had already rewritten
 part of the tree printed no summary at all. `formatOneFile` now catches it,
-names the file, and counts it as `failed` — the read side had been caught from
-the start. The other 31 `writeFile` call sites in `Cli` still share the hazard.
+names the file, and counts it apart from a parse failure under its own word —
+the read side had been caught from the start, and still shares `failed` with the
+parse failures. The other 31 `writeFile` call sites in `Cli` still share the
+hazard.
 
 `unit.ApqCountSummaryCliTest` pins all of it against the BYTES, never against
 `fmt --list`: the fixture directory is snapshotted before the run and re-read
