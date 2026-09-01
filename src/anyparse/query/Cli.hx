@@ -13557,6 +13557,32 @@ final class Cli {
 		]: Array<{ file: String, source: String }>);
 	}
 
+	/**
+	 * True — after saying so on stderr — when `path` already holds a file, for the two
+	 * ops that GENERATE a whole module and hand it to `writeFiles`.
+	 *
+	 * `extract-interface` and `extract-superclass` build the destination's complete
+	 * text; an occupied path is therefore overwritten, never merged. Measured on the
+	 * base commit: `apq extract-interface C.hx Helper` with a sibling `Helper.hx`
+	 * present replaced that class, its doc and its members with the generated
+	 * interface, reported `wrote 2 file(s)` at rc 0, and the preview had called the
+	 * same file `created`. No flag was needed — the default `--out` is the type name,
+	 * so any name that collides with a sibling module destroys it.
+	 *
+	 * The rule is the create-only one `apq new` already states; these two are the only
+	 * file-generating ops that do not go through it. Merging into an existing module is
+	 * a different feature and it has a different spelling — `extract-constant --into`,
+	 * which reads the destination first and names the intent in the flag.
+	 */
+	private static function refuseOccupiedDestination(op: String, path: String): Bool {
+		if (!FileSystem.exists(path)) return false;
+		stderr(
+			'apq $op: $path already exists — $op generates a whole module and would overwrite it '
+			+ '(create-only, as `apq new` is); pass --out <path> naming a free file, or move that one aside\n'
+		);
+		return true;
+	}
+
 	private static function runExtractInterface(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
@@ -13611,6 +13637,7 @@ final class Cli {
 		final slash: Int = srcFileNN.lastIndexOf('/');
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
 		final ifaceFile: String = out ?? '$dir$ifaceNameNN.hx';
+		if (refuseOccupiedDestination('extract-interface', ifaceFile)) return EXIT_RUNTIME;
 
 		final source: String = try readFile(srcFileNN) catch (exception: Exception) {
 			stderr('apq extract-interface: $srcFileNN: ${exception.message}\n');
@@ -13799,6 +13826,7 @@ final class Cli {
 		final slash: Int = srcFileNN.lastIndexOf('/');
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
 		final superFile: String = out ?? '$dir$superNameNN.hx';
+		if (refuseOccupiedDestination('extract-superclass', superFile)) return EXIT_RUNTIME;
 
 		final source: String = try readFile(srcFileNN) catch (exception: Exception) {
 			stderr('apq extract-superclass: $srcFileNN: ${exception.message}\n');
@@ -13899,8 +13927,15 @@ final class Cli {
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles(op, scopeDir, [srcFileNN]);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
+		// The op WRITES `srcFile`, so the canonical gate and the re-emit are judged by the
+		// config that governs THAT file — the same discovery every sibling writer-emit op
+		// does. Skipping it made the gate compare a project-canonical file against compiled
+		// defaults and refuse it, naming `apq fmt --write` as the remedy for the state that
+		// command had just produced; `--reformat` then re-canonicalised under the defaults,
+		// so the escape hatch de-formatted the file.
+		final optsJson: Null<String> = discoverFormatConfig(srcFileNN);
 		final result: EditResult = SafeDelete.safeDelete(
-			srcFileNN, srcTypeName, memberNameNN, reformat, scopeFiles, plugin, plugin.refShape()
+			srcFileNN, srcTypeName, memberNameNN, reformat, scopeFiles, plugin, plugin.refShape(), optsJson
 		);
 		switch result {
 			case Ok(text):
