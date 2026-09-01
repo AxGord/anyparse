@@ -34,6 +34,17 @@ import utest.Test;
  * own. `@:fmt(suppressPatternRestProbe)` on the same field turns the probe off
  * for the whole pattern subtree; `_suppressComplexItems` could not be reused,
  * because a switch SUBJECT sets it too and a subject must keep wrapping.
+ *
+ * T170: at THIS set-site the CALL flag is now fully subsumed. The `Call` gate
+ * reads both flags, so dropping `suppressCallRestProbe` from `HxCasePattern.expr`
+ * leaves this whole class, the rest of the suite AND the 946-fixture corpus
+ * unchanged. The FLAG stays load-bearing: three hardcoded lowering set-sites never read the
+ * meta at all (nested call arg, chain operand incl. `??`, and the collection
+ * element arm that CLEARS it). But this is the ONLY `suppressCallRestProbe`
+ * occurrence in the whole grammar, and at this set-site it is provably
+ * redundant rather than merely unobserved — the gate is `!A && !B` and B is set
+ * over the same subtree and never cleared, so M1 was green a priori, not by
+ * discovery. Removing it is a grammar edit this slice does not own.
  */
 @:nullSafety(Strict)
 final class HxCallGroupRestProbeCasePatternTest extends Test {
@@ -67,6 +78,22 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 		+ '"totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}}}';
 
+	/**
+	 * ω-pattern-rest-probe / T170: the ONE shape in this class where the wider
+	 * flag is the only thing holding the line. The object literal's element arm
+	 * CLEARS `_suppressCallRestProbe` for a field value, so the ctor below it
+	 * cannot be reached by the call flag at all — only
+	 * `_suppressPatternRestProbe` survives the descent. Every construct that
+	 * could absorb the overflow instead is pinned to `noWrap`, so the ctor is the
+	 * only breakable thing on a 67-column line and the assertion cannot be
+	 * satisfied by something else wrapping.
+	 */
+	private static final COLLECTION_PATTERN_CONFIG: String = '{"wrapping": {"maxLineLength": 60, "callParameter": '
+		+ '{"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": '
+		+ '"onePerLine"}]}, "objectLiteral": {"defaultWrap": "noWrap", "rules": []}, "casePattern": {"defaultWrap": '
+		+ '"noWrap", "rules": []}, "conditionWrapping": {"defaultWrap": "noWrap", "rules": []}, "opBoolChain": '
+		+ '{"defaultWrap": "noWrap", "rules": []}}}';
+
 	public function new(): Void {
 		super();
 	}
@@ -91,14 +118,29 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
+	/**
+	 * A multi-arg ctor pattern `Nest(_, _)` inside an overflowing `|` chain must
+	 * stay GLUED (not `Nest(\n\t_, _\n)`) — the fork breaks the `|` chain, not the
+	 * ctor args. It renders byte-identically to pristine anyparse: every fitting
+	 * ctor glued, only the boundary ctor's arg dropping to its own line (a
+	 * pre-existing anyparse-vs-fork gap this pins as neither introduced nor
+	 * worsened).
+	 *
+	 * ⚠️ T170 — what this method does NOT do any more is ATTRIBUTE that to
+	 * `@:fmt(suppressCallRestProbe)`, which is what its previous comment claimed.
+	 * `HxCasePattern.expr` carries BOTH suppress flags and the `Call` gate reads
+	 * `!opt._suppressCallRestProbe && !opt._suppressPatternRestProbe`, so either
+	 * one alone keeps this ctor glued. Measured, three mutation arms on that one
+	 * `@:fmt`: drop `suppressCallRestProbe` → this method OK (and the whole suite
+	 * AND the 946-fixture corpus unchanged — the case-pattern set-site of the call
+	 * flag is unobservable); drop `suppressPatternRestProbe` → OK; drop BOTH →
+	 * 3 assertion failures. It pins the invariant and neither flag.
+	 * `testCasePatternCtorInsideACollectionStaysGlued` is the arm that DOES
+	 * discriminate the wider flag; `testCoalesceOperandDoesNotOverWrap` and the
+	 * sibling chain-operand / nested-arg classes are where
+	 * `suppressCallRestProbe` is still the only thing holding a line.
+	 */
 	public function testCasePatternCtorStaysGlued(): Void {
-		// The crux: a multi-arg ctor pattern `Nest(_, _)` inside an overflowing
-		// `|` chain must stay GLUED (not `Nest(\n\t_, _\n)`). The
-		// `_suppressCallRestProbe` guard turns the ctor's rest-probe off, so it
-		// renders byte-identically to pristine anyparse -- every fitting ctor
-		// glued, only the boundary ctor's arg dropping to its own line (a
-		// pre-existing anyparse-vs-fork gap the
-		// guard neither introduces nor worsens).
 		final src: String = 'class C {\n\tfunction f() {\n\t\tswitch (x) {\n'
 			+ '\t\t\tcase Nest(_, _) | Concat(_) | Group(_) | BodyGroup(_) | GroupProbe(_) | Flatten(_) | WrapBoundary(_) '
 			+ '| HardFlatten(_) | CollapseProbe(\n\t\t\t\t_\n\t\t\t):\n\t\t\t\tg();\n\t\t}\n\t}\n}';
@@ -107,6 +149,34 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 		// Explicit glued invariant: the leading multi-arg ctor never splits.
 		Assert.isTrue(out.indexOf('Nest(_, _)') >= 0);
 		Assert.isTrue(out.indexOf('Nest(\n') < 0);
+	}
+
+	/**
+	 * T170's discriminating control for the SUBSUMING flag, at the one position
+	 * inside a case pattern the call flag provably cannot reach: a ctor in an
+	 * object-literal FIELD VALUE, whose element arm sets
+	 * `_suppressCallRestProbe = false` so a nested call in a real value still
+	 * wraps. At tab = 4 the ctor closes at column 51 and the whole pattern at 53,
+	 * both well inside the 60 limit; only the trailing `) if (isReady):` takes the
+	 * line to 67. So `Wrap(` and `Ctor(` are the only two movable things on it and
+	 * a rest probe is the only thing that could move either — with different flags
+	 * holding each: `Wrap(` on the call flag, `Ctor(` on nothing but
+	 * `_suppressPatternRestProbe`, since the literal cleared the call flag above it.
+	 *
+	 * Killed by the arm that drops `suppressPatternRestProbe` from
+	 * `HxCasePattern.expr` (`case Wrap({key: Ctor(\n\t\t\t\talphaArg,\n…`, while
+	 * the outer `Wrap(` stays glued on the call flag); green under the arm that
+	 * drops `suppressCallRestProbe`, which is what makes it a discriminator
+	 * rather than a second copy of `testCasePatternCtorStaysGlued`.
+	 */
+	public function testCasePatternCtorInsideACollectionStaysGlued(): Void {
+		final src: String = 'class C {\n\tstatic function f():Void {\n\t\tswitch v {\n\t\t\tcase Wrap({key: Ctor(alphaArg, '
+			+ 'betaArg)}) if (isReady):\n\t\t\t\tg();\n\t\t}\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, COLLECTION_PATTERN_CONFIG);
+		Assert.equals(src, out);
+		// Diagnostic, not a second check: the equality above already implies it.
+		// It exists so a failure names the construct instead of dumping two files.
+		Assert.isTrue(out.indexOf('Ctor(\n') < 0, 'the ctor below the literal must not rest-probe, got:\n<$out>');
 	}
 
 	public function testCoalesceOperandDoesNotOverWrap(): Void {

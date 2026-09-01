@@ -2261,23 +2261,30 @@ class WriterLowering {
 		// Star fields whose outer Group should bias toward MBreak when
 		// significant same-line content trails (typedef LHS typeParams,
 		// followed by ` = Rhs<…>;`). Mirrors fork's `lengthAfter` rule
-		// at Group layer. Plain-path `groupRestProbe` option of `WrapList.emit`;
-		// trivia path mirror lives in `triviaSepStarExpr` (dual-dispatch
-		// per [[feedback-wraprules-dispatch-dual-path]]).
-		// ω-pattern-rest-probe BACKLOG — this PLAIN-path site is NOT gated on
-		// `opt._suppressPatternRestProbe`, while its trivia mirror is. Measured
-		// gap, with a ready fixture: widen the object literal in
-		// `case FVar(t, { expr: ENew(tp, _), meta: mm, name: nn, pos: pp }) if (…):`
-		// and the two writers disagree — trivia keeps the pattern flat and wraps
-		// the guard, plain explodes the literal one-per-line and leaves the guard
-		// flat. Left open on purpose: `writeRoundTrip`, `fmt` and every
-		// canonical-gate consumer are trivia-only, so the plain writer is reached
-		// only through `--writer-output-plain` / `writer-probe` / `writer-equals
-		// --plain`, and this call already passes 3 of the ~14 options its trivia
-		// mirror does (`complexItemKinds` has the same asymmetry). Closing it means
-		// threading the flag here too — and re-measuring, since no fixture covers
-		// the plain writer's wrap output.
+		// at Group layer. Non-trivia-dispatch `groupRestProbe` option of
+		// `WrapList.emit`; trivia path mirror lives in `triviaSepStarExpr`
+		// (dual-dispatch per [[feedback-wraprules-dispatch-dual-path]]).
 		final groupRestProbe: Bool = starNode.fmtHasFlag('groupRestProbe');
+		// ω-pattern-rest-probe (T169): gated at RUNTIME, like the trivia mirror
+		// in `TriviaSepLowering` and the postfix-Star `Call` site — the
+		// suppression is a property of the DESCENT (a case pattern is a matching
+		// shape and never owns the line's overflow), not of the Star. The
+		// backlog note that stood here called this gap plain-only and therefore
+		// invisible to `fmt`; that was wrong. 14 of the 18 struct-field Star
+		// carriers have no `@:trivia` (every declare-site `<T, …>` list plus
+		// `HxNewExpr.params`, `HxTypeRef.params` and `HxArrowFnType.args`) and
+		// this is their ONLY dispatch in BOTH writers, so
+		// `case (x : Map<A, B>) if (…):` exploded its type parameters in the
+		// trivia writer too. Census and per-assertion killers:
+		// `HxGroupRestProbeStructStarTest`. Reading `opt._suppressPatternRestProbe`
+		// couples the emit to a grammar that DECLARES that option — the same
+		// coupling the postfix gate already carries, and it binds only for a Star
+		// that opted into `groupRestProbe`, which no grammar but Haxe does.
+		//
+		// STILL OPEN, and the other half of the note that stood here: this call
+		// passes 3 of the ~15 options its trivia mirror does, `complexItemKinds`
+		// among them — the same plain/trivia asymmetry one option over.
+		final groupRestProbeExpr: Expr = groupRestProbe ? (macro !opt._suppressPatternRestProbe) : (macro false);
 		final listCall: Expr = if (wrapRulesField != null) {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
 			final compactContExpr: Expr = macro $v{bodyAware};
@@ -2285,7 +2292,7 @@ class WriterLowering {
 				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
 					compactContinuation: $compactContExpr,
-					groupRestProbe: $v{groupRestProbe}
+					groupRestProbe: $groupRestProbeExpr
 				}
 			);
 		} else if (useFill) {

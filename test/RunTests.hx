@@ -746,6 +746,7 @@ import unit.HxFileHeaderCommentSliceTest;
 import unit.SafeDeleteFormatConfigCliTest;
 import unit.ExtractDestinationCollisionCliTest;
 import unit.MoveExtractDocCensusTest;
+import unit.HxGroupRestProbeStructStarTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1026,6 +1027,7 @@ class RunTests {
 		addCase(new HxCallGroupRestProbeCasePatternTest());
 		addCase(new HxCallGroupRestProbeChainOperandTest());
 		addCase(new HxCallGroupRestProbeNestedArgTest());
+		addCase(new HxGroupRestProbeStructStarTest());
 		addCase(new HxChainFillBoundaryCallOperandTest());
 		addCase(new HxMethodChainExactLimitBoundaryTest());
 		addCase(new HxReturnCallOpenParenSliceTest());

@@ -1355,10 +1355,9 @@ class WriterCodegen {
 	 * that one a switch SUBJECT also sets, and a subject is a real expression whose
 	 * call must keep wrapping. Gated on `_suppressPatternRestProbe:Bool`.
 	 *
-	 * The PLAIN struct-Star path does not read the flag — see the backlog note on
-	 * `WriterLowering`'s plain `groupRestProbe` site; `writeRoundTrip` and every
-	 * canonical gate are trivia-only, so the gap is reachable only through
-	 * `--writer-output-plain`.
+	 * The non-trivia struct-Star dispatch (`WriterLowering.emitSepStarList`) reads the
+	 * flag too, since T169 — it is the plain writer's path for a `@:trivia` Star and
+	 * the ONLY path, in both writers, for a Star that has none.
 	 */
 	private static function setSuppressPatternRestProbeField(optionsCT: ComplexType): Field {
 		return {
