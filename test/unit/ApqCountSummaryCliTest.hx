@@ -114,23 +114,74 @@ final class ApqCountSummaryCliTest extends Test {
 	 * no summary line at all, and the files already rewritten left with nothing
 	 * said about them — the extreme of this family, since the count never reaches
 	 * the reader. The read side was caught from the start; the write side was not.
+	 *
+	 * It gets a word of its OWN rather than the shared `failed`: what the run could
+	 * not answer FOR and what the HOST refused are different facts about different
+	 * things, and the reader's next move differs by all of it.
 	 */
 	public function testUnwritableFileIsAFailureAndTheRunStillReports(): Void {
 		#if (sys || nodejs)
 		final dir: String = fixtureDir('apq_count_write_ro', 2, 0, 0);
-		final locked: String = '$dir/D1.hx';
-		Sys.command('chmod', ['444', locked]);
-		if (Sys.command('test', ['-w', locked]) == 0) {
-			CliFixture.removeDir(dir);
-			Assert.pass('chmod 444 is not a write barrier here (running as root?) — skipped');
-			return;
-		}
+		final locked: Array<String> = ['$dir/D1.hx'];
+		if (!lockedOrSkipped(dir, locked)) return;
 		final before: Map<String, String> = snapshot(dir);
 		final run: FmtRunResult = Cli.fmtRun([dir, '--write']);
-		Sys.command('chmod', ['644', locked]);
+		unlock(locked);
 		Assert.notEquals(0, run.exit);
-		Assert.equals('apq fmt: rewrote 1 of 2 file(s), 1 failed\n', run.summary);
+		Assert.equals('apq fmt: rewrote 1 of 2 file(s), 1 could not be written\n', run.summary);
 		Assert.equals(1, changedSince(dir, before), 'the file that could not be written is not a rewrite');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The T400 shape, and the reason the word was split at all. A `cp -R` copy of a
+	 * read-only tree kept its `444` mode bits, so `fmt --write` wrote NOTHING and said
+	 * `rewrote 0 of 2625 file(s), 1692 failed` — the same word a parse failure earns.
+	 * Read as a source-side verdict, that line let an external comparison arm be
+	 * accepted while both of its sides were the identical untouched copy.
+	 *
+	 * ONE assertion over the whole sentence rather than over the number, because a
+	 * count pinned alone passes just as happily for a line that still calls both causes
+	 * `failed` — which IS the defect. The status is pinned beside it: a run that could
+	 * write nothing did not leave the tree canonical, so a caller that gates on the exit
+	 * code must not read it as success.
+	 */
+	public function testAWhollyUnwritableTreeSaysSoInsteadOfReadingAsInert(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixtureDir('apq_count_write_allro', 2, 0, 0);
+		final locked: Array<String> = ['$dir/D0.hx', '$dir/D1.hx'];
+		if (!lockedOrSkipped(dir, locked)) return;
+		final before: Map<String, String> = snapshot(dir);
+		final run: FmtRunResult = Cli.fmtRun([dir, '--write']);
+		unlock(locked);
+		Assert.notEquals(0, run.exit, 'a run that could write nothing did not leave the tree canonical');
+		Assert.equals('apq fmt: rewrote 0 of 2 file(s), 2 could not be written\n', run.summary);
+		Assert.equals(0, changedSince(dir, before), 'nothing was written, which is the whole point');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Both causes in ONE run — the only fixture that can catch them being summed back
+	 * together. A tail reading `2 failed` satisfies an implementation that re-merged
+	 * them, and nothing else here would notice.
+	 */
+	public function testAParseFailureAndAnUnwritableFileAreCountedApart(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixtureDir('apq_count_write_mixed', 2, 0, 1);
+		final locked: Array<String> = ['$dir/D1.hx'];
+		if (!lockedOrSkipped(dir, locked)) return;
+		final before: Map<String, String> = snapshot(dir);
+		final run: FmtRunResult = Cli.fmtRun([dir, '--write']);
+		unlock(locked);
+		Assert.notEquals(0, run.exit);
+		Assert.equals('apq fmt: rewrote 1 of 3 file(s), 1 failed, 1 could not be written\n', run.summary);
+		Assert.equals(1, changedSince(dir, before), 'only the writable drifted file moved');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -189,6 +240,31 @@ final class ApqCountSummaryCliTest extends Test {
 		for (i in 0...canonical) files.push({ name: 'C$i.hx', source: CANONICAL });
 		for (i in 0...unparseable) files.push({ name: 'U$i.hx', source: UNPARSEABLE });
 		return CliFixture.writeDir(prefix, files);
+	}
+
+	/**
+	 * `chmod 444` every path, or clean up and skip. Root ignores the mode bits, and a fixture
+	 * that quietly asserted the WRITABLE outcome there would pass for the one reason these
+	 * three exist to rule out.
+	 */
+	private static function lockedOrSkipped(dir: String, paths: Array<String>): Bool {
+		for (path in paths) Sys.command('chmod', ['444', path]);
+		for (path in paths) if (Sys.command('test', ['-w', path]) == 0) {
+			unlock(paths);
+			CliFixture.removeDir(dir);
+			Assert.pass('chmod 444 is not a write barrier here (running as root?) — skipped');
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * The restore half, extracted WITH the lock rather than left hand-written at each call
+	 * site: three tests lock a fixture and every one of them must put the mode bits back
+	 * before `changedSince` reads the file and `removeDir` unlinks it.
+	 */
+	private static function unlock(paths: Array<String>): Void {
+		for (path in paths) Sys.command('chmod', ['644', path]);
 	}
 
 	/** Every `.hx` directly under `dir`, by name — the ground truth a count line is checked against. */

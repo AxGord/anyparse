@@ -37,30 +37,35 @@
 # The steps read like a sequence but their dependencies are far sparser, so
 # they run as four concurrent BRANCHES:
 #
-#   build ──┬─ suite ── corpus          corpus reads what the suite wrote
+#   build ──┬─ suite ── corpus          build = apq.js + test.js + a recon typecheck
+#           │                           corpus reads what the suite wrote
 #           ├─ fmt
 #           ├─ jvm probe                only when src/ or the probe moved
 #           └─ oracle ── lint ── blast  lint reuses the oracle's verdict;
 #                                       blast diffs lint's own output
 #
-# build is first because everything needs the binaries. Inside a branch the
-# order is a real dependency; across branches there is none that matters: all
-# four read `src`, and each branch's writes are read only by itself — the
-# suite's `bin/.last-sweep.json`, its rotated `.prev-sweep.json` and
-# `/tmp/anyparse-last-probe.hx` by its own corpus step and by nothing else,
+# build is first because everything needs the binaries. Its third compile is a
+# TYPECHECK, not a build: `recon.hxml --no-output` is the only gate that reaches
+# `test/_ReconSkipParse.hx`, which `-main RunTests` never types and which
+# therefore had no gate at all.
+#
+# Inside a branch the order is a real dependency; across branches there is none
+# that matters: all four read `src`, and each branch's writes are read only by
+# itself — the suite's `bin/.last-sweep.json`, its rotated `.prev-sweep.json`
+# and `/tmp/anyparse-last-probe.hx` by its own corpus step and by nothing else,
 # the jvm probe's `bin/jvm-portability.jar` by nobody. Adding a fifth branch
 # means re-checking that, not assuming it: `docs/testing.md` § "The step
 # graph: four branches, one join" carries the full rationale, and
 # `tools/suite-shard.sh`'s shared-path inventory is written for shard-vs-shard
 # only.
 #
-# What fails the run: any build error, a red or count-diverged suite, a
-# non-empty `fmt --list`, a `fmt --one-pass` file (the writer needed a second
-# rewrite to settle it), a MOVE in the cross-config `--one-pass` set (this
-# repo's own sources re-formatted under a second, vendored config — the one
-# (tree, config) pair the two per-tree arms structurally cannot cover), a
-# `fmt --verify` divergence, a `--jvm` probe that
-# stops compiling, a corpus
+# What fails the run: any build error (the recon typecheck included), a red or
+# count-diverged suite, a non-empty `fmt --list`, a `fmt --one-pass` file (the
+# writer needed a second rewrite to settle it), a MOVE in the cross-config
+# `--one-pass` set (this repo's own sources re-formatted under a second,
+# vendored config — the one (tree, config) pair the two per-tree arms
+# structurally cannot cover), a `fmt --verify` divergence, a `--jvm` probe
+# that stops compiling, a corpus
 # regression (more failures than the base), or any blast-radius change that
 # was not explicitly allowed with --allow-blast. A blast comparison that
 # could not RUN (a snapshot missing or malformed — `lint-diff` exit 2) fails
@@ -91,7 +96,7 @@
 # transcript therefore reads exactly like the old sequential one.
 #
 # Timings here are wall clock with deliberate concurrency — four branches at
-# once, two builds inside one of them, two lint arms inside another. The rows
+# once, three compiles inside one of them, two lint arms inside another. The rows
 # marked `*` OVERLAP: they sum to far more than the elapsed time, and neither
 # a row nor the total measures the code. NEVER quote a battery number as a
 # benchmark result: benchmark arms run sequentially, one at a time, on an
@@ -382,18 +387,30 @@ fi
 # --- 1. builds ---------------------------------------------------------
 #
 # Sequential relative to everything else, because everything else executes
-# what it produces. The two compiles inside it are parallel: independent
-# outputs from independent hxml, and the pair is the single longest stretch
-# the concurrency below cannot dissolve.
+# what it produces. The three compiles inside it are parallel: two independent
+# outputs from independent hxml plus an output-less typecheck, and the group is
+# the single longest stretch the concurrency below cannot dissolve.
 step_begin "build (parallel)"
 apq_rc=0
 test_rc=0
+recon_rc=0
 haxe bin/apq-js.hxml > "$work/build-apq.log" 2>&1 &
 build_apq_pid=$!
 haxe test-js.hxml > "$work/build-test.log" 2>&1 &
 build_test_pid=$!
+# `recon.hxml` is the ONLY hxml that reaches `test/_ReconSkipParse.hx`, and nothing
+# ran it: `-main RunTests` types what the suite references, and no test references
+# the recon harness. So the corpus drill's own driver was typechecked by NOTHING
+# and could rot silently against any `src/` signature it calls (measured: the
+# module compiles today, the gate is what was missing). `--no-output` writes no
+# `/tmp/recon.js`, which also keeps concurrent workers off one shared artifact —
+# and it costs ~2.6s inside a stretch the ~25s test compile already owns, so the
+# branch's wall clock is unchanged.
+haxe recon.hxml --no-output > "$work/build-recon.log" 2>&1 &
+build_recon_pid=$!
 wait "$build_apq_pid" || apq_rc=$?
 wait "$build_test_pid" || test_rc=$?
+wait "$build_recon_pid" || recon_rc=$?
 if [ "$apq_rc" -ne 0 ]; then
     cat "$work/build-apq.log" >&2
     fail "bin/apq-js.hxml did not build"
@@ -401,6 +418,10 @@ fi
 if [ "$test_rc" -ne 0 ]; then
     cat "$work/build-test.log" >&2
     fail "test-js.hxml did not build"
+fi
+if [ "$recon_rc" -ne 0 ]; then
+    cat "$work/build-recon.log" >&2
+    fail "recon.hxml did not typecheck"
 fi
 step_end "build (parallel)"
 if [ "$verdict" -ne 0 ]; then

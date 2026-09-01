@@ -7868,6 +7868,7 @@ final class Cli {
 
 		var changed: Int = 0;
 		var failed: Int = 0;
+		var unwritable: Int = 0;
 		var diverged: Int = 0;
 		var unsettled: Int = 0;
 		for (path in paths) {
@@ -7878,7 +7879,16 @@ final class Cli {
 				return { exit: fatal, summary: '' };
 			}
 			if (r.changed) changed++;
-			if (r.failed) failed++;
+			// Nested rather than a sibling `if`, because `unwritable` is a SUBSET of
+			// `failed` and the summary subtracts one from the other. A later return site
+			// marking a refused write without marking a failure would send `formatFailed`
+			// negative — where its own `> 0` guard drops the clause in silence — and would
+			// exit `EXIT_OK` for a run that wrote nothing, which is the exact misreading
+			// the counter exists to end.
+			if (r.failed) {
+				failed++;
+				if (r.unwritable == true) unwritable++;
+			}
 			if (r.diverged == true) diverged++;
 			if (r.unsettled == true) unsettled++;
 		}
@@ -7887,6 +7897,7 @@ final class Cli {
 			scanned: paths.length,
 			changed: changed,
 			failed: failed,
+			unwritable: unwritable,
 			diverged: diverged,
 			unsettled: unsettled
 		});
@@ -7894,6 +7905,13 @@ final class Cli {
 		// second rewrite was still formatted — folding it into `failed` would make
 		// `--write` claim it left the file alone, which is the opposite of what
 		// happened.
+		//
+		// A write the host refused rides in `failed` and therefore already exits
+		// non-zero, and it stays that way deliberately: a `--write` run that could
+		// write nothing did not leave the tree canonical, so a caller that gates on the
+		// status must not read it as success — the same call `test-summary` makes for a
+		// transcript it could not parse. Only the SUMMARY needed splitting; the status
+		// was never the half that lied.
 		return {
 			exit: failed > 0 || unsettled > 0 ? EXIT_RUNTIME : EXIT_OK,
 			summary: summary
@@ -7919,6 +7937,7 @@ final class Cli {
 			scanned: Int,
 			changed: Int,
 			failed: Int,
+			unwritable: Int,
 			diverged: Int,
 			unsettled: Int
 		}
@@ -7926,7 +7945,21 @@ final class Cli {
 		final out: StringBuf = new StringBuf();
 		// Never folded into the mode lines below: a failure is not a rewrite that did
 		// not happen, it is a file the run could not answer for at all.
-		final failTail: String = n.failed > 0 ? ', ${n.failed} failed' : '';
+		//
+		// And the two CAUSES of a failure are never folded into each other either.
+		// `failed` is a file the run could not answer FOR — it did not parse, or its
+		// re-emission would drop a comment; an unwritable one it answered for exactly
+		// and the HOST refused the write. Under one word, `rewrote 0 of 2625 file(s),
+		// 1692 failed` on a `cp -R` copy whose mode bits stayed `444` read as a
+		// source-side verdict and was accepted as a measurement arm — the run had
+		// written nothing at all, and both arms of the comparison were the untouched
+		// copy. The tail stays shared because only a `--write` run reaches the write
+		// site at all, and `--write` outranks `--list` in the mode chain below — NOT
+		// because `listMode` excludes it: `fmt <dir> --write --list` sets both, and the
+		// line it prints is the `--write` one, clause included.
+		final formatFailed: Int = n.failed - n.unwritable;
+		final failTail: String = (formatFailed > 0 ? ', ${formatFailed} failed' : '')
+			+ (n.unwritable > 0 ? ', ${n.unwritable} could not be written' : '');
 		if (o.verify)
 			// Three numbers, because a single one reads as a clean audit for the wrong
 			// reason: `changed` is the scan's real denominator (a file the writer would
@@ -11982,6 +12015,7 @@ final class Cli {
 					return {
 						changed: false,
 						failed: true,
+						unwritable: true,
 						unsettled: unsettled,
 						fatalExit: null
 					};
@@ -18940,6 +18974,22 @@ typedef FmtFileResult = {
 	 * is the ONE-PASS property, which is a statement about the WRITER.
 	 */
 	@:optional var unsettled: Bool;
+
+	/**
+	 * `--write` only: the formatted bytes were correct and the host refused the write
+	 * (a read-only file, a full volume). Counted INSIDE `failed` — the run could not
+	 * answer for the file — and separately, because the two causes need different
+	 * readers: a parse failure is a fact about the SOURCE and a write failure is a
+	 * fact about the ENVIRONMENT, and one word for both is what let an all-EACCES
+	 * run over a `cp -R` tree read as "nothing to do" and pass as a measurement arm.
+	 *
+	 * A READ failure is an environment fact too and still rides under the shared
+	 * word — `chmod 000` on one file of two gives `rewrote 1 of 2 file(s), 1 failed`,
+	 * the same shape one syscall to the left. It is left alone deliberately: the
+	 * write side is the one that produced the vacuous arm, and a second word wants
+	 * its own fixture rather than a widened claim here.
+	 */
+	@:optional var unwritable: Bool;
 	// Non-null = a fatal per-file outcome (no writer wired for the lang);
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;
