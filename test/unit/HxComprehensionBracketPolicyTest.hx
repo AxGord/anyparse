@@ -27,6 +27,14 @@ using Lambda;
 @:nullSafety(Strict)
 class HxComprehensionBracketPolicyTest extends Test {
 
+	/** Pads only `mapLiteralBrackets`, so a padded `[` reports kind 1 and a tight one reports 0 or 2. */
+	private static inline final MAP_PAD: String =
+		'{"whitespace":{"bracketConfig":{"mapLiteralBrackets":{"openingPolicy":"after","closingPolicy":"before"}}}}';
+
+	/** The mirror of `MAP_PAD`: a padded `[` reports kind 2, a tight one 0 or 1. */
+	private static inline final COMPREHENSION_PAD: String =
+		'{"whitespace":{"bracketConfig":{"comprehensionBrackets":{"openingPolicy":"after","closingPolicy":"before"}}}}';
+
 	public function new(): Void {
 		super();
 	}
@@ -126,6 +134,107 @@ class HxComprehensionBracketPolicyTest extends Test {
 		Assert.isFalse(HaxeFormat.isComprehensionGenerator(notAGenerator));
 		Assert.equals(0, AstPreds.arrayBracketKind(null));
 		Assert.isFalse(HaxeFormat.isComprehensionGenerator(null));
+	}
+
+	/**
+	 * Control for the whole `MAP_PAD` family: a BARE `Arrow` first element was
+	 * already kind 1 before the wrapper recursion existed, so this one is green
+	 * at base by construction and only fails if the map arm itself is lost.
+	 */
+	public function testBareMapEntryPadsUnderMapBracketConfig(): Void {
+		final out: String = write('class M { static function f() { var a = [k => v]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[ k => v ]') != -1, 'expected padded map literal in: <$out>');
+	}
+
+	/** Control: a list with no arrow anywhere must not be dragged into the map policy. */
+	public function testPlainArrayStaysArrayLiteralUnderMapBracketConfig(): Void {
+		final out: String = write('class M { static function f() { var a = [1, 2, 3]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[1, 2, 3]') != -1, 'expected tight array literal in: <$out>');
+	}
+
+	public function testParenWrappedMapEntryIsMapLiteral(): Void {
+		final out: String = write('class M { static function f() { var a = [(k => v)]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[ (k => v) ]') != -1, 'expected padded map literal in: <$out>');
+	}
+
+	public function testMetaWrappedMapEntryIsMapLiteral(): Void {
+		final out: String = write('class M { static function f() { var a = [@:foo k => v]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[ @:foo k => v ]') != -1, 'expected padded map literal in: <$out>');
+	}
+
+	public function testBalancedConditionalMapEntryIsMapLiteral(): Void {
+		final out: String = write('class M { static function f() { var a = [#if flag k => v #else k2 => v2 #end]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[ #if flag k => v #else k2 => v2 #end ]') != -1, 'expected padded map literal in: <$out>');
+	}
+
+	/** Only the `#else` branch carries the entry — the `#if` branch answers 0 and must not end the search. */
+	public function testBalancedConditionalElseBranchMapEntryIsMapLiteral(): Void {
+		final out: String = write('class M { static function f() { var a = [#if flag x #else k => v #end]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[ #if flag x #else k => v #end ]') != -1, 'expected padded map literal in: <$out>');
+	}
+
+	public function testConditionalArgsMapEntryIsMapLiteral(): Void {
+		final out: String = write('class M { static function f() { var a = [#if flag k => v, #end k2 => v2]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[ #if flag k => v, #end k2 => v2 ]') != -1, 'expected padded map literal in: <$out>');
+	}
+
+	/** `body[0]` is not an entry here; the answer lives in `elseBody`. */
+	public function testConditionalArgsElseBranchMapEntryIsMapLiteral(): Void {
+		final out: String = write('class M { static function f() { var a = [#if flag x, #else k => v, #end k2 => v2]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[ #if flag x, #else k => v, #end k2 => v2 ]') != -1, 'expected padded map literal in: <$out>');
+	}
+
+	/** A conditional region with no arrow in either branch stays an array literal. */
+	public function testConditionalWithoutMapEntryStaysArrayLiteral(): Void {
+		final out: String = write('class M { static function f() { var a = [#if flag x #else y #end]; } }', MAP_PAD);
+		Assert.isTrue(out.indexOf('[#if flag x #else y #end]') != -1, 'expected tight array literal in: <$out>');
+	}
+
+	/**
+	 * The recursion clamp, one wrapper per assertion. A generator ctor behind a
+	 * wrapper is a `for` EXPRESSION used as an element, not an array comprehension,
+	 * so it must never reach the comprehension policy. Green at base by
+	 * construction (no recursion there).
+	 *
+	 * Killer coverage measured, not assumed: dropping the clamp inside `mapOnly`
+	 * flips the meta, paren and balanced-conditional assertions. The
+	 * `ConditionalArgs` one does NOT flip there — that arm is guarded twice, since
+	 * its `_k == 1` test re-clamps whatever `mapOnly` returns — and it takes both
+	 * defects at once to leak a 2 through it, which is exactly what this assertion
+	 * pins. Widening `_k == 1` to `_k != 0` on its own is an EQUIVALENT mutant
+	 * (`mapOnly` has already reduced `_k` to 1-or-0), so no fixture can kill it.
+	 *
+	 * The bare comprehension is the counter-assertion: kind 2 must still get
+	 * through when nothing wraps it.
+	 */
+	public function testWrappedComprehensionStaysArrayLiteral(): Void {
+		final out: String = write('class M { static function f() { var a = [@:foo for (x in y) x]; } }', COMPREHENSION_PAD);
+		Assert.isTrue(out.indexOf('[@:foo for (x in y) x]') != -1, 'expected tight array literal in: <$out>');
+		final paren: String = write('class M { static function f() { var a = [(for (x in y) x)]; } }', COMPREHENSION_PAD);
+		Assert.isTrue(paren.indexOf('[(for (x in y) x)]') != -1, 'expected tight array literal in: <$paren>');
+		final condArgs: String = write('class M { static function f() { var a = [#if flag for (x in y) x, #end z]; } }', COMPREHENSION_PAD);
+		Assert.isTrue(condArgs.indexOf('[#if flag for (x in y) x, #end z]') != -1, 'expected tight array literal in: <$condArgs>');
+		final condExpr: String = write(
+			'class M { static function f() { var a = [#if flag for (x in y) x #else z #end]; } }', COMPREHENSION_PAD
+		);
+		Assert.isTrue(condExpr.indexOf('[#if flag for (x in y) x #else z #end]') != -1, 'expected tight array literal in: <$condExpr>');
+		final bare: String = write('class M { static function f() { var a = [for (x in y) x]; } }', COMPREHENSION_PAD);
+		Assert.isTrue(bare.indexOf('[ for (x in y) x ]') != -1, 'expected padded comprehension in: <$bare>');
+	}
+
+	/**
+	 * Plain-mode `AstPreds` cover for the recursion — the formatting tests above
+	 * all run the trivia writer, so they exercise `AstPredsT` only. `ParenExpr`
+	 * is the one wrapper whose payload is a bare `HxExpr`, so it can be built
+	 * here without standing in a struct operand.
+	 */
+	public function testPlainAstPredsSeesThroughParenWrapper(): Void {
+		final arrow: HxExpr = Type.createEnum(HxExpr, 'Arrow', [null, null]);
+		Assert.equals(1, AstPreds.arrayBracketKind(Type.createEnum(HxExpr, 'ParenExpr', [arrow])));
+		final generator: HxExpr = Type.createEnum(HxExpr, 'ForExpr', [null]);
+		Assert.equals(2, AstPreds.arrayBracketKind(generator));
+		Assert.equals(0, AstPreds.arrayBracketKind(Type.createEnum(HxExpr, 'ParenExpr', [generator])));
+		Assert.equals(0, AstPreds.arrayBracketKind(Type.createEnum(HxExpr, 'ParenExpr', [null])));
 	}
 
 	private inline function write(src: String, json: String): String {
