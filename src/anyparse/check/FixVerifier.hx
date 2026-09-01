@@ -92,6 +92,23 @@ typedef FixVerifyTally = {
 
 	/** Edits that survived to disk: the full set, the kept complement of a bisect, or 0. */
 	var edits: Int;
+
+	/**
+	 * The sentences the CHECK ITSELF wrote onto the findings it declined in this file, one row
+	 * per distinct sentence with the number of findings carrying it.
+	 *
+	 * CARRIED rather than looked up, unlike the verifier's own reason: `Violation.declineReason`
+	 * is written onto the violation objects `verify` built HERE, through its own
+	 * `Linter.collect`, and handed to `fix` — nothing outside this function can ever see them
+	 * again. Until this field existed that channel was structurally dead for all 13 `RiskyFix`
+	 * rules, and a check adding a reason changed no reported byte, which is how it stayed
+	 * unnoticed: two checks were given reasons and both Pony ledgers came back byte-identical.
+	 *
+	 * The row count can be BELOW `findings`: a check speaks for the sites it declined and says
+	 * nothing about the ones it fixed or silently skipped. The caller charges the remainder to
+	 * the verifier's own answer, never these.
+	 */
+	var declineReasons: Array<{ text: String, count: Int }>;
 }
 
 /**
@@ -345,7 +362,8 @@ final class FixVerifier {
 						rule: check.id(),
 						file: entry.file,
 						findings: own.length,
-						edits: 0
+						edits: 0,
+						declineReasons: checkReasons(own)
 					});
 					continue;
 				}
@@ -430,7 +448,8 @@ final class FixVerifier {
 					rule: check.id(),
 					file: entry.file,
 					findings: own.length,
-					edits: landed
+					edits: landed,
+					declineReasons: checkReasons(own)
 				});
 			}
 		}
@@ -445,6 +464,33 @@ final class FixVerifier {
 			coverage: coverageMemo,
 			tallies: tallies
 		};
+	}
+
+	/**
+	 * The decline sentences `own`'s findings carry IN THE CHECK'S OWN WORDS, one row per distinct
+	 * sentence with the number of findings carrying it.
+	 *
+	 * Read AFTER `fix` has been called, because that is the second of the two places a check writes
+	 * one: `run` sets it when a whole-scope gate closes before any edit is computed, `fix` when the
+	 * gate is per-site — and `fix` is handed these very objects. Reading it earlier would see only
+	 * half the channel.
+	 *
+	 * Aggregated here rather than shipped raw so a 470-finding file costs one row per sentence, and
+	 * so the caller folds it with the same `{text, count}` shape its own reason list already uses.
+	 */
+	private static function checkReasons(own: Array<Violation>): Array<{ text: String, count: Int }> {
+		// First-appearance order, kept explicitly: the caller folds these into a list the reporter
+		// SORTS by count, but a stable order still makes a fixture assertable.
+		final order: Array<String> = [];
+		final counts: Map<String, Int> = [];
+		for (violation in own) {
+			final reason: Null<String> = violation.declineReason;
+			if (reason == null) continue;
+			final seen: Null<Int> = counts[reason];
+			if (seen == null) order.push(reason);
+			counts[reason] = (seen ?? 0) + 1;
+		}
+		return [for (text in order) { text: text, count: counts[text] ?? 0 }];
 	}
 
 	/**

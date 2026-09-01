@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
 import anyparse.query.GrammarPlugin;
@@ -64,7 +65,7 @@ using Lambda;
  * drops the finding too.
  */
 @:nullSafety(Strict)
-final class Naming implements Check implements CrossFileFix implements ConfigAware {
+final class Naming implements Check implements CrossFileFix implements ConfigAware implements FrameworkAware {
 
 	/**
 	 * A lowercase head over an all-uppercase / digit tail of four or more characters - see `normalizerArtifactName`.

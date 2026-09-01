@@ -631,6 +631,14 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded message, got: ${vs[0].message}');
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'an unproven finding yields no edit');
+		// And SAYS so, on the caller's own violation object. This is a `RiskyFix` rule, so the only
+		// caller of its `fix` is `FixVerifier` — until that carried the reason out, a note written
+		// here reached nothing and the run answered "the check declared no reason for these" for
+		// every one of Pony's 53 unproven findings.
+		Assert.equals(
+			'report-only by design: the resolution index does not prove the shorter spelling names the same declaration',
+			vs[0].declineReason
+		);
 	}
 
 	/** An unproven path is never even OFFERED the add-import arm — the freeness exemption is gated on the proof. */

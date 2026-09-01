@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
@@ -530,7 +531,123 @@ class LintFixDeclineWiringSliceTest extends Test {
 		#end
 	}
 
+	/**
+	 * A check's OWN decline sentences survive the verifier, and cover ONLY the findings that carry
+	 * them — the verifier's answer takes the remainder and nothing more.
+	 *
+	 * The dead channel this closes: `FixVerifier` re-collects its violations through its own
+	 * `Linter.collect` (deliberately — that is where the reification and noqa gates apply) and hands
+	 * THOSE objects to `fix`, so a reason a check writes lands where nothing outside that function
+	 * can read it. Measured before the fix: decline reasons added to `shorten-type-ref` and
+	 * `avoid-dynamic` left both Pony ledgers BYTE-IDENTICAL, for all 13 `RiskyFix` rules.
+	 *
+	 * Two rows, three states. `Partly.hx` — the check spoke for 3 of its 5 findings and the oracle
+	 * declined the file, so the check's sentence covers 3 and the oracle's covers the OTHER 2:
+	 * charging all 5 to the oracle blames a compiler for work never offered to it, and charging all
+	 * 5 to the check has it speak for findings it said nothing about. `Whole.hx` — the check spoke
+	 * for BOTH its findings, so the verifier's sentence for that file must not appear at all.
+	 *
+	 * At base `FixVerifyTally` has no `declineReasons` and this file does not compile.
+	 */
+	public function testACheckSOwnDeclineReasonsTakeOnlyTheirShareOfTheLedgerRow(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = [];
+		Cli.ledgerRiskyTallies(ledger, checkSpokenResult());
+		final row: Null<RuleFixOutcome> = ledger['shorten-type-ref'];
+		if (row == null) {
+			Assert.fail('the risky rule has no ledger row');
+			return;
+		}
+		Assert.equals(7, row.reported, 'every finding the phase saw across both files');
+		Assert.equals(7, row.declined, 'none of them got an edit');
+		// The exact list, so the assertion pins an ABSENCE too: `Whole.hx`'s oracle sentence
+		// ("does not typecheck this region") has no findings left to cover and must not appear.
+		Assert.same([
+			{ text: 'report-only: the shorter spelling is unproven', count: 5 },
+			{ text: 'the compiler oracle does not compile this file', count: 2 }
+		], row.reasons);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The producer half: `checkReasons` counts one row per distinct sentence, over the findings that
+	 * carry one and no others.
+	 *
+	 * A violation with no reason contributes nothing, which is exactly what lets the caller above
+	 * charge the remainder to the verifier: a check speaks for the sites it declined and stays
+	 * silent about the ones it fixed or never recognised.
+	 */
+	@:access(anyparse.check.FixVerifier)
+	public function testCheckReasonsCountOnlyTheFindingsThatCarryOne(): Void {
+		final own: Array<Violation> = [reasoned('a'), reasoned(null), reasoned('b'), reasoned('a')];
+		Assert.same([{ text: 'a', count: 2 }, { text: 'b', count: 1 }], FixVerifier.checkReasons(own));
+	}
+
+	/** One violation carrying `reason`, or none — the shape a check hands back from `fix`. */
+	private static function reasoned(reason: Null<String>): Violation {
+		return {
+			file: 'F.hx',
+			span: null,
+			rule: 'avoid-dynamic',
+			severity: Severity.Info,
+			message: 'a Dynamic',
+			declineReason: reason
+		};
+	}
+
 	#if (sys || nodejs)
+	/**
+	 * One risky-fix phase where the CHECK spoke and the VERIFIER also had an answer for the same
+	 * (rule, file) pair — the shape T407 turns on, and the one no earlier fixture could express.
+	 *
+	 * `Partly.hx` sits outside the oracle's compiled set and carries 3 findings the check declined
+	 * itself; `Whole.hx` sits in a region no compiled arm makes live and every one of its findings
+	 * carries the check's sentence, so the verifier's has nothing left to say about it.
+	 */
+	private static function checkSpokenResult(): FixVerifyResult {
+		return {
+			baseline: Confirmed,
+			applied: [],
+			appliedEdits: 0,
+			reverted: [],
+			partials: [],
+			declined: [
+				{
+					file: 'Partly.hx',
+					rule: 'shorten-type-ref',
+					edits: 2,
+					reason: 'the compiler oracle does not compile this file'
+				},
+				{
+					file: 'Whole.hx',
+					rule: 'shorten-type-ref',
+					edits: 1,
+					reason: 'the compiler oracle does not typecheck this region'
+				}
+			],
+			coverageUnknown: null,
+			coverage: null,
+			tallies: [
+				{
+					rule: 'shorten-type-ref',
+					file: 'Partly.hx',
+					findings: 5,
+					edits: 0,
+					declineReasons: [{ text: 'report-only: the shorter spelling is unproven', count: 3 }]
+				},
+				{
+					rule: 'shorten-type-ref',
+					file: 'Whole.hx',
+					findings: 2,
+					edits: 0,
+					declineReasons: [{ text: 'report-only: the shorter spelling is unproven', count: 2 }]
+				}
+			]
+		};
+	}
+
 	/**
 	 * One risky-fix phase's outcome, shaped to exercise all THREE reason states of the fold in one
 	 * call: `avoid-dynamic` landed both its edits in a covered file, landed none in a file the oracle
@@ -572,25 +689,29 @@ class LintFixDeclineWiringSliceTest extends Test {
 					rule: 'avoid-dynamic',
 					file: 'Covered.hx',
 					findings: 2,
-					edits: 2
+					edits: 2,
+					declineReasons: []
 				},
 				{
 					rule: 'avoid-dynamic',
 					file: 'Uncovered.hx',
 					findings: 3,
-					edits: 0
+					edits: 0,
+					declineReasons: []
 				},
 				{
 					rule: 'avoid-dynamic',
 					file: 'Rejected.hx',
 					findings: 1,
-					edits: 0
+					edits: 0,
+					declineReasons: []
 				},
 				{
 					rule: 'avoid-dynamic',
 					file: 'Silent.hx',
 					findings: 4,
-					edits: 0
+					edits: 0,
+					declineReasons: []
 				}
 			]
 		};

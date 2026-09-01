@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
@@ -87,7 +88,7 @@ using Lambda;
  * methods are skipped (nothing to do). The gates mirror `trivial-getter`'s soundness model.
  */
 @:nullSafety(Strict)
-final class PreferInline implements Check implements RiskyFix implements OracleRelaxable implements ConfigAware {
+final class PreferInline implements Check implements RiskyFix implements OracleRelaxable implements ConfigAware implements FrameworkAware {
 
 	/**
 	 * The inline-candidate body budget in AST nodes. Calibrated on a large real tree: trivial getters

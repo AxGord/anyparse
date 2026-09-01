@@ -1,6 +1,7 @@
 package unit;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.Naming;
 import anyparse.check.UnusedPrivate;
@@ -54,6 +55,17 @@ import utest.Test;
 
 	/** The Unity engine base, in scope for the same reason `ROOT_SRC` is. */
 	private static inline final UNITY_ROOT_SRC: String = 'class MonoBehaviour {\n\tpublic function new():Void {}\n}';
+
+	/** The roster nominating the callback of the same-simple-name collision fixture. */
+	private static inline final COLLIDE_CONFIG: String = '{"frameworks":[{"root":"Base","names":["_ready"]}]}';
+
+	/** Per-file configs for a scope spanning two roots: everything under `b/` nominates `Tick`, the rest `Start`. */
+	private static final twoRootResolver: (String) -> LintConfig = path ->
+		LintConfig.parse(
+			path.indexOf('b/') == 0
+				? '{"frameworks":[{"root":"Base","names":["Tick"]}]}'
+				: '{"frameworks":[{"root":"Base","names":["Start"]}]}'
+		);
 
 	// --- the discriminating pair ---
 
@@ -224,7 +236,144 @@ import utest.Test;
 		Assert.equals(0, LintConfig.parse('{}').drops().length, 'and leaves no diagnostic');
 	}
 
+	/**
+	 * A wrong-TYPED value and an unknown key each name themselves — the silence one level below the
+	 * half-stated entry above.
+	 *
+	 * The entry SURVIVES both, which is what kept them quiet: `"names": "Start"` leaves a contract
+	 * claiming only its prefixes, a mis-spelled `"name"` leaves the same, and the roster that comes
+	 * back reads like the one the project wrote. A wrong-typed `"root"` was worse than quiet — it fell
+	 * through to the no-root drop, which then reported "declares no root" about an entry that declares
+	 * one, sending the reader to fix a key that is already there.
+	 */
+	public function testAWrongTypedValueOrUnknownKeyNamesItself(): Void {
+		final typed: LintConfig = LintConfig.parse('{"frameworks":[{"root":"Node","names":"_ready","prefixes":["on"]}]}');
+		Assert.equals(1, typed.frameworks().length, 'the entry survives on the half it did state');
+		Assert.equals('', typed.frameworks()[0].names.join(','), 'and claims no name at all');
+		Assert.equals('frameworks[0] "names" is not an array of strings — ignored', typed.drops().join('\n'), 'which the run now says');
+		final unknown: LintConfig = LintConfig.parse('{"frameworks":[{"root":"Node","name":["_ready"],"prefixes":["on"]}]}');
+		Assert.equals(
+			'frameworks[0] declares unknown key "name" — ignored', unknown.drops().join('\n'), 'a mis-spelled key is the same silence'
+		);
+		final rooted: LintConfig = LintConfig.parse('{"frameworks":[{"root":["Node"],"names":["_ready"]}]}');
+		Assert.equals(
+			'frameworks[0] "root" is not a string — ignored\nframeworks[0] declares no "root" — dropped', rooted.drops().join('\n'),
+			'a wrong-typed root names the type error BEFORE the drop it causes'
+		);
+		final elements: LintConfig = LintConfig.parse('{"frameworks":[{"root":"Node","names":["_ready",7,null]}]}');
+		Assert.equals('_ready', elements.frameworks()[0].names.join(','), 'the string elements still count');
+		Assert.equals(
+			'frameworks[0] "names" ignored 2 value(s) that are not strings', elements.drops().join('\n'),
+			'and the ones that are not are counted rather than dropped in silence'
+		);
+	}
+
+	/**
+	 * A scope spanning two `apqlint.json` roots still applies the FIRST root's roster to every file —
+	 * and now names the disagreement.
+	 *
+	 * The single resolution stays, for the reason `frameworksFor` gives: `unused-public-member` builds
+	 * one whole-scope context before it sees a file, and a roster differing between two consumers would
+	 * spare a member from one rule and delete it with its sibling. What was not deliberate is that the
+	 * run said NOTHING about it — the observable half is asserted first, `Tick` being reported although
+	 * its own root nominates it.
+	 */
+	@:access(anyparse.check.ConfigDisagreement)
+	public function testATwoRootScopeAppliesTheFirstRosterAndNamesTheDisagreement(): Void {
+		final files: Array<{ file: String, source: String }> = twoRootFixture();
+		final roster: Array<FrameworkContract> = LintConfig.frameworksFor(twoRootResolver, files);
+		Assert.equals(1, roster.length);
+		if (roster.length != 1) return;
+		Assert.equals('Start', roster[0].names.join(','), 'the first file resolves the roster for the whole scope');
+		final check: UnusedPrivate = new UnusedPrivate();
+		check.setConfigResolver(twoRootResolver);
+		final reported: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, reported.length, 'the second root nominates Tick and gets no say');
+		if (reported.length == 1) Assert.equals('b/B.hx', reported[0].file, 'and it is B, under the root that named Tick');
+		final paths: Array<String> = [for (entry in files) entry.file];
+		final message: Null<String> = ConfigDisagreement.rosterMessage(twoRootResolver, paths);
+		Assert.notNull(message, 'a two-root scope with two rosters is a disagreement');
+		if (message != null)
+			Assert.equals(
+				'apq: this scope spans apqlint.json roots that disagree about the framework roster — the one discovered for a/A.hx'
+				+ ' applies to all 3 file(s), of which 1 file(s) sit under a root declaring one of 1 other value(s)\n',
+				message
+			);
+		Assert.isNull(
+			ConfigDisagreement.rosterMessage(_ -> LintConfig.parse(UNITY_CONFIG), paths), 'roots that agree are not a disagreement'
+		);
+		Assert.isNull(
+			ConfigDisagreement.rosterMessage(twoRootResolver, ['a/A.hx']), 'and neither is a single-file scope, whatever its config says'
+		);
+		// The consumer reads a roster with `filter` / `exists`, so ORDER carries no meaning at
+		// EITHER level; a signature that kept it would report two identical rosters as a
+		// disagreement. Both levels in one fixture: the contracts are swapped AND `A`'s names are.
+		Assert.isNull(
+			ConfigDisagreement.rosterMessage(
+				path ->
+					LintConfig.parse(
+						path == 'b/B.hx'
+							? '{"frameworks":[{"root":"B","names":["z"]},{"root":"A","names":["y","x"]}]}'
+							: '{"frameworks":[{"root":"A","names":["x","y"]},{"root":"B","names":["z"]}]}'
+					),
+				paths
+			),
+			'the same contracts, and the same names inside one, are the same roster whatever their order'
+		);
+	}
+
+	/**
+	 * Two files declaring the same SIMPLE type name no longer decide the carve-out by walk order.
+	 *
+	 * The supertype map behind `transitivelyExtends` is keyed by simple name (`extends utest.Test` is
+	 * indexed as `Test`) and it used to keep the LAST declaration walked. A project holding a `Mid` of
+	 * its own beside the framework's therefore answered "does Player's base reach the root" out of
+	 * whichever file happened to come second — a verdict with no reason behind it, and on the wrong
+	 * side of it a lifecycle callback is reported unused and offered for deletion.
+	 *
+	 * BOTH orders in one test, because either alone passes at base: the union is what makes the answer
+	 * independent of the order, and reverting it flips exactly the arm whose twin comes last.
+	 */
+	public function testASimpleNameCollisionDoesNotDecideTheCarveOutByWalkOrder(): Void {
+		final check: UnusedPrivate = new UnusedPrivate();
+		check.setConfigResolver(_ -> LintConfig.parse(COLLIDE_CONFIG));
+		Assert.equals(
+			0, check.run(collisionFixture(true), new HaxeQueryPlugin()).length, 'spared when the non-extending twin is walked last'
+		);
+		Assert.equals(0, check.run(collisionFixture(false), new HaxeQueryPlugin()).length, 'and spared when the extending one is');
+	}
+
 	// --- fixtures ---
+
+	/** Two drivers under two roots, plus the base both extend — the scope `frameworksFor` resolves once. */
+	private function twoRootFixture(): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'a/A.hx', source: 'class A extends Base {\n\tprivate function Start():Void {}\n}' },
+			{ file: 'b/B.hx', source: 'class B extends Base {\n\tprivate function Tick():Void {}\n}' },
+			{ file: 'base/Base.hx', source: 'class Base {\n\tpublic function new():Void {}\n}' }
+		];
+	}
+
+	/**
+	 * The engine base and the two same-named `Mid` types, ordered so `twinLast` decides which
+	 * declaration the simple-name map used to keep. The driver's callback is nominated only through
+	 * the extending one.
+	 */
+	private function collisionFixture(twinLast: Bool): Array<{ file: String, source: String }> {
+		final extendingSrc: String = 'class Mid extends Base {\n\tpublic function new():Void {\n\t\tsuper();\n\t}\n}';
+		final twinSrc: String = 'class Mid {\n\tpublic function new():Void {}\n}';
+		return [
+			{ file: 'engine/Base.hx', source: 'class Base {\n\tpublic function new():Void {}\n}' },
+			{ file: twinLast ? 'engine/Mid.hx' : 'game/Mid.hx', source: twinLast ? extendingSrc : twinSrc },
+			{ file: twinLast ? 'game/Mid.hx' : 'engine/Mid.hx', source: twinLast ? twinSrc : extendingSrc }
+		].concat([
+			{
+				file: DRIVER_FILE,
+				source: 'class Player extends Mid {\n\n\tpublic function new():Void {\n\t\tsuper();\n\t}\n\n'
+				+ '\tprivate function _ready():Void {}\n\n}'
+			}
+		]);
+	}
 
 	/** The Godot-shaped driver plus its in-scope engine root. */
 	private function godotFixture(): Array<{ file: String, source: String }> {

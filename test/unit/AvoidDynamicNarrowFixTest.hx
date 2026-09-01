@@ -247,6 +247,32 @@ class AvoidDynamicNarrowFixTest extends Test {
 		Assert.isTrue(out.indexOf('var x:Foo = a;') != -1, 'the local is narrowed');
 	}
 
+	/**
+	 * Every declined `Dynamic` says WHY, and the two refusals are not one answer.
+	 *
+	 * This is Pony's largest rule at 470 findings, and every one of them used to answer "the check
+	 * declares neither NoAutofix nor a decline reason": its `fix` is only ever called by
+	 * `FixVerifier`, whose own re-collect threw the note away. The SPLIT matters as much as the note
+	 * — 436 of those findings are not this fixer's subject at all and 34 are locals whose uses pin no
+	 * single type down, so one sentence for both would send a reader looking for an inference failure
+	 * that never ran.
+	 *
+	 * Three positions in one fixture, so a run that wrote one reason everywhere fails: a field, a
+	 * narrowable local (which gets an EDIT and therefore no sentence), and a local with no
+	 * corroborating use.
+	 */
+	public function testEachDeclinedDynamicSaysWhichOfTheTwoRefusalsItIs(): Void {
+		final src: String = 'class C {\n\tvar keep:Dynamic;\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n'
+			+ '\t\tvar y:Foo = x;\n\t\tvar loose:Dynamic = a;\n\t}\n}$FOO';
+		final run: { violations: Array<Violation>, edits: Array<{ span: Span, text: String }> } = fixed(src);
+		Assert.equals(1, run.edits.length, 'only the corroborated local is narrowed');
+		Assert.same([
+			'the fix narrows a LOCAL variable from its uses; this `Dynamic` is a field, parameter, return type or type argument',
+			'-',
+			'a local, but its uses prove no single plain nominal type to narrow it to'
+		], [for (v in run.violations) v.declineReason ?? '-']);
+	}
+
 	private inline function apply(src: String, e: Array<{ span: Span, text: String }>): String {
 		return CheckFixture.applyEdits(src, e);
 	}
@@ -254,10 +280,20 @@ class AvoidDynamicNarrowFixTest extends Test {
 	// ---- helpers ----
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {
+		return fixed(src).edits;
+	}
+
+	/**
+	 * Run the check over `src` and fix its findings, handing back BOTH halves.
+	 *
+	 * The violations are what `fix` writes its decline reasons onto, so a test reading those needs
+	 * the same objects the edits came from — and the three-line run/fix preamble lives here once.
+	 */
+	private function fixed(src: String): { violations: Array<Violation>, edits: Array<{ span: Span, text: String }> } {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return check.fix(src, vs, plugin);
+		return { violations: vs, edits: check.fix(src, vs, plugin) };
 	}
 
 	private function narrow(src: String): Null<String> {

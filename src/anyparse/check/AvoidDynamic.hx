@@ -115,6 +115,13 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 
 	private static inline final RULE_ID: String = 'avoid-dynamic';
 
+	/** The fix ledger's sentence for a `Dynamic` that is not this fixer's subject at all. */
+	private static inline final DECLINE_NOT_A_LOCAL: String =
+		'the fix narrows a LOCAL variable from its uses; this `Dynamic` is a field, parameter, return type or type argument';
+
+	/** The fix ledger's sentence for a local the fixer looked at and could not narrow. */
+	private static inline final DECLINE_NOT_PROVEN: String = 'a local, but its uses prove no single plain nominal type to narrow it to';
+
 	/** Call-path roots that mark a local as a Reflect/Json boundary transit — reported distinctly. */
 	private static final DEFAULT_BOUNDARY_CALLS: Array<String> = ['Reflect', 'Json'];
 
@@ -186,9 +193,21 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final decl: Null<QueryNode> = wholeDynamicLocal(tree, source, span, shape, dynName);
-			if (decl == null) continue;
+			// Two decline points, and they are not the same answer. The first says the occurrence is
+			// outside this fixer's subject altogether — a field, a parameter, a return, a type
+			// argument; on Pony that is EVERY one of its 470 findings. The second says it IS a local
+			// and its uses pin no single type down. Folded into one sentence, a reader chasing the
+			// second would look for an inference failure that never ran.
+			if (decl == null) {
+				v.declineReason = DECLINE_NOT_A_LOCAL;
+				continue;
+			}
 			final narrowed: Null<String> = inferLocalNarrowType(decl, tree, shape, dynName, declaredTypes, symbols);
-			if (narrowed != null) edits.push({ span: span, text: narrowed });
+			if (narrowed == null) {
+				v.declineReason = DECLINE_NOT_PROVEN;
+				continue;
+			}
+			edits.push({ span: span, text: narrowed });
 		}
 		return edits;
 	}

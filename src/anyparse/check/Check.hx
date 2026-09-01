@@ -159,6 +159,23 @@ interface QuotationAware {}
  * provable shape gate; the machinery lives in `FixVerifier` / `CompilerOracle`.
  */
 interface RiskyFix {}
+/**
+ * Opt-in MARKER of a `Check` that reads the project's framework roster
+ * (`LintConfig.frameworksFor`) — the `apqlint.json` `frameworks` contracts naming which member
+ * names a framework reaches by name, on which root types.
+ *
+ * Its one consumer is `Cli.runLint`, which warns when a lint scope spans `apqlint.json` roots
+ * that disagree about that roster. The warning says the first root's roster "applies to all N
+ * file(s)", and that sentence is only true when some rule in the run actually reads one: a
+ * `--rule prefer-single-quotes` run over two such roots applies no roster at all and gets no
+ * line. Gating on this marker is what keeps the diagnostic from being a claim about work the
+ * run did not do — the same defect, in the opposite direction, as the silence it replaced.
+ *
+ * DECLARED rather than inferred from "who calls `frameworksFor`": that caller list is invisible
+ * from the CLI, and a fifth consumer added without the marker would silently re-open the gap.
+ */
+
+interface FrameworkAware {}
 
 /**
  * Opt-in capability of a `RiskyFix` `Check` whose autofix has a RELAXED candidate set the

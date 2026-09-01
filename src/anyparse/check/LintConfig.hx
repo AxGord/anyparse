@@ -72,7 +72,11 @@ typedef LintDocument = {
 @:nullSafety(Strict)
 final class LintConfig {
 
-	/** Config paths `discover` has already diagnosed — each config file reports at most once per process, whatever it reported. */
+	/**
+	 * Keys already diagnosed — a config path for `discover`'s own per-file lines, a
+	 * `scope-disagreement:<setting>` key for a warning about the SCOPE rather than about one
+	 * document. Each reports at most once per process, whatever it reported.
+	 */
 	private static final warnedConfigs: Array<String> = [];
 
 	private final _rules: Map<String, RuleConfig>;
@@ -292,9 +296,20 @@ final class LintConfig {
 	}
 
 	/**
-	 * One ready diagnostic line per `frameworks` entry a document in this config's chain\n\t * declared and the mapping DROPPED —
-	 * an entry that is not an object, names no `root`, or nominates nothing. `discover` prints them once per config file, attributed to the document that declared it; the merged list here carries no attribution, so it is a count rather than a report. `parse` returns one document's lines without printing, because it cannot tell a probe from a real config file. A dropped entry that says nothing is indistinguishable from one that works, which is
-	 * the whole hazard of a per-entry-lenient reader.
+	 * Ready diagnostic lines for what a document in this config's chain declared under `frameworks` and
+	 * this reader DROPPED or partly IGNORED: an entry that is not an object, names no `root`, nominates
+	 * nothing, spells one of the three keys with the wrong type, or names a key this reader does not know.
+	 *
+	 * One line per FAULT, not per entry — a single entry can earn several (a wrong-typed `"root"` names the
+	 * type error and then the drop it causes), and an entry with three unknown keys earns three.
+	 *
+	 * `discover` prints them once per config file, attributed to the document that declared it; the merged
+	 * list here carries no attribution, so it is a count rather than a report. `parse` returns one
+	 * document's lines without printing, because it cannot tell a probe from a real config file.
+	 *
+	 * A dropped entry that says nothing is indistinguishable from one that works, which is the whole hazard
+	 * of a per-entry-lenient reader. The wrong-TYPED value was the last shape of it and the quietest, since
+	 * the entry survives and its surviving half reads as the whole.
 	 */
 	public function drops(): Array<String> {
 		return _drops;
@@ -386,14 +401,19 @@ final class LintConfig {
 
 	/**
 	 * The framework roster for a whole lint RUN over `files`, resolved through `resolve` — the one
-	 * question every framework-aware check asks, so they cannot disagree about a member by reading
-	 * the config differently.
+	 * question every framework-aware check asks, so they cannot disagree about a member by reading the
+	 * config differently.
 	 *
-	 * Resolved ONCE, from the first file. A scope spanning two roots with different `apqlint.json`
-	 * files therefore applies the first one's roster throughout; that is deliberate, because the
-	 * rules sharing this answer do not all have a per-file seam to resolve at (`unused-public-member`
-	 * builds one whole-scope context before it sees a file), and a roster that differed between two
-	 * of them would spare a member from one rule and delete it with its sibling.
+	 * Resolved ONCE, from the first file. A scope spanning two roots with different `apqlint.json` files
+	 * therefore applies the first one's roster throughout; that is deliberate, because the rules sharing
+	 * this answer do not all have a per-file seam to resolve at (`unused-public-member` builds one
+	 * whole-scope context before it sees a file), and a roster that differed between two of them would
+	 * spare a member from one rule and delete it with its sibling.
+	 *
+	 * What was NOT deliberate is that such a scope said nothing about it. `ConfigDisagreement.warnRoster`
+	 * names it once per run — from the CLI rather than from here, because this is called once per
+	 * framework-aware RULE and its own answer costs one resolve while the diagnostic costs one per file,
+	 * against a resolver that is only memoised on the CLI's side.
 	 */
 	public static function frameworksFor(
 		resolve: Null<(String) -> LintConfig>, files: Array<{ file: String, source: String }>
@@ -586,14 +606,33 @@ final class LintConfig {
 				var declaredRoot: Null<String> = null;
 				final names: Array<String> = [];
 				final prefixes: Array<String> = [];
+				// `into`, not `out`: the enclosing `out` is the contract list, and a same-named
+				// parameter here would shadow it for every reader of this block.
+				inline function collect(key: String, items: Array<JValue>, into: Array<String>): Void {
+					final before: Int = into.length;
+					collectStrings(items, into);
+					final skipped: Int = items.length - (into.length - before);
+					if (skipped > 0) drops.push('frameworks[$i] "$key" ignored $skipped value(s) that are not strings');
+				}
+				// A wrong-SHAPED value was the last silence in this reader. The entry survives, the key
+				// it declares simply is not there, and the surviving half reads as the whole:
+				// `"names": "Start"` claimed nothing and said nothing, while `"root": ["X"]` fell
+				// through to the no-root drop below, which then reported "declares no root" about an
+				// entry that declares one. An unknown key is the same silence spelled as a typo —
+				// `"name"` for `"names"` leaves an entry claiming only its prefixes.
 				for (field in fields) switch [field.key, field.value] {
 					case ['root', JString(v)]:
 						declaredRoot = v;
 					case ['names', JArray(items)]:
-						collectStrings(items, names);
+						collect(field.key, items, names);
 					case ['prefixes', JArray(items)]:
-						collectStrings(items, prefixes);
+						collect(field.key, items, prefixes);
+					case ['root', _]:
+						drops.push('frameworks[$i] "root" is not a string — ignored');
+					case ['names', _], ['prefixes', _]:
+						drops.push('frameworks[$i] "${field.key}" is not an array of strings — ignored');
 					case _:
+						drops.push('frameworks[$i] declares unknown key "${field.key}" — ignored');
 				}
 				final root: Null<String> = declaredRoot;
 				if (root == null) {
