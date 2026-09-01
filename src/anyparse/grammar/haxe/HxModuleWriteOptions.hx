@@ -660,9 +660,12 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    — zero runtime reflection.
  *  - `afterFileHeaderComment` (default `1`) — exact blanks AFTER the
  *    first top-level block-style comment of a module when fileheader
- *    semantics apply: the module either contains at least one
- *    `package` / `import` / `using` decl, OR the first decl carries 2+
- *    leading comments at module head. Site:
+ *    semantics apply: the decl that comment LEADS is itself a
+ *    `package` / `import` / `using` decl, OR it carries 2+ leading
+ *    comments at module head. Classifying from the head decl rather
+ *    than from a whole-module scan is what keeps a doc comment glued
+ *    to the type it documents in a module whose `import` sits below
+ *    that type. Site:
  *    `@:fmt(afterFileHeaderCommentBlanks)` on `HxModule.decls` (the
  *    concept is module-scope by definition).
  *  - `betweenMultilineComments` (default `0`) — exact blanks BETWEEN two

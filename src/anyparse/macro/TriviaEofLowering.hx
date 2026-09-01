@@ -10,8 +10,8 @@ import haxe.macro.Expr;
  * Builds the generated writer body for a last-field `@:trivia` Star with no
  * `@:trail` — the module-level statement/member list that runs to end of
  * file. Single hardline between elements (the plain-mode path forces a
- * double), the extra blank driven by each element's `blankBefore`, the
- * file-header blank run and its package/import/using scan, the
+ * double), the extra blank driven by each element's `blankBefore`, the file-header blank run and its head-decl package/import/using
+ * classification, the
  * line-comment-led and orphan-trail blank gates, the
  * blank-after-leading-comments emit, and the orphan trailing-trivia emit
  * past the last element.
@@ -178,8 +178,8 @@ final class TriviaEofLowering {
 
 	/**
 	 * EOF-Star empty-and-trail emit. Builds `elseBodyParts` (the non-empty
-	 * branch) and returns its `EBlock`: `_docs` init, optional `_hasPiu`
-	 * fileheader scan, head emit, the per-element `$whileExpr`, and the
+	 * branch) and returns its `EBlock`: `_docs` init, the optional `_headIsPiu`
+	 * head-decl classification, head emit, the per-element `$whileExpr`, and the
 	 * orphan-trail emit.
 	 */
 	private static function triviaEofElseBody(c: WriterLowering.EofStarCtx, whileExpr: Expr): Expr {
@@ -224,17 +224,27 @@ final class TriviaEofLowering {
 			]);
 		}
 		elseBodyParts.push(c.emit.initPrev);
-		// ω-fileheader-multiline-comments: `_hasPiu` flags whether the
-		// module contains any `package` / `import` / `using` decl (mirrors
-		// fork's `markFileHeader` packagesAndImports filter). When it is
-		// true OR when the first decl carries 2+ leading comments, the
-		// fileheader rule fires at `_si == 0 && _ci == 0` and replaces the
-		// source-driven blank slot with `opt.afterFileHeaderComment`.
-		// Top-level scan only — HxDecl's `Conditional` ctor wraps inner
-		// decls but fileheader fixtures never test that combination, so
-		// the simpler shallow scan stays in place until a fixture needs it.
-		if (c.afterFileHeaderCommentBlanks || c.betweenMultilineCommentsBlanks) elseBodyParts.push(macro var _hasPiu: Bool = false);
-		if (c.afterFileHeaderCommentBlanks) elseBodyParts.push(triviaEofHasPiuScanExpr());
+		// ω-fileheader-multiline-comments: `_headIsPiu` flags whether the
+		// decl that the module's first leading comment ACTUALLY LEADS is a
+		// `package` / `import` / `using` decl. When it is true OR when that
+		// decl carries 2+ leading comments, the fileheader rule fires at
+		// `_si == 0 && _ci == 0` and replaces the source-driven blank slot
+		// with `opt.afterFileHeaderComment`.
+		// It used to answer from a scan of the WHOLE decl array (mirroring
+		// fork's `markFileHeader`, whose `packagesAndImports` filter walks
+		// the whole root), so a module whose first decl is a DOCUMENTED TYPE
+		// and whose `import` sits BELOW it had a blank line pushed between
+		// the doc comment and the declaration it documents — and since the
+		// detached form is a fixed point, `fmt --list`, the corpus and
+		// `writeRoundTrip` all called it canonical. A file header introduces
+		// the module's package / import section; a comment that leads a type
+		// is that type's doc, whatever else the module holds further down.
+		// This is a DELIBERATE divergence from fork `markFileHeader`, which
+		// keeps the whole-root filter: a future corpus fixture of that shape
+		// would fail here, and the failure is the divergence, not a
+		// regression.
+		if (c.afterFileHeaderCommentBlanks || c.betweenMultilineCommentsBlanks) elseBodyParts.push(macro var _headIsPiu: Bool = false);
+		if (c.afterFileHeaderCommentBlanks) elseBodyParts.push(triviaEofHeadIsPiuExpr());
 		elseBodyParts.push(headEmitExpr);
 		elseBodyParts.push(macro var _si: Int = 0);
 		elseBodyParts.push(whileExpr);
@@ -286,7 +296,7 @@ final class TriviaEofLowering {
 				final _isLast: Bool = _ci + 1 == _t.leadingComments.length;
 				var _override: Int = 0;
 				final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _ci == 0 && _isBlock
-					&& (_hasPiu || _t.leadingComments.length >= 2);
+					&& (_headIsPiu || _t.leadingComments.length >= 2);
 				if (_firstSlot) {
 					_override = opt.afterFileHeaderComment;
 					_suppressBalc = true;
@@ -317,23 +327,35 @@ final class TriviaEofLowering {
 	}
 
 	/**
-	 * EOF-Star `_hasPiu` package/import/using scan (ω-fileheader-multiline-
-	 * comments): a `while` over `_arr` flipping `_hasPiu` when any top-level
-	 * package/import/using decl is present.
+	 * EOF-Star `_headIsPiu` head-decl classification (ω-fileheader-multiline-
+	 * comments): flips `_headIsPiu` when the decl the module's first leading
+	 * comment leads is a package / import / using decl — i.e. when that comment
+	 * introduces the module header rather than documenting a type.
+	 *
+	 * A module-head `#if … #end` is TRANSPARENT here: the comment still leads
+	 * whatever the guarded region opens with, so the classification reaches one
+	 * level into `HxConditionalDecl.body`. One level only — a `#if` whose first
+	 * inner decl is itself a `#if`, and the `#elseif` / `#else` clauses of an
+	 * empty `#if` body, stay opaque (no fixture reaches them).
 	 */
-	private static function triviaEofHasPiuScanExpr(): Expr {
-		return macro {
-			var _piuI: Int = 0;
-			while (_piuI < _arr.length) {
-				if (!_hasPiu) switch _arr[_piuI].node.decl {
-					case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportAliasInDecl(_) | ImportWildDecl(_) | UsingDecl(
-						_
-					) | UsingWildDecl(_):
-						_hasPiu = true;
-					case _:
-				}
-				_piuI++;
-			}
+	private static function triviaEofHeadIsPiuExpr(): Expr {
+		inline function classify(subject: Expr): Expr {
+			return macro switch ($subject) {
+				case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportAliasInDecl(_) | ImportWildDecl(_) | UsingDecl(
+					_
+				) | UsingWildDecl(_):
+					_headIsPiu = true;
+				case _:
+			};
+		}
+		final headClassify: Expr = classify(macro _arr[0].node.decl);
+		final condHeadClassify: Expr = classify(macro _c.body[0].node.decl);
+		return macro if (_arr.length > 0) switch (_arr[0].node.decl) {
+			case Conditional(_c):
+				if (_c.body.length > 0)
+					$condHeadClassify;
+			case _:
+				$headClassify;
 		};
 	}
 
