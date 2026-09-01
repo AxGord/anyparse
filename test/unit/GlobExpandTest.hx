@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Glob;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
 #end
@@ -19,14 +19,14 @@ import sys.FileSystem;
  */
 class GlobExpandTest extends Test {
 
-	#if sys
+	#if (sys || nodejs)
 	private static var counter: Int = 0;
 
 	private var _root: Null<String> = null;
 	#end
 
 	public function testSingleStarWithinSegment(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final root: String = makeTree();
 		final got: Array<String> = Glob.expand('$root/sub/*.hx', '.hx');
 		Assert.equals(3, got.length);
@@ -40,7 +40,7 @@ class GlobExpandTest extends Test {
 	}
 
 	public function testDoubleStarAcrossSegments(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final root: String = makeTree();
 		final got: Array<String> = Glob.expand('$root/**/Hx*.hx', '.hx');
 		Assert.equals(3, got.length);
@@ -54,7 +54,7 @@ class GlobExpandTest extends Test {
 	}
 
 	public function testQuestionMarkSingleChar(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final root: String = makeTree();
 		final got: Array<String> = Glob.expand('$root/?.hx', '.hx');
 		Assert.equals(1, got.length);
@@ -65,7 +65,7 @@ class GlobExpandTest extends Test {
 	}
 
 	public function testCharClass(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final root: String = makeTree();
 		final got: Array<String> = Glob.expand('$root/sub/Hx[FB]*.hx', '.hx');
 		Assert.equals(2, got.length);
@@ -77,7 +77,7 @@ class GlobExpandTest extends Test {
 	}
 
 	public function testDirectoryRecursesUnchanged(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final root: String = makeTree();
 		final got: Array<String> = Glob.expand(root, '.hx');
 		Assert.equals(5, got.length);
@@ -88,7 +88,7 @@ class GlobExpandTest extends Test {
 	}
 
 	public function testSingleFileUnchanged(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final root: String = makeTree();
 		final got: Array<String> = Glob.expand('$root/a.hx', '.hx');
 		Assert.equals(1, got.length);
@@ -99,7 +99,7 @@ class GlobExpandTest extends Test {
 	}
 
 	public function testNoMatchReturnsEmpty(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final root: String = makeTree();
 		Assert.equals(0, Glob.expand('$root/sub/*.cpp', '.hx').length);
 		#else
@@ -107,7 +107,7 @@ class GlobExpandTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	public function teardown(): Void {
 		final root: Null<String> = _root;
 		if (root != null && FileSystem.exists(root)) CliFixture.removeDir(root);

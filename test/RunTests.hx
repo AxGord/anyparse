@@ -740,6 +740,7 @@ import unit.WriteOptionsTest;
 import unit.WriterTrailingWhitespaceTest;
 import utest.Runner;
 import unit.DefaultRepeatedArgumentCheckTest;
+import unit.DeadTestGuardTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1238,6 +1239,7 @@ class RunTests {
 		addCase(new PreferEnumAbstractCheckTest());
 		addCase(new CheckstyleConfigLoaderTest());
 		addCase(new DeadCodeCheckTest());
+		addCase(new DeadTestGuardTest());
 		addCase(new IfFalseDeadCodeCheckTest());
 		addCase(new EmptyBlockCheckTest());
 		addCase(new UnusedParameterCheckTest());

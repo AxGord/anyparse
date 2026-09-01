@@ -1,12 +1,13 @@
 package unit;
 
 import anyparse.query.Cli;
+import haxe.Exception;
 import utest.Assert;
 import utest.Test;
 
 using StringTools;
 
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -31,7 +32,7 @@ import sys.io.File;
 @:nullSafety(Strict)
 class ApqReconCliTest extends Test {
 
-	#if sys
+	#if (sys || nodejs)
 	private static var counter: Int = 0;
 	#end
 
@@ -40,18 +41,33 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconNoArgsAndNoEnvIsUsageError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final saved: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
-		Sys.putEnv('ANYPARSE_HXFORMAT_FORK', '');
-		Assert.equals(2, Cli.run(['recon']), 'no <dir> and no fork env var is a usage error');
-		if (saved != null) Sys.putEnv('ANYPARSE_HXFORMAT_FORK', saved);
+		final savedHome: Null<String> = Sys.getEnv('HOME');
+		// `resolveForkPath` falls back to the `$HOME/.config/anyparse/fork_path` cache that
+		// `2ff3a397` added the day AFTER this test was written; with a real HOME the run
+		// resolves a fork and exits 0, so reaching the usage error needs both sources scoped.
+		// Both writes are process-wide and utest runs no teardown, so the restore sits inline and
+		// any throw is re-raised after it — an empty HOME leaking on would re-point the
+		// fork-path cache for every class that runs later.
+		var raised: Null<Exception> = null;
+		try {
+			Sys.putEnv('ANYPARSE_HXFORMAT_FORK', '');
+			Sys.putEnv('HOME', '');
+			Assert.equals(2, Cli.run(['recon']), 'no <dir>, no fork env var and no cached fork path is a usage error');
+		} catch (exception: Exception) {
+			raised = exception;
+		}
+		Sys.putEnv('ANYPARSE_HXFORMAT_FORK', saved ?? '');
+		Sys.putEnv('HOME', savedHome ?? '');
+		if (raised != null) throw raised;
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
 	public function testReconMissingDirIsRuntimeError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(1, Cli.run(['recon', '/nonexistent/path/that/does/not/exist']), 'non-existent <dir> is a runtime error');
 		#else
 		Assert.pass('non-sys target');
@@ -75,7 +91,7 @@ class ApqReconCliTest extends Test {
 	// -- Sweep mode against a tiny on-disk corpus --
 
 	public function testReconSweepOnEmptyDirExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_empty');
 		Assert.equals(0, Cli.run(['recon', dir]), 'empty corpus is a clean 0-total sweep');
 		CliFixture.removeDir(dir);
@@ -85,7 +101,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconSweepOnGoodFixtureExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_good');
 		File.saveContent('$dir/good.hxtest', goodHxtest());
 		Assert.equals(0, Cli.run(['recon', dir]), 'all-OK sweep exits 0');
@@ -96,7 +112,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconSweepWithBrokenFixtureExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_broken');
 		File.saveContent('$dir/good.hxtest', goodHxtest());
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
@@ -109,7 +125,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconSweepRecursesIntoSubdirs(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_nested');
 		FileSystem.createDirectory('$dir/inner');
 		File.saveContent('$dir/inner/good.hxtest', goodHxtest());
@@ -124,7 +140,7 @@ class ApqReconCliTest extends Test {
 	// -- Single-file probe mode --
 
 	public function testReconProbeGoodFixtureExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_probe_good');
 		final path: String = '$dir/ok.hxtest';
 		File.saveContent(path, goodHxtest());
@@ -136,7 +152,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconProbeBrokenFixtureIsRuntimeError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_probe_bad');
 		final path: String = '$dir/bad.hxtest';
 		File.saveContent(path, brokenHxtest());
@@ -148,7 +164,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconProbeNonexistentIsRuntimeError(): Void {
-		#if sys
+		#if (sys || nodejs)
 		Assert.equals(1, Cli.run(['recon', '--probe', '/no/such/file.hxtest']), 'probe of a missing file is a runtime error');
 		#else
 		Assert.pass('non-sys target');
@@ -158,7 +174,7 @@ class ApqReconCliTest extends Test {
 	// -- --cluster: exact-match drill into a single cluster --
 
 	public function testReconClusterDrillExactMatchExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_cluster_hit');
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
 		// Even without knowing the exact key the broken fixture lands
@@ -183,7 +199,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconClusterDrillNoMatchExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_cluster_miss');
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
 		Assert.equals(
@@ -196,7 +212,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconClusterDrillEmptySweepNoMatch(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_cluster_empty');
 		Assert.equals(1, Cli.run(['recon', '--cluster', 'anything', dir]), '--cluster on an empty sweep is a runtime exit');
 		CliFixture.removeDir(dir);
@@ -227,7 +243,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictStripUnblockOnSimpleSweep(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_predict_unblock');
 		// Fixture fails because of a single literal `XYZ` token that
 		// would substitute cleanly. Delete `XYZ` and the body becomes
@@ -245,7 +261,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictStripPatternNeverMatchesWarns(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_predict_nomatch');
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
 		// Pattern matches 0 occurrences across the (single) skip-parse
@@ -261,7 +277,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictStripStillFailExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_predict_stillfail');
 		// Strip pattern matches but the substitution leaves the body
 		// unparseable (rename `XYZ` to `WAT`, still not a token). The
@@ -292,7 +308,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictStripSourceProbeStillFailEmitsWindow(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `--predict-strip --source --probe <file>` on a STILL FAIL
 		// outcome: applying the substitution shifts the bug but the
 		// stripped source still fails to parse. The new flag adds a src
@@ -325,7 +341,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictStripSourceProbeUnblockExitsZero(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `--source` is additive — when the predict resolves to UNBLOCK
 		// (no STILL FAIL entries) it emits no extra windows and exit code
 		// stays 0. Guards against `--source` accidentally forcing
@@ -350,7 +366,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictStripSourceSweepStillFailEmitsWindow(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Sweep-mode parallel of the probe test — STILL FAIL across a
 		// directory walk should still exit non-zero with --source active.
 		final dir: String = mkTempDir('apq_recon_predict_source_sweep');
@@ -373,7 +389,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconClusterSourceOnEmptyCorpusExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_source_empty');
 		Assert.equals(
 			1, Cli.run(['recon', '--cluster', 'anything', '--source', dir]),
@@ -386,7 +402,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconClusterSourceUnknownKeyExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_source_miss');
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
 		Assert.equals(
@@ -419,7 +435,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconRegressionProbeNoSnapshotExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// In a temp directory with no snapshot file: regression-probe
 		// exits OK with a "no baseline" diagnostic (CWD doesn't have
 		// `bin/.last-sweep.json`). Run from a tmp CWD to guarantee that.
@@ -437,7 +453,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconRegressionProbeUnblockOnFixtureNotInSnapshot(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Fixture present locally but absent in the snapshot: silently
 		// ignored (no false UNBLOCK / REGRESSED line). Run in a tmp CWD
 		// with a hand-written empty-fixtures snapshot.
@@ -466,7 +482,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconRegressionProbeFlagsRegression(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Snapshot says fixture was PASS; the actual fixture is broken
 		// → REGRESSED line, exit non-zero. This is the load-bearing
 		// detection path.
@@ -519,7 +535,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictRelaxOnAlreadyParseableFile(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Already-parseable file → NO TARGET (not an error path).
 		final dir: String = mkTempDir('apq_recon_predict_relax_ok');
 		final path: String = '$dir/good.hxtest';
@@ -535,7 +551,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictRelaxOnTerminatorBlocker(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Source missing `;` after var-decl AND missing `:Type` → parser
 		// reports a real expected token. Predict-relax injects it; the
 		// retry either UNBLOCKs or STILL FAILs, but never NO TARGET.
@@ -590,7 +606,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconNoTargetClusterZeroMatchExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Corpus with one broken fixture; a deliberately-non-matching
 		// expected-msg filter exits runtime (1) with the available-keys
 		// diagnostic on stderr.
@@ -610,7 +626,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconNoTargetClusterEmptyCorpusExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Empty corpus (no skip-parse records) → no NO TARGET records to
 		// match → 0-match runtime exit, no crash.
 		final dir: String = mkTempDir('apq_recon_no_target_cluster_empty');
@@ -627,7 +643,7 @@ class ApqReconCliTest extends Test {
 	// -- --predict-relax --source: windowed src for STILL FAIL + NO TARGET --
 
 	public function testReconPredictRelaxSourceProbeNoTargetEmitsWindow(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `--predict-relax --source --probe <file>` on a NO TARGET outcome
 		// (the parser returned no usable `expected` hint to inject) prints
 		// a windowed source slice anchored on the ORIGINAL fail-locus —
@@ -659,7 +675,7 @@ class ApqReconCliTest extends Test {
 		// guard recognises predict-relax as a non-flooding mode (sweep keeps
 		// NO TARGET collapsed in the footer; STILL FAIL is small). Pre-edit
 		// this combination was rejected as a usage error.
-		#if sys
+		#if (sys || nodejs)
 		final dir: String = mkTempDir('apq_recon_predict_relax_source_sweep');
 		// Empty corpus → sweep runs cleanly without flooding.
 		Assert.equals(
@@ -673,7 +689,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictRelaxNoTargetClusterSourceAllowed(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `--predict-relax --no-target-cluster <msg> --source` combines the
 		// footer-bucket drill with the per-path source window. Empty corpus
 		// → 0 matched records → runtime exit (parallel of the
@@ -744,7 +760,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPermissiveConstructRunsOnEmptyCorpus(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Empty corpus → no skip-parse fixtures, no UNBLOCKs possible →
 		// exit non-zero (no signal) but no crash. Validates that the
 		// predictor handles the zero-records edge case cleanly.
@@ -761,7 +777,7 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconRegressionProbeFlagsUnblock(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Snapshot says fixture was SKIP_PARSE; the actual fixture parses
 		// → UNBLOCKED line, exit OK (unblocks alone don't fail the probe).
 		final dir: String = mkTempDir('apq_recon_regression_unblock');
@@ -785,7 +801,7 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static function mkTempDir(prefix: String): String {
 		counter++;
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');

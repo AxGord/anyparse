@@ -1,6 +1,7 @@
 package unit;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
 import anyparse.query.Engine;
 import anyparse.query.QueryNode;
 import anyparse.query.Selector;
@@ -10,7 +11,7 @@ import anyparse.runtime.ParseError;
 import haxe.Exception;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -18,38 +19,52 @@ import sys.io.File;
 /**
  * Phase 1 integration test for the `apq ast` engine.
  *
- * Walks `src/anyparse/`, parses each `.hx` through `HaxeQueryPlugin`,
- * renders S-expr + JSON + applies `Engine.truncate` and a sample
- * selector. The test passes when no file triggers a non-`ParseError`
- * exception in the engine path. Parse failures on individual files
- * are reported but do not fail the test — Phase 3 grammar coverage is
- * an independent concern.
+ * Walks `src/anyparse/`, parses each `.hx` through `HaxeQueryPlugin`, renders it as an
+ * S-expr and applies `Engine.truncate` and a sample selector; the two JSON paths
+ * (`Json.renderTree`, and `Json.renderMatches` with the `Cli.sourceWindows` that feeds it)
+ * run on one file in `JSON_SAMPLE_STRIDE` — see that constant for the measurement behind
+ * the split. The test passes when no file triggers a non-`ParseError` exception in the
+ * engine path. Parse failures on individual files are reported but do not fail the test —
+ * Phase 3 grammar coverage is an independent concern.
  *
- * Skipped on non-sys targets (no filesystem).
+ * Skipped when `src/anyparse` is not reachable from the runner's cwd.
  */
 class ApqAstIntegrationTest extends Test {
 
+	/**
+	 * One file in this many gets the two JSON render paths.
+	 *
+	 * Every other engine path in the walk is cheap — parse + `Text.render` + `truncate`
+	 * + `select` over all 764 files under `src/anyparse` measured 4.9s. The two JSON
+	 * paths over the same set measured 438s of the 443s total (anyparse's JSON writer
+	 * emits 3.8 MB of pretty-printed output for a 127 KB source, ~2 MB/s), which is
+	 * twenty times the whole suite. The stride keeps them exercised on a deterministic
+	 * spread of the sorted list instead; the JSON writer's throughput is a separate
+	 * concern, and `jsonRendered` is asserted against `walked / stride` so the sample
+	 * cannot silently shrink. `Cli.sourceWindows` rides the same stride — it lexes the
+	 * whole file per match, and `ApqSourceSelectTest` covers it directly.
+	 */
+	private static inline final JSON_SAMPLE_STRIDE: Int = 64;
+
 	private static final SRC_ROOT: String = 'src/anyparse';
 
+	@:access(anyparse.query.Cli)
 	public function testParseEveryAnyparseFileWithoutCrash(): Void {
-		#if sys
+		#if (sys || nodejs)
 		if (!FileSystem.exists(SRC_ROOT) || !FileSystem.isDirectory(SRC_ROOT)) {
-			Assert.pass('integration: $SRC_ROOT not present (different cwd?) — skipped');
+			// Loud, not a silent pass: the runner always starts at the repo root, so an unreachable
+			// root means the walk covered nothing — the same green-while-asserting-nothing shape
+			// `DeadTestGuardTest` exists to catch, and the verdict its own probe already uses.
+			Assert.fail('$SRC_ROOT is not reachable from the runner cwd — this walk cannot run');
 			return;
 		}
-		final paths: Array<String> = [];
-		collectHxFiles(SRC_ROOT, paths);
-		paths.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
-
+		final paths: Array<String> = SourceTree.collect(SRC_ROOT);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final probeSelector: Selector = Selector.parse('ClassDecl');
 		var parsedOk: Int = 0;
 		var parseFailed: Int = 0;
+		var jsonRendered: Int = 0;
+		var walked: Int = 0;
 		final engineCrashes: Array<String> = [];
 
 		for (path in paths) {
@@ -62,13 +77,16 @@ class ApqAstIntegrationTest extends Test {
 				continue;
 			}
 			if (tree == null) continue;
+			final jsonSampled: Bool = walked++ % JSON_SAMPLE_STRIDE == 0;
 			try {
 				Text.render(tree);
-				Json.renderTree(path, source, tree);
+				if (jsonSampled) Json.renderTree(path, source, tree);
 				final truncated: QueryNode = Engine.truncate(tree, 2);
 				Text.render(truncated);
 				final matches: Array<QueryNode> = Engine.select(tree, probeSelector, plugin.selectKindEquivalence());
-				if (matches.length > 0) Json.renderMatches(path, source, matches, Cli.sourceWindows(tree, matches, source), false, false);
+				if (matches.length > 0 && jsonSampled)
+					Json.renderMatches(path, source, matches, Cli.sourceWindows(tree, matches, source), false, false);
+				if (jsonSampled) jsonRendered++;
 				parsedOk++;
 			} catch (e: Exception) {
 				engineCrashes.push('$path (post-parse): ${e.message}');
@@ -80,23 +98,16 @@ class ApqAstIntegrationTest extends Test {
 			return;
 		}
 		Assert.isTrue(paths.length > 0, '$SRC_ROOT must contain .hx files');
-		Assert.pass('engine clean on $parsedOk/${paths.length} files ($parseFailed parse-failed, 0 engine crashes)');
+		Assert.isTrue(
+			jsonRendered >= Std.int(walked / JSON_SAMPLE_STRIDE),
+			'the JSON-render sample must track the stride, not just be non-empty ($jsonRendered of $walked walked)'
+		);
+		Assert.pass(
+			'engine clean on $parsedOk/${paths.length} files ($parseFailed parse-failed, $jsonRendered JSON-rendered, 0 engine crashes)'
+		);
 		#else
 		Assert.pass('integration: non-sys target, fs unavailable — skipped');
 		#end
 	}
-
-	#if sys
-	private static function collectHxFiles(dir: String, into: Array<String>): Void {
-		for (name in FileSystem.readDirectory(dir)) {
-			final path: String = '$dir/$name';
-			if (FileSystem.isDirectory(path)) {
-				collectHxFiles(path, into);
-			} else if (StringTools.endsWith(name, '.hx')) {
-				into.push(path);
-			}
-		}
-	}
-	#end
 
 }

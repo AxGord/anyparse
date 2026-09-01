@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -24,7 +24,7 @@ import sys.FileSystem;
 class ApqDottedAccessNudgeTest extends Test {
 
 	public function testLitDottedUppercaseExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(0, Cli.run(['lit', 'HaxeModuleParser.parse', fixture]), 'dotted lit query is a clean 0-hit, not an error');
 		FileSystem.deleteFile(fixture);
@@ -34,7 +34,7 @@ class ApqDottedAccessNudgeTest extends Test {
 	}
 
 	public function testLitDottedLowercaseExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(0, Cli.run(['lit', 'obj.name', fixture]), 'dotted lit query (obj.field shape) is a clean 0-hit');
 		FileSystem.deleteFile(fixture);
@@ -44,7 +44,7 @@ class ApqDottedAccessNudgeTest extends Test {
 	}
 
 	public function testRefsDottedExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(0, Cli.run(['refs', 'foo.bar', fixture]), 'refs on dotted query is a clean 0-hit; nudge points at search');
 		FileSystem.deleteFile(fixture);
@@ -54,7 +54,7 @@ class ApqDottedAccessNudgeTest extends Test {
 	}
 
 	public function testUsesDottedExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(0, Cli.run(['uses', 'Some.Type', fixture]), 'uses on dotted query is a clean 0-hit; nudge points at search');
 		FileSystem.deleteFile(fixture);
@@ -66,7 +66,7 @@ class ApqDottedAccessNudgeTest extends Test {
 	// Regression: non-dotted query falls back to the original nudges.
 
 	public function testLitPlainNameStillExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(0, Cli.run(['lit', 'nothingHere', fixture]), 'non-dotted query path unchanged');
 		FileSystem.deleteFile(fixture);
@@ -78,7 +78,7 @@ class ApqDottedAccessNudgeTest extends Test {
 	// Multi-segment dotted (pkg.Module.entry) still qualifies.
 
 	public function testLitMultiDottedExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(0, Cli.run(['lit', 'pkg.Module.entry', fixture]), 'multi-segment dotted query qualifies for the dotted nudge');
 		FileSystem.deleteFile(fixture);
@@ -90,7 +90,7 @@ class ApqDottedAccessNudgeTest extends Test {
 	// Negative: empty segments / non-identifier chars must NOT trigger.
 
 	public function testLitTrailingDotFallsThrough(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(0, Cli.run(['lit', 'foo.', fixture]), 'trailing dot has an empty segment, falls back to plain nudge');
 		FileSystem.deleteFile(fixture);
@@ -130,7 +130,7 @@ class ApqDottedAccessNudgeTest extends Test {
 
 	/** A qualified static call resolves to no read, and the refs run still exits clean. */
 	public function testRefsQualifiedStaticExitsClean(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = writeFixture('class B { function g():Int return A.f(); }');
 		Assert.equals(0, Cli.run(['refs', 'f', fixture]), 'member-access nudge is a warning, not an error');
 		Assert.equals(0, Cli.run(['refs', 'f', fixture, '--decls']), 'the warning does not change the exit code under a filter');
@@ -140,7 +140,7 @@ class ApqDottedAccessNudgeTest extends Test {
 		#end
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static inline function writeFixture(source: String): String {
 		return CliFixture.write('apq_dotted_access_nudge', source);
 	}

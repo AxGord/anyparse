@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -28,7 +28,7 @@ class ApqWriterProbeCliTest extends Test {
 	}
 
 	public function testSimpleClassSucceeds(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_writer_probe', 'class C {}');
 		Assert.equals(0, Cli.run(['writer-probe', input]));
 		FileSystem.deleteFile(input);
@@ -40,7 +40,7 @@ class ApqWriterProbeCliTest extends Test {
 	public function testTypedefAnonStructSucceeds(): Void {
 		// The pipeline divergence target: trivia keeps layout, plain
 		// flattens — both must succeed independently.
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_writer_probe', 'typedef T = {\n\tvar x:Int;\n}');
 		Assert.equals(0, Cli.run(['writer-probe', input]));
 		FileSystem.deleteFile(input);
@@ -50,7 +50,7 @@ class ApqWriterProbeCliTest extends Test {
 	}
 
 	public function testUnparseableInputExitsRuntime(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_writer_probe', 'class C {');
 		Assert.equals(1, Cli.run(['writer-probe', input]));
 		FileSystem.deleteFile(input);

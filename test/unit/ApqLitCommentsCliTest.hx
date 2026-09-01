@@ -3,7 +3,7 @@ package unit;
 import anyparse.query.Cli;
 import utest.Assert;
 import utest.Test;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -29,7 +29,7 @@ class ApqLitCommentsCliTest extends Test {
 	// --- --include-comments: AST + comment hits ---
 
 	public function testLitIncludeCommentsFindsBlockCommentText(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write(
 			'apq_lit_comments_block', 'class C {\n\t/* the_marker_text lives here */\n\tvar x:Int = 0;\n}'
 		);
@@ -44,7 +44,7 @@ class ApqLitCommentsCliTest extends Test {
 	}
 
 	public function testLitIncludeCommentsFindsLineCommentText(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write(
 			'apq_lit_comments_line', 'class C {\n\t// the_marker_text in a line comment\n\tvar x:Int = 0;\n}'
 		);
@@ -59,7 +59,7 @@ class ApqLitCommentsCliTest extends Test {
 	}
 
 	public function testLitIncludeCommentsFindsDocCommentText(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write(
 			'apq_lit_comments_doc', '/**\n * the_marker_text in a doc comment\n */\nclass C { var x:Int = 0; }'
 		);
@@ -76,7 +76,7 @@ class ApqLitCommentsCliTest extends Test {
 	// --- --kind Comment: comment-only scan ---
 
 	public function testLitKindCommentScansOnlyComments(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Target appears in both a string literal and a comment;
 		// --kind Comment restricts to the comment hit only. Exit code is
 		// 0 (found in comment) — text-content correctness verified
@@ -94,7 +94,7 @@ class ApqLitCommentsCliTest extends Test {
 	// --- Regression: default lit (no --include-comments) skips comments ---
 
 	public function testLitDefaultSkipsCommentText(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// Target lives ONLY in a comment. Default lit walks AST only;
 		// 0 AST hits triggers the auto-widen retry (Literal+IdentExpr →
 		// any-kind), which still finds 0 — comments are not in the parse
@@ -110,7 +110,7 @@ class ApqLitCommentsCliTest extends Test {
 	// --- String-literal awareness: `//` inside a string is not a comment ---
 
 	public function testLitCommentScanIgnoresSlashSlashInString(): Void {
-		#if sys
+		#if (sys || nodejs)
 		// `"//not_a_comment"` is a string, not a comment. --kind Comment
 		// (comment-only) must NOT match `not_a_comment` — it lives in a
 		// quoted region the lexer skips. Exit 0 (clean run, no hits).
@@ -125,7 +125,7 @@ class ApqLitCommentsCliTest extends Test {
 	// --- --any-kind also triggers comment scan ---
 
 	public function testLitAnyKindAlsoScansComments(): Void {
-		#if sys
+		#if (sys || nodejs)
 		final fixture: String = CliFixture.write('apq_lit_anykind_comments', 'class C {\n\t/* the_anykind_marker */\n\tvar x:Int = 0;\n}');
 		Assert.equals(
 			0, Cli.run(['lit', 'the_anykind_marker', '--any-kind', fixture]), 'lit --any-kind scans comments alongside AST leaves'
