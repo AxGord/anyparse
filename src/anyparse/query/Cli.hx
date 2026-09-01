@@ -149,9 +149,10 @@ typedef TestSummaryFailureLocus = {
  * call green. Read the verdict from here, never from the row counts.
  *
  * `assertions` is the header's own `assertations:` value, which counts
- * ignores too; `TestSummaryResult.assertions` sums the result rows' dots
- * instead and is short by them. The two agree on a clean run and are
- * deliberately kept separate.
+ * ignores too. `TestSummaryResult.assertions` REPORTS this number whenever
+ * a header is present and falls back to the result rows' dot sum only when
+ * there is none: under the quiet reporter a passing test emits no row, so
+ * the dot sum is 0 on every green run.
  */
 typedef TestSummaryHeader = {
 	assertions: Int,
@@ -164,9 +165,11 @@ typedef TestSummaryHeader = {
 
 /**
  * Structured result of parsing a utest OR tink_testrunner stdout
- * transcript. `tests` counts PASSING test cases (utest: `OK`-marked test
- * rows; tink: case blocks with no failed/thrown assertion) — legacy
- * contract, matches neither framework's own "total run" count.
+ * transcript. `tests` is the runner's own `tests executed: N` line when the
+ * transcript carries one; otherwise it counts PASSING test cases (utest:
+ * `OK`-marked test rows; tink: case blocks with no failed/thrown assertion)
+ * — the legacy contract, which matches neither framework's own "total run"
+ * count and reads 0 under the quiet reporter.
  * `firstFailure` is null when the run had no failures or errors;
  * otherwise it carries the first encountered locus (subsequent failures
  * only bump counters).
@@ -175,8 +178,12 @@ typedef TestSummaryHeader = {
  * transcript truncated before it. Read `header.ok` for the red/green
  * verdict, never the row counts. `noTests` flags utest's "No tests
  * executed." row, which a filter matching no class produces and which
- * would otherwise read as a clean green run. `failureNames` lists every
- * non-OK result row as `<fq.Class>.<method>`.
+ * would otherwise read as a clean green run. `failureNames` lists every non-OK result row as `<fq.Class>.<method>`.
+ *
+ * `counted` says a REPORT was found — utest's header block, a parsed result row,
+ * or (for tink) the reporter shape that routed the parse there. It is NOT "some
+ * count is non-zero": a suite that ran nothing and a run that died before printing
+ * anything both read all-zero, and only the first is an answer.
  */
 typedef TestSummaryResult = {
 	tests: Int,
@@ -186,7 +193,8 @@ typedef TestSummaryResult = {
 	firstFailure: Null<TestSummaryFailureLocus>,
 	header: Null<TestSummaryHeader>,
 	noTests: Bool,
-	failureNames: Array<String>
+	failureNames: Array<String>,
+	counted: Bool
 };
 
 /**
@@ -15515,15 +15523,30 @@ final class Cli {
 				currentClass = classRe.matched(1);
 			}
 		}
+		// The header is utest's own totals and outranks the rows whenever it is
+		// present: under the quiet reporter (`NeverShowSuccessResults`) a passing
+		// test emits no row at all, so the dot sum is 0 on every green run while
+		// `assertations:` still carries the real figure. Failure and error counts
+		// stay row-derived — failing rows ARE still printed, and the rows count
+		// TESTS where the header counts assertations.
+		final block: Null<TestSummaryHeader> = readTestSummaryHeader(lines);
+		// The `tests executed:` line is trusted ONLY alongside utest's own block,
+		// because the runner prints the two together — the line, then the block, both
+		// after every test's output. Read on its own it is forgeable: a transcript
+		// that dies mid-run after a failing test whose flushed stdout happens to carry
+		// the phrase reported `999 tests` at exit 0, for a run that never reached a
+		// report at all.
+		final executed: Null<Int> = block != null ? readExecutedCount(lines) : null;
 		return {
-			tests: tests,
-			assertions: assertions,
+			tests: executed ?? tests,
+			assertions: block != null ? block.assertions : assertions,
 			failures: failures,
 			errors: errors,
 			firstFailure: firstFailure,
-			header: readTestSummaryHeader(lines),
+			header: block,
 			noTests: noTests,
-			failureNames: collectFailureNames(lines)
+			failureNames: collectFailureNames(lines),
+			counted: sawUtestReport(block, tests, failures, errors)
 		};
 	}
 
@@ -15584,6 +15607,36 @@ final class Cli {
 				open = 0;
 		}
 		return null;
+	}
+
+	/**
+	 * The `tests executed: N` line `test/RunTests.hx` prints from the runner's
+	 * own `onComplete`. utest's end-of-run block has no test total and the quiet
+	 * reporter emits no row for a passing test, so on a green transcript this
+	 * line is the ONLY test count there is.
+	 *
+	 * Anchored, and the LAST match wins. That alone is not enough — the caller reads
+	 * this only when utest's own block is present too, because the runner prints the
+	 * two together and every test's output comes first. Without that pairing a
+	 * transcript that DIED mid-run, after a failing test whose flushed stdout carried
+	 * the phrase, reported `999 tests` at exit 0.
+	 */
+	private static function readExecutedCount(lines: Array<String>): Null<Int> {
+		final executedRe: EReg = ~/^tests executed:\s+(\d+)$/;
+		var found: Null<Int> = null;
+		for (line in lines) if (executedRe.match(line)) found = Std.parseInt(executedRe.matched(1));
+		return found;
+	}
+
+	/**
+	 * Was a REPORT found, whatever it says? Not "is some count non-zero": a run of
+	 * nothing and a run that died before printing anything both read all-zero, and
+	 * only the first is an answer. utest's end-of-run block is the strong evidence;
+	 * a parsed result row is the weak one, for a transcript truncated after the rows
+	 * but before the block.
+	 */
+	private static inline function sawUtestReport(block: Null<TestSummaryHeader>, tests: Int, failures: Int, errors: Int): Bool {
+		return block != null || tests > 0 || failures > 0 || errors > 0;
 	}
 
 	/**
@@ -15798,7 +15851,13 @@ final class Cli {
 			// than being approximated from the rows.
 			header: null,
 			noTests: false,
-			failureNames: []
+			failureNames: [],
+			// Reaching this parser at all IS the report: `looksLikeTinkTranscript`
+			// routes here only on a `- [OK|FAIL] [loc]` assertion row or on the
+			// `N Assertions N Success N Failures N Errors` summary line. A suite that
+			// ran nothing prints that summary with four zeros — an answer, not a
+			// truncated run, and it must not be refused as uncountable.
+			counted: true
 		};
 	}
 
@@ -17798,9 +17857,10 @@ final class Cli {
 	 *
 	 * Source resolution: positional path (file), `-` (stdin), or default
 	 * `/tmp/test.out` when run with no positional and the file exists.
-	 * Always exits 0 on a successful parse, 1 on read failure — the test
-	 * outcome is informational (the test runner's exit code is the
-	 * authoritative pass/fail signal).
+	 * Exits 0 on a COUNTABLE parse, 1 on a read failure or on a
+	 * transcript that yields no counts at all (see the refusal in the body).
+	 * The test outcome itself is informational — the runner's exit code is
+	 * the authoritative pass/fail signal.
 	 *
 	 * Parse rules (utest 1.13.x format, what `node bin/test.js` emits):
 	 *  - `  testName: OK <dots>` — one line per test; trailing dots are
@@ -17847,9 +17907,30 @@ final class Cli {
 		final result: TestSummaryResult = parseTestSummary(raw);
 		final src: String = sourcePath ?? '/tmp/test.out';
 		warnIfTestJsStale('test-summary');
+		// A transcript that carries no REPORT is a read failure, not a green empty
+		// run. `0 tests / 0 assertions / 0 failures / 0 errors` is what every quiet
+		// utest log printed once the per-test rows went away, and it reads exactly
+		// like "counted, fine" — the only reader that ever noticed was
+		// `tools/suite-shard.sh`, and only because it happens to refuse a zero.
+		//
+		// The question is whether a report was FOUND, never whether its numbers are
+		// zero: utest's "No tests executed." run and a tink suite that ran nothing
+		// (`0 Assertions 0 Success 0 Failures 0 Errors`) are both all-zero answers,
+		// and an all-zero test refused the second one outright.
+		if (!result.counted) {
+			stderr(
+				'apq test-summary: no report found in "$src" — no utest header block, no result row, and no tink reporter output. '
+				+ 'The run died before printing its report, or this is not a utest / tink transcript.\n'
+			);
+			return EXIT_RUNTIME;
+		}
 		sysPrint(
 			'${result.tests} tests / ${result.assertions} assertions / ${result.failures} failures / ${result.errors} errors  ($src)\n'
 		);
+		// utest synthesises the "No tests executed." row with an EMPTY method
+		// name, so it parses as neither a test row nor a failure row: the counts
+		// line for a filter that matched nothing reads all-zero, i.e. green.
+		if (result.noTests) sysPrint('no tests executed: the filter matched no test class\n');
 		final ff: Null<TestSummaryFailureLocus> = result.firstFailure;
 		if (ff != null) {
 			final classQual: String = ff.className.length > 0 ? '${ff.className}.' : '';
@@ -18081,13 +18162,17 @@ final class Cli {
 		sysPrint('  -          — read from stdin (heredoc / pipe / process subst.)\n');
 		sysPrint('  (default)  — `/tmp/test.out` if it exists, else usage error\n');
 		sysPrint('\n');
-		sysPrint('Parses lines of shape `  testName: OK <dots>` / `: FAIL` / `: ERROR`.\n');
-		sysPrint('Dot count after `OK` is the assertion count (one dot per assert).\n');
+		sysPrint('Assertions come from utest\'s own `assertations:` block when the transcript\n');
+		sysPrint('has one, and the test total from the runner\'s `tests executed:` line — the\n');
+		sysPrint('quiet reporter prints no row for a passing test. Without a header, both\n');
+		sysPrint('fall back to the `  testName: OK <dots>` rows (one dot per assertion).\n');
+		sysPrint('Failure / error counts are always row-derived, so they count TESTS.\n');
 		sysPrint('When any FAIL / ERROR is present, appends a second line with the first\n');
 		sysPrint('failure\'s locus: `first failure: ClassName.testName  line:N  <message>`\n');
 		sysPrint('(class header / line / message included when utest emitted them).\n');
-		sysPrint('Always exits 0 on a successful parse — the test runner\'s exit code is\n');
-		sysPrint('the authoritative pass/fail signal.\n');
+		sysPrint('Exits 0 on a countable parse and 1 on a transcript that yields no counts\n');
+		sysPrint('at all — the test runner\'s own exit code stays the authoritative\n');
+		sysPrint('pass/fail signal.\n');
 	}
 
 	/**

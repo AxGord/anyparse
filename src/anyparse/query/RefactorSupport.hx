@@ -338,8 +338,9 @@ final class RefactorSupport {
 	public static final IDENT_EXPR_KIND: String = 'IdentExpr';
 
 	/**
-	 * How many characters of an unparsed conditional-compilation region a refusal diagnostic quotes
-	 * back — enough to recognise the region in the file, short enough to keep the message one line.
+	 * How many characters of the offending source a refusal diagnostic quotes back — an unparsed
+	 * conditional-compilation region, or the declaration line a doc comment was about to lose —
+	 * enough to recognise it in the file, short enough to keep the message one line.
 	 */
 	private static inline final REGION_EXCERPT_CHARS: Int = 60;
 
@@ -1416,6 +1417,22 @@ final class RefactorSupport {
 		final emptied: Null<String> = BodySlotGuard.emptiedSlot(source, edits, plugin);
 		if (emptied != null) return Err(emptied);
 
+		// The second question, asked here for the same reason as the first: a doc
+		// comment re-attributed by an insert survives every gate this project owns —
+		// the result parses, it is byte-canonical, and no lint rule reads a comment's
+		// owner. `add-element --before` did exactly that for as long as it has
+		// existed, and the loss was found by a human re-reading a file, not by a run.
+		//
+		// "Every writer-emit op" is the seventeen that reach a write THROUGH here —
+		// every addressed op, plus both `lint --fix` paths and `FixVerifier`. The
+		// MOVE and EXTRACT family does not: `MoveMember`, `InheritanceMove`
+		// (pull-up / push-down), `IntroduceParameterObject`, `ExtractInterface`,
+		// `ExtractSuperclass` and `NewFile` build their result elsewhere, so this
+		// question is not asked of them. That is a gap in the seam, not in the
+		// question.
+		final splitDoc: Null<String> = docSplittingEdit(source, edits);
+		if (splitDoc != null) return Err(splitDoc);
+
 		final spliced: String = applyEdits(source, edits);
 		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT
 		// writer-emit op puts on it, and that gate is `writeRoundTrip(s) == s`
@@ -1755,6 +1772,60 @@ final class RefactorSupport {
 			first = false;
 		}
 		return from == span.from ? span : new Span(from, span.to);
+	}
+
+	/**
+	 * The doc-attribution invariant every writer-emit op passes through, and the
+	 * ONE thing the re-parse gate cannot see: a `/**` block documents the next LINE
+	 * of code, so an edit that inserts a new line of code between the two hands the
+	 * documentation to the insertion and leaves the declaration bare. The result
+	 * parses, it is byte-canonical, `fmt --list` is clean and every lint rule is
+	 * silent — the loss shows up only when a human reads the file again.
+	 *
+	 * Only a ZERO-WIDTH insertion can do it. An edit that COVERS text owns what it
+	 * covers: `set-doc` replaces the block, `comment-rewrite` splices inside it,
+	 * `remove-element --keep-doc` deliberately leaves it behind, and a `rename`
+	 * over a doc'd member rewrites the very line the doc points at. Requiring a
+	 * line break in the inserted text is what separates the two remaining
+	 * insertion shapes: `add-element` splices a whole element and always carries
+	 * one, while a fixer that prepends a modifier (`private `) stays on the
+	 * owner's own line and changes nothing about who is documented.
+	 *
+	 * Returns the refusal message, or null when no edit splits a doc from its owner.
+	 * The backward half is `docExtendedSpan` itself, not a copy of its walk: that
+	 * function IS the attribution rule this enforces, so asking it is what keeps the
+	 * two from drifting — an earlier draft re-implemented the walk and had already
+	 * lost its chain arm.
+	 */
+	public static function docSplittingEdit(source: String, edits: Array<{ span: Span, text: String }>): Null<String> {
+		for (edit in edits) {
+			final at: Int = edit.span.from;
+			// Ordered cheapest-first on purpose: the two span/text tests are free, and
+			// `docExtendedSpan` lexes the whole file. `canonicalize` is called once per
+			// file per `lint --fix` pass with an EMPTY edit set, and this must not make
+			// that call pay for a lex.
+			if (edit.span.to != at || edit.text.indexOf('\n') < 0 || edit.text.trim().length == 0) continue;
+			if (docExtendedSpan(source, new Span(at, at), true).from == at) continue;
+			var j: Int = at;
+			while (j < source.length && isSpace(source.fastCodeAt(j))) j++;
+			// A POSITIVE criterion, because the harmful side is open-ended: a doc can
+			// only be stolen from something a doc can document, and a declaration opens
+			// with a word, an annotation or a directive in every grammar this tool has.
+			// Everything else — end of file, and the byte that CLOSES the body a block
+			// was left orphaned inside — steals nothing. That second case is not
+			// hypothetical: `add-member` appends before the closer, and refusing there
+			// blocked a real file of this repo (`src/anyparse/check/PreferReadOnlyField.hx`,
+			// which ends on an orphaned `/** … */`) with a remedy `add-member` cannot
+			// perform — it has no addressing options at all.
+			final next: Int = j >= source.length ? -1 : source.fastCodeAt(j);
+			if (!isIdentStartChar(next) && next != '@'.code && next != '#'.code) continue;
+			final eol: Int = source.indexOf('\n', j);
+			final owner: String = (eol < 0 ? source.substring(j) : source.substring(j, eol)).trim();
+			final shown: String = owner.length <= REGION_EXCERPT_CHARS ? owner : '${owner.substr(0, REGION_EXCERPT_CHARS)}…';
+			return 'the insert would land between a doc comment and "$shown", the declaration it documents, so the doc would '
+				+ 'document the insert instead — anchor it on the doc\'s own opener, or on the previous sibling.';
+		}
+		return null;
 	}
 
 	/**

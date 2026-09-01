@@ -353,6 +353,28 @@ the whole cost of a slice.
   once success results are hidden — the `successes:` / `errors:` / `failures:`
   summary would vanish along with the noise and every gate that greps it would
   silently pass on nothing. Never drop that argument.
+- **The runner prints its own `tests executed: N` line**, counted off
+  `runner.onTestComplete` and emitted from `runner.onComplete`. utest's summary
+  block carries assertions but no test total, and with the per-method rows gone
+  a green transcript had no countable test count at all: `apq test-summary` read
+  `0 tests / 0 assertions` off every quiet log, and `tools/suite-shard.sh`
+  hard-failed on that zero for eighteen slices while reporting
+  `parity: counts not cross-checked`. The listener is registered BEFORE
+  `Report.create` on purpose — the report's own `onComplete` handler calls
+  `process.exit` from inside the dispatch, so anything added after it never
+  runs — and it is counted rather than read off `runner.length`, so a run that
+  dies mid-way prints neither this line nor utest's block and the transcript
+  stays visibly uncountable. The line is read only ALONGSIDE utest's block,
+  because the two are printed together and every test's output comes first:
+  read on its own it is forgeable, and a transcript that died after a failing
+  test whose flushed stdout carried the phrase reported `999 tests` at exit 0.
+  `apq test-summary` now EXITS 1 when it finds no report at all — no header
+  block, no result row, no tink reporter output — naming what it could not
+  find instead of printing four zeros that read exactly like a clean count.
+  The question is whether a report was FOUND, never whether its numbers are
+  zero: a utest "No tests executed." run and a tink suite that ran nothing
+  (`0 Assertions 0 Success 0 Failures 0 Errors`) are both all-zero ANSWERS,
+  and an all-zero test refused the second one outright.
 - The **per-test stdout capture** buffers what each test prints and discards it
   when the test passes; any non-`Success`/`Ignore` assertation flushes the
   buffer verbatim first. The CLI e2e tests drive `Cli.run`, which is chatty, and

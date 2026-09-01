@@ -163,11 +163,28 @@ final class AddElement {
 			return RefactorSupport.canonicalize(source, [{ span: span, text: block }], reformat, plugin, optsJson);
 		}
 
+		// BOTH offsets ask the same question, of the same helper: which doc comments
+		// belong to the declaration on the far side of this position? A leading doc is
+		// trivia OUTSIDE the target's span, so `span.from` sits BELOW the target's own
+		// doc; and a MODULE-level span is greedy — it runs to the first token of the
+		// NEXT declaration — so `span.to` sits below the NEIGHBOUR's doc. Inserting at
+		// either raw offset handed that doc to the insertion.
+		//
+		// `docExtendedSpan(…, docOnly)` is the attribution the delete side already asks
+		// (`RefactorSupport.deleteNodes`), so the two agree on whose doc it is, and it
+		// walks back over `/**` blocks that START THEIR LINE only. That last clause is
+		// what keeps the `After` offset off a TRAILING comment: `} // note about A` and
+		// `a: 1 /* about a */,` both end their element's span, and both stay on the
+		// element they trail. Trimming the whole span instead — the first shape this
+		// fix took — moved exactly those two onto the insertion, which is the same
+		// defect in the other direction.
+		final before: Int = RefactorSupport.docExtendedSpan(source, span, true).from;
+		final after: Int = RefactorSupport.docExtendedSpan(source, new Span(span.to, span.to), true).from;
 		final edit: { span: Span, text: String } = switch side {
 			case After:
-				{ span: new Span(span.to, span.to), text: isComma ? ', $trimmed' : '\n$trimmed' };
+				{ span: new Span(after, after), text: isComma ? ', $trimmed' : '\n$trimmed' };
 			case Before:
-				{ span: new Span(span.from, span.from), text: isComma ? '$trimmed, ' : '$trimmed\n' };
+				{ span: new Span(before, before), text: isComma ? '$trimmed, ' : '$trimmed\n' };
 		};
 
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);

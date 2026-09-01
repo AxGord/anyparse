@@ -278,4 +278,122 @@ class ApqDxTier3CliTest extends Test {
 		#end
 	}
 
+	// The quiet reporter (`NeverShowSuccessResults`) emits NO row for a
+	// passing test, so a green transcript's only counts are utest's own
+	// `assertations:` block and the runner's `tests executed:` line.
+
+	public function testTestSummaryReadsQuietUtestSummaryBlock(): Void {
+		#if (sys || nodejs)
+		final transcript: String = 'tests executed: 4\n\nassertations: 12\nsuccesses: 12\nerrors: 0\nfailures: 0\n'
+			+ 'warnings: 0\nexecution time: 1\n\nresults: ALL TESTS OK (success: true)\n';
+		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		Assert.equals(4, r.tests);
+		Assert.equals(12, r.assertions);
+		Assert.equals(0, r.failures);
+		Assert.equals(0, r.errors);
+		final h: Null<TestSummaryHeader> = r.header;
+		Assert.notNull(h);
+		if (h == null) return;
+		Assert.isTrue(h.ok);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryHeaderOutranksRowDots(): Void {
+		#if (sys || nodejs)
+		// Red quiet run: the ONE failing test still prints its row, the 8
+		// passing ones do not. The row dots would report 0 assertions; the
+		// header's 9 is the real figure. Failure counts stay row-derived,
+		// so `failures` counts the failing TEST, not utest's assertation.
+		final transcript: String = 'tests executed: 9\nFoo\n  testBad: FAILURE F\n    line: 7, boom\n\nassertations: 9\nsuccesses: 8\n'
+			+ 'errors: 0\nfailures: 1\nwarnings: 0\n\nresults: SOME TESTS FAILURES (success: false)\n';
+		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		Assert.equals(9, r.tests);
+		Assert.equals(9, r.assertions);
+		Assert.equals(1, r.failures);
+		Assert.equals(0, r.errors);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryExecutedLineTakesTheLastMatch(): Void {
+		#if (sys || nodejs)
+		// A failing test's buffered stdout is flushed into the same stream
+		// AHEAD of the runner's own line, so a transcript that merely quotes
+		// the phrase must not outrank it.
+		final transcript: String = 'tests executed: 999\nsome test chatter\ntests executed: 4\n\nassertations: 12\nsuccesses: 12\n'
+			+ 'errors: 0\nfailures: 0\nwarnings: 0\n\nresults: ALL TESTS OK (success: true)\n';
+		Assert.equals(4, Cli.parseTestSummary(transcript).tests);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryUncountableTranscriptExitsRuntime(): Void {
+		#if (sys || nodejs)
+		// No header, no `tests executed:` line, no result row — the run died
+		// before its report. `0 tests / 0 assertions` read exactly like a
+		// clean count to every reader, so this is an error, not a shrug.
+		final path: String = CliFixture.writeAs('apq_test_summary_junk', 'log', 'build noise\nnothing countable here\n');
+		Assert.equals(1, Cli.run(['test-summary', path]));
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryAllZeroReportIsCountable(): Void {
+		#if (sys || nodejs)
+		// A REPORT that says zero is an answer. Every count here is 0 and the run
+		// is countable because utest's block is present — the refusal asks whether
+		// a report was found, never whether its numbers are zero. An all-zero test
+		// passes this one vacuously; only a `counted` derived from the numbers
+		// flips it.
+		final transcript: String = 'tests executed: 0\n\nassertations: 0\nsuccesses: 0\nerrors: 0\nfailures: 0\n'
+			+ 'warnings: 0\n\nresults: ALL TESTS OK (success: true)\n';
+		final path: String = CliFixture.writeAs('apq_test_summary_zero', 'log', transcript);
+		Assert.isTrue(Cli.parseTestSummary(transcript).counted);
+		Assert.equals(0, Cli.run(['test-summary', path]));
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryEmptyTinkRunIsCountable(): Void {
+		#if (sys || nodejs)
+		// tink_testrunner emits no utest header, so `counted` cannot come from
+		// one — reaching that parser at all is the report, and a suite that ran
+		// nothing prints its summary line with four zeros. An all-zero refusal
+		// condition rejected this outright: rc 1, "the run died before printing
+		// its report", on a transcript whose last line IS the report.
+		final transcript: String = 'Suite:\n  case: [OK]\n\n0 Assertions 0 Success 0 Failures 0 Errors\n';
+		final path: String = CliFixture.writeAs('apq_test_summary_tink_zero', 'log', transcript);
+		Assert.isTrue(Cli.parseTestSummary(transcript).counted);
+		Assert.equals(0, Cli.run(['test-summary', path]));
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryExecutedLineWithoutAHeaderIsNotTrusted(): Void {
+		#if (sys || nodejs)
+		// The runner prints `tests executed:` immediately before utest's block,
+		// after every test's output — so the line without the block is not the
+		// runner's. A run that died after a failing test whose flushed stdout
+		// carried the phrase reported `999 tests` at exit 0; the count now falls
+		// back to the rows, and the failure the transcript DOES carry survives.
+		final transcript: String = 'SomeClass\n  testBad: FAILURE F\n    line: 3, boom\ntests executed: 999\n';
+		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		Assert.equals(0, r.tests);
+		Assert.equals(1, r.failures);
+		Assert.isTrue(r.counted);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

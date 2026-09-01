@@ -4,7 +4,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveElement;
-import anyparse.runtime.Span;
 import haxe.Exception;
 import utest.Assert;
 import utest.Test;
@@ -421,6 +420,11 @@ class BodySlotGuardSliceTest extends Test {
 		}
 	}
 
+	/** One pure INSERTION before `before`, through `canonicalize` — an edit whose span deletes nothing. */
+	private static inline function insertOf(source: String, before: String, text: String): EditResult {
+		return SeamEdit.insert(source, before, text);
+	}
+
 	private static function removeOf(source: String, line: Int, col: Int): EditResult {
 		return RemoveElement.removeElement(source, line, col, true, new HaxeQueryPlugin());
 	}
@@ -441,20 +445,9 @@ class BodySlotGuardSliceTest extends Test {
 	 * a construct's end can land in an edit OTHER than the one that touched its body.
 	 */
 	private static function splicesOf(source: String, pairs: Array<{ find: String, text: String }>): EditResult {
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (pair in pairs) {
-			final at: Int = source.indexOf(pair.find);
-			if (at < 0) throw new Exception('the fixture does not contain "${pair.find}"');
-			edits.push({ span: new Span(at, at + pair.find.length), text: pair.text });
-		}
-		return RefactorSupport.canonicalize(source, edits, true, new HaxeQueryPlugin());
-	}
-
-	/** One pure INSERTION before `before`, through `canonicalize` — an edit whose span deletes nothing. */
-	private static function insertOf(source: String, before: String, text: String): EditResult {
-		final at: Int = source.indexOf(before);
-		if (at < 0) throw new Exception('the fixture does not contain "$before"');
-		return RefactorSupport.canonicalize(source, [{ span: new Span(at, at), text: text }], true, new HaxeQueryPlugin());
+		return SeamEdit.apply(source, [
+			for (pair in pairs) { find: pair.find, covered: pair.find.length, text: pair.text }
+		]);
 	}
 
 }
