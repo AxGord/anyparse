@@ -7593,6 +7593,20 @@ final class Cli {
 	}
 
 	/**
+	 * The approximate-graph note for `callers` / `callees`. Severity does not swing with the
+	 * unresolved COUNT but with `provenEmpty`: `CallChains.render` always emits the root label,
+	 * so a one-line tree is an empty answer that reads exactly like a populated one, and there
+	 * the omission is the dangerous kind. With edges shown the result is merely partial. Sister
+	 * of `memberAccessNudge`, same two-severity shape; the caller invokes this only when
+	 * something IS unresolved, so a fully resolved zero never claims to be inconclusive.
+	 */
+	private static function chainUnresolvedNote(cmd: String, target: String, unresolved: Int, provenEmpty: Bool): String {
+		return provenEmpty
+			? 'apq $cmd: no $cmd resolved, but $unresolved call site(s) in scope are unresolved — this is NOT proof "$target" has none'
+			: 'apq $cmd: note — $unresolved call site(s) unresolved; the graph is approximate';
+	}
+
+	/**
 	 * Append a hint when `name` appears to be macro-generated — scan
 	 * `src/anyparse/macro/*.hx` for a `<name>Field` Field-builder function
 	 * declaration (the canonical `Codegen.<name>Field()` shape that emits
@@ -13207,23 +13221,42 @@ final class Cli {
 			return emptyExit(true);
 		}
 		// --limit 0 = uncapped; unset = DEFAULT_CHAIN_LINES; the budget is
-		// shared across the multiple matches of a bare-name target
+		final provenEmpty: Bool = renderChains(graph, matches, depth, outward, kinds, sources, limit);
+		if (graph.unresolved.length > 0) stderr('${chainUnresolvedNote(cmd, targetStr, graph.unresolved.length, provenEmpty)}\n');
+		return emptyExit(provenEmpty);
+	}
+
+	/**
+	 * Print every match's call tree and report whether the EMPTY answer is PROVEN: no tree
+	 * carried an edge line AND every match was rendered. `CallChains.render` always emits the
+	 * root label, so a one-line tree is the empty answer and the count cannot come from the
+	 * `--limit` arm alone; and a budget break leaves later matches unrendered, where "we did
+	 * not look" must never be reported as "there is nothing". The line budget is shared across
+	 * the multiple matches of a bare-name target (`limit == 0` = uncapped).
+	 */
+	private static function renderChains(
+		graph: CallGraph, matches: Array<FnNode>, depth: Int, outward: Bool, kinds: Null<Array<EdgeKind>>, sources: Map<String, String>,
+		limit: Int
+	): Bool {
 		var budget: Int = if (limit == 0)
 			0
 		else if (limit > 0)
 			limit
 		else
 			DEFAULT_CHAIN_LINES;
+		var anyEdge: Bool = false;
 		for (m in matches) {
 			final rendered: String = CallChains.render(graph, m.id, depth, outward, kinds, f -> sources[f], budget);
 			sysPrint(rendered);
+			final lines: Int = rendered.split('\n').length - 1;
+			if (lines > 1) anyEdge = true;
 			if (limit == 0) continue;
-			budget -= rendered.split('\n').length - 1;
-			if (budget <= 0) break;
+			budget -= lines;
+			if (budget > 0) continue;
+			// matches remain unrendered - the negative claim is no longer licensed
+			return false;
 		}
-		if (graph.unresolved.length > 0)
-			stderr('apq $cmd: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
-		return emptyExit(false);
+		return !anyEdge;
 	}
 
 	private static function runReach(args: Array<String>): Int {

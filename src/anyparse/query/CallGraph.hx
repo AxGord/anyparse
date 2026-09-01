@@ -89,9 +89,14 @@ enum abstract EdgeKind(Int) {
  * supertypes; `obj.m()` resolves when the receiver identifier carries an
  * explicit nominal type annotation (`TypeInfoProvider.declaredTypes`), with
  * `Null<T>` unwrapped to `T` via `declaredTypeSources`; `Type.m()` resolves as
- * a static member. Instance calls additionally emit `Virtual` edges to subtype
- * overrides. Everything unresolvable is recorded in `unresolved` — the graph
- * over-approximates but never silently drops a call it could name.
+ * a static member; `f().m()` resolves through the DECLARED return type of `f`
+ * (`TypeInfoProvider.returnTypes`) — an annotation the source carries, never an
+ * inferred one, and a nullable / dynamic wrapper names no dispatchable type.
+ * Instance calls additionally emit `Virtual` edges to subtype overrides, and a
+ * BARE call to a non-static member of the enclosing type IS one — it is an
+ * implicit-`this` call, so it dispatches exactly like `this.m()`. Everything
+ * unresolvable is recorded in `unresolved` — the graph over-approximates but
+ * never silently drops a call it could name.
  *
  * Simple type names only (`SymbolIndex` models no packages): two types with
  * the same simple name merge into one graph node — acceptable for a finder,
@@ -117,6 +122,13 @@ final class CallGraph {
 	private final _in: Map<String, Array<CallEdge>> = [];
 	private final _byMember: Map<String, Array<String>> = [];
 	private final _members: Map<String, Map<String, String>> = [];
+
+	/** Function node id -> the SIMPLE name of its DECLARED return type, for a receiver that is a call. */
+	private final _returns: Map<String, String> = [];
+
+	/** Type name -> the names of its STATIC members — a bare call to one of those is not an implicit-`this` dispatch. */
+	private final _staticMembers: Map<String, Array<String>> = [];
+
 	private final _supers: Map<String, Array<String>> = [];
 	private final _subs: Map<String, Array<String>> = [];
 
@@ -166,8 +178,24 @@ final class CallGraph {
 		return [for (id => n in nodes) if (n.typeName == typeName && n.name != null) id];
 	}
 
-	private function collectNodes(entry: ParsedEntry, shape: RefShape): Void {
+	/** Seed the supertype, subtype and static-member tables from the symbol index. */
+	private function seedFromIndex(idx: SymbolIndex): Void {
+		for (fi in idx.allFiles()) for (t in fi.types) {
+			_supers[t.name] = t.supertypes;
+			for (s in t.supertypes) {
+				final subs: Array<String> = _subs[s] ?? [];
+				if (!subs.contains(t.name)) subs.push(t.name);
+				_subs[s] = subs;
+			}
+			final statics: Array<String> = _staticMembers[t.name] ?? [];
+			for (m in t.members) if (m.isStatic && !statics.contains(m.name)) statics.push(m.name);
+			_staticMembers[t.name] = statics;
+		}
+	}
+
+	private function collectNodes(entry: ParsedEntry, shape: RefShape, provider: Null<TypeInfoProvider>): Void {
 		// noqa: complexity
+		final returnTypes: Map<Int, String> = provider == null ? [] : provider.returnTypes(entry.source);
 		final fnKinds: Array<String> = shape.functionKinds ?? [];
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
@@ -190,6 +218,8 @@ final class CallGraph {
 				fnId = parentFn == null ? '$owner.$name' : '$parentFn#$name';
 				registerNode(fnId, entry, parentFn == null ? owner : typeName, name, span);
 				if (parentFn == null) registerMember(owner, name, fnId);
+				final returned: Null<String> = returnTypes[span.from];
+				if (returned != null && !_returns.exists(fnId)) _returns[fnId] = returned;
 			} else if (span != null && lambdaKinds.contains(node.kind)) {
 				lambdaCounter++;
 				fnId = '${parentFn ?? (typeName ?? moduleType)}#$lambdaCounter';
@@ -291,6 +321,20 @@ final class CallGraph {
 			for (s in _supers[t] ?? []) queue.push(s);
 		}
 		return null;
+	}
+
+	/**
+	 * Virtual dispatch targets for a BARE call inside `typeName` — the implicit-`this` case,
+	 * where `resolved` is the node the bare name already resolved to. Empty unless that node
+	 * is a NON-STATIC member on the type's own chain: a local function, a module-level
+	 * function and `super` each yield an id `memberOnChain` never returns, and Haxe neither
+	 * inherits nor overrides a static, so a same-named static on a subtype is a DIFFERENT
+	 * function that dispatch can never reach.
+	 */
+	private function implicitThisTargets(typeName: Null<String>, member: String, resolved: String): Array<String> {
+		if (typeName == null || memberOnChain(typeName, member) != resolved) return [];
+		final owner: String = nodes[resolved]?.typeName ?? typeName;
+		return (_staticMembers[owner] ?? []).contains(member) ? [] : virtualTargets(typeName, member);
 	}
 
 	/** Transitive subtypes of `typeName` that declare `member` — virtual dispatch targets. */
@@ -397,6 +441,26 @@ final class CallGraph {
 				typeName;
 		}
 
+		/** True for every field-access spelling a callee can wear: plain, null-safe, force-unwrapped. */
+		function isAccessKind(kind: String): Bool {
+			return kind == fieldAccessKind || (safeAccessKind != null && kind == safeAccessKind)
+				|| (forceAccessKind != null && kind == forceAccessKind);
+		}
+
+		/** Resolve an identifier that NAMES a function — a local one, a scope-bound declaration, or a member on the type chain. */
+		function identTarget(name: String, span: Null<Span>, currentType: Null<String>): Null<String> {
+			if (span == null) return null;
+			final local: Null<String> = localFn(name);
+			if (local != null) return local;
+			final bound: Null<Int> = bindFor(name)[span.from];
+			return if (bound != null && bound >= 0)
+				entry.fnBySpanFrom[bound]
+			else if (currentType == null)
+				null
+			else
+				memberOnChain(currentType, name);
+		}
+
 		/**
 		 * Receiver classification: the simple type name plus whether the
 		 * receiver is a VALUE (instance dispatch — virtual expansion applies)
@@ -405,6 +469,24 @@ final class CallGraph {
 		function receiverType(recvRaw: QueryNode, currentType: Null<String>): Null<Receiver> {
 			final recv: QueryNode = unwrap(recvRaw);
 			final name: Null<String> = recv.name;
+			// a receiver that is itself a CALL takes the callee's DECLARED return type —
+			// an annotation the source carries, never an inferred one; a nullable /
+			// dynamic wrapper names no dispatchable type and stays unresolved
+			if (recv.kind == callKind && recv.children.length > 0) {
+				final inner: QueryNode = unwrap(recv.children[0]);
+				final innerName: Null<String> = inner.name;
+				if (innerName == null) return null;
+				final target: Null<String> = if (inner.kind == identKind) {
+					identTarget(innerName, inner.span, currentType);
+				} else if (isAccessKind(inner.kind) && inner.children.length > 0) {
+					final innerRecv: Null<Receiver> = receiverType(inner.children[0], currentType);
+					innerRecv == null ? null : memberOnChain(innerRecv.typeName, innerName);
+				} else {
+					null;
+				}
+				final returned: Null<String> = target == null ? null : _returns[target];
+				return returned == null || nullableWrappers.contains(returned) ? null : { typeName: returned, isValue: true };
+			}
 			if (recv.kind != identKind || name == null)
 				return (recv.kind == fieldAccessKind || (safeAccessKind != null && recv.kind == safeAccessKind)) && name != null
 					&& isTypeLike(name)
@@ -430,19 +512,7 @@ final class CallGraph {
 			final arg: QueryNode = unwrap(argRaw);
 			final name: Null<String> = arg.name;
 			if (name == null) return null;
-			if (arg.kind == identKind) {
-				final span: Null<Span> = arg.span;
-				if (span == null) return null;
-				final local: Null<String> = localFn(name);
-				if (local != null) return local;
-				final bound: Null<Int> = bindFor(name)[span.from];
-				return if (bound != null && bound >= 0)
-					entry.fnBySpanFrom[bound]
-				else if (currentType == null)
-					null
-				else
-					memberOnChain(currentType, name);
-			}
+			if (arg.kind == identKind) return identTarget(name, arg.span, currentType);
 			if (arg.kind != fieldAccessKind || arg.children.length <= 0) return null;
 			final recv: Null<Receiver> = receiverType(arg.children[0], currentType);
 			return recv == null ? null : memberOnChain(recv.typeName, name);
@@ -522,11 +592,12 @@ final class CallGraph {
 			var calleeId: Null<String> = null;
 			if (callee.kind == identKind && calleeName != null) {
 				calleeId = resolveBareCallee(calleeName, callee.span, currentType);
-				if (calleeId != null) addEdge(from, calleeId, Call, null, file, span);
-			} else if (
-				callee.kind == fieldAccessKind || (safeAccessKind != null && callee.kind == safeAccessKind)
-				|| (forceAccessKind != null && callee.kind == forceAccessKind)
-			) {
+				if (calleeId != null) {
+					addEdge(from, calleeId, Call, null, file, span);
+					// a bare call to an instance member IS `this.m()` — same dispatch, same edges
+					for (v in implicitThisTargets(currentType, calleeName, calleeId)) addEdge(from, v, Virtual, null, file, span);
+				}
+			} else if (isAccessKind(callee.kind)) {
 				if (calleeName != null && callee.children.length > 0) {
 					if (calleeName == 'bind') {
 						final callSpan: Null<Span> = call.span;
@@ -643,15 +714,7 @@ final class CallGraph {
 		final shape: RefShape = cached.refShape();
 		if (shape.callKind == null || shape.fieldAccessKind == null) return graph;
 
-		final idx: SymbolIndex = index ?? SymbolIndex.build(files, cached);
-		for (fi in idx.allFiles()) for (t in fi.types) {
-			graph._supers[t.name] = t.supertypes;
-			for (s in t.supertypes) {
-				final subs: Array<String> = graph._subs[s] ?? [];
-				if (!subs.contains(t.name)) subs.push(t.name);
-				graph._subs[s] = subs;
-			}
-		}
+		graph.seedFromIndex(index ?? SymbolIndex.build(files, cached));
 
 		final provider: Null<TypeInfoProvider> = cached is TypeInfoProvider ? cast cached : null;
 		final parsed: Array<ParsedEntry> = [];
@@ -670,7 +733,7 @@ final class CallGraph {
 				fnBySpanFrom: []
 			});
 		}
-		for (p in parsed) graph.collectNodes(p, shape);
+		for (p in parsed) graph.collectNodes(p, shape, provider);
 		for (p in parsed) graph.collectEdges(p, shape, provider);
 		return graph;
 	}

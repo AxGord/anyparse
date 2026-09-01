@@ -38,6 +38,47 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'A.a', 'Worker.run', Call).length);
 	}
 
+	public function testCallReceiverWithDeclaredReturnTypeResolves(): Void {
+		// Both receiver forms in one test: the field `_w` and the accessor `getWorker()` name the
+		// SAME declared type, so a fix that reads one form must not be able to lose the other.
+		final g: CallGraph = graphOf([
+			'class A { private final _w:Worker; function viaField():Void _w.run(); function getWorker():Worker return _w; function viaCall():Void getWorker().run(); }',
+			'class Worker { public function run():Void {} }'
+		]);
+		Assert.equals(1, edges(g, 'A.viaField', 'Worker.run', Call).length);
+		Assert.equals(1, edges(g, 'A.viaCall', 'Worker.run', Call).length);
+		Assert.equals(0, [for (u in g.unresolved) if (u.reason.indexOf('unresolved receiver') != -1) u].length);
+	}
+
+	public function testChainedCallReceiversResolveStepByStep(): Void {
+		// Each hop reads ONE declared return type - the recursion the receiver arm brings with it,
+		// not type inference; a hop whose callee carries no annotation ends the chain.
+		final g: CallGraph = graphOf([
+			'class A { function a():Void getMid().getWorker().run(); function getMid():Mid return null; }',
+			'class Mid { public function getWorker():Worker return null; public function loose() return null; }',
+			'class Worker { public function run():Void {} }'
+		]);
+		Assert.equals(1, edges(g, 'A.a', 'Worker.run', Call).length);
+		final loose: CallGraph = graphOf([
+			'class A { function a():Void getMid().loose().run(); function getMid():Mid return null; }',
+			'class Mid { public function loose() return null; }',
+			'class Worker { public function run():Void {} }'
+		]);
+		Assert.equals(0, edges(loose, 'A.a', 'Worker.run', Call).length);
+		Assert.equals(1, [for (u in loose.unresolved) if (u.reason.indexOf('unresolved receiver') != -1) u].length);
+	}
+
+	public function testNullableReturnReceiverStaysUnresolved(): Void {
+		// `returnTypes` reports the OUTER nominal, so a `Null<T>` return names no dispatchable
+		// type and there is no return-type SOURCE map to unwrap it with - refuse over a guess.
+		final g: CallGraph = graphOf([
+			'class A { function a():Void getWorker().run(); function getWorker():Null<Worker> return null; }',
+			'class Worker { public function run():Void {} }'
+		]);
+		Assert.equals(0, edges(g, 'A.a', 'Worker.run', Call).length);
+		Assert.equals(1, [for (u in g.unresolved) if (u.reason.indexOf('unresolved receiver') != -1) u].length);
+	}
+
 	public function testNullWrappedReceiverUnwraps(): Void {
 		final g: CallGraph = graphOf([
 			'class A { private var _w:Null<Worker>; function a():Void _w.run(); }',
@@ -78,6 +119,49 @@ class CallGraphTest extends Test {
 		]);
 		Assert.equals(1, edges(g, 'A.a', 'Base.run', Call).length);
 		Assert.equals(1, edges(g, 'A.a', 'Sub.run', Virtual).length);
+	}
+
+	public function testBareCallGetsSameVirtualEdgeAsThisCall(): Void {
+		// One variable: `hook()` vs `this.hook()`. A bare call to an INSTANCE member of the
+		// enclosing type IS an implicit-`this` call, so it dispatches the same way.
+		final g: CallGraph = graphOf([
+			'class Base { public function hook():Void {} public function drive():Void hook(); public function driveThis():Void this.hook(); }',
+			'class Sub extends Base { override public function hook():Void {} }'
+		]);
+		Assert.equals(1, edges(g, 'Base.driveThis', 'Sub.hook', Virtual).length);
+		Assert.equals(1, edges(g, 'Base.drive', 'Sub.hook', Virtual).length);
+	}
+
+	public function testBareCallOnAbstractMemberReachesImplementation(): Void {
+		// An `abstract` declaration has NO body, so without the virtual edge the chain from its
+		// call sites into the implementation is broken in both directions.
+		final g: CallGraph = graphOf([
+			'abstract class Base { abstract private function hook():Void; public function drive():Void hook(); }',
+			'class Sub extends Base { private function hook():Void work(); function work():Void {} }'
+		]);
+		Assert.equals(1, edges(g, 'Base.drive', 'Base.hook', Call).length);
+		Assert.equals(1, edges(g, 'Base.drive', 'Sub.hook', Virtual).length);
+	}
+
+	public function testBareStaticCallGetsNoVirtualEdge(): Void {
+		// Haxe does not inherit or override statics, so a same-named static on a subtype is a
+		// DIFFERENT function - a virtual edge there would be fabricated.
+		final g: CallGraph = graphOf([
+			'class Base { public static function helper():Void {} public function drive():Void helper(); }',
+			'class Sub extends Base { public static function helper():Void {} }'
+		]);
+		Assert.equals(1, edges(g, 'Base.drive', 'Base.helper', Call).length);
+		Assert.equals(0, edges(g, 'Base.drive', 'Sub.helper', Virtual).length);
+	}
+
+	public function testBareLocalFunctionCallGetsNoVirtualEdge(): Void {
+		// A local function shadowing a member name resolves to the local - nothing to dispatch.
+		final g: CallGraph = graphOf([
+			'class Base { public function hook():Void {} public function drive():Void { function hook():Void {} hook(); } }',
+			'class Sub extends Base { override public function hook():Void {} }'
+		]);
+		Assert.equals(1, edges(g, 'Base.drive', 'Base.drive#hook', Call).length);
+		Assert.equals(0, edges(g, 'Base.drive', 'Sub.hook', Virtual).length);
 	}
 
 	public function testLambdaArgGetsRefEdgeWithVia(): Void {

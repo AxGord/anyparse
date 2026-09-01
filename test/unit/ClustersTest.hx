@@ -112,11 +112,13 @@ class ClustersTest extends Test {
 	}
 
 	/**
-	 * An unresolvable call inside a member span counts against coverage;
-	 * the resolved bare call still counts as a resolved site.
+	 * An unresolvable call inside a member span counts against coverage; the resolved
+	 * bare call still counts as a resolved site. `get` carries NO return annotation, so
+	 * the call receiver stays unresolved — with one it would resolve through the
+	 * declared return type.
 	 */
 	public function testCoverageCountsUnresolvedInsideMembers(): Void {
-		final r: Null<ClusterReport> = analyzeOf(['class A { function a():Void get().run(); function get():Thing return null; }'], 'A');
+		final r: Null<ClusterReport> = analyzeOf(['class A { function a():Void get().run(); function get() return null; }'], 'A');
 		Assert.notNull(r);
 		if (r == null) return;
 		Assert.equals(1, r.unresolvedSites);
