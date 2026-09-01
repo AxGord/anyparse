@@ -1510,7 +1510,25 @@ class RunTests {
 		addCase(new PreferCaseGuardCheckTest());
 		addCase(new PreferCaseGuardOracleE2ETest());
 		addCase(new SplitVarDeclarationCheckTest());
-		utest.ui.Report.create(runner);
+		// Quiet by DEFAULT. utest's own default is `ShowSuccessResultsWithNoErrors`,
+		// which prints one line per passing method: on this suite that is 13 488 lines
+		// / ~800 KB, against the six-line summary every gate actually reads. For a
+		// delegated run that single difference dominates the whole token cost, so the
+		// listing is off unless asked for.
+		//
+		// `NeverShowSuccessResults` drops ONLY the passing lines — `ReportTools.skipResult`
+		// returns false for `!stats.isOk`, so every failure, error and warning still
+		// prints in full, with its message and stack.
+		//
+		// `AlwaysShowHeader` is LOAD-BEARING and not decoration: under the default
+		// `ShowHeaderWithResults`, `ReportTools.hasHeader` returns FALSE for a green run
+		// once success results are hidden — the summary the gates grep would vanish with
+		// the noise. Passing it explicitly is what keeps `successes:` / `errors:` /
+		// `failures:` on stdout.
+		//
+		// `APQ_TEST_VERBOSE=1` restores the per-method listing for a human reading one run.
+		final verbose: Bool = Sys.getEnv('APQ_TEST_VERBOSE') != null;
+		utest.ui.Report.create(runner, verbose ? AlwaysShowSuccessResults : NeverShowSuccessResults, AlwaysShowHeader);
 		runner.run();
 	}
 
