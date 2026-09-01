@@ -743,6 +743,9 @@ import unit.DefaultRepeatedArgumentCheckTest;
 import unit.DeadTestGuardTest;
 import unit.DocOwnerGuardSliceTest;
 import unit.HxFileHeaderCommentSliceTest;
+import unit.SafeDeleteFormatConfigCliTest;
+import unit.ExtractDestinationCollisionCliTest;
+import unit.MoveExtractDocCensusTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1178,6 +1181,9 @@ class RunTests {
 		addCase(new InheritanceMoveSliceTest());
 		addCase(new ExtractSuperclassSliceTest());
 		addCase(new SafeDeleteSliceTest());
+		addCase(new SafeDeleteFormatConfigCliTest());
+		addCase(new ExtractDestinationCollisionCliTest());
+		addCase(new MoveExtractDocCensusTest());
 		addCase(new ShardPlanTest());
 		addCase(new EncapsulateFieldSliceTest());
 		addCase(new ExtractConstantSliceTest());

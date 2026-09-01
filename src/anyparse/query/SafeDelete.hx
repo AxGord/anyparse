@@ -47,10 +47,19 @@ final class SafeDelete {
 	 * to it survives under `scopeFiles`. Returns `Ok(newSource)` for
 	 * `srcFile`, or an `Err` — a reference list when blocked, or a
 	 * resolution / removal diagnostic. PURE.
+	 *
+	 * `optsJson` is the formatter config that governs `srcFile`, and it is the
+	 * SAME argument every sibling writer-emit op takes: the removal is
+	 * canonical-gated, so without it the gate compares the file against
+	 * COMPILED DEFAULTS and refuses every file a project config formats
+	 * differently from them — with the one remedy it names (`apq fmt --write`)
+	 * being the thing that put the file in that state. `--reformat` had the
+	 * mirror defect: it re-canonicalised under the defaults, i.e. de-formatted
+	 * the file it was asked to edit.
 	 */
 	public static function safeDelete(
 		srcFile: String, srcTypeName: String, memberName: String, reformat: Bool, scopeFiles: Array<{ file: String, source: String }>,
-		plugin: GrammarPlugin, refShape: RefShape
+		plugin: GrammarPlugin, refShape: RefShape, ?optsJson: String
 	): EditResult {
 		final parsed: Array<Parsed> = [];
 		for (entry in scopeFiles) {
@@ -73,7 +82,7 @@ final class SafeDelete {
 		if (opaque != null) return Err(opaque);
 
 		final refs: Array<{ file: String, count: Int }> = collectReferences(parsed, srcFile, memberName, memberSpanNN, refShape);
-		if (refs.length <= 0) return RemoveMember.removeMember(src.source, srcTypeName, memberName, reformat, plugin, true);
+		if (refs.length <= 0) return RemoveMember.removeMember(src.source, srcTypeName, memberName, reformat, plugin, true, optsJson);
 		final where: String = [for (r in refs) '${r.file} (${r.count})'].join(', ');
 		return Err('"$memberName" is still referenced — refusing to delete: $where');
 	}

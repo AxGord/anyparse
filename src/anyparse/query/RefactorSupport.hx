@@ -1424,12 +1424,26 @@ final class RefactorSupport {
 		// existed, and the loss was found by a human re-reading a file, not by a run.
 		//
 		// "Every writer-emit op" is the seventeen that reach a write THROUGH here —
-		// every addressed op, plus both `lint --fix` paths and `FixVerifier`. The
-		// MOVE and EXTRACT family does not: `MoveMember`, `InheritanceMove`
-		// (pull-up / push-down), `IntroduceParameterObject`, `ExtractInterface`,
-		// `ExtractSuperclass` and `NewFile` build their result elsewhere, so this
-		// question is not asked of them. That is a gap in the seam, not in the
-		// question.
+		// every addressed op, plus both `lint --fix` paths and `FixVerifier`. S50 wrote
+		// down that the whole MOVE and EXTRACT family bypasses this; S51 measured it and
+		// found that wrong. `ExtractInterface`, `ExtractSuperclass` and
+		// `IntroduceParameterObject` reach here through `editKeepingCanonical`, and
+		// `NewFile` has no edit list to ask about — it round-trips a whole file. The
+		// three that genuinely splice with `applyEdits` and never arrive are
+		// `MoveMember`, `MoveSymbol` (`apq move`) and `InheritanceMove`
+		// (pull-up / push-down).
+		//
+		// The question finds nothing on either side, and that is a fact about the
+		// OFFSETS rather than the routing: every insertion that family makes lands at the
+		// end of a member list or at the end of the module, so the byte after it is a `}`
+		// or EOF and the positive criterion below never fires.
+		// `unit.MoveExtractDocCensusTest` pins that by outcome, per op, so an offset
+		// change is what flips it.
+		//
+		// One real limit, in `editKeepingCanonical` rather than here: on a source that is
+		// NOT writer-canonical it answers `Ok(applyEdits(...))` on the `Err` path, so a
+		// refusal this function returns — this one included — is discarded for those
+		// three callers. The guard is advisory on a drifted file.
 		final splitDoc: Null<String> = docSplittingEdit(source, edits);
 		if (splitDoc != null) return Err(splitDoc);
 
