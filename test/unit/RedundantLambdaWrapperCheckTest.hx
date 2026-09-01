@@ -181,9 +181,123 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		);
 	}
 
-	public function testLocalValueBindingNotFlagged(): Void {
+	/**
+	 * An UNANNOTATED binder answers no function type, and the reduction has no evidence to stand on.
+	 * The annotated twin differs by the annotation alone.
+	 */
+	public function testUnannotatedBinderCalleeNotFlagged(): Void {
+		final head: String = 'class C {\n\tfunction f():Void {\n\t\tvar ok';
+		Assert.equals(0, violations('$head = (v:Int) -> true;\n\t\txs.foreach(p -> ok(p));\n\t}\n}').length);
+		Assert.equals(1, violations('$head:(Int)->Bool = (v:Int) -> true;\n\t\txs.foreach(p -> ok(p));\n\t}\n}').length);
+	}
+
+	/**
+	 * A PARAMETER annotated with a function type of the lambda's own arity, never written, is the
+	 * shape the binder gate exists to accept — `fs.FileIO.run`'s `runInIOThread(() -> work())` is
+	 * the site that motivated it.
+	 */
+	public function testAnnotatedParamCalleeFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f(work:()->Void):Void {\n\t\trun(() -> work());\n\t}\n}').length);
+	}
+
+	/** A local declaration carries the same evidence a parameter does. */
+	public function testAnnotatedLocalCalleeFlagged(): Void {
 		Assert.equals(
-			0, violations('class C {\n\tfunction f():Void {\n\t\tvar ok = (v:Int) -> true;\n\t\txs.foreach(p -> ok(p));\n\t}\n}').length
+			1,
+			violations(
+				'class C {\n\tstatic function go():Void {}\n\tfunction f():Void {\n\t\tfinal w:()->Void = go;\n\t\trun(() -> w());\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * Reassigning the binder is the whole reason the gate was a blanket refusal: re-reading it at
+	 * call time is what the wrapper does, and binding it once is then a different program. The
+	 * flagged twin differs from the refused one by the assignment alone.
+	 */
+	public function testWrittenBinderCalleeNotFlagged(): Void {
+		final head: String = 'class C {\n\tstatic function go():Void {}\n\tfunction f(w:()->Void):Void {\n\t\t';
+		Assert.equals(0, violations('${head}w = go;\n\t\trun(() -> w());\n\t}\n}').length);
+		Assert.equals(1, violations('${head}run(() -> w());\n\t}\n}').length);
+	}
+
+	/**
+	 * An OPTIONAL parameter in the binder's own type breaks the reduction at the type level — Haxe
+	 * refuses `(?Int) -> Void` where `(Int) -> Void` is expected — so the arity answers null. The
+	 * flagged twin differs by that one `?`.
+	 */
+	public function testOptionalInBinderTypeNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(h:(Int, ?Int)->Void):Void {\n\t\trun(p -> h(p));\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f(h:(Int)->Void):Void {\n\t\trun(p -> h(p));\n\t}\n}').length);
+	}
+
+	/**
+	 * A binder whose declared arity is not the lambda's is a different value, however it is spelled.
+	 * The flagged twin differs by the declared arity alone.
+	 */
+	public function testBinderArityMismatchNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(w:()->Void):Void {\n\t\trun(p -> w(p));\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f(w:(Int)->Void):Void {\n\t\trun(p -> w(p));\n\t}\n}').length);
+	}
+
+	/**
+	 * Resolution is by name over the file, so two binders of one name must AGREE. Twins of the same
+	 * arity answer the same question and are accepted — `fs.FileIO`, the tree that motivated this
+	 * gate, declares `work:()->T` in two neighbouring methods.
+	 */
+	public function testAgreeingBinderTwinsFlagged(): Void {
+		final one: String = '\tfunction f(w:()->Void):Void {\n\t\trun(() -> w());\n\t}\n';
+		Assert.equals(1, violations('class C {\n$one}').length);
+		Assert.equals(1, violations('class C {\n$one\tfunction g(w:()->Void):Void {}\n}').length);
+	}
+
+	/** Twins that DISAGREE about arity leave the occurrence unresolved, so neither is read. */
+	public function testDisagreeingBinderTwinsNotFlagged(): Void {
+		final one: String = '\tfunction f(w:()->Void):Void {\n\t\trun(() -> w());\n\t}\n';
+		Assert.equals(0, violations('class C {\n$one\tfunction g(w:(Int)->Void):Void {}\n}').length);
+		// An unannotated twin is the same unresolved answer, spelled differently.
+		Assert.equals(0, violations('class C {\n$one\tfunction g():Void {\n\t\tvar w = 1;\n\t}\n}').length);
+	}
+
+	/**
+	 * An OPTIONAL or REST parameter's annotation is not the type the binder HOLDS — `?w:()->Void` is
+	 * a `Null<()->Void>` and `...w:()->Void` a rest collection — so reading the annotation as the
+	 * binder's own function type would be a category error. The required twin differs by the sigil.
+	 */
+	public function testOptionalOrRestBinderNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(?w:()->Void):Void {\n\t\trun(() -> w());\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f(...w:()->Void):Void {\n\t\trun(() -> w());\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f(w:()->Void):Void {\n\t\trun(() -> w());\n\t}\n}').length);
+	}
+
+	/** A binder of a kind the rule may not read through poisons the name even when a readable twin exists. */
+	public function testUnreadableBinderTwinNotFlagged(): Void {
+		final one: String = '\tfunction f(w:()->Void):Void {\n\t\trun(() -> w());\n\t}\n';
+		Assert.equals(1, violations('class C {\n$one}').length);
+		Assert.equals(0, violations('class C {\n$one\tfunction g():Void {\n\t\tfor (w in xs) g();\n\t}\n}').length);
+	}
+
+	/**
+	 * A `for` and a `catch` binder are RE-bound, which is where a by-name answer over a file with no
+	 * scope model is least defensible, so neither contributes a span even though both shadow the
+	 * name. The flagged twin is the same call on a parameter.
+	 */
+	public function testRebindingBinderCalleeNotFlagged(): Void {
+		final head: String = 'class C {\n\tfunction f(v:()->Void):Void {\n\t\t';
+		Assert.equals(0, violations('${head}for (w in xs) run(() -> w());\n\t}\n}').length);
+		Assert.equals(0, violations('${head}try g() catch (w:Dynamic) run(() -> w());\n\t}\n}').length);
+		Assert.equals(1, violations('${head}run(() -> v());\n\t}\n}').length);
+	}
+
+	/**
+	 * A `case` binder is refused one gate EARLIER than the rest: the grammar projects a bare
+	 * lowercase pattern as a plain identifier, so the name never enters the binder set and reads as
+	 * a name nothing declares. Recorded because the refusal is real but not this gate's doing.
+	 */
+	public function testCaseBinderCalleeNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f(v:()->Void):Void {\n\t\tswitch v {\n\t\t\tcase w: run(() -> w());\n\t\t}\n\t}\n}').length
 		);
 	}
 

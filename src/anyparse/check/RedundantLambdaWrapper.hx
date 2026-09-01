@@ -2,9 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.FunctionTypeProvider;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -53,9 +56,23 @@ using Lambda;
  * On the callee, which must resolve to a DECLARED FUNCTION — the rule reduces to a method
  * value, and a method value differs from the wrapper wherever the callee is not one:
  *
- * - a bare name bound by a local / parameter / loop or catch binder anywhere in the file is
- *   refused. It may hold a function, but re-reading it at call time is what the wrapper does
- *   and binding it once is not the same program;
+ * - a bare name held by a BINDER is read on POSITIVE EVIDENCE and refused without it. Resolution
+ *   here is by NAME over the whole file, so the evidence has to hold for EVERY binder carrying
+ *   that name, and it is three facts: each of them is a REQUIRED parameter or a local declaration (an
+ *   optional or rest parameter is refused: its annotation is not the type the binder holds —
+ *   `?w:()->Void` holds a `Null<()->Void>`, `...w:()->Void` a rest collection. A `for` or
+ *   `catch` binder is refused: this rule carries no scope model, and a name that is RE-bound is
+ *   where a flat by-name answer is least defensible. A `case` binder never reaches the binder set
+ *   at all — the grammar projects a bare lowercase pattern as a plain identifier — so it is
+ *   refused one gate earlier, as a name nothing declares); each carries an explicit annotation the
+ *   grammar reads as a function type of this same arity with every parameter positional
+ *   (`FunctionTypeProvider` — an optional or rest one answers null, because Haxe refuses
+ *   `(?Int) -> Void` where `() -> Void` is expected); and the name is never WRITTEN anywhere in
+ *   the file, proven with the same scope-resolved write walker `prefer-final` trusts. Miss any one
+ *   and re-reading the name at call time, which is what the wrapper does, stops being the same
+ *   program as binding it once. Twins that AGREE are accepted rather than refused — two same-named
+ *   parameters of one arity answer the same question, and `fs.FileIO` in the tree that motivated
+ *   this rule has exactly that shape;
  * - a local function is accepted, an `inline` local function refused — a method value of one
  *   is `Cannot create closure on inline closure`, a hard compile error (measured on `-cpp`);
  * - a member of the ENCLOSING type is accepted; an inherited member is not visible here and
@@ -120,9 +137,21 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 		final seams: Seams = resolved;
 		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = CheckScan.parseAll(plugin, files);
 		final types: Map<String, Null<Map<String, Signature>>> = collectTypes(parsed, seams);
+		final typeInfo: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final functionTypes: Null<FunctionTypeProvider> = plugin is FunctionTypeProvider ? cast plugin : null;
+		final shape: RefShape = plugin.refShape();
 		final violations: Array<Violation> = [];
 		for (entry in parsed) {
-			final ctx: Ctx = { seams: seams, types: types, scope: fileScope(entry.tree, seams) };
+			final ctx: Ctx = {
+				seams: seams,
+				shape: shape,
+				types: types,
+				scope: fileScope(entry.tree, seams),
+				tree: entry.tree,
+				typeSources: typeInfo?.declaredTypeSources(entry.source),
+				functionTypes: functionTypes,
+				written: []
+			};
 			walk(violations, entry.file, entry.tree, null, ctx);
 		}
 		return violations;
@@ -216,11 +245,53 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	}
 
 	/**
-	 * What a BARE callee name resolves to — a local function first, else a member of the enclosing
-	 * type. Null when a value binder anywhere in the file shadows the name, or nothing declares it.
+	 * What a BARE callee name resolves to — the binder that shadows everything else first, then a
+	 * local function, else a member of the enclosing type. Null when nothing declares it.
 	 */
 	private static function bareSignature(name: String, enclosing: Null<Map<String, Signature>>, ctx: Ctx): Null<Signature> {
-		return ctx.scope.valueNames.exists(name) ? null : ctx.scope.localFns.get(name) ?? enclosing?.get(name);
+		return ctx.scope.valueNames.exists(name) ? binderSignature(name, ctx) : ctx.scope.localFns.get(name) ?? enclosing?.get(name);
+	}
+
+	/**
+	 * What a callee name held by a BINDER resolves to, on positive evidence only — see the type
+	 * doc's binder bullet for why each of the three facts is load-bearing. Null the moment one is
+	 * missing, which includes a grammar that exposes neither annotations nor function types.
+	 */
+	private static function binderSignature(name: String, ctx: Ctx): Null<Signature> {
+		final sources: Null<Map<Int, String>> = ctx.typeSources;
+		final provider: Null<FunctionTypeProvider> = ctx.functionTypes;
+		final spans: Null<Array<Span>> = ctx.scope.binderSpans[name];
+		if (spans == null || spans.length == 0) return null;
+		// Resolution here is by NAME over the whole file, so the answer has to hold for EVERY binder
+		// that carries it: one binder of a kind this rule may not read through, and the occurrence
+		// could be the one it cannot see.
+		if (sources == null || provider == null || ctx.scope.binderCounts[name] != spans.length) return null;
+		var agreed: Null<Int> = null;
+		for (span in spans) {
+			final annotation: Null<String> = sources[span.from];
+			if (annotation == null) return null;
+			final declared: Null<Int> = provider.functionTypeArity(annotation);
+			if (declared == null || (agreed != null && declared != agreed)) return null;
+			agreed = declared;
+		}
+		if (agreed == null || written(name, ctx)) return null;
+		// A narrowed local never reaches a non-nullable field of an anonymous structure literal.
+		final params: Int = agreed;
+		return { arity: params, isStatic: false, safe: true };
+	}
+
+	/**
+	 * Whether `name` is assigned anywhere in this file. One scope-resolved write scan per name,
+	 * memoized: the walker `prefer-final` trusts is COMPLETE for writes — every one of them is a
+	 * structural assignment / increment node, and the single reference a source scan would miss,
+	 * simple `'$x'` interpolation, can only ever be a read.
+	 */
+	private static function written(name: String, ctx: Ctx): Bool {
+		final known: Null<Bool> = ctx.written[name];
+		if (known != null) return known;
+		final any: Bool = Refs.find(name, ctx.tree, ctx.shape).exists(h -> h.kind == RefKind.Write);
+		ctx.written[name] = any;
+		return any;
 	}
 
 	/**
@@ -340,14 +411,19 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 
 	/** The file's shadowing value binders and its local function declarations. */
 	private static function fileScope(tree: QueryNode, seams: Seams): FileScope {
-		final scope: FileScope = { valueNames: [], localFns: [] };
+		final scope: FileScope = {
+			valueNames: [],
+			binderSpans: [],
+			binderCounts: [],
+			localFns: []
+		};
 		collectBindings(tree, scope, seams);
 		return scope;
 	}
 
 	private static function collectBindings(node: QueryNode, scope: FileScope, seams: Seams): Void {
 		final name: Null<String> = node.name;
-		if (name != null && seams.binderKinds.contains(node.kind)) scope.valueNames.set(name, true);
+		if (name != null && seams.binderKinds.contains(node.kind)) bind(scope, name, node, seams);
 		if (name != null && (seams.localFunctionKinds.contains(node.kind) || seams.inlineFunctionKinds.contains(node.kind))) {
 			scope.localFns.set(name, {
 				arity: countParams(node, seams),
@@ -360,10 +436,28 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 			for (i in 0...node.children.length - 1) {
 				final param: QueryNode = node.children[i];
 				final paramName: Null<String> = param.name;
-				if (param.kind == seams.identKind && paramName != null) scope.valueNames.set(paramName, true);
+				if (param.kind == seams.identKind && paramName != null) bind(scope, paramName, param, seams);
 			}
 		}
 		for (c in node.children) collectBindings(c, scope, seams);
+	}
+
+	/**
+	 * Record one binding of `name`. Every binder counts toward `binderCounts` — a name bound twice
+	 * is ambiguous and no reduction may read through it — while only a PARAMETER or a local
+	 * declaration contributes a span to `binderSpans`, because only those two hold their value for
+	 * the whole scope the lambda is created in. A loop / `case` / `catch` binder rebinds per
+	 * iteration or per arm, so the wrapper's re-read and the reduction's single capture can
+	 * genuinely differ.
+	 */
+	private static function bind(scope: FileScope, name: String, node: QueryNode, seams: Seams): Void {
+		scope.valueNames.set(name, true);
+		scope.binderCounts.set(name, (scope.binderCounts[name] ?? 0) + 1);
+		final span: Null<Span> = node.span;
+		if (span == null || !seams.reducibleBinderKinds.contains(node.kind)) return;
+		final spans: Array<Span> = scope.binderSpans[name] ?? [];
+		spans.push(span);
+		scope.binderSpans.set(name, spans);
 	}
 
 	private static function countParams(decl: QueryNode, seams: Seams): Int {
@@ -419,6 +513,9 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 			localFunctionKinds: shape.localFunctionKinds ?? [],
 			inlineFunctionKinds: shape.inlineFunctionKinds ?? [],
 			binderKinds: binderKindsOf(shape),
+			reducibleBinderKinds: (
+				shape.paramKinds ?? []
+			).filter(k -> k != shape.optionalParamKind && k != shape.restParamKind).concat(shape.localDeclKinds ?? []),
 			modifierKinds: modifiers,
 			metaKinds: plugin.metaShape().metaKinds,
 			staticModifierKind: shape.staticModifierKind,
@@ -452,14 +549,32 @@ private typedef Signature = {
 /** One file's shadowing value binders and its local function declarations. */
 private typedef FileScope = {
 	final valueNames: Map<String, Bool>;
+
+	/** How many times each name is bound, by ANY binder — a name bound twice is ambiguous. */
+	final binderCounts: Map<String, Int>;
+
+	/** The binding spans of the binder kinds a reduction may read through — see `bind`. */
+	final binderSpans: Map<String, Array<Span>>;
+
 	final localFns: Map<String, Signature>;
 };
 
 /** The resolved seams plus the per-run tables `walk` reads. */
 private typedef Ctx = {
 	final seams: Seams;
+	final shape: RefShape;
 	final types: Map<String, Null<Map<String, Signature>>>;
 	final scope: FileScope;
+	final tree: QueryNode;
+
+	/** Verbatim `:Type` annotations by binding-span start, or null when the grammar exposes none. */
+	final typeSources: Null<Map<Int, String>>;
+
+	/** The grammar's function-type reader, or null when it implements none. */
+	final functionTypes: Null<FunctionTypeProvider>;
+
+	/** Memo of "is this name ever written in this file", filled on demand by `written`. */
+	final written: Map<String, Bool>;
 };
 
 /** Every seam `RedundantLambdaWrapper` reads, resolved once per run. */
@@ -477,6 +592,7 @@ private typedef Seams = {
 	final localFunctionKinds: Array<String>;
 	final inlineFunctionKinds: Array<String>;
 	final binderKinds: Array<String>;
+	final reducibleBinderKinds: Array<String>;
 	final modifierKinds: Array<String>;
 	final metaKinds: Array<String>;
 	final staticModifierKind: Null<String>;

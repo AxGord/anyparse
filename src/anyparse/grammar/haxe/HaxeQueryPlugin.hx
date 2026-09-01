@@ -8,6 +8,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
+import anyparse.query.FunctionTypeProvider;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.ParsedRootProvider;
@@ -56,7 +57,7 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
-		implements ParsedRootProvider {
+		implements ParsedRootProvider implements FunctionTypeProvider {
 
 	/**
 	 * Binding-declaration kinds shared by `refShape` and `metaShape`
@@ -1644,4 +1645,13 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	/** The all-empty bundle returned when the source does not parse - the six maps are simply unpopulated, never null. */
+	/**
+	 * `FunctionTypeProvider` — the parameter count of a Haxe 4 arrow function type read
+	 * out of its annotation text; `HxFunctionTypeArity` documents the shapes that answer
+	 * and the ones that deliberately do not.
+	 */
+	public function functionTypeArity(typeSource: String): Null<Int> {
+		return HxFunctionTypeArity.of(typeSource);
+	}
+
 }
