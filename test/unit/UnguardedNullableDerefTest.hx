@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnguardedNullableDeref;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
@@ -15,8 +16,10 @@ import utest.Test;
  * flow-sensitive sibling of the point-wise `possible-null-dereference` — it catches
  * the binding-then-use `var u = m[k]; ...; u.f` that the point-wise check is blind to,
  * while a guard (`if (u != null)`, early return, `&&`, non-null reassignment, `??=`)
- * narrows the fact away. A non-nullable source, a direct-expression receiver, a
- * closure body, a plain param, and a multi-binding declaration are safe misses.
+ * narrows the fact away. A non-nullable source, a direct-expression receiver, a plain param, and a
+ * multi-binding declaration are safe misses. A closure body is not one: it is its own analysis
+ * unit, so a binding made and dereferenced inside a callback is flagged there, while a name the
+ * callback merely captures gets no facts at all.
  */
 class UnguardedNullableDerefTest extends Test {
 
@@ -366,6 +369,27 @@ class UnguardedNullableDerefTest extends Test {
 				'class C { function f(m:Map<String,Foo>) { var u = m[k]; { var w = m[k2]; Assert.isTrue(w != null); w.foo; } u.foo; } }'
 			).length
 		);
+	}
+
+	/**
+	 * A lambda body is its own analysis unit, so this check — like every consumer of
+	 * `NullFlow.analyze` — now sees inside one. It saw nothing there before: the flow walk refuses
+	 * to carry the enclosing state into a function value (it may run at any later time), and
+	 * `forEachFunctionUnit` named no lambda kind, so no lambda body was ever visited by anybody.
+	 * The binding, the deref and the guard are all INSIDE the lambda here, which is what makes
+	 * the fact sound: nothing about the enclosing unit is assumed. Both halves are asserted TOGETHER
+	 * against ONE fixture — the unguarded binding is reported BY NAME and its guarded sibling in the
+	 * same lambda is not — so neither "the lambda is not a unit" (0 findings) nor "the guard stopped
+	 * narrowing inside one" (2) can satisfy it.
+	 */
+	public function testNullableBindingInsideLambdaFlagged(): Void {
+		final src: String = 'class C { function f(m:Map<String,Foo>, a:Array<String>) { a.map(k -> { var u1 = m[k]; u1.foo;'
+			+ ' var u2 = m[k]; if (u2 != null) u2.foo; return k; }); } }';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('unguarded-nullable-deref', vs[0].rule);
+		final span: Null<Span> = vs[0].span;
+		Assert.equals('u1.foo', span == null ? 'no span' : src.substring(span.from, span.to));
 	}
 
 	private function violations(src: String): Array<Violation> {

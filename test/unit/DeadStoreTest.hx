@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan;
 import anyparse.check.DeadStore;
 import anyparse.check.Linter;
+import anyparse.check.NullFlow;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
@@ -463,6 +464,92 @@ class DeadStoreTest extends Test {
 		final src: String = 'class Base { public var d(get, never):Int; } class Sub extends Base {} class C {'
 			+ ' static function f(s:Sub):Int { var x = s.d; x = 1; return x; } }';
 		Assert.equals(0, indexedFixEdits(src).length);
+	}
+
+	/**
+	 * A store inside a lambda used to be analyzed by NOBODY. The enclosing unit REFUSES to walk a
+	 * function value — `testBareArrowMemoStoresExcluded` above is the corruption that refusal
+	 * prevents — and `forEachFunctionUnit` enumerated only `RefShape.functionKinds`, which names no
+	 * lambda spelling. So the identical body reported at top level and inside `function nm(v)` (a
+	 * `LocalFnStmt`, which IS in that set) and was silent inside `v -> { … }` and
+	 * `function(v) { … }`: 2 of 4, measured on the base binary. Every function VALUE is a unit now.
+	 */
+	public function testLambdaBodyIsItsOwnAnalysisUnit(): Void {
+		final src: String = 'class C { static function f(a:Array<Int>):Int { a.map(v -> { var x = v * 2; x = v * 3; return x; });'
+			+ ' var g = function(v:Int) { var y = v; y = 5; return y; }; function nm(v:Int) { var z = v; z = 7; return z; }'
+			+ ' var w = 1; w = 2; return w + g(1) + nm(2); } }';
+		final names: Array<String> = [for (v in violations(src)) v.message.split("'")[1]];
+		names.sort((a, b) -> a < b ? -1 : 1);
+		Assert.equals('w, x, y, z', names.join(', '));
+	}
+
+	/**
+	 * The two spellings whose host kind is in `RefactorSupport.nestedFunctionKinds` but NOT in
+	 * `RefShape.functionKinds`, so they fell through the same hole as the lambdas: the local
+	 * `inline function` (`LocalInlineFnStmt`, which the grammar gives its own ctor) and the named
+	 * function LITERAL in value position (`NamedFnExpr`). Both were silent on the base binary.
+	 */
+	public function testInlineLocalAndNamedLiteralAreUnits(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C { static function f(a:Int):Int { inline function li(q:Int):Int { var s = q; s = 1; return s; } return li(a); } }'
+			).length
+		);
+		Assert.equals(
+			1,
+			violations(
+				'class C { static function f(a:Int):Int { var g = function nn(v:Int):Int { var u = v; u = 2; return u; };'
+				+ ' return g(a); } }'
+			).length
+		);
+	}
+
+	/**
+	 * A lambda unit reports only its OWN names, so an outer local the lambda captures and writes is
+	 * unreportable from BOTH sides — it is not an own name of the lambda unit, and the enclosing
+	 * unit excludes every name the lambda touches. Without that, `x = 1` as a callback's last
+	 * statement would read as dead on every path while the enclosing code reads it on the next
+	 * invocation; the S54 memo and accumulator pins above are the measured cost of getting it wrong.
+	 */
+	public function testLambdaCapturedOuterLocalStaysUnreported(): Void {
+		Assert.equals(
+			0, violations('class C { static function f(a:Array<Int>):Int { var root = 0; a.map(r -> root = r); return root; } }').length
+		);
+	}
+
+	/**
+	 * `fix` never re-derives liveness — it acts on `run`'s spans — so the report and the edit are
+	 * separate failures. The lambda-body initializer strips exactly like any other, and the result
+	 * compiles (verified with `haxe --interp` on the four-spelling fixture: same output before and
+	 * after).
+	 */
+	public function testLambdaDeadInitializerStrips(): Void {
+		assertFix(
+			'class C { static function f(a:Array<Int>):Void { a.map(v -> { var x = v * 2; x = v * 3; return x; }); } }', 'var x;',
+			'var x = v * 2'
+		);
+	}
+
+	/**
+	 * The PARSED-source direction of unit discovery, the killer for "lambda kinds dropped from
+	 * `forEachFunctionUnit`". Every function-value spelling the grammar projects must yield a body
+	 * to `each`, and the two arrow forms are why the body cannot be found by
+	 * `RefShape.functionBodyKinds` alone: they carry it BARE — `v -> v + 1` is
+	 * `ThinArrow(Required v, Add)`, `(v) -> { … }` is `ThinParenLambdaExpr(Required v, BlockExpr)`, `(v, w = 1) => …` is
+	 * `ParenLambdaExpr(Required v, Required w, …)` — while `function(v)` wraps it in `BlockBody` /
+	 * `ExprBody`. All seven function-value spellings the Haxe grammar projects are here.
+	 */
+	public function testEveryFunctionValueSpellingBecomesAUnit(): Void {
+		final src: String = 'class C { static function f(a:Array<Int>):Void { a.map(v -> v + 1); a.map((v) -> { return v; });'
+			+ ' var p = (v, w = 1) => v + w; var e = function(v:Int) { return v; }; var n = function nn(v:Int) { return v; };'
+			+ ' function lf(v:Int) { return v; } inline function li(v:Int) { return v; } } }';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
+		Assert.notNull(tree);
+		final bodies: Array<String> = [];
+		if (tree != null) NullFlow.forEachFunctionUnit(tree, plugin.refShape(), (body, params) -> bodies.push(body.kind));
+		Assert.equals(8, bodies.length, 'unit bodies were: ' + bodies.join(', '));
 	}
 
 	private function violations(src: String): Array<Violation> {

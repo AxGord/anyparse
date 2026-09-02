@@ -112,10 +112,12 @@ private typedef FixCtx = {
  * - **String interpolation**: a simple `'$name'` projects as a distinct
  *   identifier kind (`RefShape.stringInterpIdentKind`), counted as a read.
  *
- * Only a unit's own names (parameters plus locally-declared `var` / `final`s,
- * excluding closure-internal declarations) are ever reported — a field or
- * captured outer local has unknowable readers. Lambda-expression bodies are
- * not separate units (mirrors `NullFlow`); local named functions are.
+ * Only a unit's own names (parameters plus locally-declared `var` / `final`s, excluding
+ * closure-internal declarations) are ever reported — a field or captured outer local has
+ * unknowable readers. Every function VALUE is its own unit (mirrors `NullFlow`): a lambda in any
+ * spelling, the named literal, the local `function` and `inline function`. That is what makes a
+ * store inside a callback reportable at all while a write to a name the callback CAPTURED stays
+ * silent from both sides — see `NullFlow.forEachFunctionUnit`.
  *
  * ## Partition with `unused-local`
  *

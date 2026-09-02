@@ -695,6 +695,7 @@ import unit.SetDocSliceTest;
 import unit.SetModifierSliceTest;
 import unit.ShadowingCaseBinderCheckTest;
 import unit.ShadowingLocalCheckTest;
+import unit.ShadowingParameterCheckTest;
 import unit.ShardPlanTest;
 import unit.ShortenTypeRefCheckTest;
 import unit.SimplifyBooleanBranchAssignmentCheckTest;
@@ -1396,6 +1397,7 @@ class RunTests {
 		addCase(new UnusedCaseBinderCheckTest());
 		addCase(new ShadowingCaseBinderCheckTest());
 		addCase(new ShadowingLocalCheckTest());
+		addCase(new ShadowingParameterCheckTest());
 		addCase(new RedundantCaseBodyCheckTest());
 		addCase(new EmptyCaseArmCheckTest());
 		addCase(new UnnecessarySwitchCheckTest());

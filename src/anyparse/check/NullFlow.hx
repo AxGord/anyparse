@@ -161,6 +161,10 @@ private typedef FlowCtx = {
  *   and intersects the exit back, so a write inside the RHS never leaks a fact onto the skip path; a plain `??` fallback gets the same conditional join. Narrowing from a condition never keeps a fact for a name the condition itself writes — that comparison may predate the write.
  * - **Closures.** A name mutated inside any nested function value is excluded
  *   from both polarities for the whole function (a closure call could reassign it).
+ *   The value's own body is not skipped, only separated: it is ANALYZED, as a unit
+ *   of its own with its own names (`forEachFunctionUnit`), so a fact established
+ *   inside a callback is never carried out of it and one established outside is
+ *   never carried in.
  * - **Opaque subtrees.** Macro-reification (`RefShape.opaqueKinds`) is not descended into, and metadata annotations (`META_KINDS`) are skipped entirely — their arguments are compile-time data, never runtime code.
  * - **Auxiliary facts (laundered predicates, aliases, exists-guards).** A Bool
  *   local bound EXACTLY to a null-comparison of a plain own-name ident records a
@@ -305,19 +309,52 @@ final class NullFlow {
 	}
 
 	/**
-	 * Enumerate every function unit in `root` (`RefShape.functionKinds`), calling
-	 * `each(body, paramNames)` with the unit's body node and its parameter names.
-	 * The shared unit-discovery walk of the flow engines (`NullFlow` and the
-	 * `dead-store` liveness walk).
+	 * Enumerate every function unit in `root`, calling `each(body, paramNames)` with the unit's body
+	 * node and its parameter names. The shared unit-discovery walk of the flow engines (`NullFlow`
+	 * and the `dead-store` liveness walk).
+	 *
+	 * A unit is a function DECLARATION (`RefShape.functionKinds`) or a function VALUE
+	 * (`RefactorSupport.nestedFunctionKinds` — every lambda spelling, the named literal, the local
+	 * `inline function`). Both halves are needed and neither is optional: the engines already REFUSE
+	 * to walk a function value with the enclosing unit's state (it may run at any later time), so a
+	 * spelling that is in neither set is analyzed by NOBODY. That was the state until this walk read
+	 * the value kinds: `dead-store` reported the dead initializer in `function nm(v) { var z = …;
+	 * z = …; }` and at top level, and was silent on the identical body written `v -> { … }` or
+	 * `function(v) { … }` — 2 of 4, measured. The same silence covered all seven flow checks, whose
+	 * consumers never fired inside any lambda at all.
+	 *
+	 * Finding the BODY takes two rules because a lambda need not carry a body MARKER. `function(v)`
+	 * projects one (`BlockBody` / `ExprBody`, both in `RefShape.functionBodyKinds`) and is found by
+	 * kind; an arrow lambda projects its body bare — `v -> v + 1` is `ThinArrow(Required v, Add)`,
+	 * `v -> { … }` is `ThinArrow(Required v, BlockExpr)` — so for a function VALUE with no marker
+	 * child the body is the LAST child, provided it is not a
+	 * parameter or a type annotation. That proviso is a grammar-agnostic guard, not a measured gate:
+	 * no Haxe input reaches it — an arrow lambda always ends in its body, and every spelling that can
+	 * carry a return-type hint also carries a body marker the kind test finds first — and no test
+	 * flips it. It stands because this walk reads `RefShape` for any grammar, and one whose function
+	 * value can be signature-only would otherwise be handed a PARAMETER node as a body.
+	 *
+	 * A unit reports only its OWN names, so a captured outer local written inside a lambda stays
+	 * unreportable in both directions: it is not an own name of the lambda unit, and the enclosing
+	 * unit excludes every name the lambda touches.
 	 */
 	public static function forEachFunctionUnit(root: QueryNode, shape: RefShape, each: (QueryNode, Array<String>) -> Void): Void {
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		final bodyKinds: Array<String> = shape.functionBodyKinds ?? [];
 		if (functionKinds.length == 0 || bodyKinds.length == 0) return;
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
+		final typeChildKinds: Array<String> = shape.typeAnnotationKinds ?? [];
+		final valueKinds: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
+		function unitBody(node: QueryNode): Null<QueryNode> {
+			final wrapped: Null<QueryNode> = node.children.find(c -> bodyKinds.contains(c.kind));
+			if (wrapped != null) return wrapped;
+			if (!valueKinds.contains(node.kind) || node.children.length == 0) return null;
+			final last: QueryNode = node.children[node.children.length - 1];
+			return paramKinds.contains(last.kind) || typeChildKinds.contains(last.kind) ? null : last;
+		}
 		function findFns(node: QueryNode): Void {
-			if (functionKinds.contains(node.kind)) {
-				final body: Null<QueryNode> = node.children.find(c -> bodyKinds.contains(c.kind));
+			if (functionKinds.contains(node.kind) || valueKinds.contains(node.kind)) {
+				final body: Null<QueryNode> = unitBody(node);
 				if (body != null) {
 					final paramNames: Array<String> = [];
 					for (c in node.children) {

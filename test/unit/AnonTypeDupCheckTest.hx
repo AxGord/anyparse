@@ -137,7 +137,7 @@ class AnonTypeDupCheckTest extends Test {
 	}
 
 	public function testRegisteredInBuiltinsAndOffByDefault(): Void {
-		Assert.equals(177, Linter.builtins().length);
+		Assert.equals(178, Linter.builtins().length);
 		Assert.notNull(Linter.byId('anon-type-dup'));
 		final files: Array<{ file: String, source: String }> = [for (i in 0...3) { file: 'a$i.hx', source: SHAPE }];
 		final config: LintConfig = LintConfig.parse('{}');
