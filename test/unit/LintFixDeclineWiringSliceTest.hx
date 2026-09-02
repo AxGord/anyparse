@@ -96,7 +96,10 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.equals(own.length, row.declined, 'the findings it could not fix are counted as declined');
 		Assert.equals(1, row.reasons.length, 'one reason, the guard\'s: ${row.reasons}');
 		if (row.reasons.length == 0) return;
-		Assert.isTrue(row.reasons[0].text.indexOf('IfStmt') != -1, 'the reason names the construct: ${row.reasons[0].text}');
+		Assert.isTrue(
+			row.reasons[0].text.indexOf('the `if` at') != -1,
+			'the reason names the construct by the word the author wrote: ${row.reasons[0].text}'
+		);
 		// CONTROL for the `unseen` filter in `gateRefusalLines`: a refusal the DECLINE row already
 		// carries must not be repeated as an unaccounted-for one. Drop that filter and this goes red
 		// while the later-pass pin below stays green.
@@ -175,7 +178,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final declared: Map<String, String> = [];
 		final lines: String = Cli.unfixedFixLedger(ledger, declared, [], []).join('');
 		Assert.isTrue(lines.indexOf('unused-local') != -1, 'the rule reaches the report: $lines');
-		Assert.isTrue(lines.indexOf('IfStmt') != -1, 'and the block carries the guard\'s own sentence: $lines');
+		Assert.isTrue(lines.indexOf('the `if` at') != -1, 'and the block carries the guard\'s own sentence: $lines');
 		#else
 		Assert.pass('non-sys target');
 		#end

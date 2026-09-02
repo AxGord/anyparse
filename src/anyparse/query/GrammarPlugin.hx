@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -238,6 +239,25 @@ interface GrammarPlugin {
 	 * (binary formats) — the check then no-ops, like `stringFoldSupport`.
 	 */
 	public function controlFlowSupport(): Null<ControlFlowSupport>;
+
+	/**
+	 * Every NON-CODE region of `source` — comment, string literal, regex literal — as
+	 * `[from, to)` byte spans in source order, by THIS grammar's lexical rules.
+	 *
+	 * The sibling of `controlFlowSupport()` for the question "is this offset real code?", and
+	 * the seam that keeps a comment scan out of the engine: what opens a comment, what quotes
+	 * a string, whether a regex literal exists at all and what may hide inside its body are
+	 * grammar facts, and the Haxe answers to them used to sit in `anyparse.query` where a
+	 * second grammar could not reach them. Takes raw source and needs no parse, exactly as
+	 * `parseFile` / `writeRoundTrip` do.
+	 *
+	 * A grammar with no comment and no literal concept returns an empty array, which reads as
+	 * "every byte is code". That is the conservative answer for the masking consumers — an
+	 * unmasked region only ever costs an extra occurrence, never a missed one — but NOT for
+	 * `BodySlotGuard` / `Patch`, which use it to decide that a slot holding only a comment is
+	 * empty. A grammar that HAS comments must answer them here.
+	 */
+	public function lexicalRegions(source: String): Array<LexRegion>;
 
 	/**
 	 * Optional: the grammar's boolean-expression simplification capability,

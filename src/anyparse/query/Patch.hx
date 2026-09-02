@@ -107,7 +107,7 @@ final class Patch {
 		final orphan: Null<String> = docOrphanRefusal(source, tree, sorted, plugin);
 		if (orphan != null) return Err(discarded(orphan, multi));
 		return switch RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson) {
-			case Ok(text, rewrites): verbatimSpliceIntact(source, synthesised, text, rewrites);
+			case Ok(text, rewrites): verbatimSpliceIntact(source, synthesised, text, rewrites, plugin);
 			case failed: failed;
 		}
 	}
@@ -545,9 +545,9 @@ final class Patch {
 	 * so the comment case leaves rather than being kept as one.
 	 */
 	private static function verbatimSpliceIntact(
-		source: String, edits: Array<{ span: Span, text: String }>, result: String, rewrites: Null<Int>
+		source: String, edits: Array<{ span: Span, text: String }>, result: String, rewrites: Null<Int>, plugin: GrammarPlugin
 	): EditResult {
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final lines: Array<String> = result.replace('\r\n', '\n').split('\n');
 		for (edit in edits) {
 			final wanted: Array<String> = edit.text.replace('\r\n', '\n').split('\n');

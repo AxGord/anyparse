@@ -10,6 +10,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.FunctionTypeProvider;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.ParsedRootProvider;
 import anyparse.query.Pattern;
@@ -1389,6 +1390,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function controlFlowSupport(): Null<ControlFlowSupport> {
 		return new HaxeControlFlowSupport();
+	}
+
+	public function lexicalRegions(source: String): Array<LexRegion> {
+		return HaxeLexicalRegions.scan(source);
 	}
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> {

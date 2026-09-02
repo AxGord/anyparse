@@ -489,6 +489,34 @@ class ImportBlockOrderCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * T230, REFUTED and pinned as a control: a plain import from ANOTHER package between two
+	 * `unit.*` runs does NOT split the block, so a misplaced import after it is still reported.
+	 *
+	 * The claim was that `test/RunTests.hx` had a blind spot — its `import utest.Runner;` splitting
+	 * the ~700 `unit.*` imports into two trivially-sorted blocks, letting a misplaced one pass. It
+	 * does not: a run ends at a blank line, a `using` / wildcard / alias, a block comment or a
+	 * non-import declaration, and a plain import is none of those. Measured on the base build, the
+	 * real file reported `import 'unit.HxSoleArgGluedCloseDedentTest' is out of order in its block`
+	 * and one `--fix` pass sorted the whole thing, tail included.
+	 *
+	 * Green at base BY CONSTRUCTION, and a control rather than a regression pin: what would flip it
+	 * is `ImportOrder.runsOf` learning to break a run at a package change, which is the "blind spot"
+	 * this records as never having existed.
+	 */
+	public function testForeignPackageImportDoesNotSplitTheBlock(): Void {
+		final source: String =
+			'package app;\n\nimport unit.Alpha;\nimport unit.Charlie;\nimport utest.Runner;\nimport unit.Bravo;\n\nclass C {}\n';
+		final vs: Array<Violation> = violations(source);
+		Assert.equals(1, vs.length, 'the four imports are ONE block: ${[for (v in vs) v.message].join(' / ')}');
+		if (vs.length != 1) return;
+		Assert.isTrue(vs[0].message.contains("'unit.Bravo'"), 'and the import past the foreign one is the offender: ${vs[0].message}');
+		Assert.equals(
+			'package app;\n\nimport unit.Alpha;\nimport unit.Bravo;\nimport unit.Charlie;\nimport utest.Runner;\n\nclass C {}\n',
+			fixed(source), 'the fix sorts across it rather than around it'
+		);
+	}
+
 	// --- helpers -------------------------------------------------------------------
 
 	/**
