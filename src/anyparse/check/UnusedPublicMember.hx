@@ -6,6 +6,7 @@ import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
@@ -264,8 +265,11 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
 			if (info == null) continue;
-			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), entry.source);
-			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, entry.source, index, scope, info, ctx, branch);
+			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(
+				plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)
+			);
+			final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
+			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, entry.source, index, scope, info, ctx, branch, regions);
 		}
 		return out;
 	}
@@ -296,7 +300,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 */
 	private function considerClass(
 		out: Array<Violation>, cls: QueryNode, source: String, index: SymbolIndex, scope: SymbolIndex, host: FileInfo, ctx: Ctx,
-		branch: MemberBranchSeams
+		branch: MemberBranchSeams, regions: Array<LexRegion>
 	): Void {
 		final owner: Null<String> = cls.name;
 		if (owner == null) return;
@@ -304,7 +308,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		// A `@:build` macro can generate the call the scan cannot see; a `@:keep` class is reached
 		// by machinery no scan models; an `extern class` declares members of a foreign object.
 		if (declared == null || declared.hasKeep || declared.hasBuild || declared.isExtern) return;
-		final candidates: Array<Candidate> = unreferencedCandidates(cls, source, host.file, index, ctx, branch);
+		final candidates: Array<Candidate> = unreferencedCandidates(cls, source, host.file, index, ctx, branch, regions);
 		if (candidates.length == 0) return;
 		if (scope.transitivelyCarriesRtti(owner)) return;
 		final chain: Chain = { unresolved: false, generated: false };
@@ -362,7 +366,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 * span its own declaration occupies.
 	 */
 	private static function unreferencedCandidates(
-		cls: QueryNode, source: String, file: String, index: SymbolIndex, ctx: Ctx, branch: MemberBranchSeams
+		cls: QueryNode, source: String, file: String, index: SymbolIndex, ctx: Ctx, branch: MemberBranchSeams, regions: Array<LexRegion>
 	): Array<Candidate> {
 		final out: Array<Candidate> = [];
 		// The run resets at EVERY member, not only at a method: a `public` or a `@:keep` written on a
@@ -397,7 +401,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			final memberName: String = name;
 			final memberSpan: Span = span;
 			final host: QueryNode = RefactorSupport.memberHostOf(cls, child);
-			final region: Span = RefactorSupport.docExtendedSpan(source, RefactorSupport.declGroupSpan(child, host, memberSpan));
+			final region: Span = RefactorSupport.docExtendedSpan(source, RefactorSupport.declGroupSpan(child, host, memberSpan), regions);
 			if (provablyUnreferenced(memberName, file, source, region, index, ctx)) out.push({
 				name: memberName,
 				span: memberSpan,

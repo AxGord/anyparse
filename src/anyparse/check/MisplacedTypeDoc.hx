@@ -156,14 +156,14 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 		final gapTo: Null<Span> = header.decls[1].span;
 		if (gapFrom == null || gapTo == null) return null;
 		if (source.substring(gapFrom.to, gapTo.from).indexOf(DOC_OPEN) < 0) return null;
-		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final docs: Array<CommentTok> = [
 			for (tok in comments)
 				if (RefactorSupport.isDocBlock(source, tok) && tok.from >= gapFrom.to && tok.to <= gapTo.from) tok
 		];
 		return if (docs.length != 1)
 			null
-		else if (CheckScan.hasDocBefore(source, CheckScan.docBlockEnds(source), header.anchor))
+		else if (CheckScan.hasDocBefore(source, CheckScan.docBlockEnds(source, plugin.lexicalRegions(source)), header.anchor))
 			null
 		else
 			{ doc: docs[0], anchor: header.anchor, name: header.name };

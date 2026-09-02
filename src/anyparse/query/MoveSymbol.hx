@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.ImportOrder.ImportAnchor;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -271,7 +272,9 @@ final class MoveSymbol {
 		//     the new path, and every file that reached the moved type through
 		//     a MODULE import of the source keeps that statement or gains one.
 		//     Computed BEFORE the move via the index.
-		buildImporterEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName);
+		buildImporterEdits(
+			editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName, plugin.lexicalRegions
+		);
 		if (oldImportPath != null)
 			statementlessRepairEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, target, destFile, plugin);
 
@@ -296,11 +299,11 @@ final class MoveSymbol {
 						'the type "$typeName" is module-private and $cursorFile still references it after the move — '
 						+ 'a private type cannot be imported from another module; make it public or move its uses too'
 					);
-			} else if (namesAnyOf(cursorSource, moved, referenceExclusions(cursorInfo, cut))) {
+			} else if (namesAnyOf(cursorSource, moved, referenceExclusions(cursorInfo, cut), plugin.lexicalRegions(cursorSource))) {
 				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, plugin, newImportPath);
 				if (insert != null) editsFor(editsByFile, cursorFile).push(insert);
 			}
-			destinationImportEdits(editsByFile, target, destSource, declText, oldImportPath, newImportPath);
+			destinationImportEdits(editsByFile, target, destSource, declText, oldImportPath, newImportPath, plugin.lexicalRegions);
 		}
 
 		// 7d. Cut the decl from the source file — LAST, because `cutEditSpan` has to see every other
@@ -369,6 +372,7 @@ final class MoveSymbol {
 		// runs once per dependency name on each side.
 		final files: Array<FileInfo> = index.allFiles();
 		final carried: Array<String> = [];
+		final destRegions: Array<LexRegion> = plugin.lexicalRegions(destSource);
 		for (dep in depNames) {
 			// A DOTTED type path is ONE leaf, so `dep` can be `Mod.Sub`. Its head is not resolved by
 			// any import — `import q.Mod;` does NOT make `Mod.Sub` legal (`Type not found : Mod` on
@@ -421,7 +425,9 @@ final class MoveSymbol {
 			// type, with no diagnostic anywhere. `wanted == null` is NOT a licence to skip the gate —
 			// the source binding is then merely unnameable, and it is exactly the case the base engine
 			// fell through on for a stdlib name, a package wildcard and a `#if`-guarded import alike.
-			final collision: Null<String> = carryCollision(dep, wanted, cursorInfo, destInfo, destSource, files, provider != null);
+			final collision: Null<String> = carryCollision(
+				dep, wanted, cursorInfo, destInfo, destSource, files, provider != null, destRegions
+			);
 			if (collision != null) return CarryErr(collision);
 			if (provider == null) continue;
 			// Already present in the destination → no carry. The PATH is part of the identity: two
@@ -441,9 +447,10 @@ final class MoveSymbol {
 			final line: String = importLineFor(provider, source);
 			if (!carried.contains(line)) carried.push(line);
 		}
-		return CarryOk(
-			usingLinesToCarry(source, tree, memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried)
-		);
+		return CarryOk(usingLinesToCarry(
+			source, tree, memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried,
+			plugin.lexicalRegions(destSource)
+		));
 	}
 
 	/**
@@ -869,7 +876,7 @@ final class MoveSymbol {
 	 * deliberate: it counts a mention in a comment or a string literal as a use, so the gate refuses
 	 * a move it cannot prove harmless rather than performing one it cannot prove safe.
 	 */
-	private static function referencedInDest(destSource: String, destInfo: FileInfo, name: String): Bool {
+	private static function referencedInDest(destSource: String, destInfo: FileInfo, name: String, regions: Array<LexRegion>): Bool {
 		// A type that declares `name` as a HEADER type parameter spells it all over its own body, and
 		// the reference scan cannot tell that from a reference to a module of that name — so those
 		// declarations' spans are excluded alongside the import statements. Excluded by SPAN rather
@@ -886,7 +893,7 @@ final class MoveSymbol {
 		final excluded: Array<Span> = [for (imp in destInfo.imports) imp.span];
 		for (t in destInfo.types) if (t.typeParamNames.contains(name) && !t.members.exists(m -> m.isStatic)) excluded.push(t.span);
 		return RefactorSupport.referencedUnqualifiedInRange(
-			destSource, name, 0, destSource.length, excluded, RefactorSupport.collectCommentRegions(destSource)
+			destSource, name, 0, destSource.length, excluded, RefactorSupport.collectCommentRegions(regions)
 		);
 	}
 
@@ -904,7 +911,7 @@ final class MoveSymbol {
 	 */
 	private static function carryCollision(
 		dep: String, wanted: Null<String>, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, files: Array<FileInfo>,
-		hasProvider: Bool
+		hasProvider: Bool, regions: Array<LexRegion>
 	): Null<String> {
 		final standing: Null<NameBinding> = bindingOf(dep, destInfo, files);
 		final guardedDest: Null<String> = guardedImportPath(dep, destInfo);
@@ -939,7 +946,7 @@ final class MoveSymbol {
 				'the moved code reaches "$dep" as $wanted with no import to carry, and nothing in the indexed scope binds '
 					+ '"$dep" at ${destInfo.file} — the moved code would take that file\'s own resolution, which this index '
 					+ 'cannot see; import "$dep" explicitly at the source first, or move the dependency too';
-			else if (referencedInDest(destSource, destInfo, dep) && !importCandidates(dep, destInfo, files).contains(wanted))
+			else if (referencedInDest(destSource, destInfo, dep, regions) && !importCandidates(dep, destInfo, files).contains(wanted))
 				// The destination NAMES `dep` and the index cannot say what it means by it, so it means
 				// something ambient — and a carried import outranks the ambient scope. Compile-proved
 				// twice: a stdlib `Date` and a root-package `Dep.hx` at the destination each came back
@@ -965,7 +972,7 @@ final class MoveSymbol {
 			// destination names `dep` anywhere, which is why this arm does not ask.
 			'${head}declares "$dep" itself (${standing.path}) — a module\'s own type wins over an import, so carrying the import '
 				+ 'would silently rebind the moved code to ${standing.path}; rename one of the two, or move the dependency too';
-		else if (referencedInDest(destSource, destInfo, dep))
+		else if (referencedInDest(destSource, destInfo, dep, regions))
 			// An import or a same-package sibling loses to the carried line instead, so the side that
 			// changes meaning is the destination's own code — and only if it names `dep` at all.
 			'${head}already binds "$dep" to ${standing.path} — Haxe resolves the last import, so carrying the import would '
@@ -1125,7 +1132,7 @@ final class MoveSymbol {
 	 */
 	private static function usingLinesToCarry(
 		source: String, tree: QueryNode, accessKinds: Array<String>, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo,
-		destSource: String, files: Array<FileInfo>, carried: Array<String>
+		destSource: String, files: Array<FileInfo>, carried: Array<String>, destRegions: Array<LexRegion>
 	): Array<String> {
 		if (!declHasMemberAccess(tree, declSpan, accessKinds)) return carried;
 		for (imp in cursorInfo.imports) if (!imp.guarded && imp.kind == ImportKind.Using) {
@@ -1150,7 +1157,12 @@ final class MoveSymbol {
 			// Skipping cannot rebind a TYPE name. It can leave the moved body's `x.f()` on whatever
 			// extension the destination already supplies — the same residual `carriedDestEdits` names —
 			// and otherwise it is a missing extension, which is loud.
-			if (carryCollision(RefactorSupport.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, files, true) != null) continue;
+			if (
+				carryCollision(
+					RefactorSupport.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, files, true, destRegions
+				) != null
+			)
+				continue;
 			final line: String = importLineFor(imp, source);
 			if (!carried.contains(line)) carried.push(line);
 		}
@@ -1599,8 +1611,8 @@ final class MoveSymbol {
 	 * 285-case Pony census, 4 of the 89 statements this slice newly writes are for a mention that appears
 	 * ONLY in a comment.
 	 */
-	private static function namesAnyOf(source: String, names: Array<String>, excluded: Array<Span>): Bool {
-		final comments: Array<Span> = RefactorSupport.collectCommentRegions(source);
+	private static function namesAnyOf(source: String, names: Array<String>, excluded: Array<Span>, regions: Array<LexRegion>): Bool {
+		final comments: Array<Span> = RefactorSupport.collectCommentRegions(regions);
 		return names.exists(n -> RefactorSupport.referencedUnqualifiedInRange(source, n, 0, source.length, excluded, comments));
 	}
 
@@ -1667,7 +1679,7 @@ final class MoveSymbol {
 	 */
 	private static function destinationImportEdits(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, target: MoveTarget, destSource: String, declText: String,
-		oldImportPath: String, newImportPath: String
+		oldImportPath: String, newImportPath: String, lexicalRegions: (String) -> Array<LexRegion>
 	): Void {
 		final destInfo: FileInfo = target.destInfo;
 		final typeName: String = target.typeName;
@@ -1685,7 +1697,8 @@ final class MoveSymbol {
 			final moduleWide: Bool = (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using)
 				&& oldImportPath == target.cursorInfo.module;
 			final keepsOthers: Bool = moduleWide && remaining.length > 0
-				&& (imp.kind == ImportKind.Using || namesAnyOf(destSource, remaining, destExcluded) || namesAnyOf(declText, remaining, []));
+				&& (imp.kind == ImportKind.Using || namesAnyOf(destSource, remaining, destExcluded, lexicalRegions(destSource))
+					|| namesAnyOf(declText, remaining, [], lexicalRegions(declText)));
 			// A `using` is NOT made redundant by the type becoming local: the static extension is
 			// granted by the STATEMENT, not by the declaration's module, and a module may `using` its
 			// own sub-type (compile-proved on 4.3.7). Deleting it took `3.twice()` away from a
@@ -1907,7 +1920,7 @@ final class MoveSymbol {
 			// The same scan the repoint walk runs, over the same names — the moved type's own plus the
 			// enum constructors an importer may be the only thing to spell. No cut: nothing of this
 			// file moves.
-			if (!namesAnyOf(src, moved, referenceExclusions(info))) continue;
+			if (!namesAnyOf(src, moved, referenceExclusions(info), plugin.lexicalRegions(src))) continue;
 			final insert: Null<{ span: Span, text: String }> = addImportEdit(src, info, plugin, newImportPath);
 			if (insert != null) editsFor(editsByFile, info.file).push(insert);
 		}
@@ -2046,7 +2059,7 @@ final class MoveSymbol {
 		final groupSpan: Span = RefactorSupport.declGroupSpan(declMatch.declNode, declParent, parseSpan);
 		return POk({
 			typeName: typeName,
-			declSpan: RefactorSupport.trailingTrimmedSpan(cursorSourceNN, groupSpan),
+			declSpan: RefactorSupport.trailingTrimmedSpan(cursorSourceNN, groupSpan, plugin.lexicalRegions.bind(cursorSourceNN)),
 			declGroupEnd: groupSpan.to,
 			declNode: declMatch.declNode,
 			declParent: declParent,
@@ -2082,7 +2095,8 @@ final class MoveSymbol {
 	 */
 	private static function buildImporterEdits(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, index: SymbolIndex, sourceOf: Map<String, String>,
-		oldImportPath: Null<String>, newImportPath: String, destFile: String, cursorInfo: FileInfo, typeName: String
+		oldImportPath: Null<String>, newImportPath: String, destFile: String, cursorInfo: FileInfo, typeName: String,
+		lexicalRegions: (String) -> Array<LexRegion>
 	): Void {
 		if (oldImportPath == null || oldImportPath == newImportPath) return;
 		// `moduleOf` reads the path's SHAPE (up to its first upper-initial segment) while
@@ -2116,7 +2130,7 @@ final class MoveSymbol {
 			// Keeping an import this file no longer needs costs a lint advisory; dropping one it
 			// does need costs the build — so both scans answer conservatively, and a name reached
 			// through a QUALIFIED path (which needs no import) is not counted by either.
-			final needsRemaining: Bool = plan.mainMoved && namesAnyOf(src, plan.remaining, excluded);
+			final needsRemaining: Bool = plan.mainMoved && namesAnyOf(src, plan.remaining, excluded, lexicalRegions(src));
 			// A file that ALSO spells the old path in a statement binding the type's OWN NAME gets the
 			// moved type from the repoint of that statement, so the module statement owes it nothing —
 			// without this the two both emitted the new path and the file came out with a duplicate
@@ -2130,7 +2144,7 @@ final class MoveSymbol {
 			final spellsOldPath: Bool = importer.imports.exists(
 				imp -> !imp.guarded && imp.kind != ImportKind.Alias && SymbolIndex.pathImportedBy(imp) == plan.oldPath
 			);
-			final needsMoved: Bool = !plan.mainMoved && !spellsOldPath && namesAnyOf(src, plan.moved, excluded);
+			final needsMoved: Bool = !plan.mainMoved && !spellsOldPath && namesAnyOf(src, plan.moved, excluded, lexicalRegions(src));
 			for (imp in importer.imports) {
 				final edit: Null<{ span: Span, text: String }> = importerStatementEdit(imp, src, plan, needsRemaining, needsMoved);
 				if (edit != null) editsFor(editsByFile, importer.file).push(edit);

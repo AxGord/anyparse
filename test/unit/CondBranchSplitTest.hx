@@ -2,6 +2,7 @@ package unit;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondBranchProjection;
+import anyparse.query.MemberBranchScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
@@ -269,6 +270,37 @@ class CondBranchSplitTest extends Test {
 		Assert.same(declOffsets(src, 'v'), readBindings(src, 'v'));
 	}
 
+	/**
+	 * MEMBER position: the comment tokens `MemberBranchScan.seamsOf` collects are what keeps a
+	 * `#else` written inside a COMMENT from splitting a modifier run — and until S60 nothing
+	 * asserted it. Handing `seamsOf` an empty comment set left the whole suite green, at base as
+	 * well as after the migration, so the gap is older than the move; this arm closes it.
+	 *
+	 * The fixture is discriminating by construction: `public` and the method are two children of
+	 * ONE member-position region, and the only thing between them is a commented-out `#else`.
+	 * Masked, they stay one run and the method is seen `public`; unmasked, the comment opens a
+	 * second branch and the method starts a fresh run with no modifier at all — which is exactly
+	 * how `missing-visibility` would invent a finding and `member-order` would misrank it.
+	 */
+	public function testACommentedOutElseDoesNotSplitAMemberRun(): Void {
+		// The `#else` has to START its line for the splitter to read it at all, so the comment that
+		// hides it is a BLOCK one — a `//` prefix would leave the fixture green with no masking.
+		final src: String = 'class C {\n\t#if flag\n\tpublic\n\t/*\n\t#else\n\t*/\n\tfunction a(): Void {}\n\t#end\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(src);
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, 'C', plugin.refShape().classDeclKinds ?? []);
+		Assert.notNull(decl);
+		if (decl == null) return;
+		final runKinds: Array<String> = [];
+		MemberBranchScan.eachTypeMember(
+			decl, plugin.refShape(), src, n -> RefactorSupport.FN_DECL_KINDS.contains(n.kind), (member, run) -> {
+				if (member.name == 'a') for (mod in run) runKinds.push(mod.kind);
+			},
+			plugin.lexicalRegions.bind(src)
+		);
+		Assert.equals('Public', runKinds.join(','), 'the modifier must survive the commented-out `#else`');
+	}
+
 	/** The statements of `body` inside a class + function, so a region lands in a `BlockBody`. */
 	private static inline function fn(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
@@ -306,7 +338,9 @@ class CondBranchSplitTest extends Test {
 		Assert.notNull(region);
 		return region == null
 			? []
-			: CondBranchProjection.conditionalBranchRuns(region, src, ELSE_KEYWORDS, RefactorSupport.collectCommentTokens(src)) ?? [];
+			: CondBranchProjection.conditionalBranchRuns(
+				region, src, ELSE_KEYWORDS, RefactorSupport.collectCommentTokens(new HaxeQueryPlugin().lexicalRegions(src))
+			) ?? [];
 	}
 
 	private static function branchTree(src: String): QueryNode {

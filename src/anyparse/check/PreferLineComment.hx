@@ -149,7 +149,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 
 	/** Every convertible block comment in `source`, in source order. */
 	private static function rewrites(source: String, plugin: GrammarPlugin, kinds: LineCommentKinds): Array<LineCommentRewrite> {
-		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final blocks: Array<CommentTok> = [for (tok in comments) if (!tok.isLine) tok];
 		if (blocks.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);

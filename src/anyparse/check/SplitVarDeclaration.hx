@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -141,7 +142,7 @@ final class SplitVarDeclaration implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final matches: Array<Match> = [];
-			collectMatches(tree, entry.source, blockedRegions(entry.source, seams), seams, matches);
+			collectMatches(tree, entry.source, blockedRegions(entry.source, seams, plugin.lexicalRegions(entry.source)), seams, matches);
 			for (m in matches) violations.push({
 				file: entry.file,
 				span: m.span,
@@ -161,7 +162,7 @@ final class SplitVarDeclaration implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
 		final matches: Array<Match> = [];
-		collectMatches(tree, source, blockedRegions(source, seams), seams, matches);
+		collectMatches(tree, source, blockedRegions(source, seams, plugin.lexicalRegions(source)), seams, matches);
 		final byKey: Map<String, Match> = [];
 		for (m in matches) byKey['${m.span.from}:${m.span.to}'] = m;
 
@@ -191,11 +192,11 @@ final class SplitVarDeclaration implements Check {
 	 * The regions no candidate may overlap: every comment token and every conditional-compilation
 	 * directive. Scanned ONCE per file -- both scans walk the whole source.
 	 */
-	private static function blockedRegions(source: String, s: Seams): Array<Span> {
+	private static function blockedRegions(source: String, s: Seams, regions: Array<LexRegion>): Array<Span> {
 		final out: Array<Span> = [
-			for (tok in RefactorSupport.collectCommentTokens(source)) new Span(tok.from, tok.to)
+			for (tok in RefactorSupport.collectCommentTokens(regions)) new Span(tok.from, tok.to)
 		];
-		for (directive in CondDirectives.scan(source, s.shape)) out.push(directive.span);
+		for (directive in CondDirectives.scan(source, s.shape, () -> regions)) out.push(directive.span);
 		return out;
 	}
 

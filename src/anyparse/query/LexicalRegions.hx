@@ -1,7 +1,5 @@
 package anyparse.query;
 
-import anyparse.grammar.haxe.HaxeLexicalRegions;
-
 using Lambda;
 
 /**
@@ -27,7 +25,7 @@ typedef LexRegion = {
  * The grammar-agnostic half of the lexical-region model: the region TYPES above, and the two
  * pure helpers over a region ARRAY that every consumer shares.
  *
- * The SCAN that produces the array is a property of the GRAMMAR, and now lives with it —
+ * The SCAN that produces the array is a property of the GRAMMAR, and lives with it —
  * `HaxeLexicalRegions` in the Haxe grammar package, reached through
  * `GrammarPlugin.lexicalRegions(source)`, the seam beside `controlFlowSupport()`. Everything
  * the scan knows is Haxe syntax: single-quote interpolation, `${ … }` holes, `~/ … /`
@@ -35,63 +33,51 @@ typedef LexRegion = {
  * invariant 4 says a new language is a new package, never a core change, and a second
  * grammar could not have answered the same question without editing this file.
  *
- * ## `scan` / `skipStringLiteral` below are a DEPRECATED forwarder, not the seam
+ * ## There is NO forwarder any more — the deprecated `scan` / `skipStringLiteral` are GONE
  *
- * Both call `HaxeLexicalRegions` directly and so hardcode one grammar. They exist for the
- * callers that hold no `GrammarPlugin` to ask; where you have one, ask it.
+ * They hardcoded `HaxeLexicalRegions` inside this grammar-agnostic package for the callers that
+ * held no `GrammarPlugin` to ask. S55 measured that debt at 65 `collectCommentTokens` call sites
+ * across 49 files, plus `collectCommentRegions`, `collectNonCodeRegions`,
+ * `activeCodeIdentTokenOffset` and the private `headerScan` behind `typeHeaderInsertOffset` /
+ * `typeBodyBraceOffset`; S60 moved every one of them and deleted both functions.
+ * `unit.LexicalRegionsSeamTest.testNoQueryOrCheckModuleReachesTheHaxeGrammar` is the pin that keeps
+ * them gone: it enumerates the `anyparse.query` + `anyparse.check` modules that name
+ * `anyparse.grammar.haxe.*` and asserts the exact allow-list, so a new forwarder — or any other
+ * plugin-less reach into one grammar's lexer — fails a test instead of passing review.
  *
- * The callers still on the forwarder, RE-MEASURED, with what each one would cost to move:
+ * ## The seam the consumers use instead, and WHICH of the three shapes to pick
  *
- *  - `RefactorSupport.collectCommentTokens` — 65 call sites across 49 files: 55 sites in 41
- *    `check/` classes, whose `Check.run` / `Check.fix` already carry a plugin, 8 in 6 `query/`
- *    modules and 2 in tests. Most of it is therefore argument-passing rather than design — but
- *    `CondBranchProjection` and `MemberBranchScan` name no `GrammarPlugin` in ANY signature, so
- *    those two need a hop from their own callers first. It is 65 sites on the path that gates
- *    every DELETE in the tool, which is why it wants its own slice and not the tail of another,
- *    and it carries `collectCommentRegions` (6 sites / 5 files) and `InertRegions` with it.
- *  - `RefactorSupport.collectNonCodeRegions` — ONE caller, `CondDirectives.scan(source, shape)`,
- *    which is itself called from 24 sites across 9 files. Moving it is an improvement rather
- *    than a cost, since `scan` would take the plugin INSTEAD of the `RefShape` it derives from
- *    it — but it is those 24 sites, so it belongs with the item above.
- *  - `RefactorSupport.activeCodeIdentTokenOffset` — 4 call sites in 3 files, two of which reach
- *    it through a struct (`ExplicitType.ReturnSeams`) that would have to carry the plugin.
- *  - `RefactorSupport`'s own private token walk (`headerScan`), which needs `skipStringLiteral`
- *    alone. Private, but its two public callers `typeHeaderInsertOffset` / `typeBodyBraceOffset`
- *    have 2 sites each, in `ExtractInterface` / `ExtractSuperclass` and `ConstantHoist` /
- *    `FieldInitInConstructor`.
+ * A helper that is grammar-agnostic once handed regions takes `regions: Array<LexRegion>`; its
+ * caller asks `plugin.lexicalRegions(source)` ONCE and threads the array. That is the default, and
+ * it is what `RefactorSupport.collectCommentTokens` / `collectCommentRegions` /
+ * `collectNonCodeRegions` / `activeCodeIdentTokenOffset` / `docExtendedSpan` / `commentBlockAt` /
+ * `headerScan` and the two wrappers over it now take.
  *
- * `RefactorSupport.carriesAllowGrant` is OFF this forwarder as of S55: it had exactly one caller
- * (`SymbolIndex.sourceCarriesAllowGrant`) and `SymbolIndex.build` already receives the plugin, so
- * the index — the one run-scoped object that consumer already holds — now carries it. That is the
- * shape the rest of the debt should take where a run-scoped holder exists.
+ * TWO deliberate exceptions, each of which would otherwise cost a scan the pre-S60 code never paid:
  *
- * The recommended seam for the remainder is `Array<LexRegion>`, not `GrammarPlugin`: these
- * helpers are grammar-agnostic once they are handed regions, the caller then hoists ONE scan per
- * file (which these docs already ask for on performance grounds), and the plugin stops appearing
- * in signatures that have no other use for it.
+ *  - **A helper with its own CHEAP GUARD in front of the scan takes a `() -> Array<LexRegion>`**,
+ *    so the guard keeps its saving. `RefactorSupport.trailingTrimmedSpan` is the sharpest case —
+ *    its one-byte test keeps the whole-file lex off a path a caller may take once per MATCH (14337
+ *    times on one `ast --select --source` run, measured) — and `RefactorSupport.docSplittingEdit`
+ *    (called once per file per `lint --fix` pass with an EMPTY edit set), `CondDirectives.scan`,
+ *    `CondBranchProjection.branchAwareTree`, `MemberBranchScan.seamsOf` with its `eachTypeMember` /
+ *    `isGuardedMember` / `declaresMemberNamed` / `exclusiveSpansAt` wrappers,
+ *    `MissingVisibility.commentTokens` and `ConstantHoist.commentAbove` are the rest.
+ *  - **A helper that reads MORE THAN ONE source takes the plugin's own method as a value**,
+ *    `lexicalRegions: (String) -> Array<LexRegion>`, so regions can never be paired with the wrong
+ *    text. `Suppression.apply`, `Json.renderRefs`, `Cli.blastRefsSection` / `emitMentionsRefs`,
+ *    `MoveSymbol.buildImporterEdits` / `destinationImportEdits` and the `MoveMember` member-group
+ *    family take it. That is not decoration: the one real defect this migration introduced was a
+ *    single-array hop reaching `MoveSymbol.referencedInDest`, where the CURSOR file's regions
+ *    masked the DESTINATION file's text — invisible to every byte-identity gate, because no lint or
+ *    `--fix` path runs `move`.
  *
- * The consumers that DO hold a plugin ask it instead: `BodySlotGuard`, `Patch`,
+ * The consumers that hold a plugin and ask it directly: `BodySlotGuard`, `Patch`,
  * `RefactorSupport.classifyOccurrences`, `RefactorSupport.nameBoundInRange` and — since S55 —
  * `SymbolIndex.sourceCarriesAllowGrant`.
  */
 @:nullSafety(Strict)
 final class LexicalRegions {
-
-	/**
-	 * DEPRECATED — `GrammarPlugin.lexicalRegions(source)` is the seam; this forwards to the HAXE
-	 * scanner unconditionally. Kept for the plugin-less callers listed on the class.
-	 */
-	public static inline function scan(source: String): Array<LexRegion> {
-		return HaxeLexicalRegions.scan(source);
-	}
-
-	/**
-	 * DEPRECATED, and Haxe-only for the same reason as `scan`: index of the closing `quote` of the
-	 * string opened at `open`. `RefactorSupport`'s own token walk is the one caller.
-	 */
-	public static inline function skipStringLiteral(text: String, open: Int, quote: Int): Int {
-		return HaxeLexicalRegions.skipStringLiteral(text, open, quote);
-	}
 
 	/**
 	 * The lexically-scanned non-code region containing `offset`, or null when `offset` is code.

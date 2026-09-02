@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.CarriedEdits;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
@@ -294,7 +295,9 @@ final class MoveMember {
 
 		// Destination scaffold (fields + constructor) — either prepended to
 		// the moved-member insert (no dest ctor) or replacing a trivial one.
-		final destError: Null<String> = assembleDestination(prep, scaffoldFields, movedTextEdits, editsByFile, advisoryExtras);
+		final destError: Null<String> = assembleDestination(
+			prep, scaffoldFields, movedTextEdits, editsByFile, advisoryExtras, plugin.lexicalRegions
+		);
 		if (destError != null) return Err(destError);
 		final carryError: Null<String> = pushImportEdits(prep, typeRefShape, callerFilesNeedingImport, plugin, editsByFile);
 		if (carryError != null) return Err(carryError);
@@ -322,8 +325,10 @@ final class MoveMember {
 		return fieldName.startsWith('_') ? fieldName.substr(1) : fieldName;
 	}
 
-	private static inline function constructorGroupOf(decl: TypeDeclMatch, source: String, shape: RefShape): Null<MemberGroup> {
-		return memberGroupOf(decl, 'new', source, shape);
+	private static inline function constructorGroupOf(
+		decl: TypeDeclMatch, source: String, shape: RefShape, lexicalRegions: (String) -> Array<LexRegion>
+	): Null<MemberGroup> {
+		return memberGroupOf(decl, 'new', source, shape, lexicalRegions);
 	}
 
 	/**
@@ -337,14 +342,16 @@ final class MoveMember {
 	/**
 	 * All direct members of a type decl with their modifier / meta runs.
 	 */
-	private static function membersOf(decl: TypeDeclMatch, source: String, shape: RefShape): Array<MemberGroup> {
+	private static function membersOf(
+		decl: TypeDeclMatch, source: String, shape: RefShape, lexicalRegions: (String) -> Array<LexRegion>
+	): Array<MemberGroup> {
 		final out: Array<MemberGroup> = [];
 		// Branch-aware: a member a `#if` region declares is not a direct child of the type, and the scan
 		// that missed it made every consumer here — the move set, the sibling-field scan, the closure
 		// walk, the scaffold — behave as though it did not exist.
 		MemberBranchScan.eachTypeMember(
 			decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
-			(node, run) -> {
+			(node: QueryNode, run: Array<QueryNode>) -> {
 				final span: Null<Span> = node.span;
 				if (span == null) return;
 				final groupSpan: Span = MemberBranchScan.groupSpanOf(run, span);
@@ -353,7 +360,8 @@ final class MoveMember {
 					return s != null && s.from >= groupSpan.from && s.to <= span.from;
 				});
 				out.push({ member: node, modifiers: modifiers, groupSpan: groupSpan });
-			}
+			},
+			lexicalRegions.bind(source)
 		);
 		return out;
 	}
@@ -361,8 +369,10 @@ final class MoveMember {
 	/**
 	 * The member group named `memberName` on `decl`, or null.
 	 */
-	private static function memberGroupOf(decl: TypeDeclMatch, memberName: String, source: String, shape: RefShape): Null<MemberGroup> {
-		return membersOf(decl, source, shape).find(g -> g.member.name == memberName);
+	private static function memberGroupOf(
+		decl: TypeDeclMatch, memberName: String, source: String, shape: RefShape, lexicalRegions: (String) -> Array<LexRegion>
+	): Null<MemberGroup> {
+		return membersOf(decl, source, shape, lexicalRegions).find(g -> g.member.name == memberName);
 	}
 
 	/**
@@ -536,7 +546,8 @@ final class MoveMember {
 		final closureAdded: Array<String> = [for (name in effectiveNames) if (!memberNames.contains(name)) name];
 		final moved: Array<MovedMember> = [];
 		final memberError: Null<String> = resolveMovedMembers(
-			srcDecl, destHit.decl, srcSource, srcTypeName, destTypeName, effectiveNames, moved, destSource, plugin.refShape()
+			srcDecl, destHit.decl, srcSource, srcTypeName, destTypeName, effectiveNames, moved, destSource, plugin.refShape(),
+			plugin.lexicalRegions
 		);
 		if (memberError != null) return PErr(memberError);
 		final srcInfo: Null<FileInfo> = index.fileInfo(srcFile);
@@ -607,9 +618,9 @@ final class MoveMember {
 	 * blank lines on both sides leaves a double blank at the cut, so the
 	 * following blank line is swallowed.
 	 */
-	private static function cutSpanOf(srcSource: String, group: MemberGroup): Span {
+	private static function cutSpanOf(srcSource: String, group: MemberGroup, regions: Array<LexRegion>): Span {
 		return RefactorSupport.blankExtendedSpan(
-			srcSource, RefactorSupport.lineExtendedSpan(srcSource, RefactorSupport.docExtendedSpan(srcSource, group.groupSpan))
+			srcSource, RefactorSupport.lineExtendedSpan(srcSource, RefactorSupport.docExtendedSpan(srcSource, group.groupSpan, regions))
 		);
 	}
 
@@ -709,7 +720,7 @@ final class MoveMember {
 		final movedNames: Array<String> = [for (m in prep.moved) m.name];
 		final slices: String = [for (m in prep.moved) prep.srcSource.substring(m.cut.from, m.cut.to)].join('\n');
 		final candidates: Array<MemberGroup> = [
-			for (sibling in membersOf(prep.srcDecl, prep.srcSource, prep.shape)) {
+			for (sibling in membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions)) {
 				final siblingName: Null<String> = sibling.member.name;
 				if (
 					siblingName != null && sibling.member.span != null && !movedNames.contains(siblingName)
@@ -746,7 +757,8 @@ final class MoveMember {
 			mutableDeps: [],
 			missingDestFields: []
 		};
-		for (sibling in candidates) scanSibling(prep, sibling, hitsByName[sibling.member.name ?? ''] ?? [], movedTextEdits, state);
+		for (sibling in candidates)
+			scanSibling(prep, sibling, hitsByName[sibling.member.name ?? ''] ?? [], movedTextEdits, state, plugin.lexicalRegions);
 		final problems: Array<String> = siblingProblems(prep, state, scaffold);
 		return problems.length > 0
 			? {
@@ -915,7 +927,7 @@ final class MoveMember {
 	 */
 	private static function scanSibling(
 		prep: MovePrep, sibling: MemberGroup, hits: Array<RefHit>, movedTextEdits: Array<{ span: Span, text: String }>,
-		state: SiblingScanState
+		state: SiblingScanState, lexicalRegions: (String) -> Array<LexRegion>
 	): Void {
 		final siblingSpan: Null<Span> = sibling.member.span;
 		if (siblingSpan == null) return;
@@ -935,7 +947,9 @@ final class MoveMember {
 				// FINAL field IF the destination declares a same-named final
 				// field wired with the same value at construction.
 				if (FINAL_FIELD_KINDS.contains(sibling.member.kind)) {
-					final destField: Null<MemberGroup> = memberGroupOf(prep.destDecl, siblingName, prep.destSource, prep.shape);
+					final destField: Null<MemberGroup> = memberGroupOf(
+						prep.destDecl, siblingName, prep.destSource, prep.shape, lexicalRegions
+					);
 					if (destField == null || !FINAL_FIELD_KINDS.contains(destField.member.kind))
 						pushUnique(state.missingDestFields, siblingName);
 					else
@@ -977,14 +991,14 @@ final class MoveMember {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(prep.srcSource) : [];
 		final fields: Array<MemberGroup> = [
-			for (g in membersOf(prep.srcDecl, prep.srcSource, prep.shape))
+			for (g in membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions))
 				if (RefactorSupport.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
 		];
 		if (viaField != null) {
 			final g: Null<MemberGroup> = fields.find(f -> f.member.name == viaField);
 			if (g == null)
 				return scaffold
-					? scaffoldViaResult(prep, viaField)
+					? scaffoldViaResult(prep, viaField, plugin.lexicalRegions)
 					: VErr('"${prep.srcTypeName}" has no instance field "$viaField" (--via)');
 			final gSpan: Null<Span> = g.member.span;
 			final declaredType: Null<String> = gSpan != null ? declared[gSpan.from] : null;
@@ -1002,7 +1016,7 @@ final class MoveMember {
 		return switch candidates {
 			case [one]: VOk(one);
 			case []: scaffold
-				? scaffoldViaResult(prep, deriveViaName(prep.destTypeName))
+				? scaffoldViaResult(prep, deriveViaName(prep.destTypeName), plugin.lexicalRegions)
 				: VErr(
 					'caller(s) of the moved instance member(s) remain in "${prep.srcTypeName}" but it has no field of '
 					+ 'type "${prep.destTypeName}" to route them through — add one '
@@ -1061,7 +1075,7 @@ final class MoveMember {
 			case VScaffold(name): { name: name, scaffold: true };
 		};
 		if (via.scaffold) {
-			final srcCtor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape);
+			final srcCtor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions);
 			final ctorSpan: Null<Span> = srcCtor?.member.span;
 			if (ctorSpan != null && instanceHits.exists(h -> h.offset >= ctorSpan.from && h.offset < ctorSpan.to))
 				return 'a moved instance member is called inside the "${prep.srcTypeName}" constructor — the scaffolded via '
@@ -1072,7 +1086,7 @@ final class MoveMember {
 			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
 		}
 		if (via.scaffold) {
-			final error: Null<String> = scaffoldViaField(prep, via.name, scaffoldFields, editsByFile);
+			final error: Null<String> = scaffoldViaField(prep, via.name, scaffoldFields, editsByFile, plugin.lexicalRegions);
 			if (error != null) return error;
 			advisoryExtras.push(
 				'--scaffold added via field "${via.name}" wired `new ${prep.destTypeName}(...)` in the "${prep.srcTypeName}" constructor'
@@ -1107,23 +1121,25 @@ final class MoveMember {
 	 */
 	private static function resolveMovedMembers(
 		srcDecl: TypeDeclMatch, destDecl: TypeDeclMatch, srcSource: String, srcTypeName: String, destTypeName: String,
-		memberNames: Array<String>, moved: Array<MovedMember>, destSource: String, shape: RefShape
+		memberNames: Array<String>, moved: Array<MovedMember>, destSource: String, shape: RefShape,
+		lexicalRegions: (String) -> Array<LexRegion>
 	): Null<String> {
 		for (name in memberNames) {
 			if (moved.exists(m -> m.name == name)) return 'member "$name" is listed twice';
 			if (name == 'new') return 'cannot move a constructor';
-			final group: Null<MemberGroup> = memberGroupOf(srcDecl, name, srcSource, shape);
+			final group: Null<MemberGroup> = memberGroupOf(srcDecl, name, srcSource, shape, lexicalRegions);
 			if (group == null) return 'type "$srcTypeName" has no member "$name"';
 			final memberSpan: Null<Span> = group.member.span;
 			if (memberSpan == null) return 'member "$name" carries no span';
 			// Finding a guarded member is not licence to move it: cutting it out of its branch and
 			// pasting it into the destination unguarded hands it to builds that never declared it,
 			// and leaves the emptied directives behind.
-			if (MemberBranchScan.isGuardedMember(srcDecl, shape, srcSource, group.member))
+			if (MemberBranchScan.isGuardedMember(srcDecl, shape, srcSource, group.member, lexicalRegions.bind(srcSource)))
 				return
 					'"$name" is declared inside a conditional-compilation region — moving it out of its branch would change which builds '
 						+ 'declare it';
-			if (memberGroupOf(destDecl, name, destSource, shape) != null) return 'type "$destTypeName" already declares a member "$name"';
+			if (memberGroupOf(destDecl, name, destSource, shape, lexicalRegions) != null)
+				return 'type "$destTypeName" already declares a member "$name"';
 			// Re-bind: Strict does not propagate narrowing into anonymous
 			// struct fields.
 			final groupNN: MemberGroup = group;
@@ -1153,7 +1169,7 @@ final class MoveMember {
 				name: name,
 				group: groupNN,
 				span: memberSpanNN,
-				cut: cutSpanOf(srcSource, groupNN),
+				cut: cutSpanOf(srcSource, groupNN, lexicalRegions(srcSource)),
 				isStatic: modifierStatic || hostStatic
 			});
 		}
@@ -1176,17 +1192,18 @@ final class MoveMember {
 		srcDecl: TypeDeclMatch, srcTree: QueryNode, srcSource: String, seed: Array<String>, plugin: GrammarPlugin
 	): Array<String> {
 		final names: Array<String> = seed.copy();
-		final allMembers: Array<MemberGroup> = membersOf(srcDecl, srcSource, plugin.refShape());
+		final allMembers: Array<MemberGroup> = membersOf(srcDecl, srcSource, plugin.refShape(), plugin.lexicalRegions);
 		final byName: Map<String, MemberGroup> = [];
 		for (g in allMembers) {
 			final nm: Null<String> = g.member.name;
 			if (nm != null) byName[nm] = g;
 		}
+		final srcRegions: Array<LexRegion> = plugin.lexicalRegions(srcSource);
 		while (true) {
 			final cuts: Array<Span> = [
 				for (name in names) {
 					final g: Null<MemberGroup> = byName[name];
-					if (g != null) cutSpanOf(srcSource, g);
+					if (g != null) cutSpanOf(srcSource, g, srcRegions);
 				}
 			];
 			final added: Array<String> = instanceCallsInto(allMembers, names, cuts, srcSource, srcTree, plugin);
@@ -1338,7 +1355,7 @@ final class MoveMember {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		if (provider == null) return { error: 'cannot --scaffold: the grammar does not expose declared field types', fields: [] };
 		final typeSources: Map<Int, String> = provider.declaredTypeSources(prep.srcSource);
-		final members: Array<MemberGroup> = membersOf(prep.srcDecl, prep.srcSource, prep.shape);
+		final members: Array<MemberGroup> = membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions);
 		final fields: Array<ScaffoldField> = [];
 		for (name in names) {
 			final g: Null<MemberGroup> = members.find(mm -> mm.member.name == name);
@@ -1361,10 +1378,11 @@ final class MoveMember {
 	 * it in place; a real constructor is refused.
 	 */
 	private static function applyDestScaffold(
-		prep: MovePrep, fields: Array<ScaffoldField>, editsByFile: Map<String, Array<{ span: Span, text: String }>>
+		prep: MovePrep, fields: Array<ScaffoldField>, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
+		lexicalRegions: (String) -> Array<LexRegion>
 	): { error: Null<String>, prependBlock: String } {
 		final block: String = scaffoldDestBlock(fields);
-		final ctor: Null<MemberGroup> = constructorGroupOf(prep.destDecl, prep.destSource, prep.shape);
+		final ctor: Null<MemberGroup> = constructorGroupOf(prep.destDecl, prep.destSource, prep.shape, lexicalRegions);
 		if (ctor == null) return { error: null, prependBlock: block };
 		if (!isTrivialCtor(prep.destSource, ctor)) return {
 			error: '"${prep.destTypeName}" already has a constructor — --scaffold targets an empty destination '
@@ -1382,9 +1400,10 @@ final class MoveMember {
 	 * when the source type has no constructor to wire into.
 	 */
 	private static function scaffoldViaField(
-		prep: MovePrep, viaName: String, fields: Array<ScaffoldField>, editsByFile: Map<String, Array<{ span: Span, text: String }>>
+		prep: MovePrep, viaName: String, fields: Array<ScaffoldField>, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
+		lexicalRegions: (String) -> Array<LexRegion>
 	): Null<String> {
-		final ctor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape);
+		final ctor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape, lexicalRegions);
 		if (ctor == null) return 'cannot --scaffold via field "$viaName": "${prep.srcTypeName}" has no constructor to wire it in';
 		final fieldFrom: Int = lineStartOf(prep.srcSource, ctor.groupSpan.from);
 		editsFor(editsByFile, prep.srcFile).push({
@@ -1411,11 +1430,14 @@ final class MoveMember {
 	 */
 	private static function assembleDestination(
 		prep: MovePrep, scaffoldFields: Array<ScaffoldField>, movedTextEdits: Array<{ span: Span, text: String }>,
-		editsByFile: Map<String, Array<{ span: Span, text: String }>>, advisoryExtras: Array<String>
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, advisoryExtras: Array<String>,
+		lexicalRegions: (String) -> Array<LexRegion>
 	): Null<String> {
 		var destPrepend: String = '';
 		if (scaffoldFields.length > 0) {
-			final scaf: { error: Null<String>, prependBlock: String } = applyDestScaffold(prep, scaffoldFields, editsByFile);
+			final scaf: { error: Null<String>, prependBlock: String } = applyDestScaffold(
+				prep, scaffoldFields, editsByFile, lexicalRegions
+			);
 			if (scaf.error != null) return scaf.error;
 			destPrepend = scaf.prependBlock;
 			advisoryExtras.push('--scaffold generated ${scaffoldFields.length} final field(s) + constructor on "${prep.destTypeName}"');
@@ -1436,8 +1458,8 @@ final class MoveMember {
 	 * already collides with a source member (a duplicate field or an
 	 * ambiguous reference would otherwise be generated silently).
 	 */
-	private static function scaffoldViaResult(prep: MovePrep, name: String): ViaResult {
-		return memberGroupOf(prep.srcDecl, name, prep.srcSource, prep.shape) != null
+	private static function scaffoldViaResult(prep: MovePrep, name: String, lexicalRegions: (String) -> Array<LexRegion>): ViaResult {
+		return memberGroupOf(prep.srcDecl, name, prep.srcSource, prep.shape, lexicalRegions) != null
 			? VErr(
 				'cannot --scaffold via field "$name": "${prep.srcTypeName}" already declares a member with that name '
 				+ '— pass a different --via'

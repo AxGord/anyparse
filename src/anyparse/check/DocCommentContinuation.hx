@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.FragmentedDocComment.CommentTok;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -114,7 +115,7 @@ final class DocCommentContinuation implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
-		for (entry in files) scan(violations, entry.file, entry.source);
+		for (entry in files) scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source));
 		return violations;
 	}
 
@@ -129,7 +130,7 @@ final class DocCommentContinuation implements Check {
 		// ONE lexical pass for the whole file, not one per finding: `fix` is handed every violation
 		// of this rule in the file at once, and a 77-finding block comment paid 77 full re-lexes.
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (tok in RefactorSupport.collectCommentTokens(source)) if (!tok.isLine) {
+		for (tok in RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source))) if (!tok.isLine) {
 			final block: Null<JudgedBlock> = judgedBlock(source, tok);
 			if (block == null) continue;
 			for (line in block.lines) if (flagged.contains(line.from))
@@ -151,8 +152,8 @@ final class DocCommentContinuation implements Check {
 	}
 
 	/** Scan every block comment in `source`, flagging each interior line that breaks the block's prefix. */
-	private static function scan(out: Array<Violation>, file: String, source: String): Void {
-		for (tok in RefactorSupport.collectCommentTokens(source)) if (!tok.isLine) {
+	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
+		for (tok in RefactorSupport.collectCommentTokens(regions)) if (!tok.isLine) {
 			final block: Null<JudgedBlock> = judgedBlock(source, tok);
 			if (block == null) continue;
 			for (line in block.lines) {

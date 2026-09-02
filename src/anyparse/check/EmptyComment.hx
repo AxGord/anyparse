@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -82,7 +83,7 @@ final class EmptyComment implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
-		for (entry in files) scan(violations, entry.file, entry.source);
+		for (entry in files) scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source));
 		return violations;
 	}
 
@@ -103,8 +104,8 @@ final class EmptyComment implements Check {
 	}
 
 	/** Scan every comment token in `source`, flagging each content-free one that is not a paragraph separator. */
-	private static function scan(out: Array<Violation>, file: String, source: String): Void {
-		final toks: Array<CommentToken> = RefactorSupport.collectCommentTokens(source);
+	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
+		final toks: Array<CommentToken> = RefactorSupport.collectCommentTokens(regions);
 		for (i => tok in toks) if (isEmpty(source, tok) && !isParagraphSeparator(source, toks, i)) out.push({
 			file: file,
 			span: new Span(tok.from, tok.to),

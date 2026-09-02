@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -54,7 +55,9 @@ final class CondBranchProjection {
 	 * names `CondBranch`: wrapping a run in a node the grammar does not treat as a statement list
 	 * would HIDE those statements from every check that walks one.
 	 */
-	public static function branchAwareTree(tree: QueryNode, source: String, shape: RefShape, support: Null<ControlFlowSupport>): QueryNode {
+	public static function branchAwareTree(
+		tree: QueryNode, source: String, shape: RefShape, support: Null<ControlFlowSupport>, regions: () -> Array<LexRegion>
+	): QueryNode {
 		final condKind: Null<String> = shape.conditionalMemberKind;
 		final elseKeywords: Null<Array<String>> = shape.conditionalElseKeywords;
 		if (condKind == null || elseKeywords == null || support == null) return tree;
@@ -72,7 +75,7 @@ final class CondBranchProjection {
 			condKind: kind,
 			elseKeywords: keywords,
 			blockKinds: blockKinds,
-			comments: RefactorSupport.collectCommentTokens(source)
+			comments: RefactorSupport.collectCommentTokens(regions())
 		});
 	}
 

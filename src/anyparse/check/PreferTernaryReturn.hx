@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -86,7 +87,10 @@ final class PreferTernaryReturn implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree != null)
-				walk(violations, entry.file, entry.source, tree, seams, null, RefactorSupport.collectCommentTokens(entry.source));
+				walk(
+					violations, entry.file, entry.source, tree, seams, null,
+					RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source))
+				);
 		}
 		return violations;
 	}
@@ -105,7 +109,8 @@ final class PreferTernaryReturn implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectFixes(tree, source, seams, null, flagged, edits, RefactorSupport.collectCommentTokens(source));
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		collectFixes(tree, source, seams, null, flagged, edits, RefactorSupport.collectCommentTokens(regions), regions);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -146,7 +151,7 @@ final class PreferTernaryReturn implements Check {
 	/** Mirror `walk` — including its `retType` rebinding: collect one replacement edit per flagged `if`/`return` pair. */
 	private static function collectFixes(
 		node: QueryNode, source: String, s: Seams, retType: Null<String>, flagged: Array<String>,
-		edits: Array<{ span: Span, text: String }>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+		edits: Array<{ span: Span, text: String }>, comments: Array<{ from: Int, to: Int, isLine: Bool }>, regions: Array<LexRegion>
 	): Void {
 		final childRetType: Null<String> = childReturnType(node, source, s, retType);
 		if (s.support.blockKinds().contains(node.kind)) {
@@ -156,11 +161,11 @@ final class PreferTernaryReturn implements Check {
 				if (match == null) continue;
 				final ifSpan: Null<Span> = match.ifNode.span;
 				if (!(ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}'))) continue;
-				final edit: Null<{ span: Span, text: String }> = buildEdit(match, source, s.shape);
+				final edit: Null<{ span: Span, text: String }> = buildEdit(match, source, s.shape, regions);
 				if (edit != null) edits.push(edit);
 			}
 		}
-		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments);
+		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments, regions);
 	}
 
 	/**
@@ -252,7 +257,9 @@ final class PreferTernaryReturn implements Check {
 	}
 
 	/** Build the `return cond ? a : b;` edit spanning the `if` through the trailing `return`. */
-	private static function buildEdit(match: TernaryMatch, source: String, shape: RefShape): Null<{ span: Span, text: String }> {
+	private static function buildEdit(
+		match: TernaryMatch, source: String, shape: RefShape, regions: Array<LexRegion>
+	): Null<{ span: Span, text: String }> {
 		final ifSpan: Null<Span> = match.ifNode.span;
 		final condSpan: Null<Span> = match.condition.span;
 		final thenSpan: Null<Span> = match.thenValue.span;
@@ -262,7 +269,7 @@ final class PreferTernaryReturn implements Check {
 		final condition: String = wrapCondition(source.substring(condSpan.from, condSpan.to), match.condition.kind, shape);
 		final thenSource: String = source.substring(thenSpan.from, thenSpan.to);
 		final elseSource: String = source.substring(elseSpan.from, elseSpan.to);
-		final split: PreservedComments = preservedComments(source, ifSpan, thenSpan, nextSpan, [condSpan, thenSpan, elseSpan]);
+		final split: PreservedComments = preservedComments(source, ifSpan, thenSpan, nextSpan, [condSpan, thenSpan, elseSpan], regions);
 		// The guard's own trailing comment rides its branch; every other comment
 		// keeps the leading-block hoist. The broken layout is what makes the
 		// line-style case legal (a `//` glued before the `:` would comment the
@@ -339,11 +346,11 @@ final class PreferTernaryReturn implements Check {
 	 * `hoisted` is a newline-terminated block, empty when nothing hoists.
 	 */
 	private static function preservedComments(
-		source: String, ifSpan: Span, thenSpan: Span, nextSpan: Span, kept: Array<Span>
+		source: String, ifSpan: Span, thenSpan: Span, nextSpan: Span, kept: Array<Span>, regions: Array<LexRegion>
 	): PreservedComments {
 		final out: StringBuf = new StringBuf();
 		var branchTrailing: Null<String> = null;
-		for (tok in RefactorSupport.collectCommentTokens(source)) if (!(tok.from < ifSpan.from || tok.to > nextSpan.to)) {
+		for (tok in RefactorSupport.collectCommentTokens(regions)) if (!(tok.from < ifSpan.from || tok.to > nextSpan.to)) {
 			var insideKept: Bool = false;
 			for (k in kept) if (tok.from >= k.from && tok.to <= k.to) {
 				insideKept = true;

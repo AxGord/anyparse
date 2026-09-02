@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
@@ -135,7 +136,7 @@ final class NarrowLocalScope implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (m in collectMatches(tree, entry.source, resolved)) violations.push({
+			for (m in collectMatches(tree, entry.source, resolved, plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.declSpan,
 				rule: RULE_ID,
@@ -154,7 +155,7 @@ final class NarrowLocalScope implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byKey: Map<String, Match> = [];
-		for (m in collectMatches(tree, source, seams)) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
+		for (m in collectMatches(tree, source, seams, plugin.lexicalRegions(source))) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -198,10 +199,10 @@ final class NarrowLocalScope implements Check {
 	}
 
 	/** Collect every sinkable declaration reachable under `node`, memoizing one `Refs` walk per distinct name. */
-	private static function collectMatches(tree: QueryNode, source: String, s: Seams): Array<Match> {
+	private static function collectMatches(tree: QueryNode, source: String, s: Seams, regions: Array<LexRegion>): Array<Match> {
 		final out: Array<Match> = [];
 		final hitsByName: Map<String, Array<RefHit>> = [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
 		walk(tree, tree, source, comments, s, hitsByName, out);
 		return out;
 	}

@@ -461,7 +461,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	public function projectBranchAware(tree: QueryNode, source: String): QueryNode {
-		return CondBranchProjection.branchAwareTree(tree, source, refShape(), controlFlowSupport());
+		return CondBranchProjection.branchAwareTree(tree, source, refShape(), controlFlowSupport(), lexicalRegions.bind(source));
 	}
 
 	/**

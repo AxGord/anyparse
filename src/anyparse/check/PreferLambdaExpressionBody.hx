@@ -431,7 +431,7 @@ final class PreferLambdaExpressionBody implements Check {
 		final found: Array<Match> = [];
 		// The module root is shielded: nothing follows a top-level declaration but another
 		// one, so no `else` can reach a lambda that inherits its exposure from there.
-		walk(tree, source, RefactorSupport.collectCommentTokens(source), s, found, true, false);
+		walk(tree, source, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), s, found, true, false);
 		if (found.length == 0) return found;
 		// No writer, or a writer that declines this file: fail closed. A grammar with no
 		// writer makes the check inert rather than leaving every collapse unmeasured.

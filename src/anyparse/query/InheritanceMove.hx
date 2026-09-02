@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -117,14 +118,18 @@ final class InheritanceMove {
 		}
 
 		final shape: RefShape = plugin.refShape();
-		final resolved: Null<Resolved> = resolveMember(srcDeclNN, memberName, src.source, shape);
+		final resolved: Null<Resolved> = resolveMember(srcDeclNN, memberName, src.source, shape, plugin.lexicalRegions(src.source));
 		if (resolved == null) return Err('class "$srcType" has no member "$memberName"');
 		final m: Resolved = resolved;
-		final refusal: Null<String> = memberRefusal(m, memberName, targetType, targetDecl, target.source, shape);
+		final refusal: Null<String> = memberRefusal(
+			m, memberName, targetType, targetDecl, target.source, shape, plugin.lexicalRegions(target.source)
+		);
 		if (refusal != null) return Err(refusal);
 
 		if (dir == Up) {
-			final stranded: Array<String> = referencedSubMembers(srcDeclNN, memberName, m.node, src.source, shape);
+			final stranded: Array<String> = referencedSubMembers(
+				srcDeclNN, memberName, m.node, src.source, shape, plugin.lexicalRegions.bind(src.source)
+			);
 			if (stranded.length > 0)
 				return Err(
 					'"$memberName" references subclass member(s) not present on "$targetType": ${stranded.join(', ')} '
@@ -155,7 +160,8 @@ final class InheritanceMove {
 	 * target. Null when the member may move.
 	 */
 	private static function memberRefusal(
-		m: Resolved, memberName: String, targetType: String, targetDecl: TypeDeclMatch, targetSource: String, shape: RefShape
+		m: Resolved, memberName: String, targetType: String, targetDecl: TypeDeclMatch, targetSource: String, shape: RefShape,
+		regions: Array<LexRegion>
 	): Null<String> {
 		return if (memberName == 'new')
 			'cannot move a constructor'
@@ -166,7 +172,7 @@ final class InheritanceMove {
 		else if (m.guarded)
 			'"$memberName'
 				+ '" is declared inside a conditional-compilation region — moving it out of its branch would change which builds declare it'
-		else if (resolveMember(targetDecl, memberName, targetSource, shape) != null)
+		else if (resolveMember(targetDecl, memberName, targetSource, shape, regions) != null)
 			'type "$targetType" already declares a member "$memberName"'
 		else
 			null;
@@ -263,7 +269,9 @@ final class InheritanceMove {
 	 * Resolve the member named `name` in `decl`: its node, cut span (doc +
 	 * whole line included), and static / override flags. Null when absent.
 	 */
-	private static function resolveMember(decl: TypeDeclMatch, name: String, source: String, shape: RefShape): Null<Resolved> {
+	private static function resolveMember(
+		decl: TypeDeclMatch, name: String, source: String, shape: RefShape, regions: Array<LexRegion>
+	): Null<Resolved> {
 		var hit: Null<Resolved> = null;
 		// Branch-aware, so a member a `#if` region declares is found rather than reported absent. It is
 		// still refused as a MOVE (`guarded`) — cutting it out of its branch would change which builds
@@ -276,12 +284,13 @@ final class InheritanceMove {
 				final spanNN: Span = span;
 				hit = {
 					node: child,
-					cut: cutSpanOf(source, MemberBranchScan.groupSpanOf(run, spanNN)),
+					cut: cutSpanOf(source, MemberBranchScan.groupSpanOf(run, spanNN), regions),
 					isStatic: run.exists(m -> m.kind == 'Static'),
 					isOverride: run.exists(m -> m.kind == 'Override'),
-					guarded: MemberBranchScan.isGuardedMember(decl, shape, source, child)
+					guarded: MemberBranchScan.isGuardedMember(decl, shape, source, child, () -> regions)
 				};
-			}
+			},
+			() -> regions
 		);
 		return hit;
 	}
@@ -295,7 +304,7 @@ final class InheritanceMove {
 	 * name may over-refuse, which only ever keeps a member in place.
 	 */
 	private static function referencedSubMembers(
-		subDecl: TypeDeclMatch, movingName: String, moved: QueryNode, source: String, shape: RefShape
+		subDecl: TypeDeclMatch, movingName: String, moved: QueryNode, source: String, shape: RefShape, regions: () -> Array<LexRegion>
 	): Array<String> {
 		final memberNames: Map<String, Bool> = [];
 		// Branch-aware, and silently wrong when it is not: a member left behind inside a `#if` region
@@ -306,7 +315,8 @@ final class InheritanceMove {
 			(child, _) -> {
 				final nm: Null<String> = child.name;
 				if (nm != null && nm != movingName) memberNames[nm] = true;
-			}
+			},
+			regions
 		);
 		final found: Map<String, Bool> = [];
 		function walk(node: QueryNode): Void {
@@ -324,9 +334,9 @@ final class InheritanceMove {
 	 * and whole physical line(s), plus a bounding blank line when the decl
 	 * is fenced by blanks on both sides. Mirrors `MoveMember.cutSpanOf`.
 	 */
-	private static function cutSpanOf(source: String, groupSpan: Span): Span {
+	private static function cutSpanOf(source: String, groupSpan: Span, regions: Array<LexRegion>): Span {
 		return RefactorSupport.blankExtendedSpan(
-			source, RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan))
+			source, RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan, regions))
 		);
 	}
 

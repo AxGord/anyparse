@@ -252,7 +252,7 @@ class LexicalRegionAgreementTest extends Test {
 	public function testInertRegionsAgreesWithTheScannerOnBothHalves(): Void {
 		final source: String = "class C {\n\t// note\n\tvar a = 'text ${x} tail';\n\tvar b = \"whole\";\n\tvar c = ~/re/g;\n}";
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(source);
-		final inert: Array<Span> = InertRegions.of(source, tree);
+		final inert: Array<Span> = InertRegions.of(tree, new HaxeQueryPlugin().lexicalRegions(source));
 		final comments: Array<Span> = scannerCommentSpans(source);
 		final literals: Array<Span> = scannerLiteralSpans(source);
 		Assert.isTrue(inert.length > comments.length, 'the literal half must contribute spans');
@@ -276,11 +276,14 @@ class LexicalRegionAgreementTest extends Test {
 		final source: String = "class C { var a = 'lead ${Dep.x} tail'; }";
 		final holeAt: Int = source.indexOf('Dep');
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(source);
-		final inert: Array<Span> = InertRegions.of(source, tree);
+		final inert: Array<Span> = InertRegions.of(tree, new HaxeQueryPlugin().lexicalRegions(source));
 		Assert.isFalse(coversOffset(inert, holeAt), 'a name read inside a hole must keep its veto');
 		final leadAt: Int = source.indexOf('lead');
 		Assert.isTrue(coversOffset(inert, leadAt), 'the text around a hole is inert');
-		Assert.equals(0, InertRegions.of(source, null).length, 'without a tree only the comment half remains, and this source has none');
+		Assert.equals(
+			0, InertRegions.of(null, new HaxeQueryPlugin().lexicalRegions(source)).length,
+			'without a tree only the comment half remains, and this source has none'
+		);
 	}
 
 	/**

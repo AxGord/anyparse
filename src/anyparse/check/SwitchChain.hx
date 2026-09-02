@@ -300,7 +300,7 @@ final class SwitchChain {
 		if (parsed == null) return [];
 		final tree: QueryNode = parsed;
 		final scope: ChainScope = { root: tree, resolveIndex: lazyIndexOf([{ file: '', source: source }], plugin, index) };
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> = [];
 		eachHead(tree, seams, hostAccepts, head -> {
 			final span: Null<Span> = head.span;

@@ -270,7 +270,9 @@ final class JoinBranchCall implements Check {
 	 */
 	private static function contextOf(plugin: GrammarPlugin, source: String, seams: Seams, symbols: () -> Null<SymbolIndex>): Null<Ctx> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		return tree == null ? null : ctxOn(plugin, source, tree, RefactorSupport.collectCommentTokens(source), seams, symbols);
+		return tree == null
+			? null
+			: ctxOn(plugin, source, tree, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), seams, symbols);
 	}
 
 	/**

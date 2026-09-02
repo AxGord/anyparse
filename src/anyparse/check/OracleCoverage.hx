@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 
@@ -263,7 +264,7 @@ final class OracleCoverage {
 	 * An arm must satisfy BOTH halves at once — read this file AND make every byte of every span live —
 	 * because a region is only ever typechecked by a compile that did both.
 	 */
-	public function uncovered(file: String, source: String, spans: Array<Span>, shape: RefShape): Null<String> {
+	public function uncovered(file: String, source: String, spans: Array<Span>, shape: RefShape, regions: Array<LexRegion>): Null<String> {
 		#if (sys || nodejs)
 		final paths: Null<Array<String>> = _compiled;
 		if (paths == null) return reason;
@@ -273,7 +274,7 @@ final class OracleCoverage {
 		var claimed: Bool = false;
 		for (arm in _arms) if (arm.files.contains(key)) {
 			claimed = true;
-			final gap: Null<String> = CondRegionLiveness.unproven(source, shape, spans, arm.defines);
+			final gap: Null<String> = CondRegionLiveness.unproven(source, shape, spans, arm.defines, regions);
 			if (gap == null) return null;
 			if (regionGap == null) regionGap = gap;
 		}

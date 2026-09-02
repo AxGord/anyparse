@@ -87,31 +87,48 @@ class ClassifyOccurrencesTest extends Test {
 	 */
 	public function testActiveCodeOffsetSkipsCommentMention(): Void {
 		final src: String = 's\n\t// reset value\n\t.value = 1;';
-		Assert.equals(src.lastIndexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(1, src.indexOf(' =')), 'value'));
+		Assert.equals(
+			src.lastIndexOf('value'),
+			RefactorSupport.activeCodeIdentTokenOffset(
+				src, new Span(1, src.indexOf(' =')), 'value', new HaxeQueryPlugin().lexicalRegions(src)
+			)
+		);
 	}
 
 	/** A block comment between the two spans is skipped the same way. */
 	public function testActiveCodeOffsetSkipsBlockCommentMention(): Void {
 		final src: String = 's /* value */ .value;';
-		Assert.equals(src.lastIndexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(1, src.length), 'value'));
+		Assert.equals(
+			src.lastIndexOf('value'),
+			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(1, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+		);
 	}
 
 	/** Code interpolated into a string literal stays eligible. */
 	public function testActiveCodeOffsetKeepsInterpolatedCode(): Void {
 		final src: String = "trace('${s.value}');";
-		Assert.equals(src.indexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
+		Assert.equals(
+			src.indexOf('value'),
+			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+		);
 	}
 
 	/** A `#if` body is conditional CODE, not trivia — it stays eligible. */
 	public function testActiveCodeOffsetKeepsConditionalCode(): Void {
 		final src: String = '#if debug\ntrace(s.value);\n#end';
-		Assert.equals(src.indexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
+		Assert.equals(
+			src.indexOf('value'),
+			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+		);
 	}
 
 	/** A window whose only mention is a comment reports NOT FOUND. */
 	public function testActiveCodeOffsetCommentOnlyIsNotFound(): Void {
 		final src: String = 's\n\t// reset value\n\t.other;';
-		Assert.equals(-1, RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
+		Assert.equals(
+			-1,
+			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+		);
 	}
 
 	/**
@@ -138,7 +155,10 @@ class ClassifyOccurrencesTest extends Test {
 	/** `activeCodeIdentTokenOffset` reaches a member token sitting after such a regex. */
 	public function testActiveCodeOffsetSurvivesRegexCommentOpener(): Void {
 		final src: String = 'var re = ~/[\\/*]/;\ns.value = 1;';
-		Assert.equals(src.indexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
+		Assert.equals(
+			src.indexOf('value'),
+			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+		);
 	}
 
 	/**

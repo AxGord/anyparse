@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -236,7 +237,7 @@ final class PreferComprehension implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (m in collectMatches(tree, entry.source, seams, plugin.refShape())) violations.push({
+			for (m in collectMatches(tree, entry.source, seams, plugin.refShape(), plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.span,
 				rule: 'prefer-comprehension',
@@ -269,7 +270,8 @@ final class PreferComprehension implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byKey: Map<String, Array<{ span: Span, text: String }>> = [];
-		for (m in collectMatches(tree, source, seams, plugin.refShape())) byKey['${m.span.from}:${m.span.to}'] = m.edits;
+		for (m in collectMatches(tree, source, seams, plugin.refShape(), plugin.lexicalRegions(source)))
+			byKey['${m.span.from}:${m.span.to}'] = m.edits;
 		final out: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -326,11 +328,13 @@ final class PreferComprehension implements Check {
 	 * replacement span and text. The file's comment tokens are lexed ONCE here and carried in the
 	 * `Ctx` — `collectCommentTokens` re-lexes the whole source on every call.
 	 */
-	private static function collectMatches(tree: QueryNode, source: String, s: Seams, shape: RefShape): Array<Match> {
+	private static function collectMatches(
+		tree: QueryNode, source: String, s: Seams, shape: RefShape, regions: Array<LexRegion>
+	): Array<Match> {
 		final ctx: Ctx = {
 			source: source,
 			seams: s,
-			comments: RefactorSupport.collectCommentTokens(source),
+			comments: RefactorSupport.collectCommentTokens(regions),
 			tree: tree,
 			shape: shape
 		};

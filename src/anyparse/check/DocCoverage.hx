@@ -104,7 +104,10 @@ final class DocCoverage implements Check implements ConfigAware implements NoAut
 				requireMemberDoc: config.boolOption(RULE_ID, 'requireMemberDoc') ?? DEFAULT_REQUIRE_MEMBER_DOC,
 				includeConstructor: config.boolOption(RULE_ID, 'includeConstructor') ?? DEFAULT_INCLUDE_CONSTRUCTOR
 			};
-			scanModule(violations, entry.file, entry.source, tree, seams, cfg, CheckScan.docBlockEnds(entry.source));
+			scanModule(
+				violations, entry.file, entry.source, tree, seams, cfg,
+				CheckScan.docBlockEnds(entry.source, plugin.lexicalRegions(entry.source))
+			);
 		}
 		return violations;
 	}

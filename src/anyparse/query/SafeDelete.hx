@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
@@ -72,7 +73,9 @@ final class SafeDelete {
 		final srcEntry: Null<Parsed> = parsed.find(p -> p.file == srcFile);
 		if (srcEntry == null) return Err('source file $srcFile is not in the scope file set');
 		final src: Parsed = srcEntry;
-		final memberSpan: Null<Span> = memberSpanOf(src.tree, srcTypeName, memberName, src.source, refShape);
+		final memberSpan: Null<Span> = memberSpanOf(
+			src.tree, srcTypeName, memberName, src.source, refShape, plugin.lexicalRegions.bind(src.source)
+		);
 		if (memberSpan == null) return Err('no member "$memberName" on a unique type "$srcTypeName" in $srcFile');
 		final memberSpanNN: Span = memberSpan;
 
@@ -93,7 +96,7 @@ final class SafeDelete {
 	 * absent / ambiguous.
 	 */
 	private static function memberSpanOf(
-		tree: QueryNode, typeName: String, memberName: String, source: String, shape: RefShape
+		tree: QueryNode, typeName: String, memberName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>
 	): Null<Span> {
 		final decls: Array<TypeDeclMatch> = [];
 		function walk(node: QueryNode): Void {
@@ -108,7 +111,7 @@ final class SafeDelete {
 		// cuts it in place, inside that region.
 		MemberBranchScan.eachTypeMember(decls[0], shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind), (child, _) -> {
 			if (hit == null && child.name == memberName) hit = child.span;
-		});
+		}, regions);
 		return hit;
 	}
 

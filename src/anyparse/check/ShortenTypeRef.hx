@@ -422,7 +422,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			opaqueKinds: shape.opaqueKinds ?? [],
 			functionKinds: shape.functionKinds ?? [],
 			macroKind: shape.macroModifierKind,
-			comments: RefactorSupport.collectCommentRegions(source),
+			comments: RefactorSupport.collectCommentRegions(plugin.lexicalRegions(source)),
 			tree: scoped
 		};
 		final occurrences: Array<Occurrence> = [];

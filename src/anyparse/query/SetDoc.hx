@@ -80,7 +80,7 @@ final class SetDoc {
 		// `fragmented-doc-comment` reports, instead of replacing it.
 		final runStart: Int = RefactorSupport.declRunStart(node, TreePath.parentOf(tree, node), span);
 		final groupSpan: Span = new Span(runStart, span.to);
-		final docExtended: Span = RefactorSupport.docExtendedSpan(source, groupSpan);
+		final docExtended: Span = RefactorSupport.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source));
 		final docRegion: Span = new Span(docExtended.from, runStart);
 		final edit: { span: Span, text: String } = { span: docRegion, text: '${RefactorSupport.docComment(docText)}\n' };
 		final result: EditResult = RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);

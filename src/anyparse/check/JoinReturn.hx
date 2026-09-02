@@ -143,7 +143,8 @@ final class JoinReturn implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(entry.source);
+			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
 			final lambdaSpans: Array<Span> = [];
 			collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
@@ -167,7 +168,7 @@ final class JoinReturn implements Check {
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 		final lambdaSpans: Array<Span> = [];
 		collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);

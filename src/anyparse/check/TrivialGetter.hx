@@ -228,7 +228,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (tree == null || MemberWriteScan.coreApiPinsMemberShape(entry.source)) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), entry.source);
+			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(
+				plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)
+			);
 			for (cls in CheckScan.classBodies(tree)) {
 				// Build-macro bail. This rule DELETES the getter and the backing field, so a member a
 				// builder generates around them loses its referent: measured on Haxe 4.3.7, a `@:build`
@@ -282,7 +284,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (span != null) wanted.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source);
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source, plugin.lexicalRegions.bind(source));
 		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
@@ -333,7 +335,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (tree == null) return null;
 		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, v.file)
 			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), src);
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), src, plugin.lexicalRegions.bind(src));
 		for (cls in CheckScan.classBodies(tree)) {
 			final className: Null<String> = cls.name;
 			if (className == null) continue;

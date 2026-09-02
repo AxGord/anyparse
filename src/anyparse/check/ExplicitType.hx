@@ -4,6 +4,7 @@ import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -115,7 +116,8 @@ final class ExplicitType implements Check implements OracleAssisted {
 			bodies: bodies,
 			flagged: flagged,
 			printer: printer,
-			oracle: oracle
+			oracle: oracle,
+			regions: plugin.lexicalRegions(source)
 		};
 		final macroKind: Null<String> = shape.macroModifierKind;
 		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
@@ -254,7 +256,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		if (at < 0) return null;
 		// The display server answers at a position INSIDE the name token, not at the
 		// `function` keyword the node's span starts on.
-		final nameAt: Int = RefactorSupport.activeCodeIdentTokenOffset(s.source, span, name);
+		final nameAt: Int = RefactorSupport.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
 		if (nameAt < 0) return null;
 		final raw: Null<String> = s.oracle.typeAt(s.file, nameAt + name.length - 1);
 		final ret: Null<String> = raw == null ? null : returnTypeOf(raw);
@@ -740,6 +742,12 @@ private typedef ReturnSeams = {
 	final flagged: Map<String, Bool>;
 	final printer: TypeRefPrinter;
 	final oracle: TypeOracle;
+
+	/**
+	 * The source's lexically-scanned non-code regions, hoisted once per file — the grammar's own
+	 * answer (`GrammarPlugin.lexicalRegions`), carried here rather than re-derived per member.
+	 */
+	final regions: Array<LexRegion>;
 };
 
 /**

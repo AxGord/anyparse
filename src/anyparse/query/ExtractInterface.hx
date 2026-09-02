@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.EditResult;
@@ -112,7 +113,7 @@ final class ExtractInterface {
 		if (implementsClauseFor(declNN, ifaceName) != null)
 			return Err('class "$srcTypeName" already implements "$ifaceName" — refusing (nothing written)');
 
-		final all: Array<IfaceMethod> = publicMethods(declNN, srcSource, plugin.refShape());
+		final all: Array<IfaceMethod> = publicMethods(declNN, srcSource, plugin.refShape(), plugin.lexicalRegions.bind(srcSource));
 		final selected: Array<IfaceMethod> = switch selectMethods(all, memberNames) {
 			case Left(message): return Err(message);
 			case Right(list): list;
@@ -132,7 +133,9 @@ final class ExtractInterface {
 				source;
 		};
 
-		final srcEdit: Null<{ span: Span, text: String }> = implementsEdit(srcSource, decl, srcTypeName, ifaceName);
+		final srcEdit: Null<{ span: Span, text: String }> = implementsEdit(
+			srcSource, decl, srcTypeName, ifaceName, plugin.lexicalRegions(srcSource)
+		);
 		if (srcEdit == null)
 			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add implements (nothing written)');
 		final edit: { span: Span, text: String } = srcEdit;
@@ -219,7 +222,9 @@ final class ExtractInterface {
 	 * `FnMember` span up to its body child, so it carries no modifier and
 	 * no body.
 	 */
-	private static function publicMethods(decl: TypeDeclMatch, source: String, shape: RefShape): Array<IfaceMethod> {
+	private static function publicMethods(
+		decl: TypeDeclMatch, source: String, shape: RefShape, regions: () -> Array<LexRegion>
+	): Array<IfaceMethod> {
 		final out: Array<IfaceMethod> = [];
 		// Branch-aware: a method a `#if` region declares is not a direct child of the type, and the
 		// scan that missed it produced an interface silently short of that method.
@@ -246,7 +251,7 @@ final class ExtractInterface {
 				final sigNN: String = sig;
 				out.push({ name: nameNN, signature: sigNN, from: spanNN.from });
 			}
-		});
+		}, regions);
 		return out;
 	}
 
@@ -366,9 +371,9 @@ final class ExtractInterface {
 	 * the extraction before anything is written.
 	 */
 	private static function implementsEdit(
-		source: String, decl: TypeDeclMatch, typeName: String, ifaceName: String
+		source: String, decl: TypeDeclMatch, typeName: String, ifaceName: String, regions: Array<LexRegion>
 	): Null<{ span: Span, text: String }> {
-		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName);
+		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName, regions);
 		if (at == null) return null;
 		final atNN: Int = at;
 		return { span: new Span(atNN, atNN), text: ' implements $ifaceName' };

@@ -5,6 +5,7 @@ import anyparse.check.Severity;
 import anyparse.format.text.SExprFormat;
 import anyparse.grammar.sexpr.SValue;
 import anyparse.grammar.sexpr.SValueWriter;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
@@ -59,19 +60,22 @@ final class Text {
 	 * builds both from one list.
 	 */
 	public static function renderMatches(
-		matches: Array<QueryNode>, source: String, windows: Array<Null<Span>>, doc: Bool, src: Bool, spans: Bool = false
+		matches: Array<QueryNode>, source: String, windows: Array<Null<Span>>, doc: Bool, src: Bool, regions: Array<LexRegion>,
+		spans: Bool = false
 	): String {
 		if (matches.length == 0) return '(no matches)\n';
 		final buf: StringBuf = new StringBuf();
 		for (i => m in matches) {
 			buf.add(SValueWriter.write(toSValue(m, spans), SExprFormat.instance.defaultWriteOptions));
 			buf.add('\n');
-			appendDocSource(buf, source, i < windows.length ? windows[i] : m.span, doc, src);
+			appendDocSource(buf, source, i < windows.length ? windows[i] : m.span, doc, src, regions);
 		}
 		return buf.toString();
 	}
 
-	public static function renderRefs(file: String, source: String, hits: Array<RefHit>, doc: Bool, src: Bool, flat: Bool = false): String {
+	public static function renderRefs(
+		file: String, source: String, hits: Array<RefHit>, doc: Bool, src: Bool, regions: Array<LexRegion>, flat: Bool = false
+	): String {
 		if (hits.length == 0) return '$file: no refs\n';
 		final buf: StringBuf = new StringBuf();
 		final lineIndex: LineIndex = new LineIndex(source);
@@ -89,13 +93,13 @@ final class Text {
 				buf.add(' -> ${bp.line}:${bp.col}');
 			}
 			buf.add('\n');
-			appendDocSource(buf, source, h.span, doc, src);
+			appendDocSource(buf, source, h.span, doc, src, regions);
 		}
 		return buf.toString();
 	}
 
 	public static function renderUses(
-		file: String, source: String, hits: Array<UsesHit>, doc: Bool, src: Bool, flat: Bool = false
+		file: String, source: String, hits: Array<UsesHit>, doc: Bool, src: Bool, flat: Bool = false, regions: Array<LexRegion>
 	): String {
 		if (hits.length == 0) return '$file: no uses\n';
 		final buf: StringBuf = new StringBuf();
@@ -104,7 +108,7 @@ final class Text {
 		for (h in hits) {
 			final pos: Position = lineIndex.lineColAt(h.span.from);
 			buf.add(flat ? '$file:${pos.line}:${pos.col}: ${h.name}\n' : '  ${pos.line}:${pos.col}: ${h.name}\n');
-			appendDocSource(buf, source, h.span, doc, src);
+			appendDocSource(buf, source, h.span, doc, src, regions);
 		}
 		return buf.toString();
 	}
@@ -211,9 +215,11 @@ final class Text {
 	 * No-op when neither flag is set or nothing resolves — so default
 	 * output is unchanged.
 	 */
-	private static function appendDocSource(buf: StringBuf, source: String, span: Null<Span>, doc: Bool, src: Bool): Void {
+	private static function appendDocSource(
+		buf: StringBuf, source: String, span: Null<Span>, doc: Bool, src: Bool, regions: Array<LexRegion>
+	): Void {
 		if (doc) {
-			final d: Null<String> = SourceSlice.leadingDoc(source, span);
+			final d: Null<String> = SourceSlice.leadingDoc(source, span, regions);
 			if (d != null) {
 				buf.add(indentBlock(d));
 				buf.add('\n');

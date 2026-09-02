@@ -1,5 +1,6 @@
 package unit;
 
+import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.query.LexicalRegions;
 import utest.Assert;
 import utest.Test;
@@ -28,7 +29,7 @@ class LexicalRegionsTest extends Test {
 	 */
 	public function testInterpolationHoleWithNestedSameQuote(): Void {
 		final source: String = "var s = '${c ? '// note' : x}';\nvar t = 1;";
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
 		Assert.equals(1, regions.length, 'the whole literal is ONE region: ${dump(source, regions)}');
 		Assert.equals("'${c ? '// note' : x}'", source.substring(regions[0].from, regions[0].to));
 		Assert.equals(LexRegionKind.StringLit, regions[0].kind);
@@ -37,7 +38,7 @@ class LexicalRegionsTest extends Test {
 	/** Arbitrary nesting depth, the same balancing Haxe's own lexer does. */
 	public function testNestedInterpolationDepthThree(): Void {
 		final source: String = "var s = '${'inner=${'x'}'}';";
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
 		Assert.equals(1, regions.length, 'nesting stays inside one region: ${dump(source, regions)}');
 		Assert.equals("'${'inner=${'x'}'}'", source.substring(regions[0].from, regions[0].to));
 	}
@@ -50,7 +51,7 @@ class LexicalRegionsTest extends Test {
 	 */
 	public function testUnterminatedNestedLiteralFailsClosed(): Void {
 		final source: String = "var s = '${'unterminated};\nvar t = 1;";
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
 		Assert.equals(1, regions.length, 'the recovery emits one short region: ${dump(source, regions)}');
 		Assert.equals("'${'", source.substring(regions[0].from, regions[0].to), 'it stops at the nested quote, not at EOF');
 	}
@@ -65,7 +66,7 @@ class LexicalRegionsTest extends Test {
 	 */
 	public function testEscapedDollarIsNotAHole(): Void {
 		final source: String = "var s = '$${';\nvar t = '}';";
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
 		Assert.equals(2, regions.length, 'the escaped dollar leaves TWO literals: ${dump(source, regions)}');
 		Assert.equals("'$${'", source.substring(regions[0].from, regions[0].to), 'the first ends at its own quote');
 		Assert.equals("'}'", source.substring(regions[1].from, regions[1].to), 'the second is a literal of its own');
@@ -77,7 +78,7 @@ class LexicalRegionsTest extends Test {
 	 */
 	public function testRegexBodyHoldingACommentOpener(): Void {
 		final source: String = 'var r = ~/[\\/*]/;\nvar t = 1;';
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
 		Assert.equals(1, regions.length, 'the regex is one region and opens no comment: ${dump(source, regions)}');
 		Assert.equals(LexRegionKind.RegexLit, regions[0].kind);
 		Assert.equals('~/[\\/*]/', source.substring(regions[0].from, regions[0].to));
@@ -86,7 +87,7 @@ class LexicalRegionsTest extends Test {
 	/** A `\`-escaped quote does not close the literal. */
 	public function testEscapedQuoteInsideLiteral(): Void {
 		final source: String = 'var s = "a\\"b";\nvar t = 1;';
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
 		Assert.equals(1, regions.length, 'one region: ${dump(source, regions)}');
 		Assert.equals('"a\\"b"', source.substring(regions[0].from, regions[0].to));
 	}
@@ -94,7 +95,7 @@ class LexicalRegionsTest extends Test {
 	/** A string is not a comment — the distinction every rename and delete rests on. */
 	public function testOffsetWithinCommentSeparatesStringFromComment(): Void {
 		final source: String = "// c\nvar s = 'x';";
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
 		Assert.isTrue(LexicalRegions.offsetWithinComment(source.indexOf('c'), regions), 'the comment body is a comment');
 		Assert.isFalse(LexicalRegions.offsetWithinComment(source.indexOf("'x'") + 1, regions), 'a string literal is not');
 		Assert.isFalse(LexicalRegions.offsetWithinComment(source.indexOf('var'), regions), 'code is not');

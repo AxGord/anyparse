@@ -3,6 +3,7 @@ package unit;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.Suppression;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -79,7 +80,7 @@ class SuppressionSliceTest extends Test {
 			severity: Severity.Warning,
 			message: 'demo'
 		};
-		return Suppression.apply([v], [{ file: 'p/C.hx', source: src }]);
+		return Suppression.apply([v], [{ file: 'p/C.hx', source: src }], new HaxeQueryPlugin().lexicalRegions);
 	}
 
 }

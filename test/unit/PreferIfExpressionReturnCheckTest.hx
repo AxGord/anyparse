@@ -421,7 +421,9 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		if (tree == null) throw new Exception('fixture does not parse: $source');
 		final head: Null<QueryNode> = firstIf(tree, plugin.refShape().ifStatementKinds ?? []);
 		if (head == null) throw new Exception('fixture holds no if statement: $source');
-		return PreferIfExpressionReturn.claimsChain(head, source, RefactorSupport.collectCommentTokens(source), plugin.refShape());
+		return PreferIfExpressionReturn.claimsChain(
+			head, source, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), plugin.refShape()
+		);
 	}
 
 	/** The first `if` STATEMENT in document order, or null. */

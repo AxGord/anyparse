@@ -70,7 +70,7 @@ final class Patch {
 
 		// The searchable region is the same modifier-folded slice `apq source
 		// --select` prints, so a fragment copied from that output matches as-is.
-		final groupSpan: Span = RefactorSupport.declEditSpan(source, tree, node, span);
+		final groupSpan: Span = RefactorSupport.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
 		final slice: String = source.substring(groupSpan.from, groupSpan.to);
 		final edits: Array<{ span: Span, text: String }> = [];
 		// The same edits in SLICE coordinates — what `sequencingRefusal` replays to see
@@ -172,7 +172,7 @@ final class Patch {
 	): Null<String> {
 		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call, and
 		// asking it per edit cost ~19% on a 17 000-line file with 135 ranges under `--all`.
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final watched: Array<{ shifted: Int, owner: String, declared: Int }> = [];
 		var delta: Int = 0;
 		for (edit in sorted) {
@@ -189,7 +189,8 @@ final class Patch {
 
 		final spliced: String = RefactorSupport.applyEdits(source, sorted);
 		final after: QueryNode = try plugin.parseFile(spliced) catch (exception: Exception) return null;
-		final splicedComments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(spliced);
+		final splicedComments: Array<{ from: Int, to: Int, isLine: Bool }> =
+			RefactorSupport.collectCommentTokens(plugin.lexicalRegions(spliced));
 		for (w in watched) {
 			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, w.shifted);
 			if (ownerNode == null) continue;

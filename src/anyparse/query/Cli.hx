@@ -36,6 +36,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.Inline;
 import anyparse.query.InlineMethod;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
@@ -1427,9 +1428,12 @@ final class Cli {
 			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		if (o.json) {
-			sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource));
+			sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource, plugin.lexicalRegions));
 		} else {
-			for (entry in shown) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat));
+			for (entry in shown)
+				sysPrint(Text.renderRefs(
+					entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, plugin.lexicalRegions(entry.source), o.flat
+				));
 		}
 		return emptyExit(allEntries.length == 0);
 	}
@@ -4043,7 +4047,10 @@ final class Cli {
 		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> = limitEntries(
 			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
-		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat));
+		for (entry in shown)
+			sysPrint(
+				Text.renderUses(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat, plugin.lexicalRegions(entry.source))
+			);
 		return emptyExit(allEntries.length == 0);
 	}
 
@@ -4788,8 +4795,10 @@ final class Cli {
 	 * rendered `line:col` resolves via the standard `Span.lineCol(source)`
 	 * call without any conversion.
 	 */
-	private static function appendCommentHits(target: String, source: String, exact: Bool, out: Array<LitHit>): Void {
-		for (tok in RefactorSupport.collectCommentTokens(source)) {
+	private static function appendCommentHits(
+		target: String, source: String, exact: Bool, out: Array<LitHit>, regions: Array<LexRegion>
+	): Void {
+		for (tok in RefactorSupport.collectCommentTokens(regions)) {
 			final bodySpan: Span = RefactorSupport.commentBody(source, tok);
 			final body: String = source.substring(bodySpan.from, bodySpan.to);
 			final match: Bool = exact ? body == target : body.indexOf(target) >= 0;
@@ -4814,7 +4823,7 @@ final class Cli {
 	private static function appendDirectiveHits(
 		target: String, source: String, exact: Bool, plugin: GrammarPlugin, out: Array<LitHit>
 	): Void {
-		for (directive in CondDirectives.scan(source, plugin.refShape())) {
+		for (directive in CondDirectives.scan(source, plugin.refShape(), plugin.lexicalRegions.bind(source))) {
 			final text: String = CondDirectives.text(source, directive);
 			final match: Bool = exact ? text == target : text.indexOf(target) >= 0;
 			if (match) out.push(new LitHit('Directive', text, directive.span));
@@ -5276,7 +5285,7 @@ final class Cli {
 		// member-name field-access (superset). Order is fixed (precise
 		// before heuristic); each section returns whether it printed a hit.
 		if (blastUsesSection(valueTrees, typeName, typeShape, plugin, expanded.singleFile, o.flat)) any = true;
-		if (blastRefsSection(valueTrees, typeName, refShape, o.flat)) any = true;
+		if (blastRefsSection(valueTrees, typeName, refShape, o.flat, plugin.lexicalRegions)) any = true;
 
 		if (memberNames.length == 0) {
 			stderr(
@@ -5343,7 +5352,7 @@ final class Cli {
 		if (valueTrees == null) return EXIT_RUNTIME;
 
 		final usesAny: Bool = emitMentionsUses(target, valueTrees, plugin, typeShape, expanded.singleFile, o.flat);
-		final refsAny: Bool = emitMentionsRefs(target, valueTrees, refShape, o.flat);
+		final refsAny: Bool = emitMentionsRefs(target, valueTrees, refShape, o.flat, plugin.lexicalRegions);
 		final litAny: Bool = emitMentionsLit(target, valueTrees, o.limit, o.flat);
 
 		final any: Bool = usesAny || refsAny || litAny;
@@ -5642,7 +5651,7 @@ final class Cli {
 		}
 
 		final atExpr: Null<String> = o.atExpr;
-		if (atExpr != null) return runAstAt(o, atExpr, tree, source, fileLabel);
+		if (atExpr != null) return runAstAt(o, atExpr, tree, source, fileLabel, plugin.lexicalRegions(source));
 
 		final selectExpr: Null<String> = o.selectExpr;
 		if (selectExpr != null) return runAstSelect(o, selectExpr, tree, source, fileLabel, plugin);
@@ -8905,7 +8914,7 @@ final class Cli {
 		// too. The fold also stops BELOW the doc block, which plain `replace-node` leaves
 		// alone as well — its `--with-doc` arm and a replacement opening with a block comment
 		// are the two that do reach it.
-		final span: Span = sourceWindows(tree, [resolved], content)[0] ?? rawSpan;
+		final span: Span = sourceWindows(tree, [resolved], content, plugin.lexicalRegions.bind(content))[0] ?? rawSpan;
 		final endOffset: Int = span.to > span.from ? span.to - 1 : span.from;
 		return { from: span.lineCol(content).line, to: new Span(endOffset, endOffset).lineCol(content).line };
 	}
@@ -9798,7 +9807,9 @@ final class Cli {
 	 * render it (or, with `--count`, print its direct-child count). Returns
 	 * the process exit code.
 	 */
-	private static function runAstAt(o: AstOpts, atExpr: String, tree: QueryNode, source: String, fileLabel: String): Int {
+	private static function runAstAt(
+		o: AstOpts, atExpr: String, tree: QueryNode, source: String, fileLabel: String, regions: Array<LexRegion>
+	): Int {
 		final colonIdx: Int = atExpr.indexOf(':');
 		if (colonIdx < 0) {
 			stderr('apq ast: --at expects LINE:COL, got "$atExpr"\n');
@@ -9825,12 +9836,14 @@ final class Cli {
 			if (node != null) sysPrint('${node.children.length}\n');
 			return EXIT_OK;
 		}
-		final windows: Array<Null<Span>> = node == null || !(o.wantDoc || o.wantSource) ? [] : sourceWindows(tree, [node], source);
+		final windows: Array<Null<Span>> = node == null || !(o.wantDoc || o.wantSource)
+			? []
+			: sourceWindows(tree, [node], source, () -> regions);
 		final matches: Array<QueryNode> = node == null ? [] : [shapeAstOutput(node, o.depth, o.childrenLimit)];
 		sysPrint(
 			o.json
-				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource)
-				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, o.spans)
+				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource, regions)
+				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, regions, o.spans)
 		);
 		return EXIT_OK;
 	}
@@ -9913,12 +9926,14 @@ final class Cli {
 		// The `--source` / `--doc` windows come from the RAW matches, before the reshape below: a
 		// `--depth` / `--children-limit` copy has no parent in the tree, so the fold could not be
 		// asked of it.
-		final windows: Array<Null<Span>> = o.wantDoc || o.wantSource ? sourceWindows(tree, raw, source) : [];
+		final windows: Array<Null<Span>> = o.wantDoc || o.wantSource
+			? sourceWindows(tree, raw, source, plugin.lexicalRegions.bind(source))
+			: [];
 		final matches: Array<QueryNode> = [for (m in raw) shapeAstOutput(m, o.depth, o.childrenLimit)];
 		sysPrint(
 			o.json
-				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource)
-				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, o.spans)
+				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource, plugin.lexicalRegions(source))
+				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, plugin.lexicalRegions(source), o.spans)
 		);
 		return EXIT_OK;
 	}
@@ -10073,13 +10088,14 @@ final class Cli {
 				sysPrint('# uses (type positions)\n');
 				usesHeader = true;
 			}
-			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat));
+			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat, plugin.lexicalRegions(entry.source)));
 		}
 		return any;
 	}
 
 	private static function blastRefsSection(
-		valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, typeName: String, refShape: RefShape, flat: Bool
+		valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, typeName: String, refShape: RefShape, flat: Bool,
+		lexicalRegions: (String) -> Array<LexRegion>
 	): Bool {
 		var any: Bool = false;
 		var refsHeader: Bool = false;
@@ -10091,7 +10107,7 @@ final class Cli {
 				sysPrint('# refs (value bindings)\n');
 				refsHeader = true;
 			}
-			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, flat));
+			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, lexicalRegions(entry.source), flat));
 		}
 		return any;
 	}
@@ -10213,7 +10229,7 @@ final class Cli {
 			}
 			trees.push({ path: path, source: source, tree: tree });
 			final hits: Array<LitHit> = Lit.find(query.target, tree, query.exact, query.kinds);
-			if (query.scanComments) appendCommentHits(query.target, source, query.exact, hits);
+			if (query.scanComments) appendCommentHits(query.target, source, query.exact, hits, plugin.lexicalRegions(source));
 			if (query.scanDirectives) appendDirectiveHits(query.target, source, query.exact, plugin, hits);
 			if (hits.length == 0) continue;
 			// AST walk emits in depth-first source order; comment and directive
@@ -12834,13 +12850,14 @@ final class Cli {
 				sysPrint('# uses (type positions)\n');
 				header = true;
 			}
-			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat));
+			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat, plugin.lexicalRegions(entry.source)));
 		}
 		return any;
 	}
 
 	private static function emitMentionsRefs(
-		target: String, valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, refShape: RefShape, flat: Bool
+		target: String, valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, refShape: RefShape, flat: Bool,
+		lexicalRegions: (String) -> Array<LexRegion>
 	): Bool {
 		// Section 2 — value-binding references (precise).
 		var any: Bool = false;
@@ -12853,7 +12870,7 @@ final class Cli {
 				sysPrint('# refs (value bindings)\n');
 				header = true;
 			}
-			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, flat));
+			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, lexicalRegions(entry.source), flat));
 		}
 		return any;
 	}
@@ -15561,7 +15578,9 @@ final class Cli {
 		compiled: OracleCoverage, entry: { file: String, source: String }, edits: Array<{ span: Span, text: String }>,
 		plugin: GrammarPlugin
 	): Null<String> {
-		return compiled.uncovered(entry.file, entry.source, [for (edit in edits) edit.span], plugin.refShape());
+		return compiled.uncovered(
+			entry.file, entry.source, [for (edit in edits) edit.span], plugin.refShape(), plugin.lexicalRegions(entry.source)
+		);
 	}
 
 	/**
@@ -18862,11 +18881,13 @@ final class Cli {
 	 * reshaped node is a COPY and has no parent in the tree. The caller computes them only when a flag
 	 * asks, since `trailingTrimmedSpan` lexes the whole file per match.
 	 */
-	private static function sourceWindows(tree: QueryNode, nodes: Array<QueryNode>, source: String): Array<Null<Span>> {
+	private static function sourceWindows(
+		tree: QueryNode, nodes: Array<QueryNode>, source: String, regions: () -> Array<LexRegion>
+	): Array<Null<Span>> {
 		return [
 			for (n in nodes) {
 				final raw: Null<Span> = n.span;
-				raw == null ? null : RefactorSupport.declEditSpan(source, tree, n, raw);
+				raw == null ? null : RefactorSupport.declEditSpan(source, tree, n, raw, regions);
 			}
 		];
 	}

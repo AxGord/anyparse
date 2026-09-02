@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.MemberOrder.MemberRank;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.HoistedConstant;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
@@ -229,7 +230,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		final owner: Null<String> = site.container.name;
 		final annotation: Null<String> = site.typeAnnotation;
 		if (owner == null || annotation == null || index == null || !isBareLiteral(site.defaultNode, shape)) return null;
-		final reused: Null<String> = constantHoldingTheDefault(site, source, shape, annotation);
+		final reused: Null<String> = constantHoldingTheDefault(site, source, shape, annotation, plugin.lexicalRegions(source));
 		if (reused != null) return reused;
 		final ownerName: String = owner;
 		final idx: SymbolIndex = index;
@@ -247,7 +248,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		if (RefactorSupport.referencedInRange(source, newName, 0, source.length, [])) return null;
 		if (!idx.typeProvablyLacksMember(ownerName, newName, file)) return null;
 		if (_runClaims.defers(ownerName, newName, idx)) return null;
-		final at: Null<Int> = constantsRankSplice(site.container, decl, source, shape, ownerName);
+		final at: Null<Int> = constantsRankSplice(site.container, decl, source, shape, ownerName, plugin.lexicalRegions(source));
 		if (at == null) return null;
 		_runClaims.claim(ownerName, newName, idx);
 		stage(inserts, at, '\n\t${emitted.text}');
@@ -270,9 +271,9 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 	 * than a reuse.
 	 */
 	private static function constantHoldingTheDefault(
-		site: CtorDefaultSite, source: String, shape: RefShape, annotation: String
+		site: CtorDefaultSite, source: String, shape: RefShape, annotation: String, regions: Array<LexRegion>
 	): Null<String> {
-		for (m in MemberSlots.collectMembers(site.container, source, shape, [])) {
+		for (m in MemberSlots.collectMembers(site.container, source, shape, [], regions)) {
 			final init: Null<QueryNode> = m.initNode;
 			final name: Null<String> = m.node.name;
 			final declSpan: Null<Span> = m.node.span;
@@ -294,15 +295,15 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 	 * A member inside a `#if` region is no anchor: the splice must land in every build.
 	 */
 	private static function constantsRankSplice(
-		container: QueryNode, decl: TypeDeclMatch, source: String, shape: RefShape, ownerName: String
+		container: QueryNode, decl: TypeDeclMatch, source: String, shape: RefShape, ownerName: String, regions: Array<LexRegion>
 	): Null<Int> {
 		var at: Int = -1;
-		for (m in MemberSlots.collectMembers(container, source, shape, [])) if (
+		for (m in MemberSlots.collectMembers(container, source, shape, [], regions)) if (
 			m.condition == null && m.rank - MemberRank.StaticPrivateImmutableField <= 0
 		)
 			at = m.span.to;
 		if (at >= 0) return at;
-		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(source, decl, ownerName);
+		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(source, decl, ownerName, regions);
 		return brace == null ? null : brace + 1;
 	}
 

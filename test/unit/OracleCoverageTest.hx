@@ -223,9 +223,12 @@ final class OracleCoverageTest extends Test {
 		Assert.isTrue(coverage.known, 'the probe answered: ${coverage.reason}');
 		Assert.isTrue(coverage.covers('$dir/Main.hx'), 'file granularity says yes to both branches, which is the whole defect');
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
-		Assert.isNull(coverage.uncovered('$dir/Main.hx', BRANCHED, [at(BRANCHED, 'var live')], shape), 'the live branch IS verifiable');
+		Assert.isNull(
+			coverage.uncovered('$dir/Main.hx', BRANCHED, [at(BRANCHED, 'var live')], shape, new HaxeQueryPlugin().lexicalRegions(BRANCHED)),
+			'the live branch IS verifiable'
+		);
 		Assert.notNull(
-			coverage.uncovered('$dir/Main.hx', BRANCHED, [at(BRANCHED, 'var dead')], shape),
+			coverage.uncovered('$dir/Main.hx', BRANCHED, [at(BRANCHED, 'var dead')], shape, new HaxeQueryPlugin().lexicalRegions(BRANCHED)),
 			'and the excluded one is not, though the file is compiled'
 		);
 		CliFixture.removeDir(dir);
@@ -265,11 +268,11 @@ final class OracleCoverageTest extends Test {
 		);
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
 		Assert.isNull(
-			coverage.uncovered('$dir/ArmA.hx', ARM_A, [at(ARM_A, 'trace(\'a\')')], shape),
+			coverage.uncovered('$dir/ArmA.hx', ARM_A, [at(ARM_A, 'trace(\'a\')')], shape, new HaxeQueryPlugin().lexicalRegions(ARM_A)),
 			'a flag the compiling arm declares makes its region live'
 		);
 		Assert.notNull(
-			coverage.uncovered('$dir/ArmA.hx', ARM_A, [at(ARM_A, 'trace(\'both\')')], shape),
+			coverage.uncovered('$dir/ArmA.hx', ARM_A, [at(ARM_A, 'trace(\'both\')')], shape, new HaxeQueryPlugin().lexicalRegions(ARM_A)),
 			'a condition needing one flag from EACH arm is live under neither - arms are not unioned'
 		);
 		CliFixture.removeDir(dir);

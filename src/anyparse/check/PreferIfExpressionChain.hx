@@ -309,8 +309,8 @@ final class PreferIfExpressionChain implements Check {
 		if (tree == null) return [];
 		final out: Array<Match> = [];
 		walk(
-			tree, source, RefactorSupport.collectCommentTokens(source), s, plugin, lazyOf(plugin, file, source, tree, resolveIndex, index),
-			out, null, false
+			tree, source, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), s, plugin,
+			lazyOf(plugin, file, source, tree, resolveIndex, index), out, null, false
 		);
 		return out;
 	}

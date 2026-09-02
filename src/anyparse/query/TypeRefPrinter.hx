@@ -363,7 +363,8 @@ final class TypeRefPrinter {
 	private function inertRegions(source: String): Array<Span> {
 		final cached: Null<Array<Span>> = _inertRegions;
 		if (cached != null) return cached;
-		final regions: Array<Span> = InertRegions.of(source, _root);
+		final plugin: Null<GrammarPlugin> = _plugin;
+		final regions: Array<Span> = InertRegions.of(_root, plugin == null ? [] : plugin.lexicalRegions(source));
 		_inertRegions = regions;
 		return regions;
 	}

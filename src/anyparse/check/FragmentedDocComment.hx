@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -57,7 +58,7 @@ final class FragmentedDocComment implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [
-			for (entry in files) for (run in adjacentBlockRuns(entry.source))
+			for (entry in files) for (run in adjacentBlockRuns(entry.source, plugin.lexicalRegions(entry.source)))
 				{
 					file: entry.file,
 					span: new Span(run[0].from, run[run.length - 1].to),
@@ -78,7 +79,7 @@ final class FragmentedDocComment implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (run in adjacentBlockRuns(source)) if (flagged.contains(run[0].from)) {
+		for (run in adjacentBlockRuns(source, plugin.lexicalRegions(source))) if (flagged.contains(run[0].from)) {
 			final bodies: Array<String> = run.map(cleanBlockBody.bind(source));
 			edits.push({ span: new Span(run[0].from, run[run.length - 1].to), text: RefactorSupport.docComment(bodies.join('\n')) });
 		}
@@ -96,8 +97,8 @@ final class FragmentedDocComment implements Check {
 	}
 
 	/** Runs of 2+ block comments on consecutive lines (whitespace-only, no blank line, between them). */
-	private static function adjacentBlockRuns(source: String): Array<Array<CommentTok>> {
-		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(source);
+	private static function adjacentBlockRuns(source: String, regions: Array<LexRegion>): Array<Array<CommentTok>> {
+		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(regions);
 		final runs: Array<Array<CommentTok>> = [];
 		var i: Int = 0;
 		while (i < comments.length) {

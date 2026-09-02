@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -191,7 +192,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (m in collectMatches(tree, entry.source, seams)) violations.push({
+			for (m in collectMatches(tree, entry.source, seams, plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.span,
 				rule: 'cond-assign-merge',
@@ -216,7 +217,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byKey: Map<String, Match> = [];
-		for (m in collectMatches(tree, source, seams)) byKey['${m.span.from}:${m.span.to}'] = m;
+		for (m in collectMatches(tree, source, seams, plugin.lexicalRegions(source))) byKey['${m.span.from}:${m.span.to}'] = m;
 
 		return RefactorSupport.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
 			final text: Null<String> = m.text;
@@ -262,8 +263,8 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	}
 
 	/** Every mergeable region reachable under `root`, in document order — the candidate set `run` and `fix` share. */
-	private static function collectMatches(root: QueryNode, source: String, seams: Seams): Array<Match> {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+	private static function collectMatches(root: QueryNode, source: String, seams: Seams, regions: Array<LexRegion>): Array<Match> {
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
 		final out: Array<Match> = [];
 		walk(root, source, comments, seams, out);
 		return out;
