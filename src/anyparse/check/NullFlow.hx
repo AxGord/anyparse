@@ -166,10 +166,23 @@ private typedef FlowCtx = {
 @:nullSafety(Strict)
 final class NullFlow {
 
-	/** Nested function-value kinds — a separate flow context; their bodies are not walked with the outer state. */
+	/**
+	 * Nested function-value kinds — a separate flow context; their bodies are not walked with the outer
+	 * state, and the names they touch are excluded from the enclosing unit's analysis.
+	 *
+	 * The list must cover EVERY spelling of a function value the grammar projects, or the omitted one is
+	 * analyzed as straight-line code belonging to the enclosing function. `ThinArrow` — the bare
+	 * single-parameter arrow `v -> …`, by far the most common lambda in this tree — was missing, and that
+	 * one gap made `dead-store` report a false positive on any local a bare-arrow callback writes: the
+	 * lambda's own `return` cleared the backward liveness state, so the write looked dead on every path.
+	 * `DeadStoreTest.testNestedFnKindsCoverEveryGrammarFunctionValue` pins the set against the plugin's
+	 * own `lambdaKinds` / `localFunctionKinds` / `inlineFunctionKinds` / `fnExprKind` declarations, so a
+	 * grammar that adds a spelling fails a test instead of silently widening the hole.
+	 */
 	public static final NESTED_FN_KINDS: Array<String> = [
 		'FnExpr',
 		'NamedFnExpr',
+		'ThinArrow',
 		'ThinParenLambdaExpr',
 		'ParenLambdaExpr',
 		'LocalFnStmt',
