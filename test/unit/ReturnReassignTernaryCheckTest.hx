@@ -272,6 +272,56 @@ class ReturnReassignTernaryCheckTest extends Test {
 		Assert.isTrue(ids.contains('return-reassign-ternary'));
 	}
 
+	public function testNamedFunctionValueWithoutAReturnTypeIsNotFlagged(): Void {
+		// The explicit-return-type gate exists because the collapse moves the r-value's EXPECTED
+		// type from `x`'s declaration to the `return` position, which an inferred return type does
+		// not supply. Two spellings used to escape it: the set that decides "descending into this
+		// node REPLACES the enclosing return-type answer" was `functionKinds` + `lambdaKinds`, and
+		// neither names the NAMED function literal or the local `inline function` — so their bodies
+		// INHERITED the enclosing method's `: Int` and were analyzed as if annotated.
+		//
+		// Measured, on the very shape the check's own doc names: at base this fired and `--fix`
+		// produced `return c ? [] : x;`, which the compiler rejects with
+		// `Map<String, Int> should be Array<Unknown<0>>`.
+		final named: String = fn(
+			'final g = function nm(z:Int) {\n\t\t\tvar m:Map<String, Int> = null;'
+			+ '\n\t\t\tif (a) m = [];\n\t\t\treturn m;\n\t\t};\n\t\treturn g(0) == null ? 0 : 1;'
+		);
+		Assert.equals(0, violations(named).length);
+		final inlineLocal: String = fn(
+			'inline function nm(z:Int) {\n\t\t\tvar m:Map<String, Int> = null;'
+			+ '\n\t\t\tif (a) m = [];\n\t\t\treturn m;\n\t\t}\n\t\treturn nm(0) == null ? 0 : 1;'
+		);
+		Assert.equals(0, violations(inlineLocal).length);
+	}
+
+	public function testNamedFunctionValueWithItsOwnReturnTypeIsFlagged(): Void {
+		// The other direction of the same seam, and what keeps the pin above from being a blanket
+		// refusal: once the named literal and the local `inline function` are in the set, their OWN
+		// annotation is read — so an annotated one is flagged inside an enclosing function that is
+		// not, which at base was silent because the answer was inherited.
+		final named: String = 'class C {\n\tfunction f() {\n\t\tfinal g = function nm(z:Int):Int {'
+			+ '\n\t\t\tvar x = 0;\n\t\t\tif (a) x = 1;\n\t\t\treturn x;\n\t\t};\n\t\treturn g(0);\n\t}\n}';
+		Assert.equals(1, violations(named).length);
+		final inlineLocal: String = 'class C {\n\tfunction f() {\n\t\tinline function nm(z:Int):Int {'
+			+ '\n\t\t\tvar x = 0;\n\t\t\tif (a) x = 1;\n\t\t\treturn x;\n\t\t}\n\t\treturn nm(0);\n\t}\n}';
+		Assert.equals(1, violations(inlineLocal).length);
+	}
+
+	public function testAnonymousLambdaBodyStillAnswersFromItsOwnAnnotation(): Void {
+		// The spellings that were already in the set answer exactly as before — the one-variable
+		// control for the pair above, so a regression there cannot hide behind "lambdas changed too".
+		Assert.equals(
+			0,
+			violations(fn('final g = function(z:Int) {\n\t\t\tvar x = 0;\n\t\t\tif (a) x = 1;\n\t\t\treturn x;\n\t\t};\n\t\treturn g(0);'))
+				.length
+		);
+		Assert.equals(
+			0,
+			violations(fn('final g = (z) -> {\n\t\t\tvar x = 0;\n\t\t\tif (a) x = 1;\n\t\t\treturn x;\n\t\t};\n\t\treturn g(0);')).length
+		);
+	}
+
 	private function fn(body: String): String {
 		return 'class C {\n\tfunction f():Int {\n\t\t$body\n\t}\n}';
 	}

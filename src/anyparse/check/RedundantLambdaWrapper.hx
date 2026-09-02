@@ -42,8 +42,14 @@ using Lambda;
  *
  * Structural, on the lambda:
  *
- * - the body is EXACTLY the call node — a cast, a negation, a parenthesis, a block, an
- *   `untyped`, a conditional region all project as a different kind and are refused;
+ * - the body is the call node, reached through `bodyExpression` (which looks through the one
+ *   expression-body wrapper and the one `return` the `function` spelling is REQUIRED to carry, so
+ *   `function(v) return f(v)` reduces exactly as `(v) -> f(v)` does); a cast, a negation, a
+ *   parenthesis, a BLOCK body, an `untyped`, a conditional region all project as a different
+ *   kind and are refused — the block body most deliberately, since `function(v) { return f(v); }`
+ *   and `(v) -> { return f(v); }` carry a statement list whose value the grammar does not state.
+ *   `function(v):Int return f(v)` is refused one gate later: its return-type hint is a child
+ *   between the parameters and the body, which the parameter loop reads as a non-plain binder;
  * - every parameter is a plain binder — an optional / rest / defaulted parameter is refused
  *   (a lambda cannot declare one in Haxe, but the seam is grammar-agnostic);
  * - the call's arguments are the parameters, ALL of them, in the SAME ORDER, each a bare
@@ -92,6 +98,15 @@ using Lambda;
  * - a member name declared twice in one type (the two arms of a conditional region) is refused,
  *   since the two arms may disagree about any of the above.
  *
+ * The NAMED spellings are refused, and that is a decision rather than a gap. A named function
+ * BINDS its own name: `function nm(q) return f(q);` is a DECLARATION, so eta-reducing it means
+ * deleting the declaration AND rewriting every use — a two-site rewrite this rule cannot make,
+ * since its fix replaces one span and it carries no scope model. The value-position form
+ * `xs.map(function nm(q) return f(q))` looks like a one-site rewrite, but the name is visible
+ * inside the body, so `function nm(q) return nm(q)` would reduce to a reference nothing declares.
+ * Both stay out by construction — `namedFnExprKind` is not a member of `lambdaKinds`, and the
+ * local-function kinds are not either — and both are pinned by name.
+ *
  * Two things deliberately NOT gated, both measured on `-cpp`: a `static inline` / instance
  * `inline` member IS usable as a value (only a LOCAL inline function is not), and a callee whose
  * parameter or return type is WIDER than the lambda's (`Float` for an `Int` binder, a non-`Void`
@@ -106,7 +121,8 @@ using Lambda;
  *
  * ## Grammar-agnostic
  *
- * Hosts come from `RefShape.lambdaKinds`, the body kind from `callKind`, parameters from
+ * Hosts come from `RefShape.lambdaKinds`, the body unwrap from `expressionBodyKinds` +
+ * `valueReturnKinds`, the body kind from `callKind`, parameters from
  * `paramKinds` minus `optionalParamKind` / `restParamKind`, argument reads from `identKind`,
  * the static receiver from `fieldAccessKind` gated on `upperInitialNeverCaptures`, declarations
  * from `typeDeclKinds` + `visibilityContainerKinds` (the wrapped `final class` form) with
@@ -203,8 +219,9 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	private static function forwarding(node: QueryNode, seams: Seams): Null<Forward> {
 		final childCount: Int = node.children.length;
 		if (!seams.lambdaKinds.contains(node.kind) || childCount == 0) return null;
-		final call: QueryNode = node.children[childCount - 1];
-		if (call.kind != seams.callKind || call.children.length == 0) return null;
+		final body: Null<QueryNode> = bodyExpression(node.children[childCount - 1], seams);
+		if (body == null || body.kind != seams.callKind || body.children.length == 0) return null;
+		final call: QueryNode = body;
 		final params: Array<String> = [];
 		for (i in 0...childCount - 1) {
 			final param: QueryNode = node.children[i];
@@ -220,6 +237,36 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 		final callee: QueryNode = call.children[0];
 		for (name in params) if (mentions(callee, name)) return null;
 		return { callee: callee, arity: params.length };
+	}
+
+	/**
+	 * The single expression a lambda's body child evaluates to, looking through the wrappers the
+	 * grammar interposes for the spellings that cannot write a bare expression there — or null
+	 * when the body is anything else.
+	 *
+	 * Haxe needs both: `function(v) return f(v)` projects as `ExprBody(ReturnExpr(Call))`, and
+	 * the `return` is not optional in that spelling, so a consumer demanding the body BE the call
+	 * could never fire on ANY `function` lambda while the identical `(v) -> f(v)` did — a silence
+	 * this rule's own doc contradicted. Each wrapper is looked through AT MOST ONCE and only when
+	 * it holds exactly one child, so nothing nests its way past the gate.
+	 *
+	 * A BLOCK body stays refused, which is the point of naming `expressionBodyKinds` rather than
+	 * `functionBodyKinds`: `function(v) { return f(v); }` and `(v) -> { return f(v); }` carry a
+	 * statement list whose value the grammar does not state, and the rule reduces only what it can
+	 * see IS one expression. `ExprBody(UntypedExpr(Call))` is refused by the same construction —
+	 * `untyped` is neither wrapper, so the walk stops on it.
+	 */
+	private static function bodyExpression(body: QueryNode, seams: Seams): Null<QueryNode> {
+		var node: QueryNode = body;
+		if (seams.expressionBodyKinds.contains(node.kind)) {
+			if (node.children.length != 1) return null;
+			node = node.children[0];
+		}
+		if (seams.valueReturnKinds.contains(node.kind)) {
+			if (node.children.length != 1) return null;
+			node = node.children[0];
+		}
+		return node;
 	}
 
 	/** Whether a lambda parameter node is a plain binder — the bare arrow form, or a non-optional, non-rest, undefaulted declared one. */
@@ -492,15 +539,11 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
 		final callKind: Null<String> = shape.callKind;
 		if (lambdaKinds.length == 0 || callKind == null) return null;
-		final modifiers: Array<String> = (shape.modifierOrderKinds ?? []).concat(shape.visibilityModifierKinds ?? []);
-		for (kind in [
-			 shape.staticModifierKind, shape.inlineModifierKind,    shape.macroModifierKind,
-			shape.dynamicModifierKind, shape.externModifierKind, shape.overrideModifierKind
-		]) {
-			if (kind != null && !modifiers.contains(kind)) modifiers.push(kind);
-		}
+		final modifiers: Array<String> = modifierKindsOf(shape);
 		return {
 			lambdaKinds: lambdaKinds,
+			expressionBodyKinds: shape.expressionBodyKinds ?? [],
+			valueReturnKinds: shape.valueReturnKinds ?? [],
 			callKind: callKind,
 			identKind: shape.identKind,
 			fieldAccessKind: shape.fieldAccessKind,
@@ -527,6 +570,21 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 			constructorName: shape.constructorName,
 			upperInitialTypes: shape.upperInitialNeverCaptures == true
 		};
+	}
+
+	/**
+	 * Every modifier kind a member declaration can carry — the ordered / visibility vocabularies plus
+	 * each individually-named modifier seam the grammar declares outside them.
+	 */
+	private static function modifierKindsOf(shape: RefShape): Array<String> {
+		final out: Array<String> = (shape.modifierOrderKinds ?? []).concat(shape.visibilityModifierKinds ?? []);
+		for (kind in [
+			 shape.staticModifierKind, shape.inlineModifierKind,    shape.macroModifierKind,
+			shape.dynamicModifierKind, shape.externModifierKind, shape.overrideModifierKind
+		]) {
+			if (kind != null && !out.contains(kind)) out.push(kind);
+		}
+		return out;
 	}
 
 }
@@ -580,6 +638,8 @@ private typedef Ctx = {
 /** Every seam `RedundantLambdaWrapper` reads, resolved once per run. */
 private typedef Seams = {
 	final lambdaKinds: Array<String>;
+	final expressionBodyKinds: Array<String>;
+	final valueReturnKinds: Array<String>;
 	final callKind: String;
 	final identKind: String;
 	final fieldAccessKind: Null<String>;

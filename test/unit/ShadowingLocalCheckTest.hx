@@ -218,6 +218,25 @@ class ShadowingLocalCheckTest extends Test {
 		);
 	}
 
+	public function testRebindGateTreatsEverySpellingOfANestedFunctionAlike(): Void {
+		// The re-bind gate does not count a read of the shadowed name that sits inside a NESTED
+		// FUNCTION — that region is the one the resolver is not trusted in. Which spellings count as
+		// one used to be a hand union of `functionKinds` + `lambdaKinds`, and neither names the
+		// NAMED function literal: the identical re-declaration was therefore REPORTED when its
+		// initializer read the outer name through `v -> …` and SILENT when it read it through
+		// `function nm(v) …`. Both spellings, one assertion, so neither half can drift alone.
+		final arrow: String = 'class C { static function p(f:Int -> Int):Int return f(1);'
+			+ ' static function r():Void { var q = 0; var q = p(v -> q + v); trace(q); } }';
+		final named: String = 'class C { static function p(f:Int -> Int):Int return f(1);'
+			+ ' static function r():Void { var q = 0; var q = p(function nm(v) return q + v); trace(q); } }';
+		Assert.equals(1, violations(arrow).length, 'the bare-arrow spelling must be reported');
+		Assert.equals(1, violations(named).length, 'the named-function spelling must be reported the same way');
+		// The control: the same re-declaration reading the outer name DIRECTLY is a deliberate
+		// re-bind and stays unreported, so the pair above is not just "this check reports
+		// everything".
+		Assert.equals(0, violations('class C { static function r():Void { var q = 0; var q = q + 1; trace(q); } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ShadowingLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

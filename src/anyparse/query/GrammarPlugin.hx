@@ -882,6 +882,24 @@ typedef RefShape = {
 	@:optional var fnExprKind: String;
 
 	/**
+	 * The NAMED function-literal expression kind (`function name(args) { … }` in value
+	 * position — Haxe's `NamedFnExpr`). It is a function VALUE like `fnExprKind`, but it
+	 * also BINDS its own name inside its body, which is why the two are separate seams: a
+	 * check that replaces the whole literal by something else (`redundant-lambda-wrapper`)
+	 * must refuse this one, while a check that only asks "is this a nested function scope"
+	 * must accept it.
+	 *
+	 * It exists because nothing else in this shape names it. `lambdaKinds` deliberately does
+	 * not list it — `RefactorSupport.collectBareLambdaParamNames` reads a lambda's first
+	 * child as a bare parameter, and a named literal's first child is its NAME — so before
+	 * this entry a consumer asking "every function-value kind" had to hand-write the spelling,
+	 * and two of the five such consumers had simply forgotten it. Read it through
+	 * `RefactorSupport.nestedFunctionKinds`, never on its own.
+	 * Optional — a grammar with no named function literal leaves it unset.
+	 */
+	@:optional var namedFnExprKind: String;
+
+	/**
 	 * Node kinds that are TYPE annotations, never argument expressions — a `new T<…>`
 	 * type argument, a function literal's return-type hint (`Named` / `Anon` /
 	 * function-type forms). `prefer-arrow-callback` excludes them when indexing call
@@ -1112,6 +1130,21 @@ typedef RefShape = {
 	 * BODY as a nested function with no return type of its own.
 	 */
 	@:optional var functionBodyKinds: Array<String>;
+
+	/**
+	 * The subset of `functionBodyKinds` whose SINGLE child IS the expression the function
+	 * evaluates to (Haxe `ExprBody`, the wrapper around `function f() return e` and
+	 * `function f() { … }`'s expression-bodied sibling). A block body is deliberately NOT
+	 * one of these: its value is a statement list, and a check that unwraps to reach "the
+	 * body expression" must keep refusing it.
+	 *
+	 * `redundant-lambda-wrapper` reads it to look through the wrapper the `function` spelling
+	 * of a lambda is REQUIRED to carry — `function(v) return f(v)` projects as
+	 * `FnExpr(param, ExprBody(ReturnExpr(Call)))`, so a consumer demanding the body BE the
+	 * call can never fire on it while the identical arrow `(v) -> f(v)` does. Unset degrades
+	 * to that refusal, never to a wrong accept.
+	 */
+	@:optional var expressionBodyKinds: Array<String>;
 
 	/**
 	 * The enum-abstract declaration kind (Haxe `EnumAbstractDecl`) — `explicit-type`

@@ -1,15 +1,19 @@
 package unit;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.CheckScan;
 import anyparse.check.DeadStore;
 import anyparse.check.Linter;
-import anyparse.check.NullFlow;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
+
+using Lambda;
 
 /**
  * The `dead-store` check: an assignment to a local / parameter whose value is
@@ -256,19 +260,54 @@ class DeadStoreTest extends Test {
 	}
 
 	public function testNestedFnKindsCoverEveryGrammarFunctionValue(): Void {
-		// The gap this pin closes was a MISSING kind, not wrong logic: `ThinArrow` was absent from
-		// `NullFlow.NESTED_FN_KINDS` while the grammar had declared it in `RefShape.lambdaKinds` all
-		// along. Make the grammar the authority for completeness — a plugin that adds a function-value
+		// The gap this pin closes was a MISSING kind, not wrong logic: `ThinArrow` was absent from the
+		// nested-function set while the grammar had declared it in `RefShape.lambdaKinds` all along.
+		// Make the grammar the authority for completeness — a plugin that adds a function-value
 		// spelling fails here instead of silently re-opening the hole in every consumer of that set.
+		//
+		// The declaration side only. It is now half structural — `nestedFunctionKinds` DERIVES the
+		// union, so a piece cannot go missing from it — and the half that still bites is
+		// `namedFnExprKind`, the seam this pin's own predecessor could not see: it was declared in no
+		// kind-set at all, so a hand union assembled from the other four silently omitted it.
+		// `testNestedFunctionKindsCoverEverySpellingTheGrammarProjects` covers the other direction,
+		// against parsed source rather than against declarations.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final shape: RefShape = plugin.refShape();
+		final authority: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
 		final declared: Array<String> = (
-			plugin.refShape().lambdaKinds ?? []
-		).concat(plugin.refShape().localFunctionKinds ?? []).concat(plugin.refShape().inlineFunctionKinds ?? []);
-		final fnExprKind: Null<String> = plugin.refShape().fnExprKind;
-		if (fnExprKind != null) declared.push(fnExprKind);
+			shape.lambdaKinds ?? []
+		).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		for (kind in [shape.fnExprKind, shape.namedFnExprKind]) if (kind != null) declared.push(kind);
 		Assert.isTrue(declared.length > 0, 'the plugin must declare at least one function-value kind');
+		Assert.notNull(shape.namedFnExprKind, 'the Haxe plugin must declare its named function-literal kind');
 		for (kind in declared)
-			Assert.isTrue(NullFlow.NESTED_FN_KINDS.contains(kind), 'NESTED_FN_KINDS is missing the grammar function-value kind $kind');
+			Assert.isTrue(authority.contains(kind), 'the nested-function authority is missing the grammar function-value kind $kind');
+	}
+
+	public function testNestedFunctionKindsCoverEverySpellingTheGrammarProjects(): Void {
+		// The other direction, and the one a declaration-side pin cannot reach: parse each spelling of
+		// a function value that Haxe can actually write, read the kind the grammar projects it as, and
+		// require the authority to carry it. A renamed ctor fails the first assertion, a dropped kind
+		// the second — neither can be satisfied by editing the plugin's declarations alone.
+		//
+		// `ParenLambdaExpr` (the Haxe-3 `(v) => e` fat arrow) has no row: Haxe 4 cannot spell it, so
+		// the pin above is what keeps it in the set.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final authority: Array<String> = RefactorSupport.nestedFunctionKinds(plugin.refShape());
+		final spellings: Array<{ code: String, kind: String }> = [
+			{ code: 'a.map(v -> t(v));', kind: 'ThinArrow' },
+			{ code: 'a.map((v) -> t(v));', kind: 'ThinParenLambdaExpr' },
+			{ code: 'a.map(function(v) return t(v));', kind: 'FnExpr' },
+			{ code: 'var f = function nm(v) return t(v);', kind: 'NamedFnExpr' },
+			{ code: 'function nm(v) return t(v);', kind: 'LocalFnStmt' },
+			{ code: 'inline function nm(v) return t(v);', kind: 'LocalInlineFnStmt' }
+		];
+		for (s in spellings) {
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, 'class C { static function r(a:Array<Int>):Void { ${s.code} } }');
+			Assert.notNull(tree, 'the spelling ${s.code} no longer parses');
+			if (tree != null) Assert.isTrue(subtreeHasKind(tree, s.kind), 'the grammar no longer projects ${s.code} as ${s.kind}');
+			Assert.isTrue(authority.contains(s.kind), 'the nested-function authority is missing ${s.kind} (${s.code})');
+		}
 	}
 
 	public function testLoopBackEdgeNotFlagged(): Void {
@@ -456,6 +495,11 @@ class DeadStoreTest extends Test {
 		final vs: Array<Violation> = check.run(files, plugin);
 		Assert.isTrue(vs.length > 0, 'the dead store must be reported before its fix can be judged');
 		return check.fix(src, vs, plugin, SymbolIndex.build(files, plugin));
+	}
+
+	/** Whether `node`'s subtree holds a node of kind `kind`. */
+	private static function subtreeHasKind(node: QueryNode, kind: String): Bool {
+		return node.kind == kind || node.children.exists(c -> subtreeHasKind(c, kind));
 	}
 
 }

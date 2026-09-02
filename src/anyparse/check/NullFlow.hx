@@ -73,6 +73,19 @@ private typedef FlowCtx = {
 	var controlExitKinds: Array<String>;
 	var nonNullRhsKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+
+	/**
+	 * The nested function-value kinds — a separate flow context: their bodies are not walked with
+	 * the outer state, and the names they touch are excluded from the enclosing unit's analysis.
+	 *
+	 * `RefactorSupport.nestedFunctionKinds(shape)` and nothing else. It must cover EVERY spelling
+	 * of a function value the grammar projects, or the omitted one is analyzed as straight-line
+	 * code belonging to the enclosing function: this list used to be a hand-written constant here,
+	 * and its missing `ThinArrow` — the bare `v -> …`, the commonest lambda in this tree — made
+	 * `dead-store` report a false positive on any local a bare-arrow callback writes, because the
+	 * lambda's own `return` cleared the backward liveness state. Reading the derived authority is
+	 * what keeps a grammar that adds a spelling from re-opening that hole in silence.
+	 */
 	var nestedFnKinds: Array<String>;
 	var caseBranchKind: Null<String>;
 	var defaultBranchKind: Null<String>;
@@ -165,29 +178,6 @@ private typedef FlowCtx = {
  */
 @:nullSafety(Strict)
 final class NullFlow {
-
-	/**
-	 * Nested function-value kinds — a separate flow context; their bodies are not walked with the outer
-	 * state, and the names they touch are excluded from the enclosing unit's analysis.
-	 *
-	 * The list must cover EVERY spelling of a function value the grammar projects, or the omitted one is
-	 * analyzed as straight-line code belonging to the enclosing function. `ThinArrow` — the bare
-	 * single-parameter arrow `v -> …`, by far the most common lambda in this tree — was missing, and that
-	 * one gap made `dead-store` report a false positive on any local a bare-arrow callback writes: the
-	 * lambda's own `return` cleared the backward liveness state, so the write looked dead on every path.
-	 * `DeadStoreTest.testNestedFnKindsCoverEveryGrammarFunctionValue` pins the set against the plugin's
-	 * own `lambdaKinds` / `localFunctionKinds` / `inlineFunctionKinds` / `fnExprKind` declarations, so a
-	 * grammar that adds a spelling fails a test instead of silently widening the hole.
-	 */
-	public static final NESTED_FN_KINDS: Array<String> = [
-		'FnExpr',
-		'NamedFnExpr',
-		'ThinArrow',
-		'ThinParenLambdaExpr',
-		'ParenLambdaExpr',
-		'LocalFnStmt',
-		'LocalInlineFnStmt'
-	];
 
 	/** Branch constructs with two mutually-exclusive value arms — analyzed with isolated branch states. */
 	public static final IF_KINDS: Array<String> = ['IfStmt', 'IfExpr', 'Ternary'];
@@ -302,10 +292,10 @@ final class NullFlow {
 	 * (treating it as an own name would hijack a same-named outer field write).
 	 * Shared with the `dead-store` liveness walk.
 	 */
-	public static function collectDeclared(node: QueryNode, localDeclKinds: Array<String>): Array<String> {
+	public static function collectDeclared(node: QueryNode, localDeclKinds: Array<String>, nestedFnKinds: Array<String>): Array<String> {
 		final out: Array<String> = [];
 		function walkDecl(n: QueryNode): Void {
-			if (NESTED_FN_KINDS.contains(n.kind)) return;
+			if (nestedFnKinds.contains(n.kind)) return;
 			final name: Null<String> = n.name;
 			if (localDeclKinds.contains(n.kind) && name != null) out.push(name);
 			for (c in n.children) walkDecl(c);
@@ -445,6 +435,7 @@ final class NullFlow {
 		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
+		final nestedFnKinds: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
 		final ctx: FlowCtx = {
 			identKind: identKind,
 			assignKind: shape.assignKind,
@@ -466,7 +457,7 @@ final class NullFlow {
 			controlExitKinds: shape.controlExitKinds ?? [],
 			nonNullRhsKinds: NON_NULL_RHS_KINDS,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			nestedFnKinds: NESTED_FN_KINDS,
+			nestedFnKinds: nestedFnKinds,
 			caseBranchKind: shape.caseBranchKind,
 			defaultBranchKind: shape.defaultBranchKind,
 			plainCasePatternKind: shape.plainCasePatternKind,
@@ -483,8 +474,8 @@ final class NullFlow {
 			assertTrueCalls: shape.assertTrueCalls ?? [],
 			assertFalseCalls: shape.assertFalseCalls ?? [],
 			mapExistsMethods: shape.mapExistsMethods ?? [],
-			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? []),
-			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds)),
+			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? [], nestedFnKinds),
+			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds, nestedFnKinds)),
 			source: source,
 			nullableSourceRhs: seed,
 			visit: visit
@@ -947,13 +938,13 @@ final class NullFlow {
 	 * runtime value is untouched by writes to the shadow.
 	 */
 	private static function clearDeclaredIn(scope: QueryNode, state: FlowState, ctx: FlowCtx): Void {
-		for (n in collectDeclared(scope, ctx.localDeclKinds)) clearName(state, n);
+		for (n in collectDeclared(scope, ctx.localDeclKinds, ctx.nestedFnKinds)) clearName(state, n);
 	}
 
 	/** Statement-list block: children share one running state; block-local declarations are cleared on exit so their facts do not leak out. */
 	private static function handleBlock(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		for (c in node.children) walk(c, state, ctx);
-		for (n in collectDeclared(node, ctx.localDeclKinds)) clearName(state, n);
+		for (n in collectDeclared(node, ctx.localDeclKinds, ctx.nestedFnKinds)) clearName(state, n);
 	}
 
 	/** Whether `rhs` is a syntactically non-null expression (a constructor or a non-null literal). */
@@ -1019,7 +1010,9 @@ final class NullFlow {
 	}
 
 	/** The names mutated inside any nested function value within `body` — excluded from narrowing for the whole function. */
-	private static function collectCaptured(body: QueryNode, identKind: String, writeKinds: Array<String>): Array<String> {
+	private static function collectCaptured(
+		body: QueryNode, identKind: String, writeKinds: Array<String>, nestedFnKinds: Array<String>
+	): Array<String> {
 		final out: Array<String> = [];
 		function collectWrites(n: QueryNode): Void {
 			if (writeKinds.contains(n.kind) && n.children.length >= 1) {
@@ -1030,7 +1023,7 @@ final class NullFlow {
 			for (c in n.children) collectWrites(c);
 		}
 		function walkBody(n: QueryNode): Void {
-			if (NESTED_FN_KINDS.contains(n.kind))
+			if (nestedFnKinds.contains(n.kind))
 				collectWrites(n);
 			else
 				for (c in n.children) walkBody(c);

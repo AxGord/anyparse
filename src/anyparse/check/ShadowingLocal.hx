@@ -328,7 +328,7 @@ final class ShadowingLocal implements Check {
 			catchKind: shape.catchClauseKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			conditionalKind: shape.conditionalMemberKind,
-			nestedFnKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? [])
+			nestedFnKinds: (shape.functionKinds ?? []).concat(RefactorSupport.nestedFunctionKinds(shape))
 		};
 	}
 
@@ -347,5 +347,12 @@ private typedef ScopeSeams = {
 	final catchKind: Null<String>;
 	final opaqueKinds: Array<String>;
 	final conditionalKind: Null<String>;
+
+	/**
+	 * Every node that opens a function scope: `RefactorSupport.nestedFunctionKinds` — THE
+	 * authority for function VALUES — plus `functionKinds`, the declarations (methods,
+	 * module-level functions) that open one without being a value. That second half is this
+	 * check's documented extra over the authority.
+	 */
 	final nestedFnKinds: Array<String>;
 };

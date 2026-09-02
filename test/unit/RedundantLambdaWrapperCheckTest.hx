@@ -408,6 +408,72 @@ class RedundantLambdaWrapperCheckTest extends Test {
 		);
 	}
 
+	public function testFunctionSpellingFlaggedAndReducedToCallee(): Void {
+		// The `function` spelling of the very wrapper the arrow fixtures cover. Haxe REQUIRES a
+		// `return` there, so the body projects as `ExprBody(ReturnExpr(Call))` rather than as the
+		// bare `Call` an arrow gives — and a gate demanding the body BE the call could therefore
+		// never fire on any `function` lambda, while the rule's own doc says it covers "a lambda".
+		final src: String = '${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) return Helper.isPos(p));\n\t}\n}';
+		final check: RedundantLambdaWrapper = new RedundantLambdaWrapper();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		Assert.equals(1, edits.length);
+		Assert.equals('Helper.isPos', edits[0].text);
+		final applied: String = src.substring(0, edits[0].span.from) + edits[0].text + src.substring(edits[0].span.to, src.length);
+		// One string spanning both halves: the whole literal is gone, the call around it is not.
+		Assert.equals('\t\txs.foreach(Helper.isPos);', applied.split('\n')[6]);
+	}
+
+	public function testBlockBodyRefusedInBothSpellings(): Void {
+		// The unwrap looks through the expression-body wrapper and the `return`, never through a
+		// BLOCK: a statement list has no value the grammar states. Both spellings that can carry
+		// one are refused, each against the one-variable twin that differs only by the braces.
+		discriminate(
+			'function block body',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) { return Helper.isPos(p); });\n\t}\n}',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) return Helper.isPos(p));\n\t}\n}'
+		);
+		discriminate(
+			'arrow block body', '${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach((p) -> { return Helper.isPos(p); });\n\t}\n}',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach((p) -> Helper.isPos(p));\n\t}\n}'
+		);
+	}
+
+	public function testNamedFunctionSpellingsRefused(): Void {
+		// A named function BINDS its own name. The declaration form is a two-site rewrite (delete
+		// the declaration, rewrite every use) this rule's single-span fix cannot make; the
+		// value-position form looks like one site, but `function nm(q) return nm(q)` would reduce
+		// to a reference nothing declares. Both stay out because `namedFnExprKind` and the
+		// local-function kinds are not members of `lambdaKinds` — a decision, not an oversight.
+		discriminate(
+			'named function value',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function nm(p) return Helper.isPos(p));\n\t}\n}',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) return Helper.isPos(p));\n\t}\n}'
+		);
+		discriminate(
+			'named local function declaration',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\tfunction nm(p) return Helper.isPos(p);\n\t\txs.foreach(nm);\n\t}\n}',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) return Helper.isPos(p));\n\t}\n}'
+		);
+	}
+
+	public function testReturnTypeHintAndUntypedBodyRefused(): Void {
+		// A return-type hint is a child BETWEEN the parameters and the body, which the parameter
+		// loop reads as a parameter that is not a plain binder — refused one gate after the unwrap,
+		// and pinned so widening the unwrap never quietly widens this too. `untyped` is neither
+		// wrapper, so the walk stops on it.
+		discriminate(
+			'return-type hint',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p):Bool return Helper.isPos(p));\n\t}\n}',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) return Helper.isPos(p));\n\t}\n}'
+		);
+		discriminate(
+			'untyped body', '${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) untyped Helper.isPos(p));\n\t}\n}',
+			'${HELPER}class C {\n\tfunction f():Void {\n\t\txs.foreach(function(p) return Helper.isPos(p));\n\t}\n}'
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new RedundantLambdaWrapper().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

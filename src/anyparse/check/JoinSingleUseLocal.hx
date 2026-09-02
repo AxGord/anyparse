@@ -269,16 +269,12 @@ final class JoinSingleUseLocal implements Check {
 			if (kinds != null) for (k in kinds) if (!out.contains(k)) out.push(k);
 		}
 		add(shape.functionKinds);
-		add(shape.lambdaKinds);
-		add(shape.localFunctionKinds);
-		add(shape.inlineFunctionKinds);
-		add(shape.fnExprKind == null ? null : [shape.fnExprKind]);
+		add(RefactorSupport.nestedFunctionKinds(shape));
 		add(shape.loopStatementKinds);
 		add(shape.doWhileLoopKinds);
 		add(shape.forStmtKind == null ? null : [shape.forStmtKind]);
 		add(shape.whileStmtKind == null ? null : [shape.whileStmtKind]);
 		add(shape.opaqueKinds);
-		add(NullFlow.NESTED_FN_KINDS);
 		add(NullFlow.LOOP_KINDS);
 		return out;
 	}

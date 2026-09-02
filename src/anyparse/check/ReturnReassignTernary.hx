@@ -200,6 +200,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		final assignKind: Null<String> = shape.assignKind;
 		if (returnKind == null || exprStmtKind == null || assignKind == null) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		final nestedFnKinds: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
 		return support == null ? null : {
 			ifKinds: ifKinds,
 			returnKind: returnKind,
@@ -211,10 +212,14 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 			paramKinds: shape.paramKinds ?? [],
 			bodyKinds: shape.functionBodyKinds ?? [],
 			// EVERY nested-function kind, not just the arrow lambdas: a named `function g() {}`
-			// (`localFunctionKinds`) and an `inline function` (`inlineFunctionKinds`) capture a
-			// binding exactly as a lambda does, and omitting them opens the capture gate.
-			nestedFnKinds: (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []),
-			fnKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []),
+			// and an `inline function` capture a binding exactly as a lambda does, and omitting
+			// them opens the capture gate. `RefactorSupport.nestedFunctionKinds` is the authority;
+			// the hand union this replaced had missed the NAMED function literal.
+			nestedFnKinds: nestedFnKinds,
+			// The declaration kinds whose own return type gates the collapse, so descending into
+			// one REPLACES the enclosing function's answer instead of inheriting it. Same authority
+			// plus the method / module-level declarations, which are not function VALUES.
+			fnKinds: (shape.functionKinds ?? []).concat(nestedFnKinds),
 			blockKinds: support.blockKinds(),
 			shape: shape
 		};

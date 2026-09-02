@@ -2789,6 +2789,37 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * EVERY kind that projects a function VALUE nested inside code — the lambdas in every
+	 * spelling (`lambdaKinds`, which already carries the anonymous `fnExprKind`), the NAMED
+	 * function literal (`namedFnExprKind`), and the local function declarations in both the
+	 * plain (`localFunctionKinds`) and the `inline` (`inlineFunctionKinds`) form.
+	 *
+	 * THE authority for that question. Five checks used to answer it by hand and only two of
+	 * the five hand sets were complete: the named literal is declared in no other kind-set, so
+	 * `return-reassign-ternary` and `shadowing-local` had each silently omitted it, and a
+	 * grammar adding a sixth spelling would have re-opened the same hole in all five at once.
+	 * Derived rather than declared, so it can never fall behind the pieces it unions —
+	 * a plugin that adds a lambda spelling to `lambdaKinds` widens this set with it.
+	 *
+	 * It is NOT the same question as "does this node open a new scope": a method declaration
+	 * (`functionKinds`) opens one and is not a function value, so a consumer asking the scope
+	 * question unions this set with its own, and documents the extra (`shadowing-local`,
+	 * `trivial-getter`).
+	 */
+	public static function nestedFunctionKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		inline function add(kinds: Null<Array<String>>): Void {
+			if (kinds != null) for (k in kinds) if (!out.contains(k)) out.push(k);
+		}
+		add(shape.lambdaKinds);
+		add(shape.fnExprKind == null ? null : [shape.fnExprKind]);
+		add(shape.namedFnExprKind == null ? null : [shape.namedFnExprKind]);
+		add(shape.localFunctionKinds);
+		add(shape.inlineFunctionKinds);
+		return out;
+	}
+
+	/**
 	 * The single constructor (`FnMember` named `new`) directly declared in `container`,
 	 * or null when there is not exactly one — a multiple-constructor (macro-generated)
 	 * class is skipped so a field's init timing stays a plain single `new`.

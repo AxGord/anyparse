@@ -34,6 +34,7 @@ private typedef LiveCtx = {
 	var exitClearKinds: Array<String>;
 	var exitTopKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+	var nestedFnKinds: Array<String>;
 	var scopeKinds: Array<String>;
 	var loopJumpNames: Array<String>;
 	var ownNames: Array<String>;
@@ -306,6 +307,7 @@ final class DeadStore implements Check {
 		out: Array<Violation>, file: String, source: String, body: QueryNode, shape: RefShape, identKind: String, paramNames: Array<String>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
+		final nestedFnKinds: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
 		final controlExitKinds: Array<String> = shape.controlExitKinds ?? [];
 		final returnKinds: Array<String> = [];
 		{
@@ -316,8 +318,8 @@ final class DeadStore implements Check {
 			final vk: Null<String> = shape.voidReturnKind;
 			if (vk != null) returnKinds.push(vk);
 		}
-		final ownNames: Array<String> = paramNames.concat(NullFlow.collectDeclared(body, localDeclKinds));
-		final excluded: Array<String> = collectExcluded(body, identKind, shape.stringInterpIdentKind);
+		final ownNames: Array<String> = paramNames.concat(NullFlow.collectDeclared(body, localDeclKinds, nestedFnKinds));
+		final excluded: Array<String> = collectExcluded(body, identKind, shape.stringInterpIdentKind, nestedFnKinds);
 		for (i in 0...ownNames.length) {
 			final n: String = ownNames[i];
 			if (ownNames.indexOf(n) != i && !excluded.contains(n)) excluded.push(n);
@@ -336,6 +338,7 @@ final class DeadStore implements Check {
 			exitClearKinds: returnKinds,
 			exitTopKinds: [for (k in controlExitKinds) if (!returnKinds.contains(k)) k],
 			opaqueKinds: shape.opaqueKinds ?? [],
+			nestedFnKinds: nestedFnKinds,
 			scopeKinds: shape.scopeKinds,
 			loopJumpNames: shape.loopJumpNames ?? [],
 			ownNames: ownNames,
@@ -364,7 +367,7 @@ final class DeadStore implements Check {
 			setTop(live, ctx);
 			return;
 		}
-		if (NullFlow.NESTED_FN_KINDS.contains(kind)) return;
+		if (ctx.nestedFnKinds.contains(kind)) return;
 		final childScope: QueryNode = ctx.scopeKinds.contains(kind) ? node : scope;
 		if (kind == ctx.identKind) {
 			final name: Null<String> = node.name;
@@ -587,7 +590,9 @@ final class DeadStore implements Check {
 	}
 
 	/** The names a nested function value reads or writes — excluded from the whole unit's analysis (the closure may run at any later time). */
-	private static function collectExcluded(body: QueryNode, identKind: String, interpIdentKind: Null<String>): Array<String> {
+	private static function collectExcluded(
+		body: QueryNode, identKind: String, interpIdentKind: Null<String>, nestedFnKinds: Array<String>
+	): Array<String> {
 		final out: Array<String> = [];
 		function collectNames(n: QueryNode): Void {
 			final name: Null<String> = n.name;
@@ -596,7 +601,7 @@ final class DeadStore implements Check {
 			for (c in n.children) collectNames(c);
 		}
 		function walkB(n: QueryNode): Void {
-			if (NullFlow.NESTED_FN_KINDS.contains(n.kind))
+			if (nestedFnKinds.contains(n.kind))
 				collectNames(n);
 			else
 				for (c in n.children) walkB(c);

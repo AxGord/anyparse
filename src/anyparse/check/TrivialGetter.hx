@@ -161,6 +161,33 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** The metadata that gives a property physical storage of its OWN — what makes a self-backed trivial getter legal, and dead the moment the collapse gives the property a `default` side. */
 	private static inline final IS_VAR_META: String = '@:isVar';
 
+	/**
+	 * Every node kind that opens a function scope binding parameters and locals — the function
+	 * VALUES `RefactorSupport.nestedFunctionKinds` is the authority for, plus this check's one
+	 * documented extra: the two METHOD-declaration kinds. Module-level function declarations are
+	 * deliberately NOT here — `this.` / `C.` is what a shadowed reference is rewritten to, and
+	 * neither is spellable at module level.
+	 *
+	 * A hand copy of a derivable set, kept because the alternative is not worth its price: this
+	 * check reaches the shape only in `run`, while `isFnScope` is called from three points inside
+	 * a rename walk whose functions carry no context object, so deriving it would add a parameter
+	 * to eight signatures and fourteen call sites — in a file that decides its other ~40 node
+	 * kinds by literal anyway. `TrivialGetterCheckTest.testFnScopeKindsMatchTheGrammarAuthority`
+	 * pins it against the plugin in BOTH directions instead, so a grammar that adds or drops a
+	 * function-value spelling fails a test rather than silently changing what this rename trusts.
+	 */
+	private static final FN_SCOPE_KINDS: Array<String> = [
+		'FnMember',
+		'FinalModifiedMember',
+		'LocalFnStmt',
+		'LocalInlineFnStmt',
+		'FnExpr',
+		'NamedFnExpr',
+		'ThinParenLambdaExpr',
+		'ParenLambdaExpr',
+		'ThinArrow'
+	];
+
 	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
 	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
 
@@ -371,11 +398,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 
 	/** Whether `node` opens a new function scope (method / local fn / lambda) that binds parameters and locals. */
 	private static inline function isFnScope(node: QueryNode): Bool {
-		return switch node.kind {
-			case 'FnMember', 'FinalModifiedMember', 'LocalFnStmt', 'LocalInlineFnStmt', 'FnExpr', 'NamedFnExpr', 'ThinParenLambdaExpr',
-				'ParenLambdaExpr', 'ThinArrow': true;
-			case _: false;
-		}
+		return FN_SCOPE_KINDS.contains(node.kind);
 	}
 
 	/** The last `.`-separated segment of `path` (its simple name). */
