@@ -199,12 +199,15 @@ class LintConfigInheritanceTest extends Test {
 		#end
 	}
 
-	public function testTheProjectsOwnNestedConfigIsFourRelaxationsAndNothingElse(): Void {
+	public function testTheProjectsOwnNestedConfigIsItsSixRelaxationsAndNothingElse(): Void {
 		#if (sys || nodejs)
-		// The acceptance test for the shrinkage: `test/apqlint.json` is back to the four
-		// exemptions it was written as, and every key it used to carry a copy of now reaches
-		// it through the chain. Both halves matter — the relaxations must still apply, and
-		// the project settings must be the ROOT's, resolved against the ROOT's directory.
+		// The acceptance test for the shrinkage: `test/apqlint.json` is back to the
+		// exemptions it was written as — the original four, plus the two the user added on
+		// 2026-09-02 from S15's measurement (`duplicate-code` 644 findings / `prefer-typed-throw`
+		// 223, 85% of the test tree's stream, both correct checks whose fix test code cannot
+		// take) — and every key it used to carry a copy of now reaches it through the chain.
+		// Both halves matter — the relaxations must still apply, and the project settings must
+		// be the ROOT's, resolved against the ROOT's directory.
 		final repo: String = CliFixture.repoRoot();
 		final src: LintConfig = LintConfig.discover('$repo/src/anyparse/check/LintConfig.hx');
 		final test: LintConfig = LintConfig.discover('$repo/test/unit/LintConfigInheritanceTest.hx');
@@ -224,12 +227,18 @@ class LintConfigInheritanceTest extends Test {
 		for (id in [
 			'explicit-local-type',
 			'import-order',
-			'prefer-typed-throw',
+			'anon-type-dup',
 			'unused-public-member'
 		]) Assert.isTrue(test.enabledFor(id, false), 'the root opt-in "$id" reaches test/');
-		// And the four relaxations the document is actually for still apply.
-		for (id in ['magic-number', 'string-literal-dup', 'doc-coverage'])
+		// And the six relaxations the document is actually for still apply — the two newer
+		// ones are exemptions of rules that are LIVE at the root, so each is asserted on both
+		// sides: off under test/, on under src/ (a nested document that switched them off
+		// everywhere would pass a one-sided check).
+		for (id in ['magic-number', 'string-literal-dup', 'doc-coverage', 'duplicate-code'])
 			Assert.isFalse(test.enabledFor(id), 'the test-code relaxation "$id" still applies');
+		Assert.isTrue(src.enabledFor('duplicate-code'), 'duplicate-code stays on under src/');
+		Assert.isFalse(test.enabledFor('prefer-typed-throw', false), 'prefer-typed-throw is exempt under test/');
+		Assert.isTrue(src.enabledFor('prefer-typed-throw', false), 'and stays a live root opt-in under src/');
 		Assert.equals(100, test.intOption('oversized-type', 'maxMembers'), 'the oversized-type relaxation still applies');
 		Assert.isNull(src.intOption('oversized-type', 'maxMembers'), 'and it does not leak upward into src/');
 		#else
