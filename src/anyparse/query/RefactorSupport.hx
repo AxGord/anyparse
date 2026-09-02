@@ -751,7 +751,7 @@ final class RefactorSupport {
 	 * a read survives `final`.
 	 */
 	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex, member: String): Bool {
-		return !index.skippedMayReference(member) && !carriesAllowGrant(source);
+		return !index.skippedMayReference(member) && !index.sourceCarriesAllowGrant(source);
 	}
 
 	/**

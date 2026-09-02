@@ -469,6 +469,9 @@ final class SymbolIndex {
 	/** Per-file source text, retained so a subtype-ward body scan (`subtypeReferencesField`) can inspect a subtype's raw declaration span for a backing-field reference. */
 	private final _sources: Map<String, String>;
 
+	/** The answer `sourceCarriesAllowGrant` gave for `_grantScanSource`. */
+	private var _grantScanAnswer: Bool = false;
+
 	/**
 	 * Lazily-built subtype adjacency: a supertype's SIMPLE name -> every `(file, type)` pair
 	 * naming it in `supertypes`, in file / declaration order. The index is immutable after
@@ -479,6 +482,17 @@ final class SymbolIndex {
 	 * see `subtypesOf`.
 	 */
 	private var _subtypeAdjacency: Null<Map<String, Array<ResolvedType>>>;
+
+	/**
+	 * Lazily-built supertype union map: a type's SIMPLE name -> every simple name any declaration
+	 * of it names in `supertypes`. Built once per instance for the same reason
+	 * `_subtypeAdjacency` is — the index is immutable after construction — and read by
+	 * `supertypeNameUnion`.
+	 */
+	private var _supertypeNames: Null<Map<String, Array<String>>>;
+
+	/** The last source `sourceCarriesAllowGrant` was asked about, or null before the first ask. */
+	private var _grantScanSource: Null<String>;
 
 	private function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>) {
 		_files = files;
@@ -1505,6 +1519,62 @@ final class SymbolIndex {
 		final out: Array<String> = [];
 		eachSubtype(owner, sub -> if (sub.type.name != owner) for (m in sub.type.members) if (!out.contains(m.name)) out.push(m.name));
 		return out;
+	}
+
+	/**
+	 * `RefactorSupport.carriesAllowGrant` for `source`, answered from a ONE-SLOT memo on this
+	 * index.
+	 *
+	 * The grant scan is a property of the FILE and every consumer asks it once per MEMBER, so a
+	 * check walking members paid one whole-source `indexOf` per member of every file it looked at.
+	 * Measured on one 416 KB source with 644 members: 423 ms of a 2.4 s `lint --all`, ~19 %.
+	 *
+	 * ONE slot, and the index instance owns it: `SymbolIndex.build` allocates a fresh instance per
+	 * check run, and the only index anything holds on to is the resolution one a
+	 * `CachingGrammarPlugin` memoises on ITSELF and re-sets per `--fix` pass — so a memo here dies
+	 * with the run that made it, which is what the first invariant asks, and the process-scoped
+	 * cache it forbids is what none of this is.
+	 *
+	 * One slot is enough because a member walk asks about one file's source until it moves to the
+	 * next; an interleaved walk simply misses and rescans, which is what it did before this existed.
+	 * The answer is a pure function of the source text, so a miss costs time and never correctness.
+	 */
+	public function sourceCarriesAllowGrant(source: String): Bool {
+		if (_grantScanSource == source) return _grantScanAnswer;
+		_grantScanSource = source;
+		_grantScanAnswer = RefactorSupport.carriesAllowGrant(source);
+		return _grantScanAnswer;
+	}
+
+	/**
+	 * The whole index projected as a supertype graph over SIMPLE names: a name -> every simple name
+	 * that ANY declaration of it lists in `extends` / `implements`. The union is what makes the map
+	 * answerable at all, since two files may declare the same simple name and neither is more
+	 * authoritative than the other from here; a consumer reads a reachable edge as "SOME declaration
+	 * of this name extends that one".
+	 *
+	 * The arrays are the index's own and callers must not write to them — they hold COPIES of each
+	 * `TypeDeclInfo.supertypes`, never that array itself, so appending here would rewrite the index
+	 * for every later reader of that type.
+	 *
+	 * Built ONCE per instance, like `_subtypeAdjacency` and for the same reason: the index is
+	 * immutable after construction. The map used to be rebuilt inside the caller, per CALL — a
+	 * whole `allFiles()` x `types` walk per method the naming carve-outs asked about, which is one
+	 * per test method on a test-heavy tree (measured: 2.1s of a 95s project lint).
+	 */
+	public function supertypeNameUnion(): Map<String, Array<String>> {
+		var names: Null<Map<String, Array<String>>> = _supertypeNames;
+		if (names != null) return names;
+		names = [];
+		for (f in _files) for (t in f.types) {
+			final known: Null<Array<String>> = names[t.name];
+			if (known == null)
+				names[t.name] = t.supertypes.copy()
+			else
+				for (s in t.supertypes) if (!known.contains(s)) known.push(s);
+		}
+		_supertypeNames = names;
+		return names;
 	}
 
 	/**

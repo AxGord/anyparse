@@ -18,7 +18,7 @@ import anyparse.query.AddElement;
 import anyparse.query.AddImport;
 import anyparse.query.AddMember;
 import anyparse.query.AddParam;
-import anyparse.query.Address.AddressIndex;
+import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
@@ -43,7 +43,6 @@ import anyparse.query.MoveSymbol;
 import anyparse.query.MutationVerdict.MutationVerdictResult;
 import anyparse.query.NewFile.NewFileResult;
 import anyparse.query.NewFile.NewFileSpec;
-import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
@@ -10652,28 +10651,22 @@ final class Cli {
 				// already holds every reported file; a fresh wrapper here would parse each
 				// of them a second time, which dominated the whole annotation.
 				final ordered: Array<Violation> = orderedByPath();
-				final equiv: KindEquivalence = plugin.selectKindEquivalence();
 				// Addressing a node probes its tree several times, so an index per FINDING
-				// made the annotation cost far more than the analysis it annotates.
-				// `ordered` groups a file's findings together, so ONE slot serves a whole
-				// file and nothing is retained past it. Keyed by the TREE, not the path:
-				// the parse cache is keyed by CONTENT, and an index handed a node it never
-				// saw degrades every address to `<line>:<col>` in silence.
-				final indexTree: Null<QueryNode> = null;
-				final index: Null<AddressIndex> = null;
+				// makes the annotation cost far more than the analysis it annotates.
+				// `ordered` groups a file's findings together, so the addresser's ONE slot
+				// serves a whole file and retains nothing past it — it is a local of this
+				// call, which is the run-scoped place for the memo. The slot keys on the
+				// TREE, not the path: the parse cache is keyed by CONTENT, and an index
+				// handed a node it never saw degrades every address to `<line>:<col>` in
+				// silence.
+				final addresser: TreeAddresser = new TreeAddresser(plugin.selectKindEquivalence());
 				sysPrint(LintFormat.json(ordered, sourceOf, v -> {
 					final span: Null<Span> = v.span;
 					final source: Null<String> = sourceOf[v.file];
 					if (span == null || source == null) return null;
 					final tree: Null<QueryNode> =
 						try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-					if (tree == null) return null;
-					var current: Null<AddressIndex> = index;
-					if (current == null || indexTree != tree) {
-						current = Address.describerFor(tree, equiv);
-					}
-					final node: Null<QueryNode> = current.nodeAt(span.from);
-					return node == null ? null : current.describe(source, node);
+					return tree == null ? null : addresser.addressAt(tree, source, span.from);
 				}));
 			case FORMAT_CHECKSTYLE:
 				sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
