@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.Check;
 import anyparse.check.CheckScan;
 import anyparse.check.CompilerServer;
+import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OracleCache;
@@ -2031,7 +2032,11 @@ final class Cli {
 		);
 		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
-		// whole run — its hxml is typechecked as ground truth below.
+		// whole run — its hxml is typechecked as ground truth below. That stays; what it owes
+		// the reader is a word when the scope spans roots that name DIFFERENT builds, since
+		// every risky and oracle-assisted verdict below is then taken against a build the
+		// second root never declared.
+		warnScopeDisagreements(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final oracleHxml: Null<String> = oracleConfig?.compilerOracle();
 		final oracleDir: Null<String> = oracleConfig?.compilerOracleDir();
@@ -2066,6 +2071,32 @@ final class Cli {
 			for (v in all) if ((cast v.severity: Int) <= threshold) return EXIT_RUNTIME;
 		}
 		return EXIT_OK;
+	}
+
+	/**
+	 * The two scope-level `apqlint.json` diagnostics, once per run, from the one place that can
+	 * afford them and can tell whether the run consults each setting.
+	 *
+	 * Both ask their question of EVERY path where the answer they serve costs one resolve, and
+	 * `resolveConfig` is the only resolver in the codebase memoised per directory. The roster half
+	 * used to be asked from `LintConfig.frameworksFor`, which runs once per framework-aware rule and
+	 * re-ran the whole scan each time (its argument is evaluated whatever the once-per-process
+	 * ledger later decides) — and for the `RiskyFix` half of those rules, `prefer-inline` under a
+	 * configured oracle and `unused-public-member` when enabled, `FixVerifier` installs no resolver
+	 * at all, so each scan was an uncached `LintConfig.discover` walk per file. The three
+	 * `resolveConfig` sweeps in `runLint` leave the directory cache warm, so here both cost nothing.
+	 *
+	 * Each is GATED on whether this run consults its setting, because the sentence claims the first
+	 * root's answer "applies to all N file(s)": `--no-oracle` takes no oracle verdict, and a run
+	 * holding no `FrameworkAware` rule (`--rule prefer-single-quotes`, or a config disabling all
+	 * four) applies no roster. An ungated line would be the same defect as the silence it replaced,
+	 * pointing the other way.
+	 */
+	private static function warnScopeDisagreements(
+		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool
+	): Void {
+		if (activeChecks.exists(c -> c is FrameworkAware)) ConfigDisagreement.warnRoster(resolveConfig, paths);
+		if (!noOracle) ConfigDisagreement.warnOracle(resolveConfig, paths);
 	}
 
 	/**
@@ -14657,8 +14688,24 @@ final class Cli {
 			entry.edits += tally.edits;
 			if (tally.edits != 0) continue;
 			entry.declined += tally.findings;
+			// The check's OWN sentences first, per finding, because they answer a DIFFERENT question
+			// than the verifier's: a finding the check declined never produced a candidate edit, so
+			// "the oracle does not compile this file" is not why IT got no edit — it is why the
+			// OTHER findings' edits were never written. Charging all of them to the verifier would
+			// blame the compiler for work never offered to it; charging all of them to the check
+			// would have it speak for findings it said nothing about.
+			var spoken: Int = 0;
+			for (own in tally.declineReasons) {
+				bumpReason(entry.reasons, own.text, own.count);
+				spoken += own.count;
+			}
+			// The REMAINDER only — the findings the check left silent. `reasonLines` already reads a
+			// reason total below `declined` as "the check spoke for some of these and not the rest",
+			// so the split needs no new sentence form and cannot double-count.
+			final rest: Int = tally.findings - spoken;
+			if (rest <= 0) continue;
 			final reason: Null<String> = riskyDeclineReason(verified, tally);
-			if (reason != null) bumpReason(entry.reasons, reason, tally.findings);
+			if (reason != null) bumpReason(entry.reasons, reason, rest);
 		}
 	}
 

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
@@ -97,7 +98,7 @@ using StringTools;
  * per file by the caller.
  */
 @:nullSafety(Strict)
-final class UnusedPrivate implements Check implements ConfigAware {
+final class UnusedPrivate implements Check implements ConfigAware implements FrameworkAware {
 
 	/**
 	 * Cross-file string-literal contents gathered by the last `run`, consulted by

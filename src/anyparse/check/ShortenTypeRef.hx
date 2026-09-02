@@ -227,6 +227,13 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		'an over-qualified type reference (report-only: the resolution index does not prove the shorter spelling names the same declaration)';
 
 	/**
+	 * What the fix ledger is told about an `MSG_UNPROVEN` finding — report-only BY DESIGN, not a
+	 * fixer that failed. Shorter than the message because the ledger already names the rule.
+	 */
+	private static inline final DECLINE_UNPROVEN: String =
+		'report-only by design: the resolution index does not prove the shorter spelling names the same declaration';
+
+	/**
 	 * Where the backward scan for a `macro` modifier stops: the first preceding sibling that is not
 	 * a bare modifier node. A modifier projects as a childless, nameless sibling, so anything with a
 	 * child or a name is the previous DECLARATION (or its annotation) and ends the run. Same reading
@@ -309,8 +316,16 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	): Array<GroupedEdit> {
 		final wanted: Array<String> = [];
 		for (violation in violations) {
+			// Said HERE, on the caller's own violation object, because this is the site that
+			// decides: an unproven finding is report-only by design and nothing downstream asks
+			// again. It reaches the ledger on the RISKY path only since `FixVerifyTally` began
+			// carrying the check's own sentences out of the verifier's private collect.
+			if (violation.message == MSG_UNPROVEN) {
+				violation.declineReason = DECLINE_UNPROVEN;
+				continue;
+			}
 			final span: Null<Span> = violation.span;
-			if (span != null && violation.message != MSG_UNPROVEN) wanted.push(spanKey(span));
+			if (span != null) wanted.push(spanKey(span));
 		}
 		if (wanted.length == 0) return [];
 		// The resolution index (report UNION libraries) is the wider proof. The `?? index` fallback

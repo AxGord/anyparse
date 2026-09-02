@@ -795,10 +795,26 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * more than one file, so adopting it here would silently DROP the carve-out for an ambiguous
 	 * name and start reporting members this predicate used to spare — a behaviour change this seam
 	 * does not own.
+	 *
+	 * The map is keyed by that same SIMPLE name, and two files can both declare one. It used to keep
+	 * the LAST declaration walked, so whether a subtype of `p.Node` reached `root` depended on the
+	 * order `p.Node` and `q.Node` happen to arrive in — an answer with no reason behind it. The
+	 * supertypes are UNIONED instead, which reads as "SOME declaration of this name extends `root`":
+	 * the same generous direction the paragraph above already chose over `isSubtype`, and the safe
+	 * one for every consumer, since all four read a true as "leave this member alone" and never as
+	 * "act on it".
 	 */
 	private static function transitivelyExtends(typeName: String, root: String, index: SymbolIndex): Bool {
 		final superMap: Map<String, Array<String>> = [];
-		for (f in index.allFiles()) for (t in f.types) superMap[t.name] = t.supertypes;
+		for (f in index.allFiles()) for (t in f.types) {
+			final known: Null<Array<String>> = superMap[t.name];
+			// COPY, never the index's own array: the union below appends, and appending to
+			// `t.supertypes` would rewrite the index for every later reader of that type.
+			if (known == null)
+				superMap[t.name] = t.supertypes.copy()
+			else
+				for (s in t.supertypes) if (!known.contains(s)) known.push(s);
+		}
 		final seen: Array<String> = [typeName];
 		var i: Int = 0;
 		while (i < seen.length) {

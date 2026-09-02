@@ -134,13 +134,15 @@ final class FixVerifierCoverageE2ETest extends Test {
 				rule: 'avoid-dynamic',
 				file: '$dir/Main.hx',
 				findings: 1,
-				edits: 0
+				edits: 0,
+				declineReasons: []
 			},
 			{
 				rule: 'avoid-dynamic',
 				file: '$dir/Other.hx',
 				findings: 1,
-				edits: 0
+				edits: 0,
+				declineReasons: []
 			}
 		], result.tallies);
 		Assert.equals(BREAKS, File.getContent('$dir/Main.hx'), 'the compiled file is restored byte for byte');
@@ -205,13 +207,15 @@ final class FixVerifierCoverageE2ETest extends Test {
 				rule: 'avoid-dynamic',
 				file: '$dir/Main.hx',
 				findings: 1,
-				edits: 1
+				edits: 1,
+				declineReasons: []
 			},
 			{
 				rule: 'avoid-dynamic',
 				file: '$dir/Other.hx',
 				findings: 1,
-				edits: 0
+				edits: 0,
+				declineReasons: []
 			}
 		], result.tallies);
 		CliFixture.removeDir(dir);
@@ -258,7 +262,8 @@ final class FixVerifierCoverageE2ETest extends Test {
 				rule: 'avoid-dynamic',
 				file: '$dir/Main.hx',
 				findings: 1,
-				edits: 1
+				edits: 1,
+				declineReasons: []
 			}
 		], result.tallies, 'the drifted file contributes no row, the canonical one still does');
 		Assert.equals(0, result.declined.length, 'and it is not a decline either — no candidate was ever produced');

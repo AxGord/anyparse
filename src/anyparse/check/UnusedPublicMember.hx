@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
@@ -144,7 +145,7 @@ using StringTools;
  * type by rules the index does not model, and an `enum` / `typedef` declares no methods.
  */
 @:nullSafety(Strict)
-final class UnusedPublicMember implements Check implements DefaultOff implements RiskyFix implements ConfigAware {
+final class UnusedPublicMember implements Check implements DefaultOff implements RiskyFix implements ConfigAware implements FrameworkAware {
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'unused-public-member';
