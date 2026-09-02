@@ -2233,9 +2233,13 @@ final class RefactorSupport {
 	 * `Naming`s `CROSS_ALLOW_GRANT` gate), which is how a scan and the sentence describing it drift
 	 * apart.
 	 *
-	 * Comment, string and regex regions are masked, and that is a CORRECTNESS fix rather than a
-	 * tightening: a comment is not metadata, and no string literal becomes metadata on its own
-	 * file's declarations. The raw scan reported a grant for 22 of anyparse's own 1501 files while
+	 * Comment, string and regex regions are masked — through `plugin.lexicalRegions`, the seam,
+	 * since S55; this was the last plugin-less `LexicalRegions` read with a single caller, and
+	 * `SymbolIndex` carries the plugin the memo needs. Masking is a CORRECTNESS fix rather than a
+	 * tightening: a comment is not metadata, and no string literal becomes metadata on the
+	 * declarations of its own file.
+	 *
+	 * The raw scan reported a grant for 22 of anyparse's own 1501 files while
 	 * `apq meta '@:allow' src test` finds ZERO real ones — every hit was a doc comment or a test
 	 * fixture's source-code literal. Withheld findings read exactly like a clean tree, and in
 	 * `Naming` the same hit wrote a refusal sentence naming metadata the file did not carry (T159
@@ -2254,10 +2258,10 @@ final class RefactorSupport {
 	 * `MemberWriteScan.carriesBuildMacro`), which is the right place for it — a text scan of the
 	 * carrier file could never have seen it either.
 	 */
-	public static function carriesAllowGrant(source: String): Bool {
+	public static function carriesAllowGrant(source: String, plugin: GrammarPlugin): Bool {
 		var at: Int = source.indexOf('@:allow');
 		if (at < 0) return false;
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		while (at >= 0) {
 			if (LexicalRegions.regionAt(at, regions) == null) return true;
 			at = source.indexOf('@:allow', at + 1);

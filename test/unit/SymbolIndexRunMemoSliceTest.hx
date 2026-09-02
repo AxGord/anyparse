@@ -106,7 +106,7 @@ class SymbolIndexRunMemoSliceTest extends Test {
 		final commented: String = 'package p;\n/** mentions @:allow in prose */\nclass A {}';
 		final index: SymbolIndex = build([{ file: 'p/A.hx', source: commented }]);
 		Assert.isFalse(index.sourceCarriesAllowGrant(commented));
-		Assert.equals(RefactorSupport.carriesAllowGrant(commented), index.sourceCarriesAllowGrant(commented));
+		Assert.equals(RefactorSupport.carriesAllowGrant(commented, new HaxeQueryPlugin()), index.sourceCarriesAllowGrant(commented));
 	}
 
 	/**

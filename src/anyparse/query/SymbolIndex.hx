@@ -469,6 +469,14 @@ final class SymbolIndex {
 	/** Per-file source text, retained so a subtype-ward body scan (`subtypeReferencesField`) can inspect a subtype's raw declaration span for a backing-field reference. */
 	private final _sources: Map<String, String>;
 
+	/**
+	 * The grammar the index was built for, kept so `sourceCarriesAllowGrant` can ask it for the
+	 * file's lexical regions instead of the Haxe-only `LexicalRegions` forwarder. The index is
+	 * the one run-scoped object every consumer of that question already holds, which is what
+	 * makes the seam reachable there without threading a plugin through 65 call sites.
+	 */
+	private final _plugin: GrammarPlugin;
+
 	/** The answer `sourceCarriesAllowGrant` gave for `_grantScanSource`. */
 	private var _grantScanAnswer: Bool = false;
 
@@ -494,10 +502,11 @@ final class SymbolIndex {
 	/** The last source `sourceCarriesAllowGrant` was asked about, or null before the first ask. */
 	private var _grantScanSource: Null<String>;
 
-	private function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>) {
+	private function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin) {
 		_files = files;
 		_skipped = skipped;
 		_sources = sources;
+		_plugin = plugin;
 	}
 
 	/** Every indexed file's `FileInfo`, in input order. */
@@ -1542,7 +1551,7 @@ final class SymbolIndex {
 	public function sourceCarriesAllowGrant(source: String): Bool {
 		if (_grantScanSource == source) return _grantScanAnswer;
 		_grantScanSource = source;
-		_grantScanAnswer = RefactorSupport.carriesAllowGrant(source);
+		_grantScanAnswer = RefactorSupport.carriesAllowGrant(source, _plugin);
 		return _grantScanAnswer;
 	}
 
@@ -2799,7 +2808,7 @@ final class SymbolIndex {
 			skipped: Array<String>,
 			sources: Map<String, String>
 		} = SymbolIndexBuilder.extract(files, plugin);
-		return new SymbolIndex(extracted.files, extracted.skipped, extracted.sources);
+		return new SymbolIndex(extracted.files, extracted.skipped, extracted.sources, plugin);
 	}
 
 	/**

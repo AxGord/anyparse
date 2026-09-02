@@ -31,6 +31,35 @@ using StringTools;
  * quotes of `'${cond ? '// note' : X}'`, the region ended mid-expression, the `//` inside
  * opened a comment region over live source, and `unused-import --fix` removed an import the
  * commented-over line was using (`Type not found : Dep`, compile-proved).
+ *
+ * ## Why this is still a HAND scanner, measured
+ *
+ * The standing question was whether the parser could hand this back instead. Both ways were
+ * measured over 6784 real sources - this project, the haxe-formatter `.hxtest` corpus, Pony, the
+ * haxe-formatter sources and the Haxe 4.3.7 standard library:
+ *
+ *  - From a full PARSE: REFUSED. 116 of those sources do not parse at all (115 of the corpus
+ *    1890, 6.1 %), and this scan is handed RAW source everywhere, with no promise that it
+ *    parses: `RefactorSupport.nameBoundInRange` says so in code, falling back to the pure text
+ *    scan the moment `classifyOccurrences` reports the file did not parse. Even where the
+ *    parse succeeds the tree carries no node for a string literal in
+ *    three positions - a conditional-compilation CONDITION, a `#error` message, and a quoted
+ *    object-literal KEY, whose text the projection folds into the field node name slot. That is
+ *    34 of 1775 parsed corpus sources and 83 of 3340 parsed real-world files. The direction is
+ *    uniformly tree-BLIND, never scanner-blind, which is the safe one: an unmasked region costs
+ *    a refusal, a missed one costs a delete.
+ *  - From a generated LEXICAL-ONLY pass: expressible, NOT built. Every ingredient is already
+ *    declarative - `HaxeFormat.lineComment` / `blockComment` are read at macro time into
+ *    `FormatReader.commentPatterns`, and the literal terminals carry their own `@:re` - but the
+ *    one hard part, finding where a `${ ... }` hole ENDS, is the brace-and-quote balancing that
+ *    no declaration expresses and that `skipInterpolationHole` below IS. Measured drift between
+ *    this scanner, `CommentInventory.scan` and the parse tree over those 6784 sources: ZERO. A
+ *    new macro pass would buy drift-proofing that one test file buys instead.
+ *
+ * That test file is `unit.LexicalRegionAgreementTest`, and it is the pin the measurement argued
+ * for: every outermost literal NODE must be an exactly-equal region here, and this scanner must
+ * agree with `CommentInventory.scan` on every comment of every file in the tree. Both historical
+ * corruptions above are caught by it - verified by mutation, arms named in that class.
  */
 @:nullSafety(Strict)
 final class HaxeLexicalRegions {

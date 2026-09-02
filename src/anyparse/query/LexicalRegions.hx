@@ -40,19 +40,39 @@ typedef LexRegion = {
  * Both call `HaxeLexicalRegions` directly and so hardcode one grammar. They exist for the
  * callers that hold no `GrammarPlugin` to ask; where you have one, ask it.
  *
- * The callers still on the forwarder, counted at the commit that split this file:
+ * The callers still on the forwarder, RE-MEASURED, with what each one would cost to move:
  *
- *  - `RefactorSupport.collectCommentTokens` — 69 call sites across 50 files, and not one of
- *    them passes a plugin to the static helper it calls. Threading one is a cascade through
- *    `docExtendedSpan` / `trailingTrimmedSpan` / `commentBlockAt` and every check that
- *    reaches them: that is the rest of the debt, deliberately not this commit.
- *  - `RefactorSupport.collectNonCodeRegions` and `activeCodeIdentTokenOffset` — one caller
- *    each, both inside `RefactorSupport`.
- *  - `RefactorSupport.carriesAllowGrant` — left untouched while a concurrent slice holds it.
- *  - `RefactorSupport`'s own private token walk, which needs `skipStringLiteral` alone.
+ *  - `RefactorSupport.collectCommentTokens` — 65 call sites across 49 files: 55 sites in 41
+ *    `check/` classes, whose `Check.run` / `Check.fix` already carry a plugin, 8 in 6 `query/`
+ *    modules and 2 in tests. Most of it is therefore argument-passing rather than design — but
+ *    `CondBranchProjection` and `MemberBranchScan` name no `GrammarPlugin` in ANY signature, so
+ *    those two need a hop from their own callers first. It is 65 sites on the path that gates
+ *    every DELETE in the tool, which is why it wants its own slice and not the tail of another,
+ *    and it carries `collectCommentRegions` (6 sites / 5 files) and `InertRegions` with it.
+ *  - `RefactorSupport.collectNonCodeRegions` — ONE caller, `CondDirectives.scan(source, shape)`,
+ *    which is itself called from 24 sites across 9 files. Moving it is an improvement rather
+ *    than a cost, since `scan` would take the plugin INSTEAD of the `RefShape` it derives from
+ *    it — but it is those 24 sites, so it belongs with the item above.
+ *  - `RefactorSupport.activeCodeIdentTokenOffset` — 4 call sites in 3 files, two of which reach
+ *    it through a struct (`ExplicitType.ReturnSeams`) that would have to carry the plugin.
+ *  - `RefactorSupport`'s own private token walk (`headerScan`), which needs `skipStringLiteral`
+ *    alone. Private, but its two public callers `typeHeaderInsertOffset` / `typeBodyBraceOffset`
+ *    have 2 sites each, in `ExtractInterface` / `ExtractSuperclass` and `ConstantHoist` /
+ *    `FieldInitInConstructor`.
+ *
+ * `RefactorSupport.carriesAllowGrant` is OFF this forwarder as of S55: it had exactly one caller
+ * (`SymbolIndex.sourceCarriesAllowGrant`) and `SymbolIndex.build` already receives the plugin, so
+ * the index — the one run-scoped object that consumer already holds — now carries it. That is the
+ * shape the rest of the debt should take where a run-scoped holder exists.
+ *
+ * The recommended seam for the remainder is `Array<LexRegion>`, not `GrammarPlugin`: these
+ * helpers are grammar-agnostic once they are handed regions, the caller then hoists ONE scan per
+ * file (which these docs already ask for on performance grounds), and the plugin stops appearing
+ * in signatures that have no other use for it.
  *
  * The consumers that DO hold a plugin ask it instead: `BodySlotGuard`, `Patch`,
- * `RefactorSupport.classifyOccurrences` and `RefactorSupport.nameBoundInRange`.
+ * `RefactorSupport.classifyOccurrences`, `RefactorSupport.nameBoundInRange` and — since S55 —
+ * `SymbolIndex.sourceCarriesAllowGrant`.
  */
 @:nullSafety(Strict)
 final class LexicalRegions {
