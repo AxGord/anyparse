@@ -3593,7 +3593,7 @@ final class RefactorSupport {
 		if (len == 0) return out;
 		final condSpans: Array<Span> = [];
 		collectConditionalSpans(tree, condSpans);
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final stop: Int = end <= source.length ? end : source.length;
 		var i: Int = from;
 		while (i + len <= stop) {
@@ -3702,7 +3702,7 @@ final class RefactorSupport {
 	): Bool {
 		final classified: Null<Array<ClassifiedOccurrence>> = classifyOccurrences(source, name, plugin, from, end, excluded);
 		if (classified == null) return referencedInRange(source, name, from, end, excluded);
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		for (occ in classified) switch occ.kind {
 			// A word inside a longer literal binds nothing, whatever the literal interpolates.
 			case CommentTrivia, DirectiveComment, StringWord:

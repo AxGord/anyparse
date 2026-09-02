@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.SpanTypeInfoProvider;
@@ -333,6 +334,16 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	}
 
 	public function controlFlowSupport(): Null<ControlFlowSupport> return _inner.controlFlowSupport();
+
+	/**
+	 * Straight through, NOT memoised. The wrapped scan is 2.7 % of a full `lint --all --fix`
+	 * over 869 files (measured, `--cpu-prof`), and a cache keyed on source content would hold
+	 * one array per distinct file for the life of the run to buy a slice of that — while the
+	 * caches above exist because a parse costs orders of magnitude more and is demanded once
+	 * per CHECK. Adding it here on speculation is the shape invariant 1 warns about; add it
+	 * when a profile names it, and as instance state like the rest, never process-scoped.
+	 */
+	public function lexicalRegions(source: String): Array<LexRegion> return _inner.lexicalRegions(source);
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> return _inner.booleanLogicSupport();
 

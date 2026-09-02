@@ -46,8 +46,35 @@ import sys.io.File;
  */
 class BodySlotGuardSliceTest extends Test {
 
+	/**
+	 * Every `QueryNode.kind` these fixtures can reach, none of which may appear in a refusal.
+	 *
+	 * The messages used to be built from `host.kind` and `child.kind`, so the user of
+	 * `if (1) f();` was told about an `IfStmt` with an empty `IntLit` slot — two names that are
+	 * nowhere in their file. The slot half was the worse one: it is the kind of whatever happened
+	 * to sit in the slot, so one construct produced `ExprStmt`, `Call` or `IntLit` by turns.
+	 */
+	private static final KIND_LEAKS: Array<String> = [
+		'IfStmt',
+		'IfExpr',
+		'ForStmt',
+		'ForExpr',
+		'WhileStmt',
+		'WhileExpr',
+		'DoWhileStmt',
+		'TryCatchStmt',
+		'TryExpr',
+		'CatchClause',
+		'ExprStmt',
+		'IdentExpr',
+		'IntLit'
+	];
+
 	/** A brace-less `if` whose body is `a();`, followed by `b();` — the shape the campaign reported. */
 	private static final IF_STMT: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\tb();\n\t}\n}\n';
+
+	/** A brace-less `if` whose CONDITION is a unique call, so an edit can blank exactly that slot. */
+	private static final IF_COND_STMT: String = 'class C {\n\tfunction f():Void {\n\t\tif (ready()) a();\n\t\tb();\n\t}\n}\n';
 
 	/** The same with an `else` branch and a third statement after it. */
 	private static final IF_ELSE_STMT: String =
@@ -75,12 +102,12 @@ class BodySlotGuardSliceTest extends Test {
 
 	/** The then-branch of a brace-less `if` — the shape the campaign reported. */
 	public function testRefusesBracelessIfBody(): Void {
-		assertRefusedNaming('class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\tb();\n\t}\n}\n', 3, 10, 'IfStmt');
+		assertRefusedNaming('class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\tb();\n\t}\n}\n', 3, 10, 'if');
 	}
 
 	/** The then-branch when an `else` follows — the leftover `if (c) else …` does not compile. */
 	public function testRefusesBracelessIfBodyWithElse(): Void {
-		assertRefusedNaming('class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\telse d();\n\t\tb();\n\t}\n}\n', 3, 10, 'IfStmt');
+		assertRefusedNaming('class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\telse d();\n\t\tb();\n\t}\n}\n', 3, 10, 'if');
 	}
 
 	/**
@@ -90,23 +117,23 @@ class BodySlotGuardSliceTest extends Test {
 	 */
 	public function testRefusesBracelessElseBody(): Void {
 		assertRefusedNaming(
-			'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c)\n\t\t\ta();\n\t\telse\n\t\t\td();\n\t\tb();\n\t}\n}\n', 6, 4, 'IfStmt'
+			'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c)\n\t\t\ta();\n\t\telse\n\t\t\td();\n\t\tb();\n\t}\n}\n', 6, 4, 'if'
 		);
 	}
 
 	/** A `for` body — the following statement would run once per iteration. */
 	public function testRefusesBracelessForBody(): Void {
-		assertRefusedNaming('class C {\n\tfunction f(n:Int):Void {\n\t\tfor (i in 0...n) a();\n\t\tb();\n\t}\n}\n', 3, 20, 'ForStmt');
+		assertRefusedNaming('class C {\n\tfunction f(n:Int):Void {\n\t\tfor (i in 0...n) a();\n\t\tb();\n\t}\n}\n', 3, 20, 'for');
 	}
 
 	/** A `while` body — the following statement becomes the loop, and nothing advances it. */
 	public function testRefusesBracelessWhileBody(): Void {
-		assertRefusedNaming('class C {\n\tfunction f(c:Bool):Void {\n\t\twhile (c) a();\n\t\tb();\n\t}\n}\n', 3, 13, 'WhileStmt');
+		assertRefusedNaming('class C {\n\tfunction f(c:Bool):Void {\n\t\twhile (c) a();\n\t\tb();\n\t}\n}\n', 3, 13, 'while');
 	}
 
 	/** A `do` body. This one the re-parse gate happened to catch; now it says WHY. */
 	public function testRefusesBracelessDoBody(): Void {
-		assertRefusedNaming('class C {\n\tfunction f(c:Bool):Void {\n\t\tdo a();\n\t\twhile (c);\n\t\tb();\n\t}\n}\n', 3, 6, 'DoWhileStmt');
+		assertRefusedNaming('class C {\n\tfunction f(c:Bool):Void {\n\t\tdo a();\n\t\twhile (c);\n\t\tb();\n\t}\n}\n', 3, 6, 'do');
 	}
 
 	/**
@@ -116,9 +143,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * construct lost its body.
 	 */
 	public function testRefusesBracelessCatchBody(): Void {
-		assertRefusedNaming(
-			'class C {\n\tfunction f():Void {\n\t\ttry a() catch (e:Dynamic) d();\n\t\tb();\n\t}\n}\n', 3, 29, 'CatchClause'
-		);
+		assertRefusedNaming('class C {\n\tfunction f():Void {\n\t\ttry a() catch (e:Dynamic) d();\n\t\tb();\n\t}\n}\n', 3, 29, 'catch');
 	}
 
 	/**
@@ -127,12 +152,12 @@ class BodySlotGuardSliceTest extends Test {
 	 * an `Err` too, but the message is the re-parse gate's and names nothing.
 	 */
 	public function testRefusesIfExprBranch(): Void {
-		assertRefusalNames(spliceOf(IF_EXPR, '11', ''), 'IfExpr');
+		assertRefusalNames(spliceOf(IF_EXPR, '11', ''), 'if');
 	}
 
 	/** The body of a `try` EXPRESSION — the kind the statement forms' doc claimed and the list omitted. */
 	public function testRefusesTryExprBody(): Void {
-		assertRefusalNames(spliceOf(TRY_EXPR, '11', ''), 'TryExpr');
+		assertRefusalNames(spliceOf(TRY_EXPR, '11', ''), 'try');
 	}
 
 	/**
@@ -143,7 +168,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * content and returns before it ever parses.
 	 */
 	public function testRefusesCommentReplacementOfBracelessIfBody(): Void {
-		assertRefusalNames(spliceOf(IF_STMT, 'a();', '// gone'), 'IfStmt');
+		assertRefusalNames(spliceOf(IF_STMT, 'a();', '// gone'), 'if');
 	}
 
 	/**
@@ -160,12 +185,12 @@ class BodySlotGuardSliceTest extends Test {
 	 * source text that used to follow it.
 	 */
 	public function testRefusesNonBlankReplacementDroppingBracelessIfBody(): Void {
-		assertRefusalNames(spliceOf(IF_STMT, 'if (c) a();', 'if (c)'), 'IfStmt');
+		assertRefusalNames(spliceOf(IF_STMT, 'if (c) a();', 'if (c)'), 'if');
 	}
 
 	/** The same one-node-over: a `while` header kept, its body dropped, the next statement pulled in. */
 	public function testRefusesNonBlankReplacementDroppingBracelessWhileBody(): Void {
-		assertRefusalNames(spliceOf(WHILE_STMT, 'while (c) a();', 'while (c)'), 'WhileStmt');
+		assertRefusalNames(spliceOf(WHILE_STMT, 'while (c) a();', 'while (c)'), 'while');
 	}
 
 	/**
@@ -176,7 +201,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * result says what happened. The first shape this guard's own trigger was too narrow to see.
 	 */
 	public function testRefusesConstructBuiltOverAPlainStatement(): Void {
-		assertRefusalNames(spliceOf(PLAIN_STMTS, 'a();', 'if (c)'), 'IfStmt');
+		assertRefusalNames(spliceOf(PLAIN_STMTS, 'a();', 'if (c)'), 'if');
 	}
 
 	/**
@@ -186,7 +211,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * every such end as authored. A replacement only authors an end it reaches back to.
 	 */
 	public function testRefusesSwallowEndingInAnUnrelatedEdit(): Void {
-		assertRefusalNames(splicesOf(IF_STMT, [{ find: 'a();', text: 'a() +' }, { find: 'b();', text: 'd();' }]), 'IfStmt');
+		assertRefusalNames(splicesOf(IF_STMT, [{ find: 'a();', text: 'a() +' }, { find: 'b();', text: 'd();' }]), 'if');
 	}
 
 	/**
@@ -196,7 +221,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * nothing: a construct born there may end inside the inserted text and nowhere else.
 	 */
 	public function testRefusesConstructBornAtAPureInsertion(): Void {
-		assertRefusalNames(insertOf(PLAIN_STMTS, 'b();', 'if (c)\n\t\t'), 'IfStmt');
+		assertRefusalNames(insertOf(PLAIN_STMTS, 'b();', 'if (c)\n\t\t'), 'if');
 	}
 
 	/**
@@ -221,7 +246,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * that the construct no longer ends where it did.
 	 */
 	public function testRefusesHeaderShapedReplacementOfBracelessIfBody(): Void {
-		assertRefusalNames(spliceOf(IF_STMT, 'a();', 'if (c)'), 'IfStmt');
+		assertRefusalNames(spliceOf(IF_STMT, 'a();', 'if (c)'), 'if');
 	}
 
 	/**
@@ -232,7 +257,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * the same position rather than off the edit.
 	 */
 	public function testRefusesUnterminatedExpressionReplacementOfBracelessIfBody(): Void {
-		assertRefusalNames(spliceOf(IF_STMT, 'a();', 'a() +'), 'IfStmt');
+		assertRefusalNames(spliceOf(IF_STMT, 'a();', 'a() +'), 'if');
 	}
 
 	/**
@@ -379,18 +404,99 @@ class BodySlotGuardSliceTest extends Test {
 		#end
 	}
 
+	/**
+	 * T217, the BRACKETED slot: emptying a CONDITION must not advise braces.
+	 *
+	 * Reproduced on the base build — `apq patch` blanking the `cond1` of `if (cond1) trace('a');`
+	 * answered `this would leave the IfStmt at 6:3 with an empty IdentExpr slot … brace the body
+	 * first`. Two node kinds as user vocabulary, and a remedy that is not available: `if ({ … })`
+	 * is not what the author wants and does not parse. The slot is read off the SOURCE — the lead
+	 * ends with an opener and the closer follows the slot — so no grammar vocabulary is added.
+	 */
+	public function testBracketedSlotRefusalDoesNotAdviseBraces(): Void {
+		assertRemedy(spliceOf(IF_COND_STMT, 'ready()', ''), 'nothing between `(` and `)`', 'brace the body');
+	}
+
+	/**
+	 * T217, the VALUE slot: emptying the branch of an `if` EXPRESSION must not advise braces either,
+	 * for the opposite reason — `{ }` there is an empty BLOCK, so `final v = if (c) { } else 22;`
+	 * trades the refusal for a type error. Base build answered `empty IntLit slot … brace the body
+	 * first`, which is the exact wrong advice this pins.
+	 */
+	public function testUnprovedPositionNamesBothRepairs(): Void {
+		assertRemedy(spliceOf(IF_EXPR, '11', ''), 'an expression if it is a value', 'brace the body first');
+	}
+
+	/**
+	 * T217, the BODY slot, and the CONTROL for the two above: a statement construct still gets the
+	 * braces advice, which is right there. Green at base in substance and red in wording — the base
+	 * message names `IfStmt`, which `assertRemedy` refuses through `KIND_LEAKS`.
+	 *
+	 * The three arms differ only in the slot, so a `statementSlot` / `enclosingBrackets` that
+	 * collapsed any two of them flips one of these.
+	 */
+	public function testStatementBodyRefusalAdvisesBraces(): Void {
+		assertRemedy(spliceOf(IF_STMT, 'a();', ''), 'brace the body first (`{ … }`)', 'put an expression there');
+	}
+
+	/**
+	 * T217, the propagated statement position: a `catch` body inside a STATEMENT `try` is braceable,
+	 * and the first version of this rewrite got it wrong by reading the immediate parent — a
+	 * `CatchClause`'s parent is `TryCatchStmt`, which is no block kind, so it was told to put an
+	 * EXPRESSION where braces are exactly right. `statementSlot` passes the position DOWN through
+	 * fixed-slot constructs; reverting it to a parent-kind test flips this one and nothing else.
+	 */
+	public function testCatchBodyInAStatementTryAdvisesBraces(): Void {
+		assertRemedy(spliceOf(TRY_CATCH_STMT, 'd();', ''), 'brace the body first (`{ … }`)', 'put an expression there');
+	}
+
+	/**
+	 * T217, the shape SELF-REVIEW found after the first draft: a brace-less `if` that is the FIRST
+	 * statement of a `case` arm. `blockKinds()` is the `dead-code` / `empty-block` vocabulary and
+	 * deliberately holds no `CaseBranch`, so the parent walk stops at the `switch` and the position
+	 * is unproved — the draft asserted VALUE there and told the author to put an EXPRESSION where
+	 * braces are exactly right, which is the same class of wrong advice the whole item is about.
+	 *
+	 * So the message names BOTH repairs and the condition that picks between them, and this pins
+	 * that it names both: an `assertRemedy` for either half alone would pass on a message that
+	 * asserted the other. Restoring the value-only wording flips it.
+	 */
+	public function testCaseArmBodyNamesBothRepairs(): Void {
+		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tswitch (c) {\n\t\t\tcase true:\n\t\t\t\tif (c) a();\n'
+			+ '\t\t\t\tb();\n\t\t\tcase false:\n\t\t}\n\t}\n}\n';
+		assertRemedy(spliceOf(source, 'a();', ''), 'braces (`{ … }`) if this `if` is a statement', 'brace the body first');
+		assertRemedy(spliceOf(source, 'a();', ''), 'an expression if it is a value', 'brace the body first');
+	}
+
+	/**
+	 * The other half of the same fix, and what `startsAStatement` buys: the SAME `case` arm one
+	 * statement further in. A `;` before the construct proves it stands where a statement stands
+	 * whatever its parent kind is, so this one gets the sharp advice while its first-statement twin
+	 * above does not. Dropping the `startsAStatement` OR-term in `scan` flips this and leaves the
+	 * twin green — the pair is what makes either of them say anything.
+	 */
+	public function testStatementAfterASemicolonInACaseArmAdvisesBraces(): Void {
+		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tswitch (c) {\n\t\t\tcase true:\n\t\t\t\td();\n'
+			+ '\t\t\t\tif (c) a();\n\t\t\t\tb();\n\t\t\tcase false:\n\t\t}\n\t}\n}\n';
+		assertRemedy(spliceOf(source, 'a();', ''), 'brace the body first (`{ … }`)', 'an expression if it is a value');
+	}
+
 	/** Refused by `remove-element`, and the message names the construct so the caller knows what to brace. */
-	private function assertRefusedNaming(source: String, line: Int, col: Int, kind: String): Void {
-		assertRefusalNames(removeOf(source, line, col), kind);
+	private function assertRefusedNaming(source: String, line: Int, col: Int, word: String): Void {
+		assertRefusalNames(removeOf(source, line, col), word);
 	}
 
 	/** An `Err` whose message names `kind` — a refusal that says WHICH construct lost its slot. */
-	private function assertRefusalNames(result: EditResult, kind: String): Void {
+	private function assertRefusalNames(result: EditResult, word: String): Void {
 		switch result {
 			case Ok(text):
 				Assert.fail('expected a refusal, got Ok:\n$text');
 			case Err(message):
-				Assert.isTrue(message.indexOf(kind) != -1, 'the refusal names the construct ($kind): $message');
+				Assert.isTrue(
+					message.indexOf('`$word`') != -1, 'the refusal names the construct by the word the author wrote (`$word`): $message'
+				);
+				for (leak in KIND_LEAKS)
+					Assert.isTrue(message.indexOf(leak) == -1, 'the refusal leaks the node kind "$leak" as user vocabulary: $message');
 		}
 	}
 
@@ -417,6 +523,19 @@ class BodySlotGuardSliceTest extends Test {
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');
 				return '';
+		}
+	}
+
+	/** The refusal carries `wanted`, does NOT carry `refused`, and leaks no node kind. */
+	private function assertRemedy(result: EditResult, wanted: String, refused: String): Void {
+		switch result {
+			case Ok(text):
+				Assert.fail('expected a refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf(wanted) != -1, 'the refusal offers the remedy that fits ("$wanted"): $message');
+				Assert.isTrue(message.indexOf(refused) == -1, 'and not the one that does not ("$refused"): $message');
+				for (leak in KIND_LEAKS)
+					Assert.isTrue(message.indexOf(leak) == -1, 'the refusal leaks the node kind "$leak" as user vocabulary: $message');
 		}
 	}
 
