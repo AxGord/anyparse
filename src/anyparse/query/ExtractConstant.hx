@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
@@ -58,13 +59,13 @@ final class ExtractConstant {
 		if (decl == null) return Err('no unique type "$typeName" in the source');
 		final declNN: TypeDeclMatch = decl;
 		final shape: RefShape = plugin.refShape();
-		if (MemberBranchScan.declaresMemberNamed(declNN, shape, source, name))
+		if (MemberBranchScan.declaresMemberNamed(declNN, shape, source, name, plugin.lexicalRegions.bind(source)))
 			return Err('type "$typeName" already has a member named "$name"');
 
 		final occurrences: Array<Span> = collectOccurrences(declNN.nameNode, literal);
 		if (occurrences.length == 0) return Err('no plain literal \'$literal\' occurs in type "$typeName"');
 
-		final insertAt: Int = firstMemberStart(source, declNN, shape);
+		final insertAt: Int = firstMemberStart(source, declNN, shape, plugin.lexicalRegions(source));
 		if (insertAt < 0) return Err('type "$typeName" has no member to anchor the constant before');
 
 		final firstOcc: Span = occurrences[0];
@@ -163,7 +164,7 @@ final class ExtractConstant {
 	/**
 	 * Source offset just before the first member, with its leading `/**` doc comment and modifier run included (via `docExtendedSpan`) — where the constant is spliced so it becomes the types first member while the original first member keeps its own doc. -1 when the type has no member.
 	 */
-	private static function firstMemberStart(source: String, decl: TypeDeclMatch, shape: RefShape): Int {
+	private static function firstMemberStart(source: String, decl: TypeDeclMatch, shape: RefShape, regions: Array<LexRegion>): Int {
 		final condKind: Null<String> = shape.conditionalMemberKind;
 		// A `#if` region opening the body is a member position too: the constant is spliced BEFORE it,
 		// so it exists in every build. Splicing INSIDE the region would guard the constant, and treating
@@ -176,7 +177,7 @@ final class ExtractConstant {
 			final span: Null<Span> = child.span;
 			if (span == null) continue;
 			final group: Span = RefactorSupport.declGroupSpan(child, decl.nameNode, span);
-			return RefactorSupport.docExtendedSpan(source, group).from;
+			return RefactorSupport.docExtendedSpan(source, group, regions).from;
 		}
 		return -1;
 	}
@@ -210,12 +211,12 @@ final class ExtractConstant {
 		if (decl == null) return Err('module "$modulePath" has no unique type "$moduleClass"');
 		final declNN: TypeDeclMatch = decl;
 		final shape: RefShape = plugin.refShape();
-		if (MemberBranchScan.declaresMemberNamed(declNN, shape, existing, name))
+		if (MemberBranchScan.declaresMemberNamed(declNN, shape, existing, name, plugin.lexicalRegions.bind(existing)))
 			return Err('module "$moduleClass" already has a member named "$name"');
 		// Splice the constant into the constants rank (before the first member) rather than
 		// appending — an appended `public static final` after the holder's `private new()`
 		// would sit out of canonical member order. Empty module (no member): fall back to append.
-		final insertAt: Int = firstMemberStart(existing, declNN, shape);
+		final insertAt: Int = firstMemberStart(existing, declNN, shape, plugin.lexicalRegions(existing));
 		return insertAt < 0
 			? AddMember.addMember(existing, moduleClass, memberText, reformat, plugin, optsJson)
 			: RefactorSupport.canonicalize(

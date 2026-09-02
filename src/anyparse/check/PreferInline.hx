@@ -234,7 +234,11 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		final trees: Array<{ file: String, tree: QueryNode, branch: MemberBranchSeams }> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) trees.push({ file: entry.file, tree: tree, branch: MemberBranchScan.seamsOf(shape, entry.source) });
+			if (tree != null) trees.push({
+				file: entry.file,
+				tree: tree,
+				branch: MemberBranchScan.seamsOf(shape, entry.source, plugin.lexicalRegions.bind(entry.source))
+			});
 		}
 		// Pass A: the names of every LOCALLY-eligible method (single-expression / empty, and not
 		// inline / dynamic / macro / override / @:keep / constructor / self-recursive) — the only
@@ -282,7 +286,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (s != null) wanted.push('${s.from}:${s.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source);
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source, plugin.lexicalRegions.bind(source));
 		for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, branch, (name, fn, mods, metas) -> {
 			final span: Null<Span> = fn.span;
 			if (span == null || mods.contains('Inline') || !wanted.contains('${span.from}:${span.to}')) return;

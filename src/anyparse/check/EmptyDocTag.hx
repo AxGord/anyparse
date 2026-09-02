@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.FragmentedDocComment.CommentTok;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -85,7 +86,7 @@ final class EmptyDocTag implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
-		for (entry in files) scan(violations, entry.file, entry.source);
+		for (entry in files) scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source));
 		return violations;
 	}
 
@@ -104,7 +105,7 @@ final class EmptyDocTag implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (tok in RefactorSupport.collectCommentTokens(source)) if (isDoc(source, tok)) {
+		for (tok in RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source))) if (isDoc(source, tok)) {
 			final lines: Array<Span> = interiorLines(source, tok);
 			final doomed: Array<TagSection> = emptySections(source, lines).filter(s -> flagged.contains(s.from));
 			if (doomed.length > 0) {
@@ -129,8 +130,8 @@ final class EmptyDocTag implements Check {
 	}
 
 	/** Scan every doc comment in `source`, flagging each content-free tag section. */
-	private static function scan(out: Array<Violation>, file: String, source: String): Void {
-		for (tok in RefactorSupport.collectCommentTokens(source)) if (isDoc(source, tok)) {
+	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
+		for (tok in RefactorSupport.collectCommentTokens(regions)) if (isDoc(source, tok)) {
 			final lines: Array<Span> = interiorLines(source, tok);
 			for (section in emptySections(source, lines)) out.push({
 				file: file,

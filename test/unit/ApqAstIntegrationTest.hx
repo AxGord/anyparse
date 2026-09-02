@@ -85,7 +85,10 @@ class ApqAstIntegrationTest extends Test {
 				Text.render(truncated);
 				final matches: Array<QueryNode> = Engine.select(tree, probeSelector, plugin.selectKindEquivalence());
 				if (matches.length > 0 && jsonSampled)
-					Json.renderMatches(path, source, matches, Cli.sourceWindows(tree, matches, source), false, false);
+					Json.renderMatches(
+						path, source, matches, Cli.sourceWindows(tree, matches, source, plugin.lexicalRegions.bind(source)), false, false,
+						plugin.lexicalRegions(source)
+					);
 				if (jsonSampled) jsonRendered++;
 				parsedOk++;
 			} catch (e: Exception) {

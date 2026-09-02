@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.CondDirectives;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -65,9 +66,11 @@ final class CondRegionLiveness {
 	 * The OUTERMOST unproven frame is reported when several nest, because an outer branch
 	 * that is dead makes every question about its interior moot.
 	 */
-	public static function unproven(source: String, shape: RefShape, spans: Array<Span>, defines: Array<String>): Null<String> {
+	public static function unproven(
+		source: String, shape: RefShape, spans: Array<Span>, defines: Array<String>, regions: Array<LexRegion>
+	): Null<String> {
 		if (spans.length == 0) return null;
-		final directives: Array<CondDirective> = CondDirectives.scan(source, shape);
+		final directives: Array<CondDirective> = CondDirectives.scan(source, shape, () -> regions);
 		if (directives.length == 0) return null;
 		final sorted: Array<Int> = probePoints(spans, directives);
 		sorted.sort((a, b) -> a - b);

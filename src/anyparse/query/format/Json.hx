@@ -1,6 +1,7 @@
 package anyparse.query.format;
 
 import anyparse.format.text.JsonFormat;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
@@ -59,7 +60,8 @@ final class Json {
 	 * `span` and one reading `source` get different bytes for the same match by design.
 	 */
 	public static function renderMatches(
-		file: String, source: String, matches: Array<QueryNode>, windows: Array<Null<Span>>, doc: Bool, src: Bool
+		file: String, source: String, matches: Array<QueryNode>, windows: Array<Null<Span>>, doc: Bool, src: Bool,
+		regions: Array<LexRegion>
 	): String {
 		final out: AstMatchesJson = {
 			file: file,
@@ -68,7 +70,7 @@ final class Json {
 					final ast: AstNodeJson = toAst(n, source);
 					final window: Null<Span> = i < windows.length ? windows[i] : n.span;
 					if (doc) {
-						final d: Null<String> = SourceSlice.leadingDoc(source, window);
+						final d: Null<String> = SourceSlice.leadingDoc(source, window, regions);
 						if (d != null) ast.doc = d;
 					}
 					if (src) {
@@ -103,7 +105,10 @@ final class Json {
 		return '${AstMetaHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
 
-	public static function renderRefs(entries: Array<{ file: String, source: String, hits: Array<RefHit> }>, doc: Bool, src: Bool): String {
+	public static function renderRefs(
+		entries: Array<{ file: String, source: String, hits: Array<RefHit> }>, doc: Bool, src: Bool,
+		lexicalRegions: (String) -> Array<LexRegion>
+	): String {
 		final out: Array<AstRefHit> = [];
 		for (entry in entries) for (h in entry.hits) {
 			final bindingSpan: Null<Span> = h.bindingSpan;
@@ -115,7 +120,7 @@ final class Json {
 			};
 			if (bindingSpan != null) hit.binding = spanToJson(bindingSpan, entry.source);
 			if (doc) {
-				final d: Null<String> = SourceSlice.leadingDoc(entry.source, h.span);
+				final d: Null<String> = SourceSlice.leadingDoc(entry.source, h.span, lexicalRegions(entry.source));
 				if (d != null) hit.doc = d;
 			}
 			if (src) {

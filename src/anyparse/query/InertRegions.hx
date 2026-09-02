@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 /**
@@ -58,13 +59,16 @@ final class InertRegions {
 	private static final TEXT_SEGMENT_KINDS: Array<String> = ['Literal', 'Dollar', 'LoneDollar'];
 
 	/**
-	 * Every inert region of `source`, whose parsed top level is `root` — comment spans first,
-	 * then literal-text spans in tree order. A null `root` (a caller with no parsed file) yields
-	 * the comment half alone, which is the conservative reading: an unmasked literal only ever
-	 * costs a refusal.
+	 * Every inert region of one source: the comment spans among its scanned `regions` first, then the
+	 * literal-text spans of `root`, its parsed top level, in tree order. A null `root` (a caller with
+	 * no parsed file) yields the comment half alone, which is the conservative reading: an unmasked
+	 * literal only ever costs a refusal.
+	 *
+	 * The regions come from the caller because the scan is the GRAMMAR's
+	 * (`GrammarPlugin.lexicalRegions`) — this class is grammar-agnostic and never picks a lexer.
 	 */
-	public static function of(source: String, root: Null<QueryNode>): Array<Span> {
-		final out: Array<Span> = RefactorSupport.collectCommentRegions(source);
+	public static function of(root: Null<QueryNode>, regions: Array<LexRegion>): Array<Span> {
+		final out: Array<Span> = RefactorSupport.collectCommentRegions(regions);
 		if (root != null) collectLiterals(root, out);
 		return out;
 	}

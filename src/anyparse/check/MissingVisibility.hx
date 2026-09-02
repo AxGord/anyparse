@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -125,7 +126,7 @@ final class MissingVisibility implements Check {
 				file: entry.file,
 				seams: seams,
 				source: entry.source,
-				comments: commentTokens(entry.source, seams),
+				comments: commentTokens(entry.source, seams, plugin.lexicalRegions.bind(entry.source)),
 				guarded: EnumAbstractForms.valueStarts(plugin, tree)
 			}, tree, false);
 		}
@@ -178,7 +179,7 @@ final class MissingVisibility implements Check {
 			edits: edits,
 			seams: seams,
 			source: source,
-			comments: commentTokens(source, seams),
+			comments: commentTokens(source, seams, plugin.lexicalRegions.bind(source)),
 			visRank: visRank,
 			keyword: keyword,
 			flagged: flagged,
@@ -193,8 +194,10 @@ final class MissingVisibility implements Check {
 	 * conditional region's branch-boundary scan — so a grammar with no conditional seams, or a file
 	 * with no `#if` in it at all, pays nothing.
 	 */
-	private static function commentTokens(source: String, seams: Seams): Array<{ from: Int, to: Int, isLine: Bool }> {
-		return seams.condKind != null && source.indexOf(seams.ifKeyword) >= 0 ? RefactorSupport.collectCommentTokens(source) : [];
+	private static function commentTokens(
+		source: String, seams: Seams, regions: () -> Array<LexRegion>
+	): Array<{ from: Int, to: Int, isLine: Bool }> {
+		return seams.condKind != null && source.indexOf(seams.ifKeyword) >= 0 ? RefactorSupport.collectCommentTokens(regions()) : [];
 	}
 
 	/**

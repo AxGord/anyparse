@@ -36,11 +36,16 @@ class ApqTextRenderTest extends Test {
 		// `flat=true` — the reference reproduction below mirrors the flat
 		// `file:line:col: …` form; the grouped (default) form is the
 		// pretty surface and not regression-locked here.
-		Assert.equals(referenceRefs(file, src, hits), Text.renderRefs(file, src, hits, false, false, true));
+		Assert.equals(
+			referenceRefs(file, src, hits), Text.renderRefs(file, src, hits, false, false, new HaxeQueryPlugin().lexicalRegions(src), true)
+		);
 	}
 
 	public function testRenderRefsEmpty(): Void {
-		Assert.equals('T.hx: no refs\n', Text.renderRefs('T.hx', 'class T {}', [], false, false, true));
+		Assert.equals(
+			'T.hx: no refs\n',
+			Text.renderRefs('T.hx', 'class T {}', [], false, false, new HaxeQueryPlugin().lexicalRegions('class T {}'), true)
+		);
 	}
 
 	public function testRenderSearchMatchesMatchesReference(): Void {

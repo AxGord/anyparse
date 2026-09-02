@@ -1242,8 +1242,7 @@ final class RefactorSupport {
 	 * `${obj.member}` interpolation and a conditionally compiled access are
 	 * both live references a rename has to reach.
 	 */
-	public static function activeCodeIdentTokenOffset(source: String, span: Span, name: String): Int {
-		final regions: Array<LexRegion> = LexicalRegions.scan(source);
+	public static function activeCodeIdentTokenOffset(source: String, span: Span, name: String, regions: Array<LexRegion>): Int {
 		var from: Int = span.from;
 		while (from < span.to) {
 			final at: Int = identTokenOffset(source, new Span(from, span.to), name);
@@ -1444,7 +1443,7 @@ final class RefactorSupport {
 		// NOT writer-canonical it answers `Ok(applyEdits(...))` on the `Err` path, so a
 		// refusal this function returns — this one included — is discarded for those
 		// three callers. The guard is advisory on a drifted file.
-		final splitDoc: Null<String> = docSplittingEdit(source, edits);
+		final splitDoc: Null<String> = docSplittingEdit(source, edits, plugin.lexicalRegions(source));
 		if (splitDoc != null) return Err(splitDoc);
 
 		final spliced: String = applyEdits(source, edits);
@@ -1756,8 +1755,8 @@ final class RefactorSupport {
 	 * fragment that swallowed the next member's doc, and the same defect made `set-doc`
 	 * splice its replacement mid-comment and never converge.
 	 */
-	public static function docExtendedSpan(source: String, span: Span, docOnly: Bool = false): Span {
-		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(source);
+	public static function docExtendedSpan(source: String, span: Span, regions: Array<LexRegion>, docOnly: Bool = false): Span {
+		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(regions);
 		var from: Int = span.from;
 		var first: Bool = true;
 		while (true) {
@@ -1811,7 +1810,9 @@ final class RefactorSupport {
 	 * two from drifting — an earlier draft re-implemented the walk and had already
 	 * lost its chain arm.
 	 */
-	public static function docSplittingEdit(source: String, edits: Array<{ span: Span, text: String }>): Null<String> {
+	public static function docSplittingEdit(
+		source: String, edits: Array<{ span: Span, text: String }>, regions: Array<LexRegion>
+	): Null<String> {
 		for (edit in edits) {
 			final at: Int = edit.span.from;
 			// Ordered cheapest-first on purpose: the two span/text tests are free, and
@@ -1819,7 +1820,7 @@ final class RefactorSupport {
 			// file per `lint --fix` pass with an EMPTY edit set, and this must not make
 			// that call pay for a lex.
 			if (edit.span.to != at || edit.text.indexOf('\n') < 0 || edit.text.trim().length == 0) continue;
-			if (docExtendedSpan(source, new Span(at, at), true).from == at) continue;
+			if (docExtendedSpan(source, new Span(at, at), regions, true).from == at) continue;
 			var j: Int = at;
 			while (j < source.length && isSpace(source.fastCodeAt(j))) j++;
 			// A POSITIVE criterion, because the harmful side is open-ended: a doc can
@@ -1859,18 +1860,20 @@ final class RefactorSupport {
 	 * tokenisation — for the same reason `docExtendedSpan` reads it there: a `/*`
 	 * written inside a comment's TEXT is content, not an opener.
 	 */
-	public static function trailingTrimmedSpan(source: String, span: Span): Span {
+	public static function trailingTrimmedSpan(source: String, span: Span, regions: () -> Array<LexRegion>): Span {
 		// The loop below can only move `to` when the span's LAST byte is whitespace, or the `/` that
 		// closes a block comment; anything else — `}`, `;`, `)`, an identifier byte — is the node's own
 		// last token and the answer is `span` unchanged. Testing that one byte first keeps the
 		// whole-file comment lex off the common path, which matters because a caller may ask once per
 		// MATCH: `ast --select 'IdentExpr' --source` over `Cli.hx` asks 14337 times, and the lex is
 		// O(file). Measured on that query: 23.8s -> 0.4s, with `--select 'FnMember' --source` 1.08s ->
-		// 0.34s and every window byte-identical.
+		// 0.34s and every window byte-identical. That guard is also why `regions` is a PROVIDER rather
+		// than the array every other helper here takes: an eager `plugin.lexicalRegions(source)` at the
+		// call site would pay the lex the guard exists to avoid, on the same 14337 asks.
 		if (span.to <= span.from || span.to > source.length) return span;
 		final lastByte: Int = source.fastCodeAt(span.to - 1);
 		if (!isSpace(lastByte) && lastByte != '/'.code) return span;
-		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(source);
+		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(regions());
 		var to: Int = span.to;
 		while (true) {
 			var i: Int = to - 1;
@@ -2091,8 +2094,8 @@ final class RefactorSupport {
 	 * alone. String literals are skipped, so an opener inside a string is not
 	 * mistaken for a comment.
 	 */
-	public static function commentBlockAt(source: String, cursor: Int): Null<Span> {
-		final toks: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(source);
+	public static function commentBlockAt(source: String, cursor: Int, regions: Array<LexRegion>): Null<Span> {
+		final toks: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(regions);
 		var hitIdx: Int = -1;
 		for (k in 0...toks.length) if (cursor >= toks[k].from && cursor < toks[k].to) {
 			hitIdx = k;
@@ -2109,13 +2112,16 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Scan `source` for every comment token (line and block), skipping string
-	 * literals so an opener inside a string is not a comment. Mirrors the `apq
-	 * lit` comment walker. Each token is `{ from, to, isLine }`.
+	 * The comment tokens among `regions` — the line and block comments of one source, in source
+	 * order, each as `{ from, to, isLine }`.
+	 *
+	 * Takes the SCANNED regions rather than the source: the scan is a property of the grammar
+	 * (`GrammarPlugin.lexicalRegions`), and a caller that asks the plugin once per file can hand
+	 * the same array to every consumer instead of re-lexing per call.
 	 */
-	public static function collectCommentTokens(source: String): Array<{ from: Int, to: Int, isLine: Bool }> {
+	public static function collectCommentTokens(regions: Array<LexRegion>): Array<{ from: Int, to: Int, isLine: Bool }> {
 		final out: Array<{ from: Int, to: Int, isLine: Bool }> = [];
-		for (region in LexicalRegions.scan(source)) switch region.kind {
+		for (region in regions) switch region.kind {
 			case LineComment:
 				out.push({ from: region.from, to: region.to, isLine: true });
 			case BlockComment:
@@ -2131,8 +2137,8 @@ final class RefactorSupport {
 	 * caller that only needs to answer "is this offset real code?" (the conditional-compilation
 	 * directive reader) and must not grow a lexer of its own. Not memoised: each call re-lexes.
 	 */
-	public static function collectNonCodeRegions(source: String): Array<Span> {
-		return [for (region in LexicalRegions.scan(source)) new Span(region.from, region.to)];
+	public static function collectNonCodeRegions(regions: Array<LexRegion>): Array<Span> {
+		return [for (region in regions) new Span(region.from, region.to)];
 	}
 
 	/**
@@ -2148,8 +2154,8 @@ final class RefactorSupport {
 	 * bytes of a literal are text is a question only the parse answers, and `InertRegions` answers
 	 * it off the tree. Not memoised: each call re-lexes, so a per-file caller should hoist it.
 	 */
-	public static function collectCommentRegions(source: String): Array<Span> {
-		return [for (token in collectCommentTokens(source)) new Span(token.from, token.to)];
+	public static function collectCommentRegions(regions: Array<LexRegion>): Array<Span> {
+		return [for (token in collectCommentTokens(regions)) new Span(token.from, token.to)];
 	}
 
 	/**
@@ -2754,7 +2760,7 @@ final class RefactorSupport {
 				mutableFields: mutableFields,
 				visibility: visibility,
 				defaultVis: vis,
-				branch: MemberBranchScan.seamsOf(shape, entry.source),
+				branch: MemberBranchScan.seamsOf(shape, entry.source, plugin.lexicalRegions.bind(entry.source)),
 				visit: visit
 			});
 		}
@@ -3579,9 +3585,11 @@ final class RefactorSupport {
 	 * no downstream reparse gate catches it, while the caller has already staged
 	 * the member cut: the members move out and nothing inherits them.
 	 */
-	public static function typeHeaderInsertOffset(source: String, decl: TypeDeclMatch, typeName: String): Null<Int> {
-		final brace: Null<Int> = typeBodyBraceOffset(source, decl, typeName);
-		return brace == null ? null : headerScan(source, typeHeaderFrom(source, decl, typeName), brace).tokenEnd;
+	public static function typeHeaderInsertOffset(
+		source: String, decl: TypeDeclMatch, typeName: String, regions: Array<LexRegion>
+	): Null<Int> {
+		final brace: Null<Int> = typeBodyBraceOffset(source, decl, typeName, regions);
+		return brace == null ? null : headerScan(source, typeHeaderFrom(source, decl, typeName, regions), brace, regions).tokenEnd;
 	}
 
 	/**
@@ -3594,21 +3602,23 @@ final class RefactorSupport {
 	 * the first member — that position sits past the member's leading doc comment, which the insertion
 	 * would then silently steal.
 	 */
-	public static function typeBodyBraceOffset(source: String, decl: TypeDeclMatch, typeName: String): Null<Int> {
+	public static function typeBodyBraceOffset(
+		source: String, decl: TypeDeclMatch, typeName: String, regions: Array<LexRegion>
+	): Null<Int> {
 		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
 		final limit: Int = nameSpan.to <= source.length ? nameSpan.to : source.length;
-		var from: Int = typeHeaderFrom(source, decl, typeName);
+		var from: Int = typeHeaderFrom(source, decl, typeName, regions);
 		var brace: Int = -1;
 		// Children are in document order: the first one that starts after a located
 		// brace belongs to the body, every earlier one is part of the header.
 		for (child in decl.nameNode.children) {
 			final s: Null<Span> = child.span;
 			if (s == null) continue;
-			brace = headerScan(source, from, s.from < limit ? s.from : limit).brace;
+			brace = headerScan(source, from, s.from < limit ? s.from : limit, regions).brace;
 			if (brace >= 0) break;
 			if (s.to > from) from = s.to;
 		}
-		if (brace < 0) brace = headerScan(source, from, limit).brace;
+		if (brace < 0) brace = headerScan(source, from, limit, regions).brace;
 		return brace < 0 || source.fastCodeAt(brace) != '{'.code ? null : brace;
 	}
 
@@ -4100,7 +4110,7 @@ final class RefactorSupport {
 			declKinds: TypeResolver.blockScopedValueDeclarationKinds(shape),
 			metaKinds: plugin.metaShape().metaKinds,
 			elseKeywords: elseKeywords,
-			comments: collectCommentTokens(source)
+			comments: collectCommentTokens(plugin.lexicalRegions(source))
 		};
 		// A PARAMETER is in effect for the whole body, so it is an "already in effect" declaration
 		// for every region under it - the same standing a sibling declaration before the region has.
@@ -4194,10 +4204,21 @@ final class RefactorSupport {
 	): EditResult {
 		if (targets.length == 0) return Err('no node to remove');
 		final edits: Array<{ span: Span, text: String }> = [];
+		// Hoisted, and LAZY: the scan is O(file) and every target asks it of the same source, but
+		// `trailingTrimmedSpan`'s one-byte guard answers most targets without needing it at all. The
+		// memo is a local of this call — run-scoped by construction, never a process-lifetime cache.
+		var scanned: Null<Array<LexRegion>> = null;
+		final regionsOf: () -> Array<LexRegion> = () -> {
+			final cached: Null<Array<LexRegion>> = scanned;
+			if (cached != null) return cached;
+			final fresh: Array<LexRegion> = plugin.lexicalRegions(source);
+			scanned = fresh;
+			return fresh;
+		};
 		for (target in targets) {
 			final nodeSpan: Null<Span> = target.node.span;
 			if (nodeSpan == null) return Err('the node to remove has no source span');
-			final group: Span = trailingTrimmedSpan(source, declGroupSpan(target.node, target.parent, nodeSpan));
+			final group: Span = trailingTrimmedSpan(source, declGroupSpan(target.node, target.parent, nodeSpan), regionsOf);
 			// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
 			// stops short of it and the block is left in the file — where it silently becomes
 			// the documentation of whatever declaration follows. Removing it WITH the node is
@@ -4209,7 +4230,7 @@ final class RefactorSupport {
 			// DECLARATION under it, which is staying. Removing an `@:access` off a real
 			// 79-line Pony class took the class's own `/** … */` with it — orphaning nothing,
 			// just deleting documentation the caller never addressed.
-			final span: Span = withDoc && !isAnnotationElement(target.node) ? docExtendedSpan(source, group, true) : group;
+			final span: Span = withDoc && !isAnnotationElement(target.node) ? docExtendedSpan(source, group, regionsOf(), true) : group;
 
 			var isComma: Bool = adjacentToComma(source, span);
 			final parent: Null<QueryNode> = target.parent;
@@ -4490,8 +4511,10 @@ final class RefactorSupport {
 	 * `MoveSymbol` and `removeElement` still call the two halves themselves: the first needs the
 	 * UNTRIMMED group end and the modifier run separately, the second already holds the parent.
 	 */
-	public static function declEditSpan(source: String, tree: QueryNode, node: QueryNode, nodeSpan: Span): Span {
-		return trailingTrimmedSpan(source, declGroupSpan(node, TreePath.parentOf(tree, node), nodeSpan));
+	public static function declEditSpan(
+		source: String, tree: QueryNode, node: QueryNode, nodeSpan: Span, regions: () -> Array<LexRegion>
+	): Span {
+		return trailingTrimmedSpan(source, declGroupSpan(node, TreePath.parentOf(tree, node), nodeSpan), regions);
 	}
 
 	/** Whether `code` is whitespace that does NOT end a line — space, tab, carriage return. */
@@ -4679,9 +4702,9 @@ final class RefactorSupport {
 	}
 
 	/** The offset just past `decl`'s NAME token — where its header (supertype clauses, type params) begins. */
-	private static function typeHeaderFrom(source: String, decl: TypeDeclMatch, typeName: String): Int {
+	private static function typeHeaderFrom(source: String, decl: TypeDeclMatch, typeName: String, regions: Array<LexRegion>): Int {
 		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
-		final nameAt: Int = activeCodeIdentTokenOffset(source, nameSpan, typeName);
+		final nameAt: Int = activeCodeIdentTokenOffset(source, nameSpan, typeName, regions);
 		return nameAt < 0 ? nameSpan.from : nameAt + typeName.length;
 	}
 
@@ -5133,7 +5156,7 @@ final class RefactorSupport {
 	 * as invisible. `brace` is -1 when the range holds no brace outside them;
 	 * `tokenEnd` falls back to `from` when the range is all trivia.
 	 */
-	private static function headerScan(source: String, from: Int, to: Int): { brace: Int, tokenEnd: Int } {
+	private static function headerScan(source: String, from: Int, to: Int, regions: Array<LexRegion>): { brace: Int, tokenEnd: Int } {
 		final end: Int = to <= source.length ? to : source.length;
 		var brace: Int = -1;
 		var tokenEnd: Int = from;
@@ -5148,7 +5171,11 @@ final class RefactorSupport {
 				}
 			}
 			if (c == '"'.code || c == "'".code) {
-				i = LexicalRegions.skipStringLiteral(source, i, c) + 1;
+				// The scanned region starting HERE is the literal; its end is the seam's own answer to
+				// where the quote closes. A quote the scan attributes to some other region (a regex
+				// body) is not a literal opener and is stepped over as an ordinary byte.
+				final literal: Null<LexRegion> = LexicalRegions.regionAt(i, regions);
+				i = literal != null && literal.from == i ? literal.to : i + 1;
 				tokenEnd = i;
 				continue;
 			}

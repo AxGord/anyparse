@@ -182,7 +182,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final nestedFnSpans: Array<Span> = [];
 		collectNestedFnSpans(root, s.nestedFnKinds, nestedFnSpans);
 		final out: Array<Match> = [];

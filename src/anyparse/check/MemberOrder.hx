@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.MemberOrderReason.OrderKeys;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -130,7 +131,7 @@ final class MemberOrder implements Check implements ConfigAware {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
-			walk(violations, entry.file, entry.source, tree, shape, accessors);
+			walk(violations, entry.file, entry.source, tree, shape, accessors, plugin.lexicalRegions(entry.source));
 		}
 		return violations;
 	}
@@ -165,7 +166,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		// Null when the pass carries no violation — nothing to reorder anyway — which the gate reads
 		// as "no file named" and answers from the whole index, as it did before it could be told.
 		final file: Null<String> = violations.length > 0 ? violations[0].file : null;
-		fixWalk(edits, source, tree, shape, flagged, accessors, movableArglessNew, index, file);
+		fixWalk(edits, source, tree, shape, flagged, accessors, movableArglessNew, index, file, plugin.lexicalRegions(source));
 		return edits;
 	}
 
@@ -227,10 +228,11 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Walk `node`; flag each container whose members are out of canonical order or whose rank groups are not blank-line separated. */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, accessors: Map<Int, Bool>
+		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, accessors: Map<Int, Bool>,
+		regions: Array<LexRegion>
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) {
-			final members: Array<OrderedMember> = MemberSlots.collectMembers(node, source, shape, accessors);
+			final members: Array<OrderedMember> = MemberSlots.collectMembers(node, source, shape, accessors, regions);
 			final issue: Null<LayoutIssue> = firstLayoutIssue(members, source, computePlan(members, source, shape));
 			if (issue != null) out.push({
 				file: file,
@@ -240,7 +242,7 @@ final class MemberOrder implements Check implements ConfigAware {
 				message: issue.message
 			});
 		}
-		for (c in node.children) walk(out, file, source, c, shape, accessors);
+		for (c in node.children) walk(out, file, source, c, shape, accessors, regions);
 	}
 
 	/**
@@ -249,11 +251,11 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static function fixWalk(
 		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Array<Int>,
-		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>, file: Null<String>
+		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>, file: Null<String>, regions: Array<LexRegion>
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind))
-			emitReorder(edits, source, node, shape, flagged, accessors, movableArglessNew, index, file);
-		for (c in node.children) fixWalk(edits, source, c, shape, flagged, accessors, movableArglessNew, index, file);
+			emitReorder(edits, source, node, shape, flagged, accessors, movableArglessNew, index, file, regions);
+		for (c in node.children) fixWalk(edits, source, c, shape, flagged, accessors, movableArglessNew, index, file, regions);
 	}
 
 	/**
@@ -269,9 +271,9 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static function emitReorder(
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>,
-		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>, file: Null<String>
+		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>, file: Null<String>, regions: Array<LexRegion>
 	): Void {
-		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, accessors);
+		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, accessors, regions);
 		if (members.length < 2) return;
 		final plan: SortPlan = computePlan(members, source, shape);
 		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan);
@@ -279,7 +281,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> compareOrder(a, b, plan));
 		if (
-			!reorderSafe(members, sorted, source, shape, movableArglessNew)
+			!reorderSafe(members, sorted, source, shape, movableArglessNew, regions)
 			|| !macroBuiltMetaOrderKept(members, sorted, container, index, file)
 		) {
 			MemberSpacing.emitSpacingOnly(edits, members, source);
@@ -333,9 +335,10 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * allocation from the side-effecting-flip bail - see `isMovableAllocation`.
 	 */
 	private static function reorderSafe(
-		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape, movableArglessNew: Bool
+		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape, movableArglessNew: Bool,
+		regions: Array<LexRegion>
 	): Bool {
-		return !hasUnmodelledElse(members, source) && !hasOrphanComment(members, source)
+		return !hasUnmodelledElse(members, source) && !hasOrphanComment(members, source, regions)
 			&& !hasSideEffectingFieldFlip(members, sorted, shape, source, movableArglessNew)
 			&& !hasSiblingReadFlip(members, sorted, source) && conditionalRegionsCovered(members, source)
 			&& !splitsCoexistingRegion(members);
@@ -503,8 +506,8 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/** Whether a comment in the member region is covered by no member's slot or absorbed lead-doc — an orphan note the reorder would strand. Directives are regenerated, so need no coverage. */
-	private static function hasOrphanComment(members: Array<OrderedMember>, source: String): Bool {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+	private static function hasOrphanComment(members: Array<OrderedMember>, source: String, regions: Array<LexRegion>): Bool {
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
 		final regionFrom: Int = members[0].regionFrom;
 		final regionTo: Int = members[members.length - 1].regionTo;
 		for (c in comments) if (!(c.to <= regionFrom || c.from >= regionTo)) {

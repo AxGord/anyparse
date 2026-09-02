@@ -50,7 +50,7 @@ final class DuplicateCase implements Check {
 				walk(
 					violations, entry.file, entry.source, tree,
 					{ caseBranchKind: caseBranchKind, conditionalKind: shape.conditionalMemberKind },
-					CondBranchPath.scan(entry.source, shape)
+					CondBranchPath.scan(entry.source, shape, plugin.lexicalRegions(entry.source))
 				);
 		}
 		return violations;

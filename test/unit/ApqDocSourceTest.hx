@@ -37,7 +37,7 @@ class ApqDocSourceTest extends Test {
 	public function testLeadingDocAdjacentBlock(): Void {
 		final src: String = 'class C {\n\t/** field doc */\n\tvar count:Int = 0;\n}';
 		final span: Span = spanAt(src, 'var count');
-		Assert.equals('\t/** field doc */', SourceSlice.leadingDoc(src, span));
+		Assert.equals('\t/** field doc */', SourceSlice.leadingDoc(src, span, new HaxeQueryPlugin().lexicalRegions(src)));
 	}
 
 	/**
@@ -48,25 +48,27 @@ class ApqDocSourceTest extends Test {
 	public function testLeadingDocWithBlockOpenerInText(): Void {
 		final src: String = 'class C {\n\t/**\n\t * Holds a `//` or `/*` opener.\n\t */\n\tvar count:Int = 0;\n}';
 		final span: Span = spanAt(src, 'var count');
-		Assert.equals('\t/**\n\t * Holds a `//` or `/*` opener.\n\t */', SourceSlice.leadingDoc(src, span));
+		Assert.equals(
+			'\t/**\n\t * Holds a `//` or `/*` opener.\n\t */', SourceSlice.leadingDoc(src, span, new HaxeQueryPlugin().lexicalRegions(src))
+		);
 	}
 
 	public function testLeadingDocSkipsAnnotationLines(): Void {
 		final src: String = '/**\n * Widget doc.\n */\n@:keep\nclass Widget {}';
 		final span: Span = spanAt(src, 'class Widget');
-		Assert.equals('/**\n * Widget doc.\n */', SourceSlice.leadingDoc(src, span));
+		Assert.equals('/**\n * Widget doc.\n */', SourceSlice.leadingDoc(src, span, new HaxeQueryPlugin().lexicalRegions(src)));
 	}
 
 	public function testLeadingDocLineCommentRun(): Void {
 		final src: String = '/// line one\n/// line two\nclass D {}';
 		final span: Span = spanAt(src, 'class D');
-		Assert.equals('/// line one\n/// line two', SourceSlice.leadingDoc(src, span));
+		Assert.equals('/// line one\n/// line two', SourceSlice.leadingDoc(src, span, new HaxeQueryPlugin().lexicalRegions(src)));
 	}
 
 	public function testLeadingDocBlockCommentNonDoc(): Void {
 		final src: String = '/* note */\nclass F {}';
 		final span: Span = spanAt(src, 'class F');
-		Assert.equals('/* note */', SourceSlice.leadingDoc(src, span));
+		Assert.equals('/* note */', SourceSlice.leadingDoc(src, span, new HaxeQueryPlugin().lexicalRegions(src)));
 	}
 
 	/**
@@ -77,13 +79,13 @@ class ApqDocSourceTest extends Test {
 	 */
 	public function testLeadingDocIgnoresPreviousDeclarationsTrailingComment(): Void {
 		final src: String = 'class C {\n\tvar keep:Int = 0; /** about keep */\n\n\tvar count:Int = 0;\n}';
-		Assert.isNull(SourceSlice.leadingDoc(src, spanAt(src, 'var count')));
+		Assert.isNull(SourceSlice.leadingDoc(src, spanAt(src, 'var count'), new HaxeQueryPlugin().lexicalRegions(src)));
 	}
 
 	public function testLeadingDocAbsentReturnsNull(): Void {
 		final src: String = 'class E {}';
-		Assert.isNull(SourceSlice.leadingDoc(src, spanAt(src, 'class E')));
-		Assert.isNull(SourceSlice.leadingDoc(src, null));
+		Assert.isNull(SourceSlice.leadingDoc(src, spanAt(src, 'class E'), new HaxeQueryPlugin().lexicalRegions(src)));
+		Assert.isNull(SourceSlice.leadingDoc(src, null, new HaxeQueryPlugin().lexicalRegions(src)));
 	}
 
 	public function testRefsTextDocOptIn(): Void {
@@ -91,17 +93,17 @@ class ApqDocSourceTest extends Test {
 		final decls: Array<RefHit> = declHits(src, 'count');
 		Assert.isTrue(decls.length > 0, 'expected a decl hit for count');
 
-		final withDoc: String = Text.renderRefs('F.hx', src, decls, true, false);
+		final withDoc: String = Text.renderRefs('F.hx', src, decls, true, false, new HaxeQueryPlugin().lexicalRegions(src));
 		Assert.isTrue(withDoc.indexOf('/** doc for count. */') >= 0, 'doc block must appear with --doc');
 
-		final plain: String = Text.renderRefs('F.hx', src, decls, false, false);
+		final plain: String = Text.renderRefs('F.hx', src, decls, false, false, new HaxeQueryPlugin().lexicalRegions(src));
 		Assert.isTrue(plain.indexOf('/**') < 0, 'default text output must carry no doc block');
 	}
 
 	public function testRefsTextSourceOptIn(): Void {
 		final src: String = 'class C {\n\tvar count:Int = 0;\n}';
 		final decls: Array<RefHit> = declHits(src, 'count');
-		final withSource: String = Text.renderRefs('F.hx', src, decls, false, true);
+		final withSource: String = Text.renderRefs('F.hx', src, decls, false, true, new HaxeQueryPlugin().lexicalRegions(src));
 		Assert.isTrue(withSource.indexOf('var count:Int = 0;') >= 0, 'verbatim slice must appear with --source');
 	}
 
@@ -115,11 +117,11 @@ class ApqDocSourceTest extends Test {
 			}
 		];
 
-		final off: String = Json.renderRefs(entries, false, false);
+		final off: String = Json.renderRefs(entries, false, false, new HaxeQueryPlugin().lexicalRegions);
 		Assert.isTrue(off.indexOf('\"doc\"') < 0, 'default refs json must omit doc key');
 		Assert.isTrue(off.indexOf('\"source\"') < 0, 'default refs json must omit source key');
 
-		final on: String = Json.renderRefs(entries, true, true);
+		final on: String = Json.renderRefs(entries, true, true, new HaxeQueryPlugin().lexicalRegions);
 		Assert.isTrue(on.indexOf('\"doc\"') >= 0, '--doc must add the doc key');
 		Assert.isTrue(on.indexOf('\"source\"') >= 0, '--source must add the source key');
 	}

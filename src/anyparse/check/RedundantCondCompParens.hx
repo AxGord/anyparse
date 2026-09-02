@@ -120,7 +120,7 @@ final class RedundantCondCompParens implements Check {
 	/** Every parenthesised-single-flag condition in `source`, in source order. */
 	private static function sites(source: String, plugin: GrammarPlugin): Array<FlagParens> {
 		final out: Array<FlagParens> = [];
-		for (directive in CondDirectives.scan(source, plugin.refShape())) {
+		for (directive in CondDirectives.scan(source, plugin.refShape(), plugin.lexicalRegions.bind(source))) {
 			final condition: Null<Span> = directive.condition;
 			if (condition == null) continue;
 			// Re-bound to non-null locals: strict null-safety narrowing does not reach into an

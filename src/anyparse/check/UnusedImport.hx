@@ -197,7 +197,7 @@ final class UnusedImport implements Check {
 			// use) AND the comment regions (a comment resolves no type, so a name spelled only
 			// there is not a use either). String literals are deliberately NOT in it — see the
 			// class doc.
-			final comments: Array<Span> = RefactorSupport.collectCommentRegions(source);
+			final comments: Array<Span> = RefactorSupport.collectCommentRegions(plugin.lexicalRegions(source));
 			final scan: FileScan = {
 				source: source,
 				excluded: [for (imp in info.imports) imp.span].concat(comments),

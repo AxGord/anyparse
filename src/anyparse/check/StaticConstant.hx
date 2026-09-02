@@ -167,7 +167,7 @@ final class StaticConstant implements Check implements DefaultOff {
 				reflected: reflected,
 				index: index,
 				plugin: plugin,
-				branch: MemberBranchScan.seamsOf(plugin.refShape(), entry.source)
+				branch: MemberBranchScan.seamsOf(plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source))
 			}, false);
 		}
 		return violations;

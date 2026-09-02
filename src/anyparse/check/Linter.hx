@@ -388,7 +388,7 @@ final class Linter {
 	): Array<Violation> {
 		final raw: Array<Violation> = [for (check in checks) for (violation in check.run(files, plugin)) violation];
 		final unquoted: Array<Violation> = ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
-		return Suppression.apply(unquoted, files);
+		return Suppression.apply(unquoted, files, plugin.lexicalRegions);
 	}
 
 	/**

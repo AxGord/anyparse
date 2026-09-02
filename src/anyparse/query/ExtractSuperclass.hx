@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.EditResult;
@@ -98,11 +99,11 @@ final class ExtractSuperclass {
 		if (superNameOf(declNN) != null) return Err('class "$srcTypeName" already extends a class — single inheritance, refusing');
 
 		final shape: RefShape = plugin.refShape();
-		final moved: Array<Moved> = switch resolveMembers(declNN, memberNames, srcSource, shape) {
+		final moved: Array<Moved> = switch resolveMembers(declNN, memberNames, srcSource, shape, plugin.lexicalRegions.bind(srcSource)) {
 			case Left(message): return Err(message);
 			case Right(list): list;
 		};
-		final stranded: Array<String> = strandedRefs(declNN, moved, srcSource, shape);
+		final stranded: Array<String> = strandedRefs(declNN, moved, srcSource, shape, plugin.lexicalRegions.bind(srcSource));
 		if (stranded.length > 0)
 			return Err('pulled-up member(s) reference member(s) staying behind: ${stranded.join(', ')} — add them to the set or refactor');
 
@@ -120,7 +121,9 @@ final class ExtractSuperclass {
 				source;
 		};
 
-		final headerEdit: Null<{ span: Span, text: String }> = extendsEdit(srcSource, declNN, srcTypeName, superName);
+		final headerEdit: Null<{ span: Span, text: String }> = extendsEdit(
+			srcSource, declNN, srcTypeName, superName, plugin.lexicalRegions(srcSource)
+		);
 		if (headerEdit == null)
 			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add extends (nothing written)');
 		final edits: Array<{ span: Span, text: String }> = [for (m in moved) { span: m.cut, text: '' }];
@@ -185,7 +188,7 @@ final class ExtractSuperclass {
 	 * duplicate / ineligible member.
 	 */
 	private static function resolveMembers(
-		decl: TypeDeclMatch, names: Array<String>, source: String, shape: RefShape
+		decl: TypeDeclMatch, names: Array<String>, source: String, shape: RefShape, regions: () -> Array<LexRegion>
 	): Either<String, Array<Moved>> {
 		final out: Array<Moved> = [];
 		// Branch-aware: a member a `#if` region declares is not a direct child of the type, and the
@@ -197,7 +200,8 @@ final class ExtractSuperclass {
 				final nm: Null<String> = child.name;
 				final span: Null<Span> = child.span;
 				if (nm != null && span != null && !found.exists(nm)) found[nm] = { node: child, run: run, span: span };
-			}
+			},
+			regions
 		);
 		for (name in names) {
 			if (name == 'new') return Left('cannot pull up a constructor');
@@ -218,13 +222,13 @@ final class ExtractSuperclass {
 			if (isOverride) return Left('"$name" is an override — cannot pull it up');
 			// Seeing a guarded member is not licence to MOVE it: cutting it out of its branch and
 			// pasting it into the superclass unguarded gives it to builds that never had it.
-			if (MemberBranchScan.isGuardedMember(decl, shape, source, hitNN.node))
+			if (MemberBranchScan.isGuardedMember(decl, shape, source, hitNN.node, regions))
 				return Left(
 					'"$name" is declared inside a conditional-compilation region — pulling it out of its branch would change which '
 					+ 'builds declare it'
 				);
 			final groupSpan: Span = RefactorSupport.declGroupSpan(hitNN.node, decl.nameNode, hitNN.span);
-			out.push({ name: name, node: hitNN.node, cut: cutSpanOf(source, groupSpan) });
+			out.push({ name: name, node: hitNN.node, cut: cutSpanOf(source, groupSpan, regions()) });
 		}
 		out.sort((a, b) -> a.cut.from - b.cut.from);
 		return Right(out);
@@ -236,7 +240,9 @@ final class ExtractSuperclass {
 	 * AST-name match (bare call / read / `this.member`), so comments and
 	 * strings never trigger it.
 	 */
-	private static function strandedRefs(decl: TypeDeclMatch, moved: Array<Moved>, source: String, shape: RefShape): Array<String> {
+	private static function strandedRefs(
+		decl: TypeDeclMatch, moved: Array<Moved>, source: String, shape: RefShape, regions: () -> Array<LexRegion>
+	): Array<String> {
 		final movingNames: Map<String, Bool> = [for (m in moved) m.name => true];
 		final memberNames: Map<String, Bool> = [];
 		// Branch-aware, and this one fails SILENTLY when it is not: a member left behind inside a `#if`
@@ -247,7 +253,8 @@ final class ExtractSuperclass {
 			(child, _) -> {
 				final nm: Null<String> = child.name;
 				if (nm != null && !movingNames.exists(nm) && nm != 'new') memberNames[nm] = true;
-			}
+			},
+			regions
 		);
 		final found: Map<String, Bool> = [];
 		function walk(node: QueryNode): Void {
@@ -323,22 +330,22 @@ final class ExtractSuperclass {
 	 * before any member is cut.
 	 */
 	private static function extendsEdit(
-		source: String, decl: TypeDeclMatch, typeName: String, superName: String
+		source: String, decl: TypeDeclMatch, typeName: String, superName: String, regions: Array<LexRegion>
 	): Null<{ span: Span, text: String }> {
 		for (child in decl.nameNode.children) if (child.kind == 'ImplementsClause') {
 			final s: Null<Span> = child.span;
 			if (s != null) return { span: new Span(s.from, s.from), text: 'extends $superName ' };
 		}
-		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName);
+		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName, regions);
 		if (at == null) return null;
 		final atNN: Int = at;
 		return { span: new Span(atNN, atNN), text: ' extends $superName' };
 	}
 
 	/** The cut span of a member group: decl + leading doc + whole line(s). */
-	private static function cutSpanOf(source: String, groupSpan: Span): Span {
+	private static function cutSpanOf(source: String, groupSpan: Span, regions: Array<LexRegion>): Span {
 		return RefactorSupport.blankExtendedSpan(
-			source, RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan))
+			source, RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan, regions))
 		);
 	}
 

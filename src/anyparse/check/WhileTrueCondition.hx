@@ -203,7 +203,7 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 		final ctx: Ctx = {
 			source: source,
 			seams: s,
-			comments: RefactorSupport.collectCommentTokens(source),
+			comments: RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)),
 			types: CheckScan.typeNominalResolver(source, plugin, tree, file, index)
 		};
 		final out: Array<Match> = [];

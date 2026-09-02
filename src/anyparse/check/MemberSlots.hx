@@ -5,6 +5,7 @@ import anyparse.check.MemberOrder.MemberRank;
 import anyparse.check.MemberOrder.OrderedMember;
 import anyparse.query.CondDirectives;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
@@ -49,9 +50,9 @@ final class MemberSlots {
 	 * member is recorded with the condition it is declared under (see `collectInto`).
 	 */
 	public static function collectMembers(
-		container: QueryNode, source: String, shape: RefShape, accessors: Map<Int, Bool>
+		container: QueryNode, source: String, shape: RefShape, accessors: Map<Int, Bool>, regions: Array<LexRegion>
 	): Array<OrderedMember> {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
 		final out: Array<OrderedMember> = [];
 		collectInto(out, container, source, shape, comments, [], null, accessors);
 		return out;

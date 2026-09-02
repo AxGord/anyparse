@@ -205,7 +205,7 @@ final class JoinSingleUseLocal implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 		final out: Array<Match> = [];
 		collectMatches(root, source, comments, s, root, declTypeSources, out);

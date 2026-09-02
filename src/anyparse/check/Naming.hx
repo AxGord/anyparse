@@ -978,7 +978,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// the same reason an override family's are. Body-scoped bindings are excluded: two locals in
 		// exclusive branches are genuinely unrelated, sharing a name by coincidence, not by design.
 		final others: Array<Span> = otherBindingSpans(source, tree, name, declFrom, shape);
-		final exclusive: Array<Span> = bodyScoped ? [] : MemberBranchScan.exclusiveSpansAt(shape, source, tree, declFrom);
+		final exclusive: Array<Span> = bodyScoped
+			? []
+			: MemberBranchScan.exclusiveSpansAt(shape, source, tree, declFrom, plugin.lexicalRegions.bind(source));
 		final twins: Array<Span> = exclusive.length == 0
 			? []
 			: [for (s in others) if (RefactorSupport.offsetWithinAny(s.from, exclusive)) s];
@@ -1452,7 +1454,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			// in `#if ios` cannot be duplicated or shadowed by a rename landing in `#elseif android`, and
 			// reading it as a collision is what sent the pair to two DIFFERENT spellings — the shape that
 			// strands every reference the rename rewrote (see `MemberBranchScan.exclusiveSpansAt`).
-			final exclusive: Array<Span> = MemberBranchScan.exclusiveSpansAt(shape, source, tree, span.from);
+			final exclusive: Array<Span> = MemberBranchScan.exclusiveSpansAt(
+				shape, source, tree, span.from, plugin.lexicalRegions.bind(source)
+			);
 			// And EXCEPT what a same-named member declared in one of those branches EXPLAINS. The scan
 			// answers on lexical context, not on binding, so a plain read of that twin counts as the name
 			// being taken - which is how `#if ios … key … #elseif android … _key … #end` got told its

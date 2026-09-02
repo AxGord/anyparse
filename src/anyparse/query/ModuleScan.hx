@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
@@ -83,7 +84,10 @@ final class ModuleScan {
 		} else if (RefactorSupport.typeDeclOf(child) != null)
 			return null;
 		final guard: Null<QueryNode> = region;
-		return guard != null && regionDeclaresType(guard, regionKind) && singleBranchRegion(guard, source, shape) ? guard : null;
+		return guard != null && regionDeclaresType(guard, regionKind)
+			&& singleBranchRegion(guard, source, shape, plugin.lexicalRegions(source))
+			? guard
+			: null;
 	}
 
 	/**
@@ -332,14 +336,14 @@ final class ModuleScan {
 	}
 
 	/** Whether `region` opens no `#else` / `#elseif` branch of its own — `guardedBodyRegion`'s third gate. */
-	private static function singleBranchRegion(region: QueryNode, source: String, shape: RefShape): Bool {
+	private static function singleBranchRegion(region: QueryNode, source: String, shape: RefShape, regions: Array<LexRegion>): Bool {
 		final span: Null<Span> = region.span;
 		final opener: Null<String> = shape.conditionalIfKeyword;
 		final closer: Null<String> = shape.conditionalEndKeyword;
 		final seams: Null<Array<String>> = shape.conditionalElseKeywords;
 		if (span == null || opener == null || closer == null || seams == null) return false;
 		var depth: Int = 0;
-		for (directive in CondDirectives.scan(source, shape)) {
+		for (directive in CondDirectives.scan(source, shape, () -> regions)) {
 			if (directive.span.from < span.from || directive.span.to > span.to) continue;
 			if (directive.keyword == opener)
 				depth++;

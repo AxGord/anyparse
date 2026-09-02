@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
@@ -43,7 +44,9 @@ final class Suppression {
 	 * and for line resolution; a violation whose file is absent from `files`,
 	 * or whose span is null, is kept unchanged.
 	 */
-	public static function apply(violations: Array<Violation>, files: Array<{ file: String, source: String }>): Array<Violation> {
+	public static function apply(
+		violations: Array<Violation>, files: Array<{ file: String, source: String }>, lexicalRegions: (String) -> Array<LexRegion>
+	): Array<Violation> {
 		if (violations.length == 0) return violations;
 
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
@@ -56,7 +59,7 @@ final class Suppression {
 			final span: Null<Span> = v.span;
 			if (span == null) return true;
 			final cached: Null<FileDirectives> = scanned[v.file];
-			final directives: FileDirectives = cached ?? directivesOf(sourceByFile[v.file]);
+			final directives: FileDirectives = cached ?? directivesOf(sourceByFile[v.file], lexicalRegions(sourceByFile[v.file] ?? ''));
 			if (cached == null) scanned[v.file] = directives;
 			if (directives.entries.length == 0) return true;
 			final index: LineIndex = directives.index;
@@ -71,10 +74,10 @@ final class Suppression {
 	 * a finding whose file is absent from `files` is kept, which an empty entry list
 	 * already expresses.
 	 */
-	private static function directivesOf(source: Null<String>): FileDirectives {
+	private static function directivesOf(source: Null<String>, regions: Array<LexRegion>): FileDirectives {
 		if (source == null) return { index: new LineIndex(''), entries: [] };
 		final index: LineIndex = new LineIndex(source);
-		return { index: index, entries: collectEntries(source, index) };
+		return { index: index, entries: collectEntries(source, index, regions) };
 	}
 
 	/**
@@ -104,10 +107,10 @@ final class Suppression {
 	 * `CHECKSTYLE:OFF`/`ON` pairs match by nesting; an unclosed `OFF` extends
 	 * to end of file.
 	 */
-	private static function collectEntries(source: String, index: LineIndex): Array<Entry> {
+	private static function collectEntries(source: String, index: LineIndex, regions: Array<LexRegion>): Array<Entry> {
 		final entries: Array<Entry> = [];
 		var openLine: Int = -1;
-		for (tok in RefactorSupport.collectCommentTokens(source)) {
+		for (tok in RefactorSupport.collectCommentTokens(regions)) {
 			final line: Int = index.lineColAt(tok.from).line;
 			final body: Span = RefactorSupport.commentBody(source, tok);
 			final text: String = source.substring(body.from, body.to).trim();

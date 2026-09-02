@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -105,7 +106,7 @@ final class PreferLocalFunction implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (m in collectMatches(tree, entry.source, s)) violations.push({
+			for (m in collectMatches(tree, entry.source, s, plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.reportSpan,
 				rule: RULE_ID,
@@ -130,7 +131,9 @@ final class PreferLocalFunction implements Check {
 			if (span != null) wanted['${span.from}:${span.to}'] = true;
 		}
 		return [
-			for (m in collectMatches(tree, source, s)) if (wanted.exists('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e
+			for (m in collectMatches(
+				tree, source, s, plugin.lexicalRegions(source)
+			)) if (wanted.exists('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e
 		];
 	}
 
@@ -205,8 +208,8 @@ final class PreferLocalFunction implements Check {
 	}
 
 	/** Every rewritable binding reachable under `tree`, in document order. */
-	private static function collectMatches(tree: QueryNode, source: String, s: Seams): Array<Match> {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+	private static function collectMatches(tree: QueryNode, source: String, s: Seams, regions: Array<LexRegion>): Array<Match> {
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
 		final out: Array<Match> = [];
 		walkBlocks(tree, source, comments, s, out);
 		return out;

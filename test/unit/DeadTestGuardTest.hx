@@ -159,23 +159,22 @@ class DeadTestGuardTest extends Test {
 		if (ifKeyword == null) return [];
 		final defines: Array<String> = BuildDefines.definedFlags();
 		final unproven: Array<UnprovenGuard> = [];
-		for (directive in CondDirectives.scan(source, shape)) if (CondDirectives.takesCondition(
-			directive.keyword, ifKeyword, shape.conditionalEndKeyword
-		)) {
-			final condition: Null<Span> = directive.condition;
-			// A NULL condition on a keyword that takes one means the reader could not delimit
-			// it, which is not the same fact as `#else`/`#end` carrying none — `#if (a\n)` is
-			// legal Haxe that really does compile its body out. `CondRegionLiveness.apply`
-			// discriminates the two with `takesCondition`; conflating them here would let a
-			// line-wrapped dead guard through, so an undelimited condition is unproven.
-			final live: Null<Bool> = condition == null
-				? null
-				: CondRegionLiveness.evaluate(source.substring(condition.from, condition.to), defines);
-			if (live != true) unproven.push({
-				line: new Span(directive.span.from, directive.span.from).lineCol(source).line,
-				text: CondDirectives.text(source, directive)
-			});
-		}
+		for (directive in CondDirectives.scan(source, shape, new HaxeQueryPlugin().lexicalRegions.bind(source)))
+			if (CondDirectives.takesCondition(directive.keyword, ifKeyword, shape.conditionalEndKeyword)) {
+				final condition: Null<Span> = directive.condition;
+				// A NULL condition on a keyword that takes one means the reader could not delimit
+				// it, which is not the same fact as `#else`/`#end` carrying none — `#if (a\n)` is
+				// legal Haxe that really does compile its body out. `CondRegionLiveness.apply`
+				// discriminates the two with `takesCondition`; conflating them here would let a
+				// line-wrapped dead guard through, so an undelimited condition is unproven.
+				final live: Null<Bool> = condition == null
+					? null
+					: CondRegionLiveness.evaluate(source.substring(condition.from, condition.to), defines);
+				if (live != true) unproven.push({
+					line: new Span(directive.span.from, directive.span.from).lineCol(source).line,
+					text: CondDirectives.text(source, directive)
+				});
+			}
 		return unproven;
 	}
 

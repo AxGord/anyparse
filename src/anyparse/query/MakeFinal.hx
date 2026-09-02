@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
@@ -65,7 +66,9 @@ final class MakeFinal {
 		final src: Parsed = srcEntry;
 
 		final shape: RefShape = plugin.refShape();
-		final fieldNode: Null<QueryNode> = resolveVarField(src.tree, typeName, fieldName, src.source, shape);
+		final fieldNode: Null<QueryNode> = resolveVarField(
+			src.tree, typeName, fieldName, src.source, shape, plugin.lexicalRegions.bind(src.source)
+		);
 		if (fieldNode == null) return Err('no mutable var field "$fieldName" on a unique type "$typeName" in $srcFile');
 		final fNode: QueryNode = fieldNode;
 		final fieldSpan: Null<Span> = fNode.span;
@@ -78,7 +81,7 @@ final class MakeFinal {
 		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(parsed, fieldName, shape, 'making "$fieldName" final');
 		if (opaque != null) return Err(opaque);
 
-		final ctorSpan: Null<Span> = constructorSpan(src.tree, typeName, src.source, shape);
+		final ctorSpan: Null<Span> = constructorSpan(src.tree, typeName, src.source, shape, plugin.lexicalRegions.bind(src.source));
 		final hasInit: Bool = fNode.children.length > 0;
 		final writes: { ctorWrites: Int, outside: Array<String> } = classifyWrites(parsed, srcFile, fieldName, ctorSpan);
 		if (writes.outside.length > 0)
@@ -141,7 +144,7 @@ final class MakeFinal {
 	 * absent / ambiguous (a `final` field is already done and not matched).
 	 */
 	private static function resolveVarField(
-		tree: QueryNode, typeName: String, fieldName: String, source: String, shape: RefShape
+		tree: QueryNode, typeName: String, fieldName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>
 	): Null<QueryNode> {
 		final decl: Null<TypeDeclMatch> = findSoleTypeDecl(tree, typeName);
 		if (decl == null) return null;
@@ -150,18 +153,20 @@ final class MakeFinal {
 		// in place, inside that region, so seeing it is the whole fix.
 		MemberBranchScan.eachTypeMember(decl, shape, source, n -> n.kind == 'VarMember' || n.kind == 'VarField', (child, _) -> {
 			if (hit == null && child.name == fieldName) hit = child;
-		});
+		}, regions);
 		return hit;
 	}
 
 	/** The span of the `new` constructor of the sole type `typeName`, or null. */
-	private static function constructorSpan(tree: QueryNode, typeName: String, source: String, shape: RefShape): Null<Span> {
+	private static function constructorSpan(
+		tree: QueryNode, typeName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>
+	): Null<Span> {
 		final decl: Null<TypeDeclMatch> = findSoleTypeDecl(tree, typeName);
 		if (decl == null) return null;
 		var hit: Null<Span> = null;
 		MemberBranchScan.eachTypeMember(decl, shape, source, n -> n.kind == 'FnMember', (child, _) -> {
 			if (hit == null && child.name == 'new') hit = child.span;
-		});
+		}, regions);
 		return hit;
 	}
 

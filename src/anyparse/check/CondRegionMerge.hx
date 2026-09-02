@@ -148,12 +148,12 @@ final class CondRegionMerge implements Check {
 	/** Every mergeable boundary in `source`, in source order. */
 	private static function sites(source: String, plugin: GrammarPlugin): Array<MergeSite> {
 		final shape: RefShape = plugin.refShape();
-		final directives: Array<CondDirective> = CondDirectives.scan(source, shape);
+		final directives: Array<CondDirective> = CondDirectives.scan(source, shape, plugin.lexicalRegions.bind(source));
 		if (directives.length < 4) return [];
 		final regions: Null<Array<CondRegion>> = regionsOf(directives, shape);
 		if (regions == null) return [];
 		final openedAt: Map<Int, CondRegion> = [for (region in regions) region.open => region];
-		final comments: Array<Span> = RefactorSupport.collectCommentRegions(source);
+		final comments: Array<Span> = RefactorSupport.collectCommentRegions(plugin.lexicalRegions(source));
 		final paired: Array<Int> = [];
 		final out: Array<MergeSite> = [];
 		for (first in regions) {

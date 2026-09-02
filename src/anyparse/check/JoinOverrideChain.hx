@@ -180,7 +180,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, root, index);
 		if (purity == null) return [];
 		final out: Array<Match> = [];
-		collect(root, root, source, RefactorSupport.collectCommentTokens(source), s, purity, out);
+		collect(root, root, source, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), s, purity, out);
 		return out;
 	}
 

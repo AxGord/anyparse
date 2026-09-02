@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.CheckScan;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -79,7 +80,7 @@ final class CommentRewrite {
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		try {
-			for (tok in RefactorSupport.collectCommentTokens(source)) {
+			for (tok in RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source))) {
 				final bodySpan: Span = RefactorSupport.commentBody(source, tok);
 				final body: String = source.substring(bodySpan.from, bodySpan.to);
 				// The splice is RAW and the writer re-emits a comment interior byte for byte, so a
@@ -156,7 +157,7 @@ final class CommentRewrite {
 		if (metrics == null) return null;
 		final width: Int = metrics.lineWidth;
 		final tab: Int = metrics.indentWidth;
-		final got: Array<WideLine> = wideCommentLines(after, width, tab);
+		final got: Array<WideLine> = wideCommentLines(after, width, tab, plugin.lexicalRegions(after));
 		if (got.length == 0) return null;
 		// The baseline is the source CANONICALISED but UNEDITED, not the raw source. Under
 		// `--reformat` — the flag's whole use case being a file that is not canonical — the writer
@@ -167,7 +168,7 @@ final class CommentRewrite {
 			case Ok(text, _): text;
 			case Err(_): source;
 		};
-		final had: Array<WideLine> = wideCommentLines(base, width, tab);
+		final had: Array<WideLine> = wideCommentLines(base, width, tab, plugin.lexicalRegions(base));
 		// COUNT and WIDEST, not line identity. Keying on the line's TEXT made every edit that touches
 		// an over-width line read as a new one — the text necessarily changed — so `comment-rewrite`
 		// refused a rename that SHORTENED a 155-column line to 154, in exactly the case this
@@ -224,10 +225,10 @@ final class CommentRewrite {
 	 * Every distinct physical line of `text` that lies in a comment and renders wider than `width`, in
 	 * document order. Two comments on ONE line yield it once.
 	 */
-	private static function wideCommentLines(text: String, width: Int, tab: Int): Array<WideLine> {
+	private static function wideCommentLines(text: String, width: Int, tab: Int, regions: Array<LexRegion>): Array<WideLine> {
 		final seen: Array<Int> = [];
 		final lines: Array<WideLine> = [];
-		for (tok in RefactorSupport.collectCommentTokens(text)) {
+		for (tok in RefactorSupport.collectCommentTokens(regions)) {
 			var from: Int = text.lastIndexOf('\n', tok.from) + 1;
 			while (from < tok.to) {
 				var to: Int = text.indexOf('\n', from);

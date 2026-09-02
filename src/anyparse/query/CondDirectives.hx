@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -75,11 +76,11 @@ final class CondDirectives {
 	 * Every conditional-compilation directive in `source`, in source order. Empty when the
 	 * grammar declares no opener keyword, or when the text holds none.
 	 */
-	public static function scan(source: String, shape: RefShape): Array<CondDirective> {
+	public static function scan(source: String, shape: RefShape, regions: () -> Array<LexRegion>): Array<CondDirective> {
 		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
 		if (ifKeyword == null || ifKeyword == '' || source.indexOf(ifKeyword) == -1) return [];
 		final keywords: DirectiveKeywords = declaredKeywords(ifKeyword, shape);
-		final regions: Array<Span> = RefactorSupport.collectNonCodeRegions(source);
+		final regions: Array<Span> = RefactorSupport.collectNonCodeRegions(regions());
 		final out: Array<CondDirective> = [];
 		var region: Int = 0;
 		var i: Int = 0;

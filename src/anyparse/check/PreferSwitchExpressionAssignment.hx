@@ -144,7 +144,8 @@ final class PreferSwitchExpressionAssignment implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(entry.source);
+			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			final matches: Array<Match> = [];
 			collectMatches(tree, tree, entry.source, comments, seams, matches);
 			for (m in matches) violations.push({
@@ -165,7 +166,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final matches: Array<Match> = [];
 		collectMatches(tree, tree, source, comments, seams, matches);
 		final byKey: Map<String, Match> = [];

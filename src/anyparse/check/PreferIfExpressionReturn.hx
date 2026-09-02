@@ -147,7 +147,8 @@ final class PreferIfExpressionReturn implements Check {
 			// projections.
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(entry.source);
+			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
 			walkCascades(tree, violations, entry.file, entry.source, comments, seams, blockKinds);
 		}
@@ -159,7 +160,7 @@ final class PreferIfExpressionReturn implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
 				final m: Null<Match> = match(node, source, comments, seams, false);

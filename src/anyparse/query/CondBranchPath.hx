@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 
 /**
  * Which conditional-compilation BRANCH a source position sits in, for checks that compare
@@ -35,13 +36,13 @@ final class CondBranchPath {
 	 * throwing: a file whose directives do not nest is one this class cannot model, and the
 	 * empty path it then reports makes every position comparable — the pre-existing behaviour.
 	 */
-	public static function scan(source: String, shape: RefShape): CondBranchIndex {
+	public static function scan(source: String, shape: RefShape, regions: Array<LexRegion>): CondBranchIndex {
 		final marks: Array<{ at: Int, path: Array<CondFrame> }> = [];
 		final stack: Array<CondFrame> = [];
 		var nextRegion: Int = 0;
 		final elseKeywords: Array<String> = shape.conditionalElseKeywords ?? [];
 		final endKeyword: Null<String> = shape.conditionalEndKeyword;
-		for (directive in CondDirectives.scan(source, shape)) {
+		for (directive in CondDirectives.scan(source, shape, () -> regions)) {
 			if (directive.keyword == shape.conditionalIfKeyword) {
 				stack.push({ region: nextRegion, branch: 0 });
 				nextRegion++;

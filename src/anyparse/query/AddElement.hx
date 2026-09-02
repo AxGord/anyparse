@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
@@ -178,8 +179,8 @@ final class AddElement {
 		// element they trail. Trimming the whole span instead — the first shape this
 		// fix took — moved exactly those two onto the insertion, which is the same
 		// defect in the other direction.
-		final before: Int = RefactorSupport.docExtendedSpan(source, span, true).from;
-		final after: Int = RefactorSupport.docExtendedSpan(source, new Span(span.to, span.to), true).from;
+		final before: Int = RefactorSupport.docExtendedSpan(source, span, plugin.lexicalRegions(source), true).from;
+		final after: Int = RefactorSupport.docExtendedSpan(source, new Span(span.to, span.to), plugin.lexicalRegions(source), true).from;
 		final edit: { span: Span, text: String } = switch side {
 			case After:
 				{ span: new Span(after, after), text: isComma ? ', $trimmed' : '\n$trimmed' };
@@ -368,8 +369,10 @@ final class AddElement {
 	 * so its bytes count as code and the walk stops, leaving the pre-existing splice
 	 * point intact.
 	 */
-	private static function scanBackOverTrivia(source: String, lo: Int, hi: Int): { lastContent: Int, afterComments: Int } {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+	private static function scanBackOverTrivia(
+		source: String, lo: Int, hi: Int, regions: Array<LexRegion>
+	): { lastContent: Int, afterComments: Int } {
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
 		var at: Int = hi - 1;
 		var afterComments: Int = -1;
 		while (at >= lo) {
@@ -418,7 +421,9 @@ final class AddElement {
 		// whitespace AND whole comment tokens. Skipping comments by TOKEN is what
 		// keeps the splice out of comment TEXT: a trailing `// x` otherwise passes
 		// for content, and the separator spliced behind it lands inside the comment.
-		final scan: { lastContent: Int, afterComments: Int } = scanBackOverTrivia(source, containerSpan.from, close);
+		final scan: { lastContent: Int, afterComments: Int } = scanBackOverTrivia(
+			source, containerSpan.from, close, plugin.lexicalRegions(source)
+		);
 		final lastContent: Int = scan.lastContent;
 		final afterComments: Int = scan.afterComments;
 		final lastCode: Int = lastContent >= containerSpan.from ? source.fastCodeAt(lastContent) : -1;

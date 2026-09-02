@@ -156,7 +156,7 @@ final class PreferTernaryExpression implements Check {
 		walk(root, {
 			root: root,
 			source: source,
-			comments: RefactorSupport.collectCommentTokens(source),
+			comments: RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)),
 			seams: s,
 			plugin: plugin,
 			resolveIndex: resolveIndex

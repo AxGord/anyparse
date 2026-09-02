@@ -201,14 +201,14 @@ final class PreferDocComment implements Check implements DefaultOff {
 
 	/** Every convertible run in `source`, in source order. */
 	private static function rewrites(source: String, plugin: GrammarPlugin, seams: Seams): Array<DocCommentRewrite> {
-		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		if (comments.length == 0) return [];
 		final owned: Array<CommentTok> = [for (tok in comments) if (ownsItsLine(source, tok)) tok];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final anchors: Map<Int, Anchor> = [];
 		collectAnchors(source, tree, seams, new Span(-1, source.length), anchors);
-		final docEnds: Map<Int, Bool> = CheckScan.docBlockEnds(source);
+		final docEnds: Map<Int, Bool> = CheckScan.docBlockEnds(source, plugin.lexicalRegions(source));
 		// What ends a section: the next label, or the next separately-documented sibling.
 		final stops: Array<CommentTok> = [
 			for (tok in comments) if (ownsItsLine(source, tok) || RefactorSupport.isDocBlock(source, tok)) tok

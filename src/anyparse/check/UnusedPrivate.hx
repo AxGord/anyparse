@@ -248,10 +248,13 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			if (memberDeletable(node, owner, hit.inExtends, index, classMeta, reflected)) deleting.push(node);
 		}
 		final shape: RefShape = plugin.refShape();
-		for (member in survivingPerType(tree, MemberBranchScan.seamsOf(shape, source), shape.conditionalMemberKind, deleting)) {
+		for (member in survivingPerType(
+			tree, MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source)), shape.conditionalMemberKind, deleting
+		)) {
 			final span: Null<Span> = member.span;
 			final hit: Null<{ node: QueryNode, parent: QueryNode, inExtends: Bool }> = span == null ? null : memberByFrom[span.from];
-			if (span != null && hit != null) edits.push(CheckScan.deletionEdit(source, member, hit.parent, span));
+			if (span != null && hit != null)
+				edits.push(CheckScan.deletionEdit(source, member, hit.parent, span, plugin.lexicalRegions(source)));
 		}
 		return edits;
 	}

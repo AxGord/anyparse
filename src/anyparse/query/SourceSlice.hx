@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -57,7 +58,7 @@ final class SourceSlice {
 	 * opener sequence inside the doc's own text is content rather than a false start, and a
 	 * run of full-line line comments is returned as one block.
 	 */
-	public static function leadingDoc(source: String, span: Null<Span>): Null<String> {
+	public static function leadingDoc(source: String, span: Null<Span>, regions: Array<LexRegion>): Null<String> {
 		if (span == null) return null;
 		final lineStart: Array<Int> = [];
 		final lineEnd: Array<Int> = [];
@@ -91,7 +92,7 @@ final class SourceSlice {
 		// is what the hand-rolled `//` walk did.
 		var cursor: Int = lineEnd[i] - 1;
 		while (cursor > lineStart[i] && isBlank(source.fastCodeAt(cursor))) cursor--;
-		final block: Null<Span> = RefactorSupport.commentBlockAt(source, cursor);
+		final block: Null<Span> = RefactorSupport.commentBlockAt(source, cursor, regions);
 		// A comment that does not START its line trails the CODE before it — the line
 		// `var keep:Int; /* about keep */` ends in `*/` like any doc line, so the line
 		// scan above accepts it and the slice would hand back the previous

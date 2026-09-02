@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CondBranchProjection;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 
@@ -44,14 +45,14 @@ final class MemberBranchScan {
 	 * scan. A grammar without the seam yields a `condKind` of null, which makes `fold` a plain
 	 * left fold over the children — exactly the unaware scan.
 	 */
-	public static function seamsOf(shape: RefShape, source: String): MemberBranchSeams {
+	public static function seamsOf(shape: RefShape, source: String, regions: () -> Array<LexRegion>): MemberBranchSeams {
 		final condKind: Null<String> = shape.conditionalMemberKind;
 		final present: Bool = condKind != null && source.indexOf(shape.conditionalIfKeyword ?? '#if') >= 0;
 		return {
 			source: source,
 			condKind: present ? condKind : null,
 			elseKeywords: shape.conditionalElseKeywords ?? [],
-			comments: present ? RefactorSupport.collectCommentTokens(source) : []
+			comments: present ? RefactorSupport.collectCommentTokens(regions()) : []
 		};
 	}
 
@@ -118,9 +119,9 @@ final class MemberBranchScan {
 	 */
 	public static function eachTypeMember(
 		decl: TypeDeclMatch, shape: RefShape, source: String, isMember: QueryNode -> Bool,
-		visit: (member:QueryNode, run:Array<QueryNode>) -> Void
+		visit: (member:QueryNode, run:Array<QueryNode>) -> Void, regions: () -> Array<LexRegion>
 	): Void {
-		eachMember(seamsOf(shape, source), decl.nameNode, isMember, (member, run, _) -> visit(member, run));
+		eachMember(seamsOf(shape, source, regions), decl.nameNode, isMember, (member, run, _) -> visit(member, run));
 	}
 
 	/**
@@ -138,11 +139,13 @@ final class MemberBranchScan {
 	 * the independent-region shape occurs zero times, and the 13 same-name branch pairs that do occur
 	 * were written by hand rather than produced by an op — so the relaxation has no demand to serve.
 	 */
-	public static function declaresMemberNamed(decl: TypeDeclMatch, shape: RefShape, source: String, name: String): Bool {
+	public static function declaresMemberNamed(
+		decl: TypeDeclMatch, shape: RefShape, source: String, name: String, regions: () -> Array<LexRegion>
+	): Bool {
 		var found: Bool = false;
 		eachTypeMember(decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind), (member, _) -> {
 			if (member.name == name) found = true;
-		});
+		}, regions);
 		return found;
 	}
 
@@ -152,8 +155,10 @@ final class MemberBranchScan {
 	 * and pasting it elsewhere unguarded changes which builds have it, so a move must refuse rather
 	 * than silently widen the member's reach. Ops that leave the member in place never need this.
 	 */
-	public static function isGuardedMember(decl: TypeDeclMatch, shape: RefShape, source: String, member: QueryNode): Bool {
-		return branchSpanOf(seamsOf(shape, source), decl.nameNode, member) != null;
+	public static function isGuardedMember(
+		decl: TypeDeclMatch, shape: RefShape, source: String, member: QueryNode, regions: () -> Array<LexRegion>
+	): Bool {
+		return branchSpanOf(seamsOf(shape, source, regions), decl.nameNode, member) != null;
 	}
 
 	/**
@@ -216,8 +221,10 @@ final class MemberBranchScan {
 	 * region, and a region whose branch boundaries the splitter refuses. Every unknown answers "not
 	 * proven exclusive", which leaves the caller's own verdict exactly where it stood.
 	 */
-	public static function exclusiveSpansAt(shape: RefShape, source: String, tree: QueryNode, offset: Int): Array<Span> {
-		final seams: MemberBranchSeams = seamsOf(shape, source);
+	public static function exclusiveSpansAt(
+		shape: RefShape, source: String, tree: QueryNode, offset: Int, regions: () -> Array<LexRegion>
+	): Array<Span> {
+		final seams: MemberBranchSeams = seamsOf(shape, source, regions);
 		if (seams.condKind == null) return [];
 		final out: Array<Span> = [];
 		collectExclusive(seams, tree, offset, out);

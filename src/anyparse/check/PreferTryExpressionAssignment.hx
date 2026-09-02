@@ -164,7 +164,7 @@ final class PreferTryExpressionAssignment implements Check {
 	private static function collect(plugin: GrammarPlugin, source: String, s: Seams): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
 		final out: Array<Match> = [];
 		collectMatches(tree, tree, source, comments, s, out, false);
 		return out;

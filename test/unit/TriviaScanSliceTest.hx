@@ -105,7 +105,7 @@ class TriviaScanSliceTest extends Test {
 			Assert.fail('uniqueTypeDeclNamed found no X');
 			return;
 		}
-		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(src, decl, 'X');
+		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(src, decl, 'X', new HaxeQueryPlugin().lexicalRegions(src));
 		Assert.equals(src.lastIndexOf('{'), brace);
 	}
 
@@ -117,7 +117,7 @@ class TriviaScanSliceTest extends Test {
 			Assert.fail('uniqueTypeDeclNamed found no X');
 			return;
 		}
-		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(src, decl, 'X');
+		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(src, decl, 'X', new HaxeQueryPlugin().lexicalRegions(src));
 		Assert.equals(src.indexOf('X') + 1, at);
 	}
 

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.HoistedConstant;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
@@ -96,8 +97,11 @@ final class ConstantHoist {
 		};
 		final out: Array<Hoist> = [];
 		final names: Array<String> = [];
+		// Hoisted out of the loop: the scan is O(file) and every candidate asks the same question of
+		// the same source.
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		for (decl in decls) if (!names.contains(decl.name)) {
-			final hoist: Null<Hoist> = hoistFor(decl, ctx);
+			final hoist: Null<Hoist> = hoistFor(decl, ctx, regions);
 			if (hoist == null) continue;
 			names.push(decl.name);
 			out.push(hoist);
@@ -197,7 +201,7 @@ final class ConstantHoist {
 	 *    a scalar, absent for a String): a policy splitting its Constant rules on that modifier must
 	 *    judge each arm by its own rule.
 	 */
-	private static function hoistFor(decl: NamedDecl, ctx: HoistContext): Null<Hoist> {
+	private static function hoistFor(decl: NamedDecl, ctx: HoistContext, regions: Array<LexRegion>): Null<Hoist> {
 		final span: Null<Span> = decl.span;
 		if (span == null || !ctx.flaggedFroms.contains(span.from) || decl.category != NamingCategory.Local) return null;
 		final name: String = decl.name;
@@ -212,8 +216,8 @@ final class ConstantHoist {
 		final type: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(ctx.tree, ownerName, ctx.classKinds);
 		if (type == null) return null;
 		final match: TypeDeclMatch = type;
-		if (!receivable(match, name, ownerName, span, ctx)) return null;
-		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(ctx.source, match, ownerName);
+		if (!receivable(match, name, ownerName, span, ctx, () -> regions)) return null;
+		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(ctx.source, match, ownerName, regions);
 		if (brace == null) return null;
 		final member: Null<HoistedConstant> = ctx.support.hoistedConstant(declarationTextOf(ctx.source, span), scalar);
 		if (member == null) return null;
@@ -222,7 +226,7 @@ final class ConstantHoist {
 		if (rule == null || !rule.format.match(name)) return null;
 		// The trailing note is appended to what the grammar rendered rather than folded into its
 		// `declarationText`, which is contracted to be the terminated declaration alone.
-		final trailing: Null<Span> = trailingCommentOf(ctx.source, span);
+		final trailing: Null<Span> = trailingCommentOf(ctx.source, span, regions);
 		return {
 			declFrom: span.from,
 			insertAt: brace + 1,
@@ -344,10 +348,10 @@ final class ConstantHoist {
 	 * with it to the class body; left behind it would be a note about a constant that is no longer
 	 * there. A comment running onto further lines is not one and is declined.
 	 */
-	private static function trailingCommentOf(source: String, span: Span): Null<Span> {
+	private static function trailingCommentOf(source: String, span: Span, regions: Array<LexRegion>): Null<Span> {
 		var at: Int = span.to;
 		while (at < source.length && (source.fastCodeAt(at) == ' '.code || source.fastCodeAt(at) == '\t'.code)) at++;
-		final comment: Null<Span> = RefactorSupport.commentBlockAt(source, at);
+		final comment: Null<Span> = RefactorSupport.commentBlockAt(source, at, regions);
 		if (comment == null) return null;
 		final block: Span = comment;
 		final newline: Int = source.indexOf('\n', block.from);
@@ -362,7 +366,7 @@ final class ConstantHoist {
 	 * leaves the comment exactly where its author put it. A comment separated by a blank line is not
 	 * "directly above" and does not refuse.
 	 */
-	private static function commentAbove(source: String, span: Span): Bool {
+	private static function commentAbove(source: String, span: Span, regions: () -> Array<LexRegion>): Bool {
 		var at: Int = span.from;
 		var newlines: Int = 0;
 		while (at > 0 && RefactorSupport.isSpace(source.fastCodeAt(at - 1))) {
@@ -370,7 +374,7 @@ final class ConstantHoist {
 			if (newlines > 1) return false;
 			at--;
 		}
-		return at > 0 && newlines == 1 && RefactorSupport.commentBlockAt(source, at - 1) != null;
+		return at > 0 && newlines == 1 && RefactorSupport.commentBlockAt(source, at - 1, regions()) != null;
 	}
 
 	/**
@@ -381,9 +385,11 @@ final class ConstantHoist {
 	 * declaration's alone in this file. Each is documented at its bullet in `hoistFor`; `commentAbove`
 	 * rides along because it too asks only whether the move is safe, not what to write.
 	 */
-	private static function receivable(match: TypeDeclMatch, name: String, ownerName: String, declSpan: Span, ctx: HoistContext): Bool {
+	private static function receivable(
+		match: TypeDeclMatch, name: String, ownerName: String, declSpan: Span, ctx: HoistContext, regions: () -> Array<LexRegion>
+	): Bool {
 		return !staticsForbidden(ctx.tree, match, ctx.plugin) && ctx.index.typeProvablyLacksMember(ownerName, name, ctx.file)
-			&& !conditionalBetween(match.nameNode, declSpan.from) && !commentAbove(ctx.source, declSpan)
+			&& !conditionalBetween(match.nameNode, declSpan.from) && !commentAbove(ctx.source, declSpan, regions)
 			&& occupiesNameAlone(name, declSpan.from, ctx);
 	}
 

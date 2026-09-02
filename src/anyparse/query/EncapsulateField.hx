@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
@@ -65,7 +66,7 @@ final class EncapsulateField {
 			group: Span,
 			isStatic: Bool,
 			isVar: Bool
-		}> = resolveField(declNN, fieldName, source, plugin.refShape());
+		}> = resolveField(declNN, fieldName, source, plugin.refShape(), plugin.lexicalRegions.bind(source));
 		if (field == null) return Err('type "$typeName" has no field "$fieldName"');
 		final f: {
 			node: QueryNode,
@@ -77,8 +78,8 @@ final class EncapsulateField {
 		if (f.isStatic) return Err('"$fieldName" is static — encapsulate covers instance fields');
 		final shape: RefShape = plugin.refShape();
 		if (
-			MemberBranchScan.declaresMemberNamed(declNN, shape, source, 'get_$fieldName')
-			|| MemberBranchScan.declaresMemberNamed(declNN, shape, source, 'set_$fieldName')
+			MemberBranchScan.declaresMemberNamed(declNN, shape, source, 'get_$fieldName', plugin.lexicalRegions.bind(source))
+			|| MemberBranchScan.declaresMemberNamed(declNN, shape, source, 'set_$fieldName', plugin.lexicalRegions.bind(source))
 		)
 			return Err('an accessor "get_$fieldName" / "set_$fieldName" already exists');
 
@@ -113,7 +114,9 @@ final class EncapsulateField {
 	 * (modifiers included), and static / mutable flags. `isVar` is false
 	 * for a `final` field. Null when there is no data field of that name.
 	 */
-	private static function resolveField(decl: TypeDeclMatch, fieldName: String, source: String, shape: RefShape): Null<{
+	private static function resolveField(
+		decl: TypeDeclMatch, fieldName: String, source: String, shape: RefShape, regions: () -> Array<LexRegion>
+	): Null<{
 		node: QueryNode,
 		group: Span,
 		isStatic: Bool,
@@ -138,7 +141,7 @@ final class EncapsulateField {
 				isStatic: run.exists(m -> m.kind == 'Static'),
 				isVar: kind == 'VarMember' || kind == 'VarField'
 			};
-		});
+		}, regions);
 		return hit;
 	}
 

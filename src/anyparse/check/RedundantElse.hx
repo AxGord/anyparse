@@ -98,7 +98,11 @@ final class RedundantElse implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, RefactorSupport.collectCommentTokens(entry.source));
+			if (tree != null)
+				walk(
+					violations, entry.file, entry.source, tree, seams,
+					RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source))
+				);
 		}
 		return violations;
 	}
@@ -123,7 +127,7 @@ final class RedundantElse implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectDeNests(tree, source, seams, [], RefactorSupport.collectCommentTokens(source), flagged, edits, []);
+		collectDeNests(tree, source, seams, [], RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), flagged, edits, []);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 

@@ -231,7 +231,7 @@ class ApqSourceSelectTest extends Test {
 		final span: Null<Span> = node.span;
 		Assert.notNull(span);
 		if (span == null) return;
-		final window: String = SourceSlice.slice(src, RefactorSupport.declEditSpan(src, tree, node, span));
+		final window: String = SourceSlice.slice(src, RefactorSupport.declEditSpan(src, tree, node, span, plugin.lexicalRegions.bind(src)));
 		Assert.equals('@:keep\n\tpublic function f():Void {}', window);
 		// `patch` finds a fragment only inside the region it searches, so a fragment that exists
 		// ONLY in the folded part proves the two regions are one.
@@ -268,13 +268,20 @@ class ApqSourceSelectTest extends Test {
 	private function astWindowText(src: String, selector: String): String {
 		final resolved: AstSelection = astSelect(src, selector);
 		Assert.equals(1, resolved.matches.length, 'selector "$selector" did not resolve to exactly one node');
-		return resolved.matches.length == 1 ? SourceSlice.slice(src, Cli.sourceWindows(resolved.tree, resolved.matches, src)[0]) : '';
+		return resolved.matches.length == 1
+			? SourceSlice.slice(
+				src, Cli.sourceWindows(resolved.tree, resolved.matches, src, new HaxeQueryPlugin().lexicalRegions.bind(src))[0]
+			)
+			: '';
 	}
 
 	/** `ast --select --doc --source` rendered exactly as the text formatter emits it. */
 	private function astRender(src: String, selector: String): String {
 		final resolved: AstSelection = astSelect(src, selector);
-		return Text.renderMatches(resolved.matches, src, Cli.sourceWindows(resolved.tree, resolved.matches, src), true, true);
+		return Text.renderMatches(
+			resolved.matches, src, Cli.sourceWindows(resolved.tree, resolved.matches, src, new HaxeQueryPlugin().lexicalRegions.bind(src)),
+			true, true, new HaxeQueryPlugin().lexicalRegions(src)
+		);
 	}
 
 	/** Parse `src` and resolve `selector` against it — what `ast --select` does before it renders. */

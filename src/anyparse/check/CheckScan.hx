@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
@@ -113,10 +114,10 @@ final class CheckScan {
 	 * declaration follows, which is exactly the orphan `fragmented-doc-comment` reports.
 	 */
 	public static inline function deletionEdit(
-		source: String, node: QueryNode, parent: QueryNode, span: Span
+		source: String, node: QueryNode, parent: QueryNode, span: Span, regions: Array<LexRegion>
 	): { span: Span, text: String } {
 		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
-		final lines: Span = RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group, true));
+		final lines: Span = RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group, regions, true));
 		return { span: RefactorSupport.blankExtendedSpan(source, lines), text: '' };
 	}
 
@@ -419,9 +420,9 @@ final class CheckScan {
 	 * `/*` sequence inside a doc body (an escaped example) never fools the anchor — the trap
 	 * a naive `lastIndexOf('/*')` hits.
 	 */
-	public static function docBlockEnds(source: String): Map<Int, Bool> {
+	public static function docBlockEnds(source: String, regions: Array<LexRegion>): Map<Int, Bool> {
 		return [
-			for (tok in RefactorSupport.collectCommentTokens(source)) if (RefactorSupport.isDocBlock(source, tok)) tok.to => true
+			for (tok in RefactorSupport.collectCommentTokens(regions)) if (RefactorSupport.isDocBlock(source, tok)) tok.to => true
 		];
 	}
 
@@ -572,11 +573,12 @@ final class CheckScan {
 		final tree: Null<QueryNode> = parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final edits: Array<{ span: Span, text: String }> = [];
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		for (cls in classBodies(tree)) RefactorSupport.eachMemberHost(cls, host -> {
 			for (child in host.children) {
 				final span: Null<Span> = child.span;
 				if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-					edits.push(deletionEdit(source, child, host, span));
+					edits.push(deletionEdit(source, child, host, span, regions));
 			}
 		});
 		return edits;

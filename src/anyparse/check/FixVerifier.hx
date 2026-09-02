@@ -557,7 +557,9 @@ final class FixVerifier {
 		// EVERY edit's whole span, because the set is written and judged as ONE candidate: one edit
 		// landing where nothing is compiled makes the verdict on the rest unattributable, and a
 		// single edit STRADDLING such a region is the same thing with both its ends in live code.
-		final gap: Null<String> = coverage.uncovered(entry.file, before, [for (edit in edits) edit.span], plugin.refShape());
+		final gap: Null<String> = coverage.uncovered(
+			entry.file, before, [for (edit in edits) edit.span], plugin.refShape(), plugin.lexicalRegions(before)
+		);
 		if (gap != null) return Declined(gap);
 		write(entry.file, fullText);
 		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {

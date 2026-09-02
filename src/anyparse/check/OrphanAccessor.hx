@@ -154,7 +154,9 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
 			if (info == null) continue;
-			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), entry.source);
+			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(
+				plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)
+			);
 			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, scope, info, ctx, branch);
 		}
 		return out;

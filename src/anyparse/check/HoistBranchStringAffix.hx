@@ -6,6 +6,7 @@ import anyparse.query.CondBranchProjection;
 import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -188,7 +189,8 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(tree, null, violations, entry.file, contextOf(entry.source, resolved));
+			if (tree != null)
+				walk(tree, null, violations, entry.file, contextOf(entry.source, resolved, plugin.lexicalRegions(entry.source)));
 		}
 		return violations;
 	}
@@ -198,7 +200,7 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
-		final ctx: Ctx = contextOf(source, seams);
+		final ctx: Ctx = contextOf(source, seams, plugin.lexicalRegions(source));
 		return RefactorSupport.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [seams.condKind], (node, span) -> {
 			final m: Null<Match> = match(node, ctx);
 			return m == null ? null : { span: m.region, text: buildText(m) };
@@ -260,11 +262,11 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	}
 
 	/** The per-file scan state: the source, its comment tokens, its conditional directives and the seams. */
-	private static function contextOf(source: String, seams: Seams): Ctx {
+	private static function contextOf(source: String, seams: Seams, regions: Array<LexRegion>): Ctx {
 		return {
 			source: source,
-			comments: RefactorSupport.collectCommentTokens(source),
-			directives: CondDirectives.scan(source, seams.shape),
+			comments: RefactorSupport.collectCommentTokens(regions),
+			directives: CondDirectives.scan(source, seams.shape, () -> regions),
 			seams: seams
 		};
 	}

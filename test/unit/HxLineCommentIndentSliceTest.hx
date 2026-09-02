@@ -6,6 +6,7 @@ import anyparse.check.Suppression;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -186,7 +187,7 @@ class HxLineCommentIndentSliceTest extends Test {
 			violationAt(out, 'var gamma'),
 			violationAt(out, 'var delta'),
 			violationAt(out, 'var epsilon')
-		], [{ file: FILE, source: out }]);
+		], [{ file: FILE, source: out }], new HaxeQueryPlugin().lexicalRegions);
 		Assert.equals(1, kept.length);
 		Assert.equals('var epsilon', kept[0].message);
 	}

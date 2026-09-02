@@ -229,7 +229,7 @@ final class InlineConstant implements Check {
 			if (tree != null && !MemberWriteScan.coreApiPinsMemberShape(entry.source))
 				walk(
 					violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, false, proof,
-					MemberBranchScan.seamsOf(plugin.refShape(), entry.source), index
+					MemberBranchScan.seamsOf(plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)), index
 				);
 		}
 		return violations;

@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.CrossRename.FileChange;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
@@ -226,7 +227,7 @@ final class CrossRenameMember {
 			return Err('member "${t.memberName}" is an override — rename the base declaration instead (its overrides rename with it)');
 		// Refuses a name occupied only by another conditional branch too — deliberately; see
 		// `MemberBranchScan.declaresMemberNamed` for why that is not relaxed.
-		if (MemberBranchScan.declaresMemberNamed(t.srcDecl, refShape, cursorSource, newName))
+		if (MemberBranchScan.declaresMemberNamed(t.srcDecl, refShape, cursorSource, newName, plugin.lexicalRegions.bind(cursorSource)))
 			return Err('type "${t.typeName}" already declares a member "$newName"');
 		if (RefactorSupport.casePatternCaptures(cursorTree, refShape).contains(t.memberName))
 			return Err('cannot rename "${t.memberName}": a case-pattern capture in $cursorFile shares its name (would be mis-rewritten)');
@@ -490,7 +491,7 @@ final class CrossRenameMember {
 		module: ModulePath, cursorFile: String
 	): LocatedOffsets {
 		return target.isStatic
-			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module)
+			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module, plugin.lexicalRegions(source))
 			: instanceMemberOffsets(source, file, tree, target, plugin, refShape, index, cursorFile);
 	}
 
@@ -504,7 +505,8 @@ final class CrossRenameMember {
 	 * sitting between the two is ever mistaken for it.
 	 */
 	private static function staticMemberOffsets(
-		source: String, tree: QueryNode, typeName: String, memberName: String, refShape: RefShape, module: ModulePath
+		source: String, tree: QueryNode, typeName: String, memberName: String, refShape: RefShape, module: ModulePath,
+		regions: Array<LexRegion>
 	): LocatedOffsets {
 		final valueResolved: Array<Int> = [
 			for (h in Refs.find(typeName, tree, refShape))
@@ -524,7 +526,9 @@ final class CrossRenameMember {
 				if (
 					recvSpan != null && faSpan != null && RefactorSupport.receiverIsTypeNamespace(recv, typeName, qualified, valueResolved)
 				) {
-					final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
+					final off: Int = RefactorSupport.activeCodeIdentTokenOffset(
+						source, new Span(recvSpan.to, faSpan.to), memberName, regions
+					);
 					if (off < 0)
 						error = unlocatableAccess(source, faSpan, memberName);
 					else if (!out.contains(off))
@@ -563,11 +567,12 @@ final class CrossRenameMember {
 		}
 		final proof: ReceiverProof = receiverProof(recvNames, source, file, tree, target, plugin, refShape, index, cursorFile);
 		final out: Array<Int> = [];
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		for (cand in candidates) {
 			final recvSpan: Null<Span> = cand.recv.span;
 			final faSpan: Null<Span> = cand.fa.span;
 			if (recvSpan == null || faSpan == null || !receiverIsSourceType(cand.recv, proof)) continue;
-			final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
+			final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName, regions);
 			if (off < 0) return { offsets: [], error: unlocatableAccess(source, faSpan, memberName) };
 			if (!out.contains(off)) out.push(off);
 		}

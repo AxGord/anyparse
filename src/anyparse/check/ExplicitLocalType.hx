@@ -7,6 +7,7 @@ import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -380,6 +381,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			for (k in (shape.memberDeclKinds ?? []).concat(shape.localFunctionKinds ?? [])) if (!fields.contains(k)) k
 		];
 		final edits: Array<{ span: Span, text: String }> = [];
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
@@ -389,7 +391,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (at <= 0) continue;
 			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
 			if (raw == null) continue;
-			final owner: Null<String> = enclosingGenericFunction(tree, source, span.from, functions);
+			final owner: Null<String> = enclosingGenericFunction(tree, source, span.from, functions, regions);
 			// `normalizeWith` ENDS in a print, and printing is what promises the printer an import —
 			// `admissibleLocal` only gets to reject the candidate afterwards. Abstaining has to take
 			// the promise back, or it rides into the file on the next admissible candidate's edit
@@ -676,7 +678,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * source: a `<` immediately after the name token. Descending order makes the last match the
 	 * innermost, and a subtree whose span excludes `offset` is pruned.
 	 */
-	private static function enclosingGenericFunction(tree: QueryNode, source: String, offset: Int, functions: Array<String>): Null<String> {
+	private static function enclosingGenericFunction(
+		tree: QueryNode, source: String, offset: Int, functions: Array<String>, regions: Array<LexRegion>
+	): Null<String> {
 		var best: Null<String> = null;
 
 		function walk(node: QueryNode): Void {
@@ -685,7 +689,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (span != null && (offset < span.from || offset > span.to)) return;
 			final name: Null<String> = node.name;
 			if (span != null && functions.contains(node.kind) && name != null) {
-				final at: Int = RefactorSupport.activeCodeIdentTokenOffset(source, span, name);
+				final at: Int = RefactorSupport.activeCodeIdentTokenOffset(source, span, name, regions);
 				if (at >= 0 && source.fastCodeAt(at + name.length) == '<'.code) best = name;
 			}
 			for (c in node.children) walk(c);
