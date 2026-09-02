@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -38,7 +39,7 @@ import anyparse.runtime.Span;
  * grammar plugin maxComplexity seam.
  */
 @:nullSafety(Strict)
-final class Complexity implements Check implements ConfigAware implements NoAutofix {
+final class Complexity implements Check implements ConfigAware implements NoAutofix implements VolatileMessage {
 
 	/**
 	 * The complexity above which a function is flagged — the conventional checkstyle
@@ -46,6 +47,13 @@ final class Complexity implements Check implements ConfigAware implements NoAuto
 	 * exceeds it; used unless a `checkstyle.json` configures a different `CyclomaticComplexity` max.
 	 */
 	private static inline final DEFAULT_MAX_COMPLEXITY: Int = 20;
+
+	/**
+	 * The fragment that precedes the SCORE in a message, shared by the builder and by
+	 * `messageIdentity` so the mask anchor cannot drift from the wording it points at. The
+	 * `(max N)` threshold beside it stays unmasked — a configuration change IS a change.
+	 */
+	private static inline final SCORE_LEAD: String = ' has cyclomatic complexity ';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -62,6 +70,10 @@ final class Complexity implements Check implements ConfigAware implements NoAuto
 
 	public function description(): String {
 		return 'function cyclomatic complexity exceeds the threshold';
+	}
+
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskAfter(message, SCORE_LEAD);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -131,7 +143,7 @@ final class Complexity implements Check implements ConfigAware implements NoAuto
 			span: span,
 			rule: 'complexity',
 			severity: Severity.Warning,
-			message: 'function \'$name\' has cyclomatic complexity $score (max $max)'
+			message: 'function \'$name\'$SCORE_LEAD$score (max $max)'
 		});
 	}
 

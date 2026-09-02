@@ -2093,8 +2093,12 @@ typedef RefShape = {
 	 * `Array<T>` (a non-empty literal pins the element type, so the annotation
 	 * re-states the compiler's inference). Optional; unset disables array inference.
 	 *
-	 * SEAM: `redundant-parens` reads it (with `callKind` / `newExprKind`) as a
-	 * SPLICING host — see `spliceSensitiveExprKinds`.
+	 * SEAM: `redundant-parens` reads it (with `callKind` / `newExprKind`) as a SPLICING host —
+	 * see `spliceSensitiveExprKinds`. `string-literal-dup` reads it as the DATA-TABLE host: a
+	 * collection literal whose entries are all plain string literals is a vocabulary, and its
+	 * entries are exempt from the repeated-literal advisory. That consumer needs the kind and
+	 * not a shape test, because the shapes that merely LOOK like one (a constructor call, a
+	 * conditional-compilation expression) leak — see `StringLiteralDup.isTable`.
 	 */
 	@:optional var arrayLiteralKind: String;
 

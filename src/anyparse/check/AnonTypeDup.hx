@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -72,7 +73,7 @@ using StringTools;
  * verdict depend on which occurrence happened to come first.
  */
 @:nullSafety(Strict)
-final class AnonTypeDup implements Check implements ConfigAware implements DefaultOff {
+final class AnonTypeDup implements Check implements ConfigAware implements DefaultOff implements VolatileMessage {
 
 	/** Least occurrences of one shape before the group is flagged. */
 	private static inline final DEFAULT_MIN_OCCURRENCES: Int = 3;
@@ -85,6 +86,15 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'anon-type-dup';
+
+	/**
+	 * The fragment that precedes the OCCURRENCE TALLY in a message, shared by the builder and
+	 * by `messageIdentity` so the mask anchor cannot drift from the wording it points at.
+	 */
+	private static inline final WRITTEN_LEAD: String = ' written ';
+
+	/** The same, for the DISTINCT-FILE tally of the cross-file wording. */
+	private static inline final ACROSS_LEAD: String = 'across ';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -101,6 +111,10 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 
 	public function description(): String {
 		return 'an anonymous structure type written out many times across the scope that should be a named typedef';
+	}
+
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskAfter(MessageMask.maskAfter(message, WRITTEN_LEAD), ACROSS_LEAD);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -249,13 +263,13 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 			final files: Array<String> = [];
 			for (hit in hits) if (!files.contains(hit.file)) files.push(hit.file);
 			final anchor: Occurrence = hits[0];
-			final where: String = files.length == 1 ? 'in this file' : 'across ${files.length} files';
+			final where: String = files.length == 1 ? 'in this file' : '$ACROSS_LEAD${files.length} files';
 			out.push({
 				file: anchor.file,
 				span: anchor.at,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: 'anonymous structure ${preview(anchor.text)} written ${hits.length} times $where — extract a typedef'
+				message: 'anonymous structure ${preview(anchor.text)}$WRITTEN_LEAD${hits.length} times $where — extract a typedef'
 			});
 		}
 		return out;

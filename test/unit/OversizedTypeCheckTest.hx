@@ -120,7 +120,7 @@ class OversizedTypeCheckTest extends Test {
 	 * blast-radius gate would go back to reporting a reflow as movement. The input here is a
 	 * message `run` PRODUCED, never a hand-written one — that is the whole point of the case.
 	 */
-	public function testMessageIdentityMasksItsOwnLineExtentAndKeepsItsMemberCount(): Void {
+	public function testMessageIdentityMasksBothItsOwnMeasurementsAndKeepsTheThresholds(): Void {
 		final blanks: String = [for (_ in 0...2001) '\n'].join('');
 		final check: OversizedType = new OversizedType();
 		final message: String = check.run(
@@ -129,9 +129,26 @@ class OversizedTypeCheckTest extends Test {
 		Assert.isTrue(message.contains('51 members (max 50)'), 'the message states both measurements');
 		Assert.isTrue(message.contains('lines (max 2000)'));
 		final identity: String = check.messageIdentity(message);
-		Assert.isTrue(identity.contains('51 members (max 50)'), 'the member count stays in the key - it IS the finding');
-		Assert.isTrue(identity.contains('# lines (max 2000)'), 'the line extent leaves it - it drifts under any edit');
+		// BOTH measurements leave the key, the two CONFIGURED thresholds stay. The member count
+		// used to stay too, on the argument that a type crossing the limit IS the finding — but
+		// crossing it is what makes the finding APPEAR, which the key already shows, while the
+		// count then drifts on every unrelated member added anywhere in the type. Measured over
+		// this campaign's last three blast-radius verdicts, that drift produced two of the six
+		// reported lines and none of them was a real movement.
+		Assert.isTrue(identity.contains('# members (max 50)'), 'the member count leaves the key - it drifts');
+		Assert.isTrue(identity.contains('# lines (max 2000)'), 'so does the line extent');
 		Assert.equals(identity, check.messageIdentity(identity), 'and the normalization is idempotent');
+	}
+
+	public function testMessageIdentityCollapsesAMemberCountBump(): Void {
+		// The movement the mask exists to absorb: 51 members and 52 members are the same
+		// finding about the same type, and the blast-radius gate must not report the growth as
+		// one added plus one removed.
+		final check: OversizedType = new OversizedType();
+		final fiftyOne: String = check.run([{ file: 'C.hx', source: classWithMembers(51) }], new HaxeQueryPlugin())[0].message;
+		final fiftyTwo: String = check.run([{ file: 'C.hx', source: classWithMembers(52) }], new HaxeQueryPlugin())[0].message;
+		Assert.notEquals(fiftyOne, fiftyTwo);
+		Assert.equals(check.messageIdentity(fiftyOne), check.messageIdentity(fiftyTwo));
 	}
 
 	private function violations(src: String): Array<Violation> {

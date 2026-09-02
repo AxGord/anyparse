@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -70,7 +71,7 @@ using Lambda;
  * kind makes the check a no-op. The finding is spanned at the earliest occurrence.
  */
 @:nullSafety(Strict)
-final class ExtractRepeatedExpression implements Check {
+final class ExtractRepeatedExpression implements Check implements VolatileMessage {
 
 	/** The least number of identical occurrences within one body to report. */
 	private static inline final MIN_OCCURRENCES: Int = 3;
@@ -83,6 +84,14 @@ final class ExtractRepeatedExpression implements Check {
 
 	private static inline final RULE_ID: String = 'extract-repeated-expression';
 
+	/**
+	 * The tail that follows the OCCURRENCE TALLY in a message, shared by the builder and by
+	 * `messageIdentity` so the mask anchor cannot drift from the wording it points at. Read
+	 * BACKWARDS from, because the count precedes it — anchoring on ` is repeated ` instead
+	 * would also mask a digit run inside an expression that happens to spell that phrase.
+	 */
+	private static inline final REPEAT_TAIL: String = ' times in one function body';
+
 	public function new() {}
 
 	public function id(): String {
@@ -91,6 +100,10 @@ final class ExtractRepeatedExpression implements Check {
 
 	public function description(): String {
 		return 'a non-trivial pure expression repeated three or more times in one function body — a candidate for a final local';
+	}
+
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskBefore(message, REPEAT_TAIL);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -274,8 +287,7 @@ final class ExtractRepeatedExpression implements Check {
 	/** The finding message: occurrence count plus the truncated normalized expression. */
 	private static function buildMessage(g: Group): String {
 		final text: String = g.norm.length > MAX_MSG_EXPR ? '${g.norm.substr(0, MAX_MSG_EXPR)}...' : g.norm;
-		return
-			'the expression `${text}` is repeated ${g.occ.length} times in one function body — extract into a `final` local (report-only)';
+		return 'the expression `${text}` is repeated ${g.occ.length}$REPEAT_TAIL — extract into a `final` local (report-only)';
 	}
 
 	/**

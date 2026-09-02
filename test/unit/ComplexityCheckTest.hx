@@ -216,8 +216,29 @@ class ComplexityCheckTest extends Test {
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the declaration must match the behaviour');
 	}
 
+	public function testMessageIdentityMasksTheScoreAndKeepsTheThreshold(): Void {
+		// Pinned against messages `run` produced, as `Check.VolatileMessage` requires. A
+		// function drifting from 21 to 22 decision points is the same standing finding about
+		// the same function, so the score leaves the key; the configured `(max 20)` beside it
+		// stays, because a threshold change IS a change the blast-radius gate must show.
+		final check: Complexity = new Complexity();
+		final twentyOne: String = check.run([{ file: 'C.hx', source: chained(20) }], new HaxeQueryPlugin())[0].message;
+		final twentyTwo: String = check.run([{ file: 'C.hx', source: chained(21) }], new HaxeQueryPlugin())[0].message;
+		Assert.isTrue(twentyOne.contains('complexity 21 (max 20)'));
+		Assert.notEquals(twentyOne, twentyTwo);
+		final identity: String = check.messageIdentity(twentyOne);
+		Assert.isTrue(identity.contains('complexity # (max 20)'));
+		Assert.equals(identity, check.messageIdentity(twentyTwo));
+		Assert.equals(identity, check.messageIdentity(identity));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new Complexity().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** A one-method class whose body chains `n` `&&` operands — score `n + 1`. */
+	private static function chained(n: Int): String {
+		return 'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn ' + [for (_ in 0...n + 1) 'a'].join(' && ') + ';\n\t}\n}';
 	}
 
 }

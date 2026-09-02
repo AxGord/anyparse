@@ -57,6 +57,14 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	 */
 	private static inline final LINES_UNIT: String = ' lines (max ';
 
+	/**
+	 * The same, for the MEMBER count. Masked too: a type crossing 518 to 519 members re-keys a
+	 * finding that neither appeared nor went away, and measured over the campaign's last three
+	 * slices that re-key WAS the whole blast-radius report. The `(max N)` threshold beside it
+	 * stays unmasked — a configuration change IS a change the gate must show.
+	 */
+	private static inline final MEMBERS_UNIT: String = ' members (max ';
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -104,19 +112,36 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	}
 
 	/**
-	 * The line EXTENT is masked; the member COUNT is not.
+	 * BOTH measurements are masked; the two `(max N)` thresholds are not.
 	 *
-	 * A type's line count moves whenever the file is reformatted or edited at all — the
-	 * blast-radius gate saw 4184 against 4194 on a slice whose findings had not moved — while
-	 * its member count moves only when a member is written or deleted, which IS the finding
-	 * this rule reports. Both numbers stay in the message; only the first leaves the key.
+	 * The line extent moves whenever the file is reformatted or edited at all — the
+	 * blast-radius gate saw 4184 against 4194 on a slice whose findings had not moved. The
+	 * member count was kept for a while on the argument that it moves only when a member is
+	 * written or deleted, and therefore IS the finding; that argument is wrong, and the numbers
+	 * say so. Writing a member elsewhere in the type moves the count without touching this
+	 * finding, which stood before and stands after — `type 'Cli' has 518 -> 519 members` was one
+	 * added plus one removed on two consecutive slices that never touched this rule, and across
+	 * the campaign's last three verdicts such bumps were SIX of the six lines reported. Crossing
+	 * the limit is what makes the finding appear, and the key shows that on its own.
+	 *
+	 * Nothing else in the message discriminates by these numbers — the type NAME is there, and
+	 * is unique per file on every tree measured — so masking them merges no two findings. Not a
+	 * guarantee, and the two shapes that would break it are visible from here: `checkType` writes
+	 * `<anonymous>` for a nameless container, and a `#if`/`#else` pair declaring one type twice
+	 * projects two same-named siblings. Neither occurs on this tree. (Contrast `duplicate-code`
+	 * and `fragmented-doc-comment`, whose counts are kept precisely because they are the last
+	 * discriminator their keys have.) Both
+	 * numbers stay in the MESSAGE; only the key loses them.
+	 *
+	 * The price, taken knowingly: no magnitude bound. 52 -> 301 members reports the same nothing
+	 * as 52 -> 53.
 	 *
 	 * Crossing a threshold is still reported, in both directions: a type not previously over
 	 * either limit gains a finding, and one already over on members gains the `and N lines`
 	 * clause, which no mask can turn back into the shorter text.
 	 */
 	public function messageIdentity(message: String): String {
-		return MessageMask.maskBefore(message, LINES_UNIT);
+		return MessageMask.maskBefore(MessageMask.maskBefore(message, MEMBERS_UNIT), LINES_UNIT);
 	}
 
 	/**
@@ -137,7 +162,7 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		final members: Int = countMembers(type, cfg);
 		final lines: Int = lineExtent(source, span);
 		final over: Array<String> = [];
-		if (members > cfg.maxMembers) over.push('$members members (max ${cfg.maxMembers})');
+		if (members > cfg.maxMembers) over.push('$members$MEMBERS_UNIT${cfg.maxMembers})');
 		if (lines > cfg.maxLines) over.push('$lines$LINES_UNIT${cfg.maxLines})');
 		if (over.length == 0) return;
 		final name: String = type.name ?? '<anonymous>';

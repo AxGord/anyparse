@@ -2,12 +2,15 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using Lambda;
 
 /**
  * Flags a plain string literal that appears three or more times (configurable)
@@ -44,6 +47,31 @@ import anyparse.runtime.Span;
  *     `@:native` name, a `@:build` macro path) bound to that annotation, not a
  *     value duplicated across logic; extracting it would break the annotation's
  *     meaning. Such a literal neither counts toward a group nor is reported.
+ *  4. it is NOT an entry of a DATA TABLE — a node of the grammar's OWN
+ *     `RefShape.arrayLiteralKind`, outside a case PATTERN, holding `MIN_TABLE_ENTRIES` or
+ *     more children, every one of them a plain string literal. A grammar kind-name vocabulary (`['ClassDecl',
+ *     'FnMember', …]`), a keyword list, a MIME table: those literals are DATA, and the
+ *     array IS already the single named place the advisory asks for, so hoisting one of 34
+ *     entries into a constant leaves the table unreadable and the value no more centralised
+ *     than it was. Such an entry neither counts toward a group nor is reported — the same
+ *     treatment metadata gets above.
+ *
+ * ### What the table carve-out costs
+ *
+ * Measured over this project's `src/` when it landed: 375 findings to 262, and 89 to 9 in
+ * the grammar plugin whose kind vocabularies motivated it. Nothing was ADDED, and the
+ * movement splits two ways: 113 groups disappear outright, and 43 more keep their finding
+ * with a LOWER count (their table entries stopped counting but enough logic occurrences
+ * remain). The blast-radius gate reads that second bucket as no movement, because this same
+ * slice masks the repetition count — under the pre-S15 identity the same pair reads 43 added
+ * / 156 removed, which is the honest way to describe it. Of the 113 groups it
+ * removed, 16 were PURE vocabulary (every occurrence a table entry, so nothing was lost),
+ * 44 keep one occurrence outside a table, and 53 keep TWO — one short of the default
+ * threshold. That last bucket is the honest price and it has a real shape:
+ * `'SingleStringExpr'` in `HaxeStringFoldSupport` occurs three times, once as an entry of
+ * the primary-kind array and twice in logic (a `case` pattern and a `!=`), and is no longer
+ * reported. A project that wants that bucket back sets
+ * `string-literal-dup.minOccurrences: 2`.
  *
  * ## Grouping
  *
@@ -104,7 +132,7 @@ import anyparse.runtime.Span;
  * a silent capture. Only a lower-case name would capture.
  */
 @:nullSafety(Strict)
-final class StringLiteralDup implements Check implements ConfigAware {
+final class StringLiteralDup implements Check implements ConfigAware implements VolatileMessage {
 
 	/** Least repetitions of a literal before its occurrences are flagged. */
 	private static inline final DEFAULT_MIN_OCCURRENCES: Int = 3;
@@ -114,6 +142,28 @@ final class StringLiteralDup implements Check implements ConfigAware {
 
 	/** Longest literal content echoed verbatim in a finding message before it is elided. */
 	private static inline final MESSAGE_PREVIEW: Int = 40;
+
+	/**
+	 * Least entries a collection literal must hold, ALL of them plain string literals, before it
+	 * is read as a data TABLE rather than as logic. Three rather than two because a
+	 * two-element array is as readable inline as it is behind a name, so treating it as a
+	 * vocabulary buys nothing and only widens the exemption.
+	 *
+	 * (An earlier revision defended the threshold as keeping a binary concatenation of two
+	 * literals out. That reason is dead: the kind gate in `isTable` excludes `"a" + "b"`
+	 * whatever the threshold says, because its node is not the grammar's collection literal.
+	 * Stated so nobody lowers the constant on the strength of an argument that no longer
+	 * applies.)
+	 */
+	private static inline final MIN_TABLE_ENTRIES: Int = 3;
+
+	/**
+	 * The tail of a finding message, shared by the builder and by `messageIdentity` so the
+	 * mask anchor cannot drift from the wording it points at. Read BACKWARDS from, because
+	 * the repetition count precedes it — anchoring on ` repeated ` instead would also mask a
+	 * digit run inside a literal that happens to spell that word.
+	 */
+	private static inline final REPEAT_TAIL: String = ' times — extract into a named constant';
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'string-literal-dup';
@@ -135,18 +185,35 @@ final class StringLiteralDup implements Check implements ConfigAware {
 		return 'a plain string literal repeated many times in one file that should be a named constant';
 	}
 
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskBefore(message, REPEAT_TAIL);
+	}
+
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (support == null) return [];
+		// Re-bound: a narrowed local never reaches an anonymous-structure literal whose expected
+		// field type is non-nullable.
+		final folds: StringFoldSupport = support;
+		// Both shape lookups are per-RUN, not per-file, and both build a fresh struct on every
+		// call — `refShape()` a 227-field one. Hoisted out of the loop for that reason; only
+		// `minLen` below is genuinely per-file, since it comes from the discovered config.
 		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
+		final shape: RefShape = plugin.refShape();
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final minOcc: Int = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
-			final minLen: Int = positiveOr(config.intOption(RULE_ID, 'minLength'), DEFAULT_MIN_LENGTH);
-			scanFile(violations, entry.file, entry.source, tree, support, metaKinds, minOcc, minLen);
+			final ctx: ScanCtx = {
+				support: folds,
+				metaKinds: metaKinds,
+				arrayLiteralKind: shape.arrayLiteralKind,
+				casePatternKind: shape.plainCasePatternKind,
+				minLen: positiveOr(config.intOption(RULE_ID, 'minLength'), DEFAULT_MIN_LENGTH)
+			};
+			scanFile(violations, entry.file, entry.source, tree, ctx, minOcc);
 		}
 		return violations;
 	}
@@ -172,18 +239,14 @@ final class StringLiteralDup implements Check implements ConfigAware {
 	 * deterministic regardless of map iteration order.
 	 */
 	private static function scanFile(
-		out: Array<Violation>, file: String, source: String, tree: QueryNode, support: StringFoldSupport, metaKinds: Array<String>,
-		minOcc: Int, minLen: Int
+		out: Array<Violation>, file: String, source: String, tree: QueryNode, ctx: ScanCtx, minOcc: Int
 	): Void {
 		final groups: Map<String, Array<Span>> = [];
-		collect(tree, source, support, metaKinds, minLen, false, groups);
+		collect(tree, source, ctx, false, false, groups);
 		final findings: Array<Finding> = [
 			for (content => spans in groups)
 				if (spans.length >= minOcc)
-					{
-						at: earliest(spans),
-						message: 'string literal ${preview(content)} repeated ${spans.length} times — extract into a named constant'
-					}
+					{ at: earliest(spans), message: 'string literal ${preview(content)} repeated ${spans.length}$REPEAT_TAIL' }
 		];
 		findings.sort((a, b) -> a.at.from - b.at.from);
 		for (finding in findings) out.push({
@@ -202,14 +265,17 @@ final class StringLiteralDup implements Check implements ConfigAware {
 	 * `minLen`, or interpolated / non-literal (`literalOf` null), is not recorded.
 	 */
 	private static function collect(
-		node: QueryNode, source: String, support: StringFoldSupport, metaKinds: Array<String>, minLen: Int, inMeta: Bool,
-		groups: Map<String, Array<Span>>
+		node: QueryNode, source: String, ctx: ScanCtx, inMeta: Bool, inPattern: Bool, groups: Map<String, Array<Span>>
 	): Void {
-		final here: Bool = inMeta || metaKinds.contains(node.kind);
+		final here: Bool = inMeta || ctx.metaKinds.contains(node.kind);
+		// Sticky, like `inMeta`: once inside a case PATTERN, no descendant collection literal is
+		// a data table. The literals themselves stay candidates — `case 'aaaa':` is a real
+		// occurrence — only the table gate is switched off.
+		final pattern: Bool = inPattern || node.kind == ctx.casePatternKind;
 		if (!here) {
-			final literal: Null<StringLiteral> = support.literalOf(node, source);
+			final literal: Null<StringLiteral> = ctx.support.literalOf(node, source);
 			final span: Null<Span> = node.span;
-			if (literal != null && span != null && literal.content.length >= minLen) {
+			if (literal != null && span != null && literal.content.length >= ctx.minLen) {
 				final at: Span = span;
 				final bucket: Null<Array<Span>> = groups[literal.content];
 				if (bucket == null)
@@ -218,7 +284,49 @@ final class StringLiteralDup implements Check implements ConfigAware {
 					bucket.push(at);
 			}
 		}
-		for (child in node.children) collect(child, source, support, metaKinds, minLen, here, groups);
+		// A data table's entries are not candidates, and the whole run is skipped rather than
+		// walked: every child of a table is a node `literalOf` accepted, and this check's only
+		// candidate IS a `literalOf`-positive node, so descending could only find one nested
+		// inside another — which the seam's own contract rules out (a PLAIN literal carries no
+		// interpolated expression, and an interpolated one is not `literalOf`-positive).
+		if (isTable(node, source, ctx, pattern)) return;
+		for (child in node.children) collect(child, source, ctx, here, pattern, groups);
+	}
+
+	/**
+	 * Whether `node` IS a data TABLE: a COLLECTION LITERAL the grammar itself names
+	 * (`RefShape.arrayLiteralKind`) holding `MIN_TABLE_ENTRIES` or more children, every single
+	 * one a plain string literal.
+	 *
+	 * Both halves are load-bearing and each was learned the hard way. The kind gate makes the
+	 * carve-out POSITIVE — only a construct the grammar declares to be a collection literal can
+	 * ever be a table — which is what keeps it from leaking into shapes nobody enumerated. A
+	 * first version tested the SHAPE alone ("every child is a plain literal") and leaked into two
+	 * whole classes on the first review: `new Foo("a", "b", "c")` carries its type as the node's
+	 * NAME rather than as a child, and a conditional-compilation expression
+	 * (`#if js "a" #else "b" #end`) is a run of sibling branch values — both all-literal, neither
+	 * a table. Measured on this project's `src/`, the tighter gate removes exactly the same 113
+	 * findings the shape-only one did, so closing the leak cost nothing.
+	 *
+	 * The homogeneity half then keeps LOGIC out of the collection kind itself, which in Haxe is
+	 * shared with the map literal: a map entry pairs its key with a value under an `Arrow`, so
+	 * `['kkkk' => 1, 'llll' => 2, 'mmmm' => 3]` has no bare-literal child and its keys stay
+	 * candidates.
+	 *
+	 * One shape the KIND gate cannot reach, because the grammar spells it with the same kind: an
+	 * array destructuring PATTERN (`case ["aaaa", "bbbb"]:`) is a collection literal by kind and
+	 * logic by meaning. `collect` therefore carries a sticky `inPattern`, set from the grammar's
+	 * `plainCasePatternKind`, and `isTable` refuses beneath it — the literals still COUNT there,
+	 * only the table gate is off. A grammar naming no case-pattern kind simply never sets the
+	 * flag.
+	 *
+	 * A grammar that declares no `arrayLiteralKind` gets NO carve-out at all and the rule behaves
+	 * exactly as it did before — a missing seam disables the exemption, never the rule.
+	 */
+	private static function isTable(node: QueryNode, source: String, ctx: ScanCtx, inPattern: Bool): Bool {
+		final kids: Array<QueryNode> = node.children;
+		return !inPattern && node.kind == ctx.arrayLiteralKind && kids.length >= MIN_TABLE_ENTRIES
+			&& kids.foreach(kid -> ctx.support.literalOf(kid, source) != null);
 	}
 
 	/** `content` quoted for a message, elided to `MESSAGE_PREVIEW` characters so a long literal does not bloat the report. */
@@ -240,4 +348,13 @@ final class StringLiteralDup implements Check implements ConfigAware {
 private typedef Finding = {
 	final at: Span;
 	final message: String;
+};
+
+/** The per-file scan ingredients, resolved once per file rather than threaded one by one. */
+private typedef ScanCtx = {
+	final support: StringFoldSupport;
+	final metaKinds: Array<String>;
+	final arrayLiteralKind: Null<String>;
+	final casePatternKind: Null<String>;
+	final minLen: Int;
 };
