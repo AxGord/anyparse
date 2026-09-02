@@ -790,6 +790,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			conditionLastChildKinds: ['DoWhileStmt'],
 			parenLambdaKind: 'ThinParenLambdaExpr',
 			fnExprKind: 'FnExpr',
+			namedFnExprKind: 'NamedFnExpr',
 			typeAnnotationKinds: ['Named', 'Anon', 'Arrow', 'ArrowFn'],
 			forStmtKind: 'ForStmt',
 			iterationBindingKinds: ['ForStmt', 'ForExpr'],
@@ -830,6 +831,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// to tell a body child from a return-type child, so a missing ctor reads as a return type
 			// (or, for a boundary scan, as no body at all).
 			functionBodyKinds: ['BlockBody', 'UntypedBlockBody', 'ExprBody', 'NoBody', 'CondBody'],
+			expressionBodyKinds: ['ExprBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
 			enumAbstractMetaName: '@:enum',
 			operatorOverloadMetaName: '@:op',
