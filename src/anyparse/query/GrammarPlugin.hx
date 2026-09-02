@@ -256,6 +256,24 @@ interface GrammarPlugin {
 	 * unmasked region only ever costs an extra occurrence, never a missed one — but NOT for
 	 * `BodySlotGuard` / `Patch`, which use it to decide that a slot holding only a comment is
 	 * empty. A grammar that HAS comments must answer them here.
+	 *
+	 * There is deliberately NO default implementation, and today no way for one to be missing: this
+	 * is an abstract interface member and `Cli.pickPlugin` knows exactly one `--lang`. The `ar`,
+	 * `json` and `sexpr` grammars ship a parser and a writer but no `GrammarPlugin` at all, so the
+	 * question does not reach them — none of the region consumers can be pointed at those grammars
+	 * in the first place. The hazard is a FUTURE plugin author satisfying the compiler with `[]`
+	 * because it is the cheapest thing that type-checks, and the paragraph above is what that author
+	 * has to read past.
+	 *
+	 * A grammar-agnostic default IS buildable when a second implementor arrives, and the ingredients
+	 * are already declared rather than hypothetical: `Format.lineComment` and `Format.blockComment`
+	 * are read at MACRO time into `FormatReader.commentPatterns`, and `TextFormat.stringQuote` names
+	 * the quote characters. What such a default could NOT express is precisely what makes the Haxe
+	 * answer non-trivial — an interpolation hole whose end needs brace-and-quote balancing, and a
+	 * regex literal whose body may hold a comment opener — so a grammar with either must still
+	 * override. Building it for one implementor would be a default nothing exercises; the check that
+	 * the declaration and the hand scanner still agree is worth having now, and
+	 * `unit.LexicalRegionAgreementTest` has it.
 	 */
 	public function lexicalRegions(source: String): Array<LexRegion>;
 

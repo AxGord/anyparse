@@ -24,6 +24,12 @@ import anyparse.runtime.Span;
  * which are code: `'\x24name'` spells a plain fragment in raw bytes and a real `Ident` read to
  * the compiler, and only the projection (`HxInterpProjection`) says which. Nothing is memoised —
  * a per-file caller should hoist the result.
+ *
+ * So this is NOT a third Haxe lexer, and reading it as one is the mistake to avoid: the comment
+ * half is the SEAM's own answer reached through `RefactorSupport`, and the literal half is the
+ * parse. `unit.LexicalRegionAgreementTest` pins both halves against the scanner — every comment
+ * span this returns is exactly a scanner comment region, and every literal span lies INSIDE a
+ * scanner literal region, never straddling one — so the two can no longer drift apart in silence.
  */
 @:nullSafety(Strict)
 final class InertRegions {

@@ -520,6 +520,7 @@ import unit.JsonParserTest;
 import unit.JsonRoundTripTest;
 import unit.JsonTypedParserTest;
 import unit.LambdaBranchingBodyBlockCheckTest;
+import unit.LexicalRegionAgreementTest;
 import unit.LexicalRegionsSeamTest;
 import unit.LexicalRegionsTest;
 import unit.LintConfigCliTest;
@@ -1180,6 +1181,7 @@ class RunTests {
 		addCase(new LintFixDeclineWiringSliceTest());
 		addCase(new LexicalRegionsTest());
 		addCase(new LexicalRegionsSeamTest());
+		addCase(new LexicalRegionAgreementTest());
 		addCase(new RemoveImportSliceTest());
 		addCase(new RemoveMemberSliceTest());
 		addCase(new RemoveMemberDocSliceTest());
