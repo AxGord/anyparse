@@ -3,6 +3,8 @@
         "magic-number": { "enabled": false },
         "string-literal-dup": { "enabled": false },
         "doc-coverage": { "enabled": false },
-        "oversized-type": { "maxMembers": 100 }
+        "oversized-type": { "maxMembers": 100 },
+        "duplicate-code": { "enabled": false },
+        "prefer-typed-throw": { "enabled": false }
     }
 }
