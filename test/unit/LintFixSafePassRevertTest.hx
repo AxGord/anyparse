@@ -1,7 +1,10 @@
 package unit;
 
 import anyparse.check.CompilerOracle.OracleOutcome;
+import anyparse.check.DefiniteAssignmentGuard;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.LintFixSafePass;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
@@ -20,6 +23,30 @@ import utest.Test;
  * unless a project configures one).
  */
 class LintFixSafePassRevertTest extends Test {
+
+	public function testTheOracleLessComplementRefusesTheEditTheOracleArmReverts(): Void {
+		// The judgement below is ORACLE-CONDITIONAL by construction: `Cli.reconcileSafePass`
+		// returns `{reverted: false}` before reaching `classify` when no `compilerOracle` is
+		// configured or the pre-measurement is absent. Measured on the T445 fixture with S54's
+		// closure guard removed: `--no-oracle` wrote the corrupting edit, a config without
+		// `compilerOracle` wrote it, and only the oracle arm reverted.
+		//
+		// `DefiniteAssignmentGuard` is the complement that answers with no compiler at all, and
+		// it answers on the SAME source the oracle arm rejected — which is what this pin holds
+		// still: the two nets must not disagree about the shape, or the edit loop and the gate
+		// stop meaning the same thing.
+		final source: String = 'class C { static function scan(t: String): Bool { var found = false;'
+			+ ' map(t, run -> { if (t == null) found = true; return run; }); return found; } }';
+		final at: Int = source.indexOf(' = false');
+		final refusal: Null<String> = DefiniteAssignmentGuard.unassignedRead(source, [
+			{
+				span: new Span(at, at + ' = false'.length),
+				text: ''
+			}
+		], new HaxeQueryPlugin());
+		Assert.notNull(refusal);
+		Assert.stringContains('`found`', refusal ?? '');
+	}
 
 	public function testGreenThenRedRevertsTheWholePass(): Void {
 		switch LintFixSafePass.classify(OracleOutcome.Confirmed, OracleOutcome.Rejected('Cannot assign to final')) {
