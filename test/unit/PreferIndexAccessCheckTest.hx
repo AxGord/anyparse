@@ -400,6 +400,18 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(0, violationsAcross([base, sub]).length);
 	}
 
+	/**
+	 * The veto above reads a lambda's `children[0]` as a bare parameter, and a ZERO-parameter lambda's
+	 * only child is its BODY — so `() -> m` vetoed `m` and the inherited-member arm was never
+	 * consulted for it. A lambda that binds a bare parameter always carries a body after it, which is
+	 * what the arity guard separates; the shape occurs 15 times in this project's own sources.
+	 */
+	public function testZeroParameterLambdaBodyIsNotABinder(): Void {
+		final base: String = 'class Base {\n\tpublic final m:Map<String, Int> = [];\n}';
+		final sub: String = 'class Sub extends Base {\n\tfunction f():Void {\n\t\tfinal g = () -> m;\n\t\tm.set("a", 1);\n\t}\n}';
+		Assert.equals(1, violationsAcross([base, sub]).length);
+	}
+
 	public function testInheritedMemberOfImportedBaseFlaggedAcrossPackages(): Void {
 		// Positive control for the namesake fixture below: with the import-correct `a.Base` carrying
 		// the Map, the same layout DOES flag — so that test's zero is the namesake being excluded,

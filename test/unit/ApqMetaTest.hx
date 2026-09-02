@@ -37,6 +37,20 @@ class ApqMetaTest extends Test {
 		Assert.equals(0, hits[0].args.length, 'paren-less annotation has no args');
 	}
 
+	/**
+	 * An annotation before a named function LITERAL belongs to the literal, not to its first
+	 * parameter. `NamedFnExpr` was in no decl-host set, so `followingDeclHost` walked past it to the
+	 * next host it did know — the parameter `x` — and attributed the tag there. Silent: the hit count
+	 * is 1 either way, only `declKind` / `declName` say which node got it.
+	 */
+	public function testAnnotationOnANamedFunctionLiteralAttributesToTheLiteral(): Void {
+		final hits: Array<MetaHit> =
+			findIn('class X { function f():Void { var g = @:foo function nn(x:Int):Int { return x; }; trace(g); } }');
+		Assert.equals(1, hits.length, 'one annotation hit expected — got ${describe(hits)}');
+		Assert.equals('NamedFnExpr', hits[0].declKind, 'must attach to the literal, not its parameter — got ${describe(hits)}');
+		Assert.equals('nn', hits[0].declName);
+	}
+
 	public function testTopLevelAnnotationAttributesToTypeDecl(): Void {
 		final hits: Array<MetaHit> = findIn('@:foo class X {}');
 		Assert.equals(1, hits.length, 'one annotation hit expected — got ${describe(hits)}');

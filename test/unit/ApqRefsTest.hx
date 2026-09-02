@@ -4,6 +4,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxType;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -107,6 +108,134 @@ class ApqRefsTest extends Test {
 	/** And a `catch` clause the same, through its own `selfScopeDeclKinds` frame - the other one. */
 	public inline function testACatchClauseStillConfinesItsBracelessBody(): Void {
 		assertBracelessBodyConfines('try g() catch (e:Any) var x:Int = 1;');
+	}
+
+	/**
+	 * A named function LITERAL confines its parameter to its own body, exactly as the anonymous
+	 * spelling one grammar ctor over always did. `NamedFnExpr` was in neither `scopeKinds` nor
+	 * `declHostKinds`, so its parameter collected into the ENCLOSING function's frame and an outer
+	 * read of the same name resolved to the parameter — after which `rename` rewrote the two
+	 * together in BOTH directions, silently and with no refusal.
+	 */
+	public inline function testNamedFunctionLiteralParameterDoesNotLeakIntoTheEnclosingScope(): Void {
+		assertLiteralParameterIsConfined('function nn');
+	}
+
+	/** The anonymous spelling through the SAME assertion — the control that was correct all along. */
+	public inline function testAnonymousFunctionLiteralParameterDoesNotLeakIntoTheEnclosingScope(): Void {
+		assertLiteralParameterIsConfined('function');
+	}
+
+	/**
+	 * The literal's own NAME binds into the ENCLOSING body, position-scoped from the literal
+	 * onward. Measured against the compiler rather than assumed: `var f = function nn(x) …;`
+	 * followed by `nn(4)` compiles, while the same call one line ABOVE the literal, or after the
+	 * enclosing block closes, is `Unknown identifier` — so this is `declHostKinds`' treatment of a
+	 * local `function` statement, not `selfScopeDeclKinds`' treatment of a `for` iterator.
+	 */
+	public function testNamedFunctionLiteralNameBindsIntoTheEnclosingBody(): Void {
+		final source: String =
+			'class X { static function outer():Int {\n\tvar f = function nn(x:Int):Int { return x; };\n\treturn nn(4);\n} }';
+		final hits: Array<RefHit> = findIn(source, 'nn');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(1, decls.length, 'the literal must declare its own name, got ${describe(hits)}');
+		if (decls.length != 1) return;
+		Assert.equals(
+			'${source.indexOf('return nn(4)') + 'return '.length}->${decls[0].span.from}', bindings(hits), 'got ${describe(hits)}'
+		);
+	}
+
+	/** ...and nowhere above it: Haxe hoists the literal's name no more than it hoists a local `var`. */
+	public function testNamedFunctionLiteralNameIsNotVisibleBeforeItself(): Void {
+		final source: String = 'class X { static function outer():Int {\n\tvar e = nn(4);\n'
+			+ '\tvar f = function nn(x:Int):Int { return x; };\n\treturn e + f(1);\n} }';
+		final hits: Array<RefHit> = findIn(source, 'nn');
+		Assert.equals('${source.indexOf('nn(4)')}->none', bindings(hits), 'got ${describe(hits)}');
+	}
+
+	/**
+	 * Self-recursion needs no entry of its own: the binding is position-scoped at the literal's own
+	 * start, which precedes its body, so a recursive call inside resolves through the same enclosing
+	 * frame the later reads use.
+	 */
+	public function testNamedFunctionLiteralNameIsVisibleToItsOwnRecursiveBody(): Void {
+		final source: String = 'class X { static function outer():Int {\n'
+			+ '\tvar f = function nn(x:Int):Int { return x <= 0 ? 0 : nn(x - 1); };\n\treturn f(3);\n} }';
+		final hits: Array<RefHit> = findIn(source, 'nn');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(1, decls.length, 'got ${describe(hits)}');
+		if (decls.length != 1) return;
+		Assert.equals('${source.indexOf('nn(x - 1)')}->${decls[0].span.from}', bindings(hits), 'got ${describe(hits)}');
+	}
+
+	/**
+	 * The second corruption the missing decl host caused, and the one a parameter pin cannot reach:
+	 * with the literal's name no declaration at all, its own recursive call AND every later read of
+	 * the name bound to whatever ELSE in scope carried it — so renaming that outer binding rewrote
+	 * the literal's recursive call along with it.
+	 */
+	public function testNamedFunctionLiteralNameShadowsAnOuterLocalOfTheSameName(): Void {
+		final source: String = 'class X { static function outer():Int {\n\tvar nn:Int = 1;\n'
+			+ '\tvar f = function nn(x:Int):Int { return x <= 0 ? 0 : nn(x - 1); };\n\treturn nn + f(2);\n} }';
+		final hits: Array<RefHit> = findIn(source, 'nn');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(2, decls.length, 'the outer local and the literal must each declare, got ${describe(hits)}');
+		if (decls.length != 2) return;
+		final literal: Int = decls[1].span.from;
+		final expected: String =
+			'${source.indexOf('nn(x - 1)')}->$literal ${source.indexOf('return nn + f(2)') + 'return '.length}->$literal';
+		Assert.equals(expected, bindings(hits), 'got ${describe(hits)}');
+	}
+
+	/**
+	 * Make the GRAMMAR the authority for the question the missing entry answered wrong: every kind
+	 * that binds a parameter — every function VALUE (`RefactorSupport.nestedFunctionKinds`, the S56
+	 * authority) and every function DECLARATION (`functionKinds`) — must open a scope frame, or its
+	 * parameters collect into the enclosing one. `NamedFnExpr` was the sixth sighting of that
+	 * duplicate-set class in this campaign; a plugin adding a seventh spelling fails HERE rather
+	 * than re-opening the hole in `refs`, `rename`, `TypeResolver` and the checks that read
+	 * `positionScopedKinds` as the lexical container of a declaration.
+	 */
+	public function testEveryKindThatBindsParametersOpensAScopeFrame(): Void {
+		final shape: RefShape = new HaxeQueryPlugin().refShape();
+		final frames: Array<String> = shape.scopeKinds ?? [];
+		final binders: Array<String> = RefactorSupport.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
+		Assert.isTrue(binders.length > 0, 'the plugin must declare at least one parameter-binding kind');
+		for (kind in binders)
+			Assert.isTrue(frames.contains(kind), '"$kind" binds parameters but opens no scope frame, so they leak into the enclosing one');
+	}
+
+	/**
+	 * The other direction, without which the pin above is satisfiable by declaring EVERY kind a
+	 * scope. Each non-function frame here is one the grammar's own two doc blocks explain: a
+	 * hoisting type body, a statement list, or a self-scoped binder.
+	 */
+	public function testEveryNonFunctionScopeFrameIsOneTheGrammarDocuments(): Void {
+		final shape: RefShape = new HaxeQueryPlugin().refShape();
+		final binders: Array<String> = RefactorSupport.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
+		final documented: Array<String> = [
+			'ClassDecl',
+			'ClassForm',
+			'AbstractClassDecl',
+			'InterfaceDecl',
+			'AbstractDecl',
+			'EnumAbstractDecl',
+			'EnumDecl',
+			'TypedefDecl',
+			'BlockBody',
+			'BlockExpr',
+			'BlockStmt',
+			'ForStmt',
+			'ForExpr',
+			'CatchClause'
+		];
+		final frames: Array<String> = shape.scopeKinds ?? [];
+		Assert.isTrue(frames.length > binders.length, 'the grammar must open frames that are not functions');
+		for (kind in frames) if (!binders.contains(kind))
+			Assert.isTrue(
+				documented.contains(kind),
+				'"$kind" opens a scope frame but is neither a parameter binder nor a documented non-function frame'
+			);
 	}
 
 	/**
@@ -1150,6 +1279,24 @@ class ApqRefsTest extends Test {
 		final hits: Array<RefHit> = findIn(source, 'x');
 		final field: Int = source.indexOf('var x:Int = 60');
 		final expected: String = '${source.indexOf('g(x)') + 2}->$field ${source.indexOf('return x') + 'return '.length}->$field';
+		Assert.equals(expected, bindings(hits), 'got ${describe(hits)}');
+	}
+
+	/**
+	 * One outer local, one function literal binding the SAME name, one read of each. The literal's
+	 * body read must bind to the parameter and the read after the literal to the outer local; the
+	 * `head` argument is the only difference between the named and the anonymous spelling, so the
+	 * two cannot diverge again.
+	 */
+	private function assertLiteralParameterIsConfined(head: String): Void {
+		final source: String = 'class X { static function outer():Int {\n\tvar q:Int = 1;\n'
+			+ '\tvar f = $head(q:Int):Int { return q + 1; };\n\treturn q + f(2);\n} }';
+		final hits: Array<RefHit> = findIn(source, 'q');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(2, decls.length, 'the outer local and the parameter must each declare, got ${describe(hits)}');
+		if (decls.length != 2) return;
+		final expected: String = '${source.indexOf('return q + 1') + 'return '.length}->${decls[1].span.from} '
+			+ '${source.indexOf('return q + f(2)') + 'return '.length}->${decls[0].span.from}';
 		Assert.equals(expected, bindings(hits), 'got ${describe(hits)}');
 	}
 
