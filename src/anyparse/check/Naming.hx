@@ -705,7 +705,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final declarers: Array<FileInfo> = index.declaringFiles(ownerName);
 		if (declarers.length != 1)
 			return RenameRefusal.candidate(v, RenameRefusal.crossOwnerNotUnique(ownerName, declarers.map(f -> f.file)));
-		if (RefactorSupport.carriesAllowGrant(source)) return RenameRefusal.candidate(v, RenameRefusal.CROSS_ALLOW_GRANT);
+		if (index.sourceCarriesAllowGrant(source)) return RenameRefusal.candidate(v, RenameRefusal.CROSS_ALLOW_GRANT);
 		// Every refusal from here down belongs to THIS path: the gates above either hand the
 		// declaration to the single-file rename or are not about it at all, and speaking for those
 		// would overwrite the more accurate sentence that path is about to write. The category gate is

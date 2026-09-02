@@ -585,3 +585,55 @@ final class AddressIndex {
 	}
 
 }
+
+/**
+ * One `AddressIndex` held across consecutive addresses of the SAME tree — the shape the JSON lint
+ * report needs, where findings arrive grouped by file and each one asks for the address of a node
+ * in that file's tree.
+ *
+ * The memo is an INSTANCE field and the instance belongs to the run that made it: nothing here is
+ * process-scoped, and an addresser dropped at the end of a report retains no tree. The slot is
+ * keyed by the tree OBJECT rather than by a path, because the parse cache is keyed by CONTENT and
+ * an index handed a node it never indexed degrades every address to `<line>:<col>` in silence.
+ *
+ * ONE slot is enough because a caller walks a file's findings together; a tree seen again after
+ * another one in between simply rebuilds. `indexBuilds` counts the builds, and it is the ONLY
+ * observable of whether the memo is live — the addresses are identical either way, so a
+ * rebuild-per-address regression is invisible to every other gate. It has been dead once already:
+ * the two captured locals this class replaces were `var`s the report's own closure wrote, an
+ * autofix pass read those writes as dead stores, deleted them and turned the locals `final`, and
+ * every finding paid a whole-tree index from then on (measured on one 416 KB source: 56.3s for the
+ * JSON report against 2.1s for the text one over the same findings).
+ */
+@:nullSafety(Strict)
+final class TreeAddresser {
+
+	/** How many indexes this addresser has built — one per run of consecutive addresses in one tree. */
+	public var indexBuilds(default, null): Int = 0;
+
+	private final _equiv: Null<KindEquivalence>;
+
+	private var _tree: Null<QueryNode> = null;
+	private var _index: Null<AddressIndex> = null;
+
+	public function new(?equiv: KindEquivalence) {
+		_equiv = equiv;
+	}
+
+	/**
+	 * The canonical, edit-stable address of the innermost node of `tree` containing `offset`, or
+	 * null when the tree holds no such node.
+	 */
+	public function addressAt(tree: QueryNode, source: String, offset: Int): Null<String> {
+		var index: Null<AddressIndex> = _index;
+		if (index == null || _tree != tree) {
+			index = Address.describerFor(tree, _equiv);
+			_tree = tree;
+			_index = index;
+			indexBuilds++;
+		}
+		final node: Null<QueryNode> = index.nodeAt(offset);
+		return node == null ? null : index.describe(source, node);
+	}
+
+}

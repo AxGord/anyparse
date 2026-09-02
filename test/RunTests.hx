@@ -706,6 +706,7 @@ import unit.StructuralMembershipTest;
 import unit.SuppressionSliceTest;
 import unit.SwallowedExceptionCheckTest;
 import unit.SymbolIndexAliasSliceTest;
+import unit.SymbolIndexRunMemoSliceTest;
 import unit.SymbolIndexSliceTest;
 import unit.SymbolQuerySliceTest;
 import unit.TailMergeCheckTest;
@@ -1195,6 +1196,7 @@ class RunTests {
 		addCase(new IntroduceParameterObjectSliceTest());
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolIndexAliasSliceTest());
+		addCase(new SymbolIndexRunMemoSliceTest());
 		addCase(new StructuralMembershipTest());
 		addCase(new SpanTypeInfoPinTest());
 		addCase(new StdlibDupScanTest());

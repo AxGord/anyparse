@@ -544,6 +544,69 @@ class AddressTest extends Test {
 		}
 	}
 
+	/**
+	 * `TreeAddresser` builds ONE index for a run of addresses in the same tree. The addresses it
+	 * hands back are identical either way, so this counter is the only thing that can tell a live
+	 * memo from a dead one — and it HAS been dead: an autofix pass read the two captured locals the
+	 * class replaces as dead stores, and every JSON-report finding paid a whole-tree index from
+	 * then on. Green at base BY CONSTRUCTION only if the memo is written; killed by arm M1.
+	 */
+	public function testTreeAddresserBuildsOneIndexForAWholeTree(): Void {
+		final fixture: IndexFixture = indexFixture();
+		final addresser: TreeAddresser = new TreeAddresser(fixture.equiv);
+		var addressed: Int = 0;
+		for (node in fixture.nodes) {
+			final span: Null<Span> = node.span;
+			if (span == null) continue;
+			Assert.notNull(addresser.addressAt(fixture.tree, fixture.src, span.from));
+			addressed++;
+		}
+		Assert.isTrue(addressed > 20, 'fixture must exercise many addresses, got $addressed');
+		Assert.equals(1, addresser.indexBuilds);
+	}
+
+	/**
+	 * The slot keys on the TREE OBJECT, so a second tree gets its own index and the first one's is
+	 * dropped rather than reused — an index handed a node it never saw answers `<line>:<col>` for
+	 * every address, in silence. Alternating the two trees therefore rebuilds each time, which is
+	 * exactly the price the one-slot memo charges for interleaving.
+	 */
+	public function testTreeAddresserRebuildsForADifferentTree(): Void {
+		final fixture: IndexFixture = indexFixture();
+		final otherSrc: String = 'class D {\n\tfunction q(): Int {\n\t\treturn 7;\n\t}\n}\n';
+		final other: QueryNode = new HaxeQueryPlugin().parseFile(otherSrc);
+		final addresser: TreeAddresser = new TreeAddresser(fixture.equiv);
+		Assert.notNull(addresser.addressAt(fixture.tree, fixture.src, fixture.src.indexOf('function f')));
+		Assert.notNull(addresser.addressAt(fixture.tree, fixture.src, fixture.src.indexOf('function g')));
+		Assert.equals(1, addresser.indexBuilds);
+		Assert.notNull(addresser.addressAt(other, otherSrc, otherSrc.indexOf('function q')));
+		Assert.equals(2, addresser.indexBuilds);
+		Assert.notNull(addresser.addressAt(fixture.tree, fixture.src, fixture.src.indexOf('function f')));
+		Assert.equals(3, addresser.indexBuilds);
+	}
+
+	/**
+	 * The memo is a speed-up and nothing else: every address the reused index yields is the one a
+	 * throwaway `Address.describe` yields for the same node. Asserted on the SAME nodes the count
+	 * test walks, so the two together say "one index, same answers".
+	 */
+	public function testTreeAddresserAgreesWithAFreshDescribe(): Void {
+		final fixture: IndexFixture = indexFixture();
+		final addresser: TreeAddresser = new TreeAddresser(fixture.equiv);
+		var compared: Int = 0;
+		for (node in fixture.nodes) {
+			final span: Null<Span> = node.span;
+			if (span == null) continue;
+			final hit: Null<QueryNode> = fixture.index.nodeAt(span.from);
+			if (hit == null) continue;
+			Assert.equals(
+				Address.describe(fixture.tree, fixture.src, hit, fixture.equiv), addresser.addressAt(fixture.tree, fixture.src, span.from)
+			);
+			compared++;
+		}
+		Assert.isTrue(compared > 20, 'fixture must exercise many addresses, got $compared');
+	}
+
 	private function resolve(spec: AddressSpec): AddressResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(SRC);
@@ -583,13 +646,7 @@ class AddressTest extends Test {
 	 * statement, branch and binary-operator nodes, its tree, an `AddressIndex` over that
 	 * tree, and every node of it in pre-order.
 	 */
-	private function indexFixture(): {
-		src: String,
-		tree: QueryNode,
-		equiv: KindEquivalence,
-		index: AddressIndex,
-		nodes: Array<QueryNode>
-	} {
+	private function indexFixture(): IndexFixture {
 		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar x = 1;\n\t\tvar y = 2;\n\t\ttrace(x);\n\t\ttrace(y);\n\t\tif (x > y) '
 			+ 'trace(x); else trace(y);\n\t\treturn x + y;\n\t}\n\tfunction g():Void {\n\t\tvar x = 3;\n\t\ttrace(x);\n\t\tif (x > 0) {\n'
 			+ '\t\t\ttrace(x);\n\t\t\ttrace(x);\n\t\t}\n\t}\n\tfunction h():Void {\n\t\ttrace(1);\n\t\ttrace(2);\n\t\ttrace(3);\n\t}\n}\n';
@@ -608,3 +665,18 @@ class AddressTest extends Test {
 	}
 
 }
+
+/**
+ * What `AddressTest.indexFixture` hands its callers: one source, its tree, the kind equivalence
+ * that tree's plugin declares, an `AddressIndex` over it, and every node of it in pre-order.
+ *
+ * A named type rather than the anonymous one written at each call site — the four index-wide
+ * tests spell the same five fields, which is what `anon-type-dup` is for.
+ */
+private typedef IndexFixture = {
+	var src: String;
+	var tree: QueryNode;
+	var equiv: KindEquivalence;
+	var index: AddressIndex;
+	var nodes: Array<QueryNode>;
+};
