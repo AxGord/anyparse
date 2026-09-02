@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.runtime.ParseError;
@@ -521,31 +523,50 @@ final class Patch {
 	}
 
 	/**
-	 * Postcondition: a fragment spliced into a writer-VERBATIM region — a comment
-	 * interior, a string literal, a regex literal — has to reach the result with the
-	 * SHAPE the caller wrote: the same lines, and the same indentation of each line
-	 * RELATIVE to the block's first.
+	 * Postcondition: a fragment spliced into a STRING or REGEX literal has to reach the
+	 * result with the SHAPE the caller wrote — the same lines, and the same indentation
+	 * of each line relative to the block's first. There the bytes are the program's data
+	 * and the writer re-emits them one for one, so nothing else in this project can see a
+	 * corruption: `apq fmt` calls the file canonical either way, no lint rule reads a
+	 * continuation prefix, and this is the only gate that class of damage has.
 	 *
-	 * Everywhere else the writer re-indents what it emits, so a wrong indent is both
-	 * invisible and harmless. Inside such a region the indentation IS content: `apq
-	 * fmt` re-emits a comment interior verbatim and calls the file canonical, no lint
-	 * rule reads a continuation prefix, and a string literal's bytes are the program's
-	 * data — so nothing else in this project can see a corruption there.
-	 *
-	 * Relative, not absolute, because the writer legitimately re-bases a comment line
-	 * that sits shallower than its block onto the block's own indent: that moves every
-	 * line of the run by ONE amount. The defect this guards moves the FIRST line only,
-	 * which no uniform shift can explain.
+	 * A COMMENT used to be checked the same way and is not any more. The text this
+	 * function's own comment carried — that the writer's re-base "moves every line of the
+	 * run by ONE amount" — is FALSE for a comment: the writer owns a comment line's
+	 * leading whitespace outright, re-indenting each line of the block onto the
+	 * declaration's indent and writing the project's indent character. So a well-formed
+	 * payload written with a space gutter into a tab-indented site was CORRECTED on the
+	 * way through and then refused as corrupt — measured on the pre-fix build, 302 of 343
+	 * leading-whitespace combinations over one three-line member doc. What a caller can
+	 * still lose inside a comment survives `trim()` (the ` * ` gutter, a code sample's own
+	 * indentation after it) and no writer behaviour was found that changes THAT: 343 of
+	 * 343 combinations and 1018 real doc blocks of this repo came back with their trimmed
+	 * lines intact. Half an assertion with no reachable failing input is not a safety net,
+	 * so the comment case leaves rather than being kept as one.
 	 */
 	private static function verbatimSpliceIntact(
 		source: String, edits: Array<{ span: Span, text: String }>, result: String, rewrites: Null<Int>
 	): EditResult {
-		final regions: Array<Span> = RefactorSupport.collectNonCodeRegions(source);
+		final regions: Array<LexRegion> = LexicalRegions.scan(source);
 		final lines: Array<String> = result.replace('\r\n', '\n').split('\n');
 		for (edit in edits) {
 			final wanted: Array<String> = edit.text.replace('\r\n', '\n').split('\n');
 			// A single line carries no relative shape, so there is nothing to lose.
-			if (wanted.length < 2 || !insideVerbatim(source, edit.span, regions)) continue;
+			if (wanted.length < 2) continue;
+			final region: Null<LexRegionKind> = insideVerbatim(source, edit.span, regions);
+			// A COMMENT is not one of them, however verbatim its TEXT is: its per-line
+			// LEADING whitespace belongs to the writer, which re-indents each line of a
+			// block onto the declaration's indent and writes the project's indent
+			// character. Measured on the base build, that made a well-formed payload
+			// written with a space gutter into a tab-indented site read as the corruption
+			// this check exists to catch — 302 of 343 leading-whitespace combinations over
+			// one three-line member doc were refused. Everything a caller can still lose
+			// inside a comment survives `trim()` (the ` * ` gutter, a code sample's own
+			// indentation after it), and no writer behaviour was found that changes THAT:
+			// 343 of 343 combinations and 1018 real doc blocks of this repo came back with
+			// their trimmed lines intact. A check with no reachable failing input is not a
+			// safety net, so a comment leaves here rather than being half-asserted.
+			if (region != StringLit && region != RegexLit) continue;
 			// A range stopping mid-line leaves the rest of that line standing behind the
 			// replacement, so its last line is not a whole result line to compare against.
 			// The line-wise arm owns whole lines and only ends mid-line at the end of the
@@ -553,8 +574,8 @@ final class Patch {
 			if (!(edit.span.to >= source.length || source.charAt(edit.span.to) == '\n')) continue;
 			if (!shapeSurvives(lines, wanted))
 				return Err(
-					'the replacement reached the result with its indentation changed line by line — it lands inside a comment '
-					+ 'or a string literal, where indentation is content; copy the old fragment verbatim from '
+					'the replacement reached the result with its indentation changed line by line — it lands inside a string '
+					+ 'or regex literal, where indentation is content; copy the old fragment verbatim from '
 					+ '`apq source --select` so the indentation it dropped can be recovered'
 				);
 		}
@@ -572,13 +593,13 @@ final class Patch {
 	 * must stay outside is a whole line of code, because that is the text the writer
 	 * re-wraps, and a re-wrapped line is not a corruption the shape check can read.
 	 */
-	private static function insideVerbatim(source: String, span: Span, regions: Array<Span>): Bool {
+	private static function insideVerbatim(source: String, span: Span, regions: Array<LexRegion>): Null<LexRegionKind> {
 		for (region in regions) if (span.from < region.to && region.from < span.to) {
 			final lead: String = span.from >= region.from ? '' : source.substring(span.from, region.from);
 			final tail: String = span.to <= region.to ? '' : source.substring(region.to, span.to);
-			if (lead.indexOf('\n') < 0 && tail.indexOf('\n') < 0) return true;
+			if (lead.indexOf('\n') < 0 && tail.indexOf('\n') < 0) return region.kind;
 		}
-		return false;
+		return null;
 	}
 
 	/**

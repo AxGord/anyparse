@@ -748,6 +748,7 @@ import unit.SafeDeleteFormatConfigCliTest;
 import unit.ExtractDestinationCollisionCliTest;
 import unit.MoveExtractDocCensusTest;
 import unit.HxGroupRestProbeStructStarTest;
+import unit.AddMetaSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1169,6 +1170,7 @@ class RunTests {
 		addCase(new AddElementSliceTest());
 		addCase(new ReplaceNodeSliceTest());
 		addCase(new PatchSliceTest());
+		addCase(new AddMetaSliceTest());
 		addCase(new RemoveElementSliceTest());
 		addCase(new MetaElementSpanSliceTest());
 		addCase(new WrapProbeRestAwarenessSliceTest());

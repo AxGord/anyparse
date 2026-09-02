@@ -2068,11 +2068,7 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Format `text` into a doc-comment block, one ` * ` line per line. Leading /
-	 * trailing blank lines of the payload are trimmed (a stdin / heredoc payload
-	 * always carries a trailing newline — an edge blank is a delivery artifact,
-	 * never an intended empty doc line); INTERNAL blank lines are kept as
-	 * paragraph breaks.
+	 * Wrap `text` as a doc-comment block, one ` * ` line per input line. Its own doc had been orphaned onto `NewFile.parseSections`, one file over.
 	 */
 	public static function docComment(text: String): String {
 		final lines: Array<String> = trimBlankEdges(text.split('\n'));

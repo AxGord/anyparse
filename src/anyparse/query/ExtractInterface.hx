@@ -55,6 +55,14 @@ private typedef IfaceMethod = {
  * (an interface method cannot be `final`). Atomic: the interface must
  * parse (via `NewFile`) and the source edit re-parses before either is
  * returned.
+ *
+ * A class that ALREADY implements the interface is refused rather than given a
+ * second clause. The header splice is additive and read nothing, so a re-run
+ * produced `class C implements IFoo implements IFoo` at rc 0 — past the parse
+ * gate, because the header still parses, and rejected only by the compiler. The
+ * occupied-destination refusal covers the default path; `--out <fresh path>`
+ * reached it. The comparison is on the clause's WRITTEN name: an existing
+ * `implements other.IFoo` is a different type and does not block the extraction.
  */
 @:nullSafety(Strict)
 final class ExtractInterface {
@@ -95,6 +103,14 @@ final class ExtractInterface {
 		final decl: Null<TypeDeclMatch> = uniqueClass(tree, srcTypeName);
 		if (decl == null) return Err('no unique class "$srcTypeName" in $srcFile');
 		final declNN: TypeDeclMatch = decl;
+		// Re-running the op against a source that already carries the clause used to
+		// splice a SECOND one — `class A implements IA implements IA`, at rc 0, past
+		// the parse gate because the header still parses. The occupied-destination
+		// refusal hides the default path; `--out <fresh path>` reaches it. Sibling
+		// register: `add-import` refuses an import already there, `extract-superclass`
+		// a class that already extends one.
+		if (implementsClauseFor(declNN, ifaceName) != null)
+			return Err('class "$srcTypeName" already implements "$ifaceName" — refusing (nothing written)');
 
 		final all: Array<IfaceMethod> = publicMethods(declNN, srcSource, plugin.refShape());
 		final selected: Array<IfaceMethod> = switch selectMethods(all, memberNames) {
@@ -151,6 +167,37 @@ final class ExtractInterface {
 			{ file: srcFile, newSource: newSrc }
 		];
 		return Ok(changes, advisory);
+	}
+
+	/**
+	 * The `implements <ifaceName>` clause already on `decl`'s header, or null.
+	 *
+	 * The comparison is on the clause's WRITTEN name, so a pre-existing
+	 * `implements other.IA` does not block extracting a local `IA` — that pair
+	 * is legal Haxe and only a type resolution could tell the two apart. What it
+	 * does catch is the exact-name duplicate, the shape a re-run produces.
+	 */
+	private static inline function implementsClauseFor(decl: TypeDeclMatch, ifaceName: String): Null<QueryNode> {
+		// The clauses hang off the FORM node (`ClassForm` under a `final` wrapper),
+		// which is `nameNode` — `declNode` is the wrapper and has only that child.
+		return clauseIn(decl.nameNode.children, ifaceName);
+	}
+
+	/**
+	 * The `implements <ifaceName>` clause among `nodes`, recursing through a
+	 * `#if … #end` region — a guarded clause is a child of the `Conditional`, not of the
+	 * form node, so a flat scan misses it and the header gains a second clause that IS a
+	 * duplicate on every target the condition selects. `AddImport.guardedDuplicate` had
+	 * already learned the same lesson for a guarded import; this is that walk.
+	 */
+	private static function clauseIn(nodes: Array<QueryNode>, ifaceName: String): Null<QueryNode> {
+		for (node in nodes) {
+			if (node.kind == 'ImplementsClause') for (named in node.children) if (named.name == ifaceName) return node;
+			if (node.kind != 'Conditional') continue;
+			final guarded: Null<QueryNode> = clauseIn(node.children, ifaceName);
+			if (guarded != null) return guarded;
+		}
+		return null;
 	}
 
 	/** The sole class declaration named `typeName`, or null. Final-aware. */

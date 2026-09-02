@@ -141,6 +141,65 @@ class ExtractInterfaceSliceTest extends Test {
 		assertErr(ExtractInterface.extract('pkg/S.hx', 'S', '1bad', 'pkg/X.hx', null, src, plugin()));
 	}
 
+	/**
+	 * A class that ALREADY implements the interface is refused — nothing written.
+	 *
+	 * RED at base: the header splice appended a clause without reading the ones already
+	 * there, so a re-run produced `class S implements IS implements IS`, at rc 0 and past
+	 * the parse gate because the header still parses. Killed by arm M1.
+	 */
+	public function testAlreadyImplementsRefused(): Void {
+		final src: String = 'package pkg;\n\nclass S implements IS {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
+		switch ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS2.hx', null, src, plugin()) {
+			case Ok(changes, _):
+				Assert.fail('expected Err (refusal), got Ok with ${changes.length} change(s)');
+			case Err(message):
+				Assert.stringContains('already implements "IS"', message);
+		}
+	}
+
+	/**
+	 * The refusal is EXACT-NAME, so a class already implementing a DIFFERENT interface
+	 * still extracts and the two clauses stand side by side.
+	 *
+	 * Green at base by construction; killed by arm M2, which widens the refusal to any
+	 * `implements` clause.
+	 */
+	public function testSecondInterfaceStillExtracts(): Void {
+		final src: String = 'package pkg;\n\nclass S implements IA {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IB', 'pkg/IB.hx', null, src);
+		final newSrc: String = changeFor(changes, 'pkg/S.hx').newSource;
+		Assert.isTrue(newSrc.contains('class S implements IA implements IB {'), 'both clauses stand, in source order');
+	}
+
+	/**
+	 * A QUALIFIED clause of the same simple name does not block the extraction: only a
+	 * type resolution could tell `other.IS` and a local `IS` apart, and the pair is legal
+	 * Haxe. Green at base by construction; killed by arm M2 the same way.
+	 */
+	public function testQualifiedSameNameDoesNotBlock(): Void {
+		final src: String = 'package pkg;\n\nclass S implements other.IS {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
+		final newSrc: String = changeFor(changes, 'pkg/S.hx').newSource;
+		Assert.isTrue(newSrc.contains('implements other.IS implements IS'), 'the qualified clause is a different type');
+	}
+
+	/**
+	 * A clause behind `#if` counts: it is a child of the `Conditional`, not of the form
+	 * node, so the flat scan missed it and the header gained a second clause that is a
+	 * duplicate on every target the condition selects. Killed by arm M16.
+	 */
+	public function testGuardedImplementsRefused(): Void {
+		final src: String =
+			'package pkg;\n\nclass S\n#if sys\nimplements IS\n#end\n{\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
+		switch ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src, plugin()) {
+			case Ok(changes, _):
+				Assert.fail('expected Err (refusal), got Ok with ${changes.length} change(s)');
+			case Err(message):
+				Assert.stringContains('already implements "IS"', message);
+		}
+	}
+
 	/** A source type that is not a class in the file is refused. */
 	public function testNoSuchClassRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
