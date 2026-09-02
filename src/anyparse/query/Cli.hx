@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.CheckScan;
 import anyparse.check.CompilerServer;
 import anyparse.check.ConfigDisagreement;
+import anyparse.check.DefiniteAssignmentGuard;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OracleCache;
@@ -11171,7 +11172,11 @@ final class Cli {
 			// That is the point: an overlap is temporary and the deferred check fires cleanly next
 			// pass, while a gate refusal is a standing fact about those edits, so recording the
 			// refusal rather than "1 edit produced" is the truer of the two readings.
-			final refused: Null<String> = checkEdits.length > 0 ? BodySlotGuard.emptiedSlot(source, checkEdits, cached) : null;
+			final refused: Null<String> = checkEdits.length > 0
+				? BodySlotGuard.emptiedSlot(source, checkEdits, cached) ?? DefiniteAssignmentGuard.unassignedRead(
+					source, checkEdits, cached
+				)
+				: null;
 			// Accept a check's edits only when none overlaps an edit already accepted from
 			// an earlier check this pass — applying a subset would break an atomic fix
 			// (e.g. unused-parameter's signature edit without its call-site arg edit, when
