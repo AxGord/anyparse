@@ -33,6 +33,7 @@ package anyparse.grammar.haxe;
  * non-`HxExpr` Star payload. Only this list is shared, and a new generator
  * ctor is taught here once.
  */
+@:nullSafety(Strict)
 final class HxComprehension {
 
 	/**

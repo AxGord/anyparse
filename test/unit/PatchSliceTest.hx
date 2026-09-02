@@ -654,6 +654,66 @@ class PatchSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * A doc-comment payload written with a SPACE gutter into a TAB-indented site
+	 * applies — the writer owns a comment line's leading whitespace and converts it.
+	 *
+	 * Green at base BY CONSTRUCTION would be wrong here: this is RED at base. The
+	 * verbatim-splice postcondition compared the pre-writer replacement against the
+	 * post-writer result and demanded ONE shared shift across the run, so every payload
+	 * the writer re-guttered read as the per-line corruption the check exists to catch —
+	 * measured on the base build, 302 of 343 leading-whitespace combinations over this
+	 * very shape were refused. Killed by arm M3.
+	 */
+	public function testDocPayloadWithASpaceGutterApplies(): Void {
+		final source: String = 'class C {\n\n\t/**\n\t * Old.\n\t */\n\tfunction f():Void {}\n\n}\n';
+		final expected: String = 'class C {\n\n\t/**\n\t * New.\n\t */\n\tfunction f():Void {}\n\n}\n';
+		assertPatch(source, BySelector('ClassDecl:C'), ' /**\n * Old.\n */', ' /**\n * New.\n */', expected);
+	}
+
+	/**
+	 * A code sample INSIDE a doc keeps its own indentation through the widened
+	 * acceptance — everything a caller can still lose in a comment sits after the ` * `
+	 * gutter, where `trim()` keeps it and the run match compares it byte for byte.
+	 *
+	 * RED at base for the same reason as the test above, and it carries the second half
+	 * of the claim: killed by arm M3, which puts a comment back through the shape check.
+	 */
+	public function testDocCodeSampleIndentationSurvives(): Void {
+		final source: String = 'class C {\n\n\t/**\n\t * Example:\n\t *     final x = 1;\n\t */\n\tfunction f():Void {}\n\n}\n';
+		final expected: String = 'class C {\n\n\t/**\n\t * Example:\n\t *         final deeper = 1;\n\t */\n\tfunction f():Void {}\n\n}\n';
+		// The payload's gutter is the DEDENTED `apq source --select` form, so the writer
+		// re-guttering it is what arm M3 turns back into a refusal — and the assertion is
+		// the code sample's own indentation, in the same string, so neither half can pass
+		// alone.
+		assertPatch(
+			source, BySelector('ClassDecl:C'), ' /**\n * Example:\n *     final x = 1;\n */',
+			' /**\n * Example:\n *         final deeper = 1;\n */', expected
+		);
+	}
+
+	/**
+	 * THE COUNTER-EXAMPLE the widened acceptance must not swallow: inside a STRING
+	 * literal the writer is byte-verbatim, indentation IS the program's data, and a
+	 * replacement whose lines shift by DIFFERENT amounts is still refused.
+	 *
+	 * The fragment is written with leading spaces so the byte-exact arm misses it and
+	 * the dedent-tolerant arm — the only one whose indentation this op synthesises —
+	 * owns the match. Killed by arm M5.
+	 */
+	public function testStringLiteralPerLineIndentStillRefused(): Void {
+		final source: String = 'class C {\n\tfunction f():String {\n\t\treturn \'\n  a\n  b\';\n\t}\n}\n';
+		switch Patch.patchNode(
+			source, BySelector('FnMember:f'), "        return '\n    a\n    b';", "        return '\n        a\n    c';", false,
+			new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('string or regex literal, where indentation is content', message);
+		}
+	}
+
 	/** The refusal text for `pairs`, or a failure when the call unexpectedly succeeded. */
 	private function refusalMessage(source: String, pairs: Array<{ oldText: String, newText: String }>): String {
 		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {

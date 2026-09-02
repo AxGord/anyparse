@@ -103,11 +103,12 @@ final class NewFile {
 		final bodies: Map<String, String> = [];
 		final imports: Array<String> = [];
 		final bodiesRaw: Null<String> = spec.bodiesRaw;
-		if (bodiesRaw != null) parseSections(bodiesRaw, bodies, imports);
-		final classDoc: Null<String> = bodies[DOC_SECTION];
-		if (classDoc != null) bodies.remove(DOC_SECTION);
-		final freeMembers: Null<String> = bodies[MEMBERS_SECTION];
-		if (freeMembers != null) bodies.remove(MEMBERS_SECTION);
+		if (bodiesRaw != null) {
+			final sectionError: Null<String> = parseSections(bodiesRaw, bodies, imports);
+			if (sectionError != null) return err(sectionError);
+		}
+		final classDoc: Null<String> = takeSection(bodies, DOC_SECTION);
+		final freeMembers: Null<String> = takeSection(bodies, MEMBERS_SECTION);
 
 		final extendsSimple: Array<String> = [for (e in extendsList) simpleNameWithImport(e, spec.pkg, imports)];
 		final abstractClause: String = kind == 'abstract' ? abstractHeader(spec, imports) : '';
@@ -332,22 +333,30 @@ final class NewFile {
 	}
 
 	/**
-	 * Wrap `text` as a `/** … *\/` doc-comment, one ` * ` per line.
 	 * Parse the `--bodies` payload into method bodies and extra imports. A
 	 * line `@@ <name>` opens a section; lines until the next `@@` (or EOF) are
-	 * its content. The reserved section `@@ imports` contributes one
-	 * `import <line>;` per non-blank line; `@@ doc` is the type doc-comment;
+	 * its content. The reserved section `@@ imports` contributes one statement
+	 * per non-blank line — a bare module path or a whole `import` / `using`
+	 * line, see `importStatement`; `@@ doc` is the type doc-comment;
 	 * every other section is a method body (leading / trailing blank lines
-	 * trimmed). Content before the first `@@` is ignored.
+	 * trimmed). Content before the first `@@` is ignored. Returns the FIRST
+	 * unusable `@@ imports` line as a refusal, else null.
 	 */
-	private static function parseSections(raw: String, bodies: Map<String, String>, imports: Array<String>): Void {
+	private static function parseSections(raw: String, bodies: Map<String, String>, imports: Array<String>): Null<String> {
 		final lines: Array<String> = raw.split('\n');
 		var section: Null<String> = null;
+		var failure: Null<String> = null;
 		final buf: Array<String> = [];
 		inline function flush(): Void {
 			if (section == null) return;
 			if (section == 'imports') {
-				for (line in buf) if (line.trim() != '') imports.push('import ${line.trim()};');
+				for (line in buf) if (line.trim() != '') {
+					final stmt: Null<String> = importStatement(line.trim());
+					if (stmt == null)
+						failure ??= '@@ imports: "${line.trim()}" is neither a module path nor an import / using statement';
+					else
+						imports.push(stmt);
+				}
 			} else
 				bodies[section] = RefactorSupport.trimBlankEdges(buf).join('\n');
 		}
@@ -360,8 +369,65 @@ final class NewFile {
 				buf.push(line);
 		}
 		flush();
+		return failure;
 	}
 
+	/**
+	 * One `@@ imports` line as the statement it means, or null when it is neither
+	 * spelling.
+	 *
+	 * The section has always taken BARE module paths, and a whole `import x.Y;` line —
+	 * the spelling every caller reaches for, because it is what the file will contain —
+	 * was concatenated into `import import x.Y;;` and surfaced two layers later as
+	 * `assembled source does not parse: error at 2:15: unexpected input (expected //)`,
+	 * a column inside a source the caller never wrote. Both spellings are accepted now,
+	 * and `using` with them: it costs the same line as recognising `import` and is
+	 * otherwise unreachable from `apq new` at all.
+	 */
+	private static function importStatement(line: String): Null<String> {
+		// `line == keyword` is not a redundant arm: matching only `'import '` let a bare
+		// `import` fall through to the bare-path branch, which wrapped it into the
+		// `import import;` that parses and means nothing.
+		for (keyword in ['import', 'using']) if (line == keyword || line.startsWith('$keyword ')) {
+			final body: String = line.substr(keyword.length).trim();
+			final path: String = body.endsWith(';') ? body.substr(0, body.length - 1).trim() : body;
+			return path == '' ? null : '$keyword $path;';
+		}
+		return isModulePath(line) ? 'import $line;' : null;
+	}
+
+
+	/**
+	 * The `@@ <key>` section's content, removed from `bodies` so the remaining entries are
+	 * method bodies and nothing else — the reserved sections are read out one by one and
+	 * every one of them was its own read-then-remove pair in `create`.
+	 */
+	private static function takeSection(bodies: Map<String, String>, key: String): Null<String> {
+		final value: Null<String> = bodies[key];
+		if (value != null) bodies.remove(key);
+		return value;
+	}
+
+	/**
+	 * Is `path` a module path the assembled source will parse — dot-separated identifier
+	 * segments, an optional `.*` last segment, an optional ` as <Alias>` tail?
+	 *
+	 * A POSITIVE criterion, because the harm side is open-ended. The first cut refused
+	 * only a line carrying a `;` — one leak of the class, not the class: `this is not a
+	 * path` still became `import this is not a path;` and died with exactly the
+	 * `unexpected input (expected //)` at a generated column that naming the bad line
+	 * exists to replace.
+	 */
+	private static function isModulePath(path: String): Bool {
+		final aliasAt: Int = path.indexOf(' as ');
+		if (aliasAt >= 0 && !RefactorSupport.isIdentifier(path.substr(aliasAt + 4).trim())) return false;
+		final segments: Array<String> = (aliasAt < 0 ? path : path.substring(0, aliasAt)).split('.');
+		for (i in 0...segments.length) if (
+			!(segments[i] == '*' && i > 0 && i == segments.length - 1) && !RefactorSupport.isIdentifier(segments[i])
+		)
+			return false;
+		return true;
+	}
 
 	/** Order-preserving de-duplication of import lines. */
 	private static function dedup(lines: Array<String>): Array<String> {

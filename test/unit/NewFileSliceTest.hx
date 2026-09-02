@@ -397,6 +397,83 @@ class NewFileSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * `@@ imports` takes a whole `import x.Y;` line, the spelling every caller reaches
+	 * for because it is what the file will contain.
+	 *
+	 * RED at base: the section wrapped every line unconditionally, producing
+	 * `import import haxe.io.Bytes;;`, and the failure surfaced two layers later as
+	 * `assembled source does not parse: error at 2:15: unexpected input (expected //)` —
+	 * a column inside a source the caller never wrote. Killed by arm M8.
+	 */
+	public function testImportsSectionTakesStatements(): Void {
+		final text: String = okText(create({
+			className: 'Impl',
+			pkg: 'p',
+			fields: [],
+			bodiesRaw: '@@ imports\nimport haxe.io.Bytes;\nusing StringTools;\nimport haxe.Exception'
+		}));
+		Assert.isTrue(text.contains('import haxe.io.Bytes;'), 'a full import line');
+		Assert.isTrue(text.contains('using StringTools;'), 'a using line, unreachable from apq new before');
+		Assert.isTrue(text.contains('import haxe.Exception;'), 'a missing terminator is supplied');
+		Assert.isFalse(text.contains('import import'), 'the keyword is not doubled');
+	}
+
+	/**
+	 * A keyword with no path is refused rather than wrapped: matching only `'import '`
+	 * let a bare `import` reach the bare-path branch and become `import import;`, which
+	 * parses and means nothing. Killed by arm M17.
+	 */
+	public function testImportsSectionRefusesABareKeyword(): Void {
+		final res: NewFileResult = create({
+			className: 'Impl',
+			pkg: 'p',
+			fields: [],
+			bodiesRaw: '@@ imports\nimport'
+		});
+		switch res.result {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('neither a module path nor an import / using statement', message);
+		}
+	}
+
+	/** The BARE-PATH spelling the section has always taken still works — both are accepted, neither replaced. */
+	public function testImportsSectionStillTakesBarePaths(): Void {
+		final text: String = okText(create({
+			className: 'Impl',
+			pkg: 'p',
+			fields: [],
+			bodiesRaw: '@@ imports\nhaxe.io.Bytes\nhaxe.ds.Option'
+		}));
+		Assert.isTrue(text.contains('import haxe.io.Bytes;'), 'a bare path is still wrapped');
+		Assert.isTrue(text.contains('import haxe.ds.Option;'), 'and so is the second');
+	}
+
+	/**
+	 * A line that is neither spelling is refused BY NAME, before assembly — the whole
+	 * point of the change is that the diagnostic stops being a column in generated text.
+	 * Killed by arm M9.
+	 */
+	public function testImportsSectionRefusesAnUnusableLine(): Void {
+		// BOTH fixtures, because the first cut refused only a line carrying a `;` — one
+		// leak of the class, not the class. Without the second, `this is not a path`
+		// still reached assembly and died with the generated-source column this section
+		// exists to stop emitting, while the test stayed green.
+		for (line in ['this is not; a path', 'this is not a path']) switch create({
+			className: 'Impl',
+			pkg: 'p',
+			fields: [],
+			bodiesRaw: '@@ imports\n$line'
+		}).result {
+			case Ok(text):
+				Assert.fail('expected Err (refusal) for "$line", got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('neither a module path nor an import / using statement', message);
+		}
+	}
+
 	private inline function create(spec: NewFileSpec): NewFileResult {
 		return NewFile.create(spec, new HaxeQueryPlugin());
 	}

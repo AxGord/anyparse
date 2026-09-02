@@ -828,6 +828,8 @@ final class Cli {
 				return runReplaceNode(rest);
 			case 'patch':
 				return runPatch(rest);
+			case 'add-meta':
+				return runAddMeta(rest);
 			case 'remove-element':
 				return runRemoveElement(rest);
 			case 'remove-import':
@@ -3535,6 +3537,145 @@ final class Cli {
 		};
 		stderr('apq $opName: $filePath does not parse\n');
 		return null;
+	}
+
+	/**
+	 * `apq add-meta <file> (--select | --match | --at) '<@:meta>'` — add one
+	 * metadata entry to the addressed declaration, type or member. It lands at the
+	 * END of the run already there: below the doc comment, above the modifiers and
+	 * the declaration keyword. A duplicate NAME is refused. See `AddMeta` for why
+	 * neither `patch` nor `add-element` can reach that position.
+	 */
+	private static function runAddMeta(args: Array<String>): Int {
+		final o: AddMetaOpts = parseAddMetaArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final file: Null<String> = o.file;
+		final meta: Null<String> = o.meta;
+		if (file == null || meta == null) {
+			stderr("apq add-meta: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) '<@:meta>'\n");
+			printAddMetaUsage();
+			return EXIT_USAGE;
+		}
+		final filePath: String = file;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq add-meta: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
+		final target: Null<ReplaceTarget> = resolveEditTarget(
+			'add-meta', source, filePath, plugin, o.selectExpr, o.matchExpr, o.atSpec, o.nth, o.kind
+		);
+		if (target == null) return EXIT_RUNTIME;
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		return finishEdit('add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson));
+	}
+
+	/** The all-default `AddMetaOpts` carrying a terminal exit code, for the `-h` / bad-flag arms. */
+	private static function addMetaParseExit(code: Int): AddMetaOpts {
+		return {
+			lang: 'haxe',
+			write: false,
+			reformat: false,
+			selectExpr: null,
+			atSpec: null,
+			matchExpr: null,
+			nth: null,
+			kind: null,
+			file: null,
+			meta: null,
+			errExit: code
+		};
+	}
+
+	/** Parse `apq add-meta` arguments: the address options, `<file>` and the `<@:meta>` entry. */
+	private static function parseAddMetaArgs(args: Array<String>): AddMetaOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var selectExpr: Null<String> = null;
+		var atSpec: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
+		var kind: Null<String> = null;
+		var file: Null<String> = null;
+		var meta: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--at':
+					atSpec = expectValue(args, ++i, '--at');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+				case '--kind':
+					kind = expectValue(args, ++i, '--kind');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printAddMetaUsage();
+					return addMetaParseExit(EXIT_OK);
+				case _:
+					if (a.startsWith('--')) {
+						stderr('apq add-meta: unknown option "$a"\n');
+						return addMetaParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (meta == null)
+						meta = a;
+					else {
+						stderr('apq add-meta: unexpected extra argument "$a"\n');
+						return addMetaParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			reformat: reformat,
+			selectExpr: selectExpr,
+			atSpec: atSpec,
+			matchExpr: matchExpr,
+			nth: nth,
+			kind: kind,
+			file: file,
+			meta: meta,
+			errExit: null
+		};
+	}
+
+	/** `apq add-meta --help`. */
+	private static function printAddMetaUsage(): Void {
+		sysPrint(
+			"Usage: apq add-meta <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) '<@:meta>' [--reformat] "
+			+ '[--write]\n'
+		);
+		printSelectorAddressingOptions();
+		sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
+		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		printWriteLangHelp();
+		sysPrint('Add one metadata entry to the addressed declaration — a type or a member:\n');
+		sysPrint('\n');
+		sysPrint("  apq add-meta File.hx --select 'ClassDecl:Foo' '@:nullSafety(Strict)' --write\n");
+		sysPrint("  apq add-meta File.hx --select 'FnMember:go' '@:noCompletion' --write\n");
+		sysPrint('\n');
+		sysPrint('The entry lands at the END of the run already there — BELOW the doc comment,\n');
+		sysPrint('above `public` / `static` / `final` and the declaration keyword. An entry of\n');
+		sysPrint('the same name already present is refused. Writer-formatted and re-parse-\n');
+		sysPrint('validated; the file must be canonical unless --reformat is given.\n');
+		sysPrint('\n');
+		sysPrint("To REMOVE one: apq remove-element <file> --select 'MetaCall:@:name' --write\n");
+		sysPrint("(or 'Meta:@:name' for an entry with no arguments).\n");
 	}
 
 	/**
@@ -6292,6 +6433,7 @@ final class Cli {
 		sysPrint('  remove-param  Remove a function parameter + call-site args\n');
 		sysPrint('  add-member    Append a member to a type body (writer-formatted, canonical-gated)\n');
 		sysPrint('  add-import    Add an import / using to a module (writer-formatted, canonical-gated)\n');
+		sysPrint('  add-meta      Add one @:metadata entry to a type or member (canonical-gated)\n');
 		sysPrint('  add-element   Insert a sibling element — statement/case/list elem (--after/--before)\n');
 		sysPrint('  replace-node  Replace a node\'s source span (--select / --at; writer-formatted)\n');
 		sysPrint('  patch         Replace ONE unique fragment inside a node (old ==== new, stdin)\n');
@@ -19347,3 +19489,24 @@ final class WriteFailure extends Exception {
 	}
 
 }
+
+/**
+ * Parsed options for `apq add-meta` — `lang`, `write` / `reformat`, the address
+ * (`selectExpr` / `atSpec` / `matchExpr` / `nth` / `kind`) and the `meta` entry to add.
+ * `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
+@:nullSafety(Strict)
+typedef AddMetaOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var selectExpr: Null<String>;
+	var atSpec: Null<String>;
+	var matchExpr: Null<String>;
+	var nth: Null<Int>;
+	var kind: Null<String>;
+	var file: Null<String>;
+	var meta: Null<String>;
+	// Non-null = parsing hit a terminal case; the caller returns it immediately.
+	var errExit: Null<Int>;
+};
