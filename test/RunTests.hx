@@ -392,6 +392,7 @@ import unit.HxObjectLitWrapRulesTest;
 import unit.HxOpAddChainOperatorFirstSliceTest;
 import unit.HxOpAddParenInnerBreakTest;
 import unit.HxOpAddTrailingParenGlueSliceTest;
+import unit.HxOpenDelimStashBarrierTest;
 import unit.HxOptionalSemicolonSliceTest;
 import unit.HxOrphanPrefixDeclSliceTest;
 import unit.HxOverloadMetaSliceTest;
@@ -1092,6 +1093,7 @@ class RunTests {
 		addCase(new HxIndentComplexValueExpressionsOptionsTest());
 		addCase(new HxIndentObjectLiteralOptionsTest());
 		addCase(new HxComprehensionBracketPolicyTest());
+		addCase(new HxOpenDelimStashBarrierTest());
 		addCase(new HxTriviaTypesTest());
 		addCase(new HxTriviaParseTest());
 		addCase(new HxTriviaWriteTest());

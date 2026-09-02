@@ -1659,6 +1659,10 @@ class Lowering {
 		final nestBody: Bool = starNode.fmtHasFlag('nestBody');
 		if (openText != null) {
 			parseSteps.push(macro expectLit(ctx, $v{openText}));
+			// ω-open-delim-interiority: mirror of the Alt-branch barrier in
+			// `lowerTriviaStarBranch` — a stash captured before the open literal
+			// is not the first element's leading gap.
+			parseSteps.push(stashNewlineClearExpr());
 			// ω-open-trailing: capture a same-line `// comment` (or
 			// `/* … */`) sitting right after the open literal (e.g.
 			// `{ // foo` before the first element). Stored in a synth
@@ -2640,6 +2644,36 @@ class Lowering {
 	 * before any operator of that iteration has committed, and each iteration
 	 * re-derives its own gap from a freshly saved `_preWsPos`.
 	 *
+	 * An OPENING delimiter proves interiority the same way, and the two
+	 * trivia-Star open-literal emitters (`lowerTriviaStarBranch`,
+	 * `emitTriviaStarFieldSteps`) push this clear right after their own
+	 * `expectLit` for exactly that reason: a stash made before `[` or `{`
+	 * cannot be the leading gap of the first element INSIDE it.
+	 *
+	 * Without the barrier, the stash an `@:absentOn` body field leaves behind
+	 * for a source newline before the enclosing statement reached element 0,
+	 * and `reflowSourceMultiline` broke a flat comprehension bracket open. The
+	 * ω₆b `@:optional @:kw` producer below feeds the same channel and is
+	 * intercepted the same way, which is deliberate: its own comment describes
+	 * a drain by "the sub-rule's first `@:trivia` Star element", and when that
+	 * Star carries a `@:lead` the newline was never that element's gap.
+	 *
+	 * SCOPE, since it is wider than the reported bug: the two emitters serve
+	 * every `@:lead` + `@:trivia` Star in the grammar (~20 sites), and three
+	 * families move — a comprehension or array bracket (the report), an object
+	 * literal or anon type written flat on the line after a break
+	 * (`var c =\n\t{k: 1, m: 2}` stayed broken before), and Keep mode, where
+	 * `triviaSepPredicateScanExpr` deliberately exempts element 0 from its own
+	 * suppression (`!_keepEmit`) — the barrier runs UPSTREAM of that exemption,
+	 * so a newline before `[` no longer re-emerges as a break after it while a
+	 * genuine in-bracket one still does. Everything else measured byte-
+	 * identical: Allman braces, parameter and argument lists, lambda bodies,
+	 * case bodies, ternary branches, `#if` regions.
+	 *
+	 * `blankAfterLeadingComments` is NOT cleared, and that is not the asymmetry
+	 * the paragraph above warns about: it describes the gap AFTER the leading
+	 * comments, which still travel, so it travels with them.
+	 *
 	 * NOT covered, both stable fixed points — cosmetic, not canonical-gate
 	 * breakers — and both left alone here:
 	 *
@@ -2648,13 +2682,16 @@ class Lowering {
 	 *    `m`);
 	 *  - the postfix loop clears at the matched iteration's TAIL, so a stash the
 	 *    RECEIVER left is still live while the suffix's own payload parses and a
-	 *    container the payload opens can drain it (`(foo\n)[{k: 1, m: 2}]`
-	 *    breaks the index literal). Clearing before `$opChain` instead is NOT
-	 *    the fix — `gapNewline` reads the flag inside the match expression, and
-	 *    a genuine boundary the receiver stashed (`try f() catch (_) {}` then an
-	 *    own-line `#if`) is unrecoverable by the no-match scanback, whose
-	 *    `_preWsPos` already sits past the newline. Closing it means threading
-	 *    the pre-clear value through every postfix branch builder.
+	 *    container the payload opens can drain it. NARROWED by the barrier
+	 *    above, which intercepts every such container that IS a `@:lead` trivia
+	 *    Star: `(foo\n)[{k: 1, m: 2}]` broke its index literal on the base
+	 *    commit and is flat now, measured on both arms; what stays uncovered is
+	 *    a container with no trivia Star of its own. Clearing before `$opChain`
+	 *    instead is NOT the fix — `gapNewline` reads the flag inside the match
+	 *    expression, and a genuine boundary the receiver stashed (`try f() catch
+	 *    (_) {}` then an own-line `#if`) is unrecoverable by the no-match
+	 *    scanback, whose `_preWsPos` already sits past the newline. Closing it
+	 *    means threading the pre-clear value through every postfix branch builder.
 	 */
 	private function stashNewlineClearExpr(): Expr {
 		final clear: Expr = macro {
@@ -4698,9 +4735,17 @@ class Lowering {
 		} else {
 			macro {};
 		};
+		// ω-open-delim-interiority: the open literal proves the elements are
+		// INSIDE the bracket, so a stash made before it can no longer be the
+		// first element's own leading gap. Same argument `stashNewlineClearExpr`
+		// makes for an operator commit; without it a `@:absentOn` body field's
+		// pre-peek stash (`function(a, b)\n\treturn [for (k in m) …]`) reaches
+		// element 0 and `reflowSourceMultiline` breaks a flat bracket open.
+		final openDelimBarrier: Expr = stashNewlineClearExpr();
 		return macro {
 			skipWs(ctx);
 			expectLit(ctx, $v{leadText});
+			$openDelimBarrier;
 			final _openTrail: Null<String> = collectTrailingFull(ctx);
 			final _items: Array<$wrappedCT> = [];
 			var _trailBB: Bool = false;
@@ -6188,7 +6233,10 @@ class Lowering {
 				// downstream `collectTrivia` would otherwise lose:
 				// comments, blank lines, OR a single newline boundary
 				// (the `newlineBefore` channel — sub-rule's first
-				// `@:trivia` Star element consumes it via `_t.newlineBefore`).
+				// `@:trivia` Star element consumes it via `_t.newlineBefore` — EXCEPT
+				// when that Star carries a `@:lead`, whose open literal clears the
+				// newline again, a gap before `[` never being the first element's own;
+				// see `stashNewlineClearExpr`).
 				if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
 					ctx.pendingTrivia = _t;
 			}

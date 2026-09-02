@@ -68,6 +68,22 @@ class HxComprehensionBracketPolicyTest extends Test {
 		Assert.isTrue(out.indexOf('[ while (c) x ]') != -1, 'expected padded while-comprehension in: <$out>');
 	}
 
+	/**
+	 * A loop head `HxForExpr` cannot model — here a `k => v.q` key-value binder
+	 * over a field access — projects the reified twin `ForReifExpr`. It is a
+	 * comprehension by every reading of the source, but until the ctor joined
+	 * `GENERATOR_CTORS` the writer read the same bracket as a plain array literal
+	 * and left it tight under a comprehension-padding config. The plain `ForExpr`
+	 * line below is the control: it was already padded, so a failure here is about
+	 * the reified twin alone.
+	 */
+	public function testReifiedForHeadIsComprehension(): Void {
+		final out: String = write('class M { static function f() { var a = [for (k => v.q in m) k]; } }', COMPREHENSION_PAD);
+		Assert.isTrue(out.indexOf('[ for (k => v.q in m) k ]') != -1, 'expected padded reified comprehension in: <$out>');
+		final plain: String = write('class M { static function f() { var a = [for (x in y) x]; } }', COMPREHENSION_PAD);
+		Assert.isTrue(plain.indexOf('[ for (x in y) x ]') != -1, 'expected padded plain comprehension in: <$plain>');
+	}
+
 	public function testComprehensionForSameKeepsTight(): Void {
 		final json: String = '{"sameLine":{"comprehensionFor":"same"}}';
 		final out: String = write('class M { static function f() { var a = [for (x in y) x]; } }', json);
@@ -116,6 +132,7 @@ class HxComprehensionBracketPolicyTest extends Test {
 	public function testBothComprehensionClassifiersAnswerFromOneList(): Void {
 		final samples: Map<String, HxExpr> = [
 			'ForExpr' => Type.createEnum(HxExpr, 'ForExpr', [null]),
+			'ForReifExpr' => Type.createEnum(HxExpr, 'ForReifExpr', [null]),
 			'WhileExpr' => Type.createEnum(HxExpr, 'WhileExpr', [null])
 		];
 		Assert.equals(HxComprehension.GENERATOR_CTORS.length, samples.count(), 'the sample set and GENERATOR_CTORS have diverged');
