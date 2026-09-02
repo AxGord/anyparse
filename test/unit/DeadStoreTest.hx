@@ -3,6 +3,7 @@ package unit;
 import anyparse.check.Check.Violation;
 import anyparse.check.DeadStore;
 import anyparse.check.Linter;
+import anyparse.check.NullFlow;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -185,6 +186,89 @@ class DeadStoreTest extends Test {
 	public function testClosureUseExcluded(): Void {
 		// A name a nested function reads is excluded entirely — the closure may run later.
 		Assert.equals(0, violations('class C { function f(a:Int):Void { var x = a; final g = () -> trace(x); x = a + 1; g(); } }').length);
+	}
+
+	public function testBareArrowMemoStoresExcluded(): Void {
+		// The `Cli.renderLintReport` memo shape: two locals a BARE-parameter arrow (`v -> …`) captures,
+		// written last in the callback's own block. That spelling projects as `ThinArrow`, which was the
+		// one function-value kind missing from `NullFlow.NESTED_FN_KINDS` — so the body was walked as
+		// straight-line code and its own `return` cleared the backward liveness state, making both memo
+		// writes read as dead on every path. `--fix` then deleted them: identical output, and the index
+		// rebuilt per invocation (measured on this shape — 1 build vs 30 over 30 findings, byte-equal
+		// results). That is the silent 31x regression this check once shipped.
+		final src: String = 'class C { static function r(fs:Array<String>):Array<String> { var t:Null<String> = null;'
+			+ ' var ix:Null<Array<String>> = null; return emit(fs, v -> { final tr = treeOf(v); var cur = ix;'
+			+ ' if (cur == null || t != tr) { cur = build(tr); t = tr; ix = cur; } return cur[0]; }); } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testBareArrowMemoGetsNoEdit(): Void {
+		// `fix` never re-derives liveness — it acts on `run`'s spans — so the report pin above and the
+		// edit pin are separate failures. Pinning both keeps a report regression from turning straight
+		// into a corrupting edit.
+		final src: String = 'class C { static function r(fs:Array<String>):Array<String> { var t:Null<String> = null;'
+			+ ' var ix:Null<Array<String>> = null; return emit(fs, v -> { final tr = treeOf(v); var cur = ix;'
+			+ ' if (cur == null || t != tr) { cur = build(tr); t = tr; ix = cur; } return cur[0]; }); } }';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: DeadStore = new DeadStore();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		Assert.equals(0, vs.length);
+		Assert.equals(0, check.fix(src, vs, plugin).length);
+	}
+
+	public function testBareArrowAccumulatorExcluded(): Void {
+		// `ExplicitLocalType.inadmissibleType` in shape: an accumulator a driver's bare-arrow callback
+		// writes, read after the driver returns. Both the initializer and the write were flagged, and
+		// `--fix` stripped `var found:Bool = false` to `var found:Bool;` — which the compiler rejects
+		// (`Local variable found used without being initialized`), so the next project-wide fixpoint run
+		// would have broken the build of the check that gates every `explicit-local-type` annotation.
+		final src: String = 'class C { static function bad(t:String):Bool { if (t == "Void") return true;'
+			+ ' var found:Bool = false; runs(t, run -> { if (run == "Dynamic") found = true; return run; }); return found; } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testBareArrowNegatedAccumulatorExcluded(): Void {
+		// The `ExplicitLocalType.spellable` twin of the same shape — the accumulator starts `true` and
+		// the callback clears it, so a stripped initializer makes it answer "spellable" for every input
+		// instead of abstaining on the unproven ones.
+		final src: String = 'class C { static function s(p:String):Null<String> { var placed:Bool = true;'
+			+ ' runs(p, run -> { if (run.indexOf(".") != -1) placed = false; return run; }); return placed ? p : null; } }';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testBareArrowReadKeepsOuterStoreLive(): Void {
+		// WIDTH: the exclusion counts a name the closure READS, not only one it writes. Here the store is
+		// OUTSIDE the lambda and its only read is INSIDE it — once the bare-arrow body stopped being
+		// walked, a write-only exclusion would report `cb` dead and `--fix` would delete the value the
+		// callback returns. The read half of the exclusion is what makes the walk's new blindness safe.
+		Assert.equals(
+			0, violations('class C { static function f(a:Int):Int { var cb = 0; cb = a + 1; return drive(v -> cb + v); } }').length
+		);
+	}
+
+	public function testBareArrowElsewhereKeepsUnrelatedStoreFlagged(): Void {
+		// The exclusion is per NAME, not per function: a bare-arrow callback in the same body that never
+		// mentions `x` must not suppress `x`'s genuine dead initializer. Guards the over-refusal
+		// direction, which a name-blind "this body contains a lambda" gate would fail.
+		Assert.equals(
+			1, violations('class C { static function f(a:Int):Int { var x = a; x = a + 1; drive(v -> v + 1); return x; } }').length
+		);
+	}
+
+	public function testNestedFnKindsCoverEveryGrammarFunctionValue(): Void {
+		// The gap this pin closes was a MISSING kind, not wrong logic: `ThinArrow` was absent from
+		// `NullFlow.NESTED_FN_KINDS` while the grammar had declared it in `RefShape.lambdaKinds` all
+		// along. Make the grammar the authority for completeness — a plugin that adds a function-value
+		// spelling fails here instead of silently re-opening the hole in every consumer of that set.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final declared: Array<String> = (
+			plugin.refShape().lambdaKinds ?? []
+		).concat(plugin.refShape().localFunctionKinds ?? []).concat(plugin.refShape().inlineFunctionKinds ?? []);
+		final fnExprKind: Null<String> = plugin.refShape().fnExprKind;
+		if (fnExprKind != null) declared.push(fnExprKind);
+		Assert.isTrue(declared.length > 0, 'the plugin must declare at least one function-value kind');
+		for (kind in declared)
+			Assert.isTrue(NullFlow.NESTED_FN_KINDS.contains(kind), 'NESTED_FN_KINDS is missing the grammar function-value kind $kind');
 	}
 
 	public function testLoopBackEdgeNotFlagged(): Void {
