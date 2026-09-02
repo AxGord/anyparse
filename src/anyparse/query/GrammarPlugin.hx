@@ -890,10 +890,14 @@ typedef RefShape = {
 	 * must accept it.
 	 *
 	 * It exists because nothing else in this shape names it. `lambdaKinds` deliberately does
-	 * not list it — `RefactorSupport.collectBareLambdaParamNames` reads a lambda's first
-	 * child as a bare parameter, and a named literal's first child is its NAME — so before
-	 * this entry a consumer asking "every function-value kind" had to hand-write the spelling,
-	 * and two of the five such consumers had simply forgotten it. Read it through
+	 * not list it, and the reason first written here - "a named literal's first child is its
+	 * NAME" - was never true of the Haxe projection: `function nn(a) …` projects as
+	 * `NamedFnExpr nn (Required a) (BlockBody …)`, the name on the node's own `name` slot and
+	 * the parameter at `children[0]`, exactly like every anonymous spelling. The REAL reason is
+	 * the one the consumers state: a named literal is not interchangeable with a lambda, because
+	 * eta-reducing it is a two-site rewrite and the name may be the only binding a self-recursive
+	 * body has. Before this entry a consumer asking "every function-value kind" had to hand-write
+	 * the spelling, and two of the five such consumers had simply forgotten it. Read it through
 	 * `RefactorSupport.nestedFunctionKinds`, never on its own.
 	 * Optional — a grammar with no named function literal leaves it unset.
 	 */

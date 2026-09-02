@@ -92,8 +92,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * ctor instead of pairing a modifier - and both bind their name into the
 	 * ENCLOSING body while opening a scope of their own for their parameters
 	 * (see the matching pair in `scopeKinds`). They are decl hosts, not
-	 * `selfScopeDeclKinds` entries, for the mirror of `KeyValueBinder`'s reason:
-	 * the scope they open is not the one their own name lives in.
+	 * `selfScopeDeclKinds` entries, for the mirror of `KeyValueBinder`'s reason: the scope they
+	 * open is not the one their own name lives in. `NamedFnExpr` - the same `function` keyword in
+	 * VALUE position, `final f = function nn(a) { … }` - binds its name the same way, measured
+	 * against the compiler rather than assumed: the name is readable AFTER the literal in the
+	 * enclosing block (`final f = function nn(x) …; nn(4)` compiles) and nowhere else - not
+	 * before it, not outside that block, both `Unknown identifier`. Self-recursion needs no extra
+	 * entry: the binding is position-scoped at the literal's own start, which precedes its body.
+	 * Without this entry the literal's name was no declaration at all, so a self-recursive call
+	 * and every later read of the name bound to whatever ELSE in scope carried it, and renaming
+	 * that outer binding rewrote the literal's own recursive call.
 	 *
 	 * The three `final` / `abstract` type-declaration forms name themselves through
 	 * their own ctors, so each needs its own entry. `ClassForm` is the inner form of a
@@ -113,6 +121,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'FnDecl',
 		'LocalFnStmt',
 		'LocalInlineFnStmt',
+		'NamedFnExpr',
 		'ClassDecl',
 		'ClassForm',
 		'AbstractClassDecl',
@@ -223,6 +232,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * its parameter reaches the tree as an `IdentExpr` - `HxArrowParamProjection` re-labels it
 	 * `Required` before any consumer sees it. Without BOTH halves the parameter was a read of
 	 * whatever enclosed the lambda: `refs` mis-bound it, and `rename` rewrote the two together.
+	 *
+	 * `NamedFnExpr` is `function nn(a) { … }` in VALUE position, and it belongs here for exactly
+	 * the reason the anonymous `FnExpr` does - it binds a parameter that dies at the body's end.
+	 * The reasoning was never applied to it, so its parameter collected into the ENCLOSING
+	 * function's frame and an outer read of the same name resolved to it: measured on
+	 * `var q = 1; final f = function nn(q:Int) { … }; trace(q + …)`, the trace read bound to the
+	 * literal's parameter, and `rename` of either binding silently rewrote the other. The
+	 * anonymous spelling one line above was correct throughout, which is what kept it hidden.
+	 * The name `nn` itself does NOT live in this frame - it binds into the enclosing body, so it
+	 * is a `DECL_HOST_KINDS` entry too; see the pair of paragraphs there.
 	 */
 	private static final POSITION_SCOPED_SCOPE_KINDS: Array<String> = [
 		'FnDecl',
@@ -234,6 +253,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'ThinParenLambdaExpr',
 		'ParenLambdaExpr',
 		'ThinArrow',
+		'NamedFnExpr',
 		'BlockBody',
 		'BlockExpr',
 		'BlockStmt',

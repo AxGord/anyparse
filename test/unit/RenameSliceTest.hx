@@ -619,6 +619,60 @@ class RenameSliceTest extends Test {
 		assertRename(src, 4, 3, 'w', armRenamed);
 	}
 
+	/**
+	 * The corruption a missing scope frame produced, in the op that shows it: with `NamedFnExpr`
+	 * opening no frame, the literal's parameter and an outer local of the same name were ONE
+	 * binding, so renaming the outer local left its own read behind and renaming the parameter
+	 * rewrote the outer read — each silently, each an `Ok`. Both directions are asserted on the
+	 * whole program, and the anonymous spelling beside them is the control that was always right.
+	 */
+	public function testNamedFunctionLiteralParameterRenamesApartFromAnOuterLocal(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar q:Int = 1;\n\t\tvar g = function nn(q:Int):Int { return q + 1; };\n'
+			+ '\t\treturn q + g(2);\n\t}\n}';
+		assertRename(
+			src, 3, 3, 'qq',
+			'class C {\n\tfunction f():Int {\n\t\tvar qq:Int = 1;\n\t\tvar g = function nn(q:Int):Int { return q + 1; };\n'
+			+ '\t\treturn qq + g(2);\n\t}\n}'
+		);
+		assertRename(
+			src, 4, 23, 'pp',
+			'class C {\n\tfunction f():Int {\n\t\tvar q:Int = 1;\n\t\tvar g = function nn(pp:Int):Int { return pp + 1; };\n'
+			+ '\t\treturn q + g(2);\n\t}\n}'
+		);
+	}
+
+	/**
+	 * The literal's NAME is its own binding too, so renaming an outer local of that name must leave
+	 * the literal's self-recursive call alone. Before the decl-host entry the call bound to the outer
+	 * local and was rewritten with it — the resulting program called a non-function.
+	 */
+	public function testRenamingAnOuterLocalLeavesTheLiteralsRecursiveCallAlone(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar nn:Int = 1;\n'
+			+ '\t\tvar g = function nn(x:Int):Int { return x <= 0 ? 0 : nn(x - 1); };\n\t\treturn nn + g(2);\n\t}\n}';
+		assertRename(
+			src, 3, 3, 'mm',
+			'class C {\n\tfunction f():Int {\n\t\tvar mm:Int = 1;\n'
+			+ '\t\tvar g = function nn(x:Int):Int { return x <= 0 ? 0 : nn(x - 1); };\n\t\treturn nn + g(2);\n\t}\n}'
+		);
+	}
+
+	/**
+	 * The capture guard must answer the SAME for both function-literal spellings, in both
+	 * directions — renaming an outer local to a name the literal's parameter holds, and the
+	 * converse. It already did before the frame existed, by accident; pinning the four cells
+	 * together is what stops the two spellings from diverging the next time this seam moves.
+	 */
+	public function testCaptureRefusalDoesNotDependOnTheLiteralSpelling(): Void {
+		final named: String = 'class C {\n\tfunction f():Int {\n\t\tvar q:Int = 1;\n\t\tvar g = function nn(p:Int):Int { return p + q; };\n'
+			+ '\t\treturn q + g(3);\n\t}\n}';
+		final anon: String = 'class C {\n\tfunction f():Int {\n\t\tvar q:Int = 1;\n\t\tvar g = function(p:Int):Int { return p + q; };\n'
+			+ '\t\treturn q + g(3);\n\t}\n}';
+		assertRenameErr(named, 3, 3, 'p', 'is captured by a binding that shadows it');
+		assertRenameErr(anon, 3, 3, 'p', 'is captured by a binding that shadows it');
+		assertRenameErr(named, 4, 23, 'q', 'is also captured by the rename');
+		assertRenameErr(anon, 4, 20, 'q', 'is also captured by the rename');
+	}
+
 	/** An `#elseif` ladder is three arms, and the name on any two of them refuses the same way. */
 	public function testCondElseIfArmRedeclarationRefused(): Void {
 		final src: String = 'class C {\n\tfunction f():Int {\n\t\t#if js\n\t\tvar v = 1;\n\t\t#elseif cpp\n\t\tvar v = 2;\n'

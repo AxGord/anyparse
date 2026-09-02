@@ -45,6 +45,23 @@ class ShadowingLocalCheckTest extends Test {
 	}
 
 	/**
+	 * A function LITERAL's parameter is an outer side like any other — and the NAMED spelling was
+	 * the one that opened no scope frame, so its parameter was hosted by the enclosing function
+	 * instead and a redeclaration inside the literal's own body found nothing to shadow. Both
+	 * spellings run through the same assertion so they cannot diverge again.
+	 */
+	public function testLiteralParameterIsAnOuterSideInBothSpellings(): Void {
+		final named: Array<Violation> =
+			violations('class C { function f() { var g = function nn(q:Int) { var q:Int = 2; return q; }; return g(1); } }');
+		Assert.equals(1, named.length, 'the named literal parameter must be an outer side: $named');
+		Assert.isTrue(named[0].message.indexOf('parameter') != -1, 'expected a parameter finding, got: ${named[0].message}');
+		final anon: Array<Violation> =
+			violations('class C { function f() { var g = function(q:Int) { var q:Int = 2; return q; }; return g(1); } }');
+		Assert.equals(1, anon.length, 'the anonymous control must keep reporting: $anon');
+		Assert.equals(named[0].message, anon[0].message, 'the two spellings must report the same thing');
+	}
+
+	/**
 	 * A `for` iterator binds into the frame it OPENS, so the name sits in the `ForStmt`s own slot
 	 * and never among its children — which the direct-children walk could not see. With no outer
 	 * binding at all this was silence, not a wrong message: the shadow went entirely unreported.
