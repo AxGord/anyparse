@@ -225,6 +225,23 @@ class AlwaysNullComparisonTest extends Test {
 		);
 	}
 
+	/**
+	 * The lambda body is its own flow unit, so this check sees inside one. It did not before —
+	 * `NullFlow.forEachFunctionUnit` named no lambda kind and the walk refuses to carry the
+	 * enclosing state into a function value, so no lambda body was visited by any of the seven flow
+	 * checks. The second half is the discriminator: a name the lambda CAPTURES is not one of the
+	 * unit's own names, so it gets no facts and stays unreported, however it was bound outside.
+	 */
+	public function testKnownNullInsideLambdaFlaggedAndCapturedOneIsNot(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(a:Array<Int>) { a.map(v -> { var x = null; if (x == null) trace(1); return v; });'
+				+ ' var y = null; a.map(v -> { if (y == null) trace(2); return v; }); } }'
+			).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new AlwaysNullComparison().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

@@ -21,7 +21,7 @@ import utest.Test;
 class JoinSingleUseLocalCheckTest extends Test {
 
 	/** The count of builtin checks -- bumped by one when a new check is registered. */
-	private static inline final BUILTIN_CHECK_COUNT: Int = 177;
+	private static inline final BUILTIN_CHECK_COUNT: Int = 178;
 
 	// --- positive: the motivating shape and its fix ---
 

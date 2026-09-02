@@ -237,6 +237,24 @@ class ShadowingLocalCheckTest extends Test {
 		Assert.equals(0, violations('class C { static function r():Void { var q = 0; var q = q + 1; trace(q); } }').length);
 	}
 
+	/**
+	 * The BAR pin for this rule, and the control for its sibling. A nested function's parameter
+	 * hides an enclosing local exactly as a redeclaration does, and every spelling of it is silent
+	 * HERE — the parameter is only ever the OUTER side of the question this rule asks. Widening the
+	 * inner side in place would have added 6 findings on the Pony tree and 44 on this project's own
+	 * sources to a bar projects already opted into, so that half shipped as `shadowing-parameter`
+	 * (`DefaultOff`) instead, and this answer must not move: three parameter spellings plus the
+	 * block control, ONE finding.
+	 */
+	public function testParameterSpellingsAreTheSiblingRulesFindings(): Void {
+		final found: Array<Violation> = violations(
+			'class C { function f(a:Array<Int>) { var q:Int = 1; a.map(q -> q + 1); a.map(function(q) return q);'
+			+ ' function nm(q:Int) return q; { var q:Int = 2; trace(q); } trace(q + nm(3)); } }'
+		);
+		Assert.equals(1, found.length);
+		Assert.isTrue(found[0].message.indexOf('shadowing declaration') == 0, 'expected the block, got: ${found[0].message}');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ShadowingLocal().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

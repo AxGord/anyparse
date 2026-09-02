@@ -8,6 +8,7 @@ import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -78,6 +79,13 @@ using Lambda;
  *
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are never descended into: a splice may
  * carry declarations no source scan resolves.
+ *
+ * ## The parameter half is a separate rule
+ *
+ * A nested function's PARAMETER hides an enclosing binding the same way a local declaration
+ * does, and this rule is silent on every spelling of it — the parameter is only ever the OUTER
+ * side of the question asked here. That half is `shadowing-parameter` (`ShadowingParameter`),
+ * off by default, and it runs `collect` below with the same walk and the same gates.
  */
 @:nullSafety(Strict)
 final class ShadowingLocal implements Check {
@@ -96,7 +104,34 @@ final class ShadowingLocal implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<ScopeSeams> = seamsOf(plugin.refShape());
+		return collect(files, plugin, false, RULE_ID);
+	}
+
+	/** Report-only: renaming the inner declaration or the outer one is the author's call. */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+	/**
+	 * The ancestor-chain walk both spellings of the question share. `parameters` picks which
+	 * declaration family is REPORTED — the local declarations this rule owns, or the parameters
+	 * `shadowing-parameter` owns — and `ruleId` is stamped on every finding. The outer side, the
+	 * frame walk and every gate are identical for both: only the inner declaration kind differs,
+	 * which is why the two rules are one walk and not two.
+	 *
+	 * They are two RULES rather than one because the parameter half is a DIFFERENT question from
+	 * the one this rule's own doc advertises ("a LOCAL declaration whose name is already bound"),
+	 * and reusing a lambda parameter name is common idiom. Measured: on the Pony tree the local
+	 * half is 29 findings and the parameter half adds 6; on this project's own sources both are 0.
+	 * A project that opted into `shadowing-local` did not thereby ask for the wider question, so
+	 * the parameter half ships `DefaultOff` under its own id and this rule's bar cannot move.
+	 */
+	public static function collect(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, parameters: Bool, ruleId: String
+	): Array<Violation> {
+		final seams: Null<ScopeSeams> = seamsOf(plugin.refShape(), parameters, ruleId);
 		if (seams == null) return [];
 		final resolved: ScopeSeams = seams;
 		final violations: Array<Violation> = [];
@@ -105,13 +140,6 @@ final class ShadowingLocal implements Check {
 			if (tree != null) scan(tree, tree, [], false, resolved, entry.file, violations);
 		}
 		return violations;
-	}
-
-	/** Report-only: renaming the inner declaration or the outer one is the author's call. */
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return [];
 	}
 
 	/** Whether `span` lies wholly inside `outer`. */
@@ -146,14 +174,16 @@ final class ShadowingLocal implements Check {
 		if (seams.opaqueKinds.contains(node.kind)) return;
 		final span: Null<Span> = node.span;
 		final name: Null<String> = node.name;
-		if (!inConditional && seams.localDeclKinds.contains(node.kind) && name != null && span != null) {
+		final reported: Bool = seams.reportParameters ? reportableParam(node, ancestors, seams) : seams.localDeclKinds.contains(node.kind);
+		if (!inConditional && reported && name != null && span != null) {
 			final hidden: Null<String> = shadowedBinding(node, ancestors, seams);
+			final noun: String = seams.reportParameters ? 'parameter' : 'declaration';
 			if (hidden != null && !rebindsShadowed(root, node, name, seams)) out.push({
 				file: file,
 				span: span,
-				rule: RULE_ID,
+				rule: seams.ruleId,
 				severity: Severity.Warning,
-				message: 'shadowing declaration - "$name" is already a $hidden in scope here'
+				message: 'shadowing $noun - "$name" is already a $hidden in scope here'
 			});
 		}
 		final nested: Bool = inConditional || node.kind == seams.conditionalKind;
@@ -314,10 +344,12 @@ final class ShadowingLocal implements Check {
 	}
 
 	/** The scope vocabulary this check reads, or null when the grammar names no local declaration. */
-	private static function seamsOf(shape: RefShape): Null<ScopeSeams> {
+	private static function seamsOf(shape: RefShape, parameters: Bool, ruleId: String): Null<ScopeSeams> {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		return localDeclKinds.length == 0 ? null : {
 			shape: shape,
+			reportParameters: parameters,
+			ruleId: ruleId,
 			localDeclKinds: localDeclKinds,
 			declHostKinds: shape.declHostKinds,
 			positionScopedKinds: (shape.positionScopedKinds ?? []).concat(shape.branchScopeKinds ?? []),
@@ -332,11 +364,45 @@ final class ShadowingLocal implements Check {
 		};
 	}
 
+	/**
+	 * Whether `node` is a PARAMETER this rule reports: a `RefShape.paramKinds` node declared by a
+	 * function, whose name is not the project's declared-unused marker.
+	 *
+	 * Two gates, each earned by a measured false-positive class:
+	 *
+	 * - The PARENT must be a function scope (`ScopeSeams.nestedFnKinds`). Haxe's anonymous
+	 *   STRUCTURE type projects its fields with the same kind a parameter uses —
+	 *   `{ node: Int, width: Int }` is `Anon(Required node …, Required width …)` — so without this
+	 *   a return type's field name reads as a binding, and every helper returning
+	 *   `{ node: …, width: … }` out of a function that also takes a `node` is a finding. This project
+	 *   types its edit lists as `Array<{ span: Span, text: String }>` and its inputs as
+	 *   `{ file: String, source: String }`, so that class was ALL 44 of its 44 raw findings — and
+	 *   1 of 7 on the Pony tree. An enum constructor's parameters fall out with them (their host
+	 *   is `ParamCtor`, not a function), which is right: nothing encloses them.
+	 * - A leading `_` is this project's "declared unused" marker, exempted by `unused-parameter`
+	 *   on exactly the same test. A binding the body never reads cannot be mistaken for the one it
+	 *   hides, which is the whole mistake this rule names — and the `_` shadowing `_` pair it drops
+	 *   is produced by the dozen wherever the convention is used (15 of 22 on the Pony tree, 4 of
+	 *   48 here).
+	 */
+	private static function reportableParam(node: QueryNode, ancestors: Array<QueryNode>, seams: ScopeSeams): Bool {
+		if (!seams.paramKinds.contains(node.kind) || ancestors.length == 0) return false;
+		final name: Null<String> = node.name;
+		return name != null && !name.startsWith('_') && seams.nestedFnKinds.contains(ancestors[ancestors.length - 1].kind);
+	}
+
 }
 
 /** The scope vocabulary `ShadowingLocal` walks with — resolved once per run, never per node. */
 private typedef ScopeSeams = {
 	final shape: RefShape;
+
+	/** Whether this run reports PARAMETERS (`shadowing-parameter`) rather than local declarations (`shadowing-local`). */
+	final reportParameters: Bool;
+
+	/** The rule id stamped on every finding of this run — the two spellings share the walk, not the id. */
+	final ruleId: String;
+
 	final localDeclKinds: Array<String>;
 	final declHostKinds: Array<String>;
 	final positionScopedKinds: Array<String>;

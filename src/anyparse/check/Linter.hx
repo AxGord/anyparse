@@ -269,6 +269,7 @@ final class Linter {
 			new NullableSwitchMissingNull(),
 			new ShadowingCaseBinder(),
 			new ShadowingLocal(),
+			new ShadowingParameter(),
 			new UnusedCaseBinder(),
 			new RedundantCaseBody(),
 			// Deletes a whole case arm, as `redundant-case-body`'s subsume does, and the two CAN
