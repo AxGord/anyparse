@@ -65,6 +65,38 @@ A strategy's `lower` function returns a new `CoreIR` subtree for the node it own
 
 Strategies emit CoreIR. Codegen (pass 4) turns CoreIR into `haxe.macro.Expr`. A strategy that directly calls `macro ...` is wrong — it should be emitting CoreIR with `Host` as the escape hatch if nothing else works.
 
+### The engine never spells a grammar's own type or constructor
+
+Invariant 4 read at its sharpest: nothing under `anyparse.core` or `anyparse.macro`
+may name a rule type or an enum constructor of any one grammar — not as an
+identifier, and not as a string it switches on. A `@:fmt` feature whose lowering
+knows `HxFnBody` is a feature only the Haxe grammar can ever opt into, and the
+next grammar's author has no way to see that from the outside.
+
+What the lowering may do instead is ASK. Two channels exist, both declarative:
+
+- **A meta argument.** `@:fmt(bodyPolicyForCtor('ExprBody', 'functionBody'))` names
+  the constructor at the GRAMMAR, and the lowering treats it as an opaque string
+  it passes to `ruleCtorPath`. Same for `metaBlockGlue`, `valueBraceSymmetry`,
+  `arrowValueIfReflow`.
+- **A generated predicate.** For a question that needs real code — "is this element
+  a call-bearing container", "is this array literal a map or a comprehension" — the
+  lowering emits a call to the per-family marker class
+  (`<grammarPack>.AstPreds` / `AstPredsT` / `AstPredsS`, tables in the grammar's own
+  `…AstPredLowering`, machinery in `anyparse.macro.AstPredLowering`). The lowering
+  holds only the PREDICATE NAME, which is a name it owns; the marker-class path is
+  derived from the grammar root. A format that has not declared `astPreds` keeps the
+  older schema-instance channel (`<schema>.instance.<predicate>`), which is equally
+  grammar-neutral at the call site.
+
+`unit.LexicalRegionsSeamTest.testTheEngineNamesNoHaxeGrammarRuleType` is the ratchet.
+It derives the name inventory from the grammar package's own module list, so a new
+rule extends it for free, and it counts a hit inside a STRING literal — the last two
+violations it removed were a `switch` on `'HxFnBody'` / `'HxFnExprBody'` in
+`WriterLowering` and a hard-coded `HxComplexItems.kinds` call emitted from two sites.
+What it does not see is a bare constructor name in a `macro switch`; reaching those
+needs the constructor inventory rather than the module list.
+
 ## Planned strategies
 
 ### BaseShape

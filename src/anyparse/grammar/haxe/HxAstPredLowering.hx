@@ -255,7 +255,8 @@ final class HxAstPredLowering extends AstPredLowering {
 			condLeafWalkerField('tailLeafKeepsBlankAfterConditional', true, '_classifyKeepsBlankLeaf'),
 			importLeafClassifierField('_classifyImportLeafTail', 'betweenImportsTailLeafClassify'),
 			importLeafClassifierField('_classifyImportLeafHead', 'betweenImportsHeadLeafClassify'),
-			keepsBlankLeafClassifierField()
+			keepsBlankLeafClassifierField(),
+			complexItemKindsField()
 		].concat(new HxCasePredLowering(_shape, _mode).generate());
 	}
 
@@ -975,6 +976,30 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function metaOperandCase(body: Expr -> Expr): Case {
 		return caseBind(HX_EXPR, 'MetaExpr', [0 => '_m'], body(field(ident('_m'), 'expr')));
+	}
+
+	/**
+	 * `complexItemKinds` — the per-element complexity classification a
+	 * delimited list hands `WrapList`'s `complexItemKinds` axis. The
+	 * classifier itself is `HxComplexItems`; this entry is what makes it
+	 * REACHABLE from the grammar-agnostic writer lowering, which addresses
+	 * the marker class by the `AstPreds` naming convention and never the
+	 * grammar type. Before it, `WriterLowering` and `TriviaSepLowering`
+	 * each spelled `anyparse.grammar.haxe.HxComplexItems.kinds` in the
+	 * code they emit — the last two grammar names left in `anyparse.macro`.
+	 *
+	 * Untyped `Array<Any>` rather than a per-mode element type: the
+	 * classifier is reflective by design (see `HxComplexItems`), takes both
+	 * the bare node and the `Trivial<T>` wrapper, and the call sites hold
+	 * the element array untyped. So the mode machinery has nothing to
+	 * contribute here and all three marker classes get the same forwarder.
+	 */
+	private function complexItemKindsField(): Field {
+		return predField(
+			'complexItemKinds', [{ name: 'elements', type: macro :Array<Any> }],
+			macro :Array<Int>, macro anyparse.grammar.haxe.HxComplexItems.kinds(elements),
+			'One complexity code per element of a delimited list, for `WrapList`\'s `complexItemKinds` axis.'
+		);
 	}
 
 }

@@ -56,7 +56,7 @@ package anyparse.grammar.haxe;
  * `functionBody` policy.
  */
 @:peg
-@:fmt(multilineWhenFieldShape('body'), propagateFnBodyEmpty('body'))
+@:fmt(multilineWhenFieldShape('body'))
 typedef HxFnDecl = {
 	var name: HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;

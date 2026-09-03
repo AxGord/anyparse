@@ -649,6 +649,28 @@ it fails, read the diff and decide: bytes that are an improvement get re-capture
 bytes that are a regression get the op fixed. Re-capturing to make it green
 without reading it is the one way the class stops working.
 
+### The corpus is a gate for the WRITER, not for every input the writer reads
+
+946 fixtures is a lot of Haxe, and the reflex is to read a `sweep --diff` of
+`0 fixtures changed` as "nothing about layout moved". Measured twice, it does not
+carry that much:
+
+- S61's four comment-lexer mutations moved **0 of 946**; the unit pins were the
+  only killers.
+- S63 broke the `@:fmt(complexItems)` classifier outright — the generated
+  predicate made to answer an empty list for every element — and the corpus again
+  moved **0 of 946**, verdicts identical, while the same binary failed **21
+  assertions** in `HxComplexItemWrapTest`, `HxContainerItemWrapTest` and
+  `ComplexItemKindsSeamTest`.
+
+The snapshot the corpus writes is a per-fixture PASS/FAIL verdict, not the output
+bytes, so a fixture already failing can change what it emits and still count as
+unchanged; and no fixture happens to put a call-bearing container in an argument
+list at a width where the chunk policy decides anything. Treat a corpus Δ0 as
+evidence that the fixtures' VERDICTS held, and reach for a byte capture — a
+`fmt --write` tree diffed against the other arm, or the unit pins for the
+mechanism you touched — when the question is whether the bytes held.
+
 ### The step graph: four branches, one join
 
 The checks read like a sequence, but their dependencies are far sparser than

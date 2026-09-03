@@ -1837,9 +1837,11 @@ class WrapList {
 	 * cascade the real decision answers. Passing a hardcoded 0 here made a
 	 * `complexItemCount >= n` rule select the wrap MODE and then compute the
 	 * continuation INDENT as if the list held no complex items. ω-functionsignature-body-aware-
-	 * indent: `compactContinuation` (from `opt._fnSigBodyEmpty`) extends the
-	 * `additional`-only regime to FillLine / NoWrap when the wrapped
-	 * signature is followed by an empty / absent body.
+	 * indent: `compactContinuation` extends the `additional`-only regime to
+	 * FillLine / NoWrap for a function signature. It is the
+	 * `@:fmt(bodyAwareCompactIndent)` flag itself, true for every such wrap;
+	 * the body-emptiness gate it was named for (`opt._fnSigBodyEmpty`) was
+	 * dropped as too narrow in `87c5b0af` and its producer is now gone.
 	 */
 	private static function continuationCols(
 		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, measure: WrapItemMeasure, sourceMultilineKeep: Bool,

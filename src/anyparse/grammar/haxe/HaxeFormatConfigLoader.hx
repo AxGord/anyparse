@@ -750,7 +750,6 @@ final class HaxeFormatConfigLoader {
 			_inAnonFnBody: base._inAnonFnBody,
 			_inTypedefBody: base._inTypedefBody,
 			_inEnumAbstract: base._inEnumAbstract,
-			_fnSigBodyEmpty: base._fnSigBodyEmpty,
 			_chainModeOverride: base._chainModeOverride,
 			_callArgChainNest: base._callArgChainNest,
 			_suppressMore: base._suppressMore,
