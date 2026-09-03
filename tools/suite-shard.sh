@@ -10,15 +10,14 @@
 # state outside their own process stay in ONE shard.
 #
 # Both of those are decided by `apq shard-plan`, not by this script. It
-# reads the real `addCase(new X())` list out of test/RunTests.hx as an AST
-# shape (never a name heuristic — nine registered classes do not end in
-# `Test`), refuses a registration it cannot turn into a filter, refuses a
-# name that is a substring of another (`APQ_TEST` is a SUBSTRING filter, so
-# such a class would run TWICE once the two land on different shards),
-# pins the shared-state group to shard 0, splits the rest greedily by
-# measured weight, and gates its own plan on covering the class list exactly
-# once. The reasoning behind each gate lives at `ShardPlan`, and
-# `unit.ShardPlanTest` is the cover it never had while it was awk.
+# takes the class list the runner itself prints (`--list-classes`), refuses
+# a registration it cannot turn into a filter, refuses a name that is a
+# substring of another (`APQ_TEST` is a SUBSTRING filter, so such a class
+# would run TWICE once the two land on different shards), pins the
+# shared-state group to shard 0, splits the rest greedily by measured
+# weight, and gates its own plan on covering the class list exactly once.
+# The reasoning behind each gate lives at `ShardPlan`, and
+# `unit.query.ShardPlanTest` is the cover it never had while it was awk.
 #
 # Measured on Mac15,9 / 16 CPU at 11423 tests, wall of the parallel region:
 # 1 shard 21.8s · 2 shards 13.9s · 4 shards 8.5s · 6 shards 6.9s · 8 shards
@@ -181,10 +180,10 @@ trap cleanup EXIT
 # longest-processing-time-first split and the parity gates on its result. It
 # moved out of this script because a shell function is not testable, and
 # those gates are the only thing standing between a silently-shrunken run
-# and a green report — `unit.ShardPlanTest` is the first cover any of them
-# has ever had, and it plans the REAL registry as one of its cases. Why each
-# gate exists is documented at `ShardPlan`, next to the code that enforces
-# it. What stays here is orchestration: spawning the shards, waiting on
+# and a green report — `unit.query.ShardPlanTest` is the first cover any of
+# them has ever had, and it plans the REAL registry as one of its cases. Why
+# each gate exists is documented at `ShardPlan`, next to the code that
+# enforces it. What stays here is orchestration: spawning the shards, waiting on
 # them, exit codes.
 #
 # The class list comes from the RUNNER, not from parsing test/RunTests.hx.

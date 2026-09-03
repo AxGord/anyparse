@@ -1,0 +1,381 @@
+package unit.query;
+
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CondBranchProjection;
+import anyparse.query.MemberBranchScan;
+import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
+import anyparse.query.Refs;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
+
+using Lambda;
+
+/**
+ * `CondBranchProjection`'s conditional-region splitter (`conditionalBranchRuns`) and the
+ * branch-aware projection built on it (`GrammarPlugin.projectBranchAware`).
+ *
+ * The splitter reads ONLY the source gaps BETWEEN a region's child spans, so a nested `#if` costs
+ * nothing, a `#else` inside a comment cannot split a run, and a directive in the head or trailing
+ * gap is never read at all; a branch with no statements yields no run, and any shape the gaps
+ * cannot describe (a missing or non-monotonic child span) bails and leaves the region flat. The
+ * projection wraps a run only when the region's PARENT is a statement list, which is what keeps
+ * member-position, un-braced-`if`-body and switch-body regions — all spelled `Conditional` too —
+ * untouched, and it SHARES every subtree it did not rewrite.
+ */
+class CondBranchSplitTest extends Test {
+
+	private static final ELSE_KEYWORDS: Array<String> = ['#else', '#elseif'];
+
+	public function testThreeBranchesSplitOnDirectiveGaps(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\tb();\n\t\t#elseif B\n\t\tc();\n\t\t#else\n\t\td();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(3, runs.length);
+		Assert.equals(2, runs[0].nodes.length);
+		Assert.equals(1, runs[1].nodes.length);
+		Assert.equals(1, runs[2].nodes.length);
+		Assert.isTrue(noDirectiveInSpans(src, runs));
+		Assert.equals('a();\n\t\tb();', src.substring(runs[0].span.from, runs[0].span.to));
+		Assert.equals('d();', src.substring(runs[2].span.from, runs[2].span.to));
+	}
+
+	public function testNestedRegionIsOneChildNoDepthCounting(): Void {
+		// The nested `#if B … #end` projects as ONE child whose span covers its whole region, so
+		// its `#end` is never read as a gap directive and the outer run stays intact.
+		final src: String = fn('#if A\n\t\ta();\n\t\t#if B\n\t\tb();\n\t\t#end\n\t\tz();\n\t\t#else\n\t\td();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(2, runs.length);
+		Assert.equals(3, runs[0].nodes.length);
+		Assert.equals(1, runs[1].nodes.length);
+	}
+
+	public function testEmptyFirstBranchYieldsNoRun(): Void {
+		final src: String = fn('#if A\n\t\t#else\n\t\ta();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(1, runs.length);
+		Assert.equals(1, runs[0].nodes.length);
+	}
+
+	public function testEmptyLastBranchYieldsNoRun(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\t#else\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(1, runs.length);
+		Assert.equals(1, runs[0].nodes.length);
+	}
+
+	public function testFullyEmptyRegionYieldsNoRuns(): Void {
+		final src: String = fn('#if A\n\t\t#else\n\t\t#end');
+		Assert.equals(0, runsOf(src).length);
+		Assert.equals(0, countOfKind(branchTree(src), CondBranchProjection.COND_BRANCH_KIND));
+	}
+
+	public function testNoElseRegionIsOneRun(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\tb();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(1, runs.length);
+		Assert.equals(2, runs[0].nodes.length);
+	}
+
+	public function testGapWithTwoDirectivesSplitsOnce(): Void {
+		// `#elseif B` opens a branch with no statements, so the gap holds two directives and the
+		// two surviving branches still come out as two runs.
+		final src: String = fn('#if A\n\t\ta();\n\t\t#elseif B\n\t\t#elseif C\n\t\tc();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(2, runs.length);
+		Assert.equals(1, runs[0].nodes.length);
+		Assert.equals(1, runs[1].nodes.length);
+	}
+
+	public function testHeadGapWithElseOnOneLineIsOneRun(): Void {
+		// `#if A #else trace(1); #end` — the empty `#if` branch leaves the region with ONE child,
+		// so there is no gap BETWEEN children to scan and the head gap's directives are never read.
+		final src: String = fn('#if A #else trace(1); #end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(1, runs.length);
+		Assert.equals(1, runs[0].nodes.length);
+	}
+
+	public function testSingleLineRegionSplitsOnTheGapSubstring(): Void {
+		// A whole region on ONE line still splits: the ` #else ` gap between the two statements
+		// ltrims to a `#else` prefix because anchoring is relative to the GAP SUBSTRING, never to
+		// a real source line. A true line anchor would silently stop splitting these.
+		final src: String = fn('#if A x(); #else y(); #end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(2, runs.length);
+		Assert.equals('x();', src.substring(runs[0].span.from, runs[0].span.to));
+		Assert.equals('y();', src.substring(runs[1].span.from, runs[1].span.to));
+	}
+
+	public function testCommentedOutElseDoesNotSplit(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\t/*\n#else\n\t\t*/\n\t\tb();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(1, runs.length);
+		Assert.equals(2, runs[0].nodes.length);
+	}
+
+	public function testNullChildSpanBails(): Void {
+		final region: QueryNode = new QueryNode('Conditional', null, [new QueryNode('ExprStmt', null, [])], new Span(0, 10));
+		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, 'x', ELSE_KEYWORDS, []));
+	}
+
+	public function testNonMonotonicChildSpansBail(): Void {
+		final region: QueryNode = new QueryNode('Conditional', null, [
+			new QueryNode('ExprStmt', null, [], new Span(5, 9)),
+			new QueryNode('ExprStmt', null, [], new Span(7, 12))
+		], new Span(0, 20));
+		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, 'x', ELSE_KEYWORDS, []));
+	}
+
+	public function testChildSpanOutsideRegionBails(): Void {
+		final region: QueryNode = new QueryNode(
+			'Conditional', null,
+			[new QueryNode('ExprStmt', null, [], new Span(5, 30))],
+			new Span(0, 20)
+		);
+		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, 'x', ELSE_KEYWORDS, []));
+	}
+
+	public function testStatementRegionIsWrapped(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\t#else\n\t\tb();\n\t\t#end');
+		final tree: QueryNode = branchTree(src);
+		Assert.equals(2, countOfKind(tree, CondBranchProjection.COND_BRANCH_KIND));
+		final region: Null<QueryNode> = firstOfKind(tree, 'Conditional');
+		Assert.notNull(region);
+		if (region == null) return;
+		Assert.equals(2, region.children.length);
+		for (branch in region.children) {
+			Assert.equals(CondBranchProjection.COND_BRANCH_KIND, branch.kind);
+			Assert.equals(1, branch.children.length);
+		}
+	}
+
+	public function testNestedRegionInsideBranchIsWrappedToo(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\t#if B\n\t\tb();\n\t\t#end\n\t\tz();\n\t\t#else\n\t\td();\n\t\t#end');
+		// Two outer branches plus the single branch of the region nested inside the first one.
+		Assert.equals(3, countOfKind(branchTree(src), CondBranchProjection.COND_BRANCH_KIND));
+	}
+
+	public function testMemberRegionNotWrapped(): Void {
+		final src: String = 'class C {\n\t#if A\n\tfunction a():Void {}\n\t#else\n\tfunction b():Void {}\n\t#end\n}';
+		Assert.equals(0, countOfKind(branchTree(src), CondBranchProjection.COND_BRANCH_KIND));
+	}
+
+	public function testUnbracedIfBodyRegionNotWrapped(): Void {
+		final src: String = fn('if (x) #if A\n\t\ta();\n\t\tb();\n\t\t#end');
+		Assert.equals(0, countOfKind(branchTree(src), CondBranchProjection.COND_BRANCH_KIND));
+	}
+
+	public function testSwitchBodyRegionNotWrapped(): Void {
+		final src: String = fn('switch v {\n\t\t#if A\n\t\tcase 1: a();\n\t\t#else\n\t\tcase 2: b();\n\t\t#end\n\t\t}');
+		Assert.equals(0, countOfKind(branchTree(src), CondBranchProjection.COND_BRANCH_KIND));
+	}
+
+	public function testConditionalExprUntouched(): Void {
+		final src: String = fn('var x = #if A 1 #else 2 #end;\n\t\ttrace(x);');
+		final tree: QueryNode = branchTree(src);
+		Assert.equals(0, countOfKind(tree, CondBranchProjection.COND_BRANCH_KIND));
+		Assert.equals(1, countOfKind(tree, 'ConditionalExpr'));
+	}
+
+	public function testCondSpliceUntouched(): Void {
+		final src: String = 'class C { function f():Void { #if A if (x) { #else if (y) { #end a(); } } }';
+		Assert.equals(0, countOfKind(branchTree(src), CondBranchProjection.COND_BRANCH_KIND));
+	}
+
+	public function testUnrewrittenFileSharesTheSameTree(): Void {
+		// A MEMBER-position region passes the `#if` fast path and is then left alone by the parent
+		// gate, so the walk runs and must still hand back the IDENTICAL root object. `RefsCache`
+		// keys its per-file index by tree identity, so a gratuitous copy re-indexes once per check.
+		final src: String = 'class C {\n\t#if A\n\tfunction a():Void {}\n\t#else\n\tfunction b():Void {}\n\t#end\n}';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final plain: QueryNode = plugin.parseFile(src);
+		Assert.isTrue(plain == plugin.projectBranchAware(plain, src));
+	}
+
+	public function testUntouchedSiblingIsSharedByIdentity(): Void {
+		// The first class IS rewritten, so the root is a copy — but the second class was not
+		// touched and must come back as the same node instance.
+		final src: String = 'class A {\n\tfunction f():Void {\n\t\t#if X\n\t\ta();\n\t\t#else\n\t\tb();\n\t\t#end\n\t}\n}\n\nclass B {\n'
+			+ '\tfunction g():Void {\n\t\tc();\n\t}\n}';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final plain: QueryNode = plugin.parseFile(src);
+		final projected: QueryNode = plugin.projectBranchAware(plain, src);
+		Assert.isFalse(plain == projected);
+		Assert.notNull(namedClass(plain, 'B'));
+		Assert.isTrue(namedClass(plain, 'B') == namedClass(projected, 'B'));
+	}
+
+	// --- branch-local reference resolution (`Refs` reads the projection) ---
+
+	/**
+	 * A reference inside a branch binds to THAT branch's declaration. `CondBranch` is deliberately
+	 * NOT a `scopeKinds` member, so the enclosing block frame pre-collects every branch's
+	 * declaration; `Refs` therefore pushes a branch-local frame of its own. In THIS fixture the
+	 * enclosing frame is position-scoped and arrives at the same answer unaided — the frame is what
+	 * carries a HOISTING one, where position cannot separate two exclusive arms
+	 * (`testPlainTreeKeepsFirstWinsBindingInAHoistingFrame`).
+	 */
+	public function testReadBindsToItsOwnBranchDecl(): Void {
+		final src: String = fn('#if A\n\t\tvar v = 1;\n\t\tuse(v);\n\t\t#else\n\t\tvar v = 2;\n\t\tuse(v);\n\t\t#end');
+		final decls: Array<Int> = declOffsets(src, 'v');
+		Assert.equals(2, decls.length);
+		Assert.same(decls, readBindings(src, 'v'));
+	}
+
+	/**
+	 * A HOISTING frame keeps the first-wins binding in the plain projection: a type body makes
+	 * every member visible from offset `0`, so two mutually exclusive `#if` arms declaring one name
+	 * are indistinguishable BY POSITION and both reads point at the FIRST. This is the case that
+	 * still pins the preference onto the projection.
+	 *
+	 * The block-level fixture no longer discriminates it — a position-scoped frame resolves a read
+	 * to the nearest PRECEDING declaration, which inside a region already IS that region's own; see
+	 * `testPlainTreeResolvesARegionInABlockByPosition`.
+	 */
+	public function testPlainTreeKeepsFirstWinsBindingInAHoistingFrame(): Void {
+		final src: String = 'class C {\n\t#if A\n\tvar v = 1;\n\tfunction g():Void { use(v); }\n\t#else\n\tvar v = 2;\n'
+			+ '\tfunction h():Void { use(v); }\n\t#end\n}';
+		final plain: QueryNode = new HaxeQueryPlugin().parseFile(src);
+		final decls: Array<Int> = declsIn(plain, 'v');
+		Assert.equals(2, decls.length);
+		for (b in bindingsOf(plain, src, 'v')) Assert.equals(decls[0], b);
+	}
+
+	/**
+	 * A position-scoped frame resolves BY POSITION, so the plain projection binds each in-region
+	 * read to its own branch's declaration with no `CondBranch` frame involved — the two answers
+	 * coincide here. A read PAST `#end` binds to the LAST branch's declaration where the
+	 * branch-aware answer is the FIRST's; both are arbitrary, the branches being exclusive.
+	 */
+	public function testPlainTreeResolvesARegionInABlockByPosition(): Void {
+		final src: String = fn('#if A\n\t\tvar v = 1;\n\t\tuse(v);\n\t\t#else\n\t\tvar v = 2;\n\t\tuse(v);\n\t\t#end');
+		final plain: QueryNode = new HaxeQueryPlugin().parseFile(src);
+		Assert.same(declsIn(plain, 'v'), bindingsOf(plain, src, 'v'));
+	}
+
+	/**
+	 * A declaration written inside a branch is still visible AFTER `#end` — a preference, not a
+	 * scope. CONTROL: holds with the branch frame reverted too; it guards the opposite mistake,
+	 * naming `CondBranch` in `RefShape.scopeKinds`, which would leave this read unresolved.
+	 */
+	public function testBranchDeclResolvesFromAfterTheRegion(): Void {
+		final src: String = fn('#if A\n\t\tvar v = 1;\n\t\t#end\n\t\tuse(v);');
+		Assert.same(declOffsets(src, 'v'), readBindings(src, 'v'));
+	}
+
+	/** A read inside a branch of a name declared only OUTSIDE it still resolves outward. CONTROL: the branch frame must fall through. */
+	public function testOuterDeclResolvesInsideBranch(): Void {
+		final src: String = fn('var v = 1;\n\t\t#if A\n\t\tuse(v);\n\t\t#end');
+		Assert.same(declOffsets(src, 'v'), readBindings(src, 'v'));
+	}
+
+	/**
+	 * MEMBER position: the comment tokens `MemberBranchScan.seamsOf` collects are what keeps a
+	 * `#else` written inside a COMMENT from splitting a modifier run — and until S60 nothing
+	 * asserted it. Handing `seamsOf` an empty comment set left the whole suite green, at base as
+	 * well as after the migration, so the gap is older than the move; this arm closes it.
+	 *
+	 * The fixture is discriminating by construction: `public` and the method are two children of
+	 * ONE member-position region, and the only thing between them is a commented-out `#else`.
+	 * Masked, they stay one run and the method is seen `public`; unmasked, the comment opens a
+	 * second branch and the method starts a fresh run with no modifier at all — which is exactly
+	 * how `missing-visibility` would invent a finding and `member-order` would misrank it.
+	 */
+	public function testACommentedOutElseDoesNotSplitAMemberRun(): Void {
+		// The `#else` has to START its line for the splitter to read it at all, so the comment that
+		// hides it is a BLOCK one — a `//` prefix would leave the fixture green with no masking.
+		final src: String = 'class C {\n\t#if flag\n\tpublic\n\t/*\n\t#else\n\t*/\n\tfunction a(): Void {}\n\t#end\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(src);
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(tree, 'C', plugin.refShape().classDeclKinds ?? []);
+		Assert.notNull(decl);
+		if (decl == null) return;
+		final runKinds: Array<String> = [];
+		MemberBranchScan.eachTypeMember(
+			decl, plugin.refShape(), src, n -> RefactorSupport.FN_DECL_KINDS.contains(n.kind), (member, run) -> {
+				if (member.name == 'a') for (mod in run) runKinds.push(mod.kind);
+			},
+			plugin.lexicalRegions.bind(src)
+		);
+		Assert.equals('Public', runKinds.join(','), 'the modifier must survive the commented-out `#else`');
+	}
+
+	/** The statements of `body` inside a class + function, so a region lands in a `BlockBody`. */
+	private static inline function fn(body: String): String {
+		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
+	}
+
+	/** Every `Decl` hit offset for `name` in the branch-aware tree, in source order. */
+	private static function declOffsets(src: String, name: String): Array<Int> {
+		return declsIn(branchTree(src), name);
+	}
+
+	/** Every declaration offset of `name` in `tree`, in walk order. */
+	private static function declsIn(tree: QueryNode, name: String): Array<Int> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return [
+			for (h in Refs.find(name, tree, plugin.refShape())) if (h.kind == RefKind.Decl) h.span.from
+		];
+	}
+
+	/** The binding offset each non-`Decl` hit for `name` resolves to in the branch-aware tree, in source order. */
+	private static function readBindings(src: String, name: String): Array<Int> {
+		return bindingsOf(branchTree(src), src, name);
+	}
+
+	/** The binding offset each non-`Decl` hit for `name` resolves to in `tree` (-1 when unresolved). */
+	private static function bindingsOf(tree: QueryNode, src: String, name: String): Array<Int> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return [
+			for (h in Refs.find(name, tree, plugin.refShape())) if (h.kind != RefKind.Decl) h.bindingSpan?.from ?? -1
+		];
+	}
+
+	/** The runs of the first `Conditional` in `src`, or `[]` when the splitter bailed. */
+	private static function runsOf(src: String): Array<CondBranchRun> {
+		final region: Null<QueryNode> = firstOfKind(new HaxeQueryPlugin().parseFile(src), 'Conditional');
+		Assert.notNull(region);
+		return region == null
+			? []
+			: CondBranchProjection.conditionalBranchRuns(
+				region, src, ELSE_KEYWORDS, RefactorSupport.collectCommentTokens(new HaxeQueryPlugin().lexicalRegions(src))
+			) ?? [];
+	}
+
+	private static function branchTree(src: String): QueryNode {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return plugin.projectBranchAware(plugin.parseFile(src), src);
+	}
+
+	/** Whether no run's span reaches a `#` — the "a branch span never covers a directive line" invariant. */
+	private static function noDirectiveInSpans(src: String, runs: Array<CondBranchRun>): Bool {
+		return runs.foreach(run -> src.substring(run.span.from, run.span.to).indexOf('#') == -1);
+	}
+
+	/** The first `ClassDecl` named `name` under `node` — the anchor for the structural-sharing identity checks. */
+	private static function namedClass(node: QueryNode, name: String): Null<QueryNode> {
+		if (node.kind == 'ClassDecl' && node.name == name) return node;
+		for (c in node.children) {
+			final hit: Null<QueryNode> = namedClass(c, name);
+			if (hit != null) return hit;
+		}
+		return null;
+	}
+
+	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
+		if (node.kind == kind) return node;
+		for (c in node.children) {
+			final hit: Null<QueryNode> = firstOfKind(c, kind);
+			if (hit != null) return hit;
+		}
+		return null;
+	}
+
+	private static function countOfKind(node: QueryNode, kind: String): Int {
+		var n: Int = node.kind == kind ? 1 : 0;
+		for (c in node.children) n += countOfKind(c, kind);
+		return n;
+	}
+
+}

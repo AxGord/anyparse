@@ -1,0 +1,132 @@
+package unit.check;
+
+import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
+import anyparse.check.PreferNullCoalescing;
+import anyparse.check.Severity;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
+import utest.Assert;
+import utest.Test;
+
+/**
+ * The `prefer-null-coalescing` check: a null-guard ternary in any of the four shapes
+ * (`x != null ? x : y`, `null != x ? x : y`, `x == null ? y : x`, `null == x ? y : x`)
+ * is flagged `Info` and rewritten to `x ?? y`. A call-bearing guarded value, a
+ * wrong-side branch, and a plain ternary are left alone. A bare ternary fallback is
+ * parenthesized in the rewrite (`??` binds tighter than `?:`).
+ */
+class PreferNullCoalescingCheckTest extends Test {
+
+	public function testNotEqShapeFlagged(): Void {
+		final vs: Array<Violation> = violations(wrap('a != null ? a : b'));
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-null-coalescing', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals('this null-guard ternary can be the null-coalescing operator (??)', vs[0].message);
+	}
+
+	public function testNullNotEqShapeFlagged(): Void {
+		Assert.equals(1, violations(wrap('null != a ? a : b')).length);
+	}
+
+	public function testEqShapeFlagged(): Void {
+		Assert.equals(1, violations(wrap('a == null ? b : a')).length);
+	}
+
+	public function testNullEqShapeFlagged(): Void {
+		Assert.equals(1, violations(wrap('null == a ? b : a')).length);
+	}
+
+	public function testCallGuardedNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('f() != null ? f() : g()')).length);
+	}
+
+	public function testNewExprGuardedNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('new B() != null ? new B() : g()')).length);
+	}
+
+	public function testWrongSideBranchNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('a != null ? b : a')).length);
+	}
+
+	public function testPlainTernaryNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('cond ? a : b')).length);
+	}
+
+	public function testFixNotEqShape(): Void {
+		Assert.equals('a ?? b', fixText(wrap('a != null ? a : b')));
+	}
+
+	public function testFixEqShape(): Void {
+		Assert.equals('a ?? b', fixText(wrap('a == null ? b : a')));
+	}
+
+	public function testFixFieldOperand(): Void {
+		Assert.equals('o.f ?? d', fixText(wrap('o.f != null ? o.f : d')));
+	}
+
+	public function testFixNestedFallbackParenthesized(): Void {
+		Assert.equals('a ?? (b != null ? b : c)', fixText(wrap('a != null ? a : b != null ? b : c')));
+	}
+
+	public function testRegisteredInBuiltins(): Void {
+		Assert.notNull(Linter.byId('prefer-null-coalescing'));
+		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
+		Assert.isTrue(ids.contains('prefer-null-coalescing'));
+	}
+
+	public function testSkipParseNoCrash(): Void {
+		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	public function testIncrementGuardedNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('i++ != null ? i++ : y')).length);
+	}
+
+	public function testInferenceFragileFallbackNotFlagged(): Void {
+		// A for-loop iterator over a custom hasNext/next iterator is an unbound monomorph
+		// (inference-open); under an active @:nullSafety the ?? rewrite would flip the
+		// fallback field's inferred constraint to Null<…> and break later uses — skipped.
+		final src: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n'
+			+ '\t\tfor (row in it) {\n\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testInferenceOpenFallbackWithoutNullSafetyStillFlagged(): Void {
+		// Same shape but NO @:nullSafety anywhere — the flipped binding still compiles, so convert.
+		final src: String = 'class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
+			+ '\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	public function testDeclaredReceiverFallbackUnderNullSafetyStillFlagged(): Void {
+		// Fallback field access on an ANNOTATED receiver is closed (never a monomorph) — still converts.
+		final src: String = '@:nullSafety class C {\n\tfunction f(o:Opts):Void {\n\t\tvar v = o.a != null ? o.a : o.b;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	public function testIdentFallbackUnderNullSafetyStillFlagged(): Void {
+		// Bare-identifier operands (no field access) are not inference-fragile — still converts.
+		final src: String =
+			'@:nullSafety class C {\n\tfunction f(a:Null<String>, b:Null<String>):Void {\n\t\tvar v = a != null ? a : b;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	private function wrap(expr: String): String {
+		return 'class C {\n\tfunction f():Void {\n\t\tvar x = $expr;\n\t}\n}';
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferNullCoalescing().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function fixText(src: String): String {
+		final check: PreferNullCoalescing = new PreferNullCoalescing();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
+	}
+
+}

@@ -3,7 +3,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span.Position;
 import haxe.Exception;
 import sys.FileSystem;
-import unit.HxFormatterCorpusHelpers;
+import unit.grammar.haxe.HxFormatterCorpusHelpers;
 
 using StringTools;
 

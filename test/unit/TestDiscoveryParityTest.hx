@@ -46,17 +46,22 @@ class TestDiscoveryParityTest extends Test {
 	 * Registering one would be a no-op — `Runner.addITest` builds no fixture
 	 * for it either and stores no entry — so discovery reports them instead
 	 * of registering them, and this pin is what keeps "reports" from decaying
-	 * into "silently drops". Five are shared bases for one check's tests;
-	 * `unit.HxTestHelpers` extends `utest.Test` for no reason anyone recorded
-	 * and is the one that would otherwise have been a surprise.
+	 * into "silently drops".
+	 *
+	 * Five are shared bases for one check's tests. The sixth,
+	 * `unit.grammar.haxe.HxTestHelpers`, reads like the surprise and is not
+	 * one: 127 `Hx*` test classes extend it, so its `extends utest.Test` is
+	 * what makes each of THEM a `utest.ITest`. It carries parse / round-trip
+	 * helpers and no fixture of its own, which is exactly why discovery
+	 * reports it rather than registering it.
 	 */
 	private static final EXPECTED_BASE_CLASSES: Array<String> = [
-		'unit.ExplicitLocalTypeCheckTestBase',
-		'unit.FoldStringLiteralsCheckTestBase',
-		'unit.HxTestHelpers',
-		'unit.NamingCheckTestBase',
-		'unit.RedundantParensOperandArmsTestBase',
-		'unit.TrivialGetterCheckTestBase'
+		'unit.check.ExplicitLocalTypeCheckTestBase',
+		'unit.check.FoldStringLiteralsCheckTestBase',
+		'unit.check.NamingCheckTestBase',
+		'unit.check.RedundantParensOperandArmsTestBase',
+		'unit.check.TrivialGetterCheckTestBase',
+		'unit.grammar.haxe.HxTestHelpers'
 	];
 
 	public function testDiscoveryRegistersExactlyTheCensusedClassCount(): Void {
@@ -87,7 +92,7 @@ class TestDiscoveryParityTest extends Test {
 	public function testTheDiscoveryOnlyFixtureIsRegistered(): Void {
 		Assert.isTrue(
 			TestRegistry.classNames().contains('unit.DiscoveryOnlyProbeTest'),
-			'unit.DiscoveryOnlyProbeTest is absent from test/RunTestsLegacy.hx on purpose'
+			'unit.DiscoveryOnlyProbeTest carries no hand-written registration anywhere, on purpose'
 		);
 	}
 
@@ -114,8 +119,8 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		Assert.same([
-			'unit.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
-			'unit.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: '
+			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
+			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: '
 		], TestRegistry.pins(), 'the pilot annotations, with their roles and killing arms');
 	}
 

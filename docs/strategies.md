@@ -89,7 +89,7 @@ What the lowering may do instead is ASK. Two channels exist, both declarative:
   older schema-instance channel (`<schema>.instance.<predicate>`), which is equally
   grammar-neutral at the call site.
 
-`unit.LexicalRegionsSeamTest.testTheEngineNamesNoHaxeGrammarRuleType` is the ratchet.
+`unit.query.LexicalRegionsSeamTest.testTheEngineNamesNoHaxeGrammarRuleType` is the ratchet.
 It derives the name inventory from the grammar package's own module list, so a new
 rule extends it for free, and it counts a hit inside a STRING literal — the last two
 violations it removed were a `switch` on `'HxFnBody'` / `'HxFnExprBody'` in

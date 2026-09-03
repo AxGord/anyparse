@@ -1,0 +1,75 @@
+package unit.cli;
+
+#if (sys || nodejs)
+import sys.FileSystem;
+#end
+import anyparse.query.Cli;
+import utest.Assert;
+import utest.Test;
+
+/**
+ * End-to-end gating probe for `apq lint --fail-on <severity>`.
+ *
+ * `lint` is report-only by default (always exit 0). `--fail-on` makes it
+ * exit non-zero when a finding at-or-above the named severity is present,
+ * so CI can gate on it. These drive `Cli.run(['lint', ...])` against a tmp
+ * fixture that produces exactly one `unused-import` Warning.
+ */
+class LintFailOnCliTest extends Test {
+
+	public function testNoFailOnExitsZero(): Void {
+		#if (sys || nodejs)
+		final fixture: String = warningDir();
+		Assert.equals(0, Cli.run(['lint', fixture]), 'lint is report-only without --fail-on');
+		CliFixture.removeDir(fixture);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testFailOnWarningExitsNonZero(): Void {
+		#if (sys || nodejs)
+		final fixture: String = warningDir();
+		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', fixture]), 'a warning + --fail-on warning exits non-zero');
+		CliFixture.removeDir(fixture);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testFailOnErrorIgnoresWarnings(): Void {
+		#if (sys || nodejs)
+		final fixture: String = warningDir();
+		Assert.equals(0, Cli.run(['lint', '--fail-on', 'error', fixture]), 'only warnings present so --fail-on error exits 0');
+		CliFixture.removeDir(fixture);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testFailOnUnknownValueIsUsageError(): Void {
+		#if (sys || nodejs)
+		final fixture: String = CliFixture.write('lintfailon', 'package pkg;\nclass C {}');
+		Assert.equals(2, Cli.run(['lint', '--fail-on', 'nope', fixture]), 'unknown --fail-on value is a usage error');
+		FileSystem.deleteFile(fixture);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+
+	#if (sys || nodejs)
+	/**
+	 * Fixture dir producing exactly one unused-import Warning: the importing
+	 * file plus a stub declaring `a.b.Unused`, so the import is verifiable
+	 * in scope (an out-of-scope named import is only an Info advisory).
+	 */
+	private static function warningDir(): String {
+		return CliFixture.writeDir('lintfailon', [
+			{ name: 'C.hx', source: 'package pkg;\nimport a.b.Unused;\nclass C {}' },
+			{ name: 'Unused.hx', source: 'package a.b;\n\nclass Unused {}\n' }
+		]);
+	}
+	#end
+
+}
