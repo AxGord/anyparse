@@ -192,6 +192,54 @@ final class MoveFamilyCaptureTest extends Test {
 	}
 
 	/**
+	 * `move` of a type whose dependencies are reached through a `#if`-GUARDED import block, into a
+	 * destination that already spells the SAME condition — the exact shape 72 destinations of one
+	 * 767-module sweep lost, plus the merge that keeps the destination from ending up with two
+	 * regions saying the same thing.
+	 *
+	 * Captured in full because both halves are decisions, not tokens: which statements the carry
+	 * brings (`sys.FileSystem`, referenced; `sys.io.File`, referenced through a static receiver) and
+	 * WHERE they land (inside the destination's own region, after the statement it already held).
+	 */
+	public function testAGuardedImportBlockCarriesAndMergesByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\n#if (sys || nodejs)\nimport sys.FileSystem;\nimport sys.io.File;\n#end\nimport haxe.io.Path;'
+					+ '\n\n/**\n * Reads a file when the target has one.\n */\nclass Src {\n\n\tpublic static function read(p: String): S'
+					+ 'tring {\n\t\tfinal n: String = Path.withoutDirectory(p);\n\t\t#if (sys || nodejs)\n\t\tif (FileSystem.exists(p)) r'
+					+ 'eturn File.getContent(p);\n\t\t#end\n\t\treturn n;\n\t}\n\n}\n'
+			},
+			{
+				file: 'p/Other.hx',
+				source: 'package p;\n\nclass Other {\n\n\tpublic static function go(): String return Src.read(\'x\');\n\n}\n'
+			},
+			{
+				file: 'q/Host.hx',
+				source: 'package q;\n\n#if (sys || nodejs)\nimport sys.io.File;\n#end\n\nclass Host {\n\n\tpublic function new() {}\n\n}\n'
+			}
+		];
+		capture(MoveSymbol.moveType('p/Src.hx', 12, 7, 'q/Host.hx', scope, plugin(), typeRefShape()), [
+			{
+				file: 'q/Host.hx',
+				source: 'package q;\n\nimport haxe.io.Path;\n#if (sys || nodejs)\nimport sys.io.File;\nimport sys.FileSystem;\n#end\n\n'
+				+ 'class Host {\n\n\tpublic function new() {}\n\n}\n\n/**\n * Reads a file when the target has one.\n */\nclass Src {\n\n'
+				+ '\tpublic static function read(p: String): String {\n\t\tfinal n: String = Path.withoutDirectory(p);\n\t\t'
+				+ '#if (sys || nodejs)\n\t\tif (FileSystem.exists(p)) return File.getContent(p);\n\t\t#end\n\t\treturn n;\n\t}\n\n}\n'
+			},
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\n#if (sys || nodejs)\nimport sys.FileSystem;\nimport sys.io.File;\n#end\nimport haxe.io.Path;\n'
+			},
+			{
+				file: 'p/Other.hx',
+				source: 'package p;\n\nimport q.Host.Src;\n\nclass Other {\n\n\tpublic static function go(): String return Src.read'
+				+ '(\'x\');\n\n}\n'
+			}
+		]);
+	}
+
+	/**
 	 * Require `result` to be `Ok` with EXACTLY the given files, each byte-for-byte. The count is
 	 * asserted too: a change that stops being emitted at all is the same class of regression as one
 	 * whose bytes drift, and only the count catches it.

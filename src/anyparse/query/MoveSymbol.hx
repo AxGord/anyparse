@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.CondDirectives.CondBlock;
+import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.ImportOrder.ImportAnchor;
@@ -66,6 +68,14 @@ typedef NameBinding = {
 typedef CarriedEdits = {
 	var usingEdit: Null<{ span: Span, text: String }>;
 	var importEdit: Null<{ span: Span, text: String }>;
+
+	/**
+	 * Inserts INSIDE a `#if` region the destination already holds — one per carried guarded block
+	 * whose condition the destination repeats. A block with no such region is written whole at the
+	 * import anchor instead, and is then part of `importEdit`.
+	 */
+	var guardedEdits: Array<{ span: Span, text: String }>;
+
 	var unseated: Array<String>;
 }
 
@@ -180,13 +190,20 @@ final class MoveSymbol {
 		+ 'destination import is named separately and refused on its own. What is left is the case where NEITHER side is nameable: the '
 		+ 'move proceeds, which is right for the standard library (the same scope in every file) and NOT right for a wildcard of a package '
 		+ 'outside the scope, which is per-file and is the door still open. A dependency reached through a MODULE import (import pkg.Mod; '
-		+ 'binding pkg.Mod.Sub) is carried when the statement that produced the binding is one the index can name; a `#if`-guarded module '
-		+ 'import and a module OUTSIDE the scope produce none it can, so such a dependency is neither carried nor refused and the '
-		+ 'destination may need the import written by hand. A MODULE import at an importer keeps its statement beside the repointed one '
+		+ 'binding pkg.Mod.Sub) is carried when the statement that produced the binding is one the index can name. A `#if`-guarded '
+		+ 'statement is carried too, re-emitted at the destination under the condition that guards it at the source and merged into a '
+		+ 'region the destination already spells that condition for. It is REFUSED by name where one condition cannot carry it: two '
+		+ 'different regions binding one name, a statement nested in more than one region, a statement in an `#else` / `#elseif` branch '
+		+ '(whose condition is the negation of the ones above it), and one sharing its line with a directive. A module OUTSIDE '
+		+ '--scope is the one that still produces no nameable binding: the scope is the RESOLUTION index as well as the rewrite '
+		+ 'set, so such a dependency is neither carried nor refused and the destination may need the import written by hand — '
+		+ 'widen --scope to cover the dependency roots. A MODULE import at an importer keeps its statement beside the repointed one '
 		+ 'when the source module still declares types that file names. The SOURCE file keeps every import it had, including one the '
 		+ 'departed declaration was the last user of: whether an import is now unused is a whole-file question (a module import binds the '
 		+ 'sibling types of its module, a wildcard binds no single name, and a `using` grants extension methods no name scan sees). Run '
-		+ '`apq lint <file> --rule unused-import --fix`, which answers it with the resolution index.';
+		+ '`apq lint <file> --rule unused-import --fix`, which answers it with the resolution index — for the UNGUARDED statements only: '
+		+ 'measured, that check reports nothing about a `#if`-guarded import no branch uses, so a carried region leaves its source copy '
+		+ 'standing.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -223,7 +240,11 @@ final class MoveSymbol {
 		//    lines the untrimmed group had claimed. Refuse a decl sharing a source
 		//    line with other code (its modifiers are part of `declSpan`, so a
 		//    module-level `private` type is not that case).
-		final cutInfo: Null<{ span: Span, textEnd: Int }> = computeCutSpan(cursorSource, declSpan, target.declGroupEnd);
+		// ONE lexical scan of the cursor file for the two span walks below. Both step BACKWARD over
+		// the declaration's leading trivia, and a per-line prefix test cannot tell a block comment's
+		// continuation line from ordinary code — see `triviaStartOf`.
+		final cursorComments: Array<Span> = RefactorSupport.collectCommentRegions(plugin.lexicalRegions(cursorSource));
+		final cutInfo: Null<{ span: Span, textEnd: Int }> = computeCutSpan(cursorSource, declSpan, target.declGroupEnd, cursorComments);
 		if (cutInfo == null) return Err('the type "$typeName" shares a source line with other code — refusing to move');
 		final cut: Span = cutInfo.span;
 		final declText: String = cursorSource.substring(cut.from, cutInfo.textEnd);
@@ -312,7 +333,7 @@ final class MoveSymbol {
 		//     under the import region; `applyEdits` orders that tie by span width so the removal goes
 		//     first, which is what keeps the insert's text out of the range being removed.
 		final cursorEdits: Array<{ span: Span, text: String }> = editsFor(editsByFile, cursorFile);
-		final needsSeparator: Bool = hasSiblingsOnBothSides(cursorSource, target.declParent, target.declNode, cut);
+		final needsSeparator: Bool = hasSiblingsOnBothSides(cursorSource, target.declParent, target.declNode, cut, cursorComments);
 		cursorEdits.push({ span: cutEditSpan(cursorSource, cut, cursorEdits, needsSeparator), text: '' });
 
 		// 8-9. Apply edits per file, atomically re-parse, collect changed files.
@@ -373,28 +394,22 @@ final class MoveSymbol {
 		final files: Array<FileInfo> = index.allFiles();
 		final carried: Array<String> = [];
 		final destRegions: Array<LexRegion> = plugin.lexicalRegions(destSource);
+		// The cursor file's `#if` directives, read at most once and only when a dependency turns out to
+		// have no unguarded provider — a file without a single directive never pays for the scan, and
+		// `MoveMember` runs this whole carry once per moved member.
+		var cursorDirectives: Null<Array<CondDirective>> = null;
+		// Guarded statements to carry, grouped by the condition that guards them: one `#if … #end`
+		// block per condition, emitted after the walk so two names guarded by one condition do not
+		// arrive as two blocks spelling it twice.
+		final guarded: Array<{ condition: String, lines: Array<String> }> = [];
 		for (dep in depNames) {
-			// A DOTTED type path is ONE leaf, so `dep` can be `Mod.Sub`. Its head is not resolved by
-			// any import — `import q.Mod;` does NOT make `Mod.Sub` legal (`Type not found : Mod` on
-			// 4.3.7) — it is a MODULE looked up in the file's own package and then at the top level.
-			// So the PACKAGE decides it, a same-package move cannot move it, and a cross-package one
-			// silently can: compile-run through the base engine, `Mod.Sub` went `p.Sub` -> `s.Sub`
-			// with rc 0. A lowercase head is a fully-qualified path and is absolute everywhere.
-			final dot: Int = dep.indexOf('.');
-			if (dot > 0) {
-				final head: String = dep.substring(0, dot);
-				if (!RefactorSupport.isUpperInitial(head)) continue;
-				final mineHead: Null<String> = headModuleOf(head, cursorInfo, files);
-				final theirsHead: Null<String> = headModuleOf(head, destInfo, files);
-				// Equal includes null == null: a head the index cannot see is a top-level module,
-				// which resolves the same from every package.
-				if (mineHead == theirsHead) continue;
-				return CarryErr(
-					'the moved code writes the qualified type "$dep", whose head "$head" is a module resolved through the '
-					+ 'file\'s own package: ${cursorInfo.file} reaches ${mineHead == null ? 'the top level' : '$mineHead'} and '
-					+ '${destInfo.file} reaches ${theirsHead == null ? 'the top level' : '$theirsHead'} — the reference would '
-					+ 'silently change meaning; spell it fully qualified, or move the head module too'
-				);
+			// A DOTTED type path carries its own question and its own refusal — see
+			// `qualifiedHeadRefusal`. Nothing about it can be carried either way, so the loop is done
+			// with it whichever answer comes back.
+			if (dep.indexOf('.') > 0) {
+				final headErr: Null<String> = qualifiedHeadRefusal(dep, cursorInfo, destInfo, files);
+				if (headErr != null) return CarryErr(headErr);
+				continue;
 			}
 			// The source's explicit TOP-LEVEL statement that BINDS `dep` — for a plain import /
 			// using that is a path whose last segment is `dep`, for an alias it is the alias
@@ -403,11 +418,7 @@ final class MoveSymbol {
 			// thought about yet must be refused, not admitted. An alias whose path did not decode
 			// names nothing to carry. A guarded (`#if`) provider is skipped: it would be carried
 			// into the destination as an unconditional import, which could be platform-inappropriate.
-			final direct: Null<ImportInfo> = cursorInfo.imports.find(
-				imp ->
-					!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
-					&& SymbolIndex.pathImportedBy(imp) != null && RefactorSupport.lastSegment(imp.raw) == dep
-			);
+			final direct: Null<ImportInfo> = unguardedProviderOf(dep, cursorInfo);
 			// What the SOURCE means by `dep`: its own explicit import when it has one, else the same
 			// resolution ladder the destination is measured on — a dependency reached by same-package
 			// visibility has no import statement to carry and was therefore never checked at all, which
@@ -429,24 +440,47 @@ final class MoveSymbol {
 				dep, wanted, cursorInfo, destInfo, destSource, files, provider != null, destRegions
 			);
 			if (collision != null) return CarryErr(collision);
-			if (provider == null) continue;
+			if (provider == null) {
+				// The unguarded ladder has nothing to bring, which is the silent answer for every
+				// dependency reached through the stdlib, a wildcard or the ambient top level — and was
+				// also the silent answer for a `#if`-guarded import, which DOES have a statement.
+				// 72 destinations of one 767-module sweep lost their guarded block that way, with
+				// nothing naming a file. Asked only where the destination cannot already reach the
+				// name: the collision gate above has just proved that whatever it does reach it by is
+				// one of the source's own candidates, so there is nothing to add.
+				if (guardedImportPath(dep, destInfo) != null || bindingOf(dep, destInfo, files) != null) continue;
+				final directives: Array<CondDirective> = cursorDirectives ?? GuardedImportCarry.directivesOf(source, plugin);
+				cursorDirectives = directives;
+				final refusal: Null<String> = foldGuardedCarry(dep, source, cursorInfo, directives, shape, guarded);
+				if (refusal != null) return CarryErr(refusal);
+				continue;
+			}
+			// The destination's own PACKAGE CHAIN already provides `dep` under exactly the module the
+			// moved code means, and Haxe grants that without a statement — so the carried line binds
+			// nothing new. 281 of the 767 modules one campaign sweep moved received one of these, every
+			// one of them removed again by the `redundant-import` pass.
+			//
+			// The chain, not just the file's own package: compile-run on 4.3.7, a `package p.q;` module
+			// reads a bare `Dep` declared `package p;` and a bare `Root` declared at the top level, both
+			// with no import — so an ancestor package IS visibility and does license the skip. Only a
+			// plain `import` is skipped, though: a `using` grants extension methods no package
+			// visibility grants, and an alias introduces a NAME the destination does not have. A
+			// SUB-MODULE type keeps its import for the reason it needs one inside its own package —
+			// `packageOrTopLevelBinding` answers main types only, so it never licenses that skip.
+			if (provider.kind == ImportKind.Import && wanted != null && packageOrTopLevelBinding(dep, destInfo, files) == wanted) continue;
 			// Already present in the destination → no carry. The PATH is part of the identity: two
 			// alias statements binding one name to different modules share a `raw`, and reading
 			// them as the same statement would silently leave the moved decl on the DESTINATION's
 			// binding instead of its own. The differing-path case no longer reaches here at all —
 			// the collision gate above refuses it, for the plain and the alias spelling alike.
-			final already: Bool = destInfo.imports.exists(
-				imp ->
-					imp.kind == provider.kind && imp.raw == provider.raw
-					&& SymbolIndex.pathImportedBy(imp) == SymbolIndex.pathImportedBy(provider)
-			);
-			if (already) continue;
+			if (destAlreadyHolds(destInfo, provider)) continue;
 			// De-dup the carry list (a single import line could provide more
 			// than one referenced name only via wildcards, which we skipped —
 			// and via a MODULE import, which now reaches here and repeats).
 			final line: String = importLineFor(provider, source);
 			if (!carried.contains(line)) carried.push(line);
 		}
+		for (group in guarded) carried.push(GuardedImportCarry.blockText(group.condition, group.lines, shape));
 		return CarryOk(usingLinesToCarry(
 			source, tree, memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried,
 			plugin.lexicalRegions(destSource)
@@ -508,14 +542,25 @@ final class MoveSymbol {
 	 * picked by accident; `usingSeatOf` says which shapes have none and what each cost.
 	 */
 	public static function carriedDestEdits(
-		destSource: String, destInfo: FileInfo, carried: Array<String>, plugin: GrammarPlugin
+		destSource: String, destInfo: FileInfo, rawCarried: Array<String>, plugin: GrammarPlugin
 	): CarriedEdits {
+		// A carried `#if` REGION whose condition the destination already spells is merged into that
+		// region instead of being written beside it: two same-condition regions in one header compile
+		// identically, but leaving a file the `cond-region-merge` check reports is work made for the
+		// user. What does not merge stays in the anchor group — and goes LAST there, so the plain
+		// statements keep the order the dependency walk found them in.
+		final guardedEdits: Array<{ span: Span, text: String }> = [];
+		final carried: Array<String> = splitGuardedBlocks(destSource, rawCarried, plugin, guardedEdits);
 		final usings: Array<String> = carriedUsingLines(carried);
 		final ranked: Bool = destInfo.imports.exists(imp -> imp.kind == ImportKind.Using);
 		// Nothing to rank, or nothing to rank AGAINST: the ordinary anchor is the whole answer, and a
 		// lone carried `using` is then the only one the destination has.
-		if (usings.length == 0 || !ranked)
-			return { usingEdit: null, importEdit: carriedImportEdit(destSource, carried, plugin), unseated: [] };
+		if (usings.length == 0 || !ranked) return {
+			usingEdit: null,
+			importEdit: carriedImportEdit(destSource, carried, plugin),
+			guardedEdits: guardedEdits,
+			unseated: []
+		};
 		final ordinary: Int = importAnchor(destSource, plugin).offset;
 		final seat: Int = usingSeatOf(destSource, destInfo, ordinary);
 		final rest: Array<String> = carriedImportLines(carried);
@@ -526,13 +571,24 @@ final class MoveSymbol {
 		// `Array.sort` — which Haxe does not guarantee stable. ONE edit removes the question, and the
 		// `using` lines lead it so they still rank last.
 		return if (seat < 0)
-			{ usingEdit: null, importEdit: carriedImportEdit(destSource, rest, plugin), unseated: usings };
+			{
+				usingEdit: null,
+				importEdit: carriedImportEdit(destSource, rest, plugin),
+				guardedEdits: guardedEdits,
+				unseated: usings
+			};
 		else if (seat == ordinary)
-			{ usingEdit: null, importEdit: carriedImportEdit(destSource, usings.concat(rest), plugin), unseated: [] };
+			{
+				usingEdit: null,
+				importEdit: carriedImportEdit(destSource, usings.concat(rest), plugin),
+				guardedEdits: guardedEdits,
+				unseated: []
+			};
 		else
 			{
 				usingEdit: { span: new Span(seat, seat), text: '${usings.join('\n')}\n' },
 				importEdit: carriedImportEdit(destSource, rest, plugin),
+				guardedEdits: guardedEdits,
 				unseated: []
 			};
 	}
@@ -571,6 +627,29 @@ final class MoveSymbol {
 			trail: '',
 			order: -1
 		} : ImportOrder.insertionFor(source, tree, plugin, path);
+	}
+
+	/**
+	 * `carried` with every guarded REGION that merges into one the destination already has taken out
+	 * of it and appended to `into` as an edit; a region with no such seat stays in the returned list,
+	 * at its end, to be written whole at the import anchor.
+	 */
+	private static function splitGuardedBlocks(
+		destSource: String, carried: Array<String>, plugin: GrammarPlugin, into: Array<{ span: Span, text: String }>
+	): Array<String> {
+		final shape: RefShape = plugin.refShape();
+		final blocks: Array<String> = carried.filter(line -> GuardedImportCarry.isBlock(line, shape));
+		if (blocks.length == 0) return carried;
+		final out: Array<String> = carried.filter(line -> !GuardedImportCarry.isBlock(line, shape));
+		final destBlocks: Array<CondBlock> = GuardedImportCarry.blocksOf(destSource, plugin);
+		for (block in blocks) {
+			final seat: Null<{ span: Span, text: String }> = GuardedImportCarry.mergeSeat(destSource, destBlocks, block, shape);
+			if (seat == null)
+				out.push(block);
+			else if (seat.text != '')
+				into.push(seat);
+		}
+		return out;
 	}
 
 	/**
@@ -621,6 +700,96 @@ final class MoveSymbol {
 	/** The lines of a carry list that are NOT `using` statements. */
 	private static function carriedImportLines(carried: Array<String>): Array<String> {
 		return carried.filter(line -> !line.startsWith('using '));
+	}
+
+	/**
+	 * The source's explicit TOP-LEVEL statement that BINDS `dep`, or null when it has none.
+	 *
+	 * For a plain import / using that is a path whose last segment is `dep`, for an alias it is the
+	 * alias itself, and `raw` is exactly the bound name in both. The kinds are listed rather than
+	 * `!= Wild`: this writes a statement into ANOTHER file, so a kind nobody has thought about yet
+	 * must be refused, not admitted. An alias whose path did not decode names nothing to carry. A
+	 * guarded (`#if`) provider is not one of these — it is carried separately, under its own
+	 * condition, by `foldGuardedCarry`.
+	 */
+	private static function unguardedProviderOf(dep: String, cursorInfo: FileInfo): Null<ImportInfo> {
+		return cursorInfo.imports.find(
+			imp ->
+				!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
+				&& SymbolIndex.pathImportedBy(imp) != null && RefactorSupport.lastSegment(imp.raw) == dep
+		);
+	}
+
+	/**
+	 * Whether the destination already holds `provider`'s exact statement, so there is nothing to carry.
+	 *
+	 * The PATH is part of the identity: two alias statements binding one name to different modules
+	 * share a `raw`, and reading them as the same statement would silently leave the moved decl on the
+	 * DESTINATION's binding instead of its own. The differing-path case no longer reaches here at all —
+	 * the collision gate refuses it, for the plain and the alias spelling alike.
+	 */
+	private static function destAlreadyHolds(destInfo: FileInfo, provider: ImportInfo): Bool {
+		return destInfo.imports.exists(
+			imp ->
+				imp.kind == provider.kind && imp.raw == provider.raw
+				&& SymbolIndex.pathImportedBy(imp) == SymbolIndex.pathImportedBy(provider)
+		);
+	}
+
+	/**
+	 * The refusal a DOTTED dependency path owes, or null when it changes nothing.
+	 *
+	 * `dep` can be `Mod.Sub`, because a dotted type path is ONE leaf. Its head is not resolved by any
+	 * import — `import q.Mod;` does NOT make `Mod.Sub` legal (`Type not found : Mod` on 4.3.7) — it is
+	 * a MODULE looked up in the file's own package and then at the top level. So the PACKAGE decides
+	 * it, a same-package move cannot move it, and a cross-package one silently can: compile-run
+	 * through the base engine, `Mod.Sub` went `p.Sub` -> `s.Sub` with rc 0. A lowercase head is a
+	 * fully-qualified path and is absolute everywhere.
+	 */
+	private static function qualifiedHeadRefusal(
+		dep: String, cursorInfo: FileInfo, destInfo: FileInfo, files: Array<FileInfo>
+	): Null<String> {
+		final head: String = dep.substring(0, dep.indexOf('.'));
+		if (!RefactorSupport.isUpperInitial(head)) return null;
+		final mineHead: Null<String> = headModuleOf(head, cursorInfo, files);
+		final theirsHead: Null<String> = headModuleOf(head, destInfo, files);
+		// Equal includes null == null: a head the index cannot see is a top-level module, which
+		// resolves the same from every package.
+		return mineHead == theirsHead
+			? null
+			: 'the moved code writes the qualified type "$dep", whose head "$head" is a module resolved through the '
+				+ 'file\'s own package: ${cursorInfo.file} reaches ${mineHead == null ? 'the top level' : '$mineHead'} and '
+				+ '${destInfo.file} reaches ${theirsHead == null ? 'the top level' : '$theirsHead'} — the reference would '
+				+ 'silently change meaning; spell it fully qualified, or move the head module too';
+	}
+
+	/**
+	 * Fold one dependency's `#if`-guarded providers into `guarded`, grouped by the condition that
+	 * guards them, or return the refusal naming why no single condition carries it.
+	 *
+	 * Split out of the carry loop for its own sake: that loop already answers the qualified-path, the
+	 * collision and the same-package questions, and one more `switch` inside it put the function over
+	 * the complexity budget. Nothing else calls this.
+	 */
+	private static function foldGuardedCarry(
+		dep: String, source: String, cursorInfo: FileInfo, directives: Array<CondDirective>, shape: RefShape,
+		guarded: Array<{ condition: String, lines: Array<String> }>
+	): Null<String> {
+		switch GuardedImportCarry.carryFor(dep, cursorInfo.file, source, cursorInfo, directives, shape) {
+			case GuardedNone:
+			case GuardedRefusal(message):
+				return message;
+			case GuardedProviders(condition, imports):
+				final group: { condition: String, lines: Array<String> } = guarded.find(g ->
+					g.condition == condition
+				) ?? { condition: condition, lines: [] };
+				if (!guarded.contains(group)) guarded.push(group);
+				for (imp in imports) {
+					final line: String = importLineFor(imp, source);
+					if (!group.lines.contains(line)) group.lines.push(line);
+				}
+		}
+		return null;
 	}
 
 	/**
@@ -767,6 +936,7 @@ final class MoveSymbol {
 		}
 		return found;
 	}
+
 
 	/**
 	 * Whether `path` — a MODULE some file imports — could bind `name`. A module the index HOLDS is
@@ -1300,7 +1470,9 @@ final class MoveSymbol {
 	 * (the line-up-to the decl is not pure whitespace), which a whole-line cut
 	 * cannot safely express.
 	 */
-	private static function computeCutSpan(source: String, declSpan: Span, groupEnd: Int): Null<{ span: Span, textEnd: Int }> {
+	private static function computeCutSpan(
+		source: String, declSpan: Span, groupEnd: Int, comments: Array<Span>
+	): Null<{ span: Span, textEnd: Int }> {
 		// Start of the decl's own line.
 		final lineStart: Int = lineStartOf(source, declSpan.from);
 		// The characters between the line start and the decl must be pure
@@ -1309,7 +1481,7 @@ final class MoveSymbol {
 		if (!isBlank(source, lineStart, declSpan.from)) return null;
 
 		// Walk backward over contiguous preceding trivia / meta lines.
-		final cutStart: Int = triviaStartOf(source, declSpan.from);
+		final cutStart: Int = triviaStartOf(source, declSpan.from, comments);
 
 		// Extend forward over one trailing newline so the cut removes the
 		// whole decl block including its line terminator. Everything up to here is
@@ -1417,14 +1589,17 @@ final class MoveSymbol {
 	 * COMMENT, which is trivia and so no sibling, and there the blank still separates — which is why
 	 * `cutEditSpan` consults this answer only when ONE side carries a blank run.
 	 */
-	private static function hasSiblingsOnBothSides(source: String, parent: Null<QueryNode>, node: QueryNode, cut: Span): Bool {
+	private static function hasSiblingsOnBothSides(
+		source: String, parent: Null<QueryNode>, node: QueryNode, cut: Span, comments: Array<Span>
+	): Bool {
 		if (parent == null) return true;
 		final siblings: Array<QueryNode> = parent.children;
 		final index: Int = siblings.indexOf(node);
 		if (index < 0) return true;
 		var start: Int = index;
 		while (start > 0 && RefactorSupport.isDeclPrefixSibling(siblings[start - 1])) start--;
-		return adjoins(source, siblings, start - 1, cut.from, true) && adjoins(source, siblings, index + 1, cut.to, false);
+		return adjoins(source, siblings, start - 1, cut.from, true, comments)
+			&& adjoins(source, siblings, index + 1, cut.to, false, comments);
 	}
 
 	/**
@@ -1439,7 +1614,9 @@ final class MoveSymbol {
 	 * end, and — read against the CUT rather than the declaration — leaves a swallowed doc comment on
 	 * the declaration's own side.
 	 */
-	private static function adjoins(source: String, siblings: Array<QueryNode>, at: Int, edge: Int, before: Bool): Bool {
+	private static function adjoins(
+		source: String, siblings: Array<QueryNode>, at: Int, edge: Int, before: Bool, comments: Array<Span>
+	): Bool {
 		if (at < 0 || at >= siblings.length) return false;
 		final span: Null<Span> = siblings[at].span;
 		if (span == null) return false;
@@ -1447,7 +1624,7 @@ final class MoveSymbol {
 		// declaration owns, not text standing between the two: measuring to its `span.from` read a
 		// neighbour's doc block as a container boundary and cut the blank line above it away.
 		final from: Int = before ? span.to : edge;
-		final to: Int = before ? edge : triviaStartOf(source, span.from);
+		final to: Int = before ? edge : triviaStartOf(source, span.from, comments);
 		return from <= to && source.substring(from, to).trim().length == 0;
 	}
 
@@ -1501,6 +1678,9 @@ final class MoveSymbol {
 		final carriedEdits: CarriedEdits = carriedDestEdits(destSource, destInfo, carried, plugin);
 		final usingEdit: Null<{ span: Span, text: String }> = carriedEdits.usingEdit;
 		if (usingEdit != null) edits.push(usingEdit);
+		// A merge into a `#if` region the destination already holds sits INSIDE its header, strictly
+		// above the append point the branch below reasons about, so it never competes with either.
+		for (edit in carriedEdits.guardedEdits) edits.push(edit);
 		final carriedEdit: Null<{ span: Span, text: String }> = carriedEdits.importEdit;
 
 		// Append the decl after the file content. Ensure exactly one blank
@@ -2240,16 +2420,39 @@ final class MoveSymbol {
 	 * comment and annotations a whole-line cut of that declaration takes with it. A BLANK line is
 	 * not trivia, so the walk stops at the separator rather than swallowing it.
 	 */
-	private static function triviaStartOf(source: String, at: Int): Int {
+	private static function triviaStartOf(source: String, at: Int, comments: Array<Span>): Int {
 		var start: Int = lineStartOf(source, at);
 		while (start > 0) {
 			// `start` is at the start of the current line; step to the previous line.
 			final prevLineEnd: Int = start - 1; // the n terminating the previous line
 			final prevLineStart: Int = lineStartOf(source, prevLineEnd);
+			// A BLOCK comment whose continuation lines carry no `*` gutter — the
+			// `/**\n\tText\n**/` spelling — is ordinary prose to a per-line prefix test, so the
+			// walk stopped one line below the opener and the cut took only the closing `**/`.
+			// Measured: `move` of `DocRendererTest` wrote a destination beginning `**/` and
+			// refused on the re-parse, with no offset to look at. The lexer already knows where
+			// the comment starts; ask it before reading the text.
+			final open: Int = commentStartCovering(comments, prevLineEnd);
+			if (open >= 0 && open < prevLineStart) {
+				start = lineStartOf(source, open);
+				continue;
+			}
 			if (!isContiguousTriviaLine(source.substring(prevLineStart, prevLineEnd))) break;
 			start = prevLineStart;
 		}
 		return start;
+	}
+
+	/**
+	 * The start offset of the comment `comments` places over `at`, or -1 when `at` is code. The
+	 * regions are in source order and disjoint, so the first one reaching past `at` decides.
+	 */
+	private static function commentStartCovering(comments: Array<Span>, at: Int): Int {
+		for (region in comments) {
+			if (region.from > at) return -1;
+			if (at < region.to) return region.from;
+		}
+		return -1;
 	}
 
 }

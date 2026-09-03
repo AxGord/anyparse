@@ -1534,7 +1534,13 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * `parseFile` always threw on a source that does not parse.
 	 */
 	public function treeFromRoot(root: Null<Any>, source: String, withTypeRefs: Bool): QueryNode {
-		final tree: QueryNode = new QueryNode('module', null, HaxeQueryWalker.walkRoot(cast root, withTypeRefs));
+		// A null root IS the parse failure, and the walker never saw the source, so on its own it can
+		// only throw `parse failed` — which is verbatim what every op reported when its own rewrite
+		// stopped parsing, with no file offset to look at. Re-raise the parser's own error here, where
+		// the source is in hand: the memo the null root came from still holds it, so this costs nothing
+		// on the common path and one re-parse on a path that throws either way.
+		final parsed: Any = root ?? (HaxeQueryWalker.parseRootStrict(source): Any);
+		final tree: QueryNode = new QueryNode('module', null, HaxeQueryWalker.walkRoot(cast parsed, withTypeRefs));
 		HxInterpProjection.reproject(tree, source);
 		HxArrowParamProjection.reproject(tree, source);
 		return tree;

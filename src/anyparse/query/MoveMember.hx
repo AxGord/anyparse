@@ -856,6 +856,9 @@ final class MoveMember {
 		// Captured into locals: a narrowed FIELD does not stay narrowed across the call that reads it.
 		final usingEdit: Null<{ span: Span, text: String }> = destEdits.usingEdit;
 		if (usingEdit != null) editsFor(editsByFile, prep.destFile).push(usingEdit);
+		// A carried `#if` region merged into one the destination already has — see
+		// `MoveSymbol.carriedDestEdits`; a region with no such seat is part of `importEdit` instead.
+		for (edit in destEdits.guardedEdits) editsFor(editsByFile, prep.destFile).push(edit);
 		final carriedEdit: Null<{ span: Span, text: String }> = destEdits.importEdit;
 		if (carriedEdit != null) editsFor(editsByFile, prep.destFile).push(carriedEdit);
 		final destImportPath: String = RefactorSupport.rootQualifiedPath(prep.destTypeName, prep.destModule);

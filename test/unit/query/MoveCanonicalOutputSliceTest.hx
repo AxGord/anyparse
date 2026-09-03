@@ -92,6 +92,64 @@ final class MoveCanonicalOutputSliceTest extends Test {
 		#end
 	}
 
+	/**
+	 * The DESTINATION half of the same gate, and the answer to "is a moved declaration relocated
+	 * verbatim?". It is a span splice, so the pure op always pastes the source bytes — but the CLI
+	 * then canonicalises a file that was ALREADY writer-canonical, which is where the bytes can move.
+	 * Both arms in one fixture: the declaration is written in a spelling the writer does not emit
+	 * (`v: Int` under the compiled defaults a temp-dir fixture gets), and it survives into a drifted
+	 * destination and is re-emitted into a canonical one.
+	 *
+	 * Pinned because the op's `--help` used to say "relocated verbatim" full stop, which is true of
+	 * the splice and not of what lands on disk.
+	 */
+	public function testTheDeclBytesSurviveIntoADriftedDestinationAndAreReEmittedIntoACanonicalOne(): Void {
+		#if (sys || nodejs)
+		final decl: String = 'class Gone {\n\tpublic static function n(v: Int): Int {\n\t\treturn v;\n\t}\n}\n';
+		final src: String = 'package p;\n\nclass Keep {\n\n\tpublic function new() {}\n\n}\n\n$decl';
+		final drifted: String = CliFixture.writeDir('movedest', [
+			{ name: 'Src.hx', source: src },
+			{ name: 'Dest.hx', source: 'package p;\nclass Dest {\n    public function new() {}\n}\n' }
+		]);
+		Assert.equals(0, Cli.run([
+			'move',
+			'$drifted/Src.hx',
+			'--select',
+			'ClassDecl:Gone',
+			'$drifted/Dest.hx',
+			'--scope',
+			drifted,
+			'--write'
+		]));
+		Assert.isTrue(
+			File.getContent('$drifted/Dest.hx').indexOf('n(v: Int): Int') >= 0,
+			'a destination the writer does not own keeps the declaration\'s own bytes'
+		);
+		CliFixture.removeDir(drifted);
+
+		final canonical: String = CliFixture.writeDir('movedestcanon', [
+			{ name: 'Src.hx', source: src },
+			{ name: 'Dest.hx', source: DEST }
+		]);
+		Assert.equals(0, Cli.run(['fmt', '$canonical/Dest.hx', '--write']));
+		Assert.equals(0, Cli.run([
+			'move',
+			'$canonical/Src.hx',
+			'--select',
+			'ClassDecl:Gone',
+			'$canonical/Dest.hx',
+			'--scope',
+			canonical,
+			'--write'
+		]));
+		final pasted: String = File.getContent('$canonical/Dest.hx');
+		Assert.isTrue(pasted.indexOf('n(v:Int):Int') >= 0, 'a canonical destination is re-emitted under its own config, got:\n$pasted');
+		CliFixture.removeDir(canonical);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * Move `Gone` out of `source` and require BOTH halves: the declaration really left the file,
