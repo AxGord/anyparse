@@ -149,6 +149,26 @@ final class Refs {
 	}
 
 	/**
+	 * Does any occurrence of `name` inside `node` consume the binding rather than overwrite it?
+	 *
+	 * Every `find` hit that is not a `Write` counts — a `Read`, an interpolated `$name`, and a
+	 * `Decl` too. Counting the declaration is deliberate: a redeclaration of the name inside the
+	 * subtree means the region no longer talks about one binding, which is the same reason to bail
+	 * as a read. The two checks that ask this (`join-override-chain`,
+	 * `prefer-switch-expression-assignment`) both collapse a declaration and the
+	 * statement that assigns it into one initializer, so any read inside the
+	 * collapsed region would become a self-reference in the local's own
+	 * initializer. Both therefore use the answer as a REFUSAL gate — they rewrite
+	 * only when it is false — so the over-broad direction is the safe one for
+	 * both, and this helper must not be tightened for one of them without
+	 * re-reading the other.
+	 */
+	public static function readsName(name: String, node: QueryNode, shape: RefShape): Bool {
+		for (h in find(name, node, shape)) if (h.kind != RefKind.Write) return true;
+		return false;
+	}
+
+	/**
 	 * Whether `kind` is a member-access slot — `expr.name`, `expr?.name`, `expr!.name`.
 	 * The name there denotes a member of the RECEIVER's type, so a lexical walk has
 	 * nothing to bind it to; every one of these is an occurrence `find` cannot report.
