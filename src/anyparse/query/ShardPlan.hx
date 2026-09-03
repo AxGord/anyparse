@@ -181,12 +181,11 @@ final class ShardPlan {
 	];
 
 	/**
-	 * Deal the runner's registered classes onto `request.shards` shards.
+	 * Read the `addCase(new X())` registrations out of a runner source file and
+	 * deal them onto `request.shards` shards.
 	 *
-	 * The sticky group goes onto shard 0 as one block before the greedy pass
-	 * starts filling it; every other class then goes to whichever shard is
-	 * lightest so far. Greedy longest-processing-time-first is within 4/3 of
-	 * optimal and needs no search.
+	 * Extraction only — every gate and the split itself live in `planClasses`,
+	 * which the generated-registry producer reaches through `--classes`.
 	 */
 	public static function plan(request: ShardPlanRequest): ShardPlanResult {
 		if (request.shards < 1) return Refused('${TAG}--shards must be >= 1, got ${request.shards}');
@@ -196,20 +195,45 @@ final class ShardPlan {
 		final registered: Array<String> = [];
 		final unnameable: Array<String> = [];
 		collect(request, request.tree, false, imports, registered, unnameable);
-		if (unnameable.length > 0) return Refused(
-			unnameable.concat([
-				'$TAG${request.runner} holds a registration this generator cannot name — fix the shape or teach the parser'
-			])
-				.join('\n')
-		);
-		if (registered.length == 0) return Refused('${TAG}found no $REGISTER_CALL(new X()) registrations in ${request.runner}');
+		return if (unnameable.length > 0)
+			Refused(
+				unnameable.concat([
+					'$TAG${request.runner} holds a registration this generator cannot name — fix the shape or teach the parser'
+				])
+					.join('\n')
+			)
+		else if (registered.length == 0)
+			Refused('${TAG}found no $REGISTER_CALL(new X()) registrations in ${request.runner}')
+		else
+			planClasses(registered, request.shards, request.runner);
+	}
+
+	/**
+	 * Deal an already-extracted class list onto `shards` shards, or refuse.
+	 *
+	 * Split out of `plan` because the list has two producers now. `plan` reads
+	 * it out of a runner's `addCase(new X())` shapes; `apq shard-plan
+	 * --classes` reads it from `node bin/test.js --list-classes`, which prints
+	 * the GENERATED registry — the list the run will actually register rather
+	 * than a re-derivation of it from source text. Every gate below is shared
+	 * by both, which is the point: a producer cannot skip one by arriving
+	 * through a different door. `source` names whatever produced the list and
+	 * is what the refusals point at.
+	 *
+	 * The sticky group goes onto shard 0 as one block before the greedy pass
+	 * starts filling it; every other class then goes to whichever shard is
+	 * lightest so far. Greedy longest-processing-time-first is within 4/3 of
+	 * optimal and needs no search.
+	 */
+	public static function planClasses(registered: Array<String>, shards: Int, source: String): ShardPlanResult {
+		if (shards < 1) return Refused('${TAG}--shards must be >= 1, got $shards');
+		if (registered.length == 0) return Refused('$TAG$source names no test classes');
 		// Bounded here rather than only by the empty-shard gate below: a wild
 		// --shards reaches `deal`'s per-shard load array first, and a V8 fatal
 		// allocation error is a poor answer to a typo.
-		if (request.shards > registered.length)
+		if (shards > registered.length)
 			return Refused(
-				'${TAG}--shards ${request.shards} exceeds the ${registered.length} registered classes'
-				+ ' — every plan would leave an empty shard'
+				'$TAG--shards $shards exceeds the ${registered.length} registered classes — every plan would leave an empty shard'
 			);
 
 		final sorted: Array<String> = registered.copy();
@@ -217,7 +241,7 @@ final class ShardPlan {
 		final unique: Array<String> = dedupe(sorted);
 		if (unique.length != registered.length)
 			return Refused(
-				'$TAG${request.runner} registers the same class twice (${registered.length} registrations, ${unique.length}'
+				'$TAG$source registers the same class twice (${registered.length} registrations, ${unique.length}'
 				+ ' distinct) — a sharded run cannot reproduce that'
 			);
 
@@ -229,12 +253,10 @@ final class ShardPlan {
 			);
 
 		for (sticky in STICKY_CLASSES) if (!unique.contains(sticky))
-			return Refused(
-				'${TAG}pinned class $sticky is not registered in ${request.runner} — renamed or removed? update the sticky list'
-			);
+			return Refused('${TAG}pinned class $sticky is not registered in $source — renamed or removed? update the sticky list');
 
-		final placements: Array<ShardPlacement> = deal(unique, request.shards);
-		final parity: Null<String> = checkParity(unique, placements, request.shards);
+		final placements: Array<ShardPlacement> = deal(unique, shards);
+		final parity: Null<String> = checkParity(unique, placements, shards);
 		return parity == null ? Planned(placements) : Refused(parity);
 	}
 

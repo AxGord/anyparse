@@ -6462,7 +6462,7 @@ final class Cli {
 		sysPrint('  lint-diff     Multiset diff of two lint --format json snapshots (blast radius)\n');
 		sysPrint('  oracle        Typecheck the project once and record the verdict for lint\n');
 		sysPrint('  mutation-verdict  Classify one utest transcript as KILLED/SURVIVED/… for mutation-check\n');
-		sysPrint('  shard-plan    Deal test/RunTests.hx registrations onto N APQ_TEST shards\n');
+		sysPrint('  shard-plan    Deal a runner\'s test classes onto N APQ_TEST shards\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
@@ -18461,6 +18461,7 @@ final class Cli {
 	 */
 	private static function runShardPlan(args: Array<String>): Int {
 		var runner: Null<String> = null;
+		var classesPath: Null<String> = null;
 		var shardsText: Null<String> = null;
 		var format: String = 'lines';
 		var lang: String = 'haxe';
@@ -18470,6 +18471,8 @@ final class Cli {
 			switch a {
 				case '--runner':
 					runner = expectValue(args, ++i, '--runner');
+				case '--classes':
+					classesPath = expectValue(args, ++i, '--classes');
 				case '--shards':
 					shardsText = expectValue(args, ++i, '--shards');
 				case '--format':
@@ -18480,14 +18483,14 @@ final class Cli {
 					printShardPlanUsage();
 					return EXIT_OK;
 				case _:
-					stderr('apq shard-plan: unexpected argument "$a" — the runner is named by --runner\n');
+					stderr('apq shard-plan: unexpected argument "$a" — the class list is named by --runner or --classes\n');
 					printShardPlanUsage();
 					return EXIT_USAGE;
 			}
 			i++;
 		}
-		if (runner == null) {
-			stderr('apq shard-plan: --runner <path> is required\n');
+		if (runner != null && classesPath != null) {
+			stderr('apq shard-plan: --runner and --classes are mutually exclusive — one class list per plan\n');
 			printShardPlanUsage();
 			return EXIT_USAGE;
 		}
@@ -18510,6 +18513,21 @@ final class Cli {
 		}
 		final shardCount: Int = shards;
 
+		// The generated-registry door. `tools/suite-shard.sh` asks the runner
+		// itself (`node bin/test.js --list-classes`) and hands the answer here,
+		// so the plan is made from the list the run will actually register
+		// rather than from a re-derivation of it out of source text.
+		final classes: Null<String> = classesPath;
+		if (classes != null) {
+			final listed: Array<String> = [for (line in readFile(classes).split('\n')) if (line.trim() != '') line.trim()];
+			return renderShardPlan(ShardPlan.planClasses(listed, shardCount, classes), format, shardCount);
+		}
+		if (runner == null) {
+			stderr('apq shard-plan: one of --runner <path> or --classes <path> is required\n');
+			printShardPlanUsage();
+			return EXIT_USAGE;
+		}
+
 		final io: ResolvedInputs = resolveInputPaths(lang, [runner]);
 		final paths: Array<String> = io.paths;
 		if (paths.length != 1) {
@@ -18524,12 +18542,19 @@ final class Cli {
 		// Re-bound: a narrowed local never reaches an anonymous-structure literal
 		// whose expected field is non-nullable.
 		final parsed: QueryNode = tree;
-		final result: ShardPlanResult = ShardPlan.plan({
-			tree: parsed,
-			source: source,
-			runner: path,
-			shards: shardCount
-		});
+		return renderShardPlan(
+			ShardPlan.plan({
+				tree: parsed,
+				source: source,
+				runner: path,
+				shards: shardCount
+			}),
+			format, shardCount
+		);
+	}
+
+	/** Print a finished shard plan in the requested format, or its refusal on stderr. */
+	private static function renderShardPlan(result: ShardPlanResult, format: String, shardCount: Int): Int {
 		return switch result {
 			case Planned(placements):
 				final rows: Array<ShardPlacement> = placements;
@@ -18543,11 +18568,17 @@ final class Cli {
 
 	/** `apq shard-plan --help`. */
 	private static function printShardPlanUsage(): Void {
-		sysPrint('Usage: apq shard-plan --runner <RunTests.hx> --shards <N> [--format lines|filters]\n');
+		sysPrint('Usage: apq shard-plan (--runner <RunTests.hx> | --classes <list>) --shards <N>\n');
+		sysPrint('                      [--format lines|filters]\n');
 		sysPrint('\n');
-		sysPrint('Deal every class registered with addCase(new X()) onto N APQ_TEST shards,\n');
-		sysPrint('for tools/suite-shard.sh. The registrations are read as AST shapes, so both\n');
-		sysPrint('constructor arity and dotted-vs-bare names are structure rather than text.\n');
+		sysPrint('Deal N APQ_TEST shards for tools/suite-shard.sh, from one of two class lists.\n');
+		sysPrint('\n');
+		sysPrint('  --classes <path>  one fully-qualified class name per line, blank lines\n');
+		sysPrint('                    ignored — what `node bin/test.js --list-classes` prints,\n');
+		sysPrint('                    i.e. the GENERATED registry the run will actually use.\n');
+		sysPrint('  --runner <path>   a runner source file; its addCase(new X()) registrations\n');
+		sysPrint('                    are read as AST shapes, so both constructor arity and\n');
+		sysPrint('                    dotted-vs-bare names are structure rather than text.\n');
 		sysPrint('\n');
 		sysPrint('Output:\n');
 		sysPrint('  lines    (default) one "<shard>\\t<class>" row per registered class\n');

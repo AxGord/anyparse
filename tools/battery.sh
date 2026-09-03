@@ -341,7 +341,7 @@ replay_branch() {
 # --- preflight ---------------------------------------------------------
 
 if ! command -v hxq > /dev/null 2>&1; then
-    echo "battery.sh: hxq is not on PATH — suite-shard.sh reads test/RunTests.hx through it" >&2
+    echo "battery.sh: hxq is not on PATH — suite-shard.sh computes its shard plan through it" >&2
     exit 2
 fi
 
@@ -399,8 +399,10 @@ build_apq_pid=$!
 haxe test-js.hxml > "$work/build-test.log" 2>&1 &
 build_test_pid=$!
 # `recon.hxml` is the ONLY hxml that reaches `test/_ReconSkipParse.hx`, and nothing
-# ran it: `-main RunTests` types what the suite references, and no test references
-# the recon harness. So the corpus drill's own driver was typechecked by NOTHING
+# ran it. (`-main RunTests` now types every module in a package under `test/` —
+# the discovery macro asks for each one — but `_ReconSkipParse` is a root-level
+# module, which discovery skips because those are entry points, so it stays
+# outside that reach.) So the corpus drill's own driver was typechecked by NOTHING
 # and could rot silently against any `src/` signature it calls (measured: the
 # module compiles today, the gate is what was missing). `--no-output` writes no
 # `/tmp/recon.js`, which also keeps concurrent workers off one shared artifact —

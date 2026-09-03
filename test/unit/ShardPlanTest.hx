@@ -3,6 +3,7 @@ package unit;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.ShardPlan;
+import testkit.TestRegistry;
 import utest.Assert;
 import utest.Test;
 
@@ -211,30 +212,59 @@ class ShardPlanTest extends Test {
 		for (s in 0...4) Assert.equals(perShard[s], lines[s].split(',').length);
 	}
 
-	#if (sys || nodejs)
 	/**
-	 * The pleasing recursion: this class is registered in the very file the
-	 * subcommand reads, so the end-to-end fixture is the suite itself. It also
-	 * makes every gate above a live guard on the real registration list —
-	 * adding a colliding or unnameable registration now turns the suite red
-	 * instead of quietly shrinking a shard.
+	 * The pleasing recursion: this class is in the very registry the subcommand
+	 * plans, so the end-to-end fixture is the suite itself. It also makes every
+	 * gate above a live guard on the real class list — a colliding or duplicated
+	 * name now turns the suite red instead of quietly shrinking a shard.
+	 *
+	 * It reaches `planClasses` rather than `plan` because that is the door
+	 * `tools/suite-shard.sh` uses since the registration layer became generated:
+	 * the script asks the runner itself (`node bin/test.js --list-classes`) and
+	 * hands the answer to `apq shard-plan --classes`. Planning the list the run
+	 * will ACTUALLY register is the whole point of that door — parsing
+	 * `test/RunTests.hx` would now find no registrations at all, and did, which
+	 * is how this test found the coupling.
 	 */
-	public function testTheRealRunnerPlansWithoutRefusal(): Void {
-		final path: String = 'test/RunTests.hx';
-		final source: String = sys.io.File.getContent(path);
-		final tree: QueryNode = new HaxeQueryPlugin().parseFile(source);
-		final rows: Array<ShardPlacement> = unwrap(ShardPlan.plan({
-			tree: tree,
-			source: source,
-			runner: path,
-			shards: 4
-		}));
+	public function testTheRealRegistryPlansWithoutRefusal(): Void {
+		final registered: Array<String> = TestRegistry.classNames();
+		final rows: Array<ShardPlacement> = unwrap(ShardPlan.planClasses(registered, 4, 'testkit.TestRegistry'));
 		final placed: Array<String> = names(rows);
+		Assert.equals(registered.length, placed.length);
 		Assert.isTrue(placed.length > MIN_REAL_REGISTRATIONS);
 		Assert.equals(placed.length, distinct(placed).length);
 		Assert.isTrue(placed.contains('unit.ShardPlanTest'));
 	}
-	#end
+
+	/**
+	 * The `--classes` door reaches the same gates the `--runner` door does. A
+	 * duplicate is the cheapest of them to state, and the one a name list can
+	 * carry that an `addCase` list cannot: the runner would have thrown.
+	 */
+	public function testAClassListWithADuplicateIsRefused(): Void {
+		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(['unit.AlphaTest', 'unit.AlphaTest']);
+		final message: String = switch ShardPlan.planClasses(listed, 2, 'a list') {
+			case Planned(_):
+				Assert.fail('expected a refusal');
+				'';
+			case Refused(text):
+				text;
+		};
+		Assert.stringContains('registers the same class twice', message);
+	}
+
+	/** A pinned class missing from the list is refused through `--classes` too. */
+	public function testAClassListMissingAPinnedClassIsRefused(): Void {
+		final listed: Array<String> = ShardPlan.STICKY_CLASSES.filter(name -> name != 'unit.ApqProbeCliTest');
+		final message: String = switch ShardPlan.planClasses(listed, 2, 'a list') {
+			case Planned(_):
+				Assert.fail('expected a refusal');
+				'';
+			case Refused(text):
+				text;
+		};
+		Assert.stringContains('pinned class unit.ApqProbeCliTest is not registered in a list', message);
+	}
 
 	/** A runner registering every pinned class, then `statements` verbatim. */
 	private inline function runnerWith(statements: Array<String>): String {
