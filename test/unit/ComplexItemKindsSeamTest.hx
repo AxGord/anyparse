@@ -35,6 +35,16 @@ import utest.Test;
  * classifies. The `LAMBDA` code (4) is not exercised: it needs an arrow ctor
  * whose arity is not stated here, and the four codes below already discriminate
  * every arm the two consumers read.
+ *
+ * PILOT for the machine-checkable pin metadata: `@:pin` names what a fixture
+ * is FOR and `@:killer` names the mutation arm that must break it, and
+ * `testkit.TestDiscovery` refuses to BUILD a `@:pin` control that names no
+ * arm. `M-KINDS` is real and was run: collapsing `CONTAINER_PLAIN` into
+ * `NONE` inside `HxComplexItems.kinds` fails the control below. The seam pin
+ * takes no killer on purpose — it compares the two families to each other,
+ * so an arm that moves a code moves BOTH sides and the equality survives.
+ * That is a property of the pin, and the role now states it instead of a
+ * reader having to notice it.
  */
 @:nullSafety(Strict)
 class ComplexItemKindsSeamTest extends Test {
@@ -47,6 +57,8 @@ class ComplexItemKindsSeamTest extends Test {
 	 * container with nothing below it, a container carrying that call, and an
 	 * element that is neither.
 	 */
+	@:pin('control')
+	@:killer('M-KINDS')
 	public function testTheGeneratedPredicateAnswersTheClassifier(): Void {
 		final elements: Array<Any> = sampleElements();
 		Assert.same([
@@ -64,6 +76,7 @@ class ComplexItemKindsSeamTest extends Test {
 	 * only on the plain marker class would leave the trivia writer — the one the
 	 * formatter actually runs — with no predicate at all.
 	 */
+	@:pin('seam')
 	public function testTheTriviaFamilyCarriesTheSameEntry(): Void {
 		final elements: Array<Any> = sampleElements();
 		Assert.same(AstPreds.complexItemKinds(elements), AstPredsT.complexItemKinds(elements), 'both families, one answer');

@@ -33,7 +33,8 @@ function testParsesSimpleObject() {
 
 **Does not catch**: cases that nobody considered. A parser can pass all hand-written tests and still fail on something the author never imagined.
 
-Unit test files live in `test/unit/` with one file per component. Test runner is `test/RunTests.hx`.
+Unit test files live in `test/unit/` with one file per component. Test runner is `test/RunTests.hx`,
+and it registers nothing by hand — see "The registration layer is generated" below.
 
 ## Layer 2: Golden file tests
 
@@ -336,6 +337,97 @@ Chosen over tink_unittest and buddy for reasons of:
 
 Test cases extend `utest.Test`, assertions use `utest.Assert`. Each test method begins with `test`.
 
+### The registration layer is generated
+
+`test/RunTests.hx` carried **758 hand-written `addCase(new X())` lines and 758
+`import unit.…` lines**. Two costs came with that, and only the second is
+obvious:
+
+- A class whose line was never added ran nowhere and said NOTHING. There was no
+  artifact any gate could compare a class list against, so the failure was
+  invisible by construction — the same shape as the 167 test methods S48 found
+  dead behind a build guard.
+- Every parallel worker touched the same file, so a wave of slices conflicted on
+  it by construction.
+
+Registration is now generated. `testkit.TestRegistry` is an empty class built by
+`testkit.TestDiscovery`, which walks every package directory under the test
+classpath root and, for each class it finds, asks **utest's own two questions**:
+
+- does it implement `utest.ITest` (what `Runner.addCase` dispatches on), and
+- does it carry an instance method whose name starts with `test` or `spec`
+  (what `TestBuilder` turns into a fixture — the predicate is a PREFIX test and
+  it does not look at visibility, so a `private function testX` IS a fixture and
+  a `static function testX` is NOT).
+
+Asking utest's questions rather than inventing a marker is the whole design.
+An explicit `@:testCase` marker was rejected for the reason the hand-written
+list is being removed: a forgotten marker is exactly as invisible as a forgotten
+`addCase`. Because the macro and utest ask the same thing, "discovered" and
+"run" cannot drift apart.
+
+**A class that cannot be registered is a build ERROR, never a skip.** Private,
+abstract, sub-module and constructor-taking test classes each stop the build
+naming themselves and the fix. The one deliberate skip is a `utest.Test`
+subclass with NO fixture — a shared base such as `unit.NamingCheckTestBase`;
+`Runner.addITest` builds no fixture for it either and stores no entry, so
+registering it would be a no-op. Those are REPORTED through
+`TestRegistry.baseClasses()` and pinned, so "reports" cannot decay into
+"silently drops". There are six of them, and `unit.HxTestHelpers` — a helper
+that extends `utest.Test` for no recorded reason — is the one that would
+otherwise have been a surprise.
+
+**Scope is a whitelist on both edges, not a skip.** The walk covers every
+package directory under the test classpath root, minus the two modules asking
+for which would be circular (the macro and the registry it builds). Root-level
+modules are not walked either — typing `RunTests` from inside the macro that
+builds its registry is the same circle — but a root-level module that is not one
+of the declared entry points (`RunTests`, `RunTestsLegacy`, `_ReconSkipParse`)
+STOPS THE BUILD naming itself and the fix, so a test class dropped there is loud
+rather than invisible. A test class lives in a package; `unit`, like every
+existing one.
+
+The runner prints the registry on demand and exits before any fixture runs:
+
+```sh
+node bin/test.js --list-classes   # every registered class, one per line
+node bin/test.js --list-dead      # fixture-named methods utest will never run
+node bin/test.js --list-bases     # utest.Test subclasses carrying no fixture
+node bin/test.js --list-pins      # @:pin annotations with roles and killers
+```
+
+`--list-classes` is what `tools/suite-shard.sh` feeds to `apq shard-plan
+--classes`, so a shard is filtered by exactly the list one process would have
+registered — nothing re-derives it from source text.
+
+`unit.TestDiscoveryParityTest` pins the layer, in the T130 shape where the
+shrinkage IS the acceptance test: the class count is a literal, so narrowing the
+discovery predicate by one class turns the suite red instead of quietly running
+one fewer. That trades a silent failure for a loud chore — adding a test class
+needs the number bumped, and the failure message says so. `unit.DiscoveryOnlyProbeTest`
+is the other half: a real test class that no hand-written line names, kept out
+of the legacy list on purpose.
+
+**Machine-checkable test metadata (pilot).** This campaign writes rich claims in
+test doc comments — "green at base by construction" (41 occurrences in
+`test/unit`), "vacuous" (54), "by construction" (53), "killed by" (9) — and
+nothing checks any of them. `@:pin('<role>')` names what a fixture is FOR and
+`@:killer('<arm>')` names the mutation arm that must break it; `TestDiscovery`
+refuses to build a `@:pin('control')` that names no arm, so the reviewer's
+catch becomes a compile error. Piloted on ONE class
+(`unit.ComplexItemKindsSeamTest`) and deliberately not rolled out: the roles are
+only worth what the arms behind them are, and an arm nobody ran is prose retyped
+as metadata.
+
+**Staging, and when to delete it.** `test/RunTestsLegacy.hx` is the runner as it
+was — the 758 lines unmodified except for the class rename — built by
+`test-js-legacy.hxml` into `bin/test-legacy.js`. It exists so every gate can be
+run against the OLD registration and the NEW one and the two compared per class
+and per method. **Switch-over criterion: delete `test/RunTestsLegacy.hx`,
+`test-js-legacy.hxml` and `test-js-common-legacy.hxml` once the generated
+registry has carried one merged wave green.** Nothing but the comparison depends
+on them; `RunTests.hx` needs no edit when they go.
+
 ### The runner is quiet by default, and one of the two arguments is load-bearing
 
 `RunTests.main` calls `utest.ui.Report.create(runner, NeverShowSuccessResults,
@@ -559,7 +651,7 @@ The build flags live in `bin/apq-js-common.hxml` and `test-js-common.hxml`, with
 
 ### Parallel shards: one suite, N processes
 
-The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard. The split itself is not the script's — `apq shard-plan --runner test/RunTests.hx --shards N [--format lines|filters]` reads the registrations, applies every gate below, and prints the plan; the script spawns processes and waits. That division is the reason the gates are testable at all (`test/unit/ShardPlanTest.hx`), which they were not while they were awk:
+The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard. The split itself is not the script's — the script asks the runner for its class list (`node bin/test.js --list-classes`) and hands it to `apq shard-plan --classes <list> --shards N [--format lines|filters]`, which applies every gate below and prints the plan; the script spawns processes and waits. That division is the reason the gates are testable at all (`test/unit/ShardPlanTest.hx`), which they were not while they were awk:
 
 ```sh
 tools/suite-shard.sh                      # 4 shards (default)
@@ -591,7 +683,7 @@ That list is derived, not remembered: `hxq lit 'probe' test/ --kind Literal` fin
 
 **Parity is a gate, not a hope.** A sharded run that silently drops a class still reports green, so `apq shard-plan` refuses to emit a plan unless the union of the shard lists equals the registration list exactly. Three specifics worth knowing:
 
-- The class list is read structurally out of `test/RunTests.hx` — `addCase(new X())` as an AST shape, never a name heuristic. Nine registered classes do not end in `Test` — five end in `Probe`, four *begin* with it — so both a `*Test` suffix filter and a `*Probe` glob drop tests silently; the suffix filter loses 43 of them, and nothing else notices. Because the read is structural, constructor arity and dotted-vs-bare names are structure too: a `NewExpr` carrying arguments, more than one argument, or an argument that is not `new` at all is a REFUSAL naming the line. The predecessor was a search pattern plus a regex strip, and it dropped `addCase(prebuilt)` and `addCase(new A(), new B())` in silence — a class registered either way ran in no shard while class parity still passed.
+- The class list comes from the RUNNER, not from a source file: `node bin/test.js --list-classes` prints the generated registry, which is by construction exactly what one process would register. Nine registered classes do not end in `Test` — five end in `Probe`, four *begin* with it — so both a `*Test` suffix filter and a `*Probe` glob drop tests silently; the suffix filter loses 43 of them, and nothing else notices. The older `--runner <file>` door still exists and still reads `addCase(new X())` as an AST shape rather than text, so constructor arity and dotted-vs-bare names are structure too and anything it cannot name is a REFUSAL quoting the line; `test/RunTests.hx` simply holds no such line any more. Its predecessor was a search pattern plus a regex strip, and it dropped `addCase(prebuilt)` and `addCase(new A(), new B())` in silence — a class registered either way ran in no shard while class parity still passed.
 - `APQ_TEST` is a **substring** match over the fully-qualified class name. A name that is a substring of another would run in two shards and inflate the totals, so the generator hard-fails on any such pair rather than producing a plausible-looking wrong number.
 - The sticky list is hand-maintained (`ShardPlan.STICKY_CLASSES`), so every pinned name must still be registered — otherwise a rename un-pins a class in silence and the race comes back. The per-class weights next to it only balance the split; no gate reads them, so a stale weight costs balance and never correctness.
 - Test and assertion totals grow with every slice, so no literal is pinned in the script. Class parity plus the no-collision gate plus a non-empty, green shard is what makes the totals trustworthy; `--verify` (pays for a monolith run, and fails on a monolith that is red as well as on one that disagrees) and `--expect T/A` are the explicit cross-checks when you want the totals proved rather than argued.
@@ -687,9 +779,12 @@ build ──┬─ suite ── corpus          build = apq.js + test.js + a rec
 
 `build` stays sequential because everything else executes what it produces. Its
 third compile is a TYPECHECK, not a build: `haxe recon.hxml --no-output` is the
-only gate that reaches `test/_ReconSkipParse.hx`. `-main RunTests` types what the
-suite references and no test references the corpus drill's harness, so that module
-had no gate at all and could rot against any `src/` signature it calls — measured
+only gate that reaches `test/_ReconSkipParse.hx`. `-main RunTests` now types every
+module in a package under `test/` — the discovery macro asks the compiler for each
+one, so an orphaned helper in `test/unit/` can no longer rot — but `_ReconSkipParse`
+sits at the test ROOT, and discovery skips root-level modules because those are
+entry points. So that module had no gate at all and could rot against any `src/`
+signature it calls — measured
 by planting `private static function s17PlantedDefect(): Int { return 'not an Int'; }`
 in it: `haxe test-js.hxml` and `haxe bin/apq-js.hxml` both stayed exit 0, the new
 step failed the run with `recon.hxml did not typecheck`. `--no-output` writes no

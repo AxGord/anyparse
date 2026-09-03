@@ -1,0 +1,8 @@
+# Same flags as test-js-common.hxml with the legacy entry point. The output
+# line cannot live here for the reason test-js-common.hxml gives.
+-cp src
+-cp test
+-lib utest
+-lib hxnodejs
+-main RunTestsLegacy
+-D analyzer-optimize

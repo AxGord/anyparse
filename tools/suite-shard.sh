@@ -176,25 +176,37 @@ trap cleanup EXIT
 
 # --- 1. the shard plan -------------------------------------------------
 #
-# Everything that COUNTS is `apq shard-plan`: the structural read of the
-# `addCase(new X())` registrations out of test/RunTests.hx, the
-# substring-collision gate, the pinned group, the measured weights, the
-# greedy longest-processing-time-first split and the parity gates on its
-# result. It moved out of this script because a shell function is not
-# testable, and those gates are the only thing standing between a
-# silently-shrunken run and a green report — `unit.ShardPlanTest` is the
-# first cover any of them has ever had, and it plans the REAL runner as one
-# of its cases. Why each gate exists is documented at `ShardPlan`, next to
-# the code that enforces it. What stays here is orchestration: spawning the
-# shards, waiting on them, exit codes.
+# Everything that COUNTS is `apq shard-plan`: the substring-collision gate,
+# the pinned group, the measured weights, the greedy
+# longest-processing-time-first split and the parity gates on its result. It
+# moved out of this script because a shell function is not testable, and
+# those gates are the only thing standing between a silently-shrunken run
+# and a green report — `unit.ShardPlanTest` is the first cover any of them
+# has ever had, and it plans the REAL registry as one of its cases. Why each
+# gate exists is documented at `ShardPlan`, next to the code that enforces
+# it. What stays here is orchestration: spawning the shards, waiting on
+# them, exit codes.
+#
+# The class list comes from the RUNNER, not from parsing test/RunTests.hx.
+# The registration layer is generated (`testkit.TestRegistry`), so the file
+# holds no `addCase(new X())` line to read any more, and asking the binary
+# that will do the running is the honest question anyway: what shards get
+# filtered by is exactly what one process would have registered.
 #
 # Two invocations because the two formats answer two questions: `lines` is
 # the plan as `<shard>\t<class>` rows — the artifact --plan-only points at,
 # and the thing to diff when a change is supposed to be plan-neutral —
 # while `filters` is the N `APQ_TEST` values, one per line, ready to hand
 # to a shard.
+if ! node "$test_js" --list-classes > "$work/classes.txt" 2> "$work/classes.err"; then
+    cat "$work/classes.err" >&2
+    echo "suite-shard.sh: $test_js could not list its registered classes" >&2
+    rc=1
+    exit 1
+fi
+
 plan_or_die() {
-    if ! hxq shard-plan --runner test/RunTests.hx --shards "$shards" --format "$1" \
+    if ! hxq shard-plan --classes "$work/classes.txt" --shards "$shards" --format "$1" \
             > "$2" 2> "$work/plan.err"; then
         cat "$work/plan.err" >&2
         rc=1
