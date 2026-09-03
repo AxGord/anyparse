@@ -623,6 +623,32 @@ tools/battery.sh --allow-blast      # accept the blast movement it printed last 
 silence, and a battery that cannot tell "corpus clean" from "corpus not run"
 is worse than no corpus gate, so the script refuses rather than warns.
 
+### The move family: the one op family with its own byte capture
+
+`lint --all`, a `--fix` tree, `fmt --list` and the refs / rename / safe-delete
+fixtures between them run every check and every fixer — and not one of them ever
+calls `move`, `move-member`, `pull-up` or `push-down`. A seam refactor across 109
+files therefore shipped a `MoveSymbol` scan reading the CURSOR file's comment
+regions while scanning the DESTINATION's text, with the whole suite green; it was
+caught by the author's own forwarding audit, not by a gate.
+
+`test/unit/MoveFamilyCaptureTest.hx` is that gate: five fixtures — a doc block on
+the moved declaration, a `using` line to carry, an importer to repoint, a
+`#if`-guarded member, a cross-package static move, plus comments and string
+literals spelling the moved names — driven through the four ops with the FULL
+bytes of every changed file pinned. Pure and in-memory (no temp directory), 5
+tests / 17 assertions in 0.02 s, so it costs the suite nothing measurable.
+
+```sh
+APQ_TEST=MoveFamilyCapture node bin/test.js   # the move family alone, ~0.3 s
+```
+
+Run it before and after any refactor that touches the shared lexical seam, the
+`RefactorSupport` scans, or `MoveSymbol` / `MoveMember` / `InheritanceMove`. When
+it fails, read the diff and decide: bytes that are an improvement get re-captured,
+bytes that are a regression get the op fixed. Re-capturing to make it green
+without reading it is the one way the class stops working.
+
 ### The step graph: four branches, one join
 
 The checks read like a sequence, but their dependencies are far sparser than
