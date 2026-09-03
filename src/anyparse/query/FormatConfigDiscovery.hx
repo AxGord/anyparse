@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
+import anyparse.query.ConfigFinder.ConfigFile;
 #if (sys || nodejs)
-import sys.io.File;
 import sys.FileSystem;
 #end
 
@@ -25,8 +25,14 @@ import sys.FileSystem;
  * same trade the parse tiers make, and acceptable for a config that is read-only
  * for the life of a run.
  *
- * On a target without a filesystem the walk is compiled out and every lookup is
- * `null`.
+ * The walk itself is `ConfigFinder.findUpFile` — the shared walk-up every config lookup in
+ * this package uses — so the loop lives in one place and this module owns only the memo,
+ * the blank-payload fold and the diagnostic. One consequence of delegating: an
+ * `hxformat.json` that EXISTS but cannot be read used to propagate the IO exception out of
+ * `discover`; `findUpFile` answers null for it, so such a file now resolves to the writer's
+ * defaults, the same answer as no config at all.
+ *
+ * On a target without a filesystem the walk is compiled out and every lookup is `null`.
  */
 @:nullSafety(Strict)
 final class FormatConfigDiscovery {
@@ -60,27 +66,16 @@ final class FormatConfigDiscovery {
 		#if (sys || nodejs)
 		final start: String = haxe.io.Path.directory(FileSystem.absolutePath(filePath));
 		if (CACHE.exists(start)) return CACHE[start];
-		var dir: String = start;
-		while (dir != '') {
-			final candidate: String = '$dir/hxformat.json';
-			if (FileSystem.exists(candidate) && !FileSystem.isDirectory(candidate)) {
-				final content: Null<String> = normalize(File.getContent(candidate));
-				CACHE[start] = content;
-				// The one place that holds BOTH a config's text and the path it
-				// came from, and reaches it exactly once per directory — so this
-				// is where "hxq will not act on these settings" can name a file.
-				// A config handed straight to the loader as a string (a corpus
-				// fixture's section 1, a test literal) has no file to name and
-				// stays silent by construction.
-				if (content != null) HaxeFormatConfigDiagnostics.warn(candidate, content);
-				return content;
-			}
-			final parent: String = haxe.io.Path.directory(dir);
-			if (parent == dir) break;
-			dir = parent;
-		}
-		CACHE[start] = null;
-		return null;
+		final found: Null<ConfigFile> = ConfigFinder.findUpFile(filePath, 'hxformat.json');
+		final content: Null<String> = normalize(found?.content);
+		CACHE[start] = content;
+		// The one place that holds BOTH a config's text and the path it came from,
+		// and reaches it exactly once per directory — so this is where "hxq will not
+		// act on these settings" can name a file. A config handed straight to the
+		// loader as a string (a corpus fixture's section 1, a test literal) has no
+		// file to name and stays silent by construction.
+		if (found != null && content != null) HaxeFormatConfigDiagnostics.warn(found.path, content);
+		return content;
 		#else
 		return null;
 		#end

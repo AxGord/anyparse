@@ -246,6 +246,19 @@ typedef WrapListOptions = {
  * Items containing hardlines (e.g. block bodies, multi-line strings)
  * are intrinsically un-flattenable — the cascade is forced to the
  * `exceeds=true` branch in that case.
+ *
+ * Oversized and staying that way, on purpose. This type carries an
+ * `oversized-type` warning for BOTH caps (110 members / max 50, 4458
+ * lines / max 2000). A split was measured (2026-09-03) and refused:
+ * `hxq clusters WrapList src/anyparse/format/wrap` puts 80 of 105
+ * members in ONE component, and 61 of 105 even with `--hubs 25`. The
+ * obvious seam — the 17-member `shape*` intercept family — is 901
+ * lines and lands entirely INSIDE that component at both hub settings,
+ * so cutting it leaves this type at 93 members and 3557 lines, over
+ * both caps still. Clearing the finding means moving 60 members and
+ * 2458 lines, more than half the file, out of the writer's wrap engine
+ * under a no-output-byte-may-change constraint; that is a designed
+ * decomposition of the cascade, not a hygiene edit.
  */
 class WrapList {
 

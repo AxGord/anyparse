@@ -174,6 +174,29 @@ private function recordTextLineEnds(ctx: RenderCtx, body: String): Void {
 }
 
 /**
+	Emits `indent` columns worth of leading whitespace. When
+	`indentChar=Tab`, this is `floor(indent / tabWidth)` tabs followed
+	by `indent mod tabWidth` spaces — in the clean case where every
+	`Nest` value is a multiple of `tabWidth`, the remainder is zero
+	and output is pure tabs.
+
+	A pure `StringBuf` append that knows nothing about the render state, so it
+	sits at module level beside the three scans above for the same reason —
+	`Renderer` is at the 50-member cap `oversized-type` enforces, and
+	`breakLine` took the slot it used to hold.
+**/
+private inline function writeIndent(buf: StringBuf, indent: Int, indentChar: IndentChar, tabWidth: Int): Void {
+	if (indentChar == Tab && tabWidth > 0) {
+		final tabs: Int = Std.int(indent / tabWidth);
+		final rem: Int = indent - tabs * tabWidth;
+		for (_ in 0...tabs) buf.add('\t');
+		for (_ in 0...rem) buf.add(' ');
+	} else {
+		for (_ in 0...indent) buf.add(' ');
+	}
+}
+
+/**
 	One frame on the rendering stack. Carries the indent and mode that applies
 	to the doc it references.
 
@@ -309,6 +332,19 @@ private class Frame {
 	what comes after a group when deciding; in exchange, it is straightforward
 	and fast. Multi-group look-ahead can be added later if real-world
 	grammars expose it as a problem.
+
+	Oversized and staying that way, on purpose. This type carries an `oversized-type`
+	warning for its line count and sits exactly on the 50-member cap, so the three String
+	scans above it are module-level functions and each new member costs one. A split was
+	measured (2026-09-03) and refused: `hxq clusters Renderer src/anyparse/core` puts 44 of
+	53 members in ONE component (38 of 53 with `--hubs 12`), and the largest layer that even
+	LOOKS separable — the 22-member pure-Doc width family (`fitsFlat`, `flatTokenWidth*`,
+	`natural*`, `restNodeWidth`, `embeddedLineWidths`) — is 1049 lines, which leaves this
+	type at 2383 and still over the 2000-line cap. Three of those 22 (`fitsFlat`,
+	`fitsFlatStep`, `flatTokenWidthOfRestStack`) build `Frame` / `MFlat`, so even that cut
+	would export two of this module's four private state types. One algorithm, one file, one
+	warning — a real decomposition needs the state types designed for it, not a member list
+	carved to reach a number.
 **/
 class Renderer {
 
@@ -473,24 +509,6 @@ class Renderer {
 		final raw: String = ctx.buf.toString();
 		final capped: String = maxConsecutiveBlanks >= 0 ? capConsecutiveBlanks(raw, lineEnd, maxConsecutiveBlanks, ctx.textLineEnds) : raw;
 		return finalNewline && !capped.endsWith(lineEnd) ? capped + lineEnd : capped;
-	}
-
-	/**
-		Emits `indent` columns worth of leading whitespace. When
-		`indentChar=Tab`, this is `floor(indent / tabWidth)` tabs followed
-		by `indent mod tabWidth` spaces — in the clean case where every
-		`Nest` value is a multiple of `tabWidth`, the remainder is zero
-		and output is pure tabs.
-	**/
-	private static inline function writeIndent(buf: StringBuf, indent: Int, indentChar: IndentChar, tabWidth: Int): Void {
-		if (indentChar == Tab && tabWidth > 0) {
-			final tabs: Int = Std.int(indent / tabWidth);
-			final rem: Int = indent - tabs * tabWidth;
-			for (_ in 0...tabs) buf.add('\t');
-			for (_ in 0...rem) buf.add(' ');
-		} else {
-			for (_ in 0...indent) buf.add(' ');
-		}
 	}
 
 	/**
@@ -2772,6 +2790,42 @@ class Renderer {
 	}
 
 	/**
+	 * Commit one real line break to `buf` and re-open the next line at `indent`.
+	 *
+	 * The one place a layout newline is written. Every caller has already decided that a
+	 * break happens here — the decision is theirs, the bookkeeping is this helper's, and
+	 * before it existed the same run of statements stood four times
+	 * (`flushPendingHardline`, `emitLine`'s break arm, and both opt-hardline ctors in
+	 * `emitOptHardline`), which is how a change to one of them could silently miss the
+	 * other three.
+	 *
+	 * Not `inline` — eight statements, and its three neighbours on this path
+	 * (`flushOptSpace`, `commitTrailBlank`, `flushPendingHardline`) are not either; keeping it here,
+	 * beside the callers, is worth more than folding four calls.
+	 *
+	 * Order is load-bearing. The held trailing blank run is dropped FIRST — a break is
+	 * exactly what would strand it. The `trailingWhitespace` indent is written BEFORE the
+	 * line end because that setting asks for the indent of the line being CLOSED, not of
+	 * the one being opened. `verbatim` records the offset the line end lands on, so it is
+	 * read after that indent and before the append (`textLineEnds` must stay ascending,
+	 * which it is by construction: `buf` only grows and this is the last read before the
+	 * append). Only `emitLine` passes it true — a break the RENDERER chose is a layout
+	 * decision, not a byte of the program, and `capConsecutiveBlanks` must still count it.
+	 */
+	private static function breakLine(ctx: RenderCtx, indent: Int, verbatim: Bool): Void {
+		ctx.pendingTrailBlank = null;
+		if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
+			writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+		}
+		if (verbatim) ctx.textLineEnds.push(ctx.buf.length);
+		ctx.buf.add(ctx.lineEnd);
+		ctx.lineCount++;
+		ctx.pendingIndent = indent;
+		ctx.col = indent;
+		ctx.lastEmit = Hardline;
+	}
+
+	/**
 	 * Flush a pending `OptHardlineSkipBeforeHardline` slot: emit `\n+indent`
 	 * like a regular break-mode `Line` and drop the pending OptSpace (mirrors
 	 * the break-mode-Line semantic — the optional trailing space disappears
@@ -2783,17 +2837,10 @@ class Renderer {
 	private static function flushPendingHardline(ctx: RenderCtx): Void {
 		if (ctx.pendingHardline >= 0) {
 			ctx.pendingOptSpace = null;
-			// The newline is what follows the held blank run, so it never gets
-			// written — this is the deferred hardline's share of the invariant.
-			ctx.pendingTrailBlank = null;
-			if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
-				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
-			}
-			ctx.buf.add(ctx.lineEnd);
-			ctx.lineCount++;
-			ctx.pendingIndent = ctx.pendingHardline;
-			ctx.col = ctx.pendingHardline;
-			ctx.lastEmit = Hardline;
+			// The newline is what follows the held blank run, so it never gets written —
+			// `breakLine` drops it as its first statement, which is this deferred
+			// hardline's share of the invariant.
+			breakLine(ctx, ctx.pendingHardline, false);
 			ctx.pendingHardline = -1;
 		}
 	}
@@ -2904,20 +2951,11 @@ class Renderer {
 			// existing — "fire unless next is hardline" — fails
 			// here because we ARE that hardline).
 			ctx.pendingOptSpace = null;
-			ctx.pendingTrailBlank = null;
 			if (ctx.pendingHardline >= 0) ctx.pendingHardline = -1;
-			if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
-				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
-			}
-			// AFTER the indent, so the offset is the one the line end lands on.
-			// Ascending by construction: `buf` only grows and this is the last
-			// read before the append.
-			if (verbatim) ctx.textLineEnds.push(ctx.buf.length);
-			ctx.buf.add(ctx.lineEnd);
-			ctx.lineCount++;
-			ctx.pendingIndent = f.indent;
-			ctx.col = f.indent;
-			ctx.lastEmit = Hardline;
+			// `verbatim` — the break IS the token's own byte, so `breakLine` records its
+			// offset in `textLineEnds` and `capConsecutiveBlanks` will not read it as a
+			// blank line the renderer produced.
+			breakLine(ctx, f.indent, verbatim);
 		}
 	}
 
@@ -2959,16 +2997,9 @@ class Renderer {
 				} else {
 					// Only the arm that actually writes `\n` drops the held blank
 					// run; the two dropping arms above emit nothing, so a space
-					// between two texts they sit between must survive.
-					ctx.pendingTrailBlank = null;
-					if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
-						writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
-					}
-					ctx.buf.add(ctx.lineEnd);
-					ctx.lineCount++;
-					ctx.pendingIndent = f.indent;
-					ctx.col = f.indent;
-					ctx.lastEmit = Hardline;
+					// between two texts they sit between must survive. `breakLine`
+					// drops it as its first statement.
+					breakLine(ctx, f.indent, false);
 				}
 			case OptHardlineSkipAtOpenDelim:
 				// Open-delim-aware leading hardline. Three branches:
@@ -3009,15 +3040,7 @@ class Renderer {
 							ctx.pendingIndent = f.indent;
 							ctx.col = f.indent;
 						case Other:
-							ctx.pendingTrailBlank = null;
-							if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
-								writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
-							}
-							ctx.buf.add(ctx.lineEnd);
-							ctx.lineCount++;
-							ctx.pendingIndent = f.indent;
-							ctx.col = f.indent;
-							ctx.lastEmit = Hardline;
+							breakLine(ctx, f.indent, false);
 					}
 			case _:
 		}

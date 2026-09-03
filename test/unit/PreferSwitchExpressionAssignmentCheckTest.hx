@@ -544,6 +544,26 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.isTrue(out.indexOf('case _: 40;') != -1, 'a plain arm value keeps its `;` - got:\n$out');
 	}
 
+	/**
+	 * A same-named binding DECLARED inside the switch — here an array-comprehension binder,
+	 * never read and never written — still refuses the collapse, while the byte-identical shape
+	 * with that binder named `y` instead is flagged.
+	 *
+	 * `Refs.readsName` counts every non-`Write` hit, `RefKind.Decl` included: a redeclaration
+	 * means the region no longer talks about one binding, which is the same reason to bail as a
+	 * read. Killer for the arm that narrows the shared helper to `RefKind.Read` — with the Decl
+	 * arm gone the fix fires and collapses a `var` whose name a comprehension binder shadows,
+	 * and nothing else in 13 796 tests notices.
+	 */
+	public function testARedeclarationInsideTheSwitchRefusesTheCollapse(): Void {
+		final shadowed: String =
+			'var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = [for (x in 0...1) \'a\'][0];\n\t\t\tcase 2: x = \'b\';\n\t\t}';
+		final plain: String =
+			'var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = [for (y in 0...1) \'a\'][0];\n\t\t\tcase 2: x = \'b\';\n\t\t}';
+		Assert.equals(0, violations(wrap(shadowed)).length);
+		Assert.equals(1, violations(wrap(plain)).length);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {

@@ -46,7 +46,7 @@ using StringTools;
  *
  * The scope it binds INTO is the ENCLOSING body, never its own span - it is the one
  * declaration kind that opens a scope its own name does not enter. Every scope lookup made
- * from such a declaration therefore goes through `Naming.enclosingScopeSpan`, which excludes
+ * from such a declaration therefore goes through `BindingScope.enclosingScopeSpan`, which excludes
  * the declaration's own node: reading it as the scope would make every SIBLING local function
  * look disjoint, and a sibling already holding the target name is a real collision.
  *
@@ -251,7 +251,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 				target: name,
 				// A local `function` statement opens a scope of its own, but the scope its NAME binds
 				// into is the enclosing body - the one two sibling local functions share.
-				scope: Naming.enclosingScopeSpan(tree, functionScopeKinds(shape), span.from, shape)
+				scope: BindingScope.enclosingScopeSpan(tree, functionScopeKinds(shape), span.from, shape)
 			});
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -395,7 +395,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	 * unreferenced.
 	 */
 	private static function isUnreferenced(source: String, tree: QueryNode, name: String, declSpan: Span, shape: RefShape): Bool {
-		final fn: Null<Span> = Naming.enclosingScopeSpan(tree, functionScopeKinds(shape), declSpan.from, shape);
+		final fn: Null<Span> = BindingScope.enclosingScopeSpan(tree, functionScopeKinds(shape), declSpan.from, shape);
 		return fn != null && !RefactorSupport.referencedInRange(source, name, fn.from, fn.to, [declSpan]);
 	}
 

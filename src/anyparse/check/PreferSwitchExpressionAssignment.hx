@@ -268,16 +268,6 @@ final class PreferSwitchExpressionAssignment implements Check {
 	}
 
 	/**
-	 * Whether `name` is READ anywhere in `node` — any `Refs` occurrence that is not a `Write`. A read
-	 * inside the switch (a subject / condition / r-value reference) would become a self-reference in
-	 * `x`'s own initializer after the decl-pairing collapse, so it disqualifies the pair.
-	 */
-	private static function readsName(name: String, node: QueryNode, s: Seams): Bool {
-		for (h in Refs.find(name, node, s.shape)) if (h.kind != RefKind.Write) return true;
-		return false;
-	}
-
-	/**
 	 * Whether the switch's arm leaves assign exactly the declared identifier `name` and nothing else:
 	 * the common l-value is that identifier, every write of `name` is one of the `leafCount` arm-leaf
 	 * writes inside the switch, and `name` is read NOWHERE in the switch — the conditions under which
@@ -287,7 +277,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		name: String, lvalue: QueryNode, root: QueryNode, switchStmt: QueryNode, switchSpan: Span, leafCount: Int, s: Seams
 	): Bool {
 		return lvalue.kind == s.identKind && lvalue.name == name && writtenOnlyByArms(name, root, switchSpan, leafCount, s)
-			&& !readsName(name, switchStmt, s);
+			&& !Refs.readsName(name, switchStmt, s.shape);
 	}
 
 	/**

@@ -251,7 +251,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		final sa: Null<SwitchArms> = AssignmentTreeHoist.switchArms(node, ref, source, s.tree, null, fallback);
 		if (sa == null || sa.leafCount == 0 || !pureSwitch(node, s, purity)) return null;
 		final lvalue: Null<QueryNode> = ref.lvalue;
-		if (lvalue == null || lvalue.kind != s.identKind || lvalue.name != name || readsName(name, node, s)) return null;
+		if (lvalue == null || lvalue.kind != s.identKind || lvalue.name != name || Refs.readsName(name, node, s.shape)) return null;
 		final subjectSrc: Null<String> = AssignmentTreeHoist.slice(source, sa.subject);
 		final subjectSpan: Null<Span> = sa.subject.span;
 		if (subjectSrc == null || subjectSpan == null) return null;
@@ -357,15 +357,6 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 				? PurityScan.isPure(node, purity)
 				: node.children.foreach(c -> pureValue(c, s, purity))
 		);
-	}
-
-	/**
-	 * Whether `name` is READ anywhere in `node` -- any `Refs` occurrence that is not a `Write`. A read
-	 * inside the run becomes a self-reference in the local's own initializer after the collapse.
-	 */
-	private static function readsName(name: String, node: QueryNode, s: Seams): Bool {
-		for (h in Refs.find(name, node, s.shape)) if (h.kind != RefKind.Write) return true;
-		return false;
 	}
 
 }
