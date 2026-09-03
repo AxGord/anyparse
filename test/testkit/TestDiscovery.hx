@@ -56,7 +56,7 @@ typedef TestCensus = {
  * shapes that would otherwise be dropped in silence; each stops the build
  * naming itself and the fix. The one deliberate SKIP is a `utest.Test`
  * subclass with no fixture at all (a shared base class such as
- * `unit.NamingCheckTestBase`): utest registers no fixtures for it either,
+ * `unit.check.NamingCheckTestBase`): utest registers no fixtures for it either,
  * so registering it would be a no-op — it is reported through
  * `TestRegistry.baseClasses()` rather than assumed.
  *
@@ -111,7 +111,7 @@ class TestDiscovery {
 	 * class dropped there invisible, which is the failure this layer exists to
 	 * remove — moving it one directory down is the fix, and the error says so.
 	 */
-	private static final ENTRY_POINT_MODULES: Array<String> = ['RunTests', 'RunTestsLegacy', '_ReconSkipParse'];
+	private static final ENTRY_POINT_MODULES: Array<String> = ['RunTests', '_ReconSkipParse'];
 
 	/**
 	 * Generate the registry members onto the class this is built on:

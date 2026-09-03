@@ -96,14 +96,14 @@ final class ShardPlan {
 	 * compiler-server ports, so it parallelises freely.
 	 */
 	public static final STICKY_CLASSES: Array<String> = [
-		'unit.HxFormatterCorpusTest',
-		'unit.ApqDxTier5CliTest',
-		'unit.ApqDxTier4CliTest',
-		'unit.ApqProbeCliTest',
-		'unit.ApqReconCliTest',
-		'unit.ApqWriterProbeCliTest',
-		'unit.ApqAstTypeRefsCliTest',
-		'unit.ApqHxtestSection1ConfigTest'
+		'unit.grammar.haxe.HxFormatterCorpusTest',
+		'unit.cli.ApqDxTier5CliTest',
+		'unit.cli.ApqDxTier4CliTest',
+		'unit.cli.ApqProbeCliTest',
+		'unit.cli.ApqReconCliTest',
+		'unit.cli.ApqWriterProbeCliTest',
+		'unit.cli.ApqAstTypeRefsCliTest',
+		'unit.query.ApqHxtestSection1ConfigTest'
 	];
 
 	/** What a class not in `CLASS_WEIGHTS` costs — the tail is flat, so one number covers it. */
@@ -158,26 +158,26 @@ final class ShardPlan {
 	 * balanced, never that a particular class count vector comes out.
 	 */
 	private static final CLASS_WEIGHTS: Map<String, Int> = [
-		'unit.ApqDxTier5CliTest' => 40,
-		'unit.LintConfigCliTest' => 2370,
-		'unit.CompilerOracleE2ETest' => 2100,
-		'unit.ExplicitLocalTypeOracleE2ETest' => 1900,
-		'unit.HxFormatterCorpusTest' => 1400,
-		'unit.ExplicitTypeReturnOracleTest' => 1310,
-		'unit.ApqDxTier4CliTest' => 1180,
-		'unit.AvoidDynamicBagOracleE2ETest' => 950,
-		'unit.PreferInlineOracleTest' => 730,
-		'unit.LintFixFixedPointCliTest' => 530,
-		'unit.FixVerifierGroupE2ETest' => 520,
-		'unit.ResolutionScopeCliTest' => 500,
-		'unit.LintPerFileConfigCliTest' => 350,
-		'unit.PreferCaseGuardOracleE2ETest' => 280,
-		'unit.AvoidDynamicRiskyFixE2ETest' => 280,
-		'unit.ResolutionLibraryCacheTest' => 250,
-		'unit.ImplicitStdScopeTest' => 210,
-		'unit.GuardContinueCheckTest' => 190,
-		'unit.FixVerifierScopeE2ETest' => 170,
-		'unit.PreferStaticExtensionCheckTest' => 150
+		'unit.cli.ApqDxTier5CliTest' => 40,
+		'unit.cli.LintConfigCliTest' => 2370,
+		'unit.check.CompilerOracleE2ETest' => 2100,
+		'unit.check.ExplicitLocalTypeOracleE2ETest' => 1900,
+		'unit.grammar.haxe.HxFormatterCorpusTest' => 1400,
+		'unit.check.ExplicitTypeReturnOracleTest' => 1310,
+		'unit.cli.ApqDxTier4CliTest' => 1180,
+		'unit.check.AvoidDynamicBagOracleE2ETest' => 950,
+		'unit.check.PreferInlineOracleTest' => 730,
+		'unit.cli.LintFixFixedPointCliTest' => 530,
+		'unit.check.FixVerifierGroupE2ETest' => 520,
+		'unit.cli.ResolutionScopeCliTest' => 500,
+		'unit.cli.LintPerFileConfigCliTest' => 350,
+		'unit.check.PreferCaseGuardOracleE2ETest' => 280,
+		'unit.check.AvoidDynamicRiskyFixE2ETest' => 280,
+		'unit.query.ResolutionLibraryCacheTest' => 250,
+		'unit.query.ImplicitStdScopeTest' => 210,
+		'unit.check.GuardContinueCheckTest' => 190,
+		'unit.check.FixVerifierScopeE2ETest' => 170,
+		'unit.check.PreferStaticExtensionCheckTest' => 150
 	];
 
 	/**

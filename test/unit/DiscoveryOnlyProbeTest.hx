@@ -8,20 +8,18 @@ import utest.Test;
  * The pin for the failure mode the generated registration exists to end: a
  * test class that NO hand-written line names.
  *
- * `test/RunTestsLegacy.hx` — the runner as it was, with its 758
- * `addCase(new X())` lines — does not mention this class, deliberately and
- * permanently. Under that layer this fixture is registered nowhere, runs
- * nowhere, and the transcript says nothing at all about it: that silence is
- * the defect, and it is not observable from inside the old layer. Under
- * discovery the class is found because it extends `utest.Test` and carries a
- * `test`-prefixed method, which is the entire predicate.
+ * The hand-written runner it was measured against — `test/RunTestsLegacy.hx`,
+ * 758 `addCase(new X())` lines — did not mention this class, deliberately, and
+ * is gone as of the second merged wave. Under that layer this fixture was
+ * registered nowhere, ran nowhere, and the transcript said nothing at all
+ * about it: that silence was the defect, and it was not observable from inside
+ * the old layer. Under discovery the class is found because it extends
+ * `utest.Test` and carries a `test`-prefixed method, which is the entire
+ * predicate.
  *
- * So the two builds differ by exactly this fixture plus
- * `unit.TestDiscoveryParityTest`'s, and that difference is the measurement
- * the switch-over rests on.
- *
- * Leave it out of the legacy list for as long as that file exists. Adding a
- * line there would delete the only evidence this slice has.
+ * Nothing registers it by hand today either, and nothing may: a hand-written
+ * line anywhere would delete the only standing evidence that discovery — not a
+ * list — is what runs this method.
  */
 @:nullSafety(Strict)
 class DiscoveryOnlyProbeTest extends Test {

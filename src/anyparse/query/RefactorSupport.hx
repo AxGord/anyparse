@@ -1436,7 +1436,7 @@ final class RefactorSupport {
 		// OFFSETS rather than the routing: every insertion that family makes lands at the
 		// end of a member list or at the end of the module, so the byte after it is a `}`
 		// or EOF and the positive criterion below never fires.
-		// `unit.MoveExtractDocCensusTest` pins that by outcome, per op, so an offset
+		// `unit.query.MoveExtractDocCensusTest` pins that by outcome, per op, so an offset
 		// change is what flips it.
 		//
 		// One real limit, in `editKeepingCanonical` rather than here: on a source that is

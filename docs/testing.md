@@ -36,6 +36,53 @@ function testParsesSimpleObject() {
 Unit test files live in `test/unit/` with one file per component. Test runner is `test/RunTests.hx`,
 and it registers nothing by hand — see "The registration layer is generated" below.
 
+### Which package answers which layer
+
+`test/unit/` was ONE package holding 780 modules. It is now laid out to mirror
+`src/anyparse/*`: **a test class lives in the `unit.<pkg>` that mirrors the
+`anyparse.<pkg>` it primarily exercises.** 760 registered classes:
+
+| package | classes | mirrors | layer |
+|---|---:|---|---|
+| `unit.grammar.haxe` | 340 | `anyparse/grammar/haxe` (+ `checkstyle`, `format`) | 1, 3 — the Haxe grammar, its trivia and its writer |
+| `unit.check` | 252 | `anyparse/check` (+ `config`) | 1 — the analysis/check framework and every rule |
+| `unit.query` | 104 | `anyparse/query` (+ `format`) | 1 — the hxq engine: ops, addressing, symbol index, resolution |
+| `unit.cli` | 37 | `anyparse/query/Cli` | **6 — end-to-end**: a test that drives `Cli.run` on a temp file |
+| `unit.format` | 6 | `anyparse/format` (+ `wrap`, `comment`, `text`, `binary`) | 1, 3 |
+| `unit.grammar` | 5 | `anyparse/grammar/{json,ar,sexpr}` | 1, 3 — the small grammars |
+| `unit.core` | 4 | `anyparse/core` | 1 — the Doc IR and its renderer |
+| `unit.lowering` | 3 | `anyparse/macro` (+ `strategy`) | 1 — `macro` is a Haxe keyword, so the package is `lowering` |
+| `unit.runtime` | 3 | `anyparse/runtime` | 1 |
+| `unit` (root) | 6 | — | INTEGRATION and suite hygiene, listed below |
+
+Two package dirs carry no test class and stay where they are: `unit.miniblock`
+and `unit.miniblockstrict` are the mini grammars the Star-primitive tests parse.
+
+**The root is the residue, and it is named.** Six registered classes plus five
+helper modules stay in `unit` because they answer to no single package:
+`DeadTestGuardTest` and `TestDiscoveryParityTest` (suite hygiene — they read
+`test/` itself), `DiscoveryOnlyProbeTest` (the pin that no hand-written line may
+name), `LexicalRegionAgreementTest` (asserts that the grammar's regions and the
+query layer's AGREE — moving it to either would name a side),
+`ExtensionMethodsExtractionTest` (the same, across `grammar.haxe` and `query`)
+and `SpanModeProbe` (a span probe that is also a fixture for both); plus
+`SourceTree`, `BuildDefines`, `CheckFixture`, `QueryTestHelpers` and `SeamEdit`,
+helper modules shared by tests in several packages.
+
+**What the layout buys.** `APQ_TEST` is a substring filter over the
+fully-qualified name, so the package prefix IS a selector:
+`APQ_TEST=unit.check. node bin/test.js` runs every check test and nothing else;
+`unit.cli.` runs the end-to-end layer alone. `apq shard-plan` can be given a
+package-scoped class list the same way. And `apqlint.json` discovery folds the
+whole chain nearest-first, so a package may now carry its own config relaxing a
+key for that family only, instead of the root config carrying an exemption that
+applies to all 780 files.
+
+**Where a new test class goes.** Ask which `src/anyparse/<pkg>` module it names
+in its assertions; that is its package. A class exercising two packages at once
+belongs in the root as integration — and the doc comment says which two, because
+the root is the one bucket nothing else explains.
+
 ## Layer 2: Golden file tests
 
 For a grammar with many sample inputs, hand-writing unit test cases becomes tedious. Golden file tests replace assertions with input/output file pairs:
@@ -87,7 +134,7 @@ function testRandomCases() {
 
 **Every grammar gets one**. When a new grammar is added, a round-trip test is part of the pull request. No grammar is "done" until it has passing round-trip tests.
 
-Already in place: `test/unit/JsonRoundTripTest.hx` with ~30 curated cases plus 200 randomly generated ones (both write and parse go through the macro-generated pipeline).
+Already in place: `test/unit/grammar/JsonRoundTripTest.hx` with ~30 curated cases plus 200 randomly generated ones (both write and parse go through the macro-generated pipeline).
 
 ## Layer 4: Cross-family round-trip tests
 
@@ -289,7 +336,7 @@ The patch is a `git diff` rather than a script or a sed expression because the w
 apq mutation-verdict <transcript> [--expect <csv>]   # line 1: verdict, line 2: row detail
 ```
 
-It used to carry its own ~130-line awk implementation, which was a *second* utest transcript parser — `apq test-summary` had done that job for longer than the script has existed, and `tools/suite-shard.sh` reuses it precisely so a divergent copy cannot grow. One grew anyway, and the price is on record: both fixes `fdb44864` ("a red run can no longer be reported `SURVIVED`") and `ff3f20ae` ("find the utest header by *shape*") were bugs in the duplicate, 316 changed lines apart, and neither was reachable by a test, because a shell function is not testable. The Haxe classifier is pure over `TestSummaryResult` and covered by `test/unit/MutationVerdictTest.hx`.
+It used to carry its own ~130-line awk implementation, which was a *second* utest transcript parser — `apq test-summary` had done that job for longer than the script has existed, and `tools/suite-shard.sh` reuses it precisely so a divergent copy cannot grow. One grew anyway, and the price is on record: both fixes `fdb44864` ("a red run can no longer be reported `SURVIVED`") and `ff3f20ae` ("find the utest header by *shape*") were bugs in the duplicate, 316 changed lines apart, and neither was reachable by a test, because a shell function is not testable. The Haxe classifier is pure over `TestSummaryResult` and covered by `test/unit/query/MutationVerdictTest.hx`.
 
 Two consequences worth knowing. The classifier runs from the **main** tree, never from the track's own build — a track's engine is compiled from the *mutated* source, so a mutation reaching the transcript parser would otherwise grade its own homework; `mutation-check.sh` therefore refuses to start when `bin/apq.js` is missing. And the `--expect` exit code answers *"could this be classified"*, not *"what was the verdict"*: every verdict, `RUN-FAIL` included, exits 0.
 
@@ -300,7 +347,7 @@ Exit code: 0 only when every track is `KILLED`. Any other verdict exits 1, so a 
 The report is one row per track in manifest order, followed by a summary and the workroot path:
 
 ```
-KILLED     doc-blockonly        filter=SetDoc         2 tests failed / 40 assertions: unit.SetDocSliceTest.testX, unit.SetDocSliceTest.testY
+KILLED     doc-blockonly        filter=SetDoc         2 tests failed / 40 assertions: unit.query.SetDocSliceTest.testX, unit.query.SetDocSliceTest.testY
 SURVIVED   dead-branch          filter=HxLexer        0 tests failed / 85 assertions
 MISMATCH   foo                  filter=Bar            2 tests failed / 9 assertions: … (missing: unit.BazTest)
 3 tracks: 1 killed, 1 survived, 1 mismatch, 0 error
@@ -373,19 +420,22 @@ subclass with NO fixture — a shared base such as `unit.NamingCheckTestBase`;
 `Runner.addITest` builds no fixture for it either and stores no entry, so
 registering it would be a no-op. Those are REPORTED through
 `TestRegistry.baseClasses()` and pinned, so "reports" cannot decay into
-"silently drops". There are six of them, and `unit.HxTestHelpers` — a helper
-that extends `utest.Test` for no recorded reason — is the one that would
-otherwise have been a surprise.
+"silently drops". There are six of them: five per-check bases, and
+`unit.grammar.haxe.HxTestHelpers`, whose `extends utest.Test` is not decoration
+— **127 `Hx*` test classes extend it**, and that is what makes each of them a
+`utest.ITest` at all. It carries only protected parse/round-trip helpers and no
+fixture of its own, which is exactly why it is reported rather than registered;
+turning it into a plain class would unmake 127 test classes at once.
 
 **Scope is a whitelist on both edges, not a skip.** The walk covers every
 package directory under the test classpath root, minus the two modules asking
 for which would be circular (the macro and the registry it builds). Root-level
 modules are not walked either — typing `RunTests` from inside the macro that
 builds its registry is the same circle — but a root-level module that is not one
-of the declared entry points (`RunTests`, `RunTestsLegacy`, `_ReconSkipParse`)
-STOPS THE BUILD naming itself and the fix, so a test class dropped there is loud
-rather than invisible. A test class lives in a package; `unit`, like every
-existing one.
+of the declared entry points (`RunTests`, `_ReconSkipParse`) STOPS THE BUILD
+naming itself and the fix, so a test class dropped there is loud rather than
+invisible. A test class lives in a package — one of the `unit.*` packages the
+next section maps.
 
 The runner prints the registry on demand and exits before any fixture runs:
 
@@ -400,13 +450,25 @@ node bin/test.js --list-pins      # @:pin annotations with roles and killers
 --classes`, so a shard is filtered by exactly the list one process would have
 registered — nothing re-derives it from source text.
 
+`shard-plan` still has its older `--runner <file>` door, which reads
+`addCase(new X())` calls out of a hand-written runner as an AST shape. Nothing
+in the repo drives it any more — the script uses `--classes`, and `RunTests.hx`
+carries no registration to read — but it is a shipped CLI door with 31 fixtures
+of its own in `unit.query.ShardPlanTest`, including every refusal the
+`--classes` door shares with it, so it stays rather than taking its gates'
+only cover with it. Its bare-name qualification resolves through the runner's
+IMPORTS (falling back to `unit.`), which is why those fixtures now emit an
+`import` per sticky class: the sticky list names `unit.cli.*` and
+`unit.grammar.haxe.*` since the tree was laid out by package.
+
 `unit.TestDiscoveryParityTest` pins the layer, in the T130 shape where the
 shrinkage IS the acceptance test: the class count is a literal, so narrowing the
 discovery predicate by one class turns the suite red instead of quietly running
 one fewer. That trades a silent failure for a loud chore — adding a test class
 needs the number bumped, and the failure message says so. `unit.DiscoveryOnlyProbeTest`
-is the other half: a real test class that no hand-written line names, kept out
-of the legacy list on purpose.
+is the other half: a real test class that no hand-written line names, and none
+may ever name — a registration written for it would delete the only standing
+evidence that discovery, not a list, is what runs it.
 
 **Machine-checkable test metadata (pilot).** This campaign writes rich claims in
 test doc comments — "green at base by construction" (41 occurrences in
@@ -415,18 +477,24 @@ nothing checks any of them. `@:pin('<role>')` names what a fixture is FOR and
 `@:killer('<arm>')` names the mutation arm that must break it; `TestDiscovery`
 refuses to build a `@:pin('control')` that names no arm, so the reviewer's
 catch becomes a compile error. Piloted on ONE class
-(`unit.ComplexItemKindsSeamTest`) and deliberately not rolled out: the roles are
+(`unit.grammar.haxe.ComplexItemKindsSeamTest`) and deliberately not rolled out: the roles are
 only worth what the arms behind them are, and an arm nobody ran is prose retyped
 as metadata.
 
-**Staging, and when to delete it.** `test/RunTestsLegacy.hx` is the runner as it
-was — the 758 lines unmodified except for the class rename — built by
-`test-js-legacy.hxml` into `bin/test-legacy.js`. It exists so every gate can be
+**The staging arm is gone.** `test/RunTestsLegacy.hx` — the runner as it was,
+758 hand-written lines unmodified except for the class rename, built by
+`test-js-legacy.hxml` into `bin/test-legacy.js` — existed so every gate could be
 run against the OLD registration and the NEW one and the two compared per class
-and per method. **Switch-over criterion: delete `test/RunTestsLegacy.hx`,
-`test-js-legacy.hxml` and `test-js-common-legacy.hxml` once the generated
-registry has carried one merged wave green.** Nothing but the comparison depends
-on them; `RunTests.hx` needs no edit when they go.
+and per method. Its switch-over criterion was "one merged wave green"; that wave
+was the merge that landed the registry, and all three files were deleted in the
+next slice, the one that laid this tree out by package. Nothing but the
+comparison depended on them and `RunTests.hx` needed no edit when they went.
+
+What made deleting it a real removal rather than tidying: **no gate BUILT it.**
+`tools/battery.sh` compiles `test-js.hxml` and `bin/apq-js.hxml` and nothing
+else, so the legacy runner could rot silently while `hxq lint` kept scanning it
+— it was carrying 11 findings that were duplicates of the ones the live runner
+already reports.
 
 ### The runner is quiet by default, and one of the two arguments is load-bearing
 
@@ -651,7 +719,7 @@ The build flags live in `bin/apq-js-common.hxml` and `test-js-common.hxml`, with
 
 ### Parallel shards: one suite, N processes
 
-The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard. The split itself is not the script's — the script asks the runner for its class list (`node bin/test.js --list-classes`) and hands it to `apq shard-plan --classes <list> --shards N [--format lines|filters]`, which applies every gate below and prints the plan; the script spawns processes and waits. That division is the reason the gates are testable at all (`test/unit/ShardPlanTest.hx`), which they were not while they were awk:
+The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard. The split itself is not the script's — the script asks the runner for its class list (`node bin/test.js --list-classes`) and hands it to `apq shard-plan --classes <list> --shards N [--format lines|filters]`, which applies every gate below and prints the plan; the script spawns processes and waits. That division is the reason the gates are testable at all (`test/unit/query/ShardPlanTest.hx`), which they were not while they were awk:
 
 ```sh
 tools/suite-shard.sh                      # 4 shards (default)
@@ -724,7 +792,7 @@ files therefore shipped a `MoveSymbol` scan reading the CURSOR file's comment
 regions while scanning the DESTINATION's text, with the whole suite green; it was
 caught by the author's own forwarding audit, not by a gate.
 
-`test/unit/MoveFamilyCaptureTest.hx` is that gate: five fixtures — a doc block on
+`test/unit/query/MoveFamilyCaptureTest.hx` is that gate: five fixtures — a doc block on
 the moved declaration, a `using` line to carry, an importer to repoint, a
 `#if`-guarded member, a cross-package static move, plus comments and string
 literals spelling the moved names — driven through the four ops with the FULL
@@ -1028,7 +1096,7 @@ What it costs, interleaved base/roots arms, medians of three:
 | `lint ReflectionScan.hx --all --no-oracle` (11 KB) | 1.06 s | 4.85 s | a second round of the same pair read 1.05 / 5.13 |
 | `lint InlineConstant.hx --all --no-oracle` (41 KB) | 1.22 s | 5.18 s | |
 | `lint RefactorSupport.hx --all --no-oracle` (282 KB) | 2.51 s | 6.16 s | |
-| `lint test/unit/LintScopeGateTest.hx --all --no-oracle` | 0.69 s | 4.61 s | the nested config, below |
+| `lint test/unit/check/LintScopeGateTest.hx --all --no-oracle` | 0.69 s | 4.61 s | the nested config, below |
 | `lint <file> --rule prefer-single-quotes --no-oracle` | 0.12 s | 0.10 s | no whole-scope check runs |
 | `lint src test --all --no-oracle` | 92.97 s | 92.92 s | 2256 findings, `lint-diff` 0 added / 0 removed |
 | `refs` / `fmt --list` / `source` on one file | 0.10–0.13 s | 0.10–0.13 s | not a lint path |
@@ -1892,7 +1960,7 @@ the read side had been caught from the start, and still shares `failed` with the
 parse failures. The other 31 `writeFile` call sites in `Cli` still share the
 hazard.
 
-`unit.ApqCountSummaryCliTest` pins all of it against the BYTES, never against
+`unit.cli.ApqCountSummaryCliTest` pins all of it against the BYTES, never against
 `fmt --list`: the fixture directory is snapshotted before the run and re-read
 after, and the count line must equal the number of files whose bytes moved. The
 seam that makes it possible is `Cli.fmtRun`, which returns the summary instead
