@@ -768,15 +768,6 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    branches one step deeper regardless of the config knob. Local-var
  *    initializers (via `HxStatement.VarStmt` / `HxExpr.VarExpr`) keep
  *    the flag false and stay knob-gated.
- *  - `_fnSigBodyEmpty` — set while emitting an `HxFnDecl` whose body is
- *    empty or absent (`NoBody` / empty-`stmts` `BlockBody` /
- *    empty-`stmts` `UntypedBlockBody`), via the struct-level
- *    `@:fmt(propagateFnBodyEmpty('body'))` meta (evaluated at struct
- *    emit prelude, restored after). Consumed by `WrapList.emit`'s cols
- *    formula: when `true` AND `defaultAdditionalIndent` is positive, the
- *    FillLine / NoWrap path drops the `+1` paren-bump continuation,
- *    landing at `member+additional` (1 tab) instead of
- *    `member+1+additional` (2 tabs).
  *  - `_chainModeOverride` — `Null<WrapMode>` forcing
  *    `BinaryChainEmit.emit`'s cascade to a single mode
  *    (ω-chain-fillline-in-condwrap). Set by the runtime
@@ -1324,7 +1315,6 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// `@:fmt(propagateEnumAbstractContext)`), so its `beginEndType` blank count
 	// reads `enumAbstractBeginType` / `enumAbstractEndType`. Default `false`.
 	_inEnumAbstract: Bool,
-	_fnSigBodyEmpty: Bool,
 	_chainModeOverride: Null<WrapMode>,
 	_callArgChainNest: Bool,
 	_suppressMore: Bool,

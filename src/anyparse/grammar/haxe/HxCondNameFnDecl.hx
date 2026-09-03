@@ -40,7 +40,7 @@ package anyparse.grammar.haxe;
  * rollback as `FinalModifiedMember` before `FinalMember`.
  */
 @:peg
-@:fmt(multilineWhenFieldShape('body'), propagateFnBodyEmpty('body'))
+@:fmt(multilineWhenFieldShape('body'))
 typedef HxCondNameFnDecl = {
 	@:kw('#if') var region: HxFnNameRegion;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;

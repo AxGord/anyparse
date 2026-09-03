@@ -58,7 +58,6 @@ package anyparse.grammar.haxe;
  * `HxFnExprT` is synthesised by `TriviaTypeSynth`.
  */
 @:peg
-@:fmt(propagateFnBodyEmpty('body'))
 typedef HxFnExpr = {
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'),

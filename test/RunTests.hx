@@ -85,6 +85,7 @@ import unit.CommentInventoryTest;
 import unit.CommentRewriteSliceTest;
 import unit.ComparisonToBooleanCheckTest;
 import unit.CompilerOracleE2ETest;
+import unit.ComplexItemKindsSeamTest;
 import unit.ComplexityCheckTest;
 import unit.CondAssignMergeCheckTest;
 import unit.CondBranchSplitTest;
@@ -1185,6 +1186,7 @@ class RunTests {
 		addCase(new LintFixDeclineWiringSliceTest());
 		addCase(new LexicalRegionsTest());
 		addCase(new LexicalRegionsSeamTest());
+		addCase(new ComplexItemKindsSeamTest());
 		addCase(new LexicalRegionAgreementTest());
 		addCase(new RemoveImportSliceTest());
 		addCase(new RemoveMemberSliceTest());

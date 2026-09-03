@@ -948,10 +948,9 @@ final class TriviaSepLowering {
 		// once over the captured element array. `null` when the Star does not
 		// carry `@:fmt(complexItems)` — the engine then counts 0 and the chunk
 		// policy stays off, so the emit call is byte-identical.
+		final complexKindsCall: Expr = WriterLowering.astPredCallT(WriterLowering.COMPLEX_ITEM_KINDS_PRED, [macro cast _arr]);
 		final complexKindsDecl: Expr = c.complexItems
-			? macro final _complexKinds: Null<Array<Int>> = opt._suppressComplexItems
-				? null
-				: anyparse.grammar.haxe.HxComplexItems.kinds(cast _arr)
+			? macro final _complexKinds: Null<Array<Int>> = opt._suppressComplexItems ? null : $complexKindsCall
 			: macro final _complexKinds: Null<Array<Int>> = null;
 		return if (c.wrapRulesField != null) {
 			final rulesExpr: Expr = wrapRulesAccess(c.wrapRulesField, c.mapWrap);
@@ -963,8 +962,11 @@ final class TriviaSepLowering {
 			// leading-break at `calcIndent + additionalIndent` (additional-only);
 			// gating on `opt._fnSigBodyEmpty` left a NON-empty single-param
 			// signature one indent level too deep. Other sep-Star consumers
-			// (HxType.Anon.fields, HxObjectLit.fields, etc.) leave the flag
-			// clear and pass `macro false`.
+			// (HxType.Anon.fields, HxObjectLit.fields, etc.) leave the flag clear and
+			// pass `macro false`. The emptiness slot itself had no reader and its
+			// producer `@:fmt(propagateFnBodyEmpty)` is gone; the plain-path reader in
+			// `WriterLowering` carries the same note, and re-narrowing there or here
+			// now means re-deriving the emptiness, not reading an opt field.
 			final compactContExpr: Expr = macro $v{c.bodyAwareCompactIndent};
 			// ω-arraymatrix-wrap: when the Star opted into
 			// `@:fmt(arrayMatrixWrap)` (currently `HxExpr.ArrayExpr`) and the

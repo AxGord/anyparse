@@ -38,6 +38,12 @@ class LexicalRegionsSeamTest extends Test {
 	/** The package prefix no grammar-agnostic module may name outside the allow-list. */
 	private static final GRAMMAR_PATH: String = 'anyparse.grammar.haxe.';
 
+	/** The two packages that ARE the engine — the five-pass build macro and the IR it walks. */
+	private static final ENGINE_DIRS: Array<String> = ['src/anyparse/core', 'src/anyparse/macro'];
+
+	/** The Haxe grammar package: one module per rule type, so the FILE NAMES are the inventory. */
+	private static final HAXE_GRAMMAR_DIR: String = 'src/anyparse/grammar/haxe';
+
 	/** The seam answers the Haxe regions — the scan that used to sit in the engine, asked of the grammar. */
 	public function testPluginAnswersTheHaxeRegions(): Void {
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
@@ -143,6 +149,54 @@ class LexicalRegionsSeamTest extends Test {
 		Assert.equals(allowed.join('\n'), found.join('\n'), 'the allow-list is the whole story — a new one is a forwarder');
 	}
 
+	/**
+	 * The ENGINE — `anyparse.core` and the five-pass build macro — names no rule
+	 * type of any one grammar. Invariant 4 stated where it is most load-bearing:
+	 * a `@:fmt` feature whose lowering spells a grammar's own type is a feature
+	 * only that grammar can ever opt into, and nothing but a reader noticing
+	 * stood between the macro and the next one.
+	 *
+	 * RED AT BASE `3977e25e` with EIGHT hits from two mechanisms. Six sat in
+	 * `WriterLowering.buildFnBodyEmptyCheck`, which dispatched on the literal
+	 * strings `HxFnBody` / `HxFnBodyT` / `HxFnExprBody` / `HxFnExprBodyT` to pick
+	 * which set of BODY CTORS to emit, and named two of them again in its
+	 * `fatalError` text. The other two emitted a direct call to
+	 * `anyparse.grammar.haxe.HxComplexItems.kinds` — one in `WriterLowering`, one
+	 * in `TriviaSepLowering`, the plain and trivia halves of one flag.
+	 *
+	 * The inventory is DERIVED, not listed: the Haxe grammar is one module per
+	 * rule type, so the `Hx…` file names under `HAXE_GRAMMAR_DIR` are exactly the
+	 * names in question, and adding a rule extends the pin for free. A trailing
+	 * `T` / `S` is stripped before the membership test because the macro
+	 * addresses the `TriviaTypeSynth` / `SpanTypeSynth` pairs by that suffix —
+	 * `HxFnBodyT` is the same debt as `HxFnBody`.
+	 *
+	 * Unlike its sibling above, a hit inside a STRING LITERAL COUNTS. Half the
+	 * debt this pins WAS a string literal — `case 'HxFnBody', 'HxFnBodyT':` — so
+	 * excusing strings would have made the pin blind to the thing it exists for.
+	 * Only comments are masked, and with the seam under test.
+	 *
+	 * What it does NOT catch: a bare enum-CTOR name (`case NoBody:` inside a
+	 * `macro switch`), which the deleted handler also carried. Reaching those
+	 * needs the ctor inventory rather than the module list. In practice a ctor
+	 * arrives with its type — `ruleCtorPath` takes a type path — so the type-name
+	 * scan is the tripwire on the same edit; a hand-written `macro switch` over
+	 * bare ctors would still slip past, and that is the known hole.
+	 */
+	public function testTheEngineNamesNoHaxeGrammarRuleType(): Void {
+		final ruleTypes: Array<String> = haxeGrammarRuleTypeNames();
+		Assert.isTrue(ruleTypes.length > 100, 'rule-type inventory looks wrong: ${ruleTypes.length} name(s) — did the grammar move?');
+		final plugin: GrammarPlugin = new HaxeQueryPlugin();
+		final found: Array<String> = [];
+		for (dir in ENGINE_DIRS) for (path in hxFilesUnder(dir)) {
+			final source: String = File.getContent(path);
+			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+			for (name in grammarNamesOutsideComments(source, ruleTypes, regions)) found.push('$path: $name');
+		}
+		found.sort(Reflect.compare);
+		Assert.equals('', found.join('\n'), 'the engine must ASK the grammar (a `@:fmt` arg, an `AstPreds` predicate), never name it');
+	}
+
 	/** Every `.hx` under `dir`, recursively, in a stable order. */
 	private function hxFilesUnder(dir: String): Array<String> {
 		final out: Array<String> = [];
@@ -156,6 +210,52 @@ class LexicalRegionsSeamTest extends Test {
 		}
 		out.sort(Reflect.compare);
 		return out;
+	}
+
+	/** The `Hx…` module names under the Haxe grammar package — one module per rule type. */
+	private function haxeGrammarRuleTypeNames(): Array<String> {
+		return [
+			for (path in hxFilesUnder(HAXE_GRAMMAR_DIR))
+				path.substring(path.lastIndexOf('/') + 1, path.length - '.hx'.length)
+		].filter(name -> name.startsWith('Hx'));
+	}
+
+	/**
+	 * Every `Hx…` identifier in `source` that names one of `ruleTypes` and does
+	 * not sit inside a comment. Scans for the identifier rather than testing each
+	 * name with `indexOf`, so the cost is one pass over the file instead of one
+	 * per name over a 190-name inventory.
+	 */
+	private function grammarNamesOutsideComments(source: String, ruleTypes: Array<String>, regions: Array<LexRegion>): Array<String> {
+		final out: Array<String> = [];
+		final n: Int = source.length;
+		var i: Int = 0;
+		while (i < n - 1) {
+			if (source.fastCodeAt(i) != 'H'.code || source.fastCodeAt(i + 1) != 'x'.code || isIdentPart(source, i - 1)) {
+				i++;
+				continue;
+			}
+			var end: Int = i + 2;
+			while (isIdentPart(source, end)) end++;
+			final name: String = source.substring(i, end);
+			final region: Null<LexRegion> = LexicalRegions.regionAt(i, regions);
+			final masked: Bool = region != null && (region.kind == LexRegionKind.LineComment || region.kind == LexRegionKind.BlockComment);
+			if (!masked && (ruleTypes.contains(name) || ruleTypes.contains(pairedBase(name)))) out.push(name);
+			i = end;
+		}
+		return out;
+	}
+
+	/** `HxFnBodyT` / `HxFnBodyS` -> `HxFnBody`: the synth pairs are the same rule type. */
+	private static function pairedBase(name: String): String {
+		return name.endsWith('T') || name.endsWith('S') ? name.substr(0, name.length - 1) : name;
+	}
+
+	/** Whether `at` is inside `source` and holds an identifier character. */
+	private static function isIdentPart(source: String, at: Int): Bool {
+		if (at < 0 || at >= source.length) return false;
+		final c: Int = source.fastCodeAt(at);
+		return c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
 	}
 	#end
 

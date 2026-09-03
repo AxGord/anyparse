@@ -57,6 +57,21 @@ class WriterLowering {
 	 */
 	private static inline final ARRAY_BRACKET_KIND_PRED: String = 'arrayBracketKind';
 
+	/**
+	 * The grammar-supplied classifier behind `@:fmt(complexItems)` — one
+	 * complexity code per element of a delimited list, for `WrapList`'s
+	 * `complexItemKinds` axis. Read at the two emit sites the flag has (the
+	 * plain postfix-Star here, the trivia sep-Star in `TriviaSepLowering`),
+	 * which must ask the SAME question for the same list.
+	 *
+	 * Addressed through `AstPredLowering` like every other grammar
+	 * predicate. Both sites used to emit a direct call to
+	 * `anyparse.grammar.haxe.HxComplexItems.kinds` instead — the last
+	 * grammar type this package named, and the reason a second grammar
+	 * could not have opted into `complexItems` at all.
+	 */
+	private static inline final COMPLEX_ITEM_KINDS_PRED: String = 'complexItemKinds';
+
 	/** `@:fmt(valueBraceSymmetry)` required args (siblingField, blockCtor, stmtCtor); any further ones are skip-ctors. */
 	private static inline final VALUE_BRACE_SYMMETRY_MIN_ARGS: Int = 3;
 
@@ -1298,8 +1313,8 @@ class WriterLowering {
 			dcCall(parts);
 		else
 			buildMultiVarWrapFold(parts, typePath, multiVarKnob, multiVarMoreField);
-		return finalizeStructReturn(node, arrowValueIfReflowWrap(node, dcExpr));
-		// (empty-body detection + ctor-set dispatch live in finalizeStructReturn)
+		final wrapped: Expr = arrowValueIfReflowWrap(node, dcExpr);
+		return macro return $wrapped;
 	}
 
 	/**
@@ -2255,7 +2270,9 @@ class WriterLowering {
 		// `itemCount <= 1 -> noWrap`, its default fillLineWithLeadingBreak
 		// owning the overflow break) then took the fit-driven `1 + additional`
 		// paren-bump regime and gained an extra indent level. Fields without
-		// the flag pass `false` so only the opt-in site reacts.
+		// the flag pass `false` so only the opt-in site reacts. That slot had no
+		// other reader, and its producer `@:fmt(propagateFnBodyEmpty)` is gone, so
+		// re-narrowing now means re-deriving the emptiness, not reading an opt field.
 		final bodyAware: Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
 		// ω-group-rest-probe slice 2: `@:fmt(groupRestProbe)` opt-in for
 		// Star fields whose outer Group should bias toward MBreak when
@@ -6626,9 +6643,12 @@ class WriterLowering {
 			// Suppressed inside a case pattern / switch subject for the same
 			// reason the array literal is (an enum-ctor pattern parses as a
 			// `Call`). Absent flag → `null`, byte-identical emission.
+			final complexKindsCall: Expr = AstPredLowering.predCallExpr(
+				_shape.root, _ctx.trivia, false, COMPLEX_ITEM_KINDS_PRED, [macro cast _args]
+			);
 			final complexKindsExpr: Expr = c.branch.fmtHasFlag('complexItems')
 				? macro {
-					final _ck: Null<Array<Int>> = opt._suppressComplexItems ? null : anyparse.grammar.haxe.HxComplexItems.kinds(cast _args);
+					final _ck: Null<Array<Int>> = opt._suppressComplexItems ? null : $complexKindsCall;
 					_ck;
 				}
 				: macro null;
@@ -9030,60 +9050,6 @@ class WriterLowering {
 	}
 
 	/**
-	 * ω-functionsignature-body-aware-indent: finalise the struct writer's
-	 * return Expr. When the struct carries `@:fmt(propagateFnBodyEmpty(
-	 * '<bodyField>'))`, brackets the assembled `dcExpr` in a
-	 * save-mutate-eval-restore of `opt._fnSigBodyEmpty` keyed on the
-	 * named body field's emptiness; otherwise returns `return dcExpr`
-	 * directly. Extracted verbatim from `lowerStruct`'s tail.
-	 */
-	private function finalizeStructReturn(node: ShapeNode, dcExpr: Expr): Expr {
-		final fnBodyEmptyArgs: Null<Array<String>> = node.fmtReadStringArgs('propagateFnBodyEmpty');
-		if (fnBodyEmptyArgs == null) return macro return $dcExpr;
-		if (fnBodyEmptyArgs.length != 1)
-			Context.fatalError(
-				'WriterLowering: @:fmt(propagateFnBodyEmpty) expects 1 string arg (bodyFieldName), got ${fnBodyEmptyArgs.length}',
-				Context.currentPos()
-			);
-		final bodyField: String = fnBodyEmptyArgs[0];
-		final bodyAccess: Expr = { expr: EField(macro value, bodyField), pos: Context.currentPos() };
-		// ω-anonfnsignature-body-aware-indent: dispatch the empty-body
-		// switch on the body field's actual enum type. `HxFnBody` and
-		// `HxFnExprBody` share two bare ctor names (`BlockBody`,
-		// `ExprBody`) but differ in the other ctors — a single
-		// hardcoded form fails compilation on whichever enum lacks
-		// `NoBody` / `UntypedBlockBody`. Resolve the type via the
-		// body field's ShapeNode `base.ref` annotation (FQN, stripped
-		// by `simpleName`) and emit the matching ctor set. The `T`-
-		// suffixed variants (`HxFnBodyT` / `HxFnExprBodyT`) carry the
-		// same ctor names per `TriviaTypeSynth` — share an arm. Optional
-		// body (`Null<HxFnExprBody>` on `HxFnExpr.body`) gets a leading
-		// `_body == null` guard so absent body (`@:overload(function(...))`)
-		// flags as empty.
-		var bodyRef: Null<String> = null;
-		var bodyIsOptional: Bool = false;
-		for (c in node.children) if (c.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == bodyField) {
-			bodyRef = c.annotations.get(AnnotationKeys.BASE_REF);
-			bodyIsOptional = c.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
-			break;
-		}
-		if (bodyRef == null)
-			Context.fatalError(
-				'WriterLowering: @:fmt(propagateFnBodyEmpty) bodyField "$bodyField" not found in struct', Context.currentPos()
-			);
-		final bodyTypeName: String = simpleName(bodyRef);
-		// ω-fnbody-empty-honours-orphan-trivia detail lives in buildFnBodyEmptyCheck.
-		final isEmptyExpr: Expr = buildFnBodyEmptyCheck(bodyTypeName, bodyAccess, bodyIsOptional);
-		return macro {
-			final _savedFnSigBodyEmpty: Bool = opt._fnSigBodyEmpty;
-			opt._fnSigBodyEmpty = $isEmptyExpr;
-			final _resultDoc: anyparse.core.Doc = $dcExpr;
-			opt._fnSigBodyEmpty = _savedFnSigBodyEmpty;
-			return _resultDoc;
-		};
-	}
-
-	/**
 	 * omega-arrow-value-if-reflow - struct-level wrap for a type carrying
 	 * `@:fmt(arrowValueIfReflow('<knobField>', '<spineField>', '<spineCtor>'))`
 	 * (sole consumer: `HxIfExpr`).
@@ -9447,65 +9413,6 @@ class WriterLowering {
 	 */
 	private function arrowValueIfBlockOpt(child: ShapeNode, optExpr: Expr): Expr {
 		return child.fmtHasFlag(ARROW_VALUE_IF_SITE) ? macro (_aifBlocked ? _setArrowValueIfBlocked($optExpr, opt) : $optExpr) : optExpr;
-	}
-
-	/**
-	 * ω-anonfnsignature-body-aware-indent: build the runtime `Bool` Expr that
-	 * decides whether the named function-body field is empty (drives
-	 * `opt._fnSigBodyEmpty`). Dispatches the empty-body switch on the body
-	 * field's actual enum type (`HxFnBody` / `HxFnExprBody` and their `T`
-	 * variants) and honours orphan-trivia in trivia mode.
-	 */
-	private function buildFnBodyEmptyCheck(bodyTypeName: String, bodyAccess: Expr, bodyIsOptional: Bool): Expr {
-		// ω-fnbody-empty-honours-orphan-trivia: in trivia mode, a `{ // comment }`
-		// or `{\n // orphan \n}` body is NOT empty for fork's
-		// `paren_indent_function_signature` rule — the comment is content, even
-		// though `stmts.length == 0`. Mirror fork's behaviour by additionally
-		// checking the synth slots `<field>TrailingOpen` (`// after open lit`)
-		// and `<field>TrailingLeading` (orphan comments before close lit). Skip
-		// `TrailingClose` (trailing AFTER `}` doesn't affect body content) and
-		// `TrailingBlankBefore` (blank-line only is still empty). In plain mode
-		// the slots don't exist on the body type, so the original
-		// `_b.stmts.length == 0` form is preserved.
-		final blockEmptyExpr: Expr = _ctx.trivia
-			? macro _b.stmts.length == 0 && _b.stmtsTrailingOpen == null && _b.stmtsTrailingLeading.length == 0
-			: macro _b.stmts.length == 0;
-		final untypedBlockEmptyExpr: Expr = _ctx.trivia
-			? macro _u.block.stmts.length == 0 && _u.block.stmtsTrailingOpen == null && _u.block.stmtsTrailingLeading.length == 0
-			: macro _u.block.stmts.length == 0;
-		final bodySwitchExpr: Expr = switch bodyTypeName {
-			case 'HxFnBody', 'HxFnBodyT':
-				macro switch _body {
-					case NoBody: true;
-					case BlockBody(_b): $blockEmptyExpr;
-					case UntypedBlockBody(_u): $untypedBlockEmptyExpr;
-					case ExprBody(_): false;
-					case CondBody(_): false;
-				};
-			case 'HxFnExprBody', 'HxFnExprBodyT':
-				macro switch _body {
-					case BlockBody(_b): $blockEmptyExpr;
-					case ExprBody(_): false;
-				};
-			case _:
-				Context.fatalError(
-					'WriterLowering: @:fmt(propagateFnBodyEmpty) unsupported body type "$bodyTypeName" (expected HxFnBody / HxFnExprBody)',
-					Context.currentPos()
-				);
-				throw 'unreachable';
-		};
-		return bodyIsOptional
-			? macro {
-				final _body = $bodyAccess;
-				if (_body == null)
-					true;
-				else
-					$bodySwitchExpr;
-			}
-			: macro {
-				final _body = $bodyAccess;
-				$bodySwitchExpr;
-			};
 	}
 
 	/**

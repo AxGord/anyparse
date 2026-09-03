@@ -6,6 +6,12 @@ using Lambda;
  * Per-element complexity classification of a delimited list, as the writer's
  * `WrapListOptions.complexItemKinds` axis expects it.
  *
+ * Reached from the writer lowering as the `complexItemKinds` predicate on the
+ * per-family `AstPreds` marker classes, not by name: the lowering is
+ * grammar-agnostic and may not spell a grammar type (see `docs/strategies.md`,
+ * "The engine never spells a grammar's own type or constructor"). The table
+ * entry that forwards here is `HxAstPredLowering.complexItemKindsField`.
+ *
  * "Complex" has ONE definition across both consumers (the `complexItemCount >= n`
  * wrap condition and the `callParameter` chunk policy): a `new` expression, a
  * call, or a CONTAINER literal (object or array) carrying a call / `new` anywhere
