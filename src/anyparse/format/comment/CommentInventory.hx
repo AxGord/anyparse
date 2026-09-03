@@ -30,16 +30,19 @@ using StringTools;
  * whitespace removed. Multiplicity is compared too — losing one of two
  * identical comments is still data loss.
  *
- * The scan skips string and regex literals so a `"/* not a comment *\/"`
- * payload never counts as a comment on either side, and it follows a
- * single-quoted string's `${…}` interpolation as CODE — a nested same-quote
- * literal there would otherwise desynchronise the scan for the rest of the
- * file, which is the one way a real loss could hide from this check.
+ * What the audit demands OF that scan: it must skip the grammar's string and
+ * regex literals, so a `"/* not a comment *\/"` payload never counts as a
+ * comment on either side, and it must follow whatever code a literal can nest
+ * (for Haxe, a `${…}` interpolation hole). A scan that mis-pairs a nested
+ * same-quote literal desynchronises for the rest of the file, which is the one
+ * way a real loss could hide from this check.
  *
- * The scan is HAXE-lexed (`'…'` interpolation, `$$`, `~/…/`) even though the
- * package is otherwise grammar-agnostic: the Haxe writer is the only consumer
- * so far. A second grammar needs a per-grammar lexer hook here, not this one
- * inherited — its string and regex syntax is not Haxe's.
+ * The scan is the CALLER's: `collect` and `firstMissing` take a `CommentScan`,
+ * the per-grammar comment lexer, so nothing in this package knows one
+ * language's string, interpolation or regex syntax. It used to be Haxe-lexed
+ * inline — the Haxe writer was the only consumer, and a grammar-agnostic
+ * package was deciding what a comment is for every language. That lexer now
+ * sits beside the grammar's other one, as `HaxeLexicalRegions.scanComments`.
  */
 @:nullSafety(Strict)
 final class CommentInventory {
@@ -55,9 +58,6 @@ final class CommentInventory {
 	/** Longest comment head an error message quotes before eliding. */
 	private static inline final MESSAGE_WIDTH: Int = 60;
 
-	/** The quote that opens an INTERPOLATING string literal in Haxe. */
-	private static inline final SINGLE_QUOTE: Int = "'".code;
-
 	/** Shortest block comment that carries BOTH delimiters (`/**\/`). */
 	private static inline final MIN_CLOSED_BLOCK: Int = 4;
 
@@ -69,12 +69,16 @@ final class CommentInventory {
 	 * and truncated to one line for a message; `null` when every comment
 	 * survived. Comment bodies are compared ignoring the whitespace-level
 	 * reformatting the writer is allowed to perform.
+	 *
+	 * `scan` is the caller's grammar comment lexer — the same one on both
+	 * sides, so a difference can only be a lost comment, never a difference
+	 * of opinion about what a comment is.
 	 */
-	public static function firstMissing(source: String, output: String): Null<String> {
-		final wanted: Array<String> = collect(source);
+	public static function firstMissing(source: String, output: String, scan: CommentScan): Null<String> {
+		final wanted: Array<String> = collect(source, scan);
 		if (wanted.length == 0) return null;
 		final have: Map<String, Int> = [];
-		for (c in collect(output)) {
+		for (c in collect(output, scan)) {
 			final key: String = normalize(c);
 			have[key] = (have[key] ?? 0) + 1;
 		}
@@ -88,116 +92,14 @@ final class CommentInventory {
 	}
 
 	/**
-	 * Every `//` and `/* *\/` comment in `src`, verbatim and in source
-	 * order, with string and regex literals skipped.
-	 *
-	 * A single-quoted string's `${…}` interpolation is scanned as CODE, so a
-	 * nested same-quote literal (`'a ${f(\'b\')} c'`) cannot desynchronise the
-	 * scan — and a comment written inside the interpolation is counted like
-	 * any other. `$$` is the escaped dollar and opens nothing.
+	 * Every comment in `src`, verbatim and in source order, as `scan` reports
+	 * them — string and regex literals skipped, and whatever else that
+	 * grammar's lexer decides.
 	 */
-	public static function collect(src: String): Array<String> {
+	public static function collect(src: String, scan: CommentScan): Array<String> {
 		final out: Array<String> = [];
 		scan(src, (start: Int, end: Int) -> out.push(src.substring(start, end)));
 		return out;
-	}
-
-	/**
-	 * `collect`'s lexer, reporting each comment as a `[start, end)` span
-	 * instead of its text. Split out so a caller that needs WHERE a comment
-	 * sits — `FormatterOff` locating its region markers — reuses this scan
-	 * rather than growing a second Haxe lexer beside it. The literal and
-	 * interpolation handling documented on `collect` is this function's.
-	 */
-	public static function scan(src: String, onComment: (start:Int, end:Int) -> Void): Void {
-		// noqa: complexity
-		// One cohesive lexer state machine — every branch mutates the shared
-		// `quote` / interpolation-frame state, so splitting it would thread
-		// that state back out through a per-character return value.
-		final len: Int = src.length;
-		// One entry per open `${` interpolation, holding the `{` nesting depth
-		// reached inside it; the frame closes on the `}` that meets depth 0.
-		final interpolations: Array<Int> = [];
-		// The open quote character while inside a string literal, 0 in code.
-		var quote: Int = 0;
-		var i: Int = 0;
-		while (i < len) {
-			final c: Int = src.fastCodeAt(i);
-			final next: Int = i + 1 < len ? src.fastCodeAt(i + 1) : 0;
-			if (quote != 0) {
-				if (c == '\\'.code) {
-					i += 2;
-					continue;
-				}
-				if (quote == SINGLE_QUOTE && c == '$'.code && next == '$'.code) {
-					i += 2;
-					continue;
-				}
-				if (quote == SINGLE_QUOTE && c == '$'.code && next == '{'.code) {
-					interpolations.push(0);
-					quote = 0;
-					i += 2;
-					continue;
-				}
-				if (c == quote) quote = 0;
-				i++;
-				continue;
-			}
-			if (c == '/'.code && next == '/'.code) {
-				final start: Int = i;
-				while (i < len && src.fastCodeAt(i) != '\n'.code) i++;
-				onComment(start, i);
-				continue;
-			}
-			if (c == '/'.code && next == '*'.code) {
-				final start: Int = i;
-				final close: Int = src.indexOf('*/', i + 2);
-				i = close < 0 ? len : close + 2;
-				onComment(start, i);
-				continue;
-			}
-			if (c == '"'.code || c == SINGLE_QUOTE) {
-				quote = c;
-				i++;
-				continue;
-			}
-			// `~/` opens a regex literal; it runs to an unescaped `/` on the
-			// same line (an unterminated one is a syntax error the parser
-			// would have rejected long before the writer ran).
-			if (c == '~'.code && next == '/'.code) {
-				i = skipRegex(src, i + 2);
-				continue;
-			}
-			if (interpolations.length > 0 && (c == '{'.code || c == '}'.code)) {
-				final last: Int = interpolations.length - 1;
-				if (c == '{'.code)
-					interpolations[last] = interpolations[last] + 1;
-				else if (interpolations[last] == 0) {
-					interpolations.pop();
-					quote = SINGLE_QUOTE;
-				} else
-					interpolations[last] = interpolations[last] - 1;
-				i++;
-				continue;
-			}
-			i++;
-		}
-	}
-
-	/** Index just past a `~/…/` regex literal opened at `from` (its body start). */
-	private static function skipRegex(src: String, from: Int): Int {
-		final len: Int = src.length;
-		var i: Int = from;
-		while (i < len) {
-			final c: Int = src.fastCodeAt(i);
-			if (c == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			i++;
-			if (c == '/'.code || c == '\n'.code) break;
-		}
-		return i;
 	}
 
 	/** One-line rendering of a comment for an error message. */

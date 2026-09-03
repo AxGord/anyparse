@@ -228,9 +228,10 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (tree == null || MemberWriteScan.coreApiPinsMemberShape(entry.source)) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(
-				plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)
-			);
+			// Resolved ONCE per file, not per class: `refShape()` builds its struct — several
+			// `concat`ed arrays among them — on every call.
+			final shape: RefShape = plugin.refShape();
+			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, entry.source, plugin.lexicalRegions.bind(entry.source));
 			for (cls in CheckScan.classBodies(tree)) {
 				// Build-macro bail. This rule DELETES the getter and the backing field, so a member a
 				// builder generates around them loses its referent: measured on Haxe 4.3.7, a `@:build`
@@ -241,7 +242,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				// beside the `@:coreApi` bail above.
 				final owner: Null<String> = cls.name;
 				if (owner != null && index.transitivelyCarriesBuildMacro(owner, entry.file)) continue;
-				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin, branch);
+				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin, branch, shape);
 			}
 		}
 		return out;
@@ -284,8 +285,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (span != null) wanted.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source, plugin.lexicalRegions.bind(source));
-		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch);
+		final shape: RefShape = plugin.refShape();
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
+		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch, shape);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -335,7 +337,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (tree == null) return null;
 		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, v.file)
 			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), src, plugin.lexicalRegions.bind(src));
+		final shape: RefShape = plugin.refShape();
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, src, plugin.lexicalRegions.bind(src));
 		for (cls in CheckScan.classBodies(tree)) {
 			final className: Null<String> = cls.name;
 			if (className == null) continue;
@@ -343,7 +346,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final t = memberTables(cls, src, branch);
 			for (prop in t.properties) if (prop.span.from == span.from) {
 				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
-				final c = classifyProperty(cls, src, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
+				final c = classifyProperty(cls, src, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 				// The self-backed arm deletes nothing outside the owner, so no other file can need an edit.
 				if (c == null || c.inlineGetter != null || c.selfBacked) return null;
 				if (!subtypeIndex.subtypeReferencesField(owner, c.field)) return null;
@@ -463,14 +466,14 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function considerClass(
 		out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex, subtypeIndex: SymbolIndex, maxBypass: Int,
-		sourceByFile: Map<String, String>, plugin: GrammarPlugin, branch: MemberBranchSeams
+		sourceByFile: Map<String, String>, plugin: GrammarPlugin, branch: MemberBranchSeams, shape: RefShape
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
 		final owner: String = className;
 		final t = memberTables(cls, source, branch);
 		for (prop in t.properties) if (!subtypeBlocks(subtypeIndex, className, prop.name)) {
-			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
+			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 			if (c == null) continue;
 			// Every member the collapse DELETES: the accessors, plus the backing field on the bridged
 			// arm. The self-backed arm deletes no field — the property IS the storage — so its
@@ -509,20 +512,27 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * exactly `return _x;` or `return this._x;` — else null (any other body
 	 * carries real logic).
 	 */
-	private static function trivialReturnField(getter: QueryNode): Null<String> {
-		final body: Null<QueryNode> = bodyOf(getter);
-		return body == null || body.children.length != 1
-			? null
-			: switch body.kind {
-				case 'BlockBody': returnedField(body.children[0], 'ReturnStmt');
-				case 'ExprBody': returnedField(body.children[0], 'ReturnExpr');
-				case _: null;
-			};
+	private static function trivialReturnField(getter: QueryNode, shape: RefShape): Null<String> {
+		final body: Null<QueryNode> = bodyOf(getter, shape);
+		return if (body == null || body.children.length != 1)
+			null
+		else if (body.kind == shape.blockBodyKind)
+			returnedField(body.children[0], 'ReturnStmt')
+		else if ((shape.expressionBodyKinds ?? []).contains(body.kind))
+			returnedField(body.children[0], 'ReturnExpr')
+		else
+			null;
 	}
 
-	/** The getter's body node (`BlockBody` / `ExprBody`), or null. */
-	private static function bodyOf(getter: QueryNode): Null<QueryNode> {
-		return getter.children.find(child -> child.kind == 'BlockBody' || child.kind == 'ExprBody');
+	/**
+	 * The getter's body node — a statement block (`RefShape.blockBodyKind`) or an expression
+	 * body (`expressionBodyKinds`), else null. Deliberately not `functionBodyKinds`, which also
+	 * names the bodyless marker and the body shapes this rule cannot read.
+	 */
+	private static function bodyOf(getter: QueryNode, shape: RefShape): Null<QueryNode> {
+		final blockKind: Null<String> = shape.blockBodyKind;
+		final exprKinds: Array<String> = shape.expressionBodyKinds ?? [];
+		return getter.children.find(child -> child.kind == blockKind || exprKinds.contains(child.kind));
 	}
 
 	/**
@@ -573,7 +583,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 */
 	private static function collectClassFixEdits(
 		cls: QueryNode, source: String, file: String, wanted: Array<String>, index: Null<SymbolIndex>,
-		out: Array<{ span: Span, text: String }>, maxBypass: Int, branch: MemberBranchSeams
+		out: Array<{ span: Span, text: String }>, maxBypass: Int, branch: MemberBranchSeams, shape: RefShape
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
@@ -581,7 +591,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		for (prop in t.properties) if (
 			wanted.contains('${prop.span.from}:${prop.span.to}') && !subtypeBlocks(index, className, prop.name)
 		) {
-			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
+			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 			if (c == null) continue;
 			if (subtypeFieldBlocks(index, className, c.field, c.selfBacked, c.inlineGetter)) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c);
@@ -1092,7 +1102,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			isOverride: Bool,
 			isInline: Bool
 		}>,
-		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int
+		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int, shape: RefShape
 	): Null<{
 		field: String,
 		fieldNode: QueryNode,
@@ -1113,7 +1123,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			isInline: Bool
 		}> = getters['get_${prop.name}'];
 		if (getter == null || getter.dyn) return null;
-		final trivGet: Null<String> = trivialReturnField(getter.node);
+		final trivGet: Null<String> = trivialReturnField(getter.node, shape);
 		final raw: Null<{
 			field: String,
 			clauseText: String,
@@ -1124,7 +1134,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			inlineGetter: Null<QueryNode>
 		}> = prop.write == 'set'
 			? classifySetProperty(
-				cls, prop, getter.node, getter.isInline, getter.isOverride, trivGet, setters, privateFieldNodes, maxBypass
+				cls, prop, getter.node, getter.isInline, getter.isOverride, trivGet, setters, privateFieldNodes, maxBypass, shape
 			)
 			: classifyReadOnlyProperty(prop.name, prop.write, getter.node, trivGet);
 		if (raw == null) return null;
@@ -1231,17 +1241,18 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * value;` / `return this._x = value;` (`value` = the setter's single parameter) — else null
 	 * (any other body carries real logic).
 	 */
-	private static function trivialSetterField(setter: QueryNode): Null<String> {
+	private static function trivialSetterField(setter: QueryNode, shape: RefShape): Null<String> {
 		final paramName: Null<String> = setterParamName(setter);
 		if (paramName == null) return null;
-		final body: Null<QueryNode> = bodyOf(setter);
+		final body: Null<QueryNode> = bodyOf(setter, shape);
 		if (body == null || body.children.length != 1) return null;
 		final ret: QueryNode = body.children[0];
-		final retKind: Null<String> = switch body.kind {
-			case 'BlockBody': 'ReturnStmt';
-			case 'ExprBody': 'ReturnExpr';
-			case _: null;
-		}
+		final retKind: Null<String> = if (body.kind == shape.blockBodyKind)
+			'ReturnStmt';
+		else if ((shape.expressionBodyKinds ?? []).contains(body.kind))
+			'ReturnExpr';
+		else
+			null;
 		if (retKind == null || ret.kind != retKind || ret.children.length != 1) return null;
 		final assign: QueryNode = ret.children[0];
 		if (assign.kind != 'Assign' || assign.children.length != 2) return null;
@@ -1286,12 +1297,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * the first constructor reference to `field` is anything else.
 	 */
 	private static function findMovableCtorInit(
-		cls: QueryNode, field: String
+		cls: QueryNode, field: String, shape: RefShape
 	): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
 		final ctor: Null<QueryNode> = cls.children.find(c -> (c.kind == 'FnMember' || c.kind == 'FinalModifiedMember') && c.name == 'new');
 		if (ctor == null) return null;
-		final body: Null<QueryNode> = bodyOf(ctor);
-		if (body == null || body.kind != 'BlockBody') return null;
+		final body: Null<QueryNode> = bodyOf(ctor, shape);
+		if (body == null || body.kind != shape.blockBodyKind) return null;
 		final firstMention: Null<QueryNode> = body.children.find(stmt -> mentionsField(stmt, field));
 		return firstMention == null ? null : movableInitOf(firstMention, field);
 	}
@@ -1358,7 +1369,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			isOverride: Bool,
 			isInline: Bool
 		}>,
-		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int
+		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int, shape: RefShape
 	): Null<{
 		field: String,
 		clauseText: String,
@@ -1375,10 +1386,10 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			isInline: Bool
 		}> = setters['set_${prop.name}'];
 		if (setter == null || setter.dyn) return null;
-		final trivSet: Null<String> = trivialSetterField(setter.node);
+		final trivSet: Null<String> = trivialSetterField(setter.node, shape);
 		if (trivGet != null && trivSet == null)
 			return classifyTrivGetOpaqueSetter(
-				cls, prop, getterNode, getterInline, getterOverride, trivGet, setter, privateFieldNodes, maxBypass
+				cls, prop, getterNode, getterInline, getterOverride, trivGet, setter, privateFieldNodes, maxBypass, shape
 			);
 		if (trivGet != null && trivSet != null) {
 			return trivGet != trivSet ? null : {
@@ -1532,7 +1543,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			isOverride: Bool,
 			isInline: Bool
 		},
-		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int
+		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int, shape: RefShape
 	): Null<{
 		field: String,
 		clauseText: String,
@@ -1559,7 +1570,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final setterSpan: Null<Span> = setter.node.span;
 		if (fieldNode == null || setterSpan == null) return null;
 		final ci: Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> = fieldNode.children.length == 0
-			? findMovableCtorInit(cls, trivGet)
+			? findMovableCtorInit(cls, trivGet, shape)
 			: null;
 		final allowStmt: Null<QueryNode> = ci?.stmt;
 		final writes: Null<Array<QueryNode>> = collectExternalWrites(cls, trivGet, setterSpan, allowStmt);

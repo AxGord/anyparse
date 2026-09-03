@@ -43,14 +43,18 @@ using StringTools;
  * vocabulary of the language is far richer than anything a `TextFormat`
  * can express.
  *
- * `FormatReader.resolve` in the Phase 2 macro pipeline currently extracts
- * **only the `whitespace` field** from the resolved format class (see
- * `src/anyparse/macro/FormatReader.hx`), so implementing the interface
- * with placeholder values for the rest is enough to drive the existing
- * pipeline. A dedicated `LanguageFormat` interface will appear once the
- * Pratt / Indent strategies demand format-provided data that cannot be
- * expressed as a `TextFormat` shape; until then this class lives in the
- * grammar package rather than polluting `anyparse.format.text.*`.
+ * `FormatReader.resolveText` in the Phase 2 macro pipeline reads the WHOLE descriptor —
+ * `whitespace`, the JSON-family literal vocabulary, `spacedLeads` / `tightLeads`, and
+ * `lineComment` / `blockComment`, which become `FormatInfo.commentPatterns`. The doc here
+ * used to claim only `whitespace` was read; anyone evaluating whether a comment or
+ * lexical pass could be GENERATED from this declaration got the wrong answer from that
+ * sentence, since the delimiters it would need are declared right here. (That derivation
+ * was measured and refused for a different reason — the `${ … }` hole boundary no
+ * declaration expresses; the verdict is on `HaxeLexicalRegions`'s class doc.) Placeholder
+ * values for the JSON-shaped fields are still enough to drive the pipeline. A dedicated
+ * `LanguageFormat` interface will appear once the Pratt / Indent strategies demand
+ * format-provided data that cannot be expressed as a `TextFormat` shape; until then this
+ * class lives in the grammar package rather than polluting `anyparse.format.text.*`.
  *
  * Singleton for the same reason as `JsonFormat`: the fields are pure
  * configuration with no per-parse state.

@@ -1,6 +1,5 @@
 package unit;
 
-import anyparse.format.comment.CommentInventory;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -21,9 +20,11 @@ import sys.io.File;
 
 /**
  * The differential pin between the THREE answers this project holds to "which bytes of a Haxe
- * file are not code": the hand byte scanner behind the seam (`HaxeLexicalRegions`, reached as
- * `GrammarPlugin.lexicalRegions`), the writer's independent comment lexer
- * (`CommentInventory.scan`), and the GENERATED PARSER's literal nodes. Nothing pinned them
+ * file are not code": the hand byte scanner
+ * behind the seam (`HaxeLexicalRegions.scan`, reached as `GrammarPlugin.lexicalRegions`), the
+ * writer's comment lexer (`HaxeLexicalRegions.scanComments`, reached as the
+ * `anyparse.format.comment.CommentScan` the guard is handed), and the GENERATED PARSER's literal
+ * nodes. The first two are separate functions of one class and must stay so — see below. Nothing pinned them
  * against each other before this class, and `RefactorSupport.collectCommentTokens` — most of the
  * tool — reads the first one to gate DELETES.
  *
@@ -37,7 +38,7 @@ import sys.io.File;
  *    `'…'` literal is ONE `StringLit`, holes included, and a literal nested in a hole opens no
  *    region of its own. That flatness is deliberate — `LexicalRegions.regionAt` returns the FIRST
  *    containing region, so nesting could not be expressed anyway.
- *  - **`CommentInventory.scan`** answers only about comments, and it walks INTO an interpolation
+ *  - **`scanComments`** answers only about comments, and it walks INTO an interpolation
  *    hole, because a comment written there is a comment the writer must not delete. It therefore
  *    reports a token the scanner deliberately does not — the one place the two legitimately
  *    disagree, pinned by name in `testCommentInsideAnInterpolationHoleIsTheOneDisagreement`.
@@ -333,7 +334,7 @@ class LexicalRegionAgreementTest extends Test {
 	/** The writer audit's comment tokens of `source`, in source order. */
 	private function inventoryCommentSpans(source: String): Array<Span> {
 		final out: Array<Span> = [];
-		CommentInventory.scan(source, (start: Int, end: Int) -> out.push(new Span(start, end)));
+		HaxeLexicalRegions.scanComments(source, (start: Int, end: Int) -> out.push(new Span(start, end)));
 		return out;
 	}
 

@@ -141,9 +141,6 @@ final class InlineMethod {
 	 */
 	private static final SHADOW_BIND_KINDS: Array<String> = ['Required', 'Optional', 'VarStmt', 'FinalStmt', 'LocalFnStmt'];
 
-	/** Function-body wrapper kinds: a `{ ... }` block or a single expression. */
-	private static final BODY_KINDS: Array<String> = ['BlockBody', 'ExprBody'];
-
 	/**
 	 * Inline the function whose declaration is at `line:col` in `source`.
 	 * `plugin` / `shape` are the caller-owned grammar plugin and its
@@ -188,13 +185,18 @@ final class InlineMethod {
 	 * A void `return;` (no value), a multi-statement block, or a missing
 	 * body (abstract / interface method) all yield null.
 	 */
-	private static function singleReturnExpr(decl: QueryNode): Null<QueryNode> {
+	private static function singleReturnExpr(decl: QueryNode, shape: RefShape): Null<QueryNode> {
 		if (decl.children.length == 0) return null;
 		final body: QueryNode = decl.children[decl.children.length - 1];
-		if (!BODY_KINDS.contains(body.kind)) return null;
+		// The two body shapes an inline can reduce, asked of the grammar: a statement block
+		// (`RefShape.blockBodyKind`) or a wrapper whose single child IS the value
+		// (`expressionBodyKinds`). Every other body kind — bodyless, `untyped`, a
+		// conditional-compilation region — falls out here, which is the refusal it always was.
+		final isBlock: Bool = body.kind == shape.blockBodyKind;
+		if (!isBlock && !(shape.expressionBodyKinds ?? []).contains(body.kind)) return null;
 		if (body.children.length == 0) return null;
 
-		if (body.kind == 'BlockBody') {
+		if (isBlock) {
 			if (body.children.length != 1) return null;
 			final stmt: QueryNode = body.children[0];
 			return if (stmt.kind != 'ReturnStmt')
@@ -426,7 +428,7 @@ final class InlineMethod {
 		}
 
 		// Body must reduce to a single return expression `E`.
-		final body: Null<QueryNode> = singleReturnExpr(decl);
+		final body: Null<QueryNode> = singleReturnExpr(decl, shape);
 		if (body == null)
 			return PErr('"$name" body is not a single return expression — only `{ return E; }` / `=> E` bodies can be inlined');
 		final exprBody: QueryNode = body;

@@ -388,9 +388,9 @@ class CommentRewriteSliceTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('crprev', [{ name: 'C.hx', source: '/**\n * Alpha beta gamma.\n */\nclass C {}\n' }]);
 		final path: String = '$dir/C.hx';
-		final hit: String = captureStderr(() -> Assert.equals(0, Cli.run(['comment-rewrite', 'beta', 'BETA', path])));
+		final hit: String = CliFixture.captureStderr(() -> Assert.equals(0, Cli.run(['comment-rewrite', 'beta', 'BETA', path])));
 		Assert.equals(-1, hit.indexOf('contains the find text'), 'a matching preview does not claim it matched nothing: $hit');
-		final miss: String = captureStderr(() -> Assert.equals(0, Cli.run(['comment-rewrite', 'zqxwv', 'BETA', path])));
+		final miss: String = CliFixture.captureStderr(() -> Assert.equals(0, Cli.run(['comment-rewrite', 'zqxwv', 'BETA', path])));
 		Assert.isTrue(miss.indexOf('contains the find text') != -1, 'a real miss still says so: $miss');
 		CliFixture.removeDir(dir);
 		#else
@@ -426,28 +426,6 @@ class CommentRewriteSliceTest extends Test {
 				'';
 			case Err(message): message;
 		};
-	}
-
-	/** Everything the CLI writes to fd 2 while `fn` runs — the only place these diagnostics live. */
-	private static function captureStderr(fn: () -> Void): String {
-		#if nodejs
-		final buffer: Array<String> = [];
-		final fs: Dynamic = js.Syntax.code('require("fs")'); // noqa: avoid-dynamic
-		final original: Dynamic = fs.writeSync; // noqa: avoid-dynamic
-		fs.writeSync = js.Syntax.code(
-			'function(fd, data) { if (fd === 2) { {0}.push(String(data)); return 0; } return {1}.apply(null, arguments); }', buffer,
-			original
-		);
-		try fn() catch (exception: haxe.Exception) {
-			fs.writeSync = original;
-			throw exception;
-		}
-		fs.writeSync = original;
-		return buffer.join('');
-		#else
-		fn();
-		return '';
-		#end
 	}
 
 }

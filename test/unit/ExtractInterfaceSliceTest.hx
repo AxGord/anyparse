@@ -279,6 +279,31 @@ class ExtractInterfaceSliceTest extends Test {
 		Assert.isTrue(newSrc.contains('class S implements IS {'), 'and the clause still landed');
 	}
 
+	/**
+	 * A body the signature slice does not RECOGNISE is still cut off at the body.
+	 *
+	 * RED AT BASE, and a real bug the seam migration exposed: `signatureOf` spelled the body
+	 * kinds by hand as `BlockBody` / `ExprBody` / `NoBody` — three of the Haxe grammar's five.
+	 * A method written `untyped { … }` projects as `UntypedBlockBody` and a body split across a
+	 * conditional-compilation region as `CondBody`, so no child matched, the slice ran to the
+	 * END of the member, and the interface got the whole implementation followed by the stray
+	 * `;` the emitter appends — output no compiler accepts. Asking
+	 * `RefShape.functionBodyKinds`, the seam whose own doc says a consumer reads it "to tell a
+	 * body child from a return-type child", covers all five by construction.
+	 *
+	 * The two halves are asserted TOGETHER on one source, so neither passes alone: the
+	 * `untyped` method's signature must arrive terminated, and its body must not.
+	 */
+	public function testAnUntypedBodyIsCutOffLikeAnyOther(): Void {
+		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n'
+			+ '\tpublic function f():Int untyped {\n\t\treturn 1;\n\t}\n\n\tpublic function g():Int return 2;\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
+		final iface: String = changeFor(changes, 'pkg/IS.hx').newSource;
+		Assert.isTrue(iface.contains('function f():Int;'), 'the untyped body is cut off at the body: $iface');
+		Assert.isFalse(iface.contains('untyped'), 'and none of it reaches the interface: $iface');
+		Assert.isTrue(iface.contains('function g():Int;'), 'the ordinary expression body still works: $iface');
+	}
+
 	private function okChanges(
 		srcFile: String, srcType: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String
 	): Array<MoveChange> {

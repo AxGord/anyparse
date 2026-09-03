@@ -99,6 +99,36 @@ final class CliFixture {
 		throw new Exception('src/anyparse/check is not above the cwd ($cwd) - run the suite from the tree it was built from');
 	}
 
+	/**
+	 * Everything `fn` writes to STDERR, captured rather than printed.
+	 *
+	 * The CLI's diagnostics go to fd 2 through `Sys.stderr()`, which on hxnodejs
+	 * bottoms out in `fs.writeSync` — so the capture swaps that one function for the
+	 * duration of the call and restores it on the way out, exceptions included. Node
+	 * only: on any other target the call runs and the caller gets `''`, which is why
+	 * every test using this guards its assertions with `#if nodejs`.
+	 */
+	public static function captureStderr(fn: () -> Void): String {
+		#if nodejs
+		final buffer: Array<String> = [];
+		final fs: Dynamic = js.Syntax.code('require("fs")'); // noqa: avoid-dynamic
+		final original: Dynamic = fs.writeSync; // noqa: avoid-dynamic
+		fs.writeSync = js.Syntax.code(
+			'function(fd, data) { if (fd === 2) { {0}.push(String(data)); return 0; } return {1}.apply(null, arguments); }', buffer,
+			original
+		);
+		try fn() catch (exception: haxe.Exception) {
+			fs.writeSync = original;
+			throw exception;
+		}
+		fs.writeSync = original;
+		return buffer.join('');
+		#else
+		fn();
+		return '';
+		#end
+	}
+
 	private static inline function stripTrailingSlash(p: String): String {
 		return p.endsWith('/') ? p.substring(0, p.length - 1) : p;
 	}

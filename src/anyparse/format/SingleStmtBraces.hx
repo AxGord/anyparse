@@ -8,6 +8,23 @@ using StringTools;
  * ω-single-stmt-braces; JSON key
  * `whitespace.bracesConfig.singleStatementBraces: "remove"`).
  *
+ * ## Invariant-4 debt, measured and deliberately NOT paid here
+ *
+ * This module sits in the grammar-agnostic `anyparse.format` package and is Haxe to the
+ * bone: it names ~115 distinct Haxe AST constructor strings, relies on the POSITIONAL
+ * parameter layout of trivia-synthesised `HxStatementT` values, and CONSTRUCTS one
+ * (`Type.createEnum(en, 'ExprBody', …)`). T461 listed its two `'ExprBody'` literals beside
+ * seven in `check/` and `query/` that moved onto `RefShape.expressionBodyKinds`; these two
+ * CANNOT, and the reason is not effort. There is no `QueryNode`, no `GrammarPlugin` and no
+ * `RefShape` at this layer — the values are the writer's own enums, reached by reflection —
+ * so a kind-name seam has nothing to answer. Migrating the two literals alone would also
+ * buy nothing: they are 2 of ~115, and the other 113 have no seam either.
+ *
+ * What would actually pay it is a per-grammar DE-BRACE POLICY the writer lowering asks for,
+ * so the ctor names live with the grammar that owns them. That is a writer-lowering slice,
+ * not a rename; sized here so the next reader does not mistake the two literals for the
+ * whole debt.
+ *
  * `unwrapStmt` is spliced by `WriterLowering` around the body value of
  * `HxIfStmt.thenBody` / `HxIfStmt.elseBody` / `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body` (fields carrying `@:fmt(dropSingleStmtBraces)`, trivia mode only). When every safety gate passes it returns the
  * block's single inner statement so the writer emits

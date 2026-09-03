@@ -9,6 +9,7 @@ import sys.FileSystem;
 #end
 import anyparse.format.comment.FormatterOff;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -232,7 +233,7 @@ class HxFormatterCorpusTest extends Test {
 			// `HaxeQueryPlugin.writeRoundTrip`, so the `@formatter:off`
 			// restore has to be repeated here — without it the fork's
 			// `other/formatter_off*` cases could never pass.
-			final actualRaw: String = FormatterOff.restore(tc.input, emitted);
+			final actualRaw: String = FormatterOff.restore(tc.input, emitted, HaxeLexicalRegions.scanComments);
 			final actual: String = stripTrailingNewline(actualRaw);
 			if (actual == tc.expected) {
 				pass++;
