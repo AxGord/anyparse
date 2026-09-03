@@ -5174,6 +5174,15 @@ final class RefactorSupport {
 				// The scanned region starting HERE is the literal; its end is the seam's own answer to
 				// where the quote closes. A quote the scan attributes to some other region (a regex
 				// body) is not a literal opener and is stepped over as an ordinary byte.
+				//
+				// REACHABLE, against the reading that a header window — just past the type NAME to the
+				// body `{` — can hold no string: a `@:const` type parameter does. `class X extends
+				// B<"//">` parses here as a `ConstStringType`, and the whole program compiles and runs
+				// on 4.3.7. Drop this arm and the `//` inside the literal opens a line comment that
+				// eats the rest of the header, so `typeHeaderInsertOffset` answers the quote's offset
+				// and `extract-interface` writes its clause INTO the literal —
+				// `class X extends B<" implements IX//">`, which re-parses and passes every gate the op
+				// has. Pinned by `TriviaScanSliceTest.testTypeHeaderInsertOffsetStepsOverAHeaderStringLiteral`.
 				final literal: Null<LexRegion> = LexicalRegions.regionAt(i, regions);
 				i = literal != null && literal.from == i ? literal.to : i + 1;
 				tokenEnd = i;

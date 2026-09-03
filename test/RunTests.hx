@@ -563,6 +563,7 @@ import unit.ModifierKindSeamTest;
 import unit.ModifierOrderCheckTest;
 import unit.MoveCanonicalOutputSliceTest;
 import unit.MoveExtractDocCensusTest;
+import unit.MoveFamilyCaptureTest;
 import unit.MoveMemberSliceTest;
 import unit.MoveSymbolSliceTest;
 import unit.MutationVerdictTest;
@@ -1198,6 +1199,7 @@ class RunTests {
 		addCase(new SafeDeleteFormatConfigCliTest());
 		addCase(new ExtractDestinationCollisionCliTest());
 		addCase(new MoveExtractDocCensusTest());
+		addCase(new MoveFamilyCaptureTest());
 		addCase(new ShardPlanTest());
 		addCase(new EncapsulateFieldSliceTest());
 		addCase(new ExtractConstantSliceTest());

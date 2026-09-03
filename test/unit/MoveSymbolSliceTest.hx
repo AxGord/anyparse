@@ -804,6 +804,122 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
+	 * A STRING literal is the other half of the same question, and nothing masks one: the reference
+	 * scans see a string's bytes exactly as they see code.
+	 *
+	 * The comment spelling of both arms is already pinned — `testACommentOnlyMentionStillCountsAsAReference`
+	 * for the import and `testACommentOnlyMentionDoesNotRefuseAPrivateType` for the private refusal. What
+	 * is new here is the STRING mention, and the two arms in one fixture: the TEXT scan (`namesAnyOf`)
+	 * counts it, which is the conservative direction wherever the answer WRITES an import (a redundant
+	 * import costs a lint advisory, a missing one costs the build), while the PROVEN scan
+	 * (`namesAnyNodeOf`) does not — and that arm REFUSES rather than imports, because a module-`private`
+	 * type cannot be imported from another module at all. Same file, same single mention, opposite
+	 * answers.
+	 */
+	public function testAStringOnlyMentionBuysTheImportAndDoesNotRefuseThePrivateMove(): Void {
+		inline function moveWith(modifier: String): MoveResult {
+			final mover: String = 'package p;\n\nclass Keep {\n\n\tpublic function new() {}\n\n\tpublic function label(): String return '
+				+ '"Moved by hand";\n\n}\n\n${modifier}class Moved {\n\n\tpublic static function tag(): Int return 1;\n\n}\n';
+			return MoveSymbol.moveType('p/Mover.hx', 11, 7 + modifier.length, 'p/Host.hx', [
+				{ file: 'p/Mover.hx', source: mover },
+				{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {\n\n\tpublic function new() {}\n\n}\n' }
+			], plugin(), typeRefShape());
+		}
+		switch moveWith('') {
+			case Ok(changes, _):
+				Assert.isTrue(
+					changeFor(changes, 'p/Mover.hx').newSource.contains('package p;\n\nimport p.Host.Moved;\n\nclass Keep {'),
+					'a string-literal-only mention still buys the repair import'
+				);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+		switch moveWith('private ') {
+			case Ok(changes, _):
+				Assert.isFalse(
+					changeFor(changes, 'p/Mover.hx').newSource.contains('import'), 'a module-private type is never imported back'
+				);
+			case Err(message):
+				Assert.fail('the proven scan must not read a string literal as a reference: $message');
+		}
+	}
+
+	/**
+	 * A comment ending in a PERIOD, directly above a line that starts with the moved type's name.
+	 *
+	 * `namesAnyOf`'s comment regions are NOT a mask that drops mentions written inside comments — the
+	 * scan counts those deliberately, which is the conservative direction when the answer WRITES an
+	 * import. What the regions decide is the QUALIFICATION test: a name a `.` precedes is spelled
+	 * fully qualified and owes no import, and `qualifiedBefore` only believes that `.` when it is not
+	 * itself inside a comment. Hand the scan no regions and a comment's own full stop becomes that
+	 * `.` — the last real reference in the file goes uncounted, the repair import is never written,
+	 * and the source file stops compiling with `Type not found`. Measured: with the regions dropped
+	 * this fixture loses `import p.Host.Moved;` and nothing else changes.
+	 *
+	 * The second arm is the control — the same file with the period removed answers identically,
+	 * which is what makes the first arm a statement about the regions rather than about the fixture.
+	 */
+	public function testACommentsTrailingPeriodDoesNotHideTheReferenceOwedARepairImport(): Void {
+		inline function repairedSourceFor(note: String): String {
+			final mover: String = 'package p;\n\nclass Keep {\n\n\tpublic function new() {}\n\n\tpublic function use(): Int {\n\t\t// $note'
+				+ '\n\t\tMoved.tag();\n\t\treturn 1;\n\t}\n\n}\n\nclass Moved {\n\n\tpublic static function tag(): Int return 1;\n\n}\n';
+			return changeFor(okChanges('p/Mover.hx', 15, 7, 'p/Host.hx', [
+				{ file: 'p/Mover.hx', source: mover },
+				{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {\n\n\tpublic function new() {}\n\n}\n' }
+			]), 'p/Mover.hx').newSource;
+		}
+		Assert.isTrue(
+			repairedSourceFor('A note that ends in a period.').contains('package p;\n\nimport p.Host.Moved;\n\nclass Keep {'),
+			'the comment\'s full stop must not read as a qualification of the `Moved` on the next line'
+		);
+		Assert.isTrue(
+			repairedSourceFor('A note that ends in a word').contains('import p.Host.Moved;'),
+			'the control arm must carry the same repair import'
+		);
+	}
+
+	/**
+	 * The carry-collision scan of the DESTINATION reads the DESTINATION's own comment regions.
+	 *
+	 * `referencedInDest` is handed a region array, and the file it scans is `destSource` — two things
+	 * a single-array hop can silently disagree about. It did: a seam refactor across 109 files passed
+	 * the CURSOR file's regions into this scan, and every gate the campaign runs stayed green, because
+	 * no capture drives a move op at all. Here the cursor file's comment is a doc block near its top
+	 * and the destination's is deep inside a method, so the two region sets cannot stand in for each
+	 * other: with the destination's, the `.` closing its comment is not a qualification and the
+	 * reference is seen, which is the refusal; with the cursor's, that same `.` reads as a
+	 * qualification and the import is carried — silently rebinding the destination's own `Dep`.
+	 *
+	 * The control is the shape the qualification test is FOR: a genuinely qualified `q.Dep.tag()` in
+	 * the destination is not an unqualified reference and does not contest the carry.
+	 */
+	public function testTheDestinationCollisionScanReadsTheDestinationsOwnComments(): Void {
+		inline function moveInto(destBody: String): MoveResult {
+			final cursor: String = 'package p;\n\nimport q.Dep;\n\n/**\n * A doc block only the CURSOR file has.\n */\n'
+				+ 'class Mover {\n\n\tpublic function new() {}\n\n\tpublic function m(): Int return Dep.tag();\n\n}\n';
+			final host: String = 'package p;\n\nclass Host {\n\n\tpublic function new() {}\n\n\tpublic function h(): Int {\n$destBody'
+				+ '\t\treturn 1;\n\t}\n\n}\n';
+			return MoveSymbol.moveType('p/Mover.hx', 8, 7, 'p/Host.hx', [
+				{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {\n\n\tpublic static function tag(): Int return 1;\n\n}\n' },
+				{ file: 'p/Mover.hx', source: cursor },
+				{ file: 'p/Host.hx', source: host }
+			], plugin(), typeRefShape());
+		}
+		assertErrContains(
+			moveInto('\t\t// A note that ends in a period.\n\t\tDep.tag();\n'),
+			'references "Dep" while nothing in the indexed scope binds it there'
+		);
+		switch moveInto('\t\tq.Dep.tag();\n') {
+			case Ok(changes, _):
+				Assert.isTrue(
+					changeFor(changes, 'p/Host.hx').newSource.contains('import q.Dep;'), 'a qualified mention does not contest the carry'
+				);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
 	 * A dependency the DESTINATION resolves through a binding the scope index cannot name. Two
 	 * spellings, both compile-run to a CHANGED runtime class on the base engine with rc 0 and no
 	 * output: a ROOT-PACKAGE module (`Dep.hx` at the top level, which the index CAN name once the

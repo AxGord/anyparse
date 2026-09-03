@@ -109,6 +109,30 @@ class TriviaScanSliceTest extends Test {
 		Assert.equals(src.lastIndexOf('{'), brace);
 	}
 
+	/**
+	 * A string literal in the header is stepped over, so a comment opener written INSIDE it opens no
+	 * comment.
+	 *
+	 * The arm was filed as unreachable dead code on the argument that the scan window runs from just
+	 * past the type NAME to the body `{`, where no string literal can sit. It can:
+	 * `class X extends B<"//">` is a `@:const` type parameter of an `@:generic` class, it parses here
+	 * as a `ConstStringType` node, and the whole program compiles and runs on Haxe 4.3.7. Delete the
+	 * arm and the `//` inside the literal opens a line comment that swallows the rest of the header —
+	 * the insert offset lands at the quote and `extract-interface` splices its clause INSIDE the
+	 * string, writing `class X extends B<" implements IX//">`, which re-parses clean and passes every
+	 * gate the op has.
+	 */
+	public function testTypeHeaderInsertOffsetStepsOverAHeaderStringLiteral(): Void {
+		final src: String = 'class X extends B<"//"> {\n}\n';
+		final decl: Null<TypeDeclMatch> = declOf(src);
+		if (decl == null) {
+			Assert.fail('uniqueTypeDeclNamed found no X');
+			return;
+		}
+		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(src, decl, 'X', new HaxeQueryPlugin().lexicalRegions(src));
+		Assert.equals(src.indexOf('>') + 1, at);
+	}
+
 	/** A header comment holds no tokens, so the insert offset stays right after the type name. */
 	public function testTypeHeaderInsertOffsetStopsBeforeAHeaderComment(): Void {
 		final src: String = 'class X /* implements Q */ {\n}\n';

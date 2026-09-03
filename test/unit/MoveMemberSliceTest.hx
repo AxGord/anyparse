@@ -1139,6 +1139,42 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	/**
+	 * `membersOf` reads the member runs BRANCH-AWARE, and the seam it is handed is what keeps a
+	 * `#else` written inside a block comment from splitting one.
+	 *
+	 * The split is not cosmetic here: the guarded field's `static` keyword sits before the comment, so
+	 * a split leaves `shared` with an empty modifier run — and `resolveViaField` keeps a field out of
+	 * the `--via` candidate set precisely by finding `Static` there. Masked, `_dst` is the unique
+	 * candidate and the remaining bare caller is rewired through it; unmasked, `shared` joins it and
+	 * the op refuses with `multiple fields of type "Dst"`.
+	 *
+	 * `MemberBranchScan.eachTypeMember` has its own pin for the same masking
+	 * (`CondBranchSplitTest.testACommentedOutElseDoesNotSplitAMemberRun`); this one is about the
+	 * WIRING — that `MoveMember` hands the scan a real region provider rather than an empty one.
+	 */
+	public function testACommentedOutElseDoesNotSplitTheGuardedSiblingsModifierRun(): Void {
+		final src: String = 'package p;\n\nclass Src {\n\n\tprivate final _dst: Dst;\n\n\t#if flag\n\tstatic\n\t/*\n\t#else\n\t*/\n'
+			+ '\tvar shared: Dst = null;\n\t#end\n\n\tpublic function new(d: Dst) {\n\t\t_dst = d;\n\t}\n\n'
+			+ '\tpublic function keep(): Int return moveMe();\n\n\tpublic function moveMe(): Int return 1;\n\n}\n';
+		switch move('p/Src.hx', 'Src', 'moveMe', 'Dst', [
+			{ file: 'p/Dst.hx', source: 'package p;\n\nclass Dst {\n\n\tpublic function new() {}\n\n}\n' },
+			{ file: 'p/Src.hx', source: src }
+		]) {
+			case Ok(changes, advisory):
+				Assert.isTrue(
+					advisory != null && advisory.contains('rewired through "_dst"'),
+					'the commented-out `#else` must not strip `static` off the guarded sibling: $advisory'
+				);
+				Assert.isTrue(
+					changeFor(changes, 'p/Src.hx').newSource.contains('return _dst.moveMe()'),
+					'the bare caller is routed through the via field'
+				);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
 	 * `move-member` shares `MoveSymbol.dependencyImportLinesToCarry` with `move`, so it shared the
 	 * silent-miscompile too: measured on 11f22a25 and compile-run on Haxe 4.3.7, moving a static
 	 * whose body reaches `q.Dep` into a destination holding `import r.Dep;` wrote both files with
