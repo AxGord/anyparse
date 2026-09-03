@@ -54,6 +54,9 @@ interface TextFormat extends Format {
   var whitespace(default, null):String;                        // " \t\n\r"
   var lineComment(default, null):Null<String>;                 // "//" or ";" or null
   var blockComment(default, null):Null<BlockComment>;          // {"/*", "*/"} or null
+  // ^ read TWICE at macro time: by the generated `skipWs`, and by the generated
+  //   lexical pass (`strategies.md` § Lexical), which masks comments for the
+  //   occurrence scans. Declaring them is what makes both true of a grammar.
 
   // Strings and keys
   var keySyntax(default, null):KeySyntax;        // Quoted | Unquoted | Either

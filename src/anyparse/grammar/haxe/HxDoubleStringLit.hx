@@ -29,4 +29,5 @@ package anyparse.grammar.haxe;
  */
 @:re('"(?:[^"\\\\]|\\\\.)*"')
 @:rawString
+@:lexical(StringLit)
 abstract HxDoubleStringLit(String) from String to String {}

@@ -30,4 +30,5 @@ package anyparse.grammar.haxe;
  */
 @:re('~/(?:[^/\\\\\n]|\\\\.)*/[a-z]*')
 @:rawString
+@:lexical(RegexLit)
 abstract HxRegexLit(String) from String to String {}

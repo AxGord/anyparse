@@ -135,6 +135,23 @@ Owns: `@:re`.
 
 For an `abstract X(String) @:re("pattern")`, emits a `Re("pattern")` terminal. Used for regex-matched primitives: strings, numbers, identifiers, ASCII tokens.
 
+### Lexical
+
+Owns: `@:lexical(<Kind>)`, `@:balanced(<open>, <close>)`. Reads `@:re`, `@:lead`, `@:trail`, `@:lit` and the format's `lineComment` / `blockComment`.
+
+Not a strategy in the plugin sense — like `BaseShape` it is a PASS, run for the `Build.buildLexicalScan` entry point only (`LexicalLowering` then `LexicalCodegen`). It answers "which byte ranges of this source are NOT code" for the occurrence scans that must mask comments and literals before they rename or delete anything. That question is asked of RAW text, including text that does not parse, so it cannot be answered from a tree.
+
+`@:lexical(<Kind>)` marks a rule as one such region and names the `anyparse.query.LexicalRegions.LexRegionKind` it carries — an unknown kind is a compile error listing the real ones. Two shapes are accepted, and nothing else:
+
+- a `@:re` TERMINAL, whose pattern must be a delimited literal — `<open>(?:[^<excluded>]|<esc>.)*<close>[<flags>]*`. The pass reads the delimiters, the escape, the excluded set and the flag range out of the pattern rather than running it, because a regex cannot say where an UNTERMINATED literal ends and the scan must still report that region. A pattern of any other shape is a compile error naming the rule. Excluding `\n` from the body is what declares the region single-line: one that does not close on its own line then opens nothing, while one without that bound runs to EOF.
+- a `@:lead` / `@:trail` rule over a Star of segment constructors — the interpolating string. The delimiters come off the Star's field; the body's escape, its skipped runs (`@:lit("$$")`, a bare `@:lead("$")`) and its code holes come off the segment constructors in declaration order.
+
+`@:balanced("{", "}")` is the one thing no declaration expressed before this pass existed. On a segment constructor whose body is CODE — `@:lead("${") @:trail("}") Block(expr: HxExpr)` — it names the pair whose balancing ends the hole, and the walk re-enters the top-level region arms inside it so a quote or a comment written in the hole is read as one. Both arguments must be single characters.
+
+The emitted walk reports every region with the interpolation DEPTH it was found at, and the two public entries are filters over that one stream: `scan` keeps `depth == 0` (the flat region model says the whole literal), `scanComments` keeps the comment kinds at ANY depth (a comment inside a hole is one the writer's comment-loss guard must not drop). That deliberate disagreement is a declared policy of one pass, not two lexers, and `unit.LexicalRegionAgreementTest` pins it by name.
+
+Nothing about a grammar survives as a literal in either module: every character the emitted code compares against arrives in a spec. `unit.minilex` is the standing proof — a second grammar spelling its line comment `#`, its block comment `<# … #>` and its string `@ … @`, whose generated pass finds those and not Haxe's (`unit.lowering.GeneratedLexicalScanSecondGrammarTest`).
+
 ### Kw
 
 Owns: `@:kw`.

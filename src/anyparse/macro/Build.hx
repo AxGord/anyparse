@@ -47,21 +47,9 @@ import haxe.macro.Type;
 class Build {
 
 	public static macro function buildParser(target: Expr, ?options: Expr): Array<Field> {
-		final targetTypePath: String = ExprTools.toString(target);
-		final rootType: Type = Context.getType(targetTypePath);
-
-		final rootMeta: Metadata = switch rootType {
-			case TEnum(ref, _): ref.get().meta.get();
-			case TType(ref, _): ref.get().meta.get();
-			case TAbstract(ref, _): ref.get().meta.get();
-			case TInst(ref, _): ref.get().meta.get();
-			case _:
-				Context.fatalError('Build.buildParser: unsupported target type $targetTypePath', Context.currentPos());
-				throw 'unreachable';
-		};
-
-		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
-		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+		final resolved: ResolvedTarget = resolveTarget(target, 'buildParser');
+		final rootType: Type = resolved.rootType;
+		final formatInfo: FormatReader.FormatInfo = resolved.formatInfo;
 
 		final ctx: LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
@@ -154,21 +142,9 @@ class Build {
 	 * generated over (format-preserving transform is a later slice).
 	 */
 	public static macro function buildTransform(target: Expr): Array<Field> {
-		final targetTypePath: String = ExprTools.toString(target);
-		final rootType: Type = Context.getType(targetTypePath);
-
-		final rootMeta: Metadata = switch rootType {
-			case TEnum(ref, _): ref.get().meta.get();
-			case TType(ref, _): ref.get().meta.get();
-			case TAbstract(ref, _): ref.get().meta.get();
-			case TInst(ref, _): ref.get().meta.get();
-			case _:
-				Context.fatalError('Build.buildTransform: unsupported target type $targetTypePath', Context.currentPos());
-				throw 'unreachable';
-		};
-
-		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
-		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+		final resolved: ResolvedTarget = resolveTarget(target, 'buildTransform');
+		final rootType: Type = resolved.rootType;
+		final formatInfo: FormatReader.FormatInfo = resolved.formatInfo;
 
 		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
@@ -185,26 +161,15 @@ class Build {
 	}
 
 	public static macro function buildWriter(target: Expr, ?options: Expr, ?buildOptions: Expr): Array<Field> {
-		final targetTypePath: String = ExprTools.toString(target);
-		final rootType: Type = Context.getType(targetTypePath);
-
-		final rootMeta: Metadata = switch rootType {
-			case TEnum(ref, _): ref.get().meta.get();
-			case TType(ref, _): ref.get().meta.get();
-			case TAbstract(ref, _): ref.get().meta.get();
-			case TInst(ref, _): ref.get().meta.get();
-			case _:
-				Context.fatalError('Build.buildWriter: unsupported target type $targetTypePath', Context.currentPos());
-				throw 'unreachable';
-		};
-
-		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
-		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+		final resolved: ResolvedTarget = resolveTarget(target, 'buildWriter');
+		final rootType: Type = resolved.rootType;
+		final formatInfo: FormatReader.FormatInfo = resolved.formatInfo;
 
 		final optionsTypePath: Null<String> = extractTypePath(options);
 		if (optionsTypePath == null && !formatInfo.isBinary)
 			Context.fatalError(
-				'Build.buildWriter: text writer requires an options typedef — use @:build(Build.buildWriter($targetTypePath, <OptionsT>))',
+				'Build.buildWriter: text writer requires an options typedef — use @:build(Build.buildWriter(${resolved.typePath}'
+				+ ', <OptionsT>))',
 				Context.currentPos()
 			);
 		if (optionsTypePath != null && formatInfo.isBinary)
@@ -270,21 +235,9 @@ class Build {
 	 * `QueryWalkerCodegen` turns them into fields.
 	 */
 	public static macro function buildQueryWalker(target: Expr, parser: Expr): Array<Field> {
-		final targetTypePath: String = ExprTools.toString(target);
-		final rootType: Type = Context.getType(targetTypePath);
-
-		final rootMeta: Metadata = switch rootType {
-			case TEnum(ref, _): ref.get().meta.get();
-			case TType(ref, _): ref.get().meta.get();
-			case TAbstract(ref, _): ref.get().meta.get();
-			case TInst(ref, _): ref.get().meta.get();
-			case _:
-				Context.fatalError('Build.buildQueryWalker: unsupported target type $targetTypePath', Context.currentPos());
-				throw 'unreachable';
-		};
-
-		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
-		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+		final resolved: ResolvedTarget = resolveTarget(target, 'buildQueryWalker');
+		final rootType: Type = resolved.rootType;
+		final formatInfo: FormatReader.FormatInfo = resolved.formatInfo;
 
 		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
@@ -302,6 +255,76 @@ class Build {
 		#end
 
 		return fields;
+	}
+
+	/**
+	 * `@:build` entry point for the LEXICAL pass - the answer to "which bytes of a source are
+	 * not code", generated from the grammar's own declarations instead of hand-written per
+	 * grammar. Applied to a marker class with the grammar root as its single argument:
+	 *
+	 * ```haxe
+	 * @:build(anyparse.macro.Build.buildLexicalScan(anyparse.grammar.haxe.HxModule))
+	 * class HaxeLexicalRegions {}
+	 * ```
+	 *
+	 * Like `buildTransform` it needs only the BASE shape, so the strategy-annotate, trivia and
+	 * span passes are skipped: the pass reads `@:lexical` / `@:balanced` / `@:re` / `@:lead` /
+	 * `@:trail` / `@:lit` off `base.meta` directly, plus the format's comment delimiters, which
+	 * `FormatReader` already resolves for the generated `skipWs`.
+	 *
+	 * `LexicalLowering` turns those declarations into one `LexRegionSpec` per non-code region
+	 * and `LexicalCodegen` emits the specialised walk plus the two public entries every
+	 * consumer calls.
+	 */
+	public static macro function buildLexicalScan(target: Expr): Array<Field> {
+		final resolved: ResolvedTarget = resolveTarget(target, 'buildLexicalScan');
+		final formatInfo: FormatReader.FormatInfo = resolved.formatInfo;
+
+		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
+		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(resolved.rootType);
+
+		final fields: Array<Field> = LexicalCodegen.emit(LexicalLowering.generate(shape, formatInfo, resolved.schemaTypePath));
+
+		#if anyparse_dump
+		final printer: haxe.macro.Printer = new haxe.macro.Printer();
+		for (f in fields) Sys.println('// lexical field: ${printer.printField(f)}');
+		#end
+
+		return fields;
+	}
+
+	/**
+	 * What every `@:build` entry needs before it can lower anything: the grammar root's type,
+	 * the schema it names and the format that schema resolves to. `entry` names the calling
+	 * build for the error a non-grammar target produces.
+	 */
+	private static function resolveTarget(target: Expr, entry: String): ResolvedTarget {
+		final targetTypePath: String = ExprTools.toString(target);
+		final rootType: Type = Context.getType(targetTypePath);
+		final rootMeta: Metadata = rootMetaOf(rootType, targetTypePath, entry);
+		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
+		return {
+			typePath: targetTypePath,
+			rootType: rootType,
+			schemaTypePath: schemaTypePath,
+			formatInfo: FormatReader.resolve(schemaTypePath)
+		};
+	}
+
+	/**
+	 * The metadata of a `@:build` target's grammar root, whichever declaration kind it is.
+	 * `entry` names the calling build for the error a non-grammar target produces.
+	 */
+	private static function rootMetaOf(rootType: Type, targetTypePath: String, entry: String): Metadata {
+		return switch rootType {
+			case TEnum(ref, _): ref.get().meta.get();
+			case TType(ref, _): ref.get().meta.get();
+			case TAbstract(ref, _): ref.get().meta.get();
+			case TInst(ref, _): ref.get().meta.get();
+			case _:
+				Context.fatalError('Build.$entry: unsupported target type $targetTypePath', Context.currentPos());
+				throw 'unreachable';
+		};
 	}
 
 	private static function extractTypePath(e: Null<Expr>): Null<String> {
@@ -391,4 +414,11 @@ class Build {
 	}
 
 }
+/** The grammar root, its schema path and the resolved format — what every `@:build` entry starts from. */
+private typedef ResolvedTarget = {
+	typePath: String,
+	rootType: Type,
+	schemaTypePath: String,
+	formatInfo: FormatReader.FormatInfo
+};
 #end

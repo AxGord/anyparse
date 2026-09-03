@@ -23,6 +23,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 @:raw
+@:lexical(StringLit)
 typedef HxInterpString = {
 	@:lead("'") @:trail("'")
 	var parts: Array<HxStringSegment>;
