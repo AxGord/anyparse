@@ -245,7 +245,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// names the reference-kind scan below must resolve, keeping its blocked sets small.
 		final candidateNames: Array<String> = [];
 		for (t in trees) for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, t.branch, (name, fn, mods, metas) -> {
-			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed, retained) && !candidateNames.contains(name))
+			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed, retained, shape) && !candidateNames.contains(name))
 				candidateNames.push(name);
 		});
 		// Pass B: the reference-kind gate over the whole scope — a candidate name used as a VALUE
@@ -315,15 +315,15 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return isChain(node) || isPlainLiteral(node);
 	}
 
-	/** Whether `fn`'s body is an empty `BlockBody` (the no-op arm's message discriminator). */
-	private static inline function isEmptyBody(fn: QueryNode): Bool {
-		final body: Null<QueryNode> = bodyOf(fn);
-		return body != null && body.kind == 'BlockBody' && body.children.length == 0;
+	/** Whether `fn`'s body is an empty statement block (the no-op arm's message discriminator). */
+	private static inline function isEmptyBody(fn: QueryNode, shape: RefShape): Bool {
+		final body: Null<QueryNode> = bodyOf(fn, shape);
+		return body != null && body.kind == shape.blockBodyKind && body.children.length == 0;
 	}
 
 	/** Whether `fn`'s body exceeds the `MAX_BODY_NODES` inline budget (node count of the body subtree). */
-	private static inline function bodyExceedsBudget(fn: QueryNode): Bool {
-		final body: Null<QueryNode> = bodyOf(fn);
+	private static inline function bodyExceedsBudget(fn: QueryNode, shape: RefShape): Bool {
+		final body: Null<QueryNode> = bodyOf(fn, shape);
 		return body != null && nodeCount(body) > MAX_BODY_NODES;
 	}
 
@@ -464,10 +464,11 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// Read OUT of the closure below and defaulted to a kind no modifier run can hold: a grammar
 		// that names no static modifier then answers `false` for every member, which is this rule's
 		// safe direction (the framework carve-out stays as wide as it was).
-		final staticKind: String = plugin.refShape().staticModifierKind ?? '';
+		final shape: RefShape = plugin.refShape();
+		final staticKind: String = shape.staticModifierKind ?? '';
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
-			if (!isCandidateMethod(name, fn, mods, metas, relaxed, retained)) return;
+			if (!isCandidateMethod(name, fn, mods, metas, relaxed, retained, shape)) return;
 			if (valueBlocked.contains(name) || reflectBlocked.contains(name) || subtypeMembers.contains(name)) return;
 			// An abstract-superclass implementation carries no `override` (Haxe does
 			// not require it), so the modifier gate misses it — a resolvable
@@ -511,7 +512,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 				span: span,
 				rule: 'prefer-inline',
 				severity: Severity.Info,
-				message: isEmptyBody(fn)
+				message: isEmptyBody(fn, shape)
 					? 'method \'$name\' has an empty body and no value references; mark it inline — the call compiles away'
 					: 'method \'$name\' is a single-expression method with no value references; mark it inline'
 			});
@@ -549,9 +550,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * Whether `name` / `fn` is an inline candidate: a non-constructor method with a benefit-class body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, not self-recursive (a bare `name` / `this.name` in its body), and whose body is a benefit class (see `isBaseCandidateMethod`).
 	 */
 	private static function isCandidateMethod(
-		name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, relaxed: Bool, retained: Null<String>
+		name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, relaxed: Bool, retained: Null<String>, shape: RefShape
 	): Bool {
-		return isBaseCandidateMethod(name, fn, mods, metas, retained) && (relaxed || !bodyHasNullSafetyRisk(fn));
+		return isBaseCandidateMethod(name, fn, mods, metas, retained, shape) && (relaxed || !bodyHasNullSafetyRisk(fn, shape));
 	}
 
 	/**
@@ -565,7 +566,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * `relaxed` (the oracle path) drops it.
 	 */
 	private static function isBaseCandidateMethod(
-		name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, retained: Null<String>
+		name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, retained: Null<String>, shape: RefShape
 	): Bool {
 		if (isReservedMemberName(name)) return false;
 		if (
@@ -576,28 +577,29 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		if (retained != null && metas.contains(retained)) return false;
 		if (metas.exists(m -> !inlineNeutralMeta(m))) return false;
 		if (referencesSelf(fn, name)) return false;
-		if (isEmptyBody(fn)) return true;
-		final root: Null<QueryNode> = bodyRootExpr(fn);
-		return root != null && (isAccessorOrForward(root) || isConstExpr(root)) && !bodyExceedsBudget(fn);
+		if (isEmptyBody(fn, shape)) return true;
+		final root: Null<QueryNode> = bodyRootExpr(fn, shape);
+		return root != null && (isAccessorOrForward(root) || isConstExpr(root)) && !bodyExceedsBudget(fn, shape);
 	}
 
 	/**
-	 * The single root expression of a candidate body: an `ExprBody`'s expression (a wrapping
-	 * `ReturnExpr` peeled), or a one-statement `BlockBody`'s `ReturnStmt` / `ExprStmt` expression;
+	 * The single root expression of a candidate body: an expression body's expression (a wrapping
+	 * `ReturnExpr` peeled), or a one-statement block body's `ReturnStmt` / `ExprStmt` expression;
 	 * null for every other shape (multi-statement, bodyless — the EMPTY body is class A, tested
 	 * separately by `isEmptyBody`).
+	 *
+	 * WHICH kind is which is the grammar's answer: `RefShape.expressionBodyKinds` names the
+	 * wrappers whose single child IS the value, `blockBodyKind` the statement list. A body kind
+	 * that is neither — `untyped`, a conditional-compilation region — falls to the refusal it
+	 * always did.
 	 */
-	private static function bodyRootExpr(fn: QueryNode): Null<QueryNode> {
-		final body: Null<QueryNode> = bodyOf(fn);
-		return body == null
-			? null
-			: switch body.kind {
-				case 'ExprBody' if (body.children.length == 1): unwrapReturn(body.children[0]);
-				case 'BlockBody' if (body.children.length == 1):
-					final stmt: QueryNode = body.children[0];
-					(stmt.kind == 'ReturnStmt' || stmt.kind == 'ExprStmt') && stmt.children.length == 1 ? stmt.children[0] : null;
-				case _: null;
-			}
+	private static function bodyRootExpr(fn: QueryNode, shape: RefShape): Null<QueryNode> {
+		final body: Null<QueryNode> = bodyOf(fn, shape);
+		if (body == null || body.children.length != 1) return null;
+		if ((shape.expressionBodyKinds ?? []).contains(body.kind)) return unwrapReturn(body.children[0]);
+		if (body.kind != shape.blockBodyKind) return null;
+		final stmt: QueryNode = body.children[0];
+		return (stmt.kind == 'ReturnStmt' || stmt.kind == 'ExprStmt') && stmt.children.length == 1 ? stmt.children[0] : null;
 	}
 
 	/**
@@ -647,9 +649,15 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		);
 	}
 
-	/** `fn`'s body child — its `ExprBody` or `BlockBody`, else null (a bodyless declaration). */
-	private static function bodyOf(fn: QueryNode): Null<QueryNode> {
-		return fn.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
+	/**
+	 * `fn`'s body child — an expression body or a statement block, else null. Deliberately NOT
+	 * `RefShape.functionBodyKinds`, which also names the bodyless marker and the shapes this
+	 * rule cannot reason about; the two kinds below are the ones every caller here can read.
+	 */
+	private static function bodyOf(fn: QueryNode, shape: RefShape): Null<QueryNode> {
+		final blockKind: Null<String> = shape.blockBodyKind;
+		final exprKinds: Array<String> = shape.expressionBodyKinds ?? [];
+		return fn.children.find(c -> exprKinds.contains(c.kind) || c.kind == blockKind);
 	}
 
 	/** The number of nodes in `node`'s subtree, itself included. */
@@ -751,8 +759,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * elsewhere. Over-skips a safe null-value body (the sound direction); a precise split would need
 	 * null-flow typing.
 	 */
-	private static function bodyHasNullSafetyRisk(fn: QueryNode): Bool {
-		final body: Null<QueryNode> = bodyOf(fn);
+	private static function bodyHasNullSafetyRisk(fn: QueryNode, shape: RefShape): Bool {
+		final body: Null<QueryNode> = bodyOf(fn, shape);
 		return body != null && subtreeHasNullSafetyRisk(body, body.kind);
 	}
 

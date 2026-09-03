@@ -2,6 +2,7 @@ package unit;
 
 import anyparse.format.comment.FormatterOff;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -78,12 +79,31 @@ class HxFormatterOffTest extends Test {
 
 	public function testRestoreIsIdentityWhenTheSourceDeclaresNoRegion(): Void {
 		final written: String = 'class C {}\n';
-		Assert.equals(written, FormatterOff.restore('class  C  {}\n', written));
+		Assert.equals(written, FormatterOff.restore('class  C  {}\n', written, HaxeLexicalRegions.scanComments));
+	}
+
+	/**
+	 * A marker spelt on its OWN LINE inside a MULTI-LINE string literal is still not a marker.
+	 *
+	 * This is the discriminating twin of `testMarkerInsideStringLiteralIsNotAMarker`, and it
+	 * exists because that one is NOT discriminating: its marker sits on a single-line literal,
+	 * so a line-only scanner that knew nothing of strings would read the comment body as
+	 * `// @formatter:off";` — trailing quote and semicolon included — which is not the exact
+	 * marker text and opens nothing. MEASURED: replacing `FormatterOff`'s `CommentScan` with a
+	 * naive `//`-to-end-of-line walk left the whole suite green. Here the marker line ends at a
+	 * real newline INSIDE the literal, so the naive body is exactly the marker and the region
+	 * opens — which is what makes the seam observable.
+	 */
+	public function testMarkerOnItsOwnLineInsideAMultiLineStringIsNotAMarker(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal s = "x\n// @formatter:off\ny";\n$HAND_LAID\n\t}\n}';
+		Assert.isTrue(format(src).indexOf(HAND_LAID) == -1, 'a marker line inside a string literal must not open a region');
 	}
 
 	private static inline function format(src: String): String {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		return FormatterOff.restore(src, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts));
+		return FormatterOff.restore(
+			src, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts), HaxeLexicalRegions.scanComments
+		);
 	}
 
 }

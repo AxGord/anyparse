@@ -246,7 +246,7 @@ final class ExtractInterface {
 			// A `final function` wraps into FinalModifiedMember, never a plain
 			// FnMember, so this loop only ever sees non-final methods.
 			if (!isPublic || isStatic) return;
-			final sig: Null<String> = signatureOf(child, source);
+			final sig: Null<String> = signatureOf(child, source, shape);
 			if (sig != null) {
 				final sigNN: String = sig;
 				out.push({ name: nameNN, signature: sigNN, from: spanNN.from });
@@ -256,19 +256,26 @@ final class ExtractInterface {
 	}
 
 	/**
-	 * Slice a method's signature: the `FnMember` span up to its body child
-	 * (`BlockBody` / `ExprBody` / `NoBody`), trimmed, with any trailing
-	 * `;` dropped. Modifiers are separate siblings, so the slice starts at
-	 * `function` and carries none.
+	 * Slice a method's signature: the `FnMember` span up to its body child, trimmed,
+	 * with any trailing `;` dropped. Modifiers are separate siblings, so the slice
+	 * starts at `function` and carries none.
+	 *
+	 * WHICH children are bodies is `RefShape.functionBodyKinds` — the seam whose own
+	 * doc says a consumer reads it "to tell a body child from a return-type child".
+	 * The three kinds this used to spell by hand (`BlockBody` / `ExprBody` / `NoBody`)
+	 * are three of Haxe's five: a body written `untyped { … }` or spread across a
+	 * conditional-compilation region projects as `UntypedBlockBody` / `CondBody`, and
+	 * neither matched — so `bodyFrom` stayed at the member's END and the whole body
+	 * was sliced into the interface, followed by the stray `;` the caller adds.
 	 */
-	private static function signatureOf(member: QueryNode, source: String): Null<String> {
+	private static function signatureOf(member: QueryNode, source: String, shape: RefShape): Null<String> {
 		final span: Null<Span> = member.span;
 		if (span == null) return null;
+		final bodyKinds: Array<String> = shape.functionBodyKinds ?? [];
 		var bodyFrom: Int = span.to;
 		for (c in member.children) {
 			final cSpan: Null<Span> = c.span;
-			if (cSpan != null && (c.kind == 'BlockBody' || c.kind == 'ExprBody' || c.kind == 'NoBody') && cSpan.from < bodyFrom)
-				bodyFrom = cSpan.from;
+			if (cSpan != null && bodyKinds.contains(c.kind) && cSpan.from < bodyFrom) bodyFrom = cSpan.from;
 		}
 		var sig: String = source.substring(span.from, bodyFrom).trim();
 		if (sig.endsWith(';')) sig = sig.substr(0, sig.length - 1).trim();

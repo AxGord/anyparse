@@ -53,11 +53,15 @@ final class FormatterOff {
 	 * `written` with every `@formatter:off` region replaced by the bytes it
 	 * covers in `source`; `written` unchanged when the source declares no
 	 * region, or when the two texts disagree about where the regions are.
+	 *
+	 * `scan` is the caller's grammar comment lexer: the marker is a LINE
+	 * COMMENT, and which bytes are one is the grammar's answer, not this
+	 * package's — the same seam `CommentInventory` takes.
 	 */
-	public static function restore(source: String, written: String): String {
-		final srcRegions: Array<Region> = regionsOf(source);
+	public static function restore(source: String, written: String, scan: CommentScan): String {
+		final srcRegions: Array<Region> = regionsOf(source, scan);
 		if (srcRegions.length == 0) return written;
-		final outRegions: Array<Region> = regionsOf(written);
+		final outRegions: Array<Region> = regionsOf(written, scan);
 		if (outRegions.length != srcRegions.length) return written;
 
 		final srcLines: Array<String> = source.split('\n');
@@ -86,9 +90,9 @@ final class FormatterOff {
 	}
 
 	/** Every `off`…`on` region of `text`, in source order, as line indices. */
-	private static function regionsOf(text: String): Array<Region> {
+	private static function regionsOf(text: String, scan: CommentScan): Array<Region> {
 		final marks: Array<Mark> = [];
-		CommentInventory.scan(text, (start: Int, end: Int) -> {
+		scan(text, (start: Int, end: Int) -> {
 			final body: String = text.substring(start, end);
 			if (body == OFF || body == ON) marks.push({
 				offset: start,

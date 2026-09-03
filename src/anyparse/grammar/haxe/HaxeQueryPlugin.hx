@@ -500,9 +500,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// Before the guard, not after: restoring an `@formatter:off` region
 		// puts the source bytes back, so a comment living only inside one is
 		// present again by the time the inventory compares the two sides.
-		final written: String = FormatterOff.restore(source, emitted);
+		final written: String = FormatterOff.restore(source, emitted, HaxeLexicalRegions.scanComments);
 		if (written == source || CommentInventory.guardDeclined()) return written;
-		final lost: Null<String> = CommentInventory.firstMissing(source, written);
+		final lost: Null<String> = CommentInventory.firstMissing(source, written, HaxeLexicalRegions.scanComments);
 		if (lost != null) throw new CommentLossException(lost);
 		return written;
 	}

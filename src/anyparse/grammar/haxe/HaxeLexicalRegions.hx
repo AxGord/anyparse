@@ -5,23 +5,34 @@ import anyparse.query.LexicalRegions.LexRegion;
 using StringTools;
 
 /**
- * The HAXE lexer behind `GrammarPlugin.lexicalRegions`: one single-pass scan mapping a
- * source string to its non-code regions, plus the quote / brace / regex walks it is built
- * from. No AST, no `QueryNode`, no parse — just bytes.
+ * The HAXE lexers this grammar publishes, and the quote / brace / regex walks they are
+ * built from. No AST, no `QueryNode`, no parse — just bytes.
+ *
+ * TWO scans, because two consumers ask different questions and one answer cannot serve
+ * both: `scan` (behind `GrammarPlugin.lexicalRegions`) maps a source to its NON-CODE
+ * regions — comment, string literal, regex literal — for the occurrence scans that mask
+ * them; `scanComments` (behind `anyparse.format.comment.CommentScan`) reports only
+ * COMMENTS, and follows a `${ … }` interpolation hole into the code inside it, for the
+ * writer's comment-loss guard. Their one disagreement is stated on `scanComments`.
  *
  * ## Why it lives HERE
  *
  * Everything in it is Haxe syntax: single-quote interpolation, `${ … }` holes, `~/ … /`
- * literals, `//` and `/* … *\/` comments. It sat in `anyparse.query.LexicalRegions` until
- * this commit, which made a grammar-agnostic package the home of one grammar's lexer —
- * invariant 4 ("a new language is a new package, not a core change"): a second grammar
- * could not answer the same question without editing core code. It now reaches every
- * consumer that holds a plugin through `GrammarPlugin.lexicalRegions(source)`, beside
- * `controlFlowSupport()`.
+ * literals, `//` and `/* … *\/` comments. `scan` sat in `anyparse.query.LexicalRegions`, which made a grammar-agnostic package
+ * the home of one grammar's lexer — invariant 4 ("a new language is a new package, not a
+ * core change"): a second grammar could not answer the same question without editing core
+ * code. It now reaches every consumer that holds a plugin through
+ * `GrammarPlugin.lexicalRegions(source)`, beside `controlFlowSupport()`.
+ *
+ * `scanComments` came from `anyparse.format.comment.CommentInventory`, where the same debt
+ * sat one package over: the comment-preservation audit carried its own Haxe state machine
+ * because the Haxe writer was its only consumer. It reaches that package as a
+ * `CommentScan` the caller supplies.
  *
  * `anyparse.query.LexicalRegions` keeps the region TYPES and the two pure helpers over a
- * region array, which are grammar-agnostic, and one deprecated forwarder for the callers
- * that hold no plugin — its doc lists them.
+ * region array, which are grammar-agnostic. The deprecated forwarder it also carried,
+ * for callers that held no plugin, is gone since S60 — every consumer now arrives
+ * through the seam.
  *
  * ## Why the scan is correct where a naive one is not
  *
@@ -63,6 +74,9 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class HaxeLexicalRegions {
+
+	/** The quote that opens an INTERPOLATING string literal in Haxe. */
+	private static inline final SINGLE_QUOTE: Int = "'".code;
 
 	/**
 	 * Single-pass lexer emitting every non-code region (line/block comment, string
@@ -163,9 +177,126 @@ final class HaxeLexicalRegions {
 		return n - 1;
 	}
 
+	/**
+	 * The COMMENT lexer behind `anyparse.format.comment.CommentScan`: every `//` and
+	 * `/* *\/` comment of `src` as a `[start, end)` span, string and regex literals
+	 * skipped so an opener inside one never counts.
+	 *
+	 * DELIBERATELY NOT `scan` FILTERED TO ITS COMMENT REGIONS, and the divergence is
+	 * the reason both live here: this walk follows a single-quoted string's `${ … }`
+	 * interpolation as CODE, so a comment written inside a hole IS a comment, while
+	 * `scan` reports the whole literal as one `StringLit` region and the same comment
+	 * is not one. Both answers are right for their consumer — the writer must not
+	 * DELETE a comment the author put in a hole, and the occurrence scans must not
+	 * treat any byte of a literal as maskable code — so neither may be derived from
+	 * the other. `unit.LexicalRegionAgreementTest` pins the pair, that one
+	 * disagreement by name.
+	 *
+	 * `$$` is the escaped dollar and opens nothing; a nested same-quote literal inside
+	 * a hole (`'a ${f(\'b\')} c'`) is followed rather than mis-paired, which is the one
+	 * way a real comment loss could hide from the writer's guard.
+	 */
+	public static function scanComments(src: String, onComment: (start:Int, end:Int) -> Void): Void {
+		// noqa: complexity
+		// One cohesive lexer state machine — every branch mutates the shared
+		// `quote` / interpolation-frame state, so splitting it would thread
+		// that state back out through a per-character return value.
+		final len: Int = src.length;
+		// One entry per open `${` interpolation, holding the `{` nesting depth
+		// reached inside it; the frame closes on the `}` that meets depth 0.
+		final interpolations: Array<Int> = [];
+		// The open quote character while inside a string literal, 0 in code.
+		var quote: Int = 0;
+		var i: Int = 0;
+		while (i < len) {
+			final c: Int = src.fastCodeAt(i);
+			final next: Int = i + 1 < len ? src.fastCodeAt(i + 1) : 0;
+			if (quote != 0) {
+				if (c == '\\'.code) {
+					i += 2;
+					continue;
+				}
+				if (quote == SINGLE_QUOTE && c == '$'.code && next == '$'.code) {
+					i += 2;
+					continue;
+				}
+				if (quote == SINGLE_QUOTE && c == '$'.code && next == '{'.code) {
+					interpolations.push(0);
+					quote = 0;
+					i += 2;
+					continue;
+				}
+				if (c == quote) quote = 0;
+				i++;
+				continue;
+			}
+			if (c == '/'.code && next == '/'.code) {
+				final start: Int = i;
+				while (i < len && src.fastCodeAt(i) != '\n'.code) i++;
+				onComment(start, i);
+				continue;
+			}
+			if (c == '/'.code && next == '*'.code) {
+				final start: Int = i;
+				final close: Int = src.indexOf('*/', i + 2);
+				i = close < 0 ? len : close + 2;
+				onComment(start, i);
+				continue;
+			}
+			if (c == '"'.code || c == SINGLE_QUOTE) {
+				quote = c;
+				i++;
+				continue;
+			}
+			// `~/` opens a regex literal; it runs to an unescaped `/` on the
+			// same line (an unterminated one is a syntax error the parser
+			// would have rejected long before the writer ran).
+			if (c == '~'.code && next == '/'.code) {
+				i = skipCommentRegex(src, i + 2);
+				continue;
+			}
+			if (interpolations.length > 0 && (c == '{'.code || c == '}'.code)) {
+				final last: Int = interpolations.length - 1;
+				if (c == '{'.code)
+					interpolations[last] = interpolations[last] + 1;
+				else if (interpolations[last] == 0) {
+					interpolations.pop();
+					quote = SINGLE_QUOTE;
+				} else
+					interpolations[last] = interpolations[last] - 1;
+				i++;
+				continue;
+			}
+			i++;
+		}
+	}
+
 	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
 	private static inline function isRegexFlag(c: Int): Bool {
 		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
+	}
+
+	/**
+	 * Index just past a `~/…/` regex literal opened at `from` (its body start), for
+	 * `scanComments`. Separate from `scanRegexLiteral`, which `scan` uses: that one
+	 * reports -1 for a literal unterminated on its own line so the caller can fall
+	 * back, and consumes the trailing flag letters; this one always returns a
+	 * position, because a comment scan that lost the thread must resume SOMEWHERE and
+	 * the flags cannot open a comment.
+	 */
+	private static function skipCommentRegex(src: String, from: Int): Int {
+		final len: Int = src.length;
+		var i: Int = from;
+		while (i < len) {
+			final c: Int = src.fastCodeAt(i);
+			if (c == '\\'.code) {
+				i += 2;
+				continue;
+			}
+			i++;
+			if (c == '/'.code || c == '\n'.code) break;
+		}
+		return i;
 	}
 
 	/**

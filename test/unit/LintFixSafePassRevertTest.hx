@@ -3,6 +3,7 @@ package unit;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.DefiniteAssignmentGuard;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
 import anyparse.query.LintFixSafePass;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -313,6 +314,51 @@ class LintFixSafePassRevertTest extends Test {
 		};
 		Assert.stringContains('the compiler blames: /p/Z.hx', notice);
 		Assert.isFalse(notice.indexOf('blames: /p/A.hx') != -1);
+	}
+
+	/**
+	 * BOTH netless arms say the net is off, and each names the remedy it actually has.
+	 *
+	 * S59 measured the reach table and found arm B silent: a run with no `compilerOracle`
+	 * configured wrote the same corrupting edit `--no-oracle` wrote, and said nothing —
+	 * while the flag arm printed a skip line. The silent arm is the state every foreign
+	 * project starts in, so it is the one that needed the sentence most.
+	 */
+	public function testBothNetlessArmsSaySoAndNameTheirOwnRemedy(): Void {
+		final unconfigured: String = LintFixSafePass.netNotice(null, false) ?? '';
+		Assert.stringContains('no safe-pass revert net', unconfigured);
+		Assert.stringContains('compilerOracle', unconfigured);
+		Assert.stringContains('apqlint.json', unconfigured);
+		// `--no-oracle` on a project that configured nothing: the actionable remedy is still
+		// the config key, not the flag, so the two collapse to one sentence.
+		Assert.equals(unconfigured, LintFixSafePass.netNotice(null, true) ?? '');
+		// A configured oracle the run DECLINED keeps S59's wording — the remedy there is to
+		// drop the flag, and naming the config key would be advice the user already took.
+		final declined: String = LintFixSafePass.netNotice('build.hxml', true) ?? '';
+		Assert.stringContains('--no-oracle', declined);
+		Assert.equals(-1, declined.indexOf('apqlint.json'), 'a configured project is not told to configure: $declined');
+		// And a run that WILL ask the compiler says nothing, because it HAS a net.
+		Assert.isNull(LintFixSafePass.netNotice('build.hxml', false));
+	}
+
+	/**
+	 * END TO END, and the half a pure function cannot state: the sentence reaches stderr on
+	 * a `--fix` run, and a REPORT-only lint stays silent — it writes nothing, so it has no
+	 * net to be missing. Both arms run the same rule over the same scope, so the only
+	 * variable is `--fix`.
+	 */
+	public function testTheNoticeIsAFixModeFactAndNotAReportModeOne(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('s61nonet', [{ name: 'C.hx', source: 'class C {}\n' }]);
+		final fixing: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--rule', 'prefer-single-quotes', '--fix', dir]));
+		Assert.stringContains('no safe-pass revert net', fixing);
+		Assert.stringContains('compilerOracle', fixing);
+		final reporting: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--rule', 'prefer-single-quotes', dir]));
+		Assert.equals(-1, reporting.indexOf('no safe-pass revert net'), 'a report-only lint has no net to miss: $reporting');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('stderr capture needs the node target');
+		#end
 	}
 
 	private function isProceed(decision: SafePassDecision): Bool {

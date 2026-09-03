@@ -2,6 +2,7 @@ package unit;
 
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
+import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
@@ -155,7 +156,9 @@ class HxInlineBlockCommentGapTest extends Test {
 			Assert.fail('$name: writer lost a captured comment (${exception.comment})');
 			return;
 		}
-		Assert.isNull(CommentInventory.firstMissing(source, written ?? ''), '$name: comment missing from output');
+		Assert.isNull(
+			CommentInventory.firstMissing(source, written ?? '', HaxeLexicalRegions.scanComments), '$name: comment missing from output'
+		);
 		// Second, INDEPENDENT oracle: the comment's own text has to be in
 		// the emitted bytes. `firstMissing` is the guard's own check, so on
 		// its own this assertion would pass if that check ever regressed to

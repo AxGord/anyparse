@@ -95,8 +95,8 @@ class LexicalRegionsSeamTest extends Test {
 
 	/**
 	 * THE ACCEPTANCE PIN, in the "shrinkage IS the test" shape: the grammar-agnostic packages
-	 * `anyparse.query` and `anyparse.check` may name `anyparse.grammar.haxe.*` in EXACTLY two
-	 * modules, and this asserts the list rather than a count.
+	 * `anyparse.query`, `anyparse.check` and `anyparse.format` may name `anyparse.grammar.haxe.*`
+	 * in EXACTLY two modules, and this asserts the list rather than a count.
 	 *
 	 *  - `query/Cli.hx` — `pickPlugin` maps `--lang haxe` to `HaxeQueryPlugin`. Something has to
 	 *    know one concrete grammar for the CLI to have a default, and this is the one place that
@@ -110,16 +110,24 @@ class LexicalRegionsSeamTest extends Test {
 	 * lexer for 65 `collectCommentTokens` call sites — the path that gates every DELETE in the
 	 * tool. Both are gone; this test is what stops the next one being added quietly.
 	 *
+	 * `anyparse.format` contributes NO entry, and that is a measured fact rather than an empty
+	 * slot: its debt was never an import but a Haxe state machine written out INLINE — the
+	 * `'…'` interpolation / `$$` / `~/…/` lexer `CommentInventory` carried for the writer's
+	 * comment-loss guard, now `HaxeLexicalRegions.scanComments` behind the `CommentScan` seam.
+	 * A name-based scan could not have seen that, so this arm is a RATCHET on the shape the
+	 * fix left behind, and `unit.CommentInventoryTest.testTheAuditFollowsTheScanItIsHanded` is
+	 * the arm that would catch the lexer coming back.
+	 *
 	 * Occurrences inside a COMMENT or a STRING do not count, and the masking is done with the very
 	 * seam under test (`plugin.lexicalRegions` + `LexicalRegions.regionAt`) — this file's own class
 	 * doc names `anyparse.grammar.haxe` in prose, and so does `LexicalRegions`'s.
 	 */
 	#if (sys || nodejs)
-	public function testNoQueryOrCheckModuleReachesTheHaxeGrammar(): Void {
+	public function testNoGrammarAgnosticModuleReachesTheHaxeGrammar(): Void {
 		final allowed: Array<String> = ['src/anyparse/query/Cli.hx', 'src/anyparse/query/FormatConfigDiscovery.hx'];
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final found: Array<String> = [];
-		for (dir in ['src/anyparse/query', 'src/anyparse/check']) for (path in hxFilesUnder(dir)) {
+		for (dir in ['src/anyparse/check', 'src/anyparse/format', 'src/anyparse/query']) for (path in hxFilesUnder(dir)) {
 			final source: String = File.getContent(path);
 			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 			var at: Int = source.indexOf(GRAMMAR_PATH);

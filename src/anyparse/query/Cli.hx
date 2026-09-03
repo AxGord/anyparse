@@ -14959,22 +14959,26 @@ final class Cli {
 	 * loop could not see its own fixer's raw output, and the flag's own stderr note (report mode
 	 * only) never appeared to contradict it. Handing `applyLintFixes` a null hxml is exactly
 	 * "behave as if the project configured no compilerOracle": no safe-pass revert net, risky
-	 * fixes stay report-only, oracle-assisted checks stay inert. That makes the flag strictly
-	 * more dangerous in fix mode than in report mode, which is what the usage text now says.
+	 * fixes stay report-only, oracle-assisted checks stay inert. That makes the flag more dangerous in fix
+	 * mode than in report mode, which is what the usage text now says.
+	 *
+	 * The same netless state is reached WITHOUT the flag, by a project that configured no
+	 * `compilerOracle` at all — the state every foreign project starts in — and that arm used
+	 * to print nothing. Both now go through `LintFixSafePass.netNotice`, which says the net is
+	 * off and names the remedy for whichever arm it is.
 	 */
 	private static function runLintFix(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracleHxml: Null<String>, oracleDir: Null<String>, noOracle: Bool
 	): Int {
 		warnCommentGuardDeclined();
-		if (!noOracle) return applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
-		// Only a project that configured an oracle loses anything by the flag, so only that run is told.
-		if (oracleHxml != null)
-			stderr(
-				'apq lint --fix: compiler oracle SKIPPED (--no-oracle) — no safe-pass revert net, risky fixes stay report-only,'
-				+ ' oracle-assisted fixes are inert\n'
-			);
-		return applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution);
+		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
+		// and the config key they never added. `LintFixSafePass.netNotice` owns which.
+		final notice: Null<String> = LintFixSafePass.netNotice(oracleHxml, noOracle);
+		if (notice != null) stderr(notice);
+		return !noOracle
+			? applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir)
+			: applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution);
 	}
 
 	/**

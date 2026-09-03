@@ -117,14 +117,18 @@ class LintReportChannelSliceTest extends Test {
 		// naming the miss is a diagnostic, not a new failure mode — but the run now SAYS which
 		// argument it could not find, where base said nothing at all.
 		var exit: Int = -1;
-		final noise: String = captureStderr(() -> exit = Cli.run(['lint', '--rule', 'prefer-single-quotes', '--no-oracle', dir, missing]));
+		final noise: String = CliFixture.captureStderr(() ->
+			exit = Cli.run(['lint', '--rule', 'prefer-single-quotes', '--no-oracle', dir, missing])
+		);
 		Assert.equals(0, exit, 'a scope argument that matched nothing does not fail the run');
 		Assert.isTrue(noise.indexOf('NoSuchFile.hx') != -1, 'the run names the argument it could not find: $noise');
 		Assert.isTrue(noise.indexOf('"$missing"') != -1, 'and quotes it, so its boundaries are visible: $noise');
 
 		// And it says it ONCE: when NOTHING matched, the command's own `matched no .hx files` line
 		// already names every argument, so the per-spec note would be the same fact twice.
-		final onlyMissing: String = captureStderr(() -> Cli.run(['lint', '--rule', 'prefer-single-quotes', '--no-oracle', missing]));
+		final onlyMissing: String = CliFixture.captureStderr(() ->
+			Cli.run(['lint', '--rule', 'prefer-single-quotes', '--no-oracle', missing])
+		);
 		Assert.isTrue(onlyMissing.indexOf('matched no .hx files') != -1, onlyMissing);
 		Assert.equals(-1, onlyMissing.indexOf('were skipped'), 'a wholly-unmatched scope is reported once, not twice: $onlyMissing');
 		CliFixture.removeDir(dir);
@@ -194,34 +198,6 @@ class LintReportChannelSliceTest extends Test {
 	private static function captureStdout(fn: () -> Void): String {
 		#if nodejs
 		return captureOn(js.Syntax.code('process.stdout'), fn);
-		#else
-		fn();
-		return '';
-		#end
-	}
-
-	/**
-	 * The same for stderr, where every `apq` diagnostic goes.
-	 *
-	 * NOT `process.stderr`: `Cli.stderr` writes through `Sys.stderr()`, which hxnodejs implements
-	 * as `fs.writeSync(2, …)` — swapping the stream's `write` captures nothing, and the arm reads
-	 * as "the tool printed nothing" whether or not it did.
-	 */
-	private static function captureStderr(fn: () -> Void): String {
-		#if nodejs
-		final buffer: Array<String> = [];
-		final fs: Dynamic = js.Syntax.code('require("fs")'); // noqa: avoid-dynamic
-		final original: Dynamic = fs.writeSync; // noqa: avoid-dynamic
-		fs.writeSync = js.Syntax.code(
-			'function(fd, data) { if (fd === 2) { {0}.push(String(data)); return 0; } return {1}.apply(null, arguments); }', buffer,
-			original
-		);
-		try fn() catch (exception: haxe.Exception) {
-			fs.writeSync = original;
-			throw exception;
-		}
-		fs.writeSync = original;
-		return buffer.join('');
 		#else
 		fn();
 		return '';

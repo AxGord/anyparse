@@ -241,6 +241,33 @@ final class LintFixSafePass {
 		};
 	}
 
+	/**
+	 * What a `--fix` run must say about its safe-pass revert net BEFORE it writes
+	 * anything, or null when it has one.
+	 *
+	 * Two arms have no net and only one of them used to say so. `--no-oracle` on a
+	 * project that DID configure a `compilerOracle` printed the skip line; a project
+	 * that configured none printed nothing at all — and that is the state every
+	 * foreign project starts in, so the silent arm is the common one. The two are the
+	 * same run for the fixer (`applyLintFixes` is handed a null hxml either way), so
+	 * they get the same sentence, differing only in the remedy: one is a flag the user
+	 * passed, the other a key they can add.
+	 *
+	 * REPORT MODE IS NOT AN ARM. A lint that writes nothing has no writes to revert, so
+	 * there is no net to be missing — `Cli.oracleSkippedNote` covers what report mode
+	 * loses without an oracle (nullSafety trust), which is a different fact.
+	 */
+	public static function netNotice(oracleHxml: Null<String>, noOracle: Bool): Null<String> {
+		return if (oracleHxml == null)
+			'apq lint --fix: no compilerOracle configured — no safe-pass revert net, risky fixes stay report-only,'
+				+ ' oracle-assisted fixes are inert; add a "compilerOracle" hxml to apqlint.json to arm it\n'
+		else if (noOracle)
+			'apq lint --fix: compiler oracle SKIPPED (--no-oracle) — no safe-pass revert net, risky fixes stay report-only,'
+				+ ' oracle-assisted fixes are inert\n'
+		else
+			null;
+	}
+
 	/** Whether the character code is an ASCII digit. */
 	private static inline function isDigit(code: Int): Bool {
 		return code >= '0'.code && code <= '9'.code;
