@@ -40,7 +40,13 @@ class QueryWalkerCodegen {
 	private static final WITH_TYPE_REFS_ARG: FunctionArg = { name: 'withTypeRefs', type: BOOL_CT };
 
 	public static function emit(result: QueryWalkerLowering.QueryWalkerResult, parserPath: String): Array<Field> {
-		final fields: Array<Field> = [rootMemoSource(), rootMemoValue(result), rootField(result, parserPath)];
+		final fields: Array<Field> = [
+			rootMemoSource(),
+			rootMemoValue(result),
+			rootMemoError(),
+			rootField(result, parserPath),
+			publicParseRootStrictField(result, parserPath)
+		];
 		for (fn in result.walks) fields.push(walkField(fn));
 		for (fn in result.names) fields.push(nameField(fn));
 		for (fn in result.typeRefs) fields.push(typeRefsField(fn));
@@ -66,6 +72,28 @@ class QueryWalkerCodegen {
 			access: [APrivate, AStatic],
 			doc: 'Source string `_memoRoot` was parsed from, or null before the first parse.',
 			kind: FVar(TPath({ pack: [], name: 'Null', params: [TPType(STRING_CT)] }), macro null),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * The parse ERROR of `_memoSource`, or null when it parsed. Read only through
+	 * `parseRootStrict`, and only under `_memoSource == source`, so a memo that has moved on
+	 * cannot answer for a text it never saw.
+	 *
+	 * A null root is all `walkRoot` ever learns about a failure — it never sees the source — so
+	 * every op that re-parses its own rewrite reported a bare `parse failed` with no file
+	 * position. This is a second field of the SAME single-entry memo, not a new cache: it lives
+	 * and dies with `_memoSource`.
+	 */
+	private static function rootMemoError(): Field {
+		return {
+			name: '_memoError',
+			access: [APrivate, AStatic],
+			doc: 'Parse error of `_memoSource`, or null when it parsed. Valid only while `_memoSource` is the source being asked about.',
+			kind: FVar(
+				TPath({ pack: [], name: 'Null', params: [TPType(TPath({ pack: ['haxe'], name: 'Exception', params: [] }))] }), macro null
+			),
 			pos: Context.currentPos()
 		};
 	}
@@ -100,7 +128,11 @@ class QueryWalkerCodegen {
 		final body: Expr = macro {
 			if (_memoSource == source) return _memoRoot;
 			_memoSource = source;
-			_memoRoot = try $parseCall catch (exception: haxe.Exception) null;
+			_memoError = null;
+			_memoRoot = try $parseCall catch (exception: haxe.Exception) {
+				_memoError = exception;
+				null;
+			};
 			return _memoRoot;
 		};
 		return {
@@ -185,6 +217,44 @@ class QueryWalkerCodegen {
 			kind: FFun({
 				args: [SOURCE_ARG],
 				ret: nullRootCT(result.rootCT),
+				expr: body
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * The public `parseRootStrict(source)` entry - the parse that RAISES instead of answering
+	 * null, so a caller holding a null root can say WHERE the source failed.
+	 *
+	 * `parseRoot` swallows the parser's own `ParseError` and hands back null, which is the right
+	 * answer for the callers that merely skip a file they cannot parse. It is the wrong answer
+	 * for the ones that report to a user: every op re-parses its own rewrite, and all any of them
+	 * could print was `parse failed` — no file offset, no line, no expected token — because the
+	 * only value that survived the null was the absence of a tree.
+	 *
+	 * Costs nothing on the path that matters: the caller has just asked `parseRoot(source)`, so
+	 * the memo still holds that source and its error is re-raised without touching the parser. A
+	 * memo that has moved on is re-parsed once, on a path that throws either way.
+	 */
+	private static function publicParseRootStrictField(result: QueryWalkerLowering.QueryWalkerResult, parserPath: String): Field {
+		final parseCall: Expr = {
+			expr: ECall(field(haxe.macro.MacroStringTools.toFieldExpr(parserPath.split('.')), 'parse'), [macro source]),
+			pos: Context.currentPos()
+		};
+		final body: Expr = macro {
+			final memo = _memoError;
+			if (_memoSource == source && memo != null) throw memo;
+			return $parseCall;
+		};
+		return {
+			name: 'parseRootStrict',
+			access: [APublic, AStatic],
+			doc: 'Parse `source` into the grammar root, RAISING the parser\'s own error when it does not parse — the diagnostic twin '
+				+ 'of `parseRoot`, for a caller that must name the line and column rather than report a bare failure.',
+			kind: FFun({
+				args: [SOURCE_ARG],
+				ret: result.rootCT,
 				expr: body
 			}),
 			pos: Context.currentPos()

@@ -2683,6 +2683,31 @@ class MoveSymbolSliceTest extends Test {
 		Assert.isTrue(changeFor(changes, 'p/Reader.hx').newSource.contains('import p.Dest.Colour;'));
 	}
 
+	/**
+	 * A doc comment whose continuation lines carry NO `*` gutter travels whole with the declaration.
+	 *
+	 * The backward trivia walk read one line at a time and accepted a line starting with `//`, `/*`,
+	 * `*` or `@` — so a `/**\n\tText\n**\/` block matched only on its closing line, and the cut took
+	 * the `**\/` and left the opener behind. The destination then began with a bare `**\/` and stopped
+	 * parsing; the op refused with `parse failed` and no position, which is how the shape stayed
+	 * invisible. Measured on a real 1127-line test module. The walk now asks the lexer where the
+	 * comment starts before reading any line's text.
+	 */
+	public function testAGutterlessDocBlockTravelsWholeWithTheDeclaration(): Void {
+		final doc: String = '/**\n\tThe kind of doc block that has no gutter.\n\tSecond line, still prose.\n**/\n';
+		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 11, 7, 'p/Host.hx', [
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nclass Keep {\n\tpublic function new() {}\n}\n\n${doc}class Gone {\n\tpublic function new() {}\n}\n'
+			},
+			{ file: 'p/Host.hx', source: 'package p;\n' }
+		]);
+		final dest: String = changeFor(changes, 'p/Host.hx').newSource;
+		Assert.isTrue(dest.contains(doc), 'the whole doc block should have travelled, got:\n$dest');
+		final source: String = changeFor(changes, 'p/Mover.hx').newSource;
+		Assert.isFalse(source.contains('**/'), 'no half of the doc block should be left behind, got:\n$source');
+	}
+
 	private function assertUnchanged(changes: Array<MoveChange>, file: String): Void {
 		for (c in changes) if (c.file == file) Assert.fail('$file should not have been rewritten');
 		Assert.pass();

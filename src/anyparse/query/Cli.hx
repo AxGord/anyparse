@@ -7116,8 +7116,13 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Move the TYPE declaration (class / interface / enum / typedef /\n');
 		sysPrint('abstract) at <line>:<col> in <file> into <dest-file>, in the same package\n');
-		sysPrint('or another one. The decl is relocated verbatim — its leading doc-comment,\n');
-		sysPrint('annotations and conditional modifier prefix move with it. Every file\n');
+		sysPrint('or another one. <dest-file> must already EXIST (a bare `package p;` module\n');
+		sysPrint('is enough; create one with `apq new`). The decl is CUT and PASTED as\n');
+		sysPrint('source — its leading doc-comment, annotations and conditional modifier\n');
+		sysPrint('prefix move with it, byte for byte. What lands on disk is those bytes\n');
+		sysPrint('unless the file was ALREADY writer-canonical before the move, in which\n');
+		sysPrint('case the whole rewritten file is re-emitted through the writer under the\n');
+		sysPrint('destination\'s own hxformat.json — canonical in, canonical out. Every file\n');
 		sysPrint('under --scope that reached the type through its old module path — an\n');
 		sysPrint('import, a `using`, a wildcard or bare package visibility — is repointed\n');
 		sysPrint('or given a statement, and the imports the moved body depends on are\n');
@@ -7126,15 +7131,27 @@ final class Cli {
 		sysPrint('the destination lacks when the decl holds a member access at all (one\n');
 		sysPrint('whose bound type name collides at the destination is skipped; a\n');
 		sysPrint('destination whose own `using` run offers no seat above it is refused).\n');
+		sysPrint('An import the moved body needs that the source reaches only through a\n');
+		sysPrint('`#if`-guarded statement carries too: it is re-emitted at the destination\n');
+		sysPrint('under the condition that guards it at the source, merged into a region\n');
+		sysPrint('the destination already spells that condition for. Where one condition\n');
+		sysPrint('cannot carry it the move is REFUSED by name — two different regions\n');
+		sysPrint('binding one name, a statement nested in more than one region, one in an\n');
+		sysPrint('`#else` / `#elseif` branch (whose condition is the negation of the ones\n');
+		sysPrint('above it), and one sharing its line with a directive.\n');
 		sysPrint('Best-effort: a bare VALUE position (Type.createInstance(Dep, [])), a\n');
 		sysPrint('constructor pattern and a lowercase receiver are not auto-detected and\n');
-		sysPrint('may need a manual import — surfaced in the advisory. <line>:<col> uses\n');
-		sysPrint('the same column convention `apq refs` prints.\n');
+		sysPrint('may need a manual import — surfaced in the advisory. So is a dependency\n');
+		sysPrint('whose module lies OUTSIDE --scope: the scope is the resolution index as\n');
+		sysPrint('well as the rewrite set, and a module it does not hold binds nothing this\n');
+		sysPrint('op can name — widen --scope to cover the dependency roots. <line>:<col>\n');
+		sysPrint('uses the same column convention `apq refs` prints.\n');
 		sysPrint('\n');
 		sysPrint('Refuses a scope file that names the type by its fully-qualified path, an\n');
 		sysPrint('ambiguous / missing type, a decl that shares a source line with other code,\n');
 		sysPrint('any scope file that does not parse, or any rewritten file that fails to\n');
-		sysPrint('re-parse — the write is atomic (all changed files or none).\n');
+		sysPrint('re-parse — naming that file and the line and column the parse stopped at.\n');
+		sysPrint('The write is atomic (all changed files or none).\n');
 	}
 
 	private static function printInlineUsage(): Void {

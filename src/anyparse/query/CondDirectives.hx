@@ -102,6 +102,81 @@ final class CondDirectives {
 		return out;
 	}
 
+	/**
+	 * The TOP-LEVEL regions `directives` delimits, in source order — one entry per `#if` that no
+	 * other region encloses, each carrying what a caller has to know before it may treat the
+	 * region as a single lexical unit: whether it opens a branch of its own, whether it holds a
+	 * nested region, and whether its two directives own their lines.
+	 *
+	 * A caller that MOVES a region's text needs all three. `move` carries a `#if`-guarded import
+	 * block into another file: an `#else` arm has to travel with the `#if` (so the region is the
+	 * unit, not the statement), a nested region cannot be reasoned about branch by branch, and an
+	 * inline `#if sys import a; #end` shares its line with code the caller is not moving.
+	 *
+	 * An UNBALANCED scan stops the walk: the regions read so far are returned and the rest is not
+	 * guessed at. A region left open at the end is not returned at all — the direction that costs a
+	 * refusal rather than a text slice ending somewhere nobody chose.
+	 */
+	public static function topLevelBlocks(source: String, directives: Array<CondDirective>, shape: RefShape): Array<CondBlock> {
+		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
+		final endKeyword: Null<String> = shape.conditionalEndKeyword;
+		if (ifKeyword == null || endKeyword == null) return [];
+		final out: Array<CondBlock> = [];
+		var depth: Int = 0;
+		var openAt: Int = -1;
+		var flat: Bool = true;
+		var single: Bool = true;
+		for (i => directive in directives) {
+			if (directive.keyword == ifKeyword) {
+				if (depth == 0) {
+					openAt = i;
+					flat = true;
+					single = true;
+				} else
+					flat = false;
+				depth++;
+				continue;
+			}
+			if (directive.keyword == endKeyword) {
+				if (depth == 0) return out;
+				depth--;
+				if (depth == 0 && openAt >= 0) {
+					final open: CondDirective = directives[openAt];
+					out.push({
+						span: new Span(open.span.from, directive.span.to),
+						condition: open.condition,
+						headerEnd: open.span.to,
+						closeFrom: directive.span.from,
+						singleBranch: single,
+						flat: flat,
+						linewise: endsItsLine(source, open.span.to) && RefactorSupport.startsItsLine(source, directive.span.from)
+					});
+					openAt = -1;
+				}
+				continue;
+			}
+			if (depth == 1) single = false;
+		}
+		return out;
+	}
+
+	/**
+	 * Whether `span` owns the line it sits on — nothing but blanks on either side of it, with one
+	 * optional statement terminator allowed after it (a grammar's own statement span may or may not
+	 * reach over its `;`).
+	 *
+	 * The question a caller asks before MOVING a statement's text: an inline `#if sys import a; #end`
+	 * puts a directive on the same line, and taking the statement alone would leave the directive
+	 * behind with nothing between it and its `#end`.
+	 */
+	public static function ownsItsLine(source: String, span: Span): Bool {
+		if (!RefactorSupport.startsItsLine(source, span.from)) return false;
+		var at: Int = span.to;
+		if (at < source.length && source.fastCodeAt(at) == ';'.code) at++;
+		return endsItsLine(source, at);
+	}
+
+
 	/** Collapse internal whitespace runs in `condition` to single spaces, so two spellings of one condition compare equal. */
 	public static function normalizeCondition(condition: String): String {
 		return (~/\s+/g).replace(condition.trim(), ' ');
@@ -144,6 +219,20 @@ final class CondDirectives {
 	/** Whether `c` is an ASCII digit. */
 	private static inline function isDigit(c: Int): Bool {
 		return c >= '0'.code && c <= '9'.code;
+	}
+
+	/**
+	 * Whether only blanks stand between `at` and the end of its line — the forward half of
+	 * `RefactorSupport.startsItsLine`, which has no twin there.
+	 */
+	private static function endsItsLine(source: String, at: Int): Bool {
+		var i: Int = at;
+		while (
+			i < source.length
+			&& (source.fastCodeAt(i) == ' '.code || source.fastCodeAt(i) == '\t'.code || source.fastCodeAt(i) == '\r'.code)
+		)
+			i++;
+		return i >= source.length || source.fastCodeAt(i) == '\n'.code;
 	}
 
 	/**
@@ -352,6 +441,26 @@ typedef CondDirective = {
 	final keyword: String;
 	final span: Span;
 	final condition: Null<Span>;
+};
+
+/**
+ * One TOP-LEVEL conditional region, as `CondDirectives.topLevelBlocks` delimits it: `span` runs
+ * from the `#if` marker to the end of the `#end` keyword, `headerEnd` is where the opening
+ * directive stops and `closeFrom` where the closing one starts — the two offsets that bound the
+ * region's BODY — and the three flags say how far the region may be treated as one unit.
+ *
+ * `singleBranch` is false once the region opens an `#elseif` / `#else` of its own; `flat` is false
+ * once it holds a nested region; `linewise` is false for an inline `#if sys f(); #end`, whose
+ * directives share their lines with code.
+ */
+typedef CondBlock = {
+	final span: Span;
+	final condition: Null<Span>;
+	final headerEnd: Int;
+	final closeFrom: Int;
+	final singleBranch: Bool;
+	final flat: Bool;
+	final linewise: Bool;
 };
 
 /**
