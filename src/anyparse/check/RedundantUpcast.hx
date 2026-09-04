@@ -19,7 +19,7 @@ import anyparse.runtime.Span;
  * The three relations between an operand type `S` and a checked-cast target `T` partition
  * cleanly: equal (`redundant-cast`, with an unwrap autofix), `S <: T` (this check — an
  * always-succeeding upcast), and unrelated (`impossible-cast` — an always-failing cast).
- * The subtype relation is the cross-file hierarchy `SymbolIndex.isSubtype` resolves
+ * The subtype relation is the cross-file hierarchy `SubtypeGraph.isSubtype` resolves
  * (extends + implements), so an interface target (`cast(impl, I)` where `impl`'s class
  * implements `I`) is flagged too. No non-null proof is needed — a redundant upcast is a
  * no-op for any value, `null` included.
@@ -74,7 +74,7 @@ final class RedundantUpcast implements Check {
 							TypeResolver.identTypeName(node.children[0], root, shape, declaredTypes)
 						);
 						final tName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.castTargetWithin(span, castTargets));
-						if (sName != null && tName != null && index.isSubtype(sName, tName)) violations.push({
+						if (sName != null && tName != null && index.subtypes.isSubtype(sName, tName)) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'redundant-upcast',

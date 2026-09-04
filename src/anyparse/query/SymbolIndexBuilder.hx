@@ -103,7 +103,7 @@ final class SymbolIndexBuilder {
 			// The SOURCE is retained for a skipped file too. Nothing structural can be read from
 			// it, but its raw text still answers the one question every confinement gate asks —
 			// could this file reference the member at all — and that turns a whole-project veto
-			// into a per-member one (`SymbolIndex.skippedMayReference`).
+			// into a per-member one (`RawSourceScan.skippedMayReference`).
 			sources[entry.file] = entry.source;
 			if (tree == null) {
 				skipped.push(entry.file);

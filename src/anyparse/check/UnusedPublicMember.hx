@@ -50,7 +50,7 @@ using StringTools;
  *    tokens inside the member's OWN exclusion region — i.e. every occurrence in the whole scope
  *    is its own declaration. That comparison is a proof only because the map is built over a
  *    SUPERSET of the member's own file (`tokenCounts` unions the report set in by path).
- * 2. The authoritative confirm, on the REPORT index only: `SymbolIndex.nameOccursOutside`. Its
+ * 2. The authoritative confirm, on the REPORT index only: `RawSourceScan.nameOccursOutside`. Its
  *    ONE added power over the token map is `RefactorSupport.DOLLAR_ESCAPES`: a `\x24name` /
  *    `$name` interpolation escape relaxes the LEFT word boundary, and the plain tokenizer
  *    reads `\x24name` as the single token `x24name` instead. Nothing else about it is stronger,
@@ -95,7 +95,7 @@ using StringTools;
  *   `Test`.
  * - An enclosing class the index says is out of reach: `@:keep` or `@:build` on the class
  *   (a build macro may generate the call), an `extern class` (its members are declarations
- *   over a foreign object), or `SymbolIndex.transitivelyCarriesRtti` (the hierarchy is
+ *   over a foreign object), or `TypeTraits.transitivelyCarriesRtti` (the hierarchy is
  *   reflected on field NAMES at runtime).
  * - An ancestor carrying `@:autoBuild` — that macro generates into DESCENDANTS, so it is
  *   read while walking the chain UPWARD, never off the class in hand.
@@ -313,7 +313,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		if (declared == null || declared.hasKeep || declared.hasBuild || declared.isExtern) return;
 		final candidates: Array<Candidate> = unreferencedCandidates(cls, source, host.file, index, ctx, branch, regions);
 		if (candidates.length == 0) return;
-		if (scope.transitivelyCarriesRtti(owner)) return;
+		if (scope.traits.transitivelyCarriesRtti(owner)) return;
 		final chain: Chain = { unresolved: false, generated: false };
 		walkChain(scope, host, declared, chain, []);
 		if (chain.unresolved || chain.generated) return;
@@ -429,7 +429,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		countTokens(source, region.from, region.to, own);
 		// Short-circuit deliberate: the confirm is a per-candidate scan of every report file, so
 		// it must never run for a name the cheap map already saw somewhere else.
-		return ctx.tokens[name] == own[name] && !index.nameOccursOutside(name, file, region);
+		return ctx.tokens[name] == own[name] && !index.text.nameOccursOutside(name, file, region);
 	}
 
 	/**

@@ -483,7 +483,7 @@ final class LintCommand implements CliCommand {
 			// computeFileLintEdits hands fix() the whole-report index either way.
 			'redundant-tostring',
 			// prefer-inline's soundness gates are ALL whole-project: the subtype-override gate
-			// (SymbolIndex.hasSubtype + a strict-subtype member lookup), the value-reference name scan, and
+			// (SubtypeGraph.hasSubtype + a strict-subtype member lookup), the value-reference name scan, and
 			// the interface gate. On the active SUBSET a subtype / value-use / interface declared elsewhere
 			// reads as absent, so an overridden or value-referenced method is wrongly inlined ("Field X is
 			// inlined and cannot be overridden").

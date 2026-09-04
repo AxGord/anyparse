@@ -18,7 +18,7 @@ using StringTools;
  *
  * `prefer-final-field`, `prefer-final-public-field` and `prefer-read-only-field` all
  * tighten a field's write access (`final`, `(default, null)`), and all three used to bail
- * on the mere EXISTENCE of a subtype (`SymbolIndex.hasSubtype`) or of an `@:access` grant.
+ * on the mere EXISTENCE of a subtype (`SubtypeGraph.hasSubtype`) or of an `@:access` grant.
  * That is the wrong question by a wide margin: an empty `class D extends C {}` blocked
  * every field of `C`, and the answer changed with the lint scope, since a single-file run
  * cannot see the subtype at all. Only a WRITE breaks any of the three rewrites — a read
@@ -47,7 +47,7 @@ final class MemberWriteScan {
 		return scopeOf(
 			index, plugin
 		)
-			.subtypeDeclMatches(
+			.subtypes.subtypeDeclMatches(
 				owner, name,
 				(subtype, src, span, redeclares) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
 			);
@@ -68,7 +68,7 @@ final class MemberWriteScan {
 		return scopeOf(
 			index, plugin
 		)
-			.subtypeDeclMatches(
+			.subtypes.subtypeDeclMatches(
 				owner, name,
 				(subtype, src, span, redeclares) ->
 					redeclares || writeIndex.writtenAnywhere(subtype, name)
@@ -94,17 +94,17 @@ final class MemberWriteScan {
 		return scopeOf(
 			index, plugin
 		)
-			.subtypeDeclMatches(
+			.subtypes.subtypeDeclMatches(
 				owner, name,
 				(subtype, src, span, redeclares) ->
 					redeclares || mayReference(src, name, span.from, span.to)
-					|| scopeOf(index, plugin).accessGrantMatches(subtype, granted -> mayReference(granted, name, 0, granted.length))
+					|| scopeOf(index, plugin).text.accessGrantMatches(subtype, granted -> mayReference(granted, name, 0, granted.length))
 			);
 	}
 
 	/** Whether any file granting itself `@:access(owner)` MENTIONS `name` — `accessGrantMayWrite`'s read counterpart (see `subtypeMayReference`). */
 	public static inline function accessGrantMayReference(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
-		return scopeOf(index, plugin).accessGrantMatches(owner, src -> mayReference(src, name, 0, src.length));
+		return scopeOf(index, plugin).text.accessGrantMatches(owner, src -> mayReference(src, name, 0, src.length));
 	}
 
 	/**
@@ -113,7 +113,7 @@ final class MemberWriteScan {
 	 * grantee source is scanned, unlike a subtype's declaration slice.
 	 */
 	public static inline function accessGrantMayWrite(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
-		return scopeOf(index, plugin).accessGrantMatches(owner, src -> mayWrite(src, name, 0, src.length));
+		return scopeOf(index, plugin).text.accessGrantMatches(owner, src -> mayWrite(src, name, 0, src.length));
 	}
 
 	/**
@@ -209,7 +209,7 @@ final class MemberWriteScan {
 
 	/**
 	 * Whether any (transitive) subtype of `owner` may write the inherited member `name`.
-	 * True when the hierarchy cannot be resolved (`SymbolIndex.subtypeDeclMatches` reports
+	 * True when the hierarchy cannot be resolved (`SubtypeGraph.subtypeDeclMatches` reports
 	 * an unretained source or a simple-name collision) and when a subtype REDECLARES the
 	 * name — an ambiguously-named member is exactly what a write scan cannot rule out.
 	 * The index the SUBTYPE questions run against: the resolution scope when one is
@@ -278,7 +278,7 @@ final class MemberWriteScan {
 	 */
 	private static function subtypeReach(scope: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
 		return mayWrite(src, name, span.from, span.to)
-			|| scope.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
+			|| scope.text.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
 	}
 
 	/**

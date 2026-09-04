@@ -15,7 +15,7 @@ import utest.Test;
  * End-to-end coverage of `FixVerifier.verify`'s CANDIDATE SCOPE: a risky check's
  * `run` must see the WHOLE lint file set, exactly as the report run does. The
  * regression fixture mirrors a real incident: `prefer-inline`'s subtype-override
- * gate is whole-project (`SymbolIndex.hasSubtype`), so computing candidates from
+ * gate is whole-project (`SubtypeGraph.hasSubtype`), so computing candidates from
  * one file at a time re-exposed a method whose override lives in a sibling file —
  * and the compiler oracle could not catch it, because its hxml (an app target)
  * never compiles the overriding subtype (a test tree, in the incident). The safe

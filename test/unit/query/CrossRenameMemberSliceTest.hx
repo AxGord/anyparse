@@ -204,7 +204,7 @@ class CrossRenameMemberSliceTest extends Test {
 	/**
 	 * The MODULE-RELATIVE spelling of a sub-module type — `Mod.Sub`, legal wherever the module is
 	 * in simple-name scope — is a third spelling beside the bare and the root-relative one, and
-	 * it resolves only FROM the reading file (`SymbolIndex.moduleRelativeRefAll`). Annotation and `new` forms both rename. The visibility rule is the MODULE's, not a bare type
+	 * it resolves only FROM the reading file (`TypeRefIndex.moduleRelativeRefAll`). Annotation and `new` forms both rename. The visibility rule is the MODULE's, not a bare type
 	 * name's, and it is narrower: compiled on 4.3.7, `import pkg.*;` reaches `Mod.Sub` while
 	 * `import pkg.Mod;` does NOT (`Type not found : Mod`). Both arms are asserted here, alongside
 	 * the root-relative `other.Mod.Sub` of another package, which resolves to nothing.
@@ -331,7 +331,7 @@ class CrossRenameMemberSliceTest extends Test {
 
 	/**
 	 * The same subtype-receiver arm when the subtype reaches its base through `import p.Base as B;`.
-	 * `resolvesToSourceType` asks `SymbolIndex.isSubtype`, whose walk could not follow an import
+	 * `resolvesToSourceType` asks `SubtypeGraph.isSubtype`, whose walk could not follow an import
 	 * alias upward, so `s.speak()` was not proven to reach the renamed member and was left standing:
 	 * `apq rename` reported `wrote 1 file(s)` and the tree failed with `p.Derived has no field tag`
 	 * on Haxe 4.3.7 (the same fixture with the classes named `Owner` / `Derived`). It now writes both

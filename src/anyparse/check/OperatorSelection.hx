@@ -311,7 +311,8 @@ final class OperatorSelection {
 	/** Every top-level declaration named `typeName` the resolution scope carries. */
 	private function declsOf(typeName: String): Array<TypeDeclInfo> {
 		return [
-			for (index in indexes()) for (info in index.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName) decl
+			for (index in indexes()) for (info in index.refs.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName)
+				decl
 		];
 	}
 

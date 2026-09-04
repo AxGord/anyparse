@@ -238,7 +238,7 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 			if (span == null) continue;
 			final plan: Null<ConversionPlan> = _plans[planKey(v.file, span.from)];
 			if (plan == null || source.substring(span.from, span.to) != plan.declSource) continue;
-			if (index != null && (index.hasSubtype(plan.name) || index.transitivelyCarriesRtti(plan.name))) continue;
+			if (index != null && (index.subtypes.hasSubtype(plan.name) || index.traits.transitivelyCarriesRtti(plan.name))) continue;
 			for (e in plan.edits) out.push({ span: e.span, text: e.text, group: group });
 			group++;
 		}

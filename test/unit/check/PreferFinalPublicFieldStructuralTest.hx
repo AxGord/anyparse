@@ -10,7 +10,7 @@ using Lambda;
 
 /**
  * The structural-conformance gate of `prefer-final-public-field`
- * (`SymbolIndex.structuralConformanceForbidsFinal`). Haxe unifies a class instance with an
+ * (`StructuralTypes.structuralConformanceForbidsFinal`). Haxe unifies a class instance with an
  * anonymous structure by MEMBER SET, and a `final` field satisfies neither a structural
  * `var x:T` (`Inconsistent setter for field x : ctor should be default`) nor a structural
  * `function x():T` (`Cannot unify final and non-final fields`). That unification is a READ

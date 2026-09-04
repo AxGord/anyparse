@@ -138,7 +138,7 @@ final class PurityScan {
 	 * Whether a `fieldAccessKind` node reads a member proven to be a property GETTER — resolvable
 	 * only when the receiver is a bare identifier (its declared type) or `this` (the enclosing
 	 * type); a deeper receiver is left unresolved and assumed a plain read. Reuses
-	 * `SymbolIndex.memberGetter` (the getter-property map).
+	 * `MemberLookup.memberGetter` (the getter-property map).
 	 */
 	private static function isSideEffectingGetter(fa: QueryNode, ctx: PurityCtx): Bool {
 		final field: Null<String> = fa.name;
@@ -153,7 +153,7 @@ final class PurityScan {
 		} else {
 			TypeResolver.identTypeName(recv, ctx.root, ctx.shape, ctx.declaredTypes);
 		}
-		return typeName != null && ctx.index.memberGetter(typeName, field) == true;
+		return typeName != null && ctx.index.members.memberGetter(typeName, field) == true;
 	}
 
 	/**
@@ -180,7 +180,7 @@ final class PurityScan {
 		final span: Null<Span> = ident.span;
 		if (name == null || span == null) return false;
 		final owner: Null<String> = TypeResolver.enclosingTypeName(ctx.root, span);
-		if (owner == null || ctx.index.memberGetter(owner, name) != true) return false;
+		if (owner == null || ctx.index.members.memberGetter(owner, name) != true) return false;
 		return !TypeResolver.bindsToValueDeclaration(name, span, ctx.root, ctx.shape);
 	}
 

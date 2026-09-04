@@ -257,7 +257,7 @@ final class RedundantThis implements Check {
 	 * supplies no type-container / member seams the membership gate is inert, so
 	 * the check falls back to the shadow-only test (`true`). Otherwise `name` must
 	 * be a member declared by the enclosing type in THIS file (the same-file fast
-	 * path) or — when that misses — proven inherited by `SymbolIndex.inheritsMemberUnambiguously`
+	 * path) or — when that misses — proven inherited by `MemberLookup.inheritsMemberUnambiguously`
 	 * (built lazily, at most once), which pins the enclosing type to its `(file, name)`
 	 * declaration and resolves each supertype link import / qualified-path aware. The
 	 * proof is POSITIVE and UNAMBIGUOUS: it holds only when a UNIQUELY-resolved ancestor
@@ -274,7 +274,7 @@ final class RedundantThis implements Check {
 		if (members.contains(name)) return true;
 		if (typeName == null) return false;
 		final index: Null<SymbolIndex> = symbols();
-		return index != null && index.inheritsMemberUnambiguously(file, typeName, name);
+		return index != null && index.members.inheritsMemberUnambiguously(file, typeName, name);
 	}
 
 

@@ -38,7 +38,7 @@ import anyparse.runtime.Span;
  * There is no narrowing: `if (m.exists(k)) m[k].field`, `if (arr.length > 0)
  * arr.pop().f` and a guarded `findUser().f` are still flagged, since the guard is
  * invisible without flow. That is why the severity is `Info` (advisory), not the
- * `Warning` the flow-sensitive engine earns. A cross-file `Type.static()` / `obj.method()` return IS now resolved via `SymbolIndex.returnNominalOf` (conservative under a simple-name collision); a bare `this.f()` stays a safe miss. Macro-reification subtrees
+ * `Warning` the flow-sensitive engine earns. A cross-file `Type.static()` / `obj.method()` return IS now resolved via `MemberLookup.returnNominalOf` (conservative under a simple-name collision); a bare `this.f()` stays a safe miss. Macro-reification subtrees
  * (`RefShape.opaqueKinds`) are not descended into.
  */
 @:nullSafety(Strict)

@@ -344,7 +344,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	 * container the residual this check's type doc names. For the `length` arm that residual is
 	 * harmless (a `length` member is a real member either way); for the `count()` arm it is not,
 	 * because the emitted call goes through the `using Lambda;` the fix inserts and Haxe binds a
-	 * real MEMBER first. `SymbolIndex.memberShadowsExtension` — the one question shared with
+	 * real MEMBER first. `MemberLookup.memberShadowsExtension` — the one question shared with
 	 * `prefer-exists` / `prefer-foreach` / `prefer-find` / `prefer-static-extension` — sends that
 	 * container to the QUALIFIED spelling `Lambda.count(coll)` instead, which routes around the
 	 * member and needs no `using` at all. Both spellings put `coll` in `Lambda.count`'s
@@ -394,7 +394,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	/** Whether `nominal` provably declares a `count` member of its own, which the inserted `using Lambda;` would never beat. */
 	private static function countShadowed(nominal: String, index: () -> Null<SymbolIndex>): Bool {
 		final symbols: Null<SymbolIndex> = index();
-		return symbols != null && symbols.memberShadowsExtension(nominal, COUNT_METHOD);
+		return symbols != null && symbols.members.memberShadowsExtension(nominal, COUNT_METHOD);
 	}
 
 	/**

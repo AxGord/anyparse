@@ -373,7 +373,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	): Bool {
 		if (index == null) return false;
 		final idx: SymbolIndex = index;
-		if (idx.declaringFiles(target).length > 0) return true;
+		if (idx.refs.declaringFiles(target).length > 0) return true;
 		// A local / parameter / catch variable LEGALLY shadows an inherited member, so this veto
 		// is a STYLE stance, not a correctness gate — the correctness gate is `collidesInScope`,
 		// which refuses when the enclosing function already reads that member through a bare
@@ -385,7 +385,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			|| category == NamingCategory.CatchVar;
 		if (allowInheritedShadow && shadowsBinding) return false;
 		final owner: Null<String> = decl.enclosingType;
-		return owner != null && idx.supertypeDeclaresMember(owner, target);
+		return owner != null && idx.members.supertypeDeclaresMember(owner, target);
 	}
 
 

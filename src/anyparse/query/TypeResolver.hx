@@ -113,7 +113,7 @@ final class TypeResolver {
 	 * a local/param of a class/abstract type whose member `field` is a plain member;
 	 * and `this`, against the enclosing type's members. In the latter two the member
 	 * may be DECLARED by the resolved type or INHERITED from a project-resolvable
-	 * supertype — `SymbolIndex.memberGetter` walks the chain. Any unresolved receiver,
+	 * supertype — `MemberLookup.memberGetter` walks the chain. Any unresolved receiver,
 	 * a getter property, or a field whose accessor shape the index cannot prove plain
 	 * returns false — the caller keeps its conservative default.
 	 */
@@ -132,12 +132,12 @@ final class TypeResolver {
 		if (recvName == shape.selfReferenceText) {
 			final lookSpan: Span = faNode.span ?? recvSpan;
 			final enclosing: Null<String> = enclosingTypeName(tree, lookSpan);
-			return enclosing != null && index.memberGetter(enclosing, field) == false;
+			return enclosing != null && index.members.memberGetter(enclosing, field) == false;
 		}
 		final bindingFrom: Null<Int> = resolveBindingFrom(recvName, recvSpan, tree, shape);
 		if (bindingFrom == null) return false;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
-		return typeName != null && (index.isAnonStructType(typeName) || index.memberGetter(typeName, field) == false);
+		return typeName != null && (index.structural.isAnonStructType(typeName) || index.members.memberGetter(typeName, field) == false);
 	}
 
 	/**
@@ -186,7 +186,7 @@ final class TypeResolver {
 	 * `Type.method` names a `PURE_STDLIB_STATIC_FUNCS` entry; the receiver is a
 	 * genuine type / package reference (its root identifier binds to NO local —
 	 * a same-named local would make it a value call, not a static one); no
-	 * project type shadows the simple type name (`index.declaringFiles` empty);
+	 * project type shadows the simple type name (`index.refs.declaringFiles` empty);
 	 * and every argument is itself `isDeletionPure`. A discarded such call has no
 	 * observable effect, so a dead local bound to one is safe to delete. Any
 	 * deviation keeps the conservative default (the binding is kept).
@@ -203,7 +203,7 @@ final class TypeResolver {
 		final typeName: Null<String> = receiver.name;
 		if (method == null || typeName == null || !PURE_STDLIB_STATIC_FUNCS.contains('$typeName.$method')) return false;
 		if (!receiverRootIsUnboundType(receiver, tree, shape)) return false;
-		if (index.declaringFiles(typeName).length != 0) return false;
+		if (index.refs.declaringFiles(typeName).length != 0) return false;
 		for (i in 1...callNode.children.length) if (!isDeletionPure(callNode.children[i], tree, shape, declaredTypes, index)) return false;
 		return true;
 	}

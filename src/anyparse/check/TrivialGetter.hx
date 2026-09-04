@@ -59,13 +59,13 @@ using Lambda;
  *    SELF-BACKED spelling below). Interfaces (no accessor bodies) are skipped wholesale:
  * every class body — plain / `final` / `abstract class` (`CheckScan.isClassBodyKind`) — is inspected.
  * 4. No (transitive) subtype overrides the property accessor or redeclares it
- *    (`SymbolIndex.subtypeOverridesProperty`) AND no subtype references the private backing field directly (`SymbolIndex.subtypeReferencesField`) — the collapse deletes the field, and a subclass reading it (private members are subclass-visible) would break; both queries run over report + resolution scope. A subclass merely extending the class without touching the property no longer blocks; an override is attributed to the type declaring the member it overrides, so only an unattributable one keeps an unresolvable subtype hierarchy blocked conservatively.
+ *    (`SubtypeGraph.subtypeOverridesProperty`) AND no subtype references the private backing field directly (`SubtypeGraph.subtypeReferencesField`) — the collapse deletes the field, and a subclass reading it (private members are subclass-visible) would break; both queries run over report + resolution scope. A subclass merely extending the class without touching the property no longer blocks; an override is attributed to the type declaring the member it overrides, so only an unattributable one keeps an unresolvable subtype hierarchy blocked conservatively.
  * 5. When the class `implements` anything and the property is PUBLIC, an implemented interface
  *    may declare it and so require a physical accessor; a COLLAPSING shape is skipped unless every
  *    implemented interface is resolvable in the index and provably lacks it
- *    (`SymbolIndex.typeProvablyLacksMember`). The inline arm (below) keeps `get_x`, so this gate
+ *    (`MemberLookup.typeProvablyLacksMember`). The inline arm (below) keeps `get_x`, so this gate
  *    never applies to it.
- * 6. The owner type is not MACRO-BUILT (`SymbolIndex.transitivelyCarriesBuildMacro`). This rule
+ * 6. The owner type is not MACRO-BUILT (`TypeTraits.transitivelyCarriesBuildMacro`). This rule
  *    DELETES the getter and the backing field, and a member a `@:build` / `@:autoBuild` /
  *    `@:genericBuild` builder generates around them is in no text this scan reads — measured on
  *    Haxe 4.3.7, a builder adding `function readBacking() return _active` compiles before the
@@ -247,7 +247,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				// own, which is why the per-owner index question and not the file-scoped text scan
 				// beside the `@:coreApi` bail above.
 				final owner: Null<String> = cls.name;
-				if (owner != null && index.transitivelyCarriesBuildMacro(owner, entry.file)) continue;
+				if (owner != null && index.traits.transitivelyCarriesBuildMacro(owner, entry.file)) continue;
 				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin, branch, shape);
 			}
 		}
@@ -355,7 +355,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				final c = classifyProperty(cls, src, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 				// The self-backed arm deletes nothing outside the owner, so no other file can need an edit.
 				if (c == null || c.inlineGetter != null || c.selfBacked) return null;
-				if (!subtypeIndex.subtypeReferencesField(owner, c.field)) return null;
+				if (!subtypeIndex.subtypes.subtypeReferencesField(owner, c.field)) return null;
 				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(cls, src, prop.span, prop.name, prop.isStatic, c);
 				if (ownerEdits == null) return null;
 				final oe: Array<{ span: Span, text: String }> = ownerEdits;
@@ -373,18 +373,18 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 
 	/**
 	 * Whether a (transitive) subtype overrides property `propName`'s accessor or redeclares the
-	 * property (`SymbolIndex.subtypeOverridesProperty`) — the precise per-property subtype gate
+	 * property (`SubtypeGraph.subtypeOverridesProperty`) — the precise per-property subtype gate
 	 * that replaces the blanket `hasSubtype` skip. A null index (a direct fix caller without one)
 	 * cannot resolve the hierarchy and so never blocks: the report pass, which always carries an
 	 * index, has already gated the finding.
 	 */
 	private static inline function subtypeBlocks(index: Null<SymbolIndex>, className: Null<String>, propName: String): Bool {
-		return index != null && className != null && index.subtypeOverridesProperty(className, propName);
+		return index != null && className != null && index.subtypes.subtypeOverridesProperty(className, propName);
 	}
 
 	/**
 	 * Whether a subtype references the backing field `field` the collapse would DELETE
-	 * (`SymbolIndex.subtypeReferencesField`) — a subclass reading `owner`'s private `_x` directly
+	 * (`SubtypeGraph.subtypeReferencesField`) — a subclass reading `owner`'s private `_x` directly
 	 * breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references
 	 * inside the owner. The inline arm keeps the backing field, so it is exempt; the SELF-BACKED arm
 	 * deletes no field at all (the surviving property carries the name a subtype already uses), so it
@@ -394,7 +394,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	private static inline function subtypeFieldBlocks(
 		index: Null<SymbolIndex>, className: Null<String>, field: String, selfBacked: Bool, inlineGetter: Null<QueryNode>
 	): Bool {
-		return !selfBacked && inlineGetter == null && index != null && className != null && index.subtypeReferencesField(className, field);
+		return !selfBacked && inlineGetter == null && index != null && className != null
+			&& index.subtypes.subtypeReferencesField(className, field);
 	}
 
 	/** Whether `c` is an identifier character. */
@@ -907,7 +908,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (!isPublic) return false;
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		// The clause's SIMPLE names resolve against this file's own imports / package.
-		return ifaces.length != 0 && (index == null || ifaces.exists(iface -> !index.typeProvablyLacksMember(iface, propName, file)));
+		return ifaces.length != 0 && (
+			index == null || ifaces.exists(iface -> !index.members.typeProvablyLacksMember(iface, propName, file))
+		);
 	}
 
 	/** The simple names of every interface in `cls`'s `implements` clauses. */
@@ -1665,7 +1668,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 
 	/**
 	 * Every report file that may reference `owner`'s backing field through inheritance: the
-	 * declaring file of each TRANSITIVE subtype of `owner` (`SymbolIndex.subtypeFiles`), plus
+	 * declaring file of each TRANSITIVE subtype of `owner` (`SubtypeGraph.subtypeFiles`), plus
 	 * every file granting itself `@:access(owner)`. Deduped, in discovery order.
 	 *
 	 * The closure is the index's own subtype adjacency, not a `supertypes.contains(parent)` scan
@@ -1679,7 +1682,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * completeness gate now refuses the collapse instead of half-applying it.
 	 */
 	private static function affectedSubtypeFiles(owner: String, index: SymbolIndex): Array<String> {
-		final out: Array<String> = index.subtypeFiles(owner);
+		final out: Array<String> = index.subtypes.subtypeFiles(owner);
 		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
 		return out;
 	}
@@ -1714,12 +1717,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			excludeSpans.push(new Span(off, off + field.length));
 			return true;
 		}
-		if (index.isSubtype(c, owner) && !index.typeDeclaresMember(c, field)) {
+		if (index.subtypes.isSubtype(c, owner) && !index.members.typeDeclaresMember(c, field)) {
 			if (writePos) return false;
 			renameEdits.push({ span: new Span(off, off + field.length), text: bareIdent && shadowsProp ? 'this.$propName' : propName });
 			return true;
 		}
-		if (index.typeDeclaresMember(c, field) || index.supertypeDeclaresMember(c, field))
+		if (index.members.typeDeclaresMember(c, field) || index.members.supertypeDeclaresMember(c, field))
 			excludeSpans.push(new Span(off, off + field.length));
 		return true;
 	}

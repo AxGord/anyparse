@@ -36,7 +36,7 @@ using Lambda;
  *   `StringTools`, minus the non-deterministic `random`). A call is impure unless
  *   provably pure, so an instance / local call of unknown effect is never a
  *   candidate; a field read whose FIRST resolvable hop is a property GETTER
- *   (`SymbolIndex.memberGetter`, via `TypeResolver`) is treated as impure. This
+ *   (`MemberLookup.memberGetter`, via `TypeResolver`) is treated as impure. This
  *   keeps "compute once, reuse" behaviour-preserving: only referentially
  *   transparent expressions are suggested.
  * - **Repeated three or more times** (`MIN_OCCURRENCES`) inside the SAME function

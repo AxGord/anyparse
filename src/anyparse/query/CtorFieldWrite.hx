@@ -494,7 +494,7 @@ final class CtorFieldWrite {
 	 *
 	 * True (keep the `var`) when `name` has a method call in `source` outside its own declaration
 	 * `exclude` AND its type either resolves to an abstract that may REBIND `this`
-	 * (`SymbolIndex.abstractRebindsThis`) or is an UNRESOLVED non-stdlib type whose abstractness cannot
+	 * (`TypeTraits.abstractRebindsThis`) or is an UNRESOLVED non-stdlib type whose abstractness cannot
 	 * be ruled out. False — the `final` suggestion stays sound and useful — for a resolved non-abstract
 	 * type, a RESOLVED abstract whose only `this`-writes are in its constructor (the compiler forbids
 	 * `this =` outside inline members and `final` rejects an inline this-writer transitively, so a
@@ -505,7 +505,7 @@ final class CtorFieldWrite {
 	 *
 	 * The `finalSafeStdlibTypes` whitelist is the ONE place this can be wrong, and its authority now
 	 * extends past the fully-unresolved case: an abstract whose `@:forward` underlying the index cannot
-	 * resolve answers `null` (see `SymbolIndex.abstractRebindsThis`), so a WHITELISTED simple name
+	 * resolve answers `null` (see `TypeTraits.abstractRebindsThis`), so a WHITELISTED simple name
 	 * shadowed by such an abstract is called final-safe on the whitelist's word. Everything else only
 	 * ever KEEPS a `var`.
 	 */
@@ -514,7 +514,7 @@ final class CtorFieldWrite {
 	): Bool {
 		if (declType == null || !methodCalledOn(source, name, exclude)) return false;
 		final idx: Null<SymbolIndex> = index();
-		final resolvedRebind: Null<Bool> = idx?.abstractRebindsThis(declType, abstractKinds);
+		final resolvedRebind: Null<Bool> = idx?.traits.abstractRebindsThis(declType, abstractKinds);
 		return resolvedRebind ?? !finalSafeStdlibTypes.contains(declType);
 	}
 

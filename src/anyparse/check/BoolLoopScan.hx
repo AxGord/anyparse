@@ -621,7 +621,7 @@ final class BoolLoopScan {
 	 * Haxe binds a real member before any `using` static extension, so `m.exists(x -> …)` on a
 	 * `Map` resolves to `Map.exists(key:K)` and puts the lambda where a key belongs: a rewrite
 	 * that cannot compile, which the oracle reverts on every run rather than once. The question is
-	 * `SymbolIndex.memberShadowsExtension`, the same one `prefer-static-extension` has always asked.
+	 * `MemberLookup.memberShadowsExtension`, the same one `prefer-static-extension` has always asked.
 	 *
 	 * A hit no longer REFUSES the site: it selects the QUALIFIED spelling `Lambda.exists(m, x -> …)`,
 	 * which names the module outright and never consults the receiver's members. The two forms carry
@@ -646,7 +646,7 @@ final class BoolLoopScan {
 		final nominal: Null<String> = resolve == null ? null : resolve(iterable);
 		if (nominal == null) return false;
 		final index: Null<SymbolIndex> = probe.index();
-		return index != null && index.memberShadowsExtension(nominal, probe.method);
+		return index != null && index.members.memberShadowsExtension(nominal, probe.method);
 	}
 
 	/**

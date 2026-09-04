@@ -405,7 +405,7 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 
 	/** Whether `name` resolves, in `index`, to a declaration of an exhaustiveness-checked kind. */
 	private static function declaresExhaustive(scan: Scan, index: SymbolIndex, name: String): Bool {
-		for (file in index.declaringFiles(name))
+		for (file in index.refs.declaringFiles(name))
 			for (type in file.types)
 				if (type.name == name && scan.seams.exhaustiveDeclKinds.contains(type.kind)) return true;
 		return false;
@@ -420,7 +420,7 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 	 */
 	private static function aliasTargetsOf(index: SymbolIndex, name: String): Array<String> {
 		final out: Array<String> = [];
-		for (file in index.declaringFiles(name)) for (type in file.types) if (type.name == name) {
+		for (file in index.refs.declaringFiles(name)) for (type in file.types) if (type.name == name) {
 			final alias: Null<String> = type.aliasTargetNominal;
 			if (alias != null) out.push(alias);
 		}

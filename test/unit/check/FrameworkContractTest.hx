@@ -30,7 +30,7 @@ import utest.Test;
  * genuinely fires without the contract; both arms of that are asserted in ONE test.
  *
  * The engine root is declared IN the fixture scope because the RENAME needs it: the correction is
- * gated on `SymbolIndex.typeProvablyLacksMember`, which cannot clear a closure through a root it
+ * gated on `MemberLookup.typeProvablyLacksMember`, which cannot clear a closure through a root it
  * cannot see. On a tree where the root is an out-of-scope extern the rename is already refused —
  * for a reason that has nothing to do with the framework, which is exactly the luck this seam
  * replaces.

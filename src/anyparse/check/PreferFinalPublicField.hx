@@ -52,7 +52,7 @@ import anyparse.runtime.Span;
  *    library root counts, while the `writtenAnywhere(subtype, …)` arm reads the
  *    report-scoped `FieldWriteIndex` — a library-side write through a library subtype is
  *    the residual blind spot. The same gate also bails when a SUPERtype declares
- *    the same field (`SymbolIndex.supertypeDeclaresMember`): its property access is
+ *    the same field (`MemberLookup.supertypeDeclaresMember`): its property access is
  *    then fixed by that interface / superclass var, which final would violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface (which supertypeDeclaresMember treats as absent): out of scope it may still declare a mutable member, so the rewrite is skipped conservatively.
  * 3. No unresolved write can target the field
  *    (`FieldWriteIndex.hasUnresolvedWriteTargeting`): a write to the field NAME
@@ -66,7 +66,7 @@ import anyparse.runtime.Span;
  *    `writtenOutsideDeclaration` (see 1). Receiver resolution covers `this`,
  *    typed identifiers, field-access chains, index accesses, inherited-field and
  *    static roots — see `FieldWriteIndex`'s receiver-resolution doc.
- * 5. No STRUCTURAL type pins the field mutable — `SymbolIndex.structuralConformanceForbidsFinal`.
+ * 5. No STRUCTURAL type pins the field mutable — `StructuralTypes.structuralConformanceForbidsFinal`.
  *    Haxe unifies a class with an anonymous structure by member set, and a `final` field
  *    satisfies neither a structural `var x:T` nor a structural `function x():T` (both
  *    measured). That unification is a READ position, so every write gate above is blind to
@@ -148,10 +148,10 @@ final class PreferFinalPublicField implements Check {
 		// survives it — but only when it can reach this MEMBER, which it can only do by
 		// spelling the name. A whole-project veto here silenced the rule for every file in a
 		// scope holding one unparseable file.
-		if (index.skippedMayReference(name)) return;
+		if (index.text.skippedMayReference(name)) return;
 		// A macro-built type's fields are not what the declaration says — see
-		// `SymbolIndex.transitivelyCarriesBuildMacro`.
-		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
+		// `TypeTraits.transitivelyCarriesBuildMacro`.
+		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
 		final initialized: Bool = CtorFieldWrite.isInitializedNonPropertyField(source, field);
 		// The conditional-default arm: an initialized field (a `(default, null)` property
 		// included) whose only other write is one `if (p != null) x = p;` constructor
@@ -162,17 +162,17 @@ final class PreferFinalPublicField implements Check {
 		// non-property checks, so a field qualifying for NO arm bails here; the parse
 		// behind the predicate is memoized by the caching plugin.
 		if (!folded && !initialized && !CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
-		if (index.supertypeDeclaresMember(owner, name)) return;
+		if (index.members.supertypeDeclaresMember(owner, name)) return;
 		// Interface-mutability gate — complements supertypeDeclaresMember (which resolves
 		// a supertype member by name but treats an UNRESOLVABLE interface as absent): an
 		// implemented interface that cannot be resolved may still declare a mutable
 		// `name`, so `var → final` is unsafe and skipped conservatively.
-		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
+		if (index.members.implementsInterfaceDeclaringMember(owner, name)) return;
 		// Structural-conformance gate: the type may be passed where an anonymous structure
 		// declaring `name` mutably is expected — a READ position, so every write gate below is
 		// blind to it — and a `final` field satisfies neither a structural `var` nor a
 		// structural method.
-		if (index.structuralConformanceForbidsFinal(owner, name)) return;
+		if (index.structural.structuralConformanceForbidsFinal(owner, name)) return;
 		// Core-API gate: a `@:coreApi` type's members are pinned to the property access of a core
 		// type in the compiler's std path that no scope here holds, and `var` -> `final` is
 		// "Field <name> has different property access than core type".

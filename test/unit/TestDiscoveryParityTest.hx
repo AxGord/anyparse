@@ -848,6 +848,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.StdlibDupScanTest',
 		'unit.query.StructuralMembershipTest',
 		'unit.query.SymbolIndexAliasSliceTest',
+		'unit.query.SymbolIndexLayerSeamTest',
 		'unit.query.SymbolIndexRunMemoSliceTest',
 		'unit.query.SymbolIndexSliceTest',
 		'unit.query.SymbolQuerySliceTest',

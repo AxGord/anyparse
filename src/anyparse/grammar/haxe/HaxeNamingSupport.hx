@@ -791,12 +791,12 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * direct-supertype names (`extends utest.Test` is indexed as the simple name `Test`).
 	 * Resolves the intermediate-base case a single tree cannot.
 	 *
-	 * Deliberately NOT `SymbolIndex.isSubtype`: that one REFUSES when the type name is declared in
+	 * Deliberately NOT `SubtypeGraph.isSubtype`: that one REFUSES when the type name is declared in
 	 * more than one file, so adopting it here would silently DROP the carve-out for an ambiguous
 	 * name and start reporting members this predicate used to spare — a behaviour change this seam
 	 * does not own.
 	 *
-	 * The map is `SymbolIndex.supertypeNameUnion` — built ONCE per index rather than per call, which is
+	 * The map is `SubtypeGraph.supertypeNameUnion` — built ONCE per index rather than per call, which is
 	 * what this used to do: a whole `allFiles()` x `types` walk for every method the carve-outs asked
 	 * about. It is keyed by that same SIMPLE name, and two files can both declare one. It used to keep
 	 * the LAST declaration walked, so whether a subtype of `p.Node` reached `root` depended on the
@@ -807,7 +807,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * "act on it".
 	 */
 	private static function transitivelyExtends(typeName: String, root: String, index: SymbolIndex): Bool {
-		final superMap: Map<String, Array<String>> = index.supertypeNameUnion();
+		final superMap: Map<String, Array<String>> = index.subtypes.supertypeNameUnion();
 		final seen: Array<String> = [typeName];
 		var i: Int = 0;
 		while (i < seen.length) {

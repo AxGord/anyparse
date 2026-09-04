@@ -327,7 +327,7 @@ final class ComparisonToBoolean implements Check {
 		if (faKind == null || other.kind != faKind || other.children.length != 1 || field == null) return null;
 		final lookup: Null<PinnedLookup> = pinnedLookup(other.children[0], field, shape, proof);
 		if (lookup == null) return null;
-		final memberSource: Null<String> = lookup.index.resolvePathFinalMemberTypeSource(proof.file, lookup.recvType, [field]);
+		final memberSource: Null<String> = lookup.index.paths.resolvePathFinalMemberTypeSource(proof.file, lookup.recvType, [field]);
 		return memberSource == null ? null : NominalTypes.outerNominalOf(memberSource);
 	}
 
@@ -364,7 +364,7 @@ final class ComparisonToBoolean implements Check {
 	 * The simple nominal of the type a METHOD-CALL operand carries: its callee's receiver resolved
 	 * to a nominal (the same `receiverTypeNominal` walk the field arm uses, so `cast(o, T).m()`
 	 * resolves too), then that type's method looked up through the inheritance-aware
-	 * `SymbolIndex.returnNominalOf`. Null for any other operand kind, for an unresolved receiver,
+	 * `MemberLookup.returnNominalOf`. Null for any other operand kind, for an unresolved receiver,
 	 * for a receiver `memberLookupIsPinned` refuses, and for a method with no written return type.
 	 *
 	 * Requiring the callee to be a plain `fieldAccessKind` is what keeps `?.` out: `x?.m()` is
@@ -395,7 +395,7 @@ final class ComparisonToBoolean implements Check {
 		final lookup: Null<PinnedLookup> = pinnedLookup(callee.children[0], method, seams.shape, proof);
 		if (lookup == null) return null;
 		final recvType: String = lookup.recvType;
-		final written: Null<String> = lookup.index.returnNominalOf(recvType, method);
+		final written: Null<String> = lookup.index.members.returnNominalOf(recvType, method);
 		if (written != null) return written;
 		if (NominalTypes.shadowedByNonStdType(lookup.index, recvType)) return null;
 		final tabled: Null<String> = seams.instanceMethodReturns['$recvType.$method'];
@@ -429,8 +429,8 @@ final class ComparisonToBoolean implements Check {
 	 * one — makes that walk itself answer null.
 	 */
 	private static function memberLookupIsPinned(recvType: String, field: String, index: SymbolIndex): Bool {
-		return !index.isAnonStructType(recvType) && typeNameIsPinned(recvType, index)
-			&& index.memberDeclarationsOf(recvType, field).foreach(declaration -> !(declaration.member.guarded));
+		return !index.structural.isAnonStructType(recvType) && typeNameIsPinned(recvType, index)
+			&& index.members.memberDeclarationsOf(recvType, field).foreach(declaration -> !(declaration.member.guarded));
 	}
 
 	/**
@@ -454,7 +454,7 @@ final class ComparisonToBoolean implements Check {
 	 */
 	private static function typeNameIsPinned(recvType: String, index: SymbolIndex): Bool {
 		var independent: Int = 0;
-		for (fi in index.declaringFiles(recvType))
+		for (fi in index.refs.declaringFiles(recvType))
 			for (t in fi.types)
 				if (t.name == recvType && t.aliasTargetNominal != recvType) independent++;
 		return independent <= 1;

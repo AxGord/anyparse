@@ -41,11 +41,11 @@ using Lambda;
  *   so any value-position occurrence of the method's name — resolvable or not — skips it.
  *   Detected by a conservative name scan over every file: a name in value position (not a
  *   call callee) via `IdentExpr` / `FieldAccess` / `SafeFieldAccess` / `ForceFieldAccess`.
- * - An `override` method, and a method OVERRIDDEN by a subtype (`SymbolIndex.hasSubtype`
+ * - An `override` method, and a method OVERRIDDEN by a subtype (`SubtypeGraph.hasSubtype`
  *   plus a member-name lookup across strict subtypes) — inlining would break the override; and a method FILLING an
- *   abstract-superclass slot (`SymbolIndex.supertypeDeclaresMember` — Haxe requires no `override` on such an
+ *   abstract-superclass slot (`MemberLookup.supertypeDeclaresMember` — Haxe requires no `override` on such an
  *   implementation).
- * - A method an implemented interface declares (`SymbolIndex.typeProvablyLacksMember`, which
+ * - A method an implemented interface declares (`MemberLookup.typeProvablyLacksMember`, which
  *   also refuses when the interface is unresolvable) — the interface requires a real method.
  * - EVERY method of a class whose own TYPE-level metadata is not `inlineNeutralMeta`
  *   (`metaBlockedClasses`). The whitelist is the gate, so `@:hlNative` /
@@ -54,7 +54,7 @@ using Lambda;
  *   carry it, and what it binds is the whole type: a placeholder body the backend discards, or a
  *   member the host runtime calls BY NAME.
  * - EVERY method of a class under a build macro — its own, or one granted through a supertype /
- *   interface (`SymbolIndex.transitivelyCarriesBuildMacro`). The builder writes an `override` of the
+ *   interface (`TypeTraits.transitivelyCarriesBuildMacro`). The builder writes an `override` of the
  *   method into subclasses with no `override` keyword for the modifier gate to read and no declared
  *   member for the subtype lookup to find, and Haxe reports it at the GENERATED override site, in
  *   another file and possibly another project.
@@ -460,8 +460,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// declared member for `subtypeMemberNames` to find. Haxe accepts `inline` on the declaration
 		// silently and rejects it at the GENERATED override site ("Field <m> is inlined and cannot be
 		// overridden") — another file, possibly another project.
-		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
-		final subtypeMembers: Array<String> = index.hasSubtype(owner) ? index.subtypeMemberNames(owner) : [];
+		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
+		final subtypeMembers: Array<String> = index.subtypes.hasSubtype(owner) ? index.subtypes.subtypeMemberNames(owner) : [];
 		// Read OUT of the closure below and defaulted to a kind no modifier run can hold: a grammar
 		// that names no static modifier then answers `false` for every member, which is this rule's
 		// safe direction (the framework carve-out stays as wide as it was).
@@ -476,7 +476,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// supertype declaring the member means this method fills a base slot and
 			// must stay physical. An unresolvable supertype stays optimistic, like
 			// the extends chain always was for this rule.
-			if (index.supertypeDeclaresMember(owner, name)) return;
+			if (index.members.supertypeDeclaresMember(owner, name)) return;
 			if (interfaceRequires(index, ifaces, name, file)) return;
 			final span: Null<Span> = fn.span;
 			if (span == null) return;
@@ -747,7 +747,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * unreachable interface conservatively blocks the candidate.
 	 */
 	private static function interfaceRequires(index: SymbolIndex, ifaces: Array<String>, name: String, file: String): Bool {
-		return ifaces.exists(iface -> !index.typeProvablyLacksMember(iface, name, file));
+		return ifaces.exists(iface -> !index.members.typeProvablyLacksMember(iface, name, file));
 	}
 
 

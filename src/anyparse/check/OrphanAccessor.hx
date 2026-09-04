@@ -45,7 +45,7 @@ using StringTools;
  *
  * Haxe resolves an accessor UPWARD from the property, so the chain is not the whole story: a
  * property declared by a SUBTYPE is legitimately served by a method inherited from here. That is
- * checked (`SymbolIndex.subtypeDeclaresMember`) on the found-nothing arm only — an `X` found at or
+ * checked (`SubtypeGraph.subtypeDeclaresMember`) on the found-nothing arm only — an `X` found at or
  * above this class forbids a subtype redeclaring the same field, so the declared-without-slot arm
  * cannot be reached that way. That query walks from the subtype DECLARATION and treats an
  * ambiguous supertype link as a MAY, since here `true` means "leave the method alone".
@@ -67,7 +67,7 @@ using StringTools;
  * is read while walking the chain rather than off the class in hand.
  *
  * A supertype the index cannot resolve by IMPORT VISIBILITY — Haxe needs no import to name a type
- * from a PARENT package, a visibility `SymbolIndex.simpleRefInScope` does not model — is still
+ * from a PARENT package, a visibility `TypeRefIndex.simpleRefInScope` does not model — is still
  * walked when its simple name has exactly ONE project-wide declaration, but SPECULATIVELY: such a
  * type may prove a slot EXISTS (so arm 3 stays silent) and never that the property is declared
  * WITHOUT one, and the link stays counted as unresolved. A chain resolved only that way is
@@ -231,7 +231,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			// SUBTYPE is legitimately served by this inherited method. Only the found-nothing arm
 			// needs the check: a declaration found at or above this class forbids a subtype
 			// redeclaring the same field, so arm 1 cannot be reached this way.
-			if (!found.declared && scope.subtypeDeclaresMember(owner, prop)) return;
+			if (!found.declared && scope.subtypes.subtypeDeclaresMember(owner, prop)) return;
 			final reported: Null<Violation> = reportOrphan(out, file, span, name, prop, owner, wantGetter, found, ctx.reportIndex);
 			if (reported == null) return;
 			// AFTER `deletable`, so the reason below names the gate that actually closed: asked
@@ -298,7 +298,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * ordinary `get_other` declaration, since there the prefix is followed by a word char.
 	 */
 	private static function unreadableDecline(reportIndex: SymbolIndex, name: String, prop: String, wantGetter: Bool): Null<String> {
-		final unreadable: Array<String> = reportIndex.skippedFilesMentioning([
+		final unreadable: Array<String> = reportIndex.text.skippedFilesMentioning([
 			name,
 			prop,
 			wantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX
@@ -373,7 +373,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	private static function uniqueDeclaration(scope: SymbolIndex, raw: String): Array<{ file: FileInfo, type: TypeDeclInfo }> {
 		final dot: Int = raw.lastIndexOf('.');
 		final simple: String = dot < 0 ? raw : raw.substr(dot + 1);
-		final declarers: Array<FileInfo> = scope.declaringFiles(simple);
+		final declarers: Array<FileInfo> = scope.refs.declaringFiles(simple);
 		if (declarers.length != 1) return [];
 		final owner: FileInfo = declarers[0];
 		final type: Null<TypeDeclInfo> = owner.types.find(t -> t.name == simple);
@@ -481,7 +481,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			));
 			return null;
 		}
-		final unreadable: Array<String> = found.declared ? [] : reportIndex.skippedFilesMentioning([prop]);
+		final unreadable: Array<String> = found.declared ? [] : reportIndex.text.skippedFilesMentioning([prop]);
 		if (unreadable.length > 0) {
 			out.push(reportOnly(
 				file, span,

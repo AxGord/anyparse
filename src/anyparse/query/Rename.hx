@@ -501,7 +501,7 @@ final class Rename {
 		final host: Null<TypeDeclMatch> = enclosingTypeDecl(tree, offset);
 		if (host == null) return false;
 		final own: Null<Bool> = ownInstanceMember(tree, host.nameNode, name, renamed, shape);
-		return own ?? (index != null && file != null && index.inheritsInstanceMember(file, host.name, name));
+		return own ?? (index != null && file != null && index.members.inheritsInstanceMember(file, host.name, name));
 	}
 
 	/**
