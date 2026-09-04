@@ -45,7 +45,21 @@ package anyparse.grammar.haxe;
  * EXPRESSION, which is why the two branches carry the meta rather than `dropSingleStmtBraces`. The
  * block is built by the SAME `SingleStmtBraces.wrapInBlock`, given `BlockExpr` and a lift that
  * raises the branch expression into `ExprStmt`. An `else if` chain member and a brace-LED value
- * (an object literal, which a block would re-open in statement position) are excluded.
+ * (an object literal, which a block would re-open in statement position) are excluded. This skip
+ * list and the statement one (`SingleStmtBraces.SYMMETRY_WRAP_SKIP_CTORS`) are INDEPENDENT — they
+ * are keyed on ctor names and the two positions have different ctors — so what they have to agree
+ * on is the ANSWER, per ctor family — pinned by the matrix in
+ * `unit.format.BraceSymmetrySliceTest`. `ObjectLit` is the one legitimate
+ * asymmetry, since a `{` in statement position opens a block and the statement list has nothing
+ * to disagree with.
+ *
+ * When the wrap DOES fire on `thenBranch`, the `@:trailOpt` slot above is suppressed
+ * (`WriterLowering.valueBraceSymmetryTrailDrop`): the synthesized block already carries the
+ * branch terminator inside itself, so re-emitting the slot puts the source semicolon back after
+ * the closing brace and the branch reads `};` in front of `else`. Haxe accepts that, which is why
+ * only the Pony sweep caught it (`ParseBoy.hx`, `TplPut.hx`). The drop is conditioned on the wrap
+ * rather than unconditional the way the statement side is (omega-ssb-trailopt-drop), because with
+ * NO `else` that slot can be holding the ENCLOSING statement terminator.
  *
  * Dangling-else follows the same rule as `HxIfStmt`: the nearest
  * enclosing `if` greedily consumes the next `else`, so

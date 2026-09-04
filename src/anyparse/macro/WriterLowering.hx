@@ -8799,6 +8799,13 @@ class WriterLowering {
 			);
 			optExpr = macro ($operandIsBlock ? _clearExprPosition($optExpr, opt) : $optExpr);
 		}
+		// omega-macro-reification-braces: `@:fmt(clearBracePolicy)` on a kw-Ref ctor
+		// (`HxExpr.MacroExpr` / `MacroClassExpr`) disarms BOTH halves of the
+		// single-statement brace policy for the whole reified subtree — inside `macro …`
+		// a `{ … }` is an `EBlock` of the emitted value, so adding or removing one
+		// changes what the macro produces, not how it reads. Inert (and allocation-free)
+		// whenever neither knob is set.
+		if (branch.fmtHasFlag('clearBracePolicy')) optExpr = macro _clearBracePolicy($optExpr, opt);
 		if (propagateFieldLevelVar) optExpr = macro _setFieldLevelVar($optExpr, opt);
 		if (interpFlat) optExpr = macro _setChainModeOverride($optExpr, anyparse.format.wrap.WrapMode.NoWrap, opt);
 		if (parenHardFlatten)
@@ -11171,7 +11178,8 @@ class WriterLowering {
 		)
 			return;
 		final sourcePresent: Expr = macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText});
-		parts.push(semicolonBeforeSiblingWrap(child, trailOptText, fieldAccess, sourcePresent) ?? sourcePresent);
+		final emit: Expr = semicolonBeforeSiblingWrap(child, trailOptText, fieldAccess, sourcePresent) ?? sourcePresent;
+		parts.push(valueBraceSymmetryTrailDrop(child, fieldAccess, emit));
 	}
 
 	/**
@@ -12238,7 +12246,30 @@ class WriterLowering {
 	 */
 	private function valueBraceSymmetryWrap(child: ShapeNode, fieldAccess: Expr): Expr {
 		final args: Null<Array<String>> = child.fmtReadStringArgs('valueBraceSymmetry');
-		if (args == null || !_ctx.trivia) return fieldAccess;
+		final stmtPath: Null<String> = valueBraceSymmetryStmtPath(child, args);
+		if (args == null || stmtPath == null) return fieldAccess;
+		final stmtRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(stmtPath, args[2]));
+		final blockCtor: String = args[1];
+		final needsWrap: Expr = valueBraceSymmetryProbe(args, macro _vbsVal);
+		return macro {
+			final _vbsVal = $fieldAccess;
+			$needsWrap
+				? cast anyparse.format.SingleStmtBraces.wrapInBlock(
+					cast _vbsVal, $v{blockCtor}, _vbsInner -> $stmtRef(cast _vbsInner, true)
+				)
+				: _vbsVal;
+		};
+	}
+
+	/**
+	 * The block ctor's ELEMENT type path when `child` really does opt into
+	 * `@:fmt(valueBraceSymmetry(…))` and the wrap can be built, `null` otherwise
+	 * (no meta, plain mode, or an unresolvable rule). Shared by the wrap itself and
+	 * by the `@:trailOpt` drop below so the two can never disagree on whether the
+	 * wrap is live for a field.
+	 */
+	private function valueBraceSymmetryStmtPath(child: ShapeNode, args: Null<Array<String>>): Null<String> {
+		if (args == null || !_ctx.trivia) return null;
 		if (args.length < VALUE_BRACE_SYMMETRY_MIN_ARGS)
 			Context.fatalError(
 				'WriterLowering: @:fmt(valueBraceSymmetry) expects at least 3 string args (siblingField, blockCtor'
@@ -12246,11 +12277,17 @@ class WriterLowering {
 				Context.currentPos()
 			);
 		final valuePath: Null<String> = child.annotations[AnnotationKeys.BASE_REF];
-		if (valuePath == null) return fieldAccess;
-		final stmtPath: Null<String> = starElementTypePath(valuePath, args[1]);
-		if (stmtPath == null) return fieldAccess;
+		return valuePath == null ? null : starElementTypePath(valuePath, args[1]);
+	}
+
+	/**
+	 * The runtime `symmetryNeedsValueWrap(…)` test for `valueExpr`, built from ONE
+	 * reading of the meta's args — the skip-ctor tail included. Both consumers (the
+	 * wrap and the `@:trailOpt` drop) go through here, so the skip list cannot be
+	 * taught to one of them alone.
+	 */
+	private function valueBraceSymmetryProbe(args: Array<String>, valueExpr: Expr): Expr {
 		final siblingAccess: Expr = { expr: EField(macro value, args[0]), pos: Context.currentPos() };
-		final stmtRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(stmtPath, args[2]));
 		// `$a{…}` in a call-argument position SPLICES its elements as separate arguments — build the
 		// array literal itself, so the callee receives ONE `Array<String>`.
 		final skipArray: Expr = {
@@ -12258,16 +12295,30 @@ class WriterLowering {
 			pos: Context.currentPos()
 		};
 		final blockCtor: String = args[1];
-		return macro {
-			final _vbsVal = $fieldAccess;
-			anyparse.format.SingleStmtBraces.symmetryNeedsValueWrap(
-				_vbsVal, $siblingAccess, opt.dropSingleStmtBraces || opt.singleStmtBraceSymmetry, $v{blockCtor}, $skipArray
-			)
-				? cast anyparse.format.SingleStmtBraces.wrapInBlock(
-					cast _vbsVal, $v{blockCtor}, _vbsInner -> $stmtRef(cast _vbsInner, true)
-				)
-				: _vbsVal;
-		};
+		return macro anyparse.format.SingleStmtBraces.symmetryNeedsValueWrap(
+			$valueExpr, $siblingAccess, opt.dropSingleStmtBraces || opt.singleStmtBraceSymmetry, $v{blockCtor}, $skipArray
+		);
+	}
+
+	/**
+	 * omega-value-brace-symmetry (trail): a field whose value the wrap ACTUALLY wraps
+	 * must not also re-emit its `@:trailOpt(LIT)` slot. The synthesized block already
+	 * carries the branch's terminator inside itself (the lift raises the expression
+	 * into an `ExprStmt`), so emitting the slot as well puts the source's `;` back
+	 * after the closing brace — `if (c) { f(); };` in front of an `else`, which reads
+	 * as a syntax error even though Haxe accepts it.
+	 *
+	 * The statement side has no such gate because it needs none: `emitMandatoryRefTrail`
+	 * drops the slot of every `@:fmt(dropSingleStmtBraces)` field outright
+	 * (omega-ssb-trailopt-drop). A value branch cannot do that — with NO sibling the
+	 * same slot can be holding the ENCLOSING statement's terminator — so the drop is
+	 * conditioned on the wrap firing, which requires the sibling to be a block.
+	 */
+	private function valueBraceSymmetryTrailDrop(child: ShapeNode, fieldAccess: Expr, emit: Expr): Expr {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('valueBraceSymmetry');
+		if (args == null || valueBraceSymmetryStmtPath(child, args) == null) return emit;
+		final needsWrap: Expr = valueBraceSymmetryProbe(args, fieldAccess);
+		return macro $needsWrap ? _de() : $emit;
 	}
 
 	/**
