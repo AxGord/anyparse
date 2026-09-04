@@ -5,7 +5,7 @@ import anyparse.check.CondRegionMerge;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -141,7 +141,7 @@ class CondRegionMergeCheckTest extends Test {
 		final check: CondRegionMerge = new CondRegionMerge();
 		final all: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(2, all.length);
-		final edited: String = RefactorSupport.applyEdits(src, check.fix(src, [all[1]], new HaxeQueryPlugin()));
+		final edited: String = CanonicalEdit.applyEdits(src, check.fix(src, [all[1]], new HaxeQueryPlugin()));
 		Assert.equals('#if a\nx();\n#end\n\n#if a\ny();\n#end\n\nfoo();\n\n#if b\np();\n\nq();\n#end\n', edited);
 	}
 
@@ -170,7 +170,7 @@ class CondRegionMergeCheckTest extends Test {
 
 	private function applyFix(src: String): String {
 		final check: CondRegionMerge = new CondRegionMerge();
-		return RefactorSupport.applyEdits(
+		return CanonicalEdit.applyEdits(
 			src, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin())
 		);
 	}

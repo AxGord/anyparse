@@ -1,7 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -411,7 +411,7 @@ final class InlineMethod {
 		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
 		if (declNode == null) return PErr('could not resolve a function binding for "$name" at $line:$col');
 		final decl: QueryNode = declNode;
-		if (!RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
+		if (!MemberKinds.FN_DECL_KINDS.contains(decl.kind))
 			return PErr('"$name" is not a function (inline-method inlines a function declaration)');
 		final declSpan: Null<Span> = decl.span;
 		if (declSpan == null) return PErr('"$name" declaration has no source span');
@@ -514,7 +514,7 @@ final class InlineMethod {
 		if (deleteSpan == null) return Err('"$name" declaration shares its line with other code — cannot inline cleanly');
 		edits.push({ span: deleteSpan, text: '' });
 
-		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		if (rewritten == source) return Err('inline of "$name" is a no-op');
 
 		try

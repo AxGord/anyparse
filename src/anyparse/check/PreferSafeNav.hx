@@ -2,7 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -237,7 +241,7 @@ final class PreferSafeNav implements Check implements VersionGated {
 			final text: String = restSpan != null ? 'if (${source.substring(restSpan.from, restSpan.to).trim()}) $body' : body;
 			return { span: span, text: text };
 		})) edits.push(e);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** `??` and `?.` are Haxe 4.3; a project declaring an older `languageVersion` does not get this rewrite. */
@@ -425,7 +429,7 @@ final class PreferSafeNav implements Check implements VersionGated {
 		// span when the statement shares its line, so a one-line `var r = null; if (…) …;` is safe.
 		return nav == null ? null : [
 			{ span: nullSpan, text: nav },
-			{ span: RefactorSupport.lineExtendedSpan(source, ifSpan), text: '' }
+			{ span: ElementSpan.lineExtendedSpan(source, ifSpan), text: '' }
 		];
 	}
 
@@ -462,15 +466,15 @@ final class PreferSafeNav implements Check implements VersionGated {
 	 */
 	private static function matchTernary(ternary: QueryNode, source: String, s: Seams): Null<Candidate> {
 		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
-		final cond: QueryNode = RefactorSupport.unwrapParens(ternary.children[0], s.parenKind);
+		final cond: QueryNode = BoolExprShape.unwrapParens(ternary.children[0], s.parenKind);
 		if (cond.children.length != COMPARISON_CHILD_COUNT) return null;
 		// `==` puts `null` in the THEN branch and the guarded chain in the ELSE branch; `!=` mirrors that.
 		final elseIsGuarded: Bool = cond.kind == s.eqKind;
 		if (!elseIsGuarded && cond.kind != s.notEqKind) return null;
 		final condIdent: Null<QueryNode> = subjectOperand(cond, s);
 		if (condIdent == null) return null;
-		final branch: QueryNode = RefactorSupport.unwrapParens(ternary.children[elseIsGuarded ? 2 : 1], s.parenKind);
-		final fallback: QueryNode = RefactorSupport.unwrapParens(ternary.children[elseIsGuarded ? 1 : 2], s.parenKind);
+		final branch: QueryNode = BoolExprShape.unwrapParens(ternary.children[elseIsGuarded ? 2 : 1], s.parenKind);
+		final fallback: QueryNode = BoolExprShape.unwrapParens(ternary.children[elseIsGuarded ? 1 : 2], s.parenKind);
 		if (fallback.kind != s.nullKind) return null;
 		final access: Null<QueryNode> = subjectAccess(branch, condIdent, s);
 		if (access == null) return null;
@@ -671,8 +675,8 @@ final class PreferSafeNav implements Check implements VersionGated {
 	private static function declaresPlainField(host: QueryNode, name: String, accessors: Map<Int, Bool>, s: Seams): Bool {
 		var proven: Bool = false;
 		var refused: Bool = false;
-		RefactorSupport.eachMemberHost(host, memberHost -> {
-			for (child in memberHost.children) if (child.name == name && RefactorSupport.isMemberDeclKind(child.kind)) {
+		MemberKinds.eachMemberHost(host, memberHost -> {
+			for (child in memberHost.children) if (child.name == name && MemberKinds.isMemberDeclKind(child.kind)) {
 				final span: Null<Span> = child.span;
 				if (span == null || !s.fieldDeclKinds.contains(child.kind) || accessors[span.from] == true)
 					refused = true;
@@ -704,7 +708,7 @@ final class PreferSafeNav implements Check implements VersionGated {
 
 	/** The guard SUBJECT of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
 	private static function guardOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
-		final c: QueryNode = RefactorSupport.unwrapParens(cond, s.parenKind);
+		final c: QueryNode = BoolExprShape.unwrapParens(cond, s.parenKind);
 		return c.kind == s.notEqKind && c.children.length == COMPARISON_CHILD_COUNT ? subjectOperand(c, s) : null;
 	}
 
@@ -766,7 +770,7 @@ final class PreferSafeNav implements Check implements VersionGated {
 		if (sole != null) return { operand: sole, rest: null };
 		final andKind: Null<String> = s.andKind;
 		if (andKind == null) return null;
-		final c: QueryNode = RefactorSupport.unwrapParens(cond, s.parenKind);
+		final c: QueryNode = BoolExprShape.unwrapParens(cond, s.parenKind);
 		if (c.kind != andKind || c.children.length != AND_CHILD_COUNT) return null;
 		final operand: Null<QueryNode> = guardOperand(c.children[1], s);
 		return operand == null ? null : { operand: operand, rest: c.children[0] };

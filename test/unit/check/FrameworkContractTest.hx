@@ -8,10 +8,10 @@ import anyparse.check.UnusedPrivate;
 import anyparse.check.UnusedPublicMember;
 import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -86,7 +86,7 @@ import utest.Test;
 		if (open.length != 1) return;
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final edits: Array<{ span: Span, text: String }> = plain.fix(DRIVER_SRC, open, new HaxeQueryPlugin(), index);
-		switch RefactorSupport.canonicalize(DRIVER_SRC, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(DRIVER_SRC, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('function ready():Void') >= 0, 'without a contract the callback IS renamed');
 				Assert.isTrue(text.indexOf('_ready') == -1, 'the old spelling is gone');

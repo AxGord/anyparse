@@ -1,8 +1,9 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ElementSpan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveMember;
 import utest.Assert;
 import utest.Test;
@@ -268,7 +269,7 @@ class RemoveMemberSliceTest extends Test {
 			{ node: regionNN, parent: tree },
 			{ node: memberNN, parent: regionNN }
 		];
-		switch RefactorSupport.deleteNodes(source, targets, true, plugin) {
+		switch ElementSpan.deleteNodes(source, targets, true, plugin) {
 			case Ok(text):
 				Assert.equals('class C {\n\tvar keep:Int;\n}\n', text);
 			case Err(message):

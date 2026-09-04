@@ -3,7 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -81,7 +81,7 @@ final class FragmentedDocComment implements Check {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (run in adjacentBlockRuns(source, plugin.lexicalRegions(source))) if (flagged.contains(run[0].from)) {
 			final bodies: Array<String> = run.map(cleanBlockBody.bind(source));
-			edits.push({ span: new Span(run[0].from, run[run.length - 1].to), text: RefactorSupport.docComment(bodies.join('\n')) });
+			edits.push({ span: new Span(run[0].from, run[run.length - 1].to), text: SourceComments.docComment(bodies.join('\n')) });
 		}
 		return edits;
 	}
@@ -93,12 +93,12 @@ final class FragmentedDocComment implements Check {
 	 * discrimination `RefactorSupport.docExtendedSpan` already makes.
 	 */
 	private static inline function isDocBlock(source: String, tok: CommentTok): Bool {
-		return RefactorSupport.isDocBlock(source, tok);
+		return SourceComments.isDocBlock(source, tok);
 	}
 
 	/** Runs of 2+ block comments on consecutive lines (whitespace-only, no blank line, between them). */
 	private static function adjacentBlockRuns(source: String, regions: Array<LexRegion>): Array<Array<CommentTok>> {
-		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(regions);
+		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(regions);
 		final runs: Array<Array<CommentTok>> = [];
 		var i: Int = 0;
 		while (i < comments.length) {
@@ -127,8 +127,8 @@ final class FragmentedDocComment implements Check {
 
 	/** The text of a block comment's body — the delimiters and each line's leading marker stripped, blank edge lines trimmed. */
 	private static function cleanBlockBody(source: String, tok: CommentTok): String {
-		final body: Span = RefactorSupport.commentBody(source, tok);
-		return RefactorSupport.trimBlankEdges(source.substring(body.from, body.to).split('\n').map(stripMarker)).join('\n');
+		final body: Span = SourceComments.commentBody(source, tok);
+		return SourceComments.trimBlankEdges(source.substring(body.from, body.to).split('\n').map(stripMarker)).join('\n');
 	}
 
 	/** Strip a line's leading whitespace and a single leading doc marker, plus trailing whitespace. */

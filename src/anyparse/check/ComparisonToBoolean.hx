@@ -1,7 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -488,13 +490,13 @@ final class ComparisonToBoolean implements Check {
 		other: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, boolOpKinds: Array<String>,
 		fallbackReport: Bool
 	): Bool {
-		return RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || other.kind == shape.identKind
+		return BoolExprShape.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || other.kind == shape.identKind
 			&& (declaredTypes == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes));
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
 	private static function operandIsNullable(operand: QueryNode, nullableKinds: Array<String>): Bool {
-		return nullableKinds.exists(k -> RefactorSupport.subtreeContainsKind(operand, k));
+		return nullableKinds.exists(k -> MemberKinds.subtreeContainsKind(operand, k));
 	}
 
 	/**

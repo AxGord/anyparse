@@ -2,11 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -170,7 +172,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		final byKey: Map<String, Match> = [];
 		for (m in matchesIn(source, plugin, seams)) byKey['${m.ifSpan.from}:${m.ifSpan.to}'] = m;
 
-		return RefactorSupport.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
+		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
 			final text: Null<String> = m.text;
 			// A dropped comment leaves the finding report-only: no edit for this site.
 			return text == null ? null : { span: m.editSpan, text: text };
@@ -182,7 +184,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final nestedFnSpans: Array<Span> = [];
 		collectNestedFnSpans(root, s.nestedFnKinds, nestedFnSpans);
 		final out: Array<Match> = [];
@@ -200,7 +202,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		final assignKind: Null<String> = shape.assignKind;
 		if (returnKind == null || exprStmtKind == null || assignKind == null) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		final nestedFnKinds: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
+		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
 		return support == null ? null : {
 			ifKinds: ifKinds,
 			returnKind: returnKind,

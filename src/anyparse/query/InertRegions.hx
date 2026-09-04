@@ -68,7 +68,7 @@ final class InertRegions {
 	 * (`GrammarPlugin.lexicalRegions`) — this class is grammar-agnostic and never picks a lexer.
 	 */
 	public static function of(root: Null<QueryNode>, regions: Array<LexRegion>): Array<Span> {
-		final out: Array<Span> = RefactorSupport.collectCommentRegions(regions);
+		final out: Array<Span> = SourceComments.collectCommentRegions(regions);
 		if (root != null) collectLiterals(root, out);
 		return out;
 	}

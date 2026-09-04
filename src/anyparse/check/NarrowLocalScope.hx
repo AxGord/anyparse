@@ -1,12 +1,17 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -166,7 +171,7 @@ final class NarrowLocalScope implements Check {
 			edits.push({ span: m.removeSpan, text: '' });
 			edits.push({ span: new Span(m.insertAt, m.insertAt), text: '${m.indent}${m.declText};\n' });
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */
@@ -202,7 +207,7 @@ final class NarrowLocalScope implements Check {
 	private static function collectMatches(tree: QueryNode, source: String, s: Seams, regions: Array<LexRegion>): Array<Match> {
 		final out: Array<Match> = [];
 		final hitsByName: Map<String, Array<RefHit>> = [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		walk(tree, tree, source, comments, s, hitsByName, out);
 		return out;
 	}
@@ -257,16 +262,16 @@ final class NarrowLocalScope implements Check {
 		// about to bind -- `join-declaration-assignment` refuses the joined form, so sinking buys
 		// nothing, and the read is of an uninitialized local once the declaration is inside.
 		if (spans.exists(sp -> sp.from > spans[0].from && sp.from < targetSpan.to)) return null;
-		if (RefactorSupport.referencedInRange(source, name, declSpan.to, hostSpan.to, [blockSpan])) return null;
-		if (!RefactorSupport.startsItsLine(source, targetSpan.from)) return null;
+		if (OccurrenceScan.referencedInRange(source, name, declSpan.to, hostSpan.to, [blockSpan])) return null;
+		if (!SourceText.startsItsLine(source, targetSpan.from)) return null;
 		final removeSpan: Null<Span> = deletableLine(source, declSpan, comments);
 		return removeSpan == null ? null : {
 			name: name,
 			declSpan: declSpan,
 			removeSpan: removeSpan,
 			declText: source.substring(declSpan.from, declSpan.to - 1).rtrim(),
-			insertAt: RefactorSupport.startOfLine(source, targetSpan.from),
-			indent: RefactorSupport.lineIndentAt(source, targetSpan.from)
+			insertAt: SourceText.startOfLine(source, targetSpan.from),
+			indent: SourceText.lineIndentAt(source, targetSpan.from)
 		};
 	}
 
@@ -303,7 +308,7 @@ final class NarrowLocalScope implements Check {
 		var node: QueryNode = root;
 		var best: Null<QueryNode> = null;
 		while (true) {
-			if (s.functionKinds.contains(node.kind) || RefactorSupport.isConditionalKind(node.kind)) return null;
+			if (s.functionKinds.contains(node.kind) || CondRegionScan.isConditionalKind(node.kind)) return null;
 			if (s.blockScopeKinds.contains(node.kind)) best = node;
 			var next: Null<QueryNode> = null;
 			for (c in node.children) {
@@ -378,7 +383,7 @@ final class NarrowLocalScope implements Check {
 		final span: Null<Span> = decl.span;
 		return if (span == null || span.to <= span.from || source.charAt(span.to - 1) != ';')
 			null
-		else if (RefactorSupport.isMultiDeclarator(decl, s.localDeclContinuationKinds))
+		else if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds))
 			null
 		else
 			span;
@@ -395,10 +400,10 @@ final class NarrowLocalScope implements Check {
 	private static function deletableLine(
 		source: String, declSpan: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Null<Span> {
-		final line: Span = RefactorSupport.lineExtendedSpan(source, declSpan);
+		final line: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		return if (line.from == declSpan.from && line.to == declSpan.to)
 			null
-		else if (RefactorSupport.leadingCommentBlockStart(source, comments, declSpan.from) != line.from)
+		else if (SourceComments.leadingCommentBlockStart(source, comments, declSpan.from) != line.from)
 			null
 		else if (comments.exists(t -> t.from < line.to && t.to > line.from))
 			null

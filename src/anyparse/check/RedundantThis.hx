@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BinderScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -164,7 +165,7 @@ final class RedundantThis implements Check {
 			return;
 		}
 		if (c.functionKinds.contains(node.kind)) {
-			final names: Array<String> = RefactorSupport.casePatternNames(node, c.patternKind, c.patternBinderKinds);
+			final names: Array<String> = BinderScan.casePatternNames(node, c.patternKind, c.patternBinderKinds);
 			collectBindingNames(node, source, c, names);
 			flagThisAccess(out, file, node, c, names, typeName, members, symbols);
 			return;

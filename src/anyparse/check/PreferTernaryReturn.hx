@@ -1,11 +1,13 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -89,7 +91,7 @@ final class PreferTernaryReturn implements Check {
 			if (tree != null)
 				walk(
 					violations, entry.file, entry.source, tree, seams, null,
-					RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source))
+					SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source))
 				);
 		}
 		return violations;
@@ -110,8 +112,8 @@ final class PreferTernaryReturn implements Check {
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
-		collectFixes(tree, source, seams, null, flagged, edits, RefactorSupport.collectCommentTokens(regions), regions);
-		return RefactorSupport.dropContainedEdits(edits);
+		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** `TypeResolver.childReturnTypeSource` with this check's seams unpacked from `Seams`. */
@@ -219,9 +221,9 @@ final class PreferTernaryReturn implements Check {
 		// `simplify-boolean-return-chain`'s job; a value ternary still collapses here.
 		// The narrowing-guard refusal fires only for a bool-literal collapse (see
 		// RefactorSupport.refusesNullNarrowingBoolCollapse).
-		return RefactorSupport.refusesNullNarrowingBoolCollapse(thenValue, elseValue, ifNode.children[0], shape)
-			|| RefactorSupport.pendingBooleanTernaryTail(thenValue, shape) || RefactorSupport.pendingBooleanTernaryTail(elseValue, shape)
-			|| RefactorSupport.statementLikeValue(thenValue, shape) || RefactorSupport.statementLikeValue(elseValue, shape)
+		return BoolExprShape.refusesNullNarrowingBoolCollapse(thenValue, elseValue, ifNode.children[0], shape)
+			|| BoolExprShape.pendingBooleanTernaryTail(thenValue, shape) || BoolExprShape.pendingBooleanTernaryTail(elseValue, shape)
+			|| BoolExprShape.statementLikeValue(thenValue, shape) || BoolExprShape.statementLikeValue(elseValue, shape)
 			|| isStuckBooleanCollapse(thenValue, elseValue, shape, retType)
 			|| PreferIfExpressionReturn.claimsCascade(
 				// LAST, because it is the only disjunct that walks a whole cascade and re-runs another
@@ -318,8 +320,8 @@ final class PreferTernaryReturn implements Check {
 		final other: QueryNode = aBool ? b : a;
 		final notKind: Null<String> = shape.notKind;
 		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
-		return !RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)
-			&& (!RefactorSupport.declaresNonNullBool(retType, shape) || RefactorSupport.statementLikeOrNullTail(other, shape));
+		return !BoolExprShape.provablyBoolOperand(other, boolOpKinds, shape.parenKind)
+			&& (!BoolExprShape.declaresNonNullBool(retType, shape) || BoolExprShape.statementLikeOrNullTail(other, shape));
 	}
 
 	/**
@@ -350,7 +352,7 @@ final class PreferTernaryReturn implements Check {
 	): PreservedComments {
 		final out: StringBuf = new StringBuf();
 		var branchTrailing: Null<String> = null;
-		for (tok in RefactorSupport.collectCommentTokens(regions)) if (!(tok.from < ifSpan.from || tok.to > nextSpan.to)) {
+		for (tok in SourceComments.collectCommentTokens(regions)) if (!(tok.from < ifSpan.from || tok.to > nextSpan.to)) {
 			var insideKept: Bool = false;
 			for (k in kept) if (tok.from >= k.from && tok.to <= k.to) {
 				insideKept = true;

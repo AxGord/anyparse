@@ -4,9 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -26,7 +26,7 @@ class NamingCheckTestBase extends Test {
 	}
 
 	private function assertCanonicalized(src: String, edits: Array<{ span: Span, text: String }>, present: String, absent: String): Void {
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
@@ -284,7 +285,7 @@ final class MapValueScan {
 	 * since those could carry an existing map's contents.
 	 */
 	private static function provenMapExpr(expr: QueryNode, seams: ValueSeams): Bool {
-		final node: QueryNode = RefactorSupport.unwrapParens(expr, seams.parenKind);
+		final node: QueryNode = BoolExprShape.unwrapParens(expr, seams.parenKind);
 		if (node.kind == seams.newExprKind) {
 			return node.children.foreach(c -> seams.typeAnnotationKinds.contains(c.kind));
 		}
@@ -299,7 +300,7 @@ final class MapValueScan {
 
 	/** Whether `expr` is a literal form that cannot evaluate to null. */
 	private static function provenNonNullValue(expr: QueryNode, seams: ValueSeams): Bool {
-		return seams.nonNullLiteralKinds.contains(RefactorSupport.unwrapParens(expr, seams.parenKind).kind);
+		return seams.nonNullLiteralKinds.contains(BoolExprShape.unwrapParens(expr, seams.parenKind).kind);
 	}
 
 }

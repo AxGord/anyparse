@@ -1,7 +1,7 @@
 package unit;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -45,7 +45,7 @@ final class SeamEdit {
 			if (at < 0) throw new Exception('the fixture does not contain "${pair.find}"');
 			edits.push({ span: new Span(at, at + pair.covered), text: pair.text });
 		}
-		return RefactorSupport.canonicalize(source, edits, true, new HaxeQueryPlugin());
+		return CanonicalEdit.canonicalize(source, edits, true, new HaxeQueryPlugin());
 	}
 
 }

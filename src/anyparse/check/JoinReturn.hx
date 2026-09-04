@@ -1,11 +1,13 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -144,7 +146,7 @@ final class JoinReturn implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
-				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
 			final lambdaSpans: Array<Span> = [];
 			collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
@@ -168,7 +170,7 @@ final class JoinReturn implements Check {
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 		final lambdaSpans: Array<Span> = [];
 		collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
@@ -177,7 +179,7 @@ final class JoinReturn implements Check {
 		final byKey: Map<String, Match> = [];
 		for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
 	}
@@ -256,7 +258,7 @@ final class JoinReturn implements Check {
 		final init: QueryNode = decl.children[0];
 		final initSpan: Null<Span> = init.span;
 		if (initSpan == null) return null;
-		if (RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // multi-declarator
+		if (SourceText.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // multi-declarator
 
 		if (ret.kind != s.returnKind || ret.children.length != RETURN_VALUE_CHILD_COUNT) return null;
 		final retIdent: QueryNode = ret.children[0];

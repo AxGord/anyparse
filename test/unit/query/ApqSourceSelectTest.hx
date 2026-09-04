@@ -1,10 +1,11 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ElementSpan;
 import anyparse.query.Engine;
 import anyparse.query.Patch;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.ReplaceNode;
 import anyparse.query.Selector;
 import anyparse.query.SourceSlice;
@@ -232,7 +233,7 @@ class ApqSourceSelectTest extends Test {
 		final span: Null<Span> = node.span;
 		Assert.notNull(span);
 		if (span == null) return;
-		final window: String = SourceSlice.slice(src, RefactorSupport.declEditSpan(src, tree, node, span, plugin.lexicalRegions.bind(src)));
+		final window: String = SourceSlice.slice(src, ElementSpan.declEditSpan(src, tree, node, span, plugin.lexicalRegions.bind(src)));
 		Assert.equals('@:keep\n\tpublic function f():Void {}', window);
 		// `patch` finds a fragment only inside the region it searches, so a fragment that exists
 		// ONLY in the folded part proves the two regions are one.

@@ -4,8 +4,8 @@ package unit.query;
 import sys.io.File;
 #end
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.Cli;
-import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveElement;
 import haxe.Exception;
 import unit.cli.CliFixture;

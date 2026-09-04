@@ -1,8 +1,8 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -86,7 +86,7 @@ final class EncapsulateField {
 		final fieldSpan: Null<Span> = f.node.span;
 		if (fieldSpan == null) return Err('field "$fieldName" carries no span');
 		final fieldSpanNN: Span = fieldSpan;
-		final nameOffset: Int = RefactorSupport.identTokenOffset(source, fieldSpanNN, fieldName);
+		final nameOffset: Int = SourceText.identTokenOffset(source, fieldSpanNN, fieldName);
 		if (nameOffset < 0) return Err('could not locate the name of field "$fieldName"');
 		final nameEnd: Int = nameOffset + fieldName.length;
 		if (alreadyProperty(source, nameEnd, f.group.to)) return Err('"$fieldName" is already a property (it has an accessor clause)');
@@ -106,7 +106,7 @@ final class EncapsulateField {
 		final setter: String = 'function set_$fieldName($param:$typeSrcNN):$typeSrcNN {\n\treturn $fieldName = $param;\n}';
 		final replacement: String = '$newField\n\n$getter\n\n$setter';
 
-		return RefactorSupport.canonicalize(source, [{ span: f.group, text: replacement }], reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, [{ span: f.group, text: replacement }], reformat, plugin, optsJson);
 	}
 
 	/**
@@ -152,7 +152,7 @@ final class EncapsulateField {
 	 */
 	private static function alreadyProperty(source: String, nameEnd: Int, groupTo: Int): Bool {
 		var i: Int = nameEnd;
-		while (i < groupTo && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < groupTo && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		return i < groupTo && source.fastCodeAt(i) == '('.code;
 	}
 

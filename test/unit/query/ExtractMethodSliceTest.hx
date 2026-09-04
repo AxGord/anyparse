@@ -1,9 +1,9 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExtractMethod;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport.EditResult;
 import haxe.Exception;
 import utest.Assert;
 import utest.Test;

@@ -4,8 +4,8 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -164,10 +164,10 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 		if (guarded == null) return null;
 		if (subtreeMutates(guarded, seams.unsafeKinds)) return null;
 		final res: Null<{ guarded: QueryNode, fallback: QueryNode }> = if (
-			cond.kind == seams.notEqKind && RefactorSupport.sameSource(guarded, thenBranch, source)
+			cond.kind == seams.notEqKind && MemberKinds.sameSource(guarded, thenBranch, source)
 		)
 			{ guarded: guarded, fallback: elseBranch };
-		else if (cond.kind == seams.eqKind && RefactorSupport.sameSource(guarded, elseBranch, source))
+		else if (cond.kind == seams.eqKind && MemberKinds.sameSource(guarded, elseBranch, source))
 			{ guarded: guarded, fallback: thenBranch };
 		else
 			null;
@@ -181,7 +181,7 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 
 	/** Whether `node`'s subtree contains any of `unsafeKinds` (a binding-write or a call). */
 	private static function subtreeMutates(node: QueryNode, unsafeKinds: Array<String>): Bool {
-		return unsafeKinds.exists(k -> RefactorSupport.subtreeContainsKind(node, k));
+		return unsafeKinds.exists(k -> MemberKinds.subtreeContainsKind(node, k));
 	}
 
 	/**

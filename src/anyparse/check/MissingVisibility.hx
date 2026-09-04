@@ -5,7 +5,7 @@ import anyparse.query.CondBranchProjection;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -197,7 +197,7 @@ final class MissingVisibility implements Check {
 	private static function commentTokens(
 		source: String, seams: Seams, regions: () -> Array<LexRegion>
 	): Array<{ from: Int, to: Int, isLine: Bool }> {
-		return seams.condKind != null && source.indexOf(seams.ifKeyword) >= 0 ? RefactorSupport.collectCommentTokens(regions()) : [];
+		return seams.condKind != null && source.indexOf(seams.ifKeyword) >= 0 ? SourceComments.collectCommentTokens(regions()) : [];
 	}
 
 	/**

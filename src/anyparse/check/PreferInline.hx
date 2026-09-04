@@ -7,6 +7,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
@@ -421,7 +422,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	private static function metaBlockedClasses(tree: QueryNode, branch: MemberBranchSeams): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
-		MemberBranchScan.eachMember(branch, tree, child -> !RefactorSupport.isModifierOrMetaKind(child.kind), (decl, run, _) -> {
+		MemberBranchScan.eachMember(branch, tree, child -> !MemberKinds.isModifierOrMetaKind(child.kind), (decl, run, _) -> {
 			if (run.exists(carriesNonNeutralMeta)) for (cls in CheckScan.classBodies(decl)) out.push(cls);
 		});
 		return out;
@@ -429,7 +430,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	/** Whether `node` is — or holds anywhere below it — a metadata node whose name is not `inlineNeutralMeta`. */
 	private static function carriesNonNeutralMeta(node: QueryNode): Bool {
-		final metaName: Null<String> = RefactorSupport.META_KINDS.contains(node.kind) ? node.name : null;
+		final metaName: Null<String> = MemberKinds.META_KINDS.contains(node.kind) ? node.name : null;
 		// A NAMED annotation's own verdict is final — descending into its ARGUMENTS would let a
 		// `@:privateAccess` inside a whitelisted `@:value(...)` refuse the class. Only the name-less
 		// wrappers a `#if` region projects are worth recursing through.
@@ -537,7 +538,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (name == null) return;
 			final mods: Array<String> = [];
 			final metas: Array<String> = [];
-			for (mod in run) if (RefactorSupport.META_KINDS.contains(mod.kind)) {
+			for (mod in run) if (MemberKinds.META_KINDS.contains(mod.kind)) {
 				final nm: Null<String> = mod.name;
 				if (nm != null) metas.push(nm);
 			} else

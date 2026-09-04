@@ -5,7 +5,7 @@ import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -77,13 +77,13 @@ class InvertNegatedIfElseCheckTest extends Test {
 
 	public function testFixAppliedOutput(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (!a) x(); else y();\n\t}\n}';
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\tif (a) y(); else x();\n\t}\n}', RefactorSupport.applyEdits(src, edits(src)));
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tif (a) y(); else x();\n\t}\n}', CanonicalEdit.applyEdits(src, edits(src)));
 	}
 
 	public function testFixAppliedOutputBraced(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (!a) { p(); } else { q(); }\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tfunction f():Void {\n\t\tif (a) { q(); } else { p(); }\n\t}\n}', RefactorSupport.applyEdits(src, edits(src))
+			'class C {\n\tfunction f():Void {\n\t\tif (a) { q(); } else { p(); }\n\t}\n}', CanonicalEdit.applyEdits(src, edits(src))
 		);
 	}
 

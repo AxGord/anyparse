@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -200,7 +201,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		// The run resets at EVERY member, not only at a method: a `static` / `@:keep` written on a
 		// preceding FIELD would otherwise carry onto the next accessor and answer for it. A member
 		// written inside a member-position `#if` region is visited too, with its own branch's run.
-		MemberBranchScan.eachMember(branch, cls, child -> RefactorSupport.isMemberDeclKind(child.kind), (child, run, certain) -> {
+		MemberBranchScan.eachMember(branch, cls, child -> MemberKinds.isMemberDeclKind(child.kind), (child, run, certain) -> {
 			final isMethod: Bool = CheckScan.METHOD_KINDS.contains(child.kind);
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
@@ -416,7 +417,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 
 	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
 	private static function isDeclKind(node: QueryNode): Bool {
-		return RefactorSupport.isMemberDeclKind(node.kind);
+		return MemberKinds.isMemberDeclKind(node.kind);
 	}
 
 	/**
@@ -426,7 +427,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 */
 	private static function runCarries(run: Array<QueryNode>, wanted: String, isMeta: Bool): Bool {
 		for (mod in run) {
-			final meta: Bool = RefactorSupport.META_KINDS.contains(mod.kind);
+			final meta: Bool = MemberKinds.META_KINDS.contains(mod.kind);
 			if (meta == isMeta && (isMeta ? mod.name == wanted : mod.kind == wanted)) return true;
 		}
 		return false;

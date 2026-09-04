@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -79,7 +79,7 @@ final class AddMember {
 		final bodySpan: Span = matches[0].nameNode.span ?? matches[0].fullSpan;
 		var bodyClose: Int = bodySpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
+		while (bodyClose >= bodySpan.from && SourceText.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
 		if (bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code)
 			return Err('"$typeName" has no brace body to add a member to');
 
@@ -97,7 +97,7 @@ final class AddMember {
 			? { span: new Span(bodyClose, bodyClose), text: '$trimmed\n\n' }
 			: { span: new Span(bodyClose, bodyClose), text: '\n$trimmed\n' };
 		final refusal: Null<String> = spliceRefusal(source, edit, typeName, plugin);
-		return refusal != null ? Err(refusal) : RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return refusal != null ? Err(refusal) : CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/**
@@ -145,13 +145,13 @@ final class AddMember {
 		final existing: Array<String> = [];
 		final added: Array<String> = [];
 		var addedOpaqueRegion: Bool = false;
-		RefactorSupport.eachMemberHost(decl.nameNode, host -> {
-			for (child in host.children) if (RefactorSupport.isMemberDeclKind(child.kind)) {
+		MemberKinds.eachMemberHost(decl.nameNode, host -> {
+			for (child in host.children) if (MemberKinds.isMemberDeclKind(child.kind)) {
 				final span: Null<Span> = child.span;
 				if (span != null) {
 					final isAdded: Bool = span.from >= at && span.from < to;
 					final name: Null<String> = child.name;
-					if (RefactorSupport.isOpaqueMemberKind(child.kind)) {
+					if (MemberKinds.isOpaqueMemberKind(child.kind)) {
 						if (isAdded) addedOpaqueRegion = true;
 					} else if (name != null)
 						(isAdded ? added : existing).push(name);
@@ -180,7 +180,7 @@ final class AddMember {
 	 */
 	private static function carriesOpaqueMemberRegion(typeBody: QueryNode): Bool {
 		var found: Bool = false;
-		RefactorSupport.eachMemberHost(typeBody, host -> for (child in host.children) if (RefactorSupport.isOpaqueMemberKind(child.kind))
+		MemberKinds.eachMemberHost(typeBody, host -> for (child in host.children) if (MemberKinds.isOpaqueMemberKind(child.kind))
 			found = true);
 		return found;
 	}
@@ -206,7 +206,7 @@ final class AddMember {
 			if (code == '\n'.code) {
 				newlines++;
 				if (newlines >= 2) return true;
-			} else if (!RefactorSupport.isSpace(code))
+			} else if (!SourceText.isSpace(code))
 				return false;
 			i--;
 		}

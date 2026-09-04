@@ -1,9 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -142,7 +144,7 @@ final class PreferRangeLoop implements Check {
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		fixWalk(tree, tree, source, dt, s, wanted, edits);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** The bound's identifier name when `B` is a bare identifier, else null (a literal bound has no name to track). */
@@ -308,7 +310,7 @@ final class PreferRangeLoop implements Check {
 		final span: Null<Span> = decl.span;
 		return if (name == null || span == null)
 			null
-		else if (RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? []))
+		else if (SourceText.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? []))
 			null
 		else
 			name;
@@ -355,7 +357,7 @@ final class PreferRangeLoop implements Check {
 		if (s.opaqueKinds.contains(scope.kind)) return false;
 		if (s.closureKinds.contains(scope.kind)) {
 			final span: Null<Span> = scope.span;
-			if (span != null && RefactorSupport.referencedInRange(source, loopVar, span.from, span.to, [])) return true;
+			if (span != null && OccurrenceScan.referencedInRange(source, loopVar, span.from, span.to, [])) return true;
 		}
 		return scope.children.exists(c -> capturedByClosure(c, source, loopVar, s));
 	}
@@ -398,7 +400,7 @@ final class PreferRangeLoop implements Check {
 			null
 		else if (provablyNonInt(bound, root, source, dt, s))
 			null
-		else if (RefactorSupport.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, []))
+		else if (OccurrenceScan.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, []))
 			null
 		else if (capturedByClosure(scope, source, loopVar, s))
 			null

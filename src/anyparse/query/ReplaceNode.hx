@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.check.CheckScan;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -116,7 +116,7 @@ final class ReplaceNode {
 		// (modifiers included), not a fragment that would duplicate the
 		// surviving modifier siblings. A non-decl node (expression, statement,
 		// package) has no modifier run, so `declGroupSpan` returns it intact.
-		final groupSpan: Span = RefactorSupport.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
+		final groupSpan: Span = ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
 		// `--with-doc` extends the replaced range back over the leading doc / block
 		// comment run (trivia the grammar keeps outside the node span) so the new
 		// source carries the declaration documentation. The same extension applies
@@ -124,9 +124,9 @@ final class ReplaceNode {
 		// declaration would otherwise stack the new doc above the surviving old one,
 		// so the existing leading doc is absorbed rather than duplicated.
 		final carriesDoc: Bool = withDoc || startsWithBlockComment(newSource);
-		final finalSpan: Span = carriesDoc ? RefactorSupport.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source)) : groupSpan;
+		final finalSpan: Span = carriesDoc ? ElementSpan.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source)) : groupSpan;
 		final edit: { span: Span, text: String } = { span: finalSpan, text: newSource };
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/**

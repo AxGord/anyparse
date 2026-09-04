@@ -3,7 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.CondDirectives;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -153,7 +154,7 @@ final class CondRegionMerge implements Check {
 		final regions: Null<Array<CondRegion>> = regionsOf(directives, shape);
 		if (regions == null) return [];
 		final openedAt: Map<Int, CondRegion> = [for (region in regions) region.open => region];
-		final comments: Array<Span> = RefactorSupport.collectCommentRegions(plugin.lexicalRegions(source));
+		final comments: Array<Span> = SourceComments.collectCommentRegions(plugin.lexicalRegions(source));
 		final paired: Array<Int> = [];
 		final out: Array<MergeSite> = [];
 		for (first in regions) {
@@ -208,9 +209,9 @@ final class CondRegionMerge implements Check {
 		final open: CondDirective = directives[second.open];
 		final closeFrom: Int = close.span.from;
 		final openTo: Int = open.span.to;
-		final closeLineFrom: Int = RefactorSupport.startOfLine(source, closeFrom);
+		final closeLineFrom: Int = SourceText.startOfLine(source, closeFrom);
 		final closeLineTo: Int = lineEnd(source, close.span.to);
-		final openLineFrom: Int = RefactorSupport.startOfLine(source, open.span.from);
+		final openLineFrom: Int = SourceText.startOfLine(source, open.span.from);
 		final openLineTo: Int = lineEnd(source, openTo);
 		if (source.substring(closeLineFrom, closeFrom).trim() != '') return null;
 		if (source.substring(openLineFrom, open.span.from).trim() != '') return null;

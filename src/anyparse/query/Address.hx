@@ -191,11 +191,11 @@ final class Address {
 	private static function declAfterModifierPrefix(tree: QueryNode, source: String, offset: Int): Int {
 		var at: Int = offset;
 		var node: Null<QueryNode> = Engine.at(tree, at);
-		while (node != null && RefactorSupport.isModifierOrMetaKind(node.kind)) {
+		while (node != null && MemberKinds.isModifierOrMetaKind(node.kind)) {
 			final span: Null<Span> = node.span;
 			if (span == null) break;
 			var next: Int = span.to;
-			while (next < source.length && RefactorSupport.isSpace(source.fastCodeAt(next))) next++;
+			while (next < source.length && SourceText.isSpace(source.fastCodeAt(next))) next++;
 			if (next >= source.length || next <= at) break;
 			final ahead: Null<QueryNode> = Engine.at(tree, next);
 			// Only a node that STARTS here is the thing the line declares. Anything else means the walk

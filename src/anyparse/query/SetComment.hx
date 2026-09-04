@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -49,11 +49,11 @@ final class SetComment {
 			return Err('set-comment replacement must be a comment (start with // or /*)');
 
 		final cursor: Int = Span.offsetOf(source, line, col);
-		final span: Null<Span> = RefactorSupport.commentBlockAt(source, cursor, plugin.lexicalRegions(source));
+		final span: Null<Span> = SourceComments.commentBlockAt(source, cursor, plugin.lexicalRegions(source));
 		if (span == null) return Err('position $line:$col is not on a comment');
 
 		final edit: { span: Span, text: String } = { span: span, text: trimmed };
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 }

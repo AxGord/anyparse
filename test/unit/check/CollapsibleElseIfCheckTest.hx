@@ -5,7 +5,7 @@ import anyparse.check.CollapsibleElseIf;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -203,7 +203,7 @@ class CollapsibleElseIfCheckTest extends Test {
 	 */
 	private function applyFixOnce(src: String, ?optsJson: String): String {
 		final edits: Array<{ span: Span, text: String }> = fixEdits(src);
-		return switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin(), optsJson) {
+		return switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin(), optsJson) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnnecessarySwitch;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -321,7 +321,7 @@ class UnnecessarySwitchCheckTest extends Test {
 		final check: UnnecessarySwitch = new UnnecessarySwitch();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		return switch RefactorSupport.canonicalize(src, edits, true, plugin) {
+		return switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

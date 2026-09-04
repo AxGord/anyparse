@@ -7,6 +7,7 @@ import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
@@ -868,7 +869,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	 */
 	private function fixResultOf(files: Array<{ file: String, source: String }>, ?config: String): String {
 		final source: String = files[0].source;
-		switch RefactorSupport.canonicalize(source, editsOf(files, config), false, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(source, editsOf(files, config), false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				return text;
 			case Err(message):

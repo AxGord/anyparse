@@ -1,8 +1,8 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.NewFile.NewFileResult;
 import anyparse.query.NewFile.NewFileSpec;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.cli.CliContext;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;

@@ -1,10 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -234,14 +234,14 @@ final class SimplifyBooleanTernary implements Check {
 	private static function boolReturnLicence(
 		node: QueryNode, source: String, shape: RefShape, retType: Null<String>, isReturnValue: Bool
 	): Bool {
-		if (!isReturnValue || node.children.length != 3 || !RefactorSupport.declaresNonNullBool(retType, shape)) return false;
+		if (!isReturnValue || node.children.length != 3 || !BoolExprShape.declaresNonNullBool(retType, shape)) return false;
 		final boolLitKind: Null<String> = shape.boolLitKind;
 		if (boolLitKind == null) return false;
 		final thenBool: Bool = node.children[1].kind == boolLitKind;
 		final elseBool: Bool = node.children[2].kind == boolLitKind;
 		if (thenBool == elseBool) return false;
 		final other: QueryNode = thenBool ? node.children[2] : node.children[1];
-		return !RefactorSupport.statementLikeOrNullTail(other, shape) && !RefactorSupport.pendingBooleanTernaryTail(other, shape);
+		return !BoolExprShape.statementLikeOrNullTail(other, shape) && !BoolExprShape.pendingBooleanTernaryTail(other, shape);
 	}
 
 	/**
@@ -250,7 +250,7 @@ final class SimplifyBooleanTernary implements Check {
 	 * narrowing and fail to compile under `@:nullSafety(Strict)`, so it is skipped.
 	 */
 	private static function condGuarded(node: QueryNode, shape: RefShape): Bool {
-		return node.children.length > 0 && RefactorSupport.hasNullNarrowingGuard(node.children[0], shape);
+		return node.children.length > 0 && BoolExprShape.hasNullNarrowingGuard(node.children[0], shape);
 	}
 
 	/**

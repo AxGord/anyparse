@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -204,7 +204,7 @@ class UnusedPrivateCheckTest extends Test {
 		// occurs in a comment, so a self-naming doc would make this pass vacuously.
 		final src: String = 'class C {\n\t/** Explains the helper. */\n\tprivate function dead() {}\n\n\tpublic function keep() {}\n}';
 		final edits: Array<{ span: Span, text: String }> = fixEdits(src);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('Explains the helper') == -1, text);
 				Assert.isTrue(text.indexOf('dead') == -1, text);
@@ -232,7 +232,7 @@ class UnusedPrivateCheckTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('dead') == -1);
 				Assert.isTrue(text.indexOf('keep') >= 0);
@@ -523,7 +523,7 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains("'new'"));
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('function new') == -1);
 				Assert.isTrue(text.indexOf('draw') >= 0);

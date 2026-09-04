@@ -4,8 +4,8 @@ import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -282,7 +282,7 @@ final class RedundantCaseBody implements Check {
 	private static function sameBody(source: String, a: Body, b: Body): Bool {
 		if (a.nodes.length != b.nodes.length) return false;
 		if (a.nodes.length == 0) return true;
-		for (i in 0...a.nodes.length) if (!RefactorSupport.structurallyEqual(a.nodes[i], b.nodes[i])) return false;
+		for (i in 0...a.nodes.length) if (!MemberKinds.structurallyEqual(a.nodes[i], b.nodes[i])) return false;
 		return CheckScan.normalizeSpan(source, a.from, a.to).norm == CheckScan.normalizeSpan(source, b.from, b.to).norm;
 	}
 

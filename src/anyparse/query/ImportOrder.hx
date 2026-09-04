@@ -409,12 +409,12 @@ final class ImportOrder {
 	 * splices `'import <path>;\n'` at it.
 	 */
 	public static function insertOffset(source: String, block: Array<ImportSlot>, path: String): Int {
-		final simple: String = RefactorSupport.lastSegment(path);
-		if (block.exists(slot -> RefactorSupport.lastSegment(slot.path) == simple)) return -1;
+		final simple: String = SourceText.lastSegment(path);
+		if (block.exists(slot -> SourceText.lastSegment(slot.path) == simple)) return -1;
 		final chosen: Null<RunChoice> = chooseRun(runsOf(source, block), path);
 		if (chosen == null) return -1;
 		final run: Array<ImportLine> = chosen.run;
-		return chosen.slot < 0 ? run[run.length - 1].chunkTo : RefactorSupport.startOfLine(source, run[chosen.slot].declFrom);
+		return chosen.slot < 0 ? run[run.length - 1].chunkTo : SourceText.startOfLine(source, run[chosen.slot].declFrom);
 	}
 
 	/**
@@ -429,7 +429,7 @@ final class ImportOrder {
 	public static function orderAt(source: String, block: Array<ImportSlot>, at: Int): Int {
 		for (run in runsOf(source, block)) {
 			final anchored: Bool = run[run.length - 1].chunkTo == at
-				|| run.exists(line -> RefactorSupport.startOfLine(source, line.declFrom) == at);
+				|| run.exists(line -> SourceText.startOfLine(source, line.declFrom) == at);
 			if (anchored) return orderOf(pathsOf(run));
 		}
 		return -1;
@@ -566,7 +566,7 @@ final class ImportOrder {
 	 */
 	private static function lineOf(source: String, slot: ImportSlot): Null<ImportLine> {
 		if (slot.from < 0 || slot.to < 0) return null;
-		final lineStart: Int = RefactorSupport.startOfLine(source, slot.from);
+		final lineStart: Int = SourceText.startOfLine(source, slot.from);
 		if (source.substring(lineStart, slot.from).trim() != '') return null;
 		final newline: Int = source.indexOf('\n', slot.to);
 		return if (newline < 0)
@@ -641,7 +641,7 @@ final class ImportOrder {
 	private static function withLeadingComments(source: String, lineStart: Int): Int {
 		var from: Int = lineStart;
 		while (from > 0) {
-			final previousStart: Int = RefactorSupport.startOfLine(source, from - 1);
+			final previousStart: Int = SourceText.startOfLine(source, from - 1);
 			final previous: String = source.substring(previousStart, from - 1).trim();
 			if (!previous.startsWith('//')) break;
 			if (previous.indexOf('/*') >= 0 || previous.indexOf('*/') >= 0) break;

@@ -4,11 +4,14 @@ import anyparse.check.AssignmentTreeHoist.LvalueRef;
 import anyparse.check.AssignmentTreeHoist.SwitchArms;
 import anyparse.check.AssignmentTreeHoist.TreeSeams;
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -145,7 +148,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
-				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			final matches: Array<Match> = [];
 			collectMatches(tree, tree, entry.source, comments, seams, matches);
 			for (m in matches) violations.push({
@@ -166,13 +169,13 @@ final class PreferSwitchExpressionAssignment implements Check {
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final matches: Array<Match> = [];
 		collectMatches(tree, tree, source, comments, seams, matches);
 		final byKey: Map<String, Match> = [];
 		for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
 	}
@@ -232,9 +235,9 @@ final class PreferSwitchExpressionAssignment implements Check {
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
 		if (name == null || declSpan == null) return null;
-		if (RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // `var a, b;`
+		if (SourceText.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // `var a, b;`
 		final init: Null<QueryNode> = decl.children.length == 1 ? decl.children[0] : null;
-		if (init != null && !RefactorSupport.isSideEffectFree(init)) return null; // impure init cannot move to a default path
+		if (init != null && !MemberKinds.isSideEffectFree(init)) return null; // impure init cannot move to a default path
 
 		if (!s.switchKinds.contains(switchStmt.kind) || switchStmt.children.length < 2) return null;
 		final switchSpan: Null<Span> = switchStmt.span;
@@ -354,7 +357,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		if (lvalue.kind == s.identKind && prev != null && s.mutableKinds.contains(prev.kind) && prev.name == lvalue.name) return false;
 		if (isField) {
 			final receiver: Null<QueryNode> = lvalue.children.length > 0 ? lvalue.children[0] : null;
-			if (receiver == null || !RefactorSupport.isSideEffectFree(receiver)) return false;
+			if (receiver == null || !MemberKinds.isSideEffectFree(receiver)) return false;
 		}
 		return !subjectTouchesLvalue(subject, lvalue, s);
 	}

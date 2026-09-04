@@ -6,8 +6,9 @@ import anyparse.check.Linter;
 import anyparse.check.PreferIfExpressionReturn;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import utest.Assert;
@@ -391,7 +392,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
-		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
+		return switch CanonicalEdit.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
@@ -422,7 +423,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		final head: Null<QueryNode> = firstIf(tree, plugin.refShape().ifStatementKinds ?? []);
 		if (head == null) throw new Exception('fixture holds no if statement: $source');
 		return PreferIfExpressionReturn.claimsChain(
-			head, source, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), plugin.refShape()
+			head, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), plugin.refShape()
 		);
 	}
 

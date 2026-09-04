@@ -2,9 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -189,7 +191,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 			final edit: Null<{ span: Span, text: String }> = rewrite(r, source);
 			if (edit != null) edits.push(edit);
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** `??` and `?.` are Haxe 4.3; a project declaring an older `languageVersion` does not get this rewrite. */
@@ -330,7 +332,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 	 * any other shape. Parentheses around the comparison are unwrapped.
 	 */
 	private static function nullCompOperand(conjunct: QueryNode, compKind: String, s: Seams): Null<QueryNode> {
-		final c: QueryNode = RefactorSupport.unwrapParens(conjunct, s.parenKind);
+		final c: QueryNode = BoolExprShape.unwrapParens(conjunct, s.parenKind);
 		if (c.kind != compKind || c.children.length != BINARY_CHILD_COUNT) return null;
 		final a: QueryNode = c.children[0];
 		final b: QueryNode = c.children[1];
@@ -350,7 +352,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 	private static function links(earlier: Null<QueryNode>, later: Null<QueryNode>, source: String, s: Seams): Bool {
 		if (earlier == null || later == null) return false;
 		final e: QueryNode = earlier;
-		if (s.unsafeKinds.exists(k -> RefactorSupport.subtreeContainsKind(e, k))) return false;
+		if (s.unsafeKinds.exists(k -> MemberKinds.subtreeContainsKind(e, k))) return false;
 		final j: Null<QueryNode> = junction(later, e, source);
 		return j != null && j.kind == s.fieldAccessKind;
 	}
@@ -360,7 +362,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 		var n: QueryNode = later;
 		while (n.children.length > 0) {
 			final recv: QueryNode = n.children[0];
-			if (RefactorSupport.sameSource(recv, earlier, source)) return n;
+			if (MemberKinds.sameSource(recv, earlier, source)) return n;
 			n = recv;
 		}
 		return null;
@@ -475,7 +477,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 		final dots: Array<Int> = [];
 		for (j in 0...r.operands.length - 1) {
 			final target: QueryNode = r.operands[j];
-			final recv: Null<QueryNode> = chain.find(n -> RefactorSupport.sameSource(n, target, source));
+			final recv: Null<QueryNode> = chain.find(n -> MemberKinds.sameSource(n, target, source));
 			if (recv == null) return null;
 			final recvSpan: Null<Span> = recv.span;
 			if (recvSpan == null) return null;

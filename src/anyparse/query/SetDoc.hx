@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -78,12 +78,12 @@ final class SetDoc {
 		// annotation of a run, the group span begins between the two, and the block
 		// landed THERE — a second doc under the first, the stacked pair
 		// `fragmented-doc-comment` reports, instead of replacing it.
-		final runStart: Int = RefactorSupport.declRunStart(node, TreePath.parentOf(tree, node), span);
+		final runStart: Int = ElementSpan.declRunStart(node, TreePath.parentOf(tree, node), span);
 		final groupSpan: Span = new Span(runStart, span.to);
-		final docExtended: Span = RefactorSupport.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source));
+		final docExtended: Span = ElementSpan.docExtendedSpan(source, groupSpan, plugin.lexicalRegions(source));
 		final docRegion: Span = new Span(docExtended.from, runStart);
-		final edit: { span: Span, text: String } = { span: docRegion, text: '${RefactorSupport.docComment(docText)}\n' };
-		final result: EditResult = RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		final edit: { span: Span, text: String } = { span: docRegion, text: '${SourceComments.docComment(docText)}\n' };
+		final result: EditResult = CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 		// A result byte-identical to the NO-EDIT baseline is a silent no-op —
 		// either the doc already matches verbatim or the splice position cannot
 		// carry a doc (the writer dropped it). Under `reformat` the baseline is
@@ -104,7 +104,7 @@ final class SetDoc {
 	 * raw source (the guard then degrades to plain byte-equality).
 	 */
 	private static function reformatBaseline(source: String, plugin: GrammarPlugin, ?optsJson: String): String {
-		return switch RefactorSupport.canonicalize(source, [], true, plugin, optsJson) {
+		return switch CanonicalEdit.canonicalize(source, [], true, plugin, optsJson) {
 			case Ok(text): text;
 			case Err(_): source;
 		}

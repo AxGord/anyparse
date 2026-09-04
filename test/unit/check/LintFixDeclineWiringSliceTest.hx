@@ -7,8 +7,8 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.query.cli.command.LintFixLedger;
@@ -218,7 +218,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.equals(2, groups.length, 'both rules answered with edits: $groups');
 		// DETECT-PROOF: the whole set really is refused, so the salvage below is doing work rather
 		// than restating an `Ok` the gate would have given anyway.
-		switch RefactorSupport.canonicalize(REFUSED_BY_WRITER, LintFixDriver.contributedEdits(groups), false, plugin, null) {
+		switch CanonicalEdit.canonicalize(REFUSED_BY_WRITER, LintFixDriver.contributedEdits(groups), false, plugin, null) {
 			case Ok(_, _):
 				Assert.fail('the fixture no longer trips the writer-emit gate');
 			case Err(message):

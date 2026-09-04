@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -241,7 +241,7 @@ final class NewFile {
 		buf.add('\n');
 		for (imp in imports) buf.add('$imp\n');
 		if (imports.length > 0) buf.add('\n');
-		if (classDoc != null) buf.add('${RefactorSupport.docComment(classDoc)}\n');
+		if (classDoc != null) buf.add('${SourceComments.docComment(classDoc)}\n');
 
 		if (NULL_SAFE_KINDS.contains(kind)) buf.add('@:nullSafety(Strict)\n');
 
@@ -358,7 +358,7 @@ final class NewFile {
 						imports.push(stmt);
 				}
 			} else
-				bodies[section] = RefactorSupport.trimBlankEdges(buf).join('\n');
+				bodies[section] = SourceComments.trimBlankEdges(buf).join('\n');
 		}
 		for (line in lines) {
 			if (line.startsWith('@@ ')) {
@@ -420,10 +420,10 @@ final class NewFile {
 	 */
 	private static function isModulePath(path: String): Bool {
 		final aliasAt: Int = path.indexOf(' as ');
-		if (aliasAt >= 0 && !RefactorSupport.isIdentifier(path.substr(aliasAt + 4).trim())) return false;
+		if (aliasAt >= 0 && !SourceText.isIdentifier(path.substr(aliasAt + 4).trim())) return false;
 		final segments: Array<String> = (aliasAt < 0 ? path : path.substring(0, aliasAt)).split('.');
 		for (i in 0...segments.length) if (
-			!(segments[i] == '*' && i > 0 && i == segments.length - 1) && !RefactorSupport.isIdentifier(segments[i])
+			!(segments[i] == '*' && i > 0 && i == segments.length - 1) && !SourceText.isIdentifier(segments[i])
 		)
 			return false;
 		return true;

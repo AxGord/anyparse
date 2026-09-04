@@ -5,7 +5,7 @@ import anyparse.check.DeadNullGuard;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -731,7 +731,7 @@ class DeadNullGuardTest extends Test {
 	private function fixText(src: String): String {
 		final check: DeadNullGuard = new DeadNullGuard();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');

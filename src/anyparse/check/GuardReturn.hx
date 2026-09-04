@@ -2,11 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
+import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -256,12 +259,12 @@ final class GuardReturn implements Check {
 			final edit: Null<{ span: Span, text: String }> = editFor(m, source, seams, types);
 			if (edit != null) edits.push(edit);
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
 	private static inline function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
-		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
+		return BinderScan.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -453,13 +456,13 @@ final class GuardReturn implements Check {
 		if (body == null) return false;
 		final declared: Null<String> = CheckScan.returnAnnotationText(fn, s.shape, source);
 		return declared == null
-			? !RefactorSupport.subtreeContainsKindStopping(body, s.valueReturnKinds, s.returnScopeStop)
+			? !MemberKinds.subtreeContainsKindStopping(body, s.valueReturnKinds, s.returnScopeStop)
 			: declared == s.voidTypeName;
 	}
 
 	/** Whether `node`'s subtree holds a `#if … #end` region, whose raw-preserved interior the re-indenting de-nest must not move. */
 	private static function hasConditionalRegion(node: QueryNode): Bool {
-		return RefactorSupport.isConditionalKind(node.kind) || node.children.exists(c -> hasConditionalRegion(c));
+		return CondRegionScan.isConditionalKind(node.kind) || node.children.exists(c -> hasConditionalRegion(c));
 	}
 
 	/**

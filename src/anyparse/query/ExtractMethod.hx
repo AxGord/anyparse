@@ -1,7 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
@@ -129,7 +129,7 @@ final class ExtractMethod {
 		source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, reformat: Bool, plugin: GrammarPlugin,
 		shape: RefShape, ?optsJson: String
 	): EditResult {
-		if (!RefactorSupport.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
+		if (!SourceText.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
@@ -185,18 +185,18 @@ final class ExtractMethod {
 		// offset inside it, and the sweep would then see only that function's own body.
 		final block: Null<QueryNode> = TreePath.parentOf(tree, sel.stmts[0]);
 		final blockSpan: Null<Span> = block?.span;
-		final scope: QueryNode = blockSpan == null ? tree : RefactorSupport.enclosingFunctionSubtree(tree, blockSpan.from, shape);
+		final scope: QueryNode = blockSpan == null ? tree : BinderScan.enclosingFunctionSubtree(tree, blockSpan.from, shape);
 		final boundNames: Array<String> = [
 			for (d in collectLocalDecls(sel.stmts, TypeResolver.blockScopedValueDeclarationKinds(shape))) d.name
 		];
 		for (nm in boundNames) {
 			// Same question, asked of a region with no nodes: whether a name the range binds is
 			// read after it cannot be decided when an unparsed conditional region may hold that read.
-			final opaque: Null<String> = RefactorSupport.opaqueCondRegionDiagnostic(
+			final opaque: Null<String> = CondRegionScan.opaqueCondRegionDiagnostic(
 				source, scope, nm, shape, 'extract of a range binding "$nm"'
 			);
 			if (opaque != null) return Err(opaque);
-			final dup: Null<Span> = RefactorSupport.exclusiveBranchRedeclaration(scope, source, nm, plugin, shape);
+			final dup: Null<Span> = CondRegionScan.exclusiveBranchRedeclaration(scope, source, nm, plugin, shape);
 			if (dup == null) continue;
 			final at: Position = dup.lineCol(source);
 			return Err(
@@ -231,7 +231,7 @@ final class ExtractMethod {
 		final newText: String = '$fnText\n$callText';
 
 		final edit: { span: Span, text: String } = { span: new Span(sel.fromOffset, sel.toOffset), text: newText };
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/** `from` offset of a hit's binding span, or -1 when unbound. */
@@ -392,7 +392,7 @@ final class ExtractMethod {
 			if (bindingFrom >= sel.fromOffset) continue;
 			// A field / member binding persists via `this`-capture — fine.
 			final bindNode: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, bindingFrom);
-			if (bindNode == null || RefactorSupport.isFieldMemberKind(bindNode.kind)) continue;
+			if (bindNode == null || MemberKinds.isFieldMemberKind(bindNode.kind)) continue;
 			// An outer local / parameter, mutated in the range — refuse if read after.
 			if (hits.exists(h -> h.kind == RefKind.Read && bindFrom(h) == bindingFrom && h.span.from >= sel.toOffset)) return nm;
 		}
@@ -420,7 +420,7 @@ final class ExtractMethod {
 	 * named `name`. Returns false when `cursor` is not inside a function.
 	 */
 	private static function nameDeclaredInEnclosingFunction(tree: QueryNode, cursor: Int, name: String): Bool {
-		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
+		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> MemberKinds.FN_DECL_KINDS.contains(node.kind));
 		if (fn == null) return false;
 		var found: Bool = false;
 		function scan(node: QueryNode): Void {

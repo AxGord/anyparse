@@ -144,7 +144,7 @@ final class CrossRename {
 		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
 		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
 	): CrossRenameResult {
-		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
+		if (!SourceText.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
 		// 1. Resolve the type declaration the cursor sits on.
 		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return Err(
@@ -232,11 +232,11 @@ final class CrossRename {
 	): Array<Span> {
 		final out: Array<Span> = [];
 		final seen: Array<Int> = [];
-		inline function add(identFrom: Int): Void RefactorSupport.pushUniqueSpan(out, seen, identFrom, typeName.length);
+		inline function add(identFrom: Int): Void OccurrenceScan.pushUniqueSpan(out, seen, identFrom, typeName.length);
 
 		// a. Type positions.
 		final typeRefTree: QueryNode = plugin.parseFileTypeRefs(source);
-		for (hit in Uses.find(typeName, typeRefTree, typeRefShape)) add(RefactorSupport.identTokenOffset(source, hit.span, typeName));
+		for (hit in Uses.find(typeName, typeRefTree, typeRefShape)) add(SourceText.identTokenOffset(source, hit.span, typeName));
 
 		// e. QUALIFIED type positions — the same type named THROUGH its module path.
 		final qualified: Array<String> = RefactorSupport.qualifiedPaths(typeName, module, ModuleScan.packageOf(tree));
@@ -263,11 +263,11 @@ final class CrossRename {
 			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (decl != null && decl.name == typeName) {
 				final nameSpan: Null<Span> = decl.nameNode.span;
-				if (nameSpan != null) add(RefactorSupport.identTokenOffset(source, nameSpan, typeName));
+				if (nameSpan != null) add(SourceText.identTokenOffset(source, nameSpan, typeName));
 			} else if (span != null && (node.kind == 'ImportDecl' || node.kind == 'UsingDecl'))
 				add(RefactorSupport.lastSegmentOffset(source, span, node.name, typeName));
 			final children: Array<QueryNode> = node.children;
-			if (node.kind == RefactorSupport.FIELD_ACCESS_KIND && children.length > 0)
+			if (node.kind == MemberKinds.FIELD_ACCESS_KIND && children.length > 0)
 				add(namespaceReceiverOffset(source, children[0], typeName, qualified, valueResolved));
 			for (c in children) walk(c);
 		}
@@ -338,14 +338,14 @@ final class CrossRename {
 	): CrossRenameResult {
 		// A type name is reachable from any file of the scope, so an unparsed
 		// conditional-compilation region ANYWHERE in it can hide a type position.
-		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(parsed, typeName, refShape, 'rename of "$typeName"');
+		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parsed, typeName, refShape, 'rename of "$typeName"');
 		if (opaque != null) return Err(opaque);
 		final changes: Array<FileChange> = [];
 		for (entry in parsed) {
 			final occurrences: Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape, module);
 			if (occurrences.length == 0) continue;
 			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
-			final newSource: String = RefactorSupport.applyEdits(entry.source, edits);
+			final newSource: String = CanonicalEdit.applyEdits(entry.source, edits);
 
 			// Atomic validation: every rewritten file must re-parse.
 			try
@@ -397,10 +397,10 @@ final class CrossRename {
 		final recvSpan: Null<Span> = recv.span;
 		return if (recvSpan == null || !RefactorSupport.receiverIsTypeNamespace(recv, typeName, qualified, valueResolved))
 			-1
-		else if (recv.kind == RefactorSupport.FIELD_ACCESS_KIND)
+		else if (recv.kind == MemberKinds.FIELD_ACCESS_KIND)
 			RefactorSupport.lastSegmentOffset(source, recvSpan, RefactorSupport.flattenPath(recv), typeName)
-		else if (recv.kind == RefactorSupport.IDENT_EXPR_KIND)
-			RefactorSupport.identTokenOffset(source, recvSpan, typeName)
+		else if (recv.kind == MemberKinds.IDENT_EXPR_KIND)
+			SourceText.identTokenOffset(source, recvSpan, typeName)
 		else
 			-1;
 	}

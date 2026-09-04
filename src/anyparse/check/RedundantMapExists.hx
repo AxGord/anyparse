@@ -3,9 +3,11 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.MapValueScan.ValueSeams;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -169,7 +171,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(source);
 		final proven: Map<String, Bool> = [];
 		final file: String = violations.length > 0 ? violations[0].file : '';
-		return RefactorSupport.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [c.ternaryKind], (node, span) -> {
+		return CanonicalEdit.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [c.ternaryKind], (node, span) -> {
 			final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
 			return m == null || !isProven(m, file, source, tree, valueSeams, report, plugin, proven)
 				? null
@@ -238,8 +240,8 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		// The rewrite keeps the index read and the default verbatim and drops everything
 		// between them; a comment in either dropped region would be deleted with it.
 		if (
-			RefactorSupport.textHasCommentMarker(source.substring(ternarySpan.from, readSpan.from))
-			|| RefactorSupport.textHasCommentMarker(source.substring(readSpan.to, fallbackSpan.from))
+			SourceComments.textHasCommentMarker(source.substring(ternarySpan.from, readSpan.from))
+			|| SourceComments.textHasCommentMarker(source.substring(readSpan.to, fallbackSpan.from))
 		)
 			return null;
 		final fallbackSource: String = source.substring(fallbackSpan.from, fallbackSpan.to);
@@ -271,11 +273,10 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		if (recv.kind != cfg.identKind || name == null) return null;
 		if (read.kind != cfg.indexAccessKind || read.children.length != INDEX_CHILD_COUNT) return null;
 		final key: QueryNode = cond.children[1];
-		if (!RefactorSupport.sameSource(recv, read.children[0], source) || !RefactorSupport.sameSource(key, read.children[1], source))
-			return null;
+		if (!MemberKinds.sameSource(recv, read.children[0], source) || !MemberKinds.sameSource(key, read.children[1], source)) return null;
 		// `m` and `k` are evaluated TWICE by the ternary and once after the rewrite, so an
 		// impure key means the original is already order-dependent; fail closed there.
-		for (k in cfg.mutationKinds) if (RefactorSupport.subtreeContainsKind(key, k)) return null;
+		for (k in cfg.mutationKinds) if (MemberKinds.subtreeContainsKind(key, k)) return null;
 		return {
 			recv: recv,
 			read: read,

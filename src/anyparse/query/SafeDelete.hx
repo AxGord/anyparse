@@ -1,8 +1,8 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
@@ -81,7 +81,7 @@ final class SafeDelete {
 
 		// An unparsed conditional-compilation region projects no nodes, so `collectReferences` reads
 		// "unreferenced" over one that mentions the member - the exact false ABSENCE this op deletes on.
-		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(parsed, memberName, refShape, 'delete of "$memberName"');
+		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parsed, memberName, refShape, 'delete of "$memberName"');
 		if (opaque != null) return Err(opaque);
 
 		final refs: Array<{ file: String, count: Int }> = collectReferences(parsed, srcFile, memberName, memberSpanNN, refShape);
@@ -109,7 +109,7 @@ final class SafeDelete {
 		var hit: Null<Span> = null;
 		// Branch-aware: a member a `#if` region declares is not a direct child of the type. The delete
 		// cuts it in place, inside that region.
-		MemberBranchScan.eachTypeMember(decls[0], shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind), (child, _) -> {
+		MemberBranchScan.eachTypeMember(decls[0], shape, source, n -> MemberKinds.isFieldMemberKind(n.kind), (child, _) -> {
 			if (hit == null && child.name == memberName) hit = child.span;
 		}, regions);
 		return hit;

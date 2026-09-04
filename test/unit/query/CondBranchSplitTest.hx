@@ -3,9 +3,11 @@ package unit.query;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -292,12 +294,9 @@ class CondBranchSplitTest extends Test {
 		Assert.notNull(decl);
 		if (decl == null) return;
 		final runKinds: Array<String> = [];
-		MemberBranchScan.eachTypeMember(
-			decl, plugin.refShape(), src, n -> RefactorSupport.FN_DECL_KINDS.contains(n.kind), (member, run) -> {
-				if (member.name == 'a') for (mod in run) runKinds.push(mod.kind);
-			},
-			plugin.lexicalRegions.bind(src)
-		);
+		MemberBranchScan.eachTypeMember(decl, plugin.refShape(), src, n -> MemberKinds.FN_DECL_KINDS.contains(n.kind), (member, run) -> {
+			if (member.name == 'a') for (mod in run) runKinds.push(mod.kind);
+		}, plugin.lexicalRegions.bind(src));
 		Assert.equals('Public', runKinds.join(','), 'the modifier must survive the commented-out `#else`');
 	}
 
@@ -339,7 +338,7 @@ class CondBranchSplitTest extends Test {
 		return region == null
 			? []
 			: CondBranchProjection.conditionalBranchRuns(
-				region, src, ELSE_KEYWORDS, RefactorSupport.collectCommentTokens(new HaxeQueryPlugin().lexicalRegions(src))
+				region, src, ELSE_KEYWORDS, SourceComments.collectCommentTokens(new HaxeQueryPlugin().lexicalRegions(src))
 			) ?? [];
 	}
 

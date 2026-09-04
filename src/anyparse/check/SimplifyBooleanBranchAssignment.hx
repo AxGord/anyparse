@@ -2,11 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
+import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -108,7 +111,7 @@ final class SimplifyBooleanBranchAssignment implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
-				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
 		}
 		return violations;
@@ -119,13 +122,13 @@ final class SimplifyBooleanBranchAssignment implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
 				final m: Null<Match> = match(node, source, comments, seams);
 				return m == null ? null : buildEdit(m, source, span, seams);
 			});
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Bundle the required + optional seams, or null when a required one is unset (the check is then a no-op). */
@@ -233,10 +236,10 @@ final class SimplifyBooleanBranchAssignment implements Check {
 	 * other condition shape, which the rewrite must not duplicate per target.
 	 */
 	private static function readPathSegments(cond: QueryNode, source: String, s: Seams): Null<Array<String>> {
-		var node: QueryNode = RefactorSupport.unwrapParens(cond, s.shape.parenKind);
+		var node: QueryNode = BoolExprShape.unwrapParens(cond, s.shape.parenKind);
 		final notKind: Null<String> = s.negation.notKind;
 		if (notKind != null && node.kind == notKind && node.children.length == 1)
-			node = RefactorSupport.unwrapParens(node.children[0], s.shape.parenKind);
+			node = BoolExprShape.unwrapParens(node.children[0], s.shape.parenKind);
 		if (!isReadPath(node, s)) return null;
 		final text: Null<String> = normalizedText(node, source);
 		return text?.split('.');
@@ -281,7 +284,7 @@ final class SimplifyBooleanBranchAssignment implements Check {
 		if (condSpan == null) return null;
 		final positive: String = source.substring(condSpan.from, condSpan.to);
 		final negative: String = NegationScan.negateConditionText(m.condition, source, s.negation, s.logic);
-		final indent: String = RefactorSupport.lineIndentAt(source, span.from);
+		final indent: String = SourceText.lineIndentAt(source, span.from);
 		final statements: Array<String> = [];
 		for (p in m.pairs) {
 			final assignSpan: Null<Span> = p.assign.span;

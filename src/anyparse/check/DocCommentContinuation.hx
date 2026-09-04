@@ -4,7 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.FragmentedDocComment.CommentTok;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -130,7 +131,7 @@ final class DocCommentContinuation implements Check {
 		// ONE lexical pass for the whole file, not one per finding: `fix` is handed every violation
 		// of this rule in the file at once, and a 77-finding block comment paid 77 full re-lexes.
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (tok in RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source))) if (!tok.isLine) {
+		for (tok in SourceComments.collectCommentTokens(plugin.lexicalRegions(source))) if (!tok.isLine) {
 			final block: Null<JudgedBlock> = judgedBlock(source, tok);
 			if (block == null) continue;
 			for (line in block.lines) if (flagged.contains(line.from))
@@ -153,7 +154,7 @@ final class DocCommentContinuation implements Check {
 
 	/** Scan every block comment in `source`, flagging each interior line that breaks the block's prefix. */
 	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
-		for (tok in RefactorSupport.collectCommentTokens(regions)) if (!tok.isLine) {
+		for (tok in SourceComments.collectCommentTokens(regions)) if (!tok.isLine) {
 			final block: Null<JudgedBlock> = judgedBlock(source, tok);
 			if (block == null) continue;
 			for (line in block.lines) {
@@ -178,7 +179,7 @@ final class DocCommentContinuation implements Check {
 	 * nowhere else, off the first non-blank interior line.
 	 */
 	private static function judgedBlock(source: String, tok: CommentTok): Null<JudgedBlock> {
-		if (!closed(source, tok) || !RefactorSupport.startsItsLine(source, tok.from)) return null;
+		if (!closed(source, tok) || !SourceText.startsItsLine(source, tok.from)) return null;
 		final indent: String = source.substring(lineStartOf(source, tok.from), tok.from);
 		final lines: Array<InteriorLine> = interiorLines(source, tok);
 		if (lines.length == 0) return null;
@@ -187,7 +188,7 @@ final class DocCommentContinuation implements Check {
 		final head: String = opener.text;
 		// The gutter-star discriminator is `RefactorSupport`'s, shared with the splice that writes the
 		// prefix this rule reports against — the one predicate of the pair that must not drift.
-		final star: Int = RefactorSupport.gutterStarAt(head);
+		final star: Int = SourceComments.gutterStarAt(head);
 		// A `/*` block is commented-out code or a banner, where indentation is CONTENT — the stdlib
 		// keeps a whole C# method inside one, at four different levels. Only a `/**` doc block is
 		// judged by its indentation.

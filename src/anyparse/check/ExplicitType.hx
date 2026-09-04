@@ -5,8 +5,9 @@ import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.MemberKinds;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
@@ -127,7 +128,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
 				final child: QueryNode = kids[i];
-				if (functions.contains(child.kind) && !RefactorSupport.macroModifierPrecedes(kids, i, macroKind, boundary)) {
+				if (functions.contains(child.kind) && !MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) {
 					final edit: Null<{ span: Span, text: String }> = returnEdit(seams, child);
 					if (edit != null) edits.push(edit);
 				}
@@ -256,7 +257,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		if (at < 0) return null;
 		// The display server answers at a position INSIDE the name token, not at the
 		// `function` keyword the node's span starts on.
-		final nameAt: Int = RefactorSupport.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
+		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
 		if (nameAt < 0) return null;
 		final raw: Null<String> = s.oracle.typeAt(s.file, nameAt + name.length - 1);
 		final ret: Null<String> = raw == null ? null : returnTypeOf(raw);
@@ -372,8 +373,8 @@ final class ExplicitType implements Check implements OracleAssisted {
 			// (a caller may use the call as a value), so `: Void` would be unsound — leave it
 			// report-only, as with a value-return.
 			if (
-				body == null || RefactorSupport.subtreeContainsKindStopping(body, valueReturns, stop)
-				|| RefactorSupport.subtreeContainsKindStopping(body, throwKinds, stop)
+				body == null || MemberKinds.subtreeContainsKindStopping(body, valueReturns, stop)
+				|| MemberKinds.subtreeContainsKindStopping(body, throwKinds, stop)
 			)
 				return;
 			final at: Int = voidInsertPoint(span.from, body, source);
@@ -384,7 +385,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
 				final child: QueryNode = kids[i];
-				if (functions.contains(child.kind) && !RefactorSupport.macroModifierPrecedes(kids, i, macroKind, boundary)) editVoid(child);
+				if (functions.contains(child.kind) && !MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) editVoid(child);
 				walk(child);
 			}
 		}
@@ -691,7 +692,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		edits: Array<{ span: Span, text: String }>
 	): Void {
 		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, fixable, byKey);
+		MemberKinds.indexNodesByKind(tree, fixable, byKey);
 		// A cast target lookup costs a SECOND full parse of the file (`castTargetSources`),
 		// so compute it lazily and cache it — a fix whose violations key nothing into `byKey`,
 		// or whose initializers are never casts, never pays for it.

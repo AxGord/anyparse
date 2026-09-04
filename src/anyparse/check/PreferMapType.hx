@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -531,7 +532,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		var i: Int = 0;
 		var tokenStart: Int = -1;
 		while (i < text.length) {
-			final commentEnd: Int = RefactorSupport.commentRegionEnd(text, i);
+			final commentEnd: Int = SourceComments.commentRegionEnd(text, i);
 			if (commentEnd != -1) {
 				tokenStart = -1;
 				i = commentEnd;

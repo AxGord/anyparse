@@ -7,8 +7,8 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.PreferCaseGuard;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
-import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -74,7 +74,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 			APPLIES, check.run([{ file: 'Good.hx', source: APPLIES }], plugin), plugin
 		);
 		Assert.equals(1, edits.length);
-		switch RefactorSupport.canonicalize(APPLIES, edits, false, plugin, HXFORMAT) {
+		switch CanonicalEdit.canonicalize(APPLIES, edits, false, plugin, HXFORMAT) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('case Codes.DOWN if (hit == 0):') != -1);
 				Assert.equals(-1, text.indexOf('if (hit == 0) {'));

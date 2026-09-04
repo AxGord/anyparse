@@ -2,10 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -290,7 +292,7 @@ final class DeadStore implements Check {
 					expr.kind == ctx.assignKind && isFlagged(ctx, expr) && expr.children.length >= 2 && stmtSpan != null
 					&& rhsSafeToDelete(expr.children[1], ctx.root, ctx.shape, ctx.declaredTypes, ctx.index, ctx.fieldAccessKind)
 				)
-					deletions.push({ span: RefactorSupport.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
+					deletions.push({ span: ElementSpan.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
 			}
 			if (deletions.length < node.children.length || !ctx.emptyFlagKinds.contains(kind)) for (edit in deletions) edits.push(edit);
 		}
@@ -309,7 +311,7 @@ final class DeadStore implements Check {
 		out: Array<Violation>, file: String, source: String, body: QueryNode, shape: RefShape, identKind: String, paramNames: Array<String>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
-		final nestedFnKinds: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
+		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
 		final controlExitKinds: Array<String> = shape.controlExitKinds ?? [];
 		final returnKinds: Array<String> = [];
 		{
@@ -567,7 +569,7 @@ final class DeadStore implements Check {
 	/** The decl-initializer partition test: is `name` referenced in the enclosing scope outside the declaration itself (`unused-local`'s own test, inverted)? */
 	private static function referencedOutsideDecl(ctx: LiveCtx, name: String, scope: QueryNode, declSpan: Span): Bool {
 		final scopeSpan: Null<Span> = scope.span;
-		return scopeSpan != null && RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, [declSpan]);
+		return scopeSpan != null && OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, [declSpan]);
 	}
 
 	/** Make every own name live — the conservative TOP used at loop jumps and opaque subtrees. */
@@ -643,7 +645,7 @@ final class DeadStore implements Check {
 		rhs: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>,
 		fieldAccessKind: Null<String>
 	): Bool {
-		if (RefactorSupport.isSideEffectFree(rhs)) return true;
+		if (MemberKinds.isSideEffectFree(rhs)) return true;
 		if (fieldAccessKind == null) return false;
 		final faKind: String = fieldAccessKind;
 		final identKind: Null<String> = shape.identKind;

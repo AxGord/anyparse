@@ -6,6 +6,8 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.FrameworkContract;
@@ -15,10 +17,12 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.Rename;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -294,7 +298,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		rename: DeclRename, edits: Array<{ span: Span, text: String }>, claims: Array<DeclRename>, owner: Null<String>,
 		index: Null<SymbolIndex>
 	): Bool {
-		if (RefactorSupport.editsOverlapAny(rename.edits, edits)) return true;
+		if (CanonicalEdit.editsOverlapAny(rename.edits, edits)) return true;
 		for (c in claims) if (c.newName == rename.newName && c.scope.from < rename.scope.to && rename.scope.from < c.scope.to) return true;
 		return _runClaims.defers(owner, rename.newName, index);
 	}
@@ -575,7 +579,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// The resolver-only subset: `renameSpans` may additionally carry a comment-along mention.
 		final resolved: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (resolved.length == 0) return null;
-		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		final newTree: Null<QueryNode> = CheckScan.parseOrNull(plugin, rewritten);
 		if (newTree == null) return null;
 		final tr: QueryNode = newTree;
@@ -823,7 +827,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			// in any other file is a real one. `qualifyCapturedEdits` decides by RE-RESOLUTION, so an
 			// empty capture mismatch means the collision belongs to some OTHER binding and the refusal
 			// correctly stands.
-			final edits: Null<Array<{ span: Span, text: String }>> = if (!RefactorSupport.nameBoundInRange(
+			final edits: Null<Array<{ span: Span, text: String }>> = if (!OccurrenceScan.nameBoundInRange(
 				fsrc, c.targetName, 0, fsrc.length, unrelated, plugin
 			))
 				baseEdits;
@@ -924,11 +928,11 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// or name — is DROPPED by `renameOccurrences`, not rewritten, so the rename would strand
 		// it on a name the fix has removed. `rename` refuses the same shape; the completeness
 		// scan below cannot see it, since the occurrence sits inside a string literal.
-		if (RefactorSupport.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
+		if (OccurrenceScan.unrewrittenInterpRead(Refs.find(name, tree, shape), declFrom, covered) != null) return null;
 		// An unparsed conditional-compilation region is the same drop one level lower: its interior
 		// projects no nodes at all, so neither `renameOccurrences` nor the completeness scan below can
 		// see a read of `name` written inside it, and the fix would strand it on the old spelling.
-		if (RefactorSupport.opaqueCondRegionMentioning(tree, source, name, shape) != null) return null;
+		if (CondRegionScan.opaqueCondRegionMentioning(tree, source, name, shape) != null) return null;
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose
@@ -958,7 +962,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// `renameOccurrences` is the authority on which bare reads are references. Deduped by offset
 		// against `covered` anyway — two edits over one span leave `applyEdits` no defined winner.
 		final ownerBound: Array<Span> = [
-			for (s in attributed.typedBound) if (!RefactorSupport.offsetWithinAny(s.from, covered)) s
+			for (s in attributed.typedBound) if (!OccurrenceScan.offsetWithinAny(s.from, covered)) s
 		];
 		// A receiver that is a TYPE, not a value: `Event.ACTIVATE` beside a parameter named `Event`
 		// projects the same `IdentExpr` as a read of that parameter, so the resolver leaves it
@@ -981,20 +985,19 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final exclusive: Array<Span> = bodyScoped
 			? []
 			: MemberBranchScan.exclusiveSpansAt(shape, source, tree, declFrom, plugin.lexicalRegions.bind(source));
-		final twins: Array<Span> = exclusive.length == 0
-			? []
-			: [for (s in others) if (RefactorSupport.offsetWithinAny(s.from, exclusive)) s];
+		final twins: Array<Span> =
+			exclusive.length == 0 ? [] : [for (s in others) if (OccurrenceScan.offsetWithinAny(s.from, exclusive)) s];
 		final excluded: Array<Span> = covered.concat(others)
 			.concat(ownerBound)
 			.concat(foreign)
 			.concat(typeRefs)
 			.concat(family)
-			.concat(RefactorSupport.modulePathSpans(tree, shape));
-		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
+			.concat(OccurrenceScan.modulePathSpans(tree, shape));
+		final classified: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
 			source, name, plugin, 0, source.length, excluded
 		);
 		final renamed: Array<Span> = mergeUniqueSpans(mergeUniqueSpans(covered.concat(ownerBound), twins), family);
-		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : renamed;
+		if (classified == null) return OccurrenceScan.referencedInRange(source, name, 0, source.length, excluded) ? null : renamed;
 		final spans: Array<Span> = renamed;
 		// A distinctive comment mention renames along, but only within the binding's own lexical container:
 		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
@@ -1056,9 +1059,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// Module paths and type references are inert here too — see `declaringFileRenameSpans`. A
 		// subtype file naming a type after the member being renamed is the same shape, one file over.
 		final excluded: Array<Span> = ownerBound.concat(refs.ignore)
-			.concat(RefactorSupport.modulePathSpans(tree, shape))
+			.concat(OccurrenceScan.modulePathSpans(tree, shape))
 			.concat(typeReferenceSpans(source, tree, name, shape, plugin, { index: resolutionIndex, file: file }));
-		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
+		final classified: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
 			source, name, plugin, 0, source.length, excluded
 		);
 		if (classified == null) return null;
@@ -1118,9 +1121,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			if (cls == null) continue;
 			final c: String = cls;
 			if (c == ownerName || resolutionIndex.isSubtype(c, ownerName))
-				RefactorSupport.pushUniqueSpan(bareBound, seenOwner, occ.off, name.length);
+				OccurrenceScan.pushUniqueSpan(bareBound, seenOwner, occ.off, name.length);
 			else if (resolutionIndex.provablyNotSubtype(c, ownerName) && resolutionIndex.supertypeDeclaresMember(c, name))
-				RefactorSupport.pushUniqueSpan(ignore, seenIgnore, occ.off, name.length);
+				OccurrenceScan.pushUniqueSpan(ignore, seenIgnore, occ.off, name.length);
 		}
 		if (typed.length > 0)
 			attributeTypedRefs(
@@ -1139,11 +1142,11 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		node: QueryNode, name: String, source: String, currentClass: Null<String>, bare: Array<{ off: Int, cls: Null<String> }>,
 		typed: Array<{ recv: QueryNode, fa: QueryNode }>, recvNames: Array<String>
 	): Void {
-		if (RefactorSupport.isConditionalKind(node.kind)) return;
+		if (CondRegionScan.isConditionalKind(node.kind)) return;
 		final cls: Null<String> = CheckScan.isClassBodyKind(node.kind) && node.name != null ? node.name : currentClass;
 		if (node.kind == 'IdentExpr' && node.name == name) {
 			final s: Null<Span> = node.span;
-			final off: Int = s == null ? -1 : RefactorSupport.identTokenOffset(source, s, name);
+			final off: Int = s == null ? -1 : SourceText.identTokenOffset(source, s, name);
 			if (off >= 0) bare.push({ off: off, cls: cls });
 		} else if (node.kind == 'FieldAccess' && node.name == name)
 			collectFieldAccessRef(node, name, source, cls, bare, typed, recvNames);
@@ -1304,7 +1307,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final rn: Null<String> = recv.name;
 		if (recvSpan == null || faSpan == null || recv.kind != 'IdentExpr' || rn == null) return;
 		if (rn == 'this' || rn == 'super') {
-			final off: Int = RefactorSupport.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), name);
+			final off: Int = SourceText.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), name);
 			if (off >= 0) bare.push({ off: off, cls: cls });
 		} else {
 			typed.push({ recv: recv, fa: node });
@@ -1336,12 +1339,12 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			if (bindingFrom == null) continue;
 			final recvType: Null<String> = declared[bindingFrom];
 			if (recvType == null) continue;
-			final off: Int = RefactorSupport.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), name);
+			final off: Int = SourceText.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), name);
 			if (off < 0) continue;
 			if (recvType == ownerName || resolutionIndex.isSubtype(recvType, ownerName))
-				RefactorSupport.pushUniqueSpan(ownerBound, seenOwner, off, name.length);
+				OccurrenceScan.pushUniqueSpan(ownerBound, seenOwner, off, name.length);
 			else if (resolutionIndex.provablyNotSubtype(recvType, ownerName))
-				RefactorSupport.pushUniqueSpan(ignore, seenIgnore, off, name.length);
+				OccurrenceScan.pushUniqueSpan(ignore, seenIgnore, off, name.length);
 		}
 	}
 
@@ -1374,8 +1377,8 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// the expression walk below can see them, yet the raw completeness scan matches their text.
 		final typeTree: Null<QueryNode> = try plugin.parseFileTypeRefs(source) catch (exception: Exception) null;
 		if (typeTree != null) for (hit in Uses.find(name, typeTree, plugin.typeRefShape())) {
-			final off: Int = RefactorSupport.identTokenOffset(source, hit.span, name);
-			if (off >= 0) RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
+			final off: Int = SourceText.identTokenOffset(source, hit.span, name);
+			if (off >= 0) OccurrenceScan.pushUniqueSpan(out, seen, off, name.length);
 		}
 		collectTypeReferenceSpans(source, tree, tree, name, shape, out, seen);
 		return out;
@@ -1392,8 +1395,8 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 				receiver.kind == shape.identKind && receiver.name == name && rspan != null
 				&& TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)
 			) {
-				final off: Int = RefactorSupport.identTokenOffset(source, rspan, name);
-				if (off >= 0) RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
+				final off: Int = SourceText.identTokenOffset(source, rspan, name);
+				if (off >= 0) OccurrenceScan.pushUniqueSpan(out, seen, off, name.length);
 			}
 		}
 		for (child in node.children) collectTypeReferenceSpans(source, child, tree, name, shape, out, seen);
@@ -1444,7 +1447,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			// rename lands; a binding of the name anywhere else - this declaration's own branch above all
 			// - is outside it and still collides.
 			final twin: Array<Span> = exclusiveTwinOccurrences(source, tree, shape, newName, exclusive);
-			return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, unrelated.concat(exclusive).concat(twin), plugin);
+			return OccurrenceScan.nameBoundInRange(source, newName, 0, source.length, unrelated.concat(exclusive).concat(twin), plugin);
 		}
 		// A local `inline function` is a function BODY for scope purposes even though it is not a
 		// measured `functionKinds` unit (`complexity` folds it into its host): its parameters and
@@ -1476,9 +1479,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// the scope would make every SIBLING local function look disjoint - and a sibling already
 		// holding `newName` is a real collision.
 		final enclosing: Null<Span> = BindingScope.enclosingScopeSpan(tree, funcKinds, span.from, shape);
-		final excluded: Array<Span> = RefactorSupport.structureFieldNameSpans(tree, source, shape);
+		final excluded: Array<Span> = OccurrenceScan.structureFieldNameSpans(tree, source, shape);
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
-		return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
+		return OccurrenceScan.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
 	}
 
 	/**
@@ -1499,8 +1502,8 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final out: Array<Span> = [];
 		for (h in Refs.find(newName, tree, shape)) {
 			if (h.kind != RefKind.Decl) continue;
-			final off: Int = RefactorSupport.identTokenOffset(source, h.span, newName);
-			if (off < 0 || !RefactorSupport.offsetWithinAny(off, exclusive)) continue;
+			final off: Int = SourceText.identTokenOffset(source, h.span, newName);
+			if (off < 0 || !OccurrenceScan.offsetWithinAny(off, exclusive)) continue;
 			for (occ in Rename.renameOccurrences(source, tree, h.span.from, shape)) if (!out.exists(s -> s.from == occ.from)) out.push(occ);
 		}
 		return out;

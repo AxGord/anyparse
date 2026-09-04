@@ -1,10 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -101,7 +102,7 @@ final class RedundantElse implements Check {
 			if (tree != null)
 				walk(
 					violations, entry.file, entry.source, tree, seams,
-					RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source))
+					SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source))
 				);
 		}
 		return violations;
@@ -127,8 +128,8 @@ final class RedundantElse implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectDeNests(tree, source, seams, [], RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), flagged, edits, []);
-		return RefactorSupport.dropContainedEdits(edits);
+		collectDeNests(tree, source, seams, [], SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), flagged, edits, []);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**

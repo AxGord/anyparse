@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnnecessaryBlock;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -203,7 +203,7 @@ class UnnecessaryBlockCheckTest extends Test {
 	private function fixedCanonical(src: String): String {
 		final check: UnnecessaryBlock = new UnnecessaryBlock();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');

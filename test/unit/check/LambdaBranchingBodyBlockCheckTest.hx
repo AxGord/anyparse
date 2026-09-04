@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LambdaBranchingBodyBlock;
 import anyparse.check.PreferLambdaExpressionBody;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -133,7 +133,7 @@ class LambdaBranchingBodyBlockCheckTest extends Test {
 		final check: LambdaBranchingBodyBlock = new LambdaBranchingBodyBlock();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		return switch RefactorSupport.canonicalize(src, edits, true, plugin) {
+		return switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text): text;
 			case Err(message): 'ERR: $message';
 		};

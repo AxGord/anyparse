@@ -4,8 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.RedundantParens;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.BoolExprShape;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.format.Text;
 import utest.Assert;
 import utest.Test;
@@ -66,7 +67,7 @@ class RedundantParensOperandArmsTestBase extends Test {
 		if (resolve != null) check.setConfigResolver(resolve);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return RefactorSupport.applyEdits(src, check.fix(src, vs, plugin));
+		return CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin));
 	}
 
 	/** `src` fixed repeatedly until it stops changing — what `lint --fix` does over passes. */
@@ -87,7 +88,7 @@ class RedundantParensOperandArmsTestBase extends Test {
 	}
 
 	private function stripParens(node: QueryNode): QueryNode {
-		final bare: QueryNode = RefactorSupport.unwrapParens(node, 'ParenExpr');
+		final bare: QueryNode = BoolExprShape.unwrapParens(node, 'ParenExpr');
 		return new QueryNode(bare.kind, bare.name, [for (c in bare.children) stripParens(c)]);
 	}
 

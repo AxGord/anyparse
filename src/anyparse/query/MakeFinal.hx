@@ -1,8 +1,8 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -78,7 +78,7 @@ final class MakeFinal {
 		// The whole op rests on `classifyWrites` seeing every assignment. An unparsed
 		// conditional-compilation region projects no nodes, so a write inside one reads as
 		// absent and the field is made `final` over an assignment the compiler still performs.
-		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(parsed, fieldName, shape, 'making "$fieldName" final');
+		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parsed, fieldName, shape, 'making "$fieldName" final');
 		if (opaque != null) return Err(opaque);
 
 		final ctorSpan: Null<Span> = constructorSpan(src.tree, typeName, src.source, shape, plugin.lexicalRegions.bind(src.source));

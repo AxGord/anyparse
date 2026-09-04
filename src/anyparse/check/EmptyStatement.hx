@@ -1,9 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -108,7 +108,7 @@ final class EmptyStatement implements Check {
 		var lineEnd: Int = span.to;
 		while (lineEnd < source.length && source.fastCodeAt(lineEnd) != '\n'.code) lineEnd++;
 		final alone: Bool = source.substring(lineStart, span.from).trim() == '' && source.substring(span.to, lineEnd).trim() == '';
-		return alone ? RefactorSupport.lineExtendedSpan(source, span) : span;
+		return alone ? ElementSpan.lineExtendedSpan(source, span) : span;
 	}
 
 

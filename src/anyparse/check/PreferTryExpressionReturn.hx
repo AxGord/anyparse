@@ -3,9 +3,10 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.TryExpressionShape.TryParts;
 import anyparse.check.TryExpressionShape.TrySeams;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -88,7 +89,7 @@ final class PreferTryExpressionReturn implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
-				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
 		}
 		return violations;
@@ -99,7 +100,7 @@ final class PreferTryExpressionReturn implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.tryKinds, (node, span) -> {
 				final parts: Null<TryParts> = match(node, source, comments, seams);
@@ -107,7 +108,7 @@ final class PreferTryExpressionReturn implements Check {
 				final value: Null<String> = TryExpressionShape.buildValue(parts, source, seams.tryShape);
 				return value == null ? null : { span: span, text: 'return $value;' };
 			});
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */

@@ -5,7 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.FragmentedDocComment.CommentTok;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -149,7 +149,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 
 	/** Every convertible block comment in `source`, in source order. */
 	private static function rewrites(source: String, plugin: GrammarPlugin, kinds: LineCommentKinds): Array<LineCommentRewrite> {
-		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final blocks: Array<CommentTok> = [for (tok in comments) if (!tok.isLine) tok];
 		if (blocks.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
@@ -205,7 +205,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 		final dedent: String = commonIndent(raw.slice(1));
 		final lines: Array<String> = [StringTools.trim(raw[0])];
 		for (i in 1...raw.length) lines.push(stripGutter(StringTools.rtrim(dedented(raw[i], dedent)), gutter));
-		return RefactorSupport.trimBlankEdges(lines);
+		return SourceComments.trimBlankEdges(lines);
 	}
 
 	/**
@@ -243,7 +243,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 	 */
 	private static function documentsLocalFunction(source: String, tree: QueryNode, tok: CommentTok, localFns: Array<String>): Bool {
 		return localFns.length != 0 && source.substring(tok.from, tok.from + 3) == '/**'
-			&& startsNodeOfKind(tree, RefactorSupport.skipForwardTrivia(source, tok.to), localFns);
+			&& startsNodeOfKind(tree, SourceComments.skipForwardTrivia(source, tok.to), localFns);
 	}
 
 	/** Whether any node of one of `kinds` starts exactly at `offset`. */

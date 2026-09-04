@@ -3,8 +3,8 @@ package unit.query;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxType;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -199,7 +199,7 @@ class ApqRefsTest extends Test {
 	public function testEveryKindThatBindsParametersOpensAScopeFrame(): Void {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
 		final frames: Array<String> = shape.scopeKinds ?? [];
-		final binders: Array<String> = RefactorSupport.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
+		final binders: Array<String> = MemberKinds.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
 		Assert.isTrue(binders.length > 0, 'the plugin must declare at least one parameter-binding kind');
 		for (kind in binders)
 			Assert.isTrue(frames.contains(kind), '"$kind" binds parameters but opens no scope frame, so they leak into the enclosing one');
@@ -212,7 +212,7 @@ class ApqRefsTest extends Test {
 	 */
 	public function testEveryNonFunctionScopeFrameIsOneTheGrammarDocuments(): Void {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
-		final binders: Array<String> = RefactorSupport.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
+		final binders: Array<String> = MemberKinds.nestedFunctionKinds(shape).concat(shape.functionKinds ?? []);
 		final documented: Array<String> = [
 			'ClassDecl',
 			'ClassForm',

@@ -2,9 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -96,7 +97,7 @@ final class RedundantTrailingComma implements Check implements DefaultOff {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null) edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });
+			if (span != null) edits.push({ span: ElementSpan.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;
 	}
@@ -156,9 +157,9 @@ final class RedundantTrailingComma implements Check implements DefaultOff {
 	 * or the gap holds anything but whitespace and comments.
 	 */
 	private static function commaThenToken(source: String, from: Int, limit: Int): Null<{ comma: Int, next: Int }> {
-		final comma: Int = RefactorSupport.skipForwardTrivia(source, from);
+		final comma: Int = SourceComments.skipForwardTrivia(source, from);
 		if (comma >= limit || source.charAt(comma) != ',') return null;
-		final next: Int = RefactorSupport.skipForwardTrivia(source, comma + 1);
+		final next: Int = SourceComments.skipForwardTrivia(source, comma + 1);
 		return next >= limit ? null : { comma: comma, next: next };
 	}
 

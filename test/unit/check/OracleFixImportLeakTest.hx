@@ -4,7 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.ExplicitLocalType;
 import anyparse.check.ExplicitType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -184,7 +184,7 @@ private final class IdentTypeOracle implements TypeOracle {
 
 	public function typeAt(file: String, bytePos: Int): Null<String> {
 		var start: Int = bytePos + 1;
-		while (start > 0 && RefactorSupport.isIdentChar(_source.fastCodeAt(start - 1))) start--;
+		while (start > 0 && SourceText.isIdentChar(_source.fastCodeAt(start - 1))) start--;
 		return _byName[_source.substring(start, bytePos + 1)];
 	}
 

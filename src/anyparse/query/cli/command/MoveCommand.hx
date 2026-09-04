@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.format.comment.CommentLossException;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveSymbol;
@@ -299,7 +300,7 @@ final class MoveCommand implements CliCommand {
 		final original: Null<String> = try CliIo.readSourceForParse(change.file) catch (exception: Exception) null;
 		if (original == null) return change;
 		final opts: Null<String> = CliArgs.discoverFormatConfig(change.file);
-		if (!RefactorSupport.isWriterCanonical(original, plugin, opts)) return change;
+		if (!CanonicalEdit.isWriterCanonical(original, plugin, opts)) return change;
 		// The FIXED POINT, not one round trip — the same loop `apq fmt` and
 		// `RefactorSupport.canonicalize` run, and for the same recorded reason: a writer whose
 		// output is not its own fixed point leaves the file one pass short of where the next

@@ -6,7 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.MisplacedTypeDoc;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -70,7 +70,7 @@ class MisplacedTypeDocCheckTest extends Test {
 	}
 
 	public function testFixOutputSurvivesTheWriter(): Void {
-		switch RefactorSupport.canonicalize(DEAD_DOC, edits(DEAD_DOC), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(DEAD_DOC, edits(DEAD_DOC), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(' */\nclass GaugeStrip') >= 0, text);
 				Assert.equals(1, countOccurrences(text, '/**'), text);
@@ -81,9 +81,9 @@ class MisplacedTypeDocCheckTest extends Test {
 
 	/** The fixed source is a writer FIXED POINT — a second canonicalisation changes nothing. */
 	public function testFixedSourceIsWriterIdempotent(): Void {
-		switch RefactorSupport.canonicalize(DEAD_DOC, edits(DEAD_DOC), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(DEAD_DOC, edits(DEAD_DOC), true, new HaxeQueryPlugin()) {
 			case Ok(text):
-				switch RefactorSupport.canonicalize(text, [], true, new HaxeQueryPlugin()) {
+				switch CanonicalEdit.canonicalize(text, [], true, new HaxeQueryPlugin()) {
 					case Ok(again): Assert.equals(text, again);
 					case Err(message): Assert.fail('re-canonicalize Err: $message');
 				}

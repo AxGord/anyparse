@@ -8,8 +8,8 @@ import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.ExplicitLocalType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
-import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -77,7 +77,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		}
 		final edits: Array<{ text: String, span: Span }> = check.fixWithOracle(SRC, violations, plugin, display);
 		display.stop();
-		switch RefactorSupport.canonicalize(SRC, edits, true, plugin) {
+		switch CanonicalEdit.canonicalize(SRC, edits, true, plugin) {
 			case Ok(text):
 				final packed: String = StringTools.replace(text, ' ', '');
 				Assert.isTrue(packed.indexOf('varmapped:Array<Int>') != -1, 'the .map() local is annotated Array<Int>');

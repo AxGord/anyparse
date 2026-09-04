@@ -5,7 +5,7 @@ import anyparse.check.EmptyCaseArm;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -294,7 +294,7 @@ class EmptyCaseArmCheckTest extends Test {
 
 	/** Apply `edits` to `src` and re-emit through the canonical writer, the way `lint --fix` does. */
 	private function canonical(src: String, edits: Array<{ span: Span, text: String }>): String {
-		return switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -70,7 +70,7 @@ class NamingCheckBranchTwinFixTest extends NamingCheckTestBase {
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				for (p in present) Assert.isTrue(text.indexOf(p) >= 0, 'expected `$p` in:\n$text');
 				Assert.isTrue(text.indexOf(absent) == -1, 'expected no `$absent` in:\n$text');

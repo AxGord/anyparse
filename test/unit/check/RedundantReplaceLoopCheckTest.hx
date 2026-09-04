@@ -6,7 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantReplaceLoop;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -72,7 +72,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 			'trace(\'a\');\n\t\twhile (now.indexOf(\' \') != -1) now = now.replace(\' \', \'_\');\n\t\ttrace(\'b\');'
 		);
 		final r = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('trace(\'a\');') >= 0);
 				Assert.isTrue(text.indexOf('trace(\'b\');') >= 0);
@@ -617,7 +617,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final r = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);

@@ -4,9 +4,9 @@ import anyparse.check.CasePatternScan.CaseRunContext;
 import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -172,7 +172,7 @@ final class UnusedCaseBinder implements Check {
 			final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
 			if (candidate != null) for (edit in candidate.edits) edits.push(edit);
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Every unread binder in `tree`, in document order. */

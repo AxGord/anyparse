@@ -2,10 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NormalizedSpan;
+import anyparse.query.BinderScan;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -177,7 +179,7 @@ final class TailMerge implements Check {
 				tree, source, seams
 			)) if (c.fixable && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) { span: c.removeSpan, text: '' }
 		];
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** The reported wording; `count` is at least 1. */
@@ -338,7 +340,7 @@ final class TailMerge implements Check {
 	 * exactly token identity, so anything the pair cannot prove identical is refused.
 	 */
 	private static function sameStatement(a: QueryNode, b: QueryNode, source: String): Bool {
-		if (!RefactorSupport.structurallyEqual(a, b)) return false;
+		if (!MemberKinds.structurallyEqual(a, b)) return false;
 		final sa: Null<Span> = a.span;
 		final sb: Null<Span> = b.span;
 		if (sa == null || sb == null) return false;
@@ -381,7 +383,7 @@ final class TailMerge implements Check {
 	private static function declaredNode(stmt: QueryNode, seams: Seams): Null<QueryNode> {
 		return seams.fnDeclKinds.contains(stmt.kind)
 			? stmt
-			: RefactorSupport.topLevelDeclaredNode(stmt, seams.localDeclKinds, seams.localDeclExprKinds, seams.metaKinds);
+			: BinderScan.topLevelDeclaredNode(stmt, seams.localDeclKinds, seams.localDeclExprKinds, seams.metaKinds);
 	}
 
 	/**

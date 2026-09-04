@@ -1,11 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CtorFieldFold;
+import anyparse.query.CtorFieldWrite;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -105,7 +106,7 @@ final class PreferFinalPublicField implements Check {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin, index);
 		final violations: Array<Violation> = [];
-		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
+		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
 		});
 		return violations;
@@ -123,7 +124,7 @@ final class PreferFinalPublicField implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return RefactorSupport.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
+		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
 	}
 
 	/**
@@ -151,16 +152,16 @@ final class PreferFinalPublicField implements Check {
 		// A macro-built type's fields are not what the declaration says — see
 		// `SymbolIndex.transitivelyCarriesBuildMacro`.
 		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
-		final initialized: Bool = RefactorSupport.isInitializedNonPropertyField(source, field);
+		final initialized: Bool = CtorFieldWrite.isInitializedNonPropertyField(source, field);
 		// The conditional-default arm: an initialized field (a `(default, null)` property
 		// included) whose only other write is one `if (p != null) x = p;` constructor
 		// statement, folded to `final` plus `x = p ?? <default>`. Its own proof is entirely
 		// inside the shared predicate, which `prefer-read-only-field` cedes on.
-		final folded: Bool = RefactorSupport.ctorConditionalDefaultFinalEdits(source, span, plugin) != null;
+		final folded: Bool = CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null;
 		// The no-init arm's single-file proof embeds the cheap syntactic no-initializer /
 		// non-property checks, so a field qualifying for NO arm bails here; the parse
 		// behind the predicate is memoized by the caching plugin.
-		if (!folded && !initialized && !RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
+		if (!folded && !initialized && !CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (index.supertypeDeclaresMember(owner, name)) return;
 		// Interface-mutability gate — complements supertypeDeclaresMember (which resolves
 		// a supertype member by name but treats an UNRESOLVABLE interface as absent): an

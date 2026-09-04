@@ -5,11 +5,17 @@ import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CondRegionScan;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -288,7 +294,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final shape: RefShape = plugin.refShape();
 		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
 		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch, shape);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
@@ -687,9 +693,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final span: Null<Span> = acc.span;
 			if (span == null) return null;
 			edits.push({
-				span: RefactorSupport.lineExtendedSpan(
-					source, RefactorSupport.declGroupSpan(acc, RefactorSupport.memberHostOf(cls, acc), span)
-				),
+				span: ElementSpan.lineExtendedSpan(source, ElementSpan.declGroupSpan(acc, MemberKinds.memberHostOf(cls, acc), span)),
 				text: ''
 			});
 		}
@@ -704,7 +708,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * a doubled or trailing space next to a sibling annotation.
 	 */
 	private static function metaRemovalSpan(source: String, meta: Span): Span {
-		final line: Span = RefactorSupport.lineExtendedSpan(source, meta);
+		final line: Span = ElementSpan.lineExtendedSpan(source, meta);
 		if (line.from != meta.from || line.to != meta.to) return line;
 		var to: Int = meta.to;
 		while (to < source.length && isHorizontalSpace(source.fastCodeAt(to))) to++;
@@ -800,7 +804,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	private static function pushTokenRename(
 		source: String, span: Span, field: String, propName: String, out: Array<{ span: Span, text: String }>
 	): Bool {
-		final off: Int = RefactorSupport.identTokenOffset(source, span, field);
+		final off: Int = SourceText.identTokenOffset(source, span, field);
 		if (off < 0) return false;
 		out.push({ span: new Span(off, off + field.length), text: propName });
 		return true;
@@ -1049,7 +1053,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		switch node.kind {
 			case 'VarStmt', 'FinalStmt':
 				if (span == null) return true;
-				return node.children.exists(c -> c.kind == 'VarMore') && RefactorSupport.identTokenOffset(source, span, field) >= 0;
+				return node.children.exists(c -> c.kind == 'VarMore') && SourceText.identTokenOffset(source, span, field) >= 0;
 			case 'ForStmt', 'ForExpr', 'KeyValueBinder':
 				return span == null || node.name == field;
 			case _:
@@ -1618,23 +1622,21 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		// The member's own host, not the container: a guarded member's modifier run lives inside the
 		// `#if` region, and a group span computed against the container would leave it behind.
 		for (d in deleted) edits.push({
-			span: RefactorSupport.lineExtendedSpan(
-				source, RefactorSupport.declGroupSpan(d.node, RefactorSupport.memberHostOf(cls, d.node), d.span)
-			),
+			span: ElementSpan.lineExtendedSpan(source, ElementSpan.declGroupSpan(d.node, MemberKinds.memberHostOf(cls, d.node), d.span)),
 			text: ''
 		});
 		final fieldSpan: Null<Span> = fieldNode.span;
 		if (fieldSpan == null) return false;
 		edits.push({
-			span: RefactorSupport.lineExtendedSpan(
-				source, RefactorSupport.declGroupSpan(fieldNode, RefactorSupport.memberHostOf(cls, fieldNode), fieldSpan)
+			span: ElementSpan.lineExtendedSpan(
+				source, ElementSpan.declGroupSpan(fieldNode, MemberKinds.memberHostOf(cls, fieldNode), fieldSpan)
 			),
 			text: ''
 		});
 		if (ctorInit != null) {
 			final cs: Null<Span> = ctorInit.stmt.span;
 			if (cs == null) return false;
-			edits.push({ span: RefactorSupport.lineExtendedSpan(source, cs), text: '' });
+			edits.push({ span: ElementSpan.lineExtendedSpan(source, cs), text: '' });
 		}
 		return true;
 	}
@@ -1688,7 +1690,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final recv: QueryNode = node.children[0];
 		final recvSpan: Null<Span> = recv.span;
 		return recv.kind == 'IdentExpr' && (recv.name == 'this' || recv.name == 'super') && recvSpan != null
-			? RefactorSupport.identTokenOffset(source, new Span(recvSpan.to, span.to), field)
+			? SourceText.identTokenOffset(source, new Span(recvSpan.to, span.to), field)
 			: -1;
 	}
 
@@ -1735,7 +1737,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final span: Null<Span> = node.span;
 		if (span == null) return true;
 		final off: Int = switch node.kind {
-			case 'IdentExpr': RefactorSupport.identTokenOffset(source, span, field);
+			case 'IdentExpr': SourceText.identTokenOffset(source, span, field);
 			case 'FieldAccess': fieldAccessTokenOffset(node, span, source, field);
 			case _: -1;
 		}
@@ -1757,7 +1759,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		node: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool,
 		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
 	): Bool {
-		if (RefactorSupport.isConditionalKind(node.kind)) return true;
+		if (CondRegionScan.isConditionalKind(node.kind)) return true;
 		final isClass: Bool = CheckScan.isClassBodyKind(node.kind);
 		// The owner's own class is rewritten wholesale by `buildFix`; exclude its whole span from the
 		// completeness scan and stop descending, so a same-file sibling subtype is still walked.
@@ -1832,13 +1834,13 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			for (s in refs.excludeSpans) excluded.push(s);
 			// A `package` / `import` path is a dotted module path, not a reference to the field —
 			// same reading as `Naming`'s collectors.
-			for (s in RefactorSupport.modulePathSpans(tree, plugin.refShape())) excluded.push(s);
-			final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
+			for (s in OccurrenceScan.modulePathSpans(tree, plugin.refShape())) excluded.push(s);
+			final classified: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
 				src, field, plugin, 0, src.length, excluded
 			);
 			final edits: Array<{ span: Span, text: String }> = refs.renameEdits.copy();
 			if (classified == null) {
-				if (RefactorSupport.referencedInRange(src, field, 0, src.length, excluded)) return null;
+				if (OccurrenceScan.referencedInRange(src, field, 0, src.length, excluded)) return null;
 			} else
 				for (occ in classified) switch occ.kind {
 					case OccurrenceClass.CommentTrivia if (distinctive):
@@ -1938,13 +1940,13 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		// Every member the collapse deletes or rewrites lives in ONE branch. What remains to prove is
 		// that nothing OUTSIDE that branch names the backing field, since the rename gives it the
 		// property's name — a member only that branch's build declares.
-		return !RefactorSupport.referencedInRange(source, field, 0, region.from, [])
-			&& !RefactorSupport.referencedInRange(source, field, region.to, source.length, []);
+		return !OccurrenceScan.referencedInRange(source, field, 0, region.from, [])
+			&& !OccurrenceScan.referencedInRange(source, field, region.to, source.length, []);
 	}
 
 	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set the region guard counts. */
 	private static function isDeclKind(node: QueryNode): Bool {
-		return RefactorSupport.isMemberDeclKind(node.kind);
+		return MemberKinds.isMemberDeclKind(node.kind);
 	}
 
 }

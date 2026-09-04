@@ -229,7 +229,7 @@ final class CallGraph {
 			for (i in 0...kids.length) {
 				final c: QueryNode = kids[i];
 				if (macroKind != null && c.kind == macroKind) continue;
-				if (fnKinds.contains(c.kind) && RefactorSupport.macroModifierPrecedes(kids, i, macroKind, macroBoundary)) {
+				if (fnKinds.contains(c.kind) && MemberKinds.macroModifierPrecedes(kids, i, macroKind, macroBoundary)) {
 					// `macro` function body — compile-time code, not runtime calls
 					continue;
 				}
@@ -423,7 +423,7 @@ final class CallGraph {
 		}
 
 		function unwrap(node: QueryNode): QueryNode {
-			return RefactorSupport.unwrapParens(node, parenKind);
+			return BoolExprShape.unwrapParens(node, parenKind);
 		}
 
 		/** Declared simple type of a value identifier, `Null<T>` unwrapped to `T`. */

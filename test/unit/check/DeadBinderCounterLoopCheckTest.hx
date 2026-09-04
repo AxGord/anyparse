@@ -5,7 +5,7 @@ import anyparse.check.DeadBinderCounterLoop;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -136,7 +136,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		final src: String = 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(table:Map<Int, Item>):Void {\n\t\tvar i = 0;\n'
 			+ '\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		final r = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.equals(1, countOccurrences(text, 'using Lambda;'));
 			case Err(message):
@@ -273,7 +273,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function assertFixCanonical(src: String, present: Array<String>, absent: Array<String>): Void {
 		final r = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				for (p in present) Assert.isTrue(text.indexOf(p) >= 0, 'expected $p in $text');
 				for (a in absent) Assert.isTrue(text.indexOf(a) == -1, 'expected no $a in $text');

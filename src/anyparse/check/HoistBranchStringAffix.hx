@@ -2,13 +2,14 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -201,7 +202,7 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final ctx: Ctx = contextOf(source, seams, plugin.lexicalRegions(source));
-		return RefactorSupport.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [seams.condKind], (node, span) -> {
+		return CanonicalEdit.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [seams.condKind], (node, span) -> {
 			final m: Null<Match> = match(node, ctx);
 			return m == null ? null : { span: m.region, text: buildText(m) };
 		}));
@@ -265,7 +266,7 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	private static function contextOf(source: String, seams: Seams, regions: Array<LexRegion>): Ctx {
 		return {
 			source: source,
-			comments: RefactorSupport.collectCommentTokens(regions),
+			comments: SourceComments.collectCommentTokens(regions),
 			directives: CondDirectives.scan(source, seams.shape, () -> regions),
 			seams: seams
 		};

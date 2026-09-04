@@ -6,9 +6,10 @@ import anyparse.check.DeadStore;
 import anyparse.check.Linter;
 import anyparse.check.NullFlow;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -274,7 +275,7 @@ class DeadStoreTest extends Test {
 		// against parsed source rather than against declarations.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
-		final authority: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
+		final authority: Array<String> = MemberKinds.nestedFunctionKinds(shape);
 		final declared: Array<String> = (
 			shape.lambdaKinds ?? []
 		).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
@@ -294,7 +295,7 @@ class DeadStoreTest extends Test {
 		// `ParenLambdaExpr` (the Haxe-3 `(v) => e` fat arrow) has no row: Haxe 4 cannot spell it, so
 		// the pin above is what keeps it in the set.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final authority: Array<String> = RefactorSupport.nestedFunctionKinds(plugin.refShape());
+		final authority: Array<String> = MemberKinds.nestedFunctionKinds(plugin.refShape());
 		final spellings: Array<{ code: String, kind: String }> = [
 			{ code: 'a.map(v -> t(v));', kind: 'ThinArrow' },
 			{ code: 'a.map((v) -> t(v));', kind: 'ThinParenLambdaExpr' },
@@ -443,7 +444,7 @@ class DeadStoreTest extends Test {
 		final check: DeadStore = new DeadStore();
 		final src: String = 'class C { static function f():Int { var x = 0; return { x = 2; }; } }';
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('x = 2') >= 0);
 			case Err(message):
@@ -559,7 +560,7 @@ class DeadStoreTest extends Test {
 	private function assertFix(src: String, present: String, absent: String): Void {
 		final check: DeadStore = new DeadStore();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);

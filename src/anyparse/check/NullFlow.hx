@@ -1,8 +1,10 @@
 package anyparse.check;
 
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 
 using Lambda;
 
@@ -344,7 +346,7 @@ final class NullFlow {
 		if (functionKinds.length == 0 || bodyKinds.length == 0) return;
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final typeChildKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-		final valueKinds: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
+		final valueKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
 		function unitBody(node: QueryNode): Null<QueryNode> {
 			final wrapped: Null<QueryNode> = node.children.find(c -> bodyKinds.contains(c.kind));
 			if (wrapped != null) return wrapped;
@@ -383,7 +385,7 @@ final class NullFlow {
 	public static function isMultiBinding(node: QueryNode, continuationKinds: Array<String>, declTypeChildKinds: Array<String>): Bool {
 		var exprChildren: Int = 0;
 		for (c in node.children) if (!declTypeChildKinds.contains(c.kind)) exprChildren++;
-		return exprChildren > 1 || node.span == null || RefactorSupport.isMultiDeclarator(node, continuationKinds);
+		return exprChildren > 1 || node.span == null || SourceText.isMultiDeclarator(node, continuationKinds);
 	}
 
 	/** Whether `rhs` is the null literal — a syntactically definite-null assignment value. */
@@ -472,7 +474,7 @@ final class NullFlow {
 		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
-		final nestedFnKinds: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
+		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
 		final ctx: FlowCtx = {
 			identKind: identKind,
 			assignKind: shape.assignKind,
@@ -1174,7 +1176,7 @@ final class NullFlow {
 	 */
 	private static function establishAux(state: FlowState, ctx: FlowCtx, name: String, rhs: Null<QueryNode>): Void {
 		if (rhs == null || !ctx.ownNames.contains(name) || ctx.captured.contains(name)) return;
-		final r: QueryNode = RefactorSupport.unwrapParens(rhs, ctx.parenKind);
+		final r: QueryNode = BoolExprShape.unwrapParens(rhs, ctx.parenKind);
 		final rk: String = r.kind;
 		if (rk == ctx.notEqKind || rk == ctx.eqKind) {
 			final operand: Null<QueryNode> = nullComparisonOperand(r, ctx.identKind, ctx.nullLitKind);
@@ -1278,7 +1280,7 @@ final class NullFlow {
 	 */
 	private static function isExistsGuard(rawCond: QueryNode, ctx: FlowCtx): Null<ExistsFact> {
 		if (ctx.callKind == null || ctx.fieldAccessKind == null || ctx.mapExistsMethods.length == 0) return null;
-		final cond: QueryNode = RefactorSupport.unwrapParens(rawCond, ctx.parenKind);
+		final cond: QueryNode = BoolExprShape.unwrapParens(rawCond, ctx.parenKind);
 		if (cond.kind != ctx.callKind || cond.children.length != 2) return null;
 		final callee: QueryNode = cond.children[0];
 		final method: Null<String> = callee.name;
@@ -1303,7 +1305,7 @@ final class NullFlow {
 	 */
 	private static function suppressedByExists(rawInit: Null<QueryNode>, state: FlowState, ctx: FlowCtx): Bool {
 		if (rawInit == null || ctx.indexAccessKind == null) return false;
-		final init: QueryNode = RefactorSupport.unwrapParens(rawInit, ctx.parenKind);
+		final init: QueryNode = BoolExprShape.unwrapParens(rawInit, ctx.parenKind);
 		if (init.kind != ctx.indexAccessKind || init.children.length < 2) return false;
 		final recv: QueryNode = init.children[0];
 		final key: QueryNode = init.children[1];

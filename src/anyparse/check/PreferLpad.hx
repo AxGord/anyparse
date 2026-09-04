@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -201,7 +202,7 @@ final class PreferLpad implements Check implements DefaultOff {
 			return [];
 		if (UsingScan.hasUsingModule(header, STRING_TOOLS_MODULE)) return edits;
 		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, STRING_TOOLS_MODULE);
-		if (!RefactorSupport.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
+		if (!CanonicalEdit.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
 		return edits;
 	}
 

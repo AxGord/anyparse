@@ -209,12 +209,12 @@ final class TypeRefPrinter {
 		final trimmed: String = fqn.trim();
 		// A dotless run carries no derivable module path, and a lower-initial final segment is a
 		// package path or a structural field name, never a type — both pass through untouched.
-		if (trimmed.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(trimmed))) return {
+		if (trimmed.indexOf('.') == -1 || !SourceText.isUpperInitial(SourceText.lastSegment(trimmed))) return {
 			text: trimmed,
 			importPath: null
 		};
 		final canonical: String = canonicalize(trimmed);
-		final simple: String = RefactorSupport.lastSegment(canonical);
+		final simple: String = SourceText.lastSegment(canonical);
 		final visible: Null<String> = visibleNameFor(canonical, simple);
 		// Re-bind: a null-check does not narrow into an anonymous-structure literal.
 		if (visible != null) {
@@ -251,7 +251,7 @@ final class TypeRefPrinter {
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = t.fastCodeAt(i);
-			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
+			if (!SourceText.isIdentChar(c) && c != '.'.code) {
 				buf.addChar(c);
 				i++;
 				continue;
@@ -259,7 +259,7 @@ final class TypeRefPrinter {
 			final start: Int = i;
 			while (i < n) {
 				final cc: Int = t.fastCodeAt(i);
-				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
+				if (!SourceText.isIdentChar(cc) && cc != '.'.code) break;
 				i++;
 			}
 			buf.add(print(t.substring(start, i)).text);
@@ -294,9 +294,9 @@ final class TypeRefPrinter {
 		// The same two rejections `print` opens with, so both entry points read one input class:
 		// a dotless run carries no derivable module path, and a lower-initial final segment is a
 		// package path or a structural field name, never a type.
-		if (trimmed.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(trimmed))) return null;
+		if (trimmed.indexOf('.') == -1 || !SourceText.isUpperInitial(SourceText.lastSegment(trimmed))) return null;
 		final canonical: String = canonicalize(trimmed);
-		return declaredAtPath(canonical, RefactorSupport.lastSegment(canonical)) ? canonical : null;
+		return declaredAtPath(canonical, SourceText.lastSegment(canonical)) ? canonical : null;
 	}
 
 	/**
@@ -477,8 +477,8 @@ final class TypeRefPrinter {
 		final dot: Int = canonical.lastIndexOf('.');
 		if (dot <= 0) return false;
 		final module: String = canonical.substring(0, dot);
-		if (_importMap[RefactorSupport.lastSegment(module)] != module && !_usingModules.contains(module)) return false;
-		if (_pendingImports.exists(p -> p != canonical && RefactorSupport.lastSegment(p) == simple)) return false;
+		if (_importMap[SourceText.lastSegment(module)] != module && !_usingModules.contains(module)) return false;
+		if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return false;
 		final index: Null<SymbolIndex> = _index;
 		if (index == null) return true;
 		final declarers: Array<FileInfo> = index.declaringFiles(simple);
@@ -508,7 +508,7 @@ final class TypeRefPrinter {
 		if (source == null || _root == null || !_canAnchorImports) return false;
 		if (!importReachesSite()) return false;
 		if (shadowedLocally(canonical, simple)) return false;
-		if (_pendingImports.exists(p -> p != canonical && RefactorSupport.lastSegment(p) == simple)) return false;
+		if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return false;
 		// A mention in INERT text — a comment, or the literal text of a string / regex — is masked
 		// out: the scan asks whether anything in this file BINDS the name, and neither binds
 		// anything, while the T15 reading refused the import on the strength of a word in a
@@ -516,7 +516,7 @@ final class TypeRefPrinter {
 		// interpolates, so the `Foo` of `'${Foo.x}'` or `'$Foo'` is a real reference and still
 		// vetoes (`inertRegions`).
 		final exempt: Array<Span> = (owned ?? []).concat(inertRegions(source));
-		return !RefactorSupport.referencedInRange(source, simple, 0, source.length, exempt);
+		return !OccurrenceScan.referencedInRange(source, simple, 0, source.length, exempt);
 	}
 
 	/**
@@ -586,7 +586,7 @@ final class TypeRefPrinter {
 	 * repairing it would rewrite one real type into another.
 	 */
 	private function canonicalize(raw: String): String {
-		final simple: String = RefactorSupport.lastSegment(raw);
+		final simple: String = SourceText.lastSegment(raw);
 		if (declaredAtPath(raw, simple)) return raw;
 		final imported: Null<String> = _importMap[simple];
 		if (imported != null && imported != raw && ModuleScan.dropModuleSegment(imported) == raw) return imported;
@@ -737,7 +737,7 @@ final class TypeRefPrinter {
 				))
 					return true;
 			} else if (index == null) {
-				if (RefactorSupport.lastSegment(path) == simple) return true;
+				if (SourceText.lastSegment(path) == simple) return true;
 			} else if (declarers.exists(f -> f.module == path && ModuleScan.pathOfTypeIn(f, simple) != canonical))
 				return true;
 		}
@@ -773,7 +773,7 @@ final class TypeRefPrinter {
 			final span: Null<Span> = c.span;
 			switch c.kind {
 				case 'ImportDecl':
-					if (RefactorSupport.lastSegment(raw) == simple && raw != canonical) return true;
+					if (SourceText.lastSegment(raw) == simple && raw != canonical) return true;
 				// The grammar's name slot for an alias declaration IS the alias, never the aliased path.
 				case 'ImportAliasDecl', 'ImportAliasInDecl':
 					if (raw == simple && (span == null || ModuleScan.aliasTargetOf(source.substring(span.from, span.to)) != canonical))

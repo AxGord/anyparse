@@ -1,11 +1,13 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CtorFieldFold;
+import anyparse.query.CtorFieldWrite;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -92,7 +94,7 @@ final class PreferReadOnlyField implements Check {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin, index);
 		final violations: Array<Violation> = [];
-		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
+		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
 		});
 		return violations;
@@ -168,8 +170,8 @@ final class PreferReadOnlyField implements Check {
 		// That is exactly the `Iterator`-shaped field this gate was added for, whose correct
 		// answer is this rule's `(default, null)`, not silence.
 		final finalizable: Bool = !index.structuralConformanceForbidsFinal(owner, name);
-		if (finalizable && RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
-		if (finalizable && RefactorSupport.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
+		if (finalizable && CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
+		if (finalizable && CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
 		out.push({
 			file: file,
 			span: span,
@@ -188,9 +190,9 @@ final class PreferReadOnlyField implements Check {
 		final n: Int = source.length;
 		if (span.from + keyword.length > n || source.substring(span.from, span.from + keyword.length) != keyword) return -1;
 		var i: Int = span.from + keyword.length;
-		while (i < n && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < n && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		final start: Int = i;
-		while (i < n && RefactorSupport.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < n && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
 		return i > start ? i : -1;
 	}
 
@@ -198,7 +200,7 @@ final class PreferReadOnlyField implements Check {
 	private static function isProperty(source: String, nameEnd: Int): Bool {
 		final n: Int = source.length;
 		var i: Int = nameEnd;
-		while (i < n && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < n && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		return i < n && source.fastCodeAt(i) == '('.code;
 	}
 

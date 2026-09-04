@@ -1,8 +1,10 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ElementSpan;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveElement;
 import anyparse.query.RemoveMember;
 import utest.Assert;
@@ -169,12 +171,12 @@ class DeleteBlankLineSliceTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(source);
 		final targets: Array<{ node: QueryNode, parent: Null<QueryNode> }> = [];
-		RefactorSupport.eachMemberHost(tree, host -> for (child in host.children) if (
+		MemberKinds.eachMemberHost(tree, host -> for (child in host.children) if (
 			child.name == 'd1' || child.name == 'd2' || child.name == 'd3'
 		)
 			targets.push({ node: child, parent: host }));
 		Assert.equals(3, targets.length);
-		switch RefactorSupport.deleteNodes(source, targets, true, plugin, true, KEEPS_TWO_BLANKS) {
+		switch ElementSpan.deleteNodes(source, targets, true, plugin, true, KEEPS_TWO_BLANKS) {
 			case Ok(text):
 				Assert.equals(1, blanksBetween(text, 'function keep', 'function tail'), text);
 			case Err(message):

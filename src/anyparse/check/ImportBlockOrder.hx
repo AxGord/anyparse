@@ -6,7 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportOrder;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
@@ -363,7 +363,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		// line start (`ImportOrder.withLeadingComments`), so this asks the one question it can answer —
 		// does this run's head carry an absorbed leading comment. Spelled `!=`, it read as a
 		// line-boundary check, which is a question `ImportOrder.lineOf` has already refused to hand it.
-		for (head in wedge.heads) if (head.chunkFrom < RefactorSupport.startOfLine(source, head.declFrom)) return false;
+		for (head in wedge.heads) if (head.chunkFrom < SourceText.startOfLine(source, head.declFrom)) return false;
 		for (statement in wedge.usings) {
 			final names: Null<Array<String>> = moduleTypes[statement.path];
 			if (names == null || names.length == 0) return false;
@@ -448,7 +448,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		// unreachable cause, so every refusal it ever explained was explained wrongly: two real files,
 		// each carrying a comment that says why its import order is deliberate, were told their first
 		// import shared its line with something else.
-		if (block[0].chunkFrom < RefactorSupport.startOfLine(source, block[0].declFrom))
+		if (block[0].chunkFrom < SourceText.startOfLine(source, block[0].declFrom))
 			return 'the block\'s first import carries an absorbed leading comment, written directly above it — such a comment belongs to '
 				+ 'the whole block, so permuting the block would relocate it into the middle or strand it above a different import';
 		final bound: Array<String> = [];
@@ -487,7 +487,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 */
 	private static function boundNames(path: String, moduleTypes: Map<String, Array<String>>): Array<String> {
 		final types: Null<Array<String>> = moduleTypes[path];
-		return types == null || types.length == 0 ? [RefactorSupport.lastSegment(path)] : types;
+		return types == null || types.length == 0 ? [SourceText.lastSegment(path)] : types;
 	}
 
 	/**

@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.runtime.ParseError;
@@ -76,7 +76,7 @@ final class AddMeta {
 
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, hostNN);
 		final run: Array<QueryNode> = prefixRun(parent, hostNN);
-		for (sibling in run) if (RefactorSupport.META_KINDS.contains(sibling.kind) && sibling.name == nameNN)
+		for (sibling in run) if (MemberKinds.META_KINDS.contains(sibling.kind) && sibling.name == nameNN)
 			return Err('already annotated: $nameNN');
 
 		final at: Null<Int> = insertOffset(run, hostNN);
@@ -93,7 +93,7 @@ final class AddMeta {
 			span: new Span(atNN, atNN + 1),
 			text: '$text\n${lineIndentAt(source, atNN)}${source.charAt(atNN)}'
 		};
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/**
@@ -106,13 +106,13 @@ final class AddMeta {
 		if (!text.startsWith('@')) return null;
 		var i: Int = text.charAt(1) == ':' ? 2 : 1;
 		final from: Int = i;
-		while (i < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(i))) i++;
+		while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
 		if (i == from) return null;
 		// A dotted name (`@:foo.bar`) is one entry; the grammar carries the whole path.
 		while (i < text.length && text.charAt(i) == '.') {
 			i++;
 			final seg: Int = i;
-			while (i < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(i))) i++;
+			while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
 			if (i == seg) return null;
 		}
 		final rest: String = text.substr(i).trim();
@@ -143,10 +143,10 @@ final class AddMeta {
 			host = p;
 			parent = TreePath.parentOf(tree, host);
 		}
-		if (parent != null && RefactorSupport.META_KINDS.contains(host.kind)) {
+		if (parent != null && MemberKinds.META_KINDS.contains(host.kind)) {
 			final siblings: Array<QueryNode> = parent.children;
 			var i: Int = siblings.indexOf(host);
-			while (i >= 0 && i < siblings.length && RefactorSupport.isModifierOrMetaKind(siblings[i].kind)) i++;
+			while (i >= 0 && i < siblings.length && MemberKinds.isModifierOrMetaKind(siblings[i].kind)) i++;
 			if (i > 0 && i < siblings.length) host = siblings[i];
 		}
 		return host.span == null ? null : host;
@@ -159,7 +159,7 @@ final class AddMeta {
 		final i: Int = siblings.indexOf(host);
 		if (i < 0) return [];
 		var start: Int = i;
-		while (start > 0 && RefactorSupport.isModifierOrMetaKind(siblings[start - 1].kind)) start--;
+		while (start > 0 && MemberKinds.isModifierOrMetaKind(siblings[start - 1].kind)) start--;
 		return siblings.slice(start, i);
 	}
 
@@ -170,7 +170,7 @@ final class AddMeta {
 	 * order Haxe accepts — annotations, then modifiers, then the keyword.
 	 */
 	private static function insertOffset(run: Array<QueryNode>, host: QueryNode): Null<Int> {
-		for (sibling in run) if (!RefactorSupport.META_KINDS.contains(sibling.kind)) return sibling.span?.from;
+		for (sibling in run) if (!MemberKinds.META_KINDS.contains(sibling.kind)) return sibling.span?.from;
 		return host.span?.from;
 	}
 

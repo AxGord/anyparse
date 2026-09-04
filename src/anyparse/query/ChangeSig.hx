@@ -104,7 +104,7 @@ final class ChangeSig {
 		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
 		if (declNode == null) return Err('could not resolve a function binding for "$name" at $line:$col');
 		final decl: QueryNode = declNode;
-		if (!RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
+		if (!MemberKinds.FN_DECL_KINDS.contains(decl.kind))
 			return Err('"$name" is not a function (change-sig reorders function parameters)');
 		final declSpan: Null<Span> = decl.span;
 		if (declSpan == null) return Err('"$name" declaration has no source span');
@@ -151,7 +151,7 @@ final class ChangeSig {
 			appendSlotSwap(edits, source, args, order);
 		}
 
-		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		if (rewritten == source) return Err('reorder of "$name" is a no-op');
 
 		try
@@ -201,7 +201,7 @@ final class ChangeSig {
 		final seen: Array<Int> = [];
 		for (part in parts) {
 			final trimmed: String = part.trim();
-			final idx: Null<Int> = RefactorSupport.parseStrictInt(trimmed);
+			final idx: Null<Int> = SourceText.parseStrictInt(trimmed);
 			if (idx == null) return PErr('permutation "$perm" contains a non-integer index "$trimmed"');
 			final value: Int = idx;
 			if (value < 0 || value >= n) return PErr('permutation "$perm" index $value is out of range 0..${n - 1}');

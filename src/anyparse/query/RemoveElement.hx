@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -51,7 +51,7 @@ final class RemoveElement {
 				'position $line:$col'
 				+ ' is not on the first token of an element — point at the first token of a statement / case / list element / member'
 			)
-			: RefactorSupport.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
+			: ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}
 
 }

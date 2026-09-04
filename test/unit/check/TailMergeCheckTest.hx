@@ -6,7 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.TailMerge;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -41,7 +41,7 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(2, es.length);
 		Assert.equals('', es[0].text);
 		Assert.equals('', es[1].text);
-		final result: String = RefactorSupport.applyEdits(REFERENCE_SHAPE, es);
+		final result: String = CanonicalEdit.applyEdits(REFERENCE_SHAPE, es);
 		Assert.equals(
 			'class C {\n\tfunction set_p(v:String):String {\n\t\tif (cond1) {\n\t\t\tif (c2) {\n\t\t\t\twork();\n\t\t\t} else if (c3) {\n'
 			+ '\t\t\t\twork2();\n\t\t\t}\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
@@ -238,7 +238,7 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			'class C {\n\tfunction f(v:String):String {\n\t\tif (a)\n\t\t\tif (b) {\n\t\t\t\twork();\n\t\t\t}\n\t\thelper(v);\n'
 			+ '\t\treturn v;\n\t}\n}',
-			RefactorSupport.applyEdits(src, edits(src))
+			CanonicalEdit.applyEdits(src, edits(src))
 		);
 	}
 
@@ -251,12 +251,12 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(
 			'class C {\n\tfunction f(v:String):String {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tp();\n\t\t\t}\n\t\t}\n\t\thelper(v);\n'
 			+ '\t\treturn v;\n\t}\n}',
-			RefactorSupport.applyEdits(src, edits(src))
+			CanonicalEdit.applyEdits(src, edits(src))
 		);
 	}
 
 	public function testFixIsIdempotent(): Void {
-		final once: String = RefactorSupport.applyEdits(REFERENCE_SHAPE, edits(REFERENCE_SHAPE));
+		final once: String = CanonicalEdit.applyEdits(REFERENCE_SHAPE, edits(REFERENCE_SHAPE));
 		Assert.equals(0, violations(once).length);
 		Assert.equals(0, edits(once).length);
 	}
@@ -420,7 +420,7 @@ class TailMergeCheckTest extends Test {
 		Assert.equals(1, es.length);
 		Assert.equals(
 			'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\tp();\n\t\t}\n\t\tq();\n\t\tr();\n\t\treturn v;\n\t}\n}',
-			RefactorSupport.applyEdits(src, es)
+			CanonicalEdit.applyEdits(src, es)
 		);
 	}
 

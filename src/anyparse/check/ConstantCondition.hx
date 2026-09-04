@@ -1,10 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -105,7 +107,7 @@ final class ConstantCondition implements Check {
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		collectBranchEdits(tree, null, source, seams.boolLitKind, seams.branchKinds, seams.blockKinds, seams.emptyStmtKind, flagged, edits);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Walk `node`, flagging every branch whose condition is a boolean literal. */
@@ -174,7 +176,7 @@ final class ConstantCondition implements Check {
 			final inBlock: Bool = parent != null && blockKinds.contains(parent.kind);
 			return inBlock
 				? {
-					span: RefactorSupport.lineExtendedSpan(source, nspan),
+					span: ElementSpan.lineExtendedSpan(source, nspan),
 					text: ''
 				}
 				: {
@@ -222,7 +224,7 @@ final class ConstantCondition implements Check {
 		if (emptyStmtKind != null && eliminated.kind == emptyStmtKind) return true;
 		if (!blockKinds.contains(eliminated.kind) || eliminated.children.length != 0) return false;
 		final espan: Null<Span> = eliminated.span;
-		return espan != null && RefactorSupport.isBlankSpan(espan, source);
+		return espan != null && SourceText.isBlankSpan(espan, source);
 	}
 
 	/**

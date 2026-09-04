@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -694,7 +694,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 				out[f.file] = f.source;
 				continue;
 			}
-			out[f.file] = switch RefactorSupport.canonicalize(f.source, edits, true, plugin) {
+			out[f.file] = switch CanonicalEdit.canonicalize(f.source, edits, true, plugin) {
 				case Ok(text): text;
 				case Err(message):
 					Assert.fail('crossFix canonicalize Err ($message)');

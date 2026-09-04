@@ -3,9 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -212,7 +212,7 @@ final class SimplifyNegatedCompound implements Check {
 
 	/** Whether a `#if … #end` region sits anywhere in `node` — block, expression or mid-expression splice alike. */
 	private static function hasConditionalRegion(node: QueryNode): Bool {
-		return RefactorSupport.isConditionalKind(node.kind) || node.children.exists(c -> hasConditionalRegion(c));
+		return CondRegionScan.isConditionalKind(node.kind) || node.children.exists(c -> hasConditionalRegion(c));
 	}
 
 	/**

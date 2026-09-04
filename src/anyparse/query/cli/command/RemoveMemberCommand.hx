@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.MemberKinds;
 import anyparse.query.cli.CliContext;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -212,7 +213,7 @@ final class RemoveMemberCommand implements CliCommand {
 		while (i >= 0) {
 			final node: QueryNode = chain[i];
 			final name: Null<String> = node.name;
-			if (name != null && RefactorSupport.isFieldMemberKind(node.kind)) {
+			if (name != null && MemberKinds.isFieldMemberKind(node.kind)) {
 				member = name;
 				break;
 			}

@@ -1,9 +1,10 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.Cli;
 import anyparse.query.CommentRewrite;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -305,14 +306,14 @@ class CommentRewriteSliceTest extends Test {
 	public function testEmptyDocBlockContinuationIsTheDocGutter(): Void {
 		final src: String = 'class C {\n\t/**\n\t */\n\tfunction f() {}\n}';
 		final tok: { from: Int, to: Int, isLine: Bool } = { from: src.indexOf('/**'), to: src.indexOf('*/') + 2, isLine: false };
-		Assert.equals('\t * ', RefactorSupport.commentContinuation(src, tok));
+		Assert.equals('\t * ', SourceComments.commentContinuation(src, tok));
 	}
 
 	/** The other closer spelling — an empty GUTTER-LESS block ends `**\/`, and it is skipped too. */
 	public function testEmptyGutterlessBlockContinuationIsTheDocGutter(): Void {
 		final src: String = 'class C {\n\t/**\n\t**/\n\tfunction f() {}\n}';
 		final tok: { from: Int, to: Int, isLine: Bool } = { from: src.indexOf('/**'), to: src.indexOf('**/') + 3, isLine: false };
-		Assert.equals('\t * ', RefactorSupport.commentContinuation(src, tok));
+		Assert.equals('\t * ', SourceComments.commentContinuation(src, tok));
 	}
 
 	/**
@@ -345,7 +346,7 @@ class CommentRewriteSliceTest extends Test {
 	 * indentation and put the closer under the block. It is handed back untouched instead.
 	 */
 	public function testOpenGrownDocBlockLeavesAGutterlessContinuationAlone(): Void {
-		Assert.equals('* A\n\t\tB', RefactorSupport.openGrownDocBlock('* A\n\t\tB', '\t\t'));
+		Assert.equals('* A\n\t\tB', SourceComments.openGrownDocBlock('* A\n\t\tB', '\t\t'));
 	}
 
 	/**

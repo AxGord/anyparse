@@ -1,10 +1,13 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -88,7 +91,7 @@ final class EmptyBlock implements Check {
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		collectEmptyFixes(tree, null, null, source, blockKinds, flagged, edits);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Walk `node`, flagging every empty control-flow block reached. */
@@ -96,7 +99,7 @@ final class EmptyBlock implements Check {
 		final span: Null<Span> = node.span;
 		if (
 			span != null && node.children.length == 0 && support.emptyFlagKinds().contains(node.kind)
-			&& RefactorSupport.isBlankSpan(span, source)
+			&& SourceText.isBlankSpan(span, source)
 		) out.push({
 			file: file,
 			span: span,
@@ -140,17 +143,17 @@ final class EmptyBlock implements Check {
 		// Empty `else {}` — this node is the else branch (then + else both present).
 		if (kids.length >= IF_WITH_ELSE_CHILD_COUNT && kids[2] == node) {
 			final thenSpan: Null<Span> = kids[1].span;
-			return thenSpan == null ? null : { span: RefactorSupport.lineExtendedSpan(source, new Span(thenSpan.to, nspan.to)), text: '' };
+			return thenSpan == null ? null : { span: ElementSpan.lineExtendedSpan(source, new Span(thenSpan.to, nspan.to)), text: '' };
 		}
 		// Empty no-else `if (cond) {}` with a side-effect-free condition — safe to
 		// drop only when the `if` is a statement-list member, not a branch body.
 		if (
-			kids.length != 2 || kids[1] != node || !RefactorSupport.isSideEffectFree(kids[0])
+			kids.length != 2 || kids[1] != node || !MemberKinds.isSideEffectFree(kids[0])
 			|| (grandparent == null || !blockKinds.contains(grandparent.kind))
 		)
 			return null;
 		final pspan: Null<Span> = parent.span;
-		return pspan == null ? null : { span: RefactorSupport.lineExtendedSpan(source, pspan), text: '' };
+		return pspan == null ? null : { span: ElementSpan.lineExtendedSpan(source, pspan), text: '' };
 	}
 
 }

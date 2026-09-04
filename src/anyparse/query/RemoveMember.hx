@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 
@@ -116,7 +116,7 @@ final class RemoveMember {
 		}
 		// Nested regions (`#if a f #if b f #end #end`) put a target inside a target; `deleteNodes`
 		// keeps the outer one, which removes the inner anyway.
-		return RefactorSupport.deleteNodes(source, targets, reformat, plugin, withDoc, optsJson);
+		return ElementSpan.deleteNodes(source, targets, reformat, plugin, withDoc, optsJson);
 	}
 
 	/** The node whose `typeDeclOf().name == typeName`, first in pre-order. */
@@ -144,8 +144,8 @@ final class RemoveMember {
 	 * matched because they carry statement kinds, not `FIELD_MEMBER_KINDS`.
 	 */
 	private static function collectMembers(node: QueryNode, memberName: String, out: Array<{ node: QueryNode, parent: QueryNode }>): Void {
-		RefactorSupport.eachMemberHost(node, host -> for (child in host.children) if (
-			RefactorSupport.isFieldMemberKind(child.kind) && child.name == memberName
+		MemberKinds.eachMemberHost(node, host -> for (child in host.children) if (
+			MemberKinds.isFieldMemberKind(child.kind) && child.name == memberName
 		)
 			out.push({ node: child, parent: host }));
 	}
@@ -169,10 +169,10 @@ final class RemoveMember {
 		var cur: Null<QueryNode> = region;
 		while (cur != null) {
 			final scope: QueryNode = cur;
-			final held: Array<QueryNode> = MemberBranchScan.regionMembers(scope, n -> RefactorSupport.isFieldMemberKind(n.kind));
+			final held: Array<QueryNode> = MemberBranchScan.regionMembers(scope, n -> MemberKinds.isFieldMemberKind(n.kind));
 			if (held.length == 0 || held.exists(n -> !deleting.exists(m -> m.node == n))) break;
 			var host: Null<QueryNode> = null;
-			RefactorSupport.eachMemberHost(typeNode, h -> if (h.children.contains(scope)) host = h);
+			MemberKinds.eachMemberHost(typeNode, h -> if (h.children.contains(scope)) host = h);
 			if (host == null) break;
 			final owner: QueryNode = host;
 			result = { node: scope, parent: owner };

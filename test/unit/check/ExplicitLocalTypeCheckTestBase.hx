@@ -4,7 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import utest.Assert;
 import utest.Test;
@@ -31,7 +31,7 @@ class ExplicitLocalTypeCheckTestBase extends Test {
 		final check: ExplicitLocalType = new ExplicitLocalType();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.isTrue(vs.length >= 1);
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(expected) >= 0);
 			case Err(message):
@@ -58,7 +58,7 @@ class ExplicitLocalTypeCheckTestBase extends Test {
 		final index: SymbolIndex = SymbolIndex.build([fixFile].concat(otherFiles), plugin);
 		final vs: Array<Violation> = check.run([fixFile], plugin);
 		Assert.isTrue(vs.length >= 1);
-		switch RefactorSupport.canonicalize(fixSrc, check.fix(fixSrc, vs, plugin, index), true, plugin) {
+		switch CanonicalEdit.canonicalize(fixSrc, check.fix(fixSrc, vs, plugin, index), true, plugin) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(expected) >= 0);
 			case Err(message):
@@ -93,7 +93,7 @@ class ExplicitLocalTypeCheckTestBase extends Test {
 		final index: SymbolIndex = SymbolIndex.build(report, scoped);
 		final vs: Array<Violation> = check.run(report, scoped);
 		Assert.isTrue(vs.length >= 1, 'the fixture must produce a finding to fix');
-		switch RefactorSupport.canonicalize(fixSrc, check.fix(fixSrc, vs, scoped, index), true, scoped) {
+		switch CanonicalEdit.canonicalize(fixSrc, check.fix(fixSrc, vs, scoped, index), true, scoped) {
 			case Ok(text):
 				return text;
 			case Err(message):

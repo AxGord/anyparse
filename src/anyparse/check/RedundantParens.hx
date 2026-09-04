@@ -2,9 +2,9 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -362,7 +362,7 @@ final class RedundantParens implements Check implements ConfigAware {
 			if (span == null) continue;
 			final site: Null<ParenSite> = siteByKey['${span.from}:${span.to}'];
 			if (site == null) continue;
-			final inner: Null<Span> = RefactorSupport.unwrapParens(site.node, slots.parenKind).span;
+			final inner: Null<Span> = BoolExprShape.unwrapParens(site.node, slots.parenKind).span;
 			if (inner == null) continue;
 			final text: String = source.substring(inner.from, inner.to);
 			if (!site.dropsParens) {
@@ -560,7 +560,7 @@ final class RedundantParens implements Check implements ConfigAware {
 	private static function dropsParens(inner: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool, prefixed: Bool): Bool {
 		// The fix drops the WHOLE chain, so every test reads the content that would be
 		// left bare, not the next paren layer down.
-		final bare: QueryNode = RefactorSupport.unwrapParens(inner, slots.parenKind);
+		final bare: QueryNode = BoolExprShape.unwrapParens(inner, slots.parenKind);
 		if (prefixed) return false;
 		// The operand arms answer per CONTENT, so they apply in any slot the shipped arms
 		// leave alone — but never inside a subtree where a paren carries meaning.
@@ -724,7 +724,7 @@ final class RedundantParens implements Check implements ConfigAware {
 	private static function sameFamilyLeftOperand(parent: QueryNode, slots: ParenSlots): Bool {
 		if (parent.children.length != 2 || parent.children[0].kind != slots.parenKind) return false;
 		if (parent.children[1].kind == slots.parenKind) return false;
-		final bare: String = RefactorSupport.unwrapParens(parent.children[0], slots.parenKind).kind;
+		final bare: String = BoolExprShape.unwrapParens(parent.children[0], slots.parenKind).kind;
 		return slots.families.exists(family -> family.contains(parent.kind) && family.contains(bare));
 	}
 
@@ -755,7 +755,7 @@ final class RedundantParens implements Check implements ConfigAware {
 		if (parent.children[i].kind != slots.parenKind) return false;
 		final sibling: QueryNode = parent.children[1 - i];
 		if (sibling.kind != slots.parenKind) return true;
-		final bare: QueryNode = RefactorSupport.unwrapParens(sibling, slots.parenKind);
+		final bare: QueryNode = BoolExprShape.unwrapParens(sibling, slots.parenKind);
 		return tighterTierContent(bare, unwrapKinds, slots) || isAtom(bare, slots);
 	}
 

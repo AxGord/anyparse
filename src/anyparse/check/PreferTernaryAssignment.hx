@@ -1,9 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -103,7 +106,7 @@ final class PreferTernaryAssignment implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
-				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
 		}
 		return violations;
@@ -114,13 +117,13 @@ final class PreferTernaryAssignment implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
 				final m: Null<Match> = match(node, source, comments, seams);
 				return m == null ? null : buildEdit(m, source, span, seams);
 			});
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -194,7 +197,7 @@ final class PreferTernaryAssignment implements Check {
 		// a value that is ALREADY a ternary writes the three-rung `x = c ? a : p ? q : r`, which
 		// `prefer-if-expression-chain` then reports — on code this fix just wrote. Asked of that rule
 		// directly, gates and all, so a shape it refuses keeps its finding here.
-		return RefactorSupport.refusesNullNarrowingBoolCollapse(m.thenRhs, m.elseRhs, condition, s.shape)
+		return BoolExprShape.refusesNullNarrowingBoolCollapse(m.thenRhs, m.elseRhs, condition, s.shape)
 			|| droppedComment(ifNode, m, comments) || PreferIfExpressionAssignment.claims(ifNode, source, comments, s.shape)
 			? null
 			: m;
@@ -228,7 +231,7 @@ final class PreferTernaryAssignment implements Check {
 	private static function sameLvalue(a: QueryNode, b: QueryNode, source: String): Bool {
 		final aSpan: Null<Span> = a.span;
 		final bSpan: Null<Span> = b.span;
-		return aSpan != null && bSpan != null && RefactorSupport.structurallyEqual(a, b)
+		return aSpan != null && bSpan != null && MemberKinds.structurallyEqual(a, b)
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
 	}
 

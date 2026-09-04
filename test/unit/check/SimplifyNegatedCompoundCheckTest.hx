@@ -6,7 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -469,7 +469,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 
 	/** `source` run through the writer alone — the canonical form `RefactorSupport.canonicalize` demands of a fix input. */
 	private function canon(source: String): String {
-		return switch RefactorSupport.canonicalize(source, [], true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(source, [], true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
@@ -501,7 +501,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	}
 
 	private function canonicalized(source: String, es: Array<{ span: Span, text: String }>, plugin: anyparse.query.GrammarPlugin): String {
-		return switch RefactorSupport.canonicalize(source, es, false, plugin) {
+		return switch CanonicalEdit.canonicalize(source, es, false, plugin) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

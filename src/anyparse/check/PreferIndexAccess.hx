@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BinderScan;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
@@ -110,7 +112,7 @@ final class PreferIndexAccess implements Check {
 			final resolveBinders: () -> Null<Array<String>> = () -> {
 				if (!bindersComputed) {
 					bindersComputed = true;
-					binders = RefactorSupport.resolverInvisibleBinderNames(root, c.shape);
+					binders = BinderScan.resolverInvisibleBinderNames(root, c.shape);
 				}
 				return binders;
 			};
@@ -144,7 +146,7 @@ final class PreferIndexAccess implements Check {
 			tree, null, cfg, (call, parentKind) -> structuralMatch(call, parentKind, cfg),
 			m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m
 		);
-		return RefactorSupport.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
+		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
 			final text: Null<String> = editText(m, source);
 			return text == null ? null : { span: m.callSpan, text: text };
 		}));

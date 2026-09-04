@@ -1,9 +1,9 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -74,7 +74,7 @@ final class RedundantVoidReturn implements Check {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null) edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });
+			if (span != null) edits.push({ span: ElementSpan.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;
 	}

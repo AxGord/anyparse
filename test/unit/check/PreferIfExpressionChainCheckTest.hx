@@ -8,7 +8,7 @@ import anyparse.check.PreferTernaryExpression;
 import anyparse.check.Severity;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -134,7 +134,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	public function testGuardCollapsePipelineConverges(): Void {
 		final collapsed: String = 'class C {\n\tfunction f():Int {\n\t\treturn a ? 1 : b ? 2 : 3;\n\t}\n}';
 		final es: Array<{ span: Span, text: String }> = edits(collapsed);
-		final converted: String = RefactorSupport.applyEdits(collapsed, es);
+		final converted: String = CanonicalEdit.applyEdits(collapsed, es);
 		Assert.equals('class C {\n\tfunction f():Int {\n\t\treturn if (a) 1 else if (b) 2 else 3;\n\t}\n}', converted);
 		Assert.equals(0, violations(converted).length);
 		Assert.equals(0, ternaryExpressionViolations(converted).length);
@@ -292,7 +292,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 			+ 'else if (groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING) RebindAsEdit else RebindAsSteady',
 			es[0].text
 		);
-		Assert.equals(0, violations(RefactorSupport.applyEdits(TM_RELINK_DECISION, es)).length);
+		Assert.equals(0, violations(CanonicalEdit.applyEdits(TM_RELINK_DECISION, es)).length);
 	}
 
 	/** Every copied piece is cut back to its last token — a non-leaf span runs on through the trivia after it. */
@@ -343,7 +343,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 
 	/** The emitted arm is the fixed point: the if-chain form draws nothing back. */
 	public function testCaseArmOutputIsAFixedPoint(): Void {
-		final once: String = RefactorSupport.applyEdits(CASE_ARM_CHAIN, edits(CASE_ARM_CHAIN));
+		final once: String = CanonicalEdit.applyEdits(CASE_ARM_CHAIN, edits(CASE_ARM_CHAIN));
 		Assert.equals(0, violations(once).length);
 		Assert.equals(0, ternaryExpressionViolations(once).length);
 		Assert.equals(0, switchExpressionViolations(once).length);
@@ -442,12 +442,12 @@ class PreferIfExpressionChainCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = edits(TM_NULL_GUARDED_ACCESSOR);
 		Assert.equals(1, es.length);
 		Assert.equals("if (sel == null) '' else if (sel.data.data == -1) 'N/A' else sel.data.text", es[0].text);
-		Assert.equals(0, violations(RefactorSupport.applyEdits(TM_NULL_GUARDED_ACCESSOR, es)).length);
+		Assert.equals(0, violations(CanonicalEdit.applyEdits(TM_NULL_GUARDED_ACCESSOR, es)).length);
 	}
 
 	/** The output is the fixed point: the emitted chain has no ternary rung left, so nothing draws it back. */
 	public function testInvertedOutputIsAFixedPoint(): Void {
-		final once: String = RefactorSupport.applyEdits(THEN_NESTED, edits(THEN_NESTED));
+		final once: String = CanonicalEdit.applyEdits(THEN_NESTED, edits(THEN_NESTED));
 		Assert.equals(0, violations(once).length);
 		Assert.equals(0, ternaryExpressionViolations(once).length);
 	}

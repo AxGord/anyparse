@@ -5,8 +5,8 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -142,19 +142,19 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 			}
 		]);
 		Assert.isTrue(
-			RefactorSupport.canonicalize(MAIN, slotOnly, false, plugin, null).match(Err(_)),
+			CanonicalEdit.canonicalize(MAIN, slotOnly, false, plugin, null).match(Err(_)),
 			'deleting the body of a brace-less `if` alone must be refused — that refusal IS the arm under test'
 		);
 		Assert.isTrue(
-			RefactorSupport.canonicalize(MAIN, withPoison, false, plugin, null).match(Err(_)),
+			CanonicalEdit.canonicalize(MAIN, withPoison, false, plugin, null).match(Err(_)),
 			'and refused in the company the bisect actually probes it in'
 		);
 		Assert.isTrue(
-			RefactorSupport.canonicalize(MAIN, both, false, plugin, null).match(Ok(_, _)),
+			CanonicalEdit.canonicalize(MAIN, both, false, plugin, null).match(Ok(_, _)),
 			'deleting the lead WITH the body is accepted, so the full set reaches the compiler'
 		);
 		Assert.isTrue(
-			RefactorSupport.isWriterCanonical(MAIN, plugin, null), 'the fixture must be the writer fixed point, else nothing is spliced'
+			CanonicalEdit.isWriterCanonical(MAIN, plugin, null), 'the fixture must be the writer fixed point, else nothing is spliced'
 		);
 		#else
 		Assert.pass('non-sys target');

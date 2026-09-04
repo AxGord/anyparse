@@ -4,6 +4,7 @@ using StringTools;
 using Lambda;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.SourceText;
 import anyparse.query.cli.CliArgs.ExpandedInputs;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.runtime.Span;
@@ -45,8 +46,8 @@ final class CliArgs {
 	public static function parseLineCol(spec: String): Null<Position> {
 		final colon: Int = spec.indexOf(':');
 		if (colon <= 0 || colon >= spec.length - 1) return null;
-		final line: Null<Int> = RefactorSupport.parseStrictInt(spec.substring(0, colon));
-		final col: Null<Int> = RefactorSupport.parseStrictInt(spec.substring(colon + 1));
+		final line: Null<Int> = SourceText.parseStrictInt(spec.substring(0, colon));
+		final col: Null<Int> = SourceText.parseStrictInt(spec.substring(colon + 1));
 		return line == null || col == null ? null : { line: line, col: col };
 	}
 

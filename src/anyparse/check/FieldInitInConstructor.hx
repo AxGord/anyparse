@@ -3,13 +3,18 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.MemberOrder.MemberRank;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CtorFieldFold;
+import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.HoistedConstant;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -137,10 +142,10 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
-		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
+		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			final span: Null<Span> = field.span;
 			if (
-				!exported && span != null && RefactorSupport.ctorConditionalDefaultTernaryEdits(source, span, plugin) != null
+				!exported && span != null && CtorFieldFold.ctorConditionalDefaultTernaryEdits(source, span, plugin) != null
 			) violations.push({
 				file: file,
 				span: span,
@@ -173,14 +178,14 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final fold: Null<Array<{ span: Span, text: String }>> = RefactorSupport.ctorConditionalDefaultTernaryEdits(
+			final fold: Null<Array<{ span: Span, text: String }>> = CtorFieldFold.ctorConditionalDefaultTernaryEdits(
 				source, span, plugin,
 				site -> tree == null ? null : extractedConstant(site, source, file, tree, plugin, resolution, inserts)
 			);
 			if (fold != null) for (edit in fold) edits.push(edit);
 		}
 		for (slot in inserts) edits.push({ span: new Span(slot.at, slot.at), text: slot.text });
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
@@ -245,7 +250,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		final rule: Null<NamingRule> = ConstantHoist.constantRule(support.policyFor(file), emitted.mods);
 		if (rule == null || !rule.format.match(newName)) return null;
 		if (ConstantHoist.staticsForbidden(tree, decl, plugin)) return null;
-		if (RefactorSupport.referencedInRange(source, newName, 0, source.length, [])) return null;
+		if (OccurrenceScan.referencedInRange(source, newName, 0, source.length, [])) return null;
 		if (!idx.typeProvablyLacksMember(ownerName, newName, file)) return null;
 		if (_runClaims.defers(ownerName, newName, idx)) return null;
 		final at: Null<Int> = constantsRankSplice(site.container, decl, source, shape, ownerName, plugin.lexicalRegions(source));
@@ -281,7 +286,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 			if (m.condition != null || !isConstantRank(m.rank) || init == null || name == null || declSpan == null || initSpan == null)
 				continue;
 			if (!isBareLiteral(init, shape) || source.substring(initSpan.from, initSpan.to) != site.defaultText) continue;
-			if (RefactorSupport.declaredTypeAnnotation(source, declSpan, initSpan, name) == annotation) return name;
+			if (CtorFieldFold.declaredTypeAnnotation(source, declSpan, initSpan, name) == annotation) return name;
 		}
 		return null;
 	}
@@ -319,9 +324,9 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 
 	/** The constant name derived from a field name (`_cellsNumX` -> `CELLS_NUM_X_DEFAULT`), or null when nothing survives. */
 	private static function derivedConstantName(fieldName: String): Null<String> {
-		final core: String = RefactorSupport.upperSnake(fieldName);
+		final core: String = SourceText.upperSnake(fieldName);
 		final name: String = '$core$DEFAULT_SUFFIX';
-		return core == '' || !RefactorSupport.isIdentifier(name) ? null : name;
+		return core == '' || !SourceText.isIdentifier(name) ? null : name;
 	}
 
 	/** Record one member to splice at `at`, merging it into the insertion already pending there. */

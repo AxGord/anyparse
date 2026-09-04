@@ -4,8 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -238,7 +238,7 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 
 	/** At least one call, or a field-access chain of depth `MIN_CHAIN_DEPTH` — a bare read is trivial. */
 	private static function isNonTrivial(node: QueryNode, ctx: Ctx): Bool {
-		return RefactorSupport.subtreeContainsKind(node, ctx.callKind) || maxFieldChainDepth(node, ctx.fieldAccessKind) >= MIN_CHAIN_DEPTH;
+		return MemberKinds.subtreeContainsKind(node, ctx.callKind) || maxFieldChainDepth(node, ctx.fieldAccessKind) >= MIN_CHAIN_DEPTH;
 	}
 
 	/** The deepest run of consecutive field accesses anywhere in `node`'s subtree (`a.b.c` = 2). */

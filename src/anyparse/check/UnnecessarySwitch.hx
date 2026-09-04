@@ -4,9 +4,9 @@ import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.Check.Violation;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -196,7 +196,7 @@ final class UnnecessarySwitch implements Check {
 		if (body.length == 0)
 			return !statement || !inList || CheckScan.hasCommentMarker(source, at.from, at.to)
 				? null
-				: { span: at, edit: { span: RefactorSupport.lineDeletionSpan(source, at), text: '' } };
+				: { span: at, edit: { span: ElementSpan.lineDeletionSpan(source, at), text: '' } };
 		final first: Null<Span> = body[0].span;
 		final last: Null<Span> = body[body.length - 1].span;
 		if (first == null || last == null) return null;

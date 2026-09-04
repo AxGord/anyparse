@@ -1,8 +1,8 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -97,7 +97,7 @@ final class PurityScan {
 		final kind: String = node.kind;
 		if (kind == ctx.identKind) return !readsGetterUnqualified(node, ctx);
 		function childrenPure() return node.children.foreach(c -> isPure(c, ctx));
-		if (RefactorSupport.isSafeKind(kind)) return childrenPure();
+		if (MemberKinds.isSafeKind(kind)) return childrenPure();
 		if (kind != ctx.fieldAccessKind) return if (ctx.indexAccessKind != null && kind == ctx.indexAccessKind)
 			childrenPure()
 		else if (kind == ctx.callKind)

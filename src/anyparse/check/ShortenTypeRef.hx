@@ -6,9 +6,13 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.ModuleScan;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
@@ -368,7 +372,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 
 	/** Whether `c` can sit INSIDE a dotted type path — an identifier character or the separator itself. */
 	private static inline function isPathChar(c: Int): Bool {
-		return c == '.'.code || RefactorSupport.isIdentChar(c);
+		return c == '.'.code || SourceText.isIdentChar(c);
 	}
 
 	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */
@@ -422,7 +426,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			opaqueKinds: shape.opaqueKinds ?? [],
 			functionKinds: shape.functionKinds ?? [],
 			macroKind: shape.macroModifierKind,
-			comments: RefactorSupport.collectCommentRegions(plugin.lexicalRegions(source)),
+			comments: SourceComments.collectCommentRegions(plugin.lexicalRegions(source)),
 			tree: scoped
 		};
 		final occurrences: Array<Occurrence> = [];
@@ -515,7 +519,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final region: Bool = conditional || ModuleScan.opensConditionalRegion(node, context.source, context.shape.conditionalIfKeyword);
 		final found: Null<Occurrence> = occurrenceOf(node, context, region, underUpperField, macroBody);
 		if (found != null) out.push(found);
-		final upperReceiver: Bool = node.kind == context.shape.fieldAccessKind && RefactorSupport.isUpperInitial(node.name ?? '');
+		final upperReceiver: Bool = node.kind == context.shape.fieldAccessKind && SourceText.isUpperInitial(node.name ?? '');
 		final kids: Array<QueryNode> = node.children;
 		for (i in 0...kids.length) {
 			final child: QueryNode = kids[i];
@@ -523,7 +527,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			// DOWN into the function and inherited by its whole subtree.
 			final inMacro: Bool = macroBody
 				|| (context.functionKinds.contains(child.kind)
-					&& RefactorSupport.macroModifierPrecedes(kids, i, context.macroKind, MODIFIER_RUN_BOUNDARY));
+					&& MemberKinds.macroModifierPrecedes(kids, i, context.macroKind, MODIFIER_RUN_BOUNDARY));
 			scan(child, context, region, upperReceiver, inMacro, out);
 		}
 	}
@@ -547,7 +551,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final name: Null<String> = node.name;
 		if (name == null) return null;
 		if (context.typeKinds.contains(node.kind)) {
-			if (name.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(name))) return null;
+			if (name.indexOf('.') == -1 || !SourceText.isUpperInitial(SourceText.lastSegment(name))) return null;
 			final span: Null<Span> = pathSpanOf(node, name, context);
 			return span == null ? null : {
 				path: name,
@@ -556,7 +560,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 				macroBody: macroBody
 			};
 		}
-		if (node.kind != context.shape.fieldAccessKind || underUpperField || !RefactorSupport.isUpperInitial(name)) return null;
+		if (node.kind != context.shape.fieldAccessKind || underUpperField || !SourceText.isUpperInitial(name)) return null;
 		final path: Null<String> = staticChainPath(node, context);
 		final span: Null<Span> = node.span;
 		// The chain's own span must BE the path verbatim. A chain broken by a comment or a newline
@@ -606,7 +610,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		while (cursor.children.length == 1) {
 			final child: QueryNode = cursor.children[0];
 			final name: Null<String> = child.name;
-			if (name == null || name == '' || RefactorSupport.isUpperInitial(name)) return null;
+			if (name == null || name == '' || SourceText.isUpperInitial(name)) return null;
 			segments.unshift(name);
 			if (child.kind == identKind) {
 				final span: Null<Span> = child.span;
@@ -641,7 +645,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 			final after: Int = at + token.length;
 			final boundedLeft: Bool = at == 0 || !isPathChar(source.fastCodeAt(at - 1));
 			final boundedRight: Bool = after >= source.length || !isPathChar(source.fastCodeAt(after));
-			if (boundedLeft && boundedRight && !RefactorSupport.offsetWithinAny(at, context.comments)) return at;
+			if (boundedLeft && boundedRight && !OccurrenceScan.offsetWithinAny(at, context.comments)) return at;
 			i = at + 1;
 		}
 		return -1;

@@ -97,7 +97,7 @@ final class RemoveParam {
 		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
 		if (declNode == null) return Err('could not resolve a function binding for "$name" at $line:$col');
 		final decl: QueryNode = declNode;
-		if (!RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
+		if (!MemberKinds.FN_DECL_KINDS.contains(decl.kind))
 			return Err('"$name" is not a function (remove-param removes a function parameter)');
 		final declSpan: Null<Span> = decl.span;
 		if (declSpan == null) return Err('"$name" declaration has no source span');
@@ -113,7 +113,7 @@ final class RemoveParam {
 		final error: Null<String> = result.error;
 		if (error != null) return Err(error);
 
-		final rewritten: String = RefactorSupport.applyEdits(source, result.edits);
+		final rewritten: String = CanonicalEdit.applyEdits(source, result.edits);
 		if (rewritten == source) return Err('removing parameter $index of "$name" is a no-op');
 
 		try

@@ -1,11 +1,15 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -182,7 +186,7 @@ final class JoinSingleUseLocal implements Check {
 			edits.push({ span: m.dropSpan, text: '' });
 			edits.push({ span: m.readSpan, text: m.initSource });
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
@@ -205,7 +209,7 @@ final class JoinSingleUseLocal implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 		final out: Array<Match> = [];
 		collectMatches(root, source, comments, s, root, declTypeSources, out);
@@ -269,7 +273,7 @@ final class JoinSingleUseLocal implements Check {
 			if (kinds != null) for (k in kinds) if (!out.contains(k)) out.push(k);
 		}
 		add(shape.functionKinds);
-		add(RefactorSupport.nestedFunctionKinds(shape));
+		add(MemberKinds.nestedFunctionKinds(shape));
 		add(shape.loopStatementKinds);
 		add(shape.doWhileLoopKinds);
 		add(shape.forStmtKind == null ? null : [shape.forStmtKind]);
@@ -328,7 +332,7 @@ final class JoinSingleUseLocal implements Check {
 		if (!annotationIsNeutral(declTypeSources()[declNameFrom], init, s, tree, declTypeSources)) return null;
 		if (commentInDroppedRegion(comments, dropSpan)) return null;
 
-		final tokenFrom: Int = RefactorSupport.identTokenOffset(source, readHit.span, name);
+		final tokenFrom: Int = SourceText.identTokenOffset(source, readHit.span, name);
 		if (tokenFrom < 0) return null;
 		if (unindexedNameUse(name, declSpan, tokenFrom, tree, s)) return null;
 		if (initIdentRebound(init, declSpan, tokenFrom, tree, s)) return null;
@@ -354,10 +358,10 @@ final class JoinSingleUseLocal implements Check {
 	private static function deletableDeclLine(decl: QueryNode, declSpan: Span, source: String, s: Seams): Null<Span> {
 		if (!s.localDeclKinds.contains(decl.kind) || s.mutableKinds.contains(decl.kind)) return null;
 		if (s.continuationKinds.contains(decl.kind) || decl.children.length != INIT_CHILD_COUNT) return null;
-		if (RefactorSupport.isMultiDeclarator(decl, s.continuationKinds)) return null;
+		if (SourceText.isMultiDeclarator(decl, s.continuationKinds)) return null;
 		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
 		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
-		final dropSpan: Span = RefactorSupport.lineExtendedSpan(source, declSpan);
+		final dropSpan: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		return dropSpan.from == declSpan.from && dropSpan.to == declSpan.to ? null : dropSpan;
 	}
 
@@ -609,7 +613,7 @@ final class JoinSingleUseLocal implements Check {
 			final kids: Array<QueryNode> = path[i].children;
 			for (c in kids) {
 				if (c == path[i + 1]) break;
-				if (!RefactorSupport.isSideEffectFree(c) && !isTrivialPureRead(c, s)) return false;
+				if (!MemberKinds.isSideEffectFree(c) && !isTrivialPureRead(c, s)) return false;
 			}
 		}
 		return true;

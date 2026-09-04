@@ -561,7 +561,7 @@ final class SymbolIndex {
 	 */
 	public inline function subtypeReferencesField(owner: String, field: String): Bool {
 		return subtypeDeclMatches(
-			owner, field, (_, src, span, redeclares) -> !redeclares && RefactorSupport.identTokenOffset(src, span, field) >= 0
+			owner, field, (_, src, span, redeclares) -> !redeclares && SourceText.identTokenOffset(src, span, field) >= 0
 		);
 	}
 
@@ -714,7 +714,7 @@ final class SymbolIndex {
 	public function nameOccursOutside(name: String, excludedFile: String, excludedSpan: Span): Bool {
 		for (file => src in _sources) {
 			final excluded: Array<Span> = file == excludedFile ? [excludedSpan] : [];
-			if (RefactorSupport.referencedInRange(src, name, 0, src.length, excluded)) return true;
+			if (OccurrenceScan.referencedInRange(src, name, 0, src.length, excluded)) return true;
 		}
 		return false;
 	}
@@ -1905,7 +1905,7 @@ final class SymbolIndex {
 		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource);
 		if (args == null || args.length != 1) return false;
 		final element: String = args[0];
-		return RefactorSupport.isIdentifier(element) && resolveTypeRef(element, host.file) == null
+		return SourceText.isIdentifier(element) && resolveTypeRef(element, host.file) == null
 			&& (accepts == ITERABLE_TYPE_NAME ? satisfiesIterable(receiver, fromFile) : satisfiesIterator(receiver, fromFile));
 	}
 
@@ -2821,7 +2821,7 @@ final class SymbolIndex {
 		final out: Array<String> = [];
 		for (segment in segments) {
 			out.push(segment);
-			if (segment.length > 0 && RefactorSupport.isUpperInitial(segment)) return out.join('.');
+			if (segment.length > 0 && SourceText.isUpperInitial(segment)) return out.join('.');
 		}
 		return path;
 	}
@@ -2920,7 +2920,7 @@ final class SymbolIndex {
 			final alias: Null<String> = imp.alias;
 			final target: Null<String> = imp.aliasTarget;
 			if (alias == null || target == null) continue;
-			final simple: String = RefactorSupport.lastSegment(target);
+			final simple: String = SourceText.lastSegment(target);
 			if (simple == alias) continue;
 			final bucket: Array<String> = edges[alias] ?? [];
 			if (!bucket.contains(simple)) bucket.push(simple);
@@ -2952,12 +2952,12 @@ final class SymbolIndex {
 		if (params.length == 0) return false;
 		var i: Int = 0;
 		while (i < text.length) {
-			if (!RefactorSupport.isIdentStartChar(text.fastCodeAt(i))) {
+			if (!SourceText.isIdentStartChar(text.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			var end: Int = i + 1;
-			while (end < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(end))) end++;
+			while (end < text.length && SourceText.isIdentChar(text.fastCodeAt(end))) end++;
 			if (params.contains(text.substring(i, end))) return true;
 			i = end;
 		}

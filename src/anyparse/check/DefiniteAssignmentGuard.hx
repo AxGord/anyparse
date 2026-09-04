@@ -1,8 +1,9 @@
 package anyparse.check;
 
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -104,7 +105,7 @@ final class DefiniteAssignmentGuard {
 		if (vocab == null) return null;
 		final before: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (before == null) return null;
-		final spliced: String = RefactorSupport.applyEdits(source, edits);
+		final spliced: String = CanonicalEdit.applyEdits(source, edits);
 		final after: Null<QueryNode> = CheckScan.parseOrNull(plugin, spliced);
 		if (after == null) return null;
 		final stood: Array<String> = [for (had in findings(before, shape, vocab)) had.name];
@@ -139,7 +140,7 @@ final class DefiniteAssignmentGuard {
 			continuationKinds: shape.localDeclContinuationKinds ?? [],
 			typeChildKinds: shape.declTypeChildKinds ?? [],
 			ifKinds: NullFlow.IF_KINDS,
-			nestedFnKinds: RefactorSupport.nestedFunctionKinds(shape),
+			nestedFnKinds: MemberKinds.nestedFunctionKinds(shape),
 			metaKinds: NullFlow.META_KINDS,
 			exitKinds: shape.controlExitKinds ?? []
 		};

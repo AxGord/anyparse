@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
+import anyparse.query.BinderScan;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
@@ -183,13 +185,13 @@ final class PreferFind implements Check {
 			final cand: Null<FixCandidate> = byKey['${span.from}:${span.to}'];
 			if (cand == null) continue;
 			final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s);
-			if (candEdits == null || RefactorSupport.editsOverlapAny(candEdits, edits)) continue;
+			if (candEdits == null || CanonicalEdit.editsOverlapAny(candEdits, edits)) continue;
 			for (e in candEdits) edits.push(e);
 			if (!cand.qualified) rewrote = true;
 		}
 		if (rewrote && !UsingScan.hasUsingModule(header, LAMBDA_MODULE)) {
 			final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-			if (!RefactorSupport.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
+			if (!CanonicalEdit.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
 		}
 		return edits;
 	}
@@ -523,7 +525,7 @@ final class PreferFind implements Check {
 	 */
 	private static function forIfHead(forNode: QueryNode, s: Seams, probe: MemberProbe): Null<Head> {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
-		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
+		final operands: Array<QueryNode> = BinderScan.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
 		final iterable: QueryNode = operands[0];

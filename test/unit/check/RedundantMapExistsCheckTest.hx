@@ -4,7 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.RedundantMapExists;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -207,7 +207,7 @@ class RedundantMapExistsCheckTest extends Test {
 		var source: String = '';
 		for (entry in files) if (entry.file == file) source = entry.source;
 		final edits: Array<{ span: Span, text: String }> = check.fix(source, vs, plugin, SymbolIndex.build(files, plugin));
-		switch RefactorSupport.canonicalize(source, edits, true, plugin) {
+		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
 				return text;
 			case Err(message):

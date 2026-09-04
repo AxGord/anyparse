@@ -6,7 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -713,7 +713,7 @@ class GuardReturnCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }, { file: 'Res.hx', source: model }];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final es: Array<{ span: Span, text: String }> = check.fix(source, scopedViolations(source, model), plugin, index);
-		return switch RefactorSupport.canonicalize(source, es, false, plugin) {
+		return switch CanonicalEdit.canonicalize(source, es, false, plugin) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
@@ -725,14 +725,14 @@ class GuardReturnCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
 		return es.length == 0
 			? source
-			: switch RefactorSupport.canonicalize(source, es, false, plugin) {
+			: switch CanonicalEdit.canonicalize(source, es, false, plugin) {
 				case Ok(text): text;
 				case Err(message): throw message;
 			};
 	}
 
 	private function canon(source: String): String {
-		return switch RefactorSupport.canonicalize(source, [], true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(source, [], true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

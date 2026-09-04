@@ -99,7 +99,7 @@ final class GuardedImportCarry {
 			for (imp in cursorInfo.imports)
 				if (
 					imp.guarded && CARRIABLE_KINDS.contains(imp.kind) && SymbolIndex.pathImportedBy(imp) != null
-					&& RefactorSupport.lastSegment(imp.raw) == dep
+					&& SourceText.lastSegment(imp.raw) == dep
 				)
 					imp
 		];

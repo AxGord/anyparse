@@ -1,10 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -83,7 +84,7 @@ final class DeadCode implements Check {
 		final edits: Array<{ span: Span, text: String }> = [];
 		collectDeletions(tree, source, support, flagged, edits);
 		// A nested dead run sits inside an outer one; keep only the outer deletion.
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
@@ -142,7 +143,7 @@ final class DeadCode implements Check {
 				final firstDead: Null<Span> = kids[i + 1].span;
 				final lastDead: Null<Span> = kids[kids.length - 1].span;
 				if (firstDead != null && lastDead != null && flagged.contains('${firstDead.from}:${firstDead.to}'))
-					edits.push({ span: RefactorSupport.lineExtendedSpan(source, new Span(firstDead.from, lastDead.to)), text: '' });
+					edits.push({ span: ElementSpan.lineExtendedSpan(source, new Span(firstDead.from, lastDead.to)), text: '' });
 			}
 			return;
 		}

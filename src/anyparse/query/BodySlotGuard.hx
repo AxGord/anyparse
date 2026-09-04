@@ -256,7 +256,7 @@ final class BodySlotGuard {
 		// splice below before anything here could see it — so this inherits it rather than re-testing.
 		final disjoint: Array<{ span: Span, text: String }> = edits.copy();
 		disjoint.sort((a, b) -> a.span.from - b.span.from);
-		final spliced: String = RefactorSupport.applyEdits(source, edits);
+		final spliced: String = CanonicalEdit.applyEdits(source, edits);
 		final result: QueryNode = try plugin.parseFile(spliced) catch (exception: Exception) return null;
 		return reached(result, false, {
 			tree: tree,

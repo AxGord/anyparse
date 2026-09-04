@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferCaseGuard;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -375,7 +375,7 @@ class PreferCaseGuardCheckTest extends Test {
 
 	/** Run `fix` and re-emit through the canonical writer, `reformat` on so the minimal fixture need not be canonical. */
 	private function applyFixOnce(src: String): String {
-		return switch RefactorSupport.canonicalize(src, fixEdits(src), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, fixEdits(src), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

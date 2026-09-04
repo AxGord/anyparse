@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnreachableCatch;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -150,7 +150,7 @@ class UnreachableCatchTest extends Test {
 	private function assertFix(src: String, present: String, absent: String): Void {
 		final check: UnreachableCatch = new UnreachableCatch();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);

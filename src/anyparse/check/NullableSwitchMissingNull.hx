@@ -3,9 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullFlow.NullFacts;
 import anyparse.check.NullableSource.NullableSourceCfg;
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -351,7 +351,7 @@ final class NullableSwitchMissingNull implements Check {
 	 * flow-based `NullFlow` path's job, not this positional scanner's.
 	 */
 	private static function relationalAssertOperand(arg: QueryNode, s: Seams, asTrue: Bool): Null<QueryNode> {
-		final e: QueryNode = RefactorSupport.unwrapParens(arg, s.parenKind);
+		final e: QueryNode = BoolExprShape.unwrapParens(arg, s.parenKind);
 		final wantKind: Null<String> = asTrue ? s.shape.notEqKind : s.shape.eqKind;
 		return wantKind == null || e.kind != wantKind ? null : NullFlow.nullComparisonOperand(e, s.identKind, s.nullLitKind);
 	}

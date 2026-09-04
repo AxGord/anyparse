@@ -8,7 +8,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -203,7 +203,7 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 		final ctx: Ctx = {
 			source: source,
 			seams: s,
-			comments: RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)),
+			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
 			types: CheckScan.typeNominalResolver(source, plugin, tree, file, index)
 		};
 		final out: Array<Match> = [];

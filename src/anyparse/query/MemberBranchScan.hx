@@ -52,7 +52,7 @@ final class MemberBranchScan {
 			source: source,
 			condKind: present ? condKind : null,
 			elseKeywords: shape.conditionalElseKeywords ?? [],
-			comments: present ? RefactorSupport.collectCommentTokens(regions()) : []
+			comments: present ? SourceComments.collectCommentTokens(regions()) : []
 		};
 	}
 
@@ -143,7 +143,7 @@ final class MemberBranchScan {
 		decl: TypeDeclMatch, shape: RefShape, source: String, name: String, regions: () -> Array<LexRegion>
 	): Bool {
 		var found: Bool = false;
-		eachTypeMember(decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind), (member, _) -> {
+		eachTypeMember(decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind), (member, _) -> {
 			if (member.name == name) found = true;
 		}, regions);
 		return found;
@@ -172,7 +172,7 @@ final class MemberBranchScan {
 		// member, and starting the group at the first of THOSE swallows whatever else sits between.
 		var from: Int = span.from;
 		var i: Int = run.length - 1;
-		while (i >= 0 && RefactorSupport.isModifierOrMetaKind(run[i].kind)) {
+		while (i >= 0 && MemberKinds.isModifierOrMetaKind(run[i].kind)) {
 			final s: Null<Span> = run[i].span;
 			if (s == null) break;
 			from = s.from;
@@ -245,7 +245,7 @@ final class MemberBranchScan {
 	 */
 	public static function regionMembers(region: QueryNode, isMember: QueryNode -> Bool): Array<QueryNode> {
 		final members: Array<QueryNode> = [];
-		RefactorSupport.eachMemberHost(region, host -> for (c in host.children) if (isMember(c)) members.push(c));
+		MemberKinds.eachMemberHost(region, host -> for (c in host.children) if (isMember(c)) members.push(c));
 		return members;
 	}
 
@@ -388,7 +388,7 @@ final class MemberBranchScan {
 	private static function eachRegion(seams: MemberBranchSeams, container: QueryNode, visit: QueryNode -> Void): Void {
 		for (child in container.children) {
 			if (isRegion(seams, child)) visit(child);
-			if (!RefactorSupport.isMemberDeclKind(child.kind)) eachRegion(seams, child, visit);
+			if (!MemberKinds.isMemberDeclKind(child.kind)) eachRegion(seams, child, visit);
 		}
 	}
 

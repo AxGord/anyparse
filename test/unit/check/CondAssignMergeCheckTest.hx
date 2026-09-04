@@ -6,7 +6,7 @@ import anyparse.check.CondAssignMerge;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -517,7 +517,7 @@ class CondAssignMergeCheckTest extends Test {
 	}
 
 	private function canonicalize(src: String, es: Array<{ span: Span, text: String }>): String {
-		return switch RefactorSupport.canonicalize(src, es, true, new HaxeQueryPlugin(), null) {
+		return switch CanonicalEdit.canonicalize(src, es, true, new HaxeQueryPlugin(), null) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

@@ -5,12 +5,15 @@ import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
@@ -339,7 +342,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		return name == null || (
 			scopeIndex != null
 				? scopeIndex.nameOccursOutside(name, file, span)
-				: RefactorSupport.referencedInRange(source, name, 0, source.length, [span])
+				: OccurrenceScan.referencedInRange(source, name, 0, source.length, [span])
 		);
 	}
 
@@ -400,7 +403,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// the report scope. An unresolvable supertype leaves the member flaggable, as before.
 		if (scopeIndex.supertypeDeclaresMember(owner, decl.name)) return null;
 		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, index)
-			? !RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span])
+			? !OccurrenceScan.referencedInRange(source, decl.name, 0, source.length, [span])
 			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex);
 		return unused ? {
 			file: file,
@@ -436,7 +439,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	private static function provablyDeadProjectWide(
 		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex
 	): Bool {
-		return !RefactorSupport.referencedInRange(source, name, 0, source.length, [span]) && !index.nameOccursOutside(name, file, span)
+		return !OccurrenceScan.referencedInRange(source, name, 0, source.length, [span]) && !index.nameOccursOutside(name, file, span)
 			&& (scopeIndex == index || !scopeIndex.nameOccursOutside(name, file, span));
 	}
 
@@ -454,7 +457,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		for (c in member.children) if (c.kind == 'NoBody') return false;
 		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return true;
 		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
-		return init == null || RefactorSupport.isSideEffectFree(init);
+		return init == null || MemberKinds.isSideEffectFree(init);
 	}
 
 	/**
@@ -480,11 +483,11 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	): Void {
 		final childExtends: Bool = isClassScopeNode(node.kind) ? classDeclaresExtends(node) : inExtends;
 		for (child in node.children) {
-			if (RefactorSupport.isFieldMemberKind(child.kind)) {
+			if (MemberKinds.isFieldMemberKind(child.kind)) {
 				final span: Null<Span> = child.span;
 				if (span != null) out[span.from] = { node: child, parent: node, inExtends: childExtends };
 			}
-			if (RefactorSupport.descendsToMemberHost(node.kind, child.kind)) collectMembers(child, childExtends, out);
+			if (MemberKinds.descendsToMemberHost(node.kind, child.kind)) collectMembers(child, childExtends, out);
 		}
 	}
 
@@ -558,7 +561,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 
 	/** Whether `name` occurs as a word inside any collected string-literal content (a possible reflection target). */
 	private static function mentionedInStrings(name: String, contents: Array<String>): Bool {
-		return contents.exists(c -> RefactorSupport.referencedInRange(c, name, 0, c.length, []));
+		return contents.exists(c -> OccurrenceScan.referencedInRange(c, name, 0, c.length, []));
 	}
 
 	/**
@@ -671,8 +674,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			final at: Int = source.indexOf(className, i);
 			if (at < 0) return false;
 			final afterIdx: Int = at + len;
-			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(at - 1));
-			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(afterIdx));
+			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
+			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk && precededByNew(source, at)) return true;
 			i = at + 1;
 		}
@@ -687,7 +690,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		final start: Int = j + 1 - kw.length;
 		if (start < 0) return false;
 		for (k in 0...kw.length) if (source.fastCodeAt(start + k) != kw.fastCodeAt(k)) return false;
-		return start == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(start - 1));
+		return start == 0 || !SourceText.isIdentChar(source.fastCodeAt(start - 1));
 	}
 
 	/**
@@ -753,7 +756,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		for (child in node.children)
 			out = condKind != null && child.kind == condKind
 				? survivingPerType(child, seams, condKind, out)
-				: MemberBranchScan.survivingDeletions(seams, child, out, c -> RefactorSupport.isMemberDeclKind(c.kind));
+				: MemberBranchScan.survivingDeletions(seams, child, out, c -> MemberKinds.isMemberDeclKind(c.kind));
 		return out;
 	}
 

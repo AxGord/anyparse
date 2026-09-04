@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferKeyValueLoop;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -214,7 +214,7 @@ class PreferKeyValueLoopCheckTest extends Test {
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final r = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0, 'expected $present in $text');
 				Assert.isTrue(text.indexOf(absent) == -1, 'expected no $absent in $text');
