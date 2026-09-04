@@ -212,13 +212,13 @@ typedef HxIfExpr = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap')) var cond: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
-		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite,
-		semicolonBeforeSibling('elseBranch'),
+		inlineBlockBodyIfFlag('expressionIfWithBlocks'), bracketBodyGlueIfFlag('expressionIfWithBrackets'), propagateValueIfBranch,
+		arrowValueIfReflowSite, semicolonBeforeSibling('elseBranch'),
 		valueBraceSymmetry('elseBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'))
 	var thenBranch: HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
-		elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'), inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch,
-		arrowValueIfReflowSite,
+		elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'), inlineBlockBodyIfFlag('expressionIfWithBlocks'),
+		bracketBodyGlueIfFlag('expressionIfWithBrackets'), propagateValueIfBranch, arrowValueIfReflowSite,
 		valueBraceSymmetry(
 			'thenBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'
 		)) var elseBranch: Null<HxExpr>;

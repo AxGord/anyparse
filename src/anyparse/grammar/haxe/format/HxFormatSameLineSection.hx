@@ -231,6 +231,20 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var expressionIfWithBlocks: Bool;
 
+	/**
+	 * omega-bracket-body-glue: the `[` sibling of `expressionIfWithBlocks`.
+	 * When `true`, an opening `[` — an array literal AND an array
+	 * comprehension, which share one ctor — that is the value of an
+	 * expression-`if` branch HUGS the branch head (`return if (c) [` … `] else
+	 * [];`) exactly as a `{` block body already does, instead of dropping to
+	 * its own line under the `expressionIf` policy. Default `false`; the fork
+	 * has no such key, so an absent one is fork parity. A NEW key rather than a
+	 * widening of `expressionIfWithBlocks`, whose job is to collapse a block
+	 * body's CONTENTS: a config wanting the bracket hug would otherwise have to
+	 * flatten every value-`if` block body it owns as well.
+	 */
+	@:optional var expressionIfWithBrackets: Bool;
+
 	@:optional var expressionIfArrowBodyReflow: Bool;
 
 	/**

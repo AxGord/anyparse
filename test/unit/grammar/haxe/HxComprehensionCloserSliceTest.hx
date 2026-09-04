@@ -200,15 +200,17 @@ final class HxComprehensionCloserSliceTest extends Test {
 		Assert.equals(expected, triviaWrite(src, ON));
 	}
 
-	/** A NESTED-generator comprehension is the second neither-predicate shape: base head-glued the curly tail, it now leading-breaks. */
-	public function testNestedGeneratorBraceTailLeadingBreaks(): Void {
+	/**
+	 * A NESTED-generator comprehension used to be the second neither-predicate shape and leading-broke its `[`. Since S78 the
+	 * generator-count veto is gone, so it cuddles like every other `for` item and only its curly tail stays on the next line.
+	 */
+	public function testNestedGeneratorBraceTailCuddles(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (outerElement in outerCollectionValue) for ('
 			+ 'innerElement in innerCollectionValue)\n\t\t\tmacro if ($$p{[\'sourceObject\', innerElement.slot]} != null) '
 			+ '$$p{[outerElement.slot]} = $$p{[\'sourceObject\', innerElement.slot]} ];\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [\n'
-			+ '\t\t\tfor (outerElement in outerCollectionValue) for (innerElement in innerCollectionValue)\n'
-			+ "\t\t\t\tmacro if ($p{['sourceObject', innerElement.slot]} != null) $p{[outerElement.slot]} "
-			+ '= $$p{[\'sourceObject\', innerElement.slot]}\n\t\t];\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (outerElement in outerCollectionValue) for ('
+			+ 'innerElement in innerCollectionValue)\n\t\t\tmacro if ($$p{[\'sourceObject\', innerElement.slot]} != null) '
+			+ '$$p{[outerElement.slot]} = $$p{[\'sourceObject\', innerElement.slot]}\n\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src, ON));
 	}
 

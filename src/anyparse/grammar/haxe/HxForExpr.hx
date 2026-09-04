@@ -58,5 +58,7 @@ typedef HxForExpr = {
 	@:lead('(') var varName: HxIdentLit;
 	@:optional @:lead('=>') var valueName: Null<HxKeyValueBinder>;
 	@:kw('in') @:trail(')') var iterable: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral')) var body: HxExpr;
+	@:trailOpt(';') @:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor(
+		'ObjectLit', 'indentObjectLiteral'
+	), strictFitLineBody) var body: HxExpr;
 };

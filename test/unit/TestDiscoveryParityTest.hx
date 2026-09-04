@@ -727,6 +727,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxTypedefSemiSliceTest',
 		'unit.grammar.haxe.HxUniformStatementBlanksSliceTest',
 		'unit.grammar.haxe.HxUntypedBodyPolicySliceTest',
+		'unit.grammar.haxe.HxValueIfBracketHugSliceTest',
 		'unit.grammar.haxe.HxValueIfFitSliceTest',
 		'unit.grammar.haxe.HxVarInitBreakAfterEqOverflowTest',
 		'unit.grammar.haxe.HxVarNoTypeSliceTest',
@@ -915,7 +916,8 @@ class TestDiscoveryParityTest extends Test {
 		Assert.same([
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
-			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineKeepsTheBodyOnAFittingHeadLine :: control :: M-NO-WIRE',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine :: control '
+			+ ':: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLinePullsUpABodyThatFits :: control :: M-NO-WIRE',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testKeepReadsTheSourceBreak :: control :: M-ALWAYS-SAME',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testNextLayoutIsIdempotent :: control :: M-ALWAYS-SAME',
@@ -925,10 +927,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testTheSpecificKeyOutranksTheExpressionIfFanout :: control '
 			+ ':: M-FANOUT-FIRST',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testFilterIfWithoutElseStillCuddles :: control :: M-CUDDLE-OFF',
-			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyDeclinesTheCuddle :: control :: M-ELSE-GATE',
-			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyDeclinesTheCuddleWithTightBrackets :: control '
-			+ ':: M-ELSE-GATE',
-			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE'
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyCuddles :: control :: M-ELSE-GATE',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyCuddlesWithTightBrackets :: control :: M-ELSE-GATE',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyUnderFitLineLeavesTheHeadLine :: control '
+			+ ':: M-FIRST-LINE-FIT',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase :: control '
+			+ ':: M-FIRST-LINE-FIT'
 		], TestRegistry.pins(), 'the pilot annotations, with their roles and killing arms');
 	}
 
