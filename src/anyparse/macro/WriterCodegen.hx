@@ -3,6 +3,7 @@ package anyparse.macro;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.MacroNames.*;
 
 /**
  * Pass 4W of the macro pipeline — writer codegen.
@@ -336,11 +337,6 @@ class WriterCodegen {
 					out.push(cf.name);
 			case _:
 		}
-	}
-
-	private static function packOf(typePath: String): Array<String> {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
 
 	private static function binaryEntry(rootTypePath: String, rootReturnCT: ComplexType): Field {
@@ -1761,7 +1757,7 @@ class WriterCodegen {
 	 * `keepInnerWhenEmpty` (slice ω-anon-fn-empty-paren-inner-space) —
 	 * when `true` AND the list is empty, splices a single space between
 	 * the open and close literals (`( )` instead of `()`). Routed by
-	 * `WriterLowering.keepInnerWhenEmptyExpr` from a per-field
+	 * `WriterPolicyLowering.keepInnerWhenEmptyExpr` from a per-field
 	 * `@:fmt(keepInnerWhenEmpty('<flagName>'))` annotation; default
 	 * `false` preserves the pre-slice tight emission for every other
 	 * sepList caller that does not opt in.
@@ -2425,11 +2421,6 @@ class WriterCodegen {
 			}),
 			pos: Context.currentPos()
 		};
-	}
-
-	private static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
 	}
 
 	private static function pushOptFanoutHelpers(fields: Array<Field>, optionsTypePath: String, optionsCT: ComplexType): Void {

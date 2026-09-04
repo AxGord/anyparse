@@ -3,6 +3,7 @@ package anyparse.macro;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.WriterBlankLowering.*;
 
 /**
  * Pass 3W helpers — the block-mode (`@:lead` + `@:trail` + `@:trivia`) Star
@@ -54,6 +55,7 @@ import haxe.macro.Expr;
  * writer either reads an undeclared local or declares a dead one, with
  * nothing in this module's types to catch it.
  */
+@:access(anyparse.macro.WriterBlankLowering)
 final class TriviaBlockLowering {
 
 	/**
@@ -221,7 +223,7 @@ final class TriviaBlockLowering {
 		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>, uniformBetween: Bool, uniformBetweenOptField: Null<String>,
 		anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool
 	): Expr {
-		final blankExtras: Expr = WriterLowering.blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		if (!anyEmptyLinesFlag) return triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
 		final stripByDocExpr: Expr = afterFieldsWithDocComments
 			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
@@ -353,7 +355,7 @@ final class TriviaBlockLowering {
 		final addByCurrDocExpr: Expr = g.addByCurrDocExpr;
 		final addByInterMemberExpr: Expr = g.addByInterMemberExpr;
 		final addByUniformBetweenExpr: Expr = g.addByUniformBetweenExpr;
-		final blankExtras: Expr = WriterLowering.blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		return macro {
 			$currHasDocComputeExpr;
 			$currKindComputeExpr;
@@ -535,7 +537,7 @@ final class TriviaBlockLowering {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
 		final caseSym: Bool = caseSiblingSymmetryKnobs != null && caseSiblingSymmetryKnobs.length == 2;
-		final caseSiblingWidthExpr: Expr = WriterLowering.caseSiblingWidthProbeExpr(
+		final caseSiblingWidthExpr: Expr = caseSiblingWidthProbeExpr(
 			elemFn, caseSym ? caseSiblingSymmetryKnobs : null, caseSiblingUnitsFn, caseSiblingStructuralFn, caseSiblingControlFlowFn
 		);
 		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail, caseSym);
@@ -655,7 +657,7 @@ final class TriviaBlockLowering {
 			afterFieldsWithDocComments, beforeDocCommentEmptyLines, existingBetweenFields, interMember, indentCaseLabelsGate,
 			lineCommentTrailBlank
 		);
-		final blankAround = WriterLowering.blankAroundMultilineExprs(blankAroundOptField);
+		final blankAround = blankAroundMultilineExprs(blankAroundOptField);
 		final ctx: WriterLowering.BlockStarCtx = {
 			fieldAccess: fieldAccess,
 			openText: openText,
@@ -1072,7 +1074,7 @@ final class TriviaBlockLowering {
 		final trackDocCommentExpr: Expr = c.trackDocCommentExpr;
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final trackPrevKindExpr: Expr = c.trackPrevKindExpr;
-		final balcEmitExpr: Expr = WriterLowering.triviaBalcEmitExpr(c.uniformStmtBlanks);
+		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
 		final blankAroundMarkExpr: Expr = c.blankAroundMarkExpr;
 		final blankAroundSeenExpr: Expr = c.blankAroundSeenExpr;
 		final blankAroundApplyExpr: Expr = c.blankAroundApplyExpr;
@@ -1119,7 +1121,7 @@ final class TriviaBlockLowering {
 		final initCurrDocCommentExpr: Expr = c.initCurrDocCommentExpr;
 		final initCurrSplitLeadingExpr: Expr = c.initCurrSplitLeadingExpr;
 		final initPrevKindExpr: Expr = c.initPrevKindExpr;
-		final uniformCollapseInitExpr: Expr = WriterLowering.triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
+		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
 		final whileExpr: Expr = triviaBlockWhileExpr(c);
 		final blockTrailSepEmitExpr: Expr = c.blockTrailSepEmitExpr;
 		final extraInnerTrailBlankExpr: Expr = c.extraInnerTrailBlankExpr;

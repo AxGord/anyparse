@@ -116,12 +116,18 @@ name); the lowering never interprets one as a grammar type of its own — see "T
 never spells a grammar's own type or constructor" above.
 
 **The measurement, on this tree.** 335 `@:fmt(...)` annotations across the shipped
-grammars declare **211 distinct flags**: 141 bare-only, 65 argument-only, and 5 that
+grammars declare **212 distinct flags**: 142 bare-only, 65 argument-only, and 5 that
 appear both ways (`beginEndType`, `blockBodyKeepsInline`, `emptyCurlyBreak`, `leftCurly`,
 `rightCurly`). The distribution is long-tailed — `padLeading` 51 sites, `padTrailing` 48,
 `propagateExprPosition` 30, `wrapRules` 26, `groupRestProbe` 21, `conditionalBodyIndent`
 18, `captureRhsTrail` 16, `bodyPolicy` 15, `leftCurly` 14, `typeParamClose` 13 — and 102 of
 the 211 appear exactly once, each for one construct's one problem.
+
+(`clearBracePolicy` is the 212th: it is declared twice, on `HxExpr.MacroClassExpr` and
+`HxExpr.MacroExpr`, and read by `WriterLowering`, but the first extraction of this list
+dropped it — a `@:fmt(a, b)` entry whose SECOND identifier is the one nothing else names.
+The ownership table below is the check that found it, and is now the check that keeps the
+list honest.)
 
 **The inventory.** `(…)` marks a flag that takes arguments, `[(…)]` one seen in both
 forms; everything else is bare.
@@ -143,7 +149,7 @@ breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, c
 captureCondOpenNewline, captureKwNewline, capturePostfixOpSpace, captureRhsTrail, captureSource(…),
 captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
 caseSiblingSymmetry(…), catchParensGap, catchParensInsideClose, catchParensInsideOpen, chainNestSuppress,
-clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, complexItems, condExprFitBreak,
+clearBracePolicy, clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, complexItems, condExprFitBreak,
 condExprFitGroup, conditionalBodyIndent, conditionalMarkerDedent, condParensInside(…),
 condSpliceCaseMarkerDedent, condSwitchOpenCasesNest, condWrap(…), condWrapEnd, constructFitBody,
 constructFitGroup(…), constructFitSep, cuddle, deferKwSpace, dropSingleStmtBraces, elemSelfTrailsNewline,
@@ -179,9 +185,46 @@ Regenerate it with `apq meta '@:fmt' src/anyparse/grammar --limit 500 --flat` an
 the identifiers out of each argument list — that command IS the source of the list above,
 so a flag added to a grammar shows up without anyone maintaining a second copy. What it
 cannot tell you is whether the macro still READS a given flag: a declaration whose handler
-was removed keeps parsing and does nothing. `apq mentions fmtHasFlag src/anyparse/macro`
-names the three modules that answer them — `WriterLowering`, `TriviaTypeSynth`,
-`Lowering` — and is the other half of any audit.
+was removed keeps parsing and does nothing. That is the other half of the audit, and it is
+the table below.
+
+### Which module answers a flag
+
+`@:fmt` has no dispatcher: a flag is not routed to a handler, it is ASKED FOR at the point
+in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(node, [...])`,
+`fmtReadStringArgs(node, 'bodyPolicy')`). So the answer to "who handles this flag" is
+"which module names it", and this table is that, per module, over every string literal in
+`src/anyparse/macro` that matches an inventory name.
+
+| module | inventory flags it names |
+|---|---|
+| `WriterLowering` | 199 |
+| `TriviaTypeSynth` | 17 |
+| `Lowering` | 16 |
+| `WriterPolicyLowering` | 10 |
+| `WriterCodegen` | 3 |
+| `WriterBlankLowering` | 2 |
+| `WriterLoweringSupport` | 2 |
+| `TriviaSlotNames` | 1 |
+| `WriterChainLowering` | 1 |
+
+Read the shape of it, not just the numbers. `WriterLowering` answers 199 of 212 because
+the writer lowering is organised by grammar SHAPE — Star, Ref, Terminal, Alt branch, Pratt
+— and a flag is a branch INSIDE one of those emitters, not a unit of its own. A per-flag
+module split is therefore not a code motion; it would mean rewriting the emitters, and the
+thirteen flags that have left are the ones whose whole handler was a function.
+
+**Four flags are handler-only** — `WriterLowering` names them, no shipped grammar declares
+them, so they are absent from the inventory above: `blankLinesBeforeCtor`,
+`blankLinesBeforeCtorIf`, `fill` and `fillDoubleIndent`. That is the plugin contract
+working (a handler is available before a grammar asks for it), not dead code — but it is
+the state that has to be visible, because the same reading covers a handler whose grammar
+declaration was DELETED.
+
+`unit.lowering.FmtFlagOwnershipTest` pins all of it: every inventory flag is named by at
+least one module, the module list and the per-module counts match the scan, and the four
+handler-only flags are named-but-undeclared. Change any of it and the test says which line
+of this file to edit. That is how `clearBracePolicy` was found.
 
 ## Planned strategies
 

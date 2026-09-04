@@ -4,6 +4,7 @@ package anyparse.grammar.haxe;
 import anyparse.macro.AstPredLowering;
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.MacroNames.*;
 
 /**
  * The SWITCH-CASE half of the Haxe grammar's AST-predicate tables.
@@ -204,7 +205,7 @@ final class HxCasePredLowering extends AstPredLowering {
 	 * one switch-case Star element stands for, or `null` when the element
 	 * is its own single unit. Consumed by the widest-sibling pre-pass of
 	 * `@:fmt(caseSiblingSymmetry(…))` (see
-	 * `WriterLowering.caseSiblingWidthProbeExpr`), which splices the
+	 * `WriterBlankLowering.caseSiblingWidthProbeExpr`), which splices the
 	 * returned units in place of the element before measuring.
 	 *
 	 * A `#if <cond> case … #end` region projects as ONE
@@ -240,7 +241,7 @@ final class HxCasePredLowering extends AstPredLowering {
 		};
 		final body: Expr = nullSwitch(ident('c'), macro null, [caseBind(HX_SWITCH_CASE, 'Conditional', [0 => '_i'], collect)], macro null);
 		return predField(
-			'caseSiblingUnits_${AstPredLowering.simpleName(HX_SWITCH_CASE)}',
+			'caseSiblingUnits_${simpleName(HX_SWITCH_CASE)}',
 			[valueArg('c', HX_SWITCH_CASE)],
 			ruleNullArrayCT(HX_SWITCH_CASE), body,
 			'The case units a `#if`-guarded switch-case element expands to, or null when it is its own single unit.'
@@ -343,7 +344,7 @@ final class HxCasePredLowering extends AstPredLowering {
 	 * budget, so the per-switch symmetry verdict can be reached without a
 	 * width comparison at all. Consumed by the
 	 * `@:fmt(caseSiblingSymmetry(…))` pre-pass
-	 * (`WriterLowering.caseSiblingWidthProbeExpr`), which drops the whole
+	 * (`WriterBlankLowering.caseSiblingWidthProbeExpr`), which drops the whole
 	 * widest-sibling measurement for `BodyFit.SIBLING_FORCE_BREAK` on the
 	 * first unit that answers true.
 	 *
@@ -417,7 +418,7 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseOf(HX_SWITCH_CASE, ['CondSpliceCase'], macro true)
 		], macro false);
 		return predField(
-			'caseUnitStructuralBreak_${AstPredLowering.simpleName(HX_SWITCH_CASE)}',
+			'caseUnitStructuralBreak_${simpleName(HX_SWITCH_CASE)}',
 			[valueArg('c', HX_SWITCH_CASE)],
 			macro :Bool, body,
 			'True iff a case unit\'s body sits below its label at any budget (multi-statement, one refused statement, '
@@ -459,7 +460,7 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_SWITCH_CASE, 'DefaultBranch', [0 => '_d'], verdict(HX_DEFAULT_BRANCH, 'stmts', '_d'))
 		], macro false);
 		return predField(
-			'caseUnitControlFlowBody_${AstPredLowering.simpleName(HX_SWITCH_CASE)}',
+			'caseUnitControlFlowBody_${simpleName(HX_SWITCH_CASE)}',
 			[valueArg('c', HX_SWITCH_CASE)],
 			macro :Bool, body, 'True iff a case unit holds exactly one body statement and that statement is control-flow.'
 		);

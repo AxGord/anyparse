@@ -4,6 +4,7 @@ package anyparse.macro;
 import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.MacroNames.*;
 
 using anyparse.macro.MetaInspect;
 
@@ -211,16 +212,5 @@ class BinaryWriterLowering {
 	}
 
 	// -------- helpers --------
-
-	private static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
-	}
-
-	private static function packOf(typePath: String): Array<String> {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
-	}
-
 }
 #end

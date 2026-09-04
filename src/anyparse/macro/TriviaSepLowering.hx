@@ -4,6 +4,9 @@ package anyparse.macro;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
+import anyparse.macro.WriterPolicyLowering.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterBlankLowering.*;
 
 /**
  * Pass 3W helpers — the separated-list (`@:trivia` + `@:sep`) Star emit
@@ -39,7 +42,7 @@ import haxe.macro.MacroStringTools;
  * `_arr` / `_t` / `_si` / `_inner` / `opt` from the Star scaffold, `_elem`
  * from this module's own force-multi branch, `_currHasDocComment` from
  * `triviaSepTypedefBlanksExprs`, `_uniformCollapse` from the
- * `WriterLowering.triviaUniformCollapseInitExpr` declaration
+ * `WriterBlankLowering.triviaUniformCollapseInitExpr` declaration
  * `triviaSepDispatchExpr` splices, and the `_dt()` / `_dc()` / `_dn()` /
  * `_de()` / `_dhl()` / `_dwb()` Doc wrappers emitted by `WriterCodegen` on
  * the generated class. The two cross-helper locals are gated on the SAME
@@ -50,6 +53,7 @@ import haxe.macro.MacroStringTools;
  * dead one, with nothing in either module's types to catch it — and the
  * `_uniformCollapse` half crosses the module boundary.
  */
+@:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterLoweringSupport, anyparse.macro.WriterPolicyLowering)
 final class TriviaSepLowering {
 
 	/**
@@ -505,7 +509,7 @@ final class TriviaSepLowering {
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr();
 		final lineExpr: Expr = triviaSepForceMultiLineExpr(c.appendTrailingCommaExpr, c.sepText);
-		final balcEmitExpr: Expr = WriterLowering.triviaBalcEmitExpr(c.uniformStmtBlanks);
+		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
 		return macro {
 			final _inner: Array<anyparse.core.Doc> = [];
 			$initCurrDocCommentExpr;
@@ -626,9 +630,9 @@ final class TriviaSepLowering {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	private static function wrapRulesAccess(wrapRulesField: String, mapWrap: Null<WriterLowering.SepStarMapWrap>): Expr {
-		final base: Expr = WriterLowering.optFieldAccess(wrapRulesField);
+		final base: Expr = optFieldAccess(wrapRulesField);
 		if (mapWrap == null) return base;
-		final mapAccess: Expr = WriterLowering.optFieldAccess(mapWrap.field);
+		final mapAccess: Expr = optFieldAccess(mapWrap.field);
 		final isMapLiteralExpr: Expr = mapWrap.isMapLiteralExpr;
 		return macro ($isMapLiteralExpr ? $mapAccess : $base);
 	}
@@ -730,7 +734,7 @@ final class TriviaSepLowering {
 		//  - in the no-trivia branch: feed `(leadFlat, leadBreak)` into
 		//    `WrapList.emit` so the engine's Group(IfBreak) picks the
 		//    right shape per the wrap-cascade's flat/break decision.
-		final knobExpr: Null<Expr> = leftCurlyKnob == null ? null : WriterLowering.optFieldAccess(leftCurlyKnob);
+		final knobExpr: Null<Expr> = leftCurlyKnob == null ? null : optFieldAccess(leftCurlyKnob);
 		final nextPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
 		// Doc that selects `_doh()` for `BracePlacement.Next`, `_de()`
 		// otherwise. `_doh()` is `OptHardline` — drops when the previous
@@ -759,7 +763,7 @@ final class TriviaSepLowering {
 		// through `WrapList.emit`'s `trailBreak` param (slice
 		// ω-wraplist-trailbreakdoc) — both branches honour the same
 		// `RightCurlyPlacement.{Inline,Same}` semantic.
-		final rightCurlyKnobExpr: Null<Expr> = rightCurlyKnob == null ? null : WriterLowering.optFieldAccess(rightCurlyKnob);
+		final rightCurlyKnobExpr: Null<Expr> = rightCurlyKnob == null ? null : optFieldAccess(rightCurlyKnob);
 		final inlinePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'RightCurlyPlacement', 'Inline']);
 		final triviaTrailDoc: Expr = rightCurlyKnobExpr == null ? macro _dhl() : {
 			expr: ESwitch(rightCurlyKnobExpr, [{ values: [inlinePat], expr: macro _de(), guard: null }], macro _dhl()),
@@ -812,9 +816,9 @@ final class TriviaSepLowering {
 		trailingCommaField: Null<String>, trailPresentAccess: Null<Expr>, matrixWrap: Bool, forceMultiInTypedef: Bool, openText: String,
 		closeText: String, sepText: String, triviaElemCall: Expr, trailingCommaRemovable: Bool
 	): WriterLowering.SepStarTrailExprs {
-		final knobAccessOrFalse: Expr = trailingCommaField == null ? macro false : WriterLowering.optFieldAccess(trailingCommaField);
+		final knobAccessOrFalse: Expr = trailingCommaField == null ? macro false : optFieldAccess(trailingCommaField);
 		final forceExceedsExpr: Expr = trailPresentAccess != null && trailingCommaField != null
-			? WriterLowering.keepsTrailingCommaExpr(macro $trailPresentAccess && $knobAccessOrFalse, trailingCommaRemovable)
+			? keepsTrailingCommaExpr(macro $trailPresentAccess && $knobAccessOrFalse, trailingCommaRemovable)
 			: macro false;
 		// ω-meta-allman-objectlit: when source had a trailing `,`, preserve
 		// it in any multi-line shape regardless of the ADD knob (but not
@@ -828,7 +832,7 @@ final class TriviaSepLowering {
 		// Mirrors haxe-formatter's "Keep" trailing-comma policy for the
 		// meta-prefixed object-literal pattern (`return @patch { ..., }`
 		// → multi-line with closing `,`).
-		final appendTrailingCommaExpr: Expr = WriterLowering.keepsTrailingCommaExpr(
+		final appendTrailingCommaExpr: Expr = keepsTrailingCommaExpr(
 			trailPresentAccess != null && trailingCommaField != null ? macro $trailPresentAccess || $knobAccessOrFalse : knobAccessOrFalse,
 			trailingCommaRemovable
 		);
@@ -1264,7 +1268,7 @@ final class TriviaSepLowering {
 		// the block-Star statement policy. Declared BEFORE the predicate scan
 		// (which reads it) and before the force-multi loop's blank guard.
 		// `macro {}` for every non-opted sep-Star.
-		final uniformCollapseInitExpr: Expr = WriterLowering.triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
+		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
 		return macro {
 			// ω-keep-predicate-split + ω-cascade-emits-comments: decompose
 			// `_hasTrivia` into three orthogonal predicates so the
@@ -1543,7 +1547,7 @@ final class TriviaSepLowering {
 		// `macro false` for every non-opted sep-Star keeps the emit
 		// byte-identical.
 		final uniformStripExpr: Expr = uniformStmtBlanks ? macro _uniformCollapse : macro false;
-		final blankExtras: Expr = WriterLowering.blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		return beforeDocCommentEmptyLines
 			? macro {
 				$currHasDocComputeExpr;

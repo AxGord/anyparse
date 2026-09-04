@@ -4,6 +4,7 @@ package anyparse.macro;
 import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.MacroNames.*;
 
 /**
  * Pass 3S of the macro pipeline - span-info lowering.
@@ -378,17 +379,17 @@ class SpanInfoLowering extends PairedShapeLowering {
 
 	/** Generated span-info walk name for a rule type path. */
 	public static inline function spanInfoFnName(typePath: String): String {
-		return '_spanInfo${PairedShapeLowering.simpleName(typePath)}S';
+		return '_spanInfo${simpleName(typePath)}S';
 	}
 
 	/** Generated nominal-name helper name for a rule type path. */
 	public static inline function nominalFnName(typePath: String): String {
-		return '_nominalName${PairedShapeLowering.simpleName(typePath)}S';
+		return '_nominalName${simpleName(typePath)}S';
 	}
 
 	/** Generated own-span helper name for a rule type path. */
 	public static inline function spanOfFnName(typePath: String): String {
-		return '_spanOf${PairedShapeLowering.simpleName(typePath)}S';
+		return '_spanOf${simpleName(typePath)}S';
 	}
 
 	/** The accessor ids that denote a plain stored slot, as an array-literal expression for the emitted test. */

@@ -5,6 +5,7 @@ import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
+import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
@@ -2199,11 +2200,6 @@ class TriviaTypeSynth {
 			if (node != null) return node.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 		}
 		return false;
-	}
-
-	private static function packOf(qualifiedName: String): Array<String> {
-		final idx: Int = qualifiedName.lastIndexOf('.');
-		return idx == -1 ? [] : qualifiedName.substring(0, idx).split('.');
 	}
 
 	private static function leafOf(qualifiedName: String): String {

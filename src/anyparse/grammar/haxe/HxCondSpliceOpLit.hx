@@ -19,7 +19,7 @@ package anyparse.grammar.haxe;
  * WORD-like ones (`is`, `in`) carry a `(?![A-Za-z0-9_])` guard so
  * `island` and `index` are not read as an operator followed by a
  * suffix — the terminal twin of the `matchKw` word-boundary dispatch
- * `Lowering.endsWithWordChar` gives them inside the Pratt loop.
+ * `ParseDispatchLowering.endsWithWordChar` gives them inside the Pratt loop.
  *
  * The TERNARY's `?` and `:` are deliberately NOT here, and the
  * omission is measured rather than assumed. Adding them makes the

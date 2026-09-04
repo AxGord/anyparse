@@ -3,6 +3,7 @@ package anyparse.macro;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.WriterCascadeLowering.*;
 
 /**
  * Pass 3W helpers — the EOF-mode trivia Star emit family.
@@ -19,7 +20,7 @@ import haxe.macro.Expr;
  * Split out of `WriterLowering` for size — the two are NOT independent. The
  * macro-time surface is small: one inbound call (`triviaEofStarExpr`, from
  * `WriterLowering.emitTriviaEofStar`) and one outbound call
- * (`WriterLowering.buildCascadeEmit`, for the shared ctor-blank cascade).
+ * (`WriterCascadeLowering.buildCascadeEmit`, for the shared ctor-blank cascade).
  * Both directions run through `@:access` and every member here stays
  * private.
  *
@@ -37,6 +38,7 @@ import haxe.macro.Expr;
  * `leadingCommentDocRun` / `trailingCommentDoc*`) emitted by
  * `WriterCodegen` on the generated class.
  */
+@:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterCascadeLowering)
 final class TriviaEofLowering {
 
 	/**
@@ -84,7 +86,7 @@ final class TriviaEofLowering {
 		// for cascade priority semantics, transparent-wrapper handling,
 		// and the runtime locals (`_t`, `_v0`, `opt`) the emitted Exprs
 		// reference.
-		final emit: WriterLowering.CascadeEmit = WriterLowering.buildCascadeEmit(
+		final emit: WriterLowering.CascadeEmit = buildCascadeEmit(
 			afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos, betweenIfNotInfos
 		);
 		final c: WriterLowering.EofStarCtx = {
@@ -192,7 +194,7 @@ final class TriviaEofLowering {
 		// `isSameLine` over the whitespace `MarkWrapping` has already
 		// committed; here it is answered from the built Doc, in three terms:
 		//  - a COMMITTED break — exact, the same `hasForcedBreak` term
-		//    `WriterLowering.blankAroundMultilineExprs` uses for members;
+		//    `WriterBlankLowering.blankAroundMultilineExprs` uses for members;
 		//  - a flat width the module-level pen (column 0) cannot hold —
 		//    the sibling's second term;
 		//  - AND a break OPPORTUNITY to spend it on. Without the third term
