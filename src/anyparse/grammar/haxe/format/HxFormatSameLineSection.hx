@@ -242,6 +242,16 @@ package anyparse.grammar.haxe.format;
 	 * widening of `expressionIfWithBlocks`, whose job is to collapse a block
 	 * body's CONTENTS: a config wanting the bracket hug would otherwise have to
 	 * flatten every value-`if` block body it owns as well.
+	 *
+	 * The knob owns the CLOSE side too: a branch value it hugs also drops the
+	 * optional `;` the source wrote before `else` and pulls the `else` up to the
+	 * `]`, so `return if (c) [` closes as `] else [];` and not as `];` on a line
+	 * of its own. Without that half the hug is half a shape -- the pre-`else` gap
+	 * resolves to `Keep` under `sameLine.expressionIf: next`, so a break the
+	 * source wrote there would survive forever. The `;` drop overrides
+	 * `whitespace.semicolonBeforeElse` for this one shape. The curly twin (`};`)
+	 * is deliberately NOT covered: `expressionIfWithBlocks` collapses a block
+	 * body's CONTENTS and hugs nothing.
 	 */
 	@:optional var expressionIfWithBrackets: Bool;
 
