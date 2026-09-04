@@ -685,6 +685,7 @@ final class HaxeFormat implements TextFormat {
 		expressionElseBody: BodyPolicy.Same,
 		expressionForBody: BodyPolicy.Keep,
 		expressionIfWithBlocks: false,
+		expressionIfWithBrackets: false,
 		dropSingleStmtBraces: false,
 		singleStmtBraceSymmetry: false,
 		condDirectiveOpSpacing: OperatorSpacing.Keep,

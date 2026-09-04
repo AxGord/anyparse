@@ -810,6 +810,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionElseBody: BodyPolicy,
 	expressionForBody: BodyPolicy,
 	expressionIfWithBlocks: Bool,
+	expressionIfWithBrackets: Bool,
 	leftCurly: BracePlacement,
 	emptyCurly: EmptyCurly,
 	objectLiteralLeftCurly: BracePlacement,

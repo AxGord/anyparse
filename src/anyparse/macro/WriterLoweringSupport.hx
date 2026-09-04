@@ -348,13 +348,31 @@ final class WriterLoweringSupport {
 	private static function isCurlyBlockCtorBranch(branch: ShapeNode): Bool {
 		if (!isBlockCtorBranch(branch)) return false;
 		final leadText: Null<String> = branch.annotations[AnnotationKeys.LIT_LEAD_TEXT];
-		return leadText != null && StringTools.startsWith(leadText, '{');
+		return leadText != null && leadText.startsWith('{');
 	}
 
 	private static function isBlockCtorBranch(branch: ShapeNode): Bool {
 		final leadText: Null<String> = branch.annotations[AnnotationKeys.LIT_LEAD_TEXT];
 		final trailText: Null<String> = branch.annotations[AnnotationKeys.LIT_TRAIL_TEXT];
 		return leadText != null && trailText != null && (branch.children.length == 1 && branch.children[0].kind == Star);
+	}
+
+	/**
+	 * The `[` half of the split `isCurlyBlockCtorBranch` makes: a block-ctor
+	 * shape whose `@:lead` literal opens a square bracket (`HxExpr.ArrayExpr`
+	 * — an array literal AND an array comprehension, which share one ctor).
+	 *
+	 * The two predicates are deliberately separate rather than one
+	 * parameterised on the delimiter. The curly one is UNCONDITIONAL — a `{`
+	 * block body always overrides the body policy, because a block owns its
+	 * own indent — while this one only ever fires behind a config flag
+	 * (`@:fmt(bracketBodyGlueIfFlag(...))`), since a bracket body hugging its
+	 * head is a house-style choice, not a structural fact.
+	 */
+	private static function isBracketBlockCtorBranch(branch: ShapeNode): Bool {
+		if (!isBlockCtorBranch(branch)) return false;
+		final leadText: Null<String> = branch.annotations[AnnotationKeys.LIT_LEAD_TEXT];
+		return leadText != null && leadText.startsWith('[');
 	}
 
 	/**

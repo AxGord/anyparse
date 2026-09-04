@@ -64,6 +64,17 @@ class WriterLowering {
 	 */
 	private static inline final ARROW_VALUE_IF_SITE: String = 'arrowValueIfReflowSite';
 
+	/**
+	 * omega-strict-fitline-body: the field flag that makes a `FitLine` body policy answer
+	 * for the WHOLE body rather than for its first line. Read at the three
+	 * `bodyPolicyWrap` seats a body field can arrive through, for the same reason
+	 * `ARROW_VALUE_IF_SITE` is named once.
+	 */
+	private static inline final STRICT_FIT_LINE_BODY: String = 'strictFitLineBody';
+
+	/** omega-bracket-body-glue: the `@:fmt` entry naming the knob that hugs a `[` body to its branch head. */
+	private static inline final BRACKET_BODY_GLUE: String = 'bracketBodyGlueIfFlag';
+
 	/** `@:fmt(arrowValueIfReflow)` arg count that carries the optional value-if FIT knob as its 4th arg. */
 	private static inline final FIT_KNOB_ARG_COUNT: Int = 4;
 
@@ -4305,6 +4316,45 @@ class WriterLowering {
 		return { tagged: tagged, untagged: untagged };
 	}
 
+	/**
+	 * omega-bracket-body-glue: the BRACKET counterpart of
+	 * `collectBlockCtorPatternsByLeftCurly` — every `[ … ]` block ctor of
+	 * `bodyTypePath`, as `case` patterns. Unsplit, because the `leftCurly`
+	 * knob has no bracket sibling: a `[` body has exactly one placement, glued
+	 * to the head, and the FLAG decides whether it is taken at all.
+	 */
+	private function collectBracketBlockCtorPatterns(bodyTypePath: String): Array<Expr> {
+		final rule: Null<ShapeNode> = _shape.rules[bodyTypePath];
+		return rule == null || rule.kind != Alt ? [] : [
+			for (branch in rule.children) if (isBracketBlockCtorBranch(branch)) branchCtorPattern(bodyTypePath, branch)
+		];
+	}
+
+	/**
+	 * omega-bracket-body-glue: the runtime test that substitutes `Same` for the
+	 * resolved policy — `opt.<flagName>` AND the body's runtime ctor is one of
+	 * the body type's `[ … ]` block ctors. Null when the field carries no
+	 * `@:fmt(bracketBodyGlueIfFlag(...))`, or when the body type has no bracket
+	 * block ctor at all, so every other grammar and every other field keep their
+	 * bytes.
+	 */
+	private function buildBracketBodyGlueTest(opts: WrapBodyOpts): Null<Expr> {
+		final args: Null<Array<String>> = opts.bracketBodyGlueArgs;
+		if (args == null) return null;
+		if (args.length != 1)
+			Context.fatalError(
+				'WriterLowering: bodyPolicyWrap bracketBodyGlueArgs requires (flagName), got ${args.length} args', Context.currentPos()
+			);
+		final patterns: Array<Expr> = collectBracketBlockCtorPatterns(opts.bodyTypePath);
+		if (patterns.length == 0) return null;
+		final flagAccess: Expr = optFieldAccess(args[0]);
+		final ctorTest: Expr = {
+			expr: ESwitch(opts.bodyValueExpr, [{ values: patterns, expr: macro true, guard: null }], macro false),
+			pos: Context.currentPos()
+		};
+		return macro $flagAccess && $ctorTest;
+	}
+
 	private function branchCtorPattern(bodyTypePath: String, branch: ShapeNode): Expr {
 		final ctorName: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final arity: Int = branch.children.length + branchSynthExtraArity(bodyTypePath, branch);
@@ -7158,7 +7208,10 @@ class WriterLowering {
 		// decision, so a wrapped condition (hardlines in its committed shape)
 		// forces the body onto the next line. Multiline non-block bodies keep
 		// the glue branch (the group is already broken; OptSpace flushes).
-		final fitInnerExpr: Expr = if (opts.constructFitBody == true)
+		final fitInnerExpr: Expr = if (opts.strictFitLine == true)
+			// omega-strict-fitline-body: the whole body decides, not its first line.
+			macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth, anyparse.format.BodyFit.SIBLING_NONE, true);
+		else if (opts.constructFitBody == true)
 			// One soft line, no group of its own — see WrapBodyOpts.constructFitBody.
 			macro _dn(_cols, _dc([_dl(), _body]));
 		else if (opts.condFitGroup == true)
@@ -7290,7 +7343,12 @@ class WriterLowering {
 		final tests: { same: Null<Expr>, next: Null<Expr> } = buildElseSwitchTests(opts);
 		final esSame: Null<Expr> = tests.same;
 		final esNext: Null<Expr> = tests.next;
-		final effPolicy: Expr = esSame == null ? optFlag : macro ($esSame ? $samePat : ($esNext ? $nextPat : $optFlag));
+		final elseSwitchPolicy: Expr = esSame == null ? optFlag : macro ($esSame ? $samePat : ($esNext ? $nextPat : $optFlag));
+		// omega-bracket-body-glue: same substitution seam, same reason — a `[` body
+		// that hugs its branch head is the `Same` layout, so it costs one ternary
+		// here instead of a whole extra outer arm.
+		final bracketTest: Null<Expr> = buildBracketBodyGlueTest(opts);
+		final effPolicy: Expr = bracketTest == null ? elseSwitchPolicy : macro ($bracketTest ? $samePat : $elseSwitchPolicy);
 		final policySwitch: Expr = { expr: ESwitch(effPolicy, policyCases, sameLayoutExpr), pos: Context.currentPos() };
 		final outerCases: Array<Case> = [];
 		if (ifStmtPattern != null) {
@@ -9940,6 +9998,8 @@ class WriterLowering {
 			bodyAllmanIndentArgs: bodyAllmanIndentArgs,
 			fallbackFlagName: fallbackFlag,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
+			strictFitLine: child.fmtHasFlag(STRICT_FIT_LINE_BODY),
+			bracketBodyGlueArgs: child.fmtReadStringArgs(BRACKET_BODY_GLUE),
 			condFitGroup: condFitGroup,
 			constructFitBody: child.fmtHasFlag('constructFitBody'),
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
@@ -10734,6 +10794,8 @@ class WriterLowering {
 				bodyOnSameLineExpr: bodyOnSameLineExpr,
 				indentObjArgs: indentObjArgs,
 				inlineBlockBodyArgs: inlineBlockBodyArgs,
+				strictFitLine: child.fmtHasFlag(STRICT_FIT_LINE_BODY),
+				bracketBodyGlueArgs: child.fmtReadStringArgs(BRACKET_BODY_GLUE),
 				arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
 				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow'),
 				elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
@@ -10791,6 +10853,8 @@ class WriterLowering {
 			afterTrailExpr: afterTrailExpr,
 			indentObjArgs: indentObjArgs,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
+			strictFitLine: child.fmtHasFlag(STRICT_FIT_LINE_BODY),
+			bracketBodyGlueArgs: child.fmtReadStringArgs(BRACKET_BODY_GLUE),
 			constructFitBody: child.fmtHasFlag('constructFitBody'),
 			elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
 		}));
@@ -12759,7 +12823,28 @@ typedef WrapBodyOpts = {
 	// therefore spells no grammar ctor of its own here, unlike the older
 	// `elseIf` flag beside it, which still hardcodes `IfStmt`/`IfExpr`.
 	// Null → byte-inert.
-	?elseSwitchArgs: Null<Array<String>>
+	?elseSwitchArgs: Null<Array<String>>,
+	// omega-strict-fitline-body: true for a body field carrying
+	// `@:fmt(strictFitLineBody)` (`HxForExpr.body` / `HxForReif.body`). Its
+	// `FitLine` layout then answers for the WHOLE body rather than for the
+	// body's FIRST line: a body that renders flat stays on the head line while
+	// it fits, and a body that cannot render flat goes to the next line one
+	// indent deeper instead of gluing its first line to the head. That is the
+	// `refuseGlue` arm of `BodyFit.fitLineLayout`, reached here by a field flag
+	// rather than by the case-body caller's control-flow verdict. False
+	// everywhere else -> byte-inert.
+	?strictFitLine: Bool,
+	// omega-bracket-body-glue: the runtime flag name from
+	// `@:fmt(bracketBodyGlueIfFlag('<flagName>'))` on a body field
+	// (`HxIfExpr.thenBranch` / `elseBranch`). When `opt.<flagName>` is set and
+	// the body's runtime ctor is one of the body type's BRACKET block ctors
+	// (`@:lead('[')` + `@:trail` + a single `Star`, i.e. `HxExpr.ArrayExpr` —
+	// an array literal AND an array comprehension), the resolved policy is
+	// substituted with `Same`, so the `[` hugs the branch head exactly as a
+	// `{` block body already does through the curly block-ctor arm. Folded
+	// into the policy SELECTOR rather than added as another outer arm for the
+	// JVM method-size reason `buildBodyCoreWrap` records. Null -> byte-inert.
+	?bracketBodyGlueArgs: Null<Array<String>>
 };
 
 /**

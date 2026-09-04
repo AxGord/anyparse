@@ -4389,7 +4389,7 @@ class WrapList {
 	 * (`testWhileComprehensionNotCuddled`). Wire a body policy on `HxWhileExpr`
 	 * first if `while` comprehensions ever need this.
 	 *
-	 * Four gates, all cheap left-spine / flat walks already used by the sibling predicates:
+	 * Three gates, all cheap left-spine / flat walks already used by the sibling predicates:
 	 *  - first visible Text is the reserved `for` keyword (exact match —
 	 *    unambiguous, as in `isBlockBodyComprehensionItem`);
 	 *  - the body is NOT a head-glued `{ … }`
@@ -4410,55 +4410,23 @@ class WrapList {
 	 *    `anyItemLength > 30`), and cuddling such an item would leave the
 	 *    whole body flat on the head line with a lone `]` below — the fit
 	 *    probe cannot catch that, since the item genuinely fits
-	 *    (`testInlineBodyComprehensionNotCuddled`);
-	 *  - the item has no TOP-LEVEL `else` (`hasTopLevelElse` at the item's own
-	 *    Nest depth). An `expressionIf: next` if/else body carries a break of
-	 *    its own, and cuddling then glues `[`, the `for` head and the `if`
-	 *    condition into ONE line while the `else` keeps the CONTAINER line's
-	 *    indent — so the `else` reads as belonging to whatever opened that
-	 *    line, not to its own `if`. This is the SAME question the arrow path
-	 *    asks through `arrowBodyIsBrokenIfElse`; routing the comprehension
-	 *    through it is what makes the two constructs agree, and what makes a
-	 *    comprehension nested inside another lay out like its parent
-	 *    (`HxComprehensionIfElseBodySliceTest`). A FILTER `if` (no `else`) is
-	 *    untouched — that is the knob's own canonical shape.
+	 *    (`testInlineBodyComprehensionNotCuddled`).
 	 *
-	 * NESTED generators are excluded on purpose: a second `for` / `while`
-	 * keyword anywhere inside the item means the body is itself a generator
-	 * (or contains one), where "the head" is no longer a single well-defined
-	 * segment and the fork's own layout is unverified. Conservative bail —
-	 * they keep the pre-knob leading-break shape
-	 * (`testNestedComprehensionNotCuddled`).
+	 * TWO further gates used to sit here and are GONE: a top-level `else` in the
+	 * item, and a nested second generator. Neither was a property of the BRACKET
+	 * — `[ for (head)` is glued to its own `[` whatever the body turns out to be,
+	 * and where the body lands below that head is the body policy's question
+	 * (`expressionForBody`), which owns its own `Nest`. Keeping them meant the
+	 * two commonest real shapes — a comprehension whose body is an if/else, and
+	 * an outer comprehension holding a second `for` — were the only ones the knob
+	 * refused, which is the layout the user rejected three times. The `else`
+	 * gate's stated hazard (the `else` rendering at CONTAINER indent) belongs to
+	 * a body policy that glues the body to the head line; under the strict
+	 * `comprehensionFor: fitLine` the body starts one level below the head and
+	 * the `else` sits with its own `if`.
 	 */
 	private static function isCuddleableComprehensionItem(item: Doc): Bool {
-		return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0
-			&& countGeneratorKeywords(item) == 1 && !hasTopLevelElse(item, 0);
-	}
-
-	/**
-	 * Number of `for` / `while` keyword Text leaves in `d`, capped at 2 (the
-	 * only distinction any caller needs: exactly one generator vs nested).
-	 * Full flat walk reusing `flatPushChildren`'s child order, so it sees the
-	 * same tree `flatLength` measured — i.e. the FLAT projection: a keyword
-	 * reachable only through the break side of an `IfBreak` / `If*Exceeds` is
-	 * not counted, matching `flatLength`'s own blindness. A keyword inside a
-	 * string literal never matches — the literal's Text leaf carries its
-	 * quotes.
-	 */
-	private static function countGeneratorKeywords(d: Doc): Int {
-		final stack: Array<Doc> = [d];
-		var n: Int = 0;
-		while (stack.length > 0 && n < 2) {
-			final node: Doc = stack.pop();
-			if (flatPushChildren(node, stack)) continue;
-			switch (node) {
-				case Text(s):
-					final t: String = StringTools.trim(s);
-					if (t == 'for' || t == 'while') n++;
-				case _:
-			}
-		}
-		return n;
+		return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0;
 	}
 
 	/**
@@ -4527,7 +4495,7 @@ class WrapList {
 	 * verbatim `trailingCommentDocVerbatim` / leading-comment output, i.e. a
 	 * trimmed atom opening `//` or `/*`. A string literal can never collide:
 	 * its Text leaf carries its own quotes, so it trims to `'…` / `"…` (the
-	 * same reasoning `countGeneratorKeywords` relies on), and a division
+	 * same reasoning `firstVisibleText` relies on), and a division
 	 * operand trims to a bare `/`.
 	 *
 	 * BOTH comment forms count here, unlike `MethodChainEmit

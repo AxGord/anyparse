@@ -588,6 +588,7 @@ final class HaxeFormatConfigLoader {
 			expressionElseBody: base.expressionElseBody,
 			expressionForBody: base.expressionForBody,
 			expressionIfWithBlocks: base.expressionIfWithBlocks,
+			expressionIfWithBrackets: base.expressionIfWithBrackets,
 			dropSingleStmtBraces: base.dropSingleStmtBraces,
 			singleStmtBraceSymmetry: base.singleStmtBraceSymmetry,
 			condDirectiveOpSpacing: base.condDirectiveOpSpacing,
@@ -1058,6 +1059,12 @@ final class HaxeFormatConfigLoader {
 		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
 		if (section.expressionTry != null) opt.expressionTry = HaxeFormatValues.sameLineToRuntime(section.expressionTry);
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;
+		// omega-bracket-body-glue: the `[` sibling of `expressionIfWithBlocks`, and a
+		// SEPARATE key rather than an extension of it — that one collapses a block
+		// body's CONTENTS, this one only decides where the body's opening delimiter
+		// sits. Riding on `expressionIfWithBlocks` would have made a config that
+		// wants `return if (c) [` also flatten every `{ … }` value-if body it owns.
+		if (section.expressionIfWithBrackets != null) opt.expressionIfWithBrackets = section.expressionIfWithBrackets;
 	}
 
 	private static function applyTrailingCommas(section: HxFormatTrailingCommasSection, opt: HxModuleWriteOptions): Void {

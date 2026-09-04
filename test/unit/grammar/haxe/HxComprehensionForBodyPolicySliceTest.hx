@@ -25,8 +25,10 @@ import utest.Test;
  * The four values are the engine's own `BodyPolicy`, so they mean here what
  * they mean on every other body knob: `same` puts the body on the head's
  * line, `next` on its own line one level in, `keep` reproduces the source
- * break, and `fitLine` glues a body whose first line fits and breaks one
- * whose does not.
+ * break, and `fitLine` keeps a body that RENDERS FLAT on the head line while it fits and
+ * puts one that cannot render flat on its own line one level in. S78 made that
+ * last clause strict: it used to ask only whether the body's FIRST line fits,
+ * which glued an if/else head to the `for` and left its `else` below.
  *
  * Bracket padding is NOT part of the change — it stays coupled to
  * `comprehensionFor: fitLine` (fork parity: `MarkSameLine.markArrayComprehension`
@@ -60,20 +62,15 @@ final class HxComprehensionForBodyPolicySliceTest extends Test {
 	private static final FLAT_IF_ELSE: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (elementValue in '
 		+ 'sourceCollectionValueName) if (elementValue > offsetValue) elementValue else offsetValue ];\n\t}\n}';
 
-	/** `same`: the body keeps the head line; `expressionIf: next` then staircases the if/else itself. */
-	private static final SAME_IF_ELSE: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n\t\t\tfor (elementValue in '
-		+ 'sourceCollectionValueName) if (elementValue > offsetValue)\n\t\t\t\telementValue\n\t\t\telse\n'
-		+ '\t\t\t\toffsetValue\n\t\t];\n\t}\n}';
+	/** `same`: the body keeps the head line, which keeps the `for` head glued to its own `[`. */
+	private static final SAME_IF_ELSE: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (elementValue in '
+		+ 'sourceCollectionValueName) if (elementValue > offsetValue)\n\t\t\telementValue\n\t\telse\n'
+		+ '\t\t\toffsetValue\n\t\t];\n\t}\n}';
 
 	/** `next`: the `if` head leaves the `for` line and the `else` aligns with it — the user-reported ask. */
 	private static final NEXT_IF_ELSE: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (elementValue in '
 		+ 'sourceCollectionValueName)\n\t\t\tif (elementValue > offsetValue)\n\t\t\t\telementValue\n\t\t\telse\n'
 		+ '\t\t\t\toffsetValue\n\t\t];\n\t}\n}';
-
-	/** `fitLine`: the body's first line fits the head line, so it glues and the branches staircase below it. */
-	private static final FIT_IF_ELSE: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (elementValue in '
-		+ 'sourceCollectionValueName) if (elementValue > offsetValue)\n\t\t\telementValue\n\t\telse\n'
-		+ '\t\t\toffsetValue\n\t\t];\n\t}\n}';
 
 	/** A plain-bodied comprehension the SOURCE broke after the `for` head. */
 	private static final BROKEN_PLAIN: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n\t\t\tfor (elementValue in '
@@ -112,11 +109,16 @@ final class HxComprehensionForBodyPolicySliceTest extends Test {
 		Assert.equals(NEXT_IF_ELSE, HxWriteFixture.triviaWrite(FLAT_IF_ELSE, CFG_NEXT));
 	}
 
-	/** `fitLine` glues a body whose first line fits the head line. */
+	/**
+	 * `fitLine` asks whether the WHOLE body renders flat, not whether its FIRST line fits (S78) — an if/else
+	 * body never does, so it leaves the head line. On THIS input that is byte-identical to `next`, which is
+	 * why the pair is discriminated one arm down, on a body that DOES render flat:
+	 * `testFitLinePullsUpABodyThatFits` collapses it, `testNextPutsTheBodyOnItsOwnLine`'s value would not.
+	 */
 	@:pin('control')
-	@:killer('M-NO-WIRE')
-	public function testFitLineKeepsTheBodyOnAFittingHeadLine(): Void {
-		Assert.equals(FIT_IF_ELSE, HxWriteFixture.triviaWrite(FLAT_IF_ELSE, CFG_FIT));
+	@:killer('M-FIRST-LINE-FIT')
+	public function testFitLineMovesANonFlatBodyOffTheHeadLine(): Void {
+		Assert.equals(NEXT_IF_ELSE, HxWriteFixture.triviaWrite(FLAT_IF_ELSE, CFG_FIT));
 	}
 
 	/** `fitLine` on a flat-fitting body collapses the source break, like `same`. */
