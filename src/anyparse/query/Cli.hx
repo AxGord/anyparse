@@ -14,7 +14,6 @@ import anyparse.core.EnvFlag;
 import anyparse.format.WhitespaceInvariant;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.AddElement;
 import anyparse.query.AddImport;
 import anyparse.query.AddMember;
@@ -23,7 +22,6 @@ import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
-import anyparse.query.Cases.CasesHit;
 import anyparse.query.ChangeSig;
 import anyparse.query.Clusters.ClusterReport;
 import anyparse.query.CrossRename;
@@ -56,10 +54,17 @@ import anyparse.query.ShardPlan.ShardPlanResult;
 import anyparse.query.StdlibDifferential.DifferentialOutcome;
 import anyparse.query.SymbolQuery;
 import anyparse.query.Uses.UsesHit;
+import anyparse.query.cli.CliArgs;
+import anyparse.query.cli.CliCommand;
+import anyparse.query.cli.CliContext;
+import anyparse.query.cli.CliEdit;
+import anyparse.query.cli.CliIo;
+import anyparse.query.cli.CliRegistry;
+import anyparse.query.cli.CliWalk;
+import anyparse.query.cli.WriteFailure;
 import anyparse.query.format.Json;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
-import anyparse.runtime.EditDistance;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -84,15 +89,6 @@ using Lambda;
 import sys.io.File;
 import sys.FileSystem;
 #end
-
-/**
- * Skip-entry for a walker's 0-hit nudge: a path the walk could not parse
- * plus a human-readable failure locus (`LINE:COL <message>`). The locus
- * lets the reader judge whether the parse failure is upstream of the
- * searched-for content (warning critical) or far past it (can ignore)
- * without a follow-up `hxq ast <path>` probe.
- */
-typedef SkipEntry = { path: String, locus: String };
 
 /**
  * Discriminator on the first-failure locus utest emitted —
@@ -324,34 +320,6 @@ typedef SelfStatusOpts = {
 };
 
 /**
- * What `resolveInputPaths` hands a subcommand: the grammar plugin for `--lang`,
- * the `.hx` paths its file / dir / glob specs expanded to, and whether the call
- * named exactly ONE concrete file (the gofmt-style "print to stdout" case).
- * Named because three seats spell it out — the resolver itself, `shard-plan`
- * and `self-status`.
- */
-typedef ResolvedInputs = {
-	var plugin: GrammarPlugin;
-	var paths: Array<String>;
-	var singleFile: Bool;
-};
-
-/**
- * What `expandInputs` answers: the deduped `.hx` paths the specs expanded to, whether the call
- * named exactly ONE concrete file, and every spec that expanded to NOTHING.
- *
- * `unmatched` is what the union alone cannot say — a spec naming a file that is not there vanishes
- * into `paths` the moment another spec matched, and the run analyses a scope short of what it was
- * asked for. Named rather than spelled inline because the reporting seat and its pin both have to
- * write it out.
- */
-typedef ExpandedInputs = {
-	var paths: Array<String>;
-	var singleFile: Bool;
-	var unmatched: Array<String>;
-};
-
-/**
  * The outcome of one `lint --fix` pass over the active file set: `nextActive` is the file set (with rewritten sources) to feed the next fixpoint pass, and `fixedDelta` how many findings that pass resolved.
  */
 typedef LintPassResult = {
@@ -535,8 +503,6 @@ final class Cli {
 	private static inline final NO_TARGET_TOP_N: Int = 10;
 	#end
 
-	private static inline final SKIP_PATHS_SHOWN: Int = 5;
-
 	/** The `--format` value whose stdout is a JSON record array — a MACHINE reader, never capped by `--all`. */
 	private static inline final FORMAT_JSON: String = 'json';
 
@@ -553,20 +519,6 @@ final class Cli {
 	 */
 	private static inline final DECLINE_LINES_SHOWN: Int = 20;
 
-	/**
-	 * The suffix every write is staged through, on the far side of the extension on purpose:
-	 * a `.hx.apq-tmp` a killed process left behind is invisible to every `*.hx` walk this tool
-	 * does, where a `.apq-tmp.hx` would be linted, formatted and reported as a source file.
-	 */
-	private static inline final STAGED_WRITE_SUFFIX: String = '.apq-tmp';
-
-	/**
-	 * The mode bits a staged temporary inherits from the target it will replace: 07777, so the
-	 * setuid / setgid / sticky trio travels with the nine permission bits rather than being dropped
-	 * by the rename. Inert on a `.hx` source and free to carry.
-	 */
-	private static inline final PERMISSION_BITS: Int = 0xFFF;
-
 	/** How many rule ids `unfixedFixLedger` names before it summarises the rest as a count. */
 	private static inline final DECLINED_RULES_SHOWN: Int = 6;
 
@@ -577,8 +529,6 @@ final class Cli {
 	 * (`unused-import`'s four arms are the widest, and the fourth is 15 of 204 findings).
 	 */
 	private static inline final DECLINED_REASONS_SHOWN: Int = 3;
-
-	private static inline final FUZZY_MAX_DIST: Int = 3;
 
 	/** The maximum 32-bit signed integer — a null-span sort sentinel and the unbounded `--top` / `--all` count. */
 	private static inline final MAX_INT: Int = 0x7FFFFFFF;
@@ -614,21 +564,6 @@ final class Cli {
 	 */
 	private static inline final RECON_SOURCE_WINDOW_RADIUS: Int = 3;
 
-	private static inline final FUZZY_TOP_K: Int = 3;
-
-	/**
-	 * Substring "did you mean" — `query` ≥ this length OR the substring
-	 * pre-filter is skipped (avoids `Hx` matching every grammar type).
-	 */
-	private static inline final FUZZY_SUBSTRING_MIN_QUERY: Int = 4;
-
-	/**
-	 * Substring "did you mean" — candidate's extra char count over
-	 * `query.length` must not exceed this (avoids `Foo` matching a huge
-	 * `FooSomeReallyLongName` and crowding out true neighbours).
-	 */
-	private static inline final FUZZY_SUBSTRING_MAX_EXTRA: Int = 8;
-
 	/**
 	 * Single-line byte-diff describing where `actual` first diverges from
 	 * `expected`, with windowed snippets around the divergence point.
@@ -640,16 +575,6 @@ final class Cli {
 
 	private static inline final BYTE_DIFF_LEAD: Int = 4;
 	private static inline final STAGE_PROBE_PATH: String = '/tmp/anyparse-last-probe.hx';
-	private static inline final AUTO_LIMIT_THRESHOLD: Int = 500;
-
-	/**
-	 * Heartbeat interval for the multi-file walk progress line — emit a
-	 * stderr `scanned K/N` every this many files so a corpus-wide walk
-	 * never goes silent (a watchdog reading a redirected stream sees
-	 * steady byte growth). Tuned so a several-hundred-file `src/` walk
-	 * yields ~10–20 lines rather than one-per-file flooding.
-	 */
-	private static inline final PROGRESS_INTERVAL: Int = 25;
 
 	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
 	private static inline final DEFAULT_REACH_PATHS: Int = 10;
@@ -726,7 +651,7 @@ final class Cli {
 			// Named with the subcommand, like every other line the CLI prints: a bare `apq:` costs
 			// a script the identity of the op that failed, and `args[0]` is the op by construction
 			// (the empty / `--help` argv returned above).
-			stderr('apq ${args[0]}: ${failure.message}\n');
+			CliIo.stderr('apq ${args[0]}: ${failure.message}\n');
 			return EXIT_RUNTIME;
 		}
 	}
@@ -743,12 +668,19 @@ final class Cli {
 			return EXIT_OK;
 		}
 		final cmd: String = args[0];
-		_requireMatch = false;
+		var requireMatch: Bool = false;
 		final rest: Array<String> = [];
 		for (a in args.slice(1)) if (a == '--exit-on-empty' || a == '--require-match')
-			_requireMatch = true;
+			requireMatch = true;
 		else
 			rest.push(a);
+		// TRANSITIONAL, and it ends when the registry owns every command: a registered
+		// command reads the flag off its own run context and never sees a static, while
+		// the 66 still below reach it through `emptyExit`. One parse, two consumers —
+		// `_requireMatch` goes with the last `case` arm.
+		_requireMatch = requireMatch;
+		final registered: Null<CliCommand> = CliRegistry.find(cmd);
+		if (registered != null) return registered.run(rest, new CliContext(requireMatch));
 		switch cmd {
 			case 'ast':
 				return runAst(rest);
@@ -774,8 +706,6 @@ final class Cli {
 				return runSafeDelete(rest);
 			case 'encapsulate-field':
 				return runEncapsulateField(rest);
-			case 'make-final':
-				return runMakeFinal(rest);
 			case 'introduce-parameter-object':
 				return runIntroduceParameterObject(rest);
 			case 'symbols':
@@ -794,14 +724,14 @@ final class Cli {
 				#if (sys || nodejs)
 				return runMutationVerdict(rest);
 				#else
-				stderr('apq mutation-verdict: requires a sys target (file read)\n');
+				CliIo.stderr('apq mutation-verdict: requires a sys target (file read)\n');
 				return EXIT_USAGE;
 				#end
 			case 'shard-plan':
 				#if (sys || nodejs)
 				return runShardPlan(rest);
 				#else
-				stderr('apq shard-plan: requires a sys target (file read)\n');
+				CliIo.stderr('apq shard-plan: requires a sys target (file read)\n');
 				return EXIT_USAGE;
 				#end
 			case 'inline':
@@ -844,8 +774,6 @@ final class Cli {
 				return runNew(rest);
 			case 'set-doc':
 				return runSetDoc(rest);
-			case 'set-comment':
-				return runSetComment(rest);
 			case 'rewrite':
 				return runRewrite(rest);
 			case 'comment-rewrite':
@@ -862,8 +790,6 @@ final class Cli {
 				return runLit(rest);
 			case 'mentions':
 				return runMentions(rest);
-			case 'cases':
-				return runCases(rest);
 			case 'callees':
 				return runCallees(rest);
 			case 'callers':
@@ -876,7 +802,7 @@ final class Cli {
 				#if (sys || nodejs)
 				return runStdlibDup(rest);
 				#else
-				stderr('apq stdlib-dup: requires a sys target (probe staging + compiler spawn)\n');
+				CliIo.stderr('apq stdlib-dup: requires a sys target (probe staging + compiler spawn)\n');
 				return EXIT_USAGE;
 				#end
 			case 'gates':
@@ -895,28 +821,28 @@ final class Cli {
 				#if (sys || nodejs)
 				return runRecon(rest);
 				#else
-				stderr('apq recon: requires a sys target (filesystem walk)\n');
+				CliIo.stderr('apq recon: requires a sys target (filesystem walk)\n');
 				return EXIT_USAGE;
 				#end
 			case 'sweep':
 				#if (sys || nodejs)
 				return runSweep(rest);
 				#else
-				stderr('apq sweep: requires a sys target (file read)\n');
+				CliIo.stderr('apq sweep: requires a sys target (file read)\n');
 				return EXIT_USAGE;
 				#end
 			case 'test-summary':
 				#if (sys || nodejs)
 				return runTestSummary(rest);
 				#else
-				stderr('apq test-summary: requires a sys target (file or stdin read)\n');
+				CliIo.stderr('apq test-summary: requires a sys target (file or stdin read)\n');
 				return EXIT_USAGE;
 				#end
 			case 'self-status':
 				#if (sys || nodejs)
 				return runSelfStatus(rest);
 				#else
-				stderr('apq self-status: requires a sys target (filesystem walk)\n');
+				CliIo.stderr('apq self-status: requires a sys target (filesystem walk)\n');
 				return EXIT_USAGE;
 				#end
 			// `show` is the SAME command under a name a shell sandbox does not veto. An agent
@@ -928,11 +854,11 @@ final class Cli {
 				#if (sys || nodejs)
 				return runSource(rest);
 				#else
-				stderr('apq $cmd: requires a sys target (file read)\n');
+				CliIo.stderr('apq $cmd: requires a sys target (file read)\n');
 				return EXIT_USAGE;
 				#end
 			case _:
-				stderr('apq: unknown subcommand "$cmd"\n');
+				CliIo.stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
 				return EXIT_USAGE;
 		}
@@ -964,24 +890,6 @@ final class Cli {
 	}
 
 	/**
-	 * Read a file as **source for parsing**. Same as `readFile` for plain
-	 * `.hx` files; auto-extracts the input section (between the 1st and
-	 * 2nd `\n---\n` separators) when the path ends with `.hxtest` AND the
-	 * content has the canonical 3-section layout (`config / input /
-	 * expected`, as defined by `unit.HxFormatterCorpusHelpers`). This
-	 * collapses the recurring `.hxtest` strip-test dance — `awk` /
-	 * scratch-file extract followed by parse — into a direct
-	 * `hxq strip /path/case.hxtest --replace … --with …`.
-	 *
-	 * Non-3-section `.hxtest` files (malformed, or a fork variant) pass
-	 * through unchanged so the parser sees the raw bytes and the user
-	 * gets a normal parse-error trace, not a silent transformation.
-	 */
-	private static inline function readSourceForParse(path: String): String {
-		return readHxtestSectionOrRaw(path, 1);
-	}
-
-	/**
 	 * Read a file as **expected output bytes** for byte-comparison
 	 * (`writer-equals <input> <expected>`). Symmetric to
 	 * `readSourceForParse`: when the path ends with `.hxtest` and has the
@@ -991,22 +899,7 @@ final class Cli {
 	 * of pre-extracting via `awk` / scratch file.
 	 */
 	private static inline function readExpectedForCompare(path: String): String {
-		return readHxtestSectionOrRaw(path, 2);
-	}
-
-	/**
-	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
-	 * for `FormatConfigDiscovery.discover` — the CLI keeps the short local name its
-	 * ~20 call sites use.
-	 */
-	private static inline function discoverFormatConfig(filePath: String): Null<String> {
-		return FormatConfigDiscovery.discover(filePath);
-	}
-
-	private static inline function sysPrint(s: String): Void {
-		#if (sys || nodejs)
-		Sys.print(s);
-		#end
+		return CliIo.readHxtestSectionOrRaw(path, 2);
 	}
 
 	/**
@@ -1278,19 +1171,6 @@ final class Cli {
 		};
 	}
 
-	private static inline function setCommentParseExit(code: Int): SetCommentOpts {
-		return {
-			lang: '',
-			write: false,
-			reformat: false,
-			fromFile: null,
-			file: null,
-			pos: null,
-			commentText: null,
-			errExit: code
-		};
-	}
-
 	private static inline function replaceNodeParseExit(code: Int): ReplaceNodeOpts {
 		return {
 			lang: '',
@@ -1377,12 +1257,12 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		final name: Null<String> = o.name;
 		if (name == null) {
-			stderr('apq refs: missing <name> argument\n');
+			CliIo.stderr('apq refs: missing <name> argument\n');
 			printRefsUsage();
 			return EXIT_USAGE;
 		}
 		if (o.inputSpecs.length == 0) {
-			stderr('apq refs: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq refs: missing <file-or-dir-or-glob> argument\n');
 			printRefsUsage();
 			return EXIT_USAGE;
 		}
@@ -1392,13 +1272,13 @@ final class Cli {
 		// same any-flag-narrows convention.
 		final anyFilter: Bool = o.wantDecls || o.wantReads || o.wantWrites;
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final shape: RefShape = plugin.refShape();
 
-		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq refs: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
+			CliIo.stderr('apq refs: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -1418,20 +1298,21 @@ final class Cli {
 		final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = collected.entries;
 
 		if (allEntries.length == 0)
-			stderr('${emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
-		if (collected.memberAccesses > 0) stderr('${memberAccessNudge('refs', nameStr, collected.memberAccesses, collected.bindings)}\n');
+			CliIo.stderr('${CliWalk.emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
+		if (collected.memberAccesses > 0)
+			CliIo.stderr('${CliWalk.memberAccessNudge('refs', nameStr, collected.memberAccesses, collected.bindings)}\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('refs', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> = limitEntries(
+		final cappedLimit: Int = CliWalk.effectiveAutoLimit('refs', o.limit, totalHits);
+		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> = CliWalk.limitEntries(
 			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		if (o.json) {
-			sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource, plugin.lexicalRegions));
+			CliIo.sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource, plugin.lexicalRegions));
 		} else {
 			for (entry in shown)
-				sysPrint(Text.renderRefs(
+				CliIo.sysPrint(Text.renderRefs(
 					entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, plugin.lexicalRegions(entry.source), o.flat
 				));
 		}
@@ -1471,17 +1352,17 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '--scope':
-					scope = expectValue(args, ++i, '--scope');
+					scope = CliArgs.expectValue(args, ++i, '--scope');
 				case '--qualify-shadowed':
 					qualifyShadowed = true;
 				case '-h', '--help':
@@ -1489,38 +1370,38 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq rename: unknown option "$a"\n');
+						CliIo.stderr('apq rename: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null && selectExpr == null && matchExpr == null && newName == null && isPosSpec(a))
+					else if (posSpec == null && selectExpr == null && matchExpr == null && newName == null && CliArgs.isPosSpec(a))
 						posSpec = a;
 					else if (newName == null)
 						newName = a;
 					else {
-						stderr('apq rename: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq rename: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || newName == null) {
-			stderr("apq rename: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <newName>\n");
+			CliIo.stderr("apq rename: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <newName>\n");
 			printRenameUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
 		final newNameStr: String = newName;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq rename: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq rename: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		final op: String = 'rename';
-		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 
 		if (scope != null) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scope, write, plugin);
@@ -1539,13 +1420,13 @@ final class Cli {
 		switch result {
 			case Ok(text):
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq rename: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq rename: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq rename: $message\n');
+				CliIo.stderr('apq rename: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -1564,13 +1445,13 @@ final class Cli {
 	private static function runRenameScope(
 		filePath: String, source: String, line: Int, col: Int, newName: String, scope: String, write: Bool, plugin: GrammarPlugin
 	): Int {
-		final expanded: ExpandedInputs = expandInputs([scope], '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs([scope], '.hx');
 		final paths: Array<String> = expanded.paths;
 		// The cursor file's declaration must be covered even if it sits
 		// outside the scope directory — add it when expandInputs missed it.
 		if (!paths.contains(filePath)) paths.push(filePath);
 		if (paths.length == 0) {
-			stderr('apq rename: --scope $scope matched no .hx files\n');
+			CliIo.stderr('apq rename: --scope $scope matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -1580,8 +1461,8 @@ final class Cli {
 				scopeFiles.push({ file: path, source: source });
 				continue;
 			}
-			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
-				stderr('apq rename: $path: ${exception.message}\n');
+			final fileSource: String = try CliIo.readSourceForParse(path) catch (exception: Exception) {
+				CliIo.stderr('apq rename: $path: ${exception.message}\n');
 				return EXIT_RUNTIME;
 			};
 			scopeFiles.push({ file: path, source: fileSource });
@@ -1599,17 +1480,17 @@ final class Cli {
 				var totalOccurrences: Int = 0;
 				for (c in changes) totalOccurrences += c.count;
 				if (write) {
-					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
-					stderr('apq rename: wrote ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
+					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+					CliIo.stderr('apq rename: wrote ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
 				} else {
-					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
-					sysPrint('total: ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
-					stderr('apq rename: NOTHING written — this is a preview; re-run with --write to apply\n');
+					for (c in changes) CliIo.sysPrint('${c.file}: ${c.count} occurrence(s)\n');
+					CliIo.sysPrint('total: ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
+					CliIo.stderr('apq rename: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
-				if (advisory != null) stderr('apq rename: $advisory\n');
+				if (advisory != null) CliIo.stderr('apq rename: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq rename: $message\n');
+				CliIo.stderr('apq rename: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -1691,20 +1572,22 @@ final class Cli {
 				if (changes.length != 1) throw new Exception('in-file rename produced ${changes.length} file change(s)');
 				final change: FileChange = changes[0];
 				if (write) {
-					writeFile(change.file, change.newSource);
-					stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)\n');
+					CliIo.writeFile(change.file, change.newSource);
+					CliIo.stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)\n');
 				} else {
 					// The one preview tail that spells the notice itself: this op's name already
 					// occurs twice as a bare literal, and a third would read as an extractable
 					// constant rather than as the CLI vocabulary it is.
-					sysPrint(change.newSource);
-					stderr('apq rename: ${change.file} NOT written — this is a preview on stdout; re-run with --write to apply\n');
+					CliIo.sysPrint(change.newSource);
+					CliIo.stderr('apq rename: ${change.file} NOT written — this is a preview on stdout; re-run with --write to apply\n');
 				}
-				stderr('apq rename: in-file rename - references in OTHER files keep the old name; pass --scope <dir> to cover them\n');
-				if (advisory != null) stderr('apq rename: $advisory\n');
+				CliIo.stderr(
+					'apq rename: in-file rename - references in OTHER files keep the old name; pass --scope <dir> to cover them\n'
+				);
+				if (advisory != null) CliIo.stderr('apq rename: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq rename: $message\n');
+				CliIo.stderr('apq rename: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -1733,17 +1616,19 @@ final class Cli {
 		final scopeDir: Null<String> = o.scope;
 		if (cursorFile == null || destFile == null || scopeDir == null)
 			throw new Exception('apq move: null arg after validation (unreachable)');
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
 
-		final cursorSource: String = try readSourceForParse(cursorFile) catch (exception: Exception) {
-			stderr('apq move: $cursorFile: ${exception.message}\n');
+		final cursorSource: String = try CliIo.readSourceForParse(cursorFile) catch (exception: Exception) {
+			CliIo.stderr('apq move: $cursorFile: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final pos: Null<Position> = resolveAddressPos('move', cursorSource, plugin, o.posSpec, o.selectExpr, o.matchExpr, o.nth);
+		final pos: Null<Position> = CliEdit.resolveAddressPos('move', cursorSource, plugin, o.posSpec, o.selectExpr, o.matchExpr, o.nth);
 		if (pos == null) return EXIT_RUNTIME;
 
 		// Gather scope files = expandInputs(scope) ∪ {cursorFile, destFile}.
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles('move', scopeDir, [cursorFile, destFile]);
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
+			'move', scopeDir, [cursorFile, destFile]
+		);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final typeRefShape: TypeRefShape = plugin.typeRefShape();
@@ -1772,15 +1657,15 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--kind':
-					kindFilter = expectValue(args, ++i, '--kind');
+					kindFilter = CliArgs.expectValue(args, ++i, '--kind');
 				case '-h', '--help':
 					printSymbolsUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq symbols: unknown option "$a"\n');
+						CliIo.stderr('apq symbols: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					inputSpecs.push(a);
@@ -1788,15 +1673,15 @@ final class Cli {
 			i++;
 		}
 		if (inputSpecs.length == 0) {
-			stderr('apq symbols: expected <scope> (one or more file/dir/glob specs)\n');
+			CliIo.stderr('apq symbols: expected <scope> (one or more file/dir/glob specs)\n');
 			printSymbolsUsage();
 			return EXIT_USAGE;
 		}
 
-		final io = resolveInputPaths(lang, inputSpecs);
+		final io = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq symbols: ${quotedSpecs(inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq symbols: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -1805,15 +1690,15 @@ final class Cli {
 			for (path in paths)
 				{
 					file: path,
-					source: (try readSourceForParse(path) catch (exception: Exception) {
-						stderr('apq symbols: $path: ${exception.message}\n');
+					source: (try CliIo.readSourceForParse(path) catch (exception: Exception) {
+						CliIo.stderr('apq symbols: $path: ${exception.message}\n');
 						return EXIT_RUNTIME;
 					}: String)
 				}
 		];
 
 		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.symbols(files, plugin, kindFilter);
-		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
+		for (row in rows) CliIo.sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
 		return EXIT_OK;
 	}
 
@@ -1835,13 +1720,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printImportersUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq importers: unknown option "$a"\n');
+						CliIo.stderr('apq importers: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (module == null)
@@ -1852,16 +1737,16 @@ final class Cli {
 			i++;
 		}
 		if (module == null || inputSpecs.length == 0) {
-			stderr('apq importers: expected <module> <scope> (one or more file/dir/glob specs)\n');
+			CliIo.stderr('apq importers: expected <module> <scope> (one or more file/dir/glob specs)\n');
 			printImportersUsage();
 			return EXIT_USAGE;
 		}
 
 		final modulePath: String = module;
-		final io = resolveInputPaths(lang, inputSpecs);
+		final io = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq importers: ${quotedSpecs(inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq importers: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -1870,15 +1755,15 @@ final class Cli {
 			for (path in paths)
 				{
 					file: path,
-					source: (try readSourceForParse(path) catch (exception: Exception) {
-						stderr('apq importers: $path: ${exception.message}\n');
+					source: (try CliIo.readSourceForParse(path) catch (exception: Exception) {
+						CliIo.stderr('apq importers: $path: ${exception.message}\n');
 						return EXIT_RUNTIME;
 					}: String)
 				}
 		];
 
 		final hits: Array<String> = SymbolQuery.importers(files, plugin, modulePath);
-		for (path in hits) sysPrint('$path\n');
+		for (path in hits) CliIo.sysPrint('$path\n');
 		return EXIT_OK;
 	}
 
@@ -1902,13 +1787,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printDeclaresUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq declares: unknown option "$a"\n');
+						CliIo.stderr('apq declares: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (typeName == null)
@@ -1919,16 +1804,16 @@ final class Cli {
 			i++;
 		}
 		if (typeName == null || inputSpecs.length == 0) {
-			stderr('apq declares: expected <type> <scope> (one or more file/dir/glob specs)\n');
+			CliIo.stderr('apq declares: expected <type> <scope> (one or more file/dir/glob specs)\n');
 			printDeclaresUsage();
 			return EXIT_USAGE;
 		}
 
 		final name: String = typeName;
-		final io = resolveInputPaths(lang, inputSpecs);
+		final io = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq declares: ${quotedSpecs(inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq declares: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -1937,8 +1822,8 @@ final class Cli {
 			for (path in paths)
 				{
 					file: path,
-					source: (try readSourceForParse(path) catch (exception: Exception) {
-						stderr('apq declares: $path: ${exception.message}\n');
+					source: (try CliIo.readSourceForParse(path) catch (exception: Exception) {
+						CliIo.stderr('apq declares: $path: ${exception.message}\n');
 						return EXIT_RUNTIME;
 					}: String)
 				}
@@ -1946,10 +1831,10 @@ final class Cli {
 
 		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declares(files, plugin, name);
 		if (rows.length == 0)
-			stderr('apq declares: no type named "$name" in ${inputSpecs.join(', ')}\n');
+			CliIo.stderr('apq declares: no type named "$name" in ${inputSpecs.join(', ')}\n');
 		else if (rows.length > 1)
-			stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
-		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
+			CliIo.stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
+		for (row in rows) CliIo.sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
 		return EXIT_OK;
 	}
 
@@ -1970,7 +1855,7 @@ final class Cli {
 		final o: LintOpts = parseLintArgs(args);
 		if (o.errExit != null) return o.errExit;
 		if (o.inputSpecs.length == 0) {
-			stderr('apq lint: expected <scope> (one or more file/dir/glob specs)\n');
+			CliIo.stderr('apq lint: expected <scope> (one or more file/dir/glob specs)\n');
 			printLintUsage();
 			return EXIT_USAGE;
 		}
@@ -1978,10 +1863,10 @@ final class Cli {
 		final checks: Null<Array<Check>> = resolveLintChecks(o.ruleFilters);
 		if (checks == null) return EXIT_USAGE;
 
-		final io = resolveInputPaths(o.lang, o.inputSpecs);
+		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq lint: ${quotedSpecs(o.inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -1989,8 +1874,8 @@ final class Cli {
 		final files: Array<{ file: String, source: String }> = [];
 		final sourceOf: Map<String, String> = [];
 		for (path in paths) {
-			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
-				stderr('apq lint: $path: ${exception.message}\n');
+			final fileSource: String = try CliIo.readSourceForParse(path) catch (exception: Exception) {
+				CliIo.stderr('apq lint: $path: ${exception.message}\n');
 				return EXIT_RUNTIME;
 			};
 			files.push({ file: path, source: fileSource });
@@ -2235,7 +2120,7 @@ final class Cli {
 		for (name in libNames) {
 			final dir: Null<String> = HaxelibResolver.libSourceDir(name);
 			if (dir == null)
-				stderr('apq lint: resolutionLibs: could not resolve haxelib "$name" (not installed?); skipping\n');
+				CliIo.stderr('apq lint: resolutionLibs: could not resolve haxelib "$name" (not installed?); skipping\n');
 			else if (!scanRoots.contains(dir))
 				scanRoots.push(dir);
 		}
@@ -2252,8 +2137,8 @@ final class Cli {
 		final stdDir: Null<String> = stdEnabled ? StdResolver.stdDir() : null;
 		if (stdDir != null) for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) scanRoots.push(spec);
 		final libFiles: Array<{ file: String, source: String }> = [];
-		for (path in expandInputs(scanRoots, '.hx').paths) if (!reportPaths.exists(realPath(path))) {
-			final src: Null<String> = try readSourceForParse(path) catch (exception: Exception) null;
+		for (path in CliArgs.expandInputs(scanRoots, '.hx').paths) if (!reportPaths.exists(realPath(path))) {
+			final src: Null<String> = try CliIo.readSourceForParse(path) catch (exception: Exception) null;
 			if (src != null) libFiles.push({ file: path, source: src });
 		}
 		return libFiles;
@@ -2288,7 +2173,7 @@ final class Cli {
 		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
 		// hxformat.json is on disk and source-independent — discover once per file.
 		final optsByFile: Map<String, Null<String>> = [];
-		for (entry in files) optsByFile[entry.file] = discoverFormatConfig(entry.file);
+		for (entry in files) optsByFile[entry.file] = CliArgs.discoverFormatConfig(entry.file);
 
 		// The pre-fix bytes of every file, kept so a safe pass that breaks a build which
 		// was GREEN can be undone. The passes mutate `entry.source` in place and only the
@@ -2355,7 +2240,7 @@ final class Cli {
 		// it was needed.
 		final safePass: SafePassOutcome = commitSafeWrites(files, changedFiles, originalOf, coupled, oracleHxml, oracleDir);
 		if (safePass.reverted) {
-			stderr(safePass.notice);
+			CliIo.stderr(safePass.notice);
 			return EXIT_RUNTIME;
 		}
 
@@ -2395,7 +2280,7 @@ final class Cli {
 			return fixedCount - before;
 		}, coupled, changedFiles, oracleHxml, oracleDir);
 		if (followUp.reverted) {
-			stderr(followUp.notice);
+			CliIo.stderr(followUp.notice);
 			return EXIT_RUNTIME;
 		}
 
@@ -2405,7 +2290,7 @@ final class Cli {
 		// wording produced `over 12 pass(es) (stopped at 10 passes …)` — a line that reads as a
 		// contradiction rather than as the two budgets it actually reports.
 		final capTail: String = hitCap ? ' (a round stopped at its $maxPasses-pass budget — re-run if more remain)' : '';
-		stderr(
+		CliIo.stderr(
 			'${lintFixSummary(fixedCount, changedFiles.length, passes)}$skipTail$capTail$baselineTail$riskyTail$oracleTail'
 			+ '${followUp.tail}\n'
 		);
@@ -2418,7 +2303,7 @@ final class Cli {
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
 		// md5 snapshot before and after plus one run per candidate rule.
-		for (r in risky.reverts) stderr('apq lint --fix: risky-fix REVERTED ${r.file} (${r.rule}): ${revertCauseText(r.cause)}\n');
+		for (r in risky.reverts) CliIo.stderr('apq lint --fix: risky-fix REVERTED ${r.file} (${r.rule}): ${revertCauseText(r.cause)}\n');
 		// And WHICH code the oracle cannot speak for at all. The count alone would leave the
 		// reader to guess which of hundreds of files this hxml never typechecks — the same search
 		// the revert lines above exist to remove. Capped by `DECLINE_LINES_SHOWN`, unlike the
@@ -2426,10 +2311,10 @@ final class Cli {
 		for (i in 0...risky.declines.length) {
 			final d: FixVerifyDecline = risky.declines[i];
 			if (i >= DECLINE_LINES_SHOWN) {
-				stderr('apq lint --fix: … and ${risky.declines.length - DECLINE_LINES_SHOWN} more risky-fix decline(s) not listed\n');
+				CliIo.stderr('apq lint --fix: … and ${risky.declines.length - DECLINE_LINES_SHOWN} more risky-fix decline(s) not listed\n');
 				break;
 			}
-			stderr('apq lint --fix: risky-fix DECLINED ${d.file} (${d.rule}): ${d.reason} — ${d.edits} edit(s) left report-only\n');
+			CliIo.stderr('apq lint --fix: risky-fix DECLINED ${d.file} (${d.rule}): ${d.reason} — ${d.edits} edit(s) left report-only\n');
 		}
 		return EXIT_OK;
 	}
@@ -2579,13 +2464,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -2593,7 +2478,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq inline: unknown option "$a"\n');
+						CliIo.stderr('apq inline: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -2601,40 +2486,40 @@ final class Cli {
 					else if (posSpec == null)
 						posSpec = a;
 					else {
-						stderr('apq inline: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq inline: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
-			stderr("apq inline: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>')\n");
+			CliIo.stderr("apq inline: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>')\n");
 			printInlineUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq inline: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq inline: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		final op: String = 'inline';
-		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: InlineResult = Inline.inlineVar(source, pos.line, pos.col, plugin, shape);
 		switch result {
 			case Ok(text):
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq inline: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq inline: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq inline: $message\n');
+				CliIo.stderr('apq inline: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -2670,13 +2555,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -2684,7 +2569,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq inline-method: unknown option "$a"\n');
+						CliIo.stderr('apq inline-method: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -2692,40 +2577,40 @@ final class Cli {
 					else if (posSpec == null)
 						posSpec = a;
 					else {
-						stderr('apq inline-method: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq inline-method: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
-			stderr("apq inline-method: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>')\n");
+			CliIo.stderr("apq inline-method: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>')\n");
 			printInlineMethodUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq inline-method: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq inline-method: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		final op: String = 'inline-method';
-		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: EditResult = InlineMethod.inlineMethod(source, pos.line, pos.col, plugin, shape);
 		switch result {
 			case Ok(text):
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq inline-method: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq inline-method: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq inline-method: $message\n');
+				CliIo.stderr('apq inline-method: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -2760,11 +2645,11 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -2772,36 +2657,36 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq extract-var: unknown option "$a"\n');
+						CliIo.stderr('apq extract-var: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null && matchExpr == null && name == null && isPosSpec(a))
+					else if (posSpec == null && matchExpr == null && name == null && CliArgs.isPosSpec(a))
 						posSpec = a;
 					else if (name == null)
 						name = a;
 					else {
-						stderr('apq extract-var: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq extract-var: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && matchExpr == null) || name == null) {
-			stderr("apq extract-var: expected <file> (<line>:<col> | --match '<expr-pattern>') <name>\n");
+			CliIo.stderr("apq extract-var: expected <file> (<line>:<col> | --match '<expr-pattern>') <name>\n");
 			printExtractVarUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
 		final nameStr: String = name;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq extract-var: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq extract-var: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		// A --match address knows the expression's EXACT span — both ends are
 		// passed through so a co-starting wider operator chain (`a * 2 + 1` over
 		// a matched `a * 2`) cannot swallow the extraction.
@@ -2810,7 +2695,7 @@ final class Cli {
 		if (matchExpr != null) {
 			final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree == null) {
-				stderr('apq extract-var: $filePath does not parse\n');
+				CliIo.stderr('apq extract-var: $filePath does not parse\n');
 				return EXIT_RUNTIME;
 			}
 			switch Address.resolve(tree, source, plugin, { match: matchExpr, nth: nth }) {
@@ -2818,11 +2703,11 @@ final class Cli {
 					pos = new Span(offset, offset).lineCol(source);
 					exactTo = node?.span?.to;
 				case Err(message):
-					stderr('apq extract-var: $message\n');
+					CliIo.stderr('apq extract-var: $message\n');
 					return EXIT_RUNTIME;
 			}
 		} else {
-			pos = resolveAddressPos(op, source, plugin, posSpec, null, null, null);
+			pos = CliEdit.resolveAddressPos(op, source, plugin, posSpec, null, null, null);
 		}
 		if (pos == null) return EXIT_RUNTIME;
 		final loc: Position = pos;
@@ -2830,13 +2715,13 @@ final class Cli {
 		switch result {
 			case Ok(text):
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq extract-var: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq extract-var: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq extract-var: $message\n');
+				CliIo.stderr('apq extract-var: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -2867,18 +2752,18 @@ final class Cli {
 		final nameStr: Null<String> = o.name;
 		if (filePath == null || startPos == null || endPos == null || nameStr == null)
 			throw new Exception('apq extract-method: null arg after validation (unreachable)');
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq extract-method: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq extract-method: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final shape: RefShape = plugin.refShape();
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = ExtractMethod.extractMethod(
 			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, o.reformat, plugin, shape, optsJson
 		);
-		return finishEdit('extract-method', filePath, o.write, result);
+		return CliEdit.finishEdit('extract-method', filePath, o.write, result);
 	}
 
 	/**
@@ -2910,13 +2795,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -2924,50 +2809,50 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq add-param: unknown option "$a"\n');
+						CliIo.stderr('apq add-param: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null && selectExpr == null && matchExpr == null && paramText == null && isPosSpec(a))
+					else if (posSpec == null && selectExpr == null && matchExpr == null && paramText == null && CliArgs.isPosSpec(a))
 						posSpec = a;
 					else if (paramText == null)
 						paramText = a;
 					else {
-						stderr('apq add-param: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq add-param: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || paramText == null) {
-			stderr("apq add-param: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <paramText>\n");
+			CliIo.stderr("apq add-param: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <paramText>\n");
 			printAddParamUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
 		final paramStr: String = paramText;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq add-param: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq add-param: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		final op: String = 'add-param';
-		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final result: AddParamResult = AddParam.addParam(source, pos.line, pos.col, paramStr, plugin);
 		switch result {
 			case Ok(text):
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq add-param: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq add-param: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq add-param: $message\n');
+				CliIo.stderr('apq add-param: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -2989,14 +2874,14 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		var memberText: Null<String> = o.memberText;
 		if (o.fromFile != null || memberText == '-') {
-			final resolved: Null<String> = resolveCodeArg('add-member', memberText, o.fromFile);
+			final resolved: Null<String> = CliArgs.resolveCodeArg('add-member', memberText, o.fromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			memberText = resolved;
 		}
 		final file: Null<String> = o.file;
 		final typeName: Null<String> = o.typeName;
 		if (file == null || typeName == null || memberText == null) {
-			stderr('apq add-member: expected <file> --type <TypeName> (<memberText> | --from-file <path> | -)\n');
+			CliIo.stderr('apq add-member: expected <file> --type <TypeName> (<memberText> | --from-file <path> | -)\n');
 			printAddMemberUsage();
 			return EXIT_USAGE;
 		}
@@ -3004,15 +2889,15 @@ final class Cli {
 		final filePath: String = file;
 		final typeStr: String = typeName;
 		final memberStr: String = memberText;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq add-member: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq add-member: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = AddMember.addMember(source, typeStr, memberStr, o.reformat, plugin, optsJson);
-		return finishEdit('add-member', filePath, o.write, result);
+		return CliEdit.finishEdit('add-member', filePath, o.write, result);
 	}
 
 	/**
@@ -3041,7 +2926,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--using':
 					isUsing = true;
 				case '--write':
@@ -3053,7 +2938,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq add-import: unknown option "$a"\n');
+						CliIo.stderr('apq add-import: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -3061,40 +2946,40 @@ final class Cli {
 					else if (path == null)
 						path = a;
 					else {
-						stderr('apq add-import: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq add-import: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || path == null) {
-			stderr('apq add-import: expected <file> <module.path> [--using]\n');
+			CliIo.stderr('apq add-import: expected <file> <module.path> [--using]\n');
 			printAddImportUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
 		final pathStr: String = path;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq add-import: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq add-import: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = AddImport.addImport(source, pathStr, isUsing, reformat, plugin, optsJson);
 		final op: String = 'add-import';
 		switch result {
 			case Ok(text, rewrites):
-				warnRewrites(op, filePath, rewrites);
+				CliEdit.warnRewrites(op, filePath, rewrites);
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq add-import: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq add-import: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq add-import: $message\n');
+				CliIo.stderr('apq add-import: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -3120,13 +3005,13 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		var code: Null<String> = o.code;
 		if (o.fromFile != null || code == '-') {
-			final resolved: Null<String> = resolveCodeArg('add-element', code, o.fromFile, true);
+			final resolved: Null<String> = CliArgs.resolveCodeArg('add-element', code, o.fromFile, true);
 			if (resolved == null) return EXIT_RUNTIME;
 			code = resolved;
 		}
 		final file: Null<String> = o.file;
 		if (file == null || code == null) {
-			stderr(
+			CliIo.stderr(
 				'apq add-element: expected <file> (--after | --before | --append) (<line>[:<col>] '
 				+ "| --select '<sel>' | --match '<pattern>') (<code> | --from-file <path> | -)\n"
 			);
@@ -3139,7 +3024,7 @@ final class Cli {
 		// Exactly one of --after / --before / --append must be given.
 		final targetCount: Int = (afterSpec != null ? 1 : 0) + (beforeSpec != null ? 1 : 0) + (appendSpec != null ? 1 : 0);
 		if (targetCount != 1) {
-			stderr('apq add-element: provide exactly one of --after, --before, or --append\n');
+			CliIo.stderr('apq add-element: provide exactly one of --after, --before, or --append\n');
 			return EXIT_USAGE;
 		}
 
@@ -3150,84 +3035,25 @@ final class Cli {
 		final posSpec: String = afterSpec ?? beforeSpec ?? (cast appendSpec: String);
 		final atSpec: Null<String> = posSpec == '' ? null : posSpec;
 		if (atSpec == null && o.selectExpr == null && o.matchExpr == null) {
-			stderr("apq add-element: no target address — give a position or --select '<sel>' / --match '<pattern>'\n");
+			CliIo.stderr("apq add-element: no target address — give a position or --select '<sel>' / --match '<pattern>'\n");
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
 		final codeStr: String = code;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq add-element: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq add-element: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
-		final pos: Null<Position> = resolveAddressPos('add-element', source, plugin, atSpec, o.selectExpr, o.matchExpr, o.nth);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
+		final pos: Null<Position> = CliEdit.resolveAddressPos('add-element', source, plugin, atSpec, o.selectExpr, o.matchExpr, o.nth);
 		if (pos == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = appendSpec != null
 			? AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
 			: AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
-		return finishEdit('add-element', filePath, o.write, result);
-	}
-
-	/**
-	 * The print-only tail every writer-emit op shares: the rewritten source goes to
-	 * STDOUT, and — the half that was missing — a line on stderr saying the file was
-	 * NOT touched.
-	 *
-	 * Without it the two outcomes a caller most needs to tell apart, "the edit
-	 * landed" and "the edit was a preview", were distinguished only by output nobody
-	 * is obliged to read: `--write` reports on stderr, a preview reported nothing
-	 * there at all. A caller that keeps stderr and drops stdout — the documented way
-	 * to run these ops without drowning in source — saw the same silence either way,
-	 * and silence reads as success.
-	 */
-	private static function previewEdit(opName: String, filePath: String, text: String, detail: String = ''): Void {
-		sysPrint(text);
-		stderr('apq $opName: $filePath NOT written — this is a preview on stdout$detail; re-run with --write to apply\n');
-	}
-
-	/**
-	 * Report a writer that needed more than one round trip to settle the content
-	 * an op is about to write, in `apq fmt`'s exact words.
-	 *
-	 * Silent for the healthy counts and for a `null` — an `EditResult.Ok` from a
-	 * producer that never ran the loop measured nothing, and inventing a "1" for it
-	 * would claim a measurement nobody made.
-	 *
-	 * Called on the FINALISE, not on the write, so it fires in preview mode too:
-	 * the finding is about the WRITER, and a preview is where a user is still
-	 * deciding. It also has to be said here rather than left for the user's next
-	 * `fmt --list`, which will say nothing — by then the file IS the fixed point.
-	 *
-	 * A caller that makes several passes over one file gates the call on its own
-	 * "already told them about this file" set — `FormatFixedPoint.rewritesNote` is
-	 * the same predicate, asked directly.
-	 */
-	private static function warnRewrites(opName: String, filePath: String, rewrites: Null<Int>): Void {
-		final note: Null<String> = FormatFixedPoint.rewritesNote(rewrites);
-		if (note != null) stderr('apq $opName: $filePath: $note\n');
-	}
-
-	/** Shared Ok/Err + write/preview tail for the single-result writer-emit ops. */
-	private static function finishEdit(opName: String, filePath: String, write: Bool, result: EditResult, ?detail: String): Int {
-		switch result {
-			case Ok(text, rewrites):
-				warnRewrites(opName, filePath, rewrites);
-				// `detail` reaches the PREVIEW too: a preview leaves no file to inspect, so it is
-				// the mode where "did all of them land?" has no other answer.
-				final tail: String = detail == null ? '' : ' ($detail)';
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq $opName: wrote $filePath$tail\n');
-				} else
-					previewEdit(opName, filePath, text, tail);
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq $opName: $message\n');
-				return EXIT_RUNTIME;
-		}
+		return CliEdit.finishEdit('add-element', filePath, o.write, result);
 	}
 
 	/**
@@ -3254,13 +3080,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -3276,7 +3102,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq remove-element: unknown option "$a"\n');
+						CliIo.stderr('apq remove-element: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -3284,28 +3110,28 @@ final class Cli {
 					else if (posSpec == null)
 						posSpec = a;
 					else {
-						stderr('apq remove-element: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq remove-element: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
-			stderr("apq remove-element: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>')\n");
+			CliIo.stderr("apq remove-element: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>')\n");
 			printRemoveElementUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq remove-element: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq remove-element: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos('remove-element', source, plugin, posSpec, selectExpr, matchExpr, nth);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final pos: Null<Position> = CliEdit.resolveAddressPos('remove-element', source, plugin, posSpec, selectExpr, matchExpr, nth);
 		if (pos == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit(
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		return CliEdit.finishEdit(
 			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson)
 		);
 	}
@@ -3330,7 +3156,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -3342,7 +3168,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq remove-import: unknown option "$a"\n');
+						CliIo.stderr('apq remove-import: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -3350,27 +3176,29 @@ final class Cli {
 					else if (modulePath == null)
 						modulePath = a;
 					else {
-						stderr('apq remove-import: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq remove-import: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || modulePath == null) {
-			stderr('apq remove-import: expected <file> <module.path>\n');
+			CliIo.stderr('apq remove-import: expected <file> <module.path>\n');
 			printRemoveImportUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
 		final path: String = modulePath;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq remove-import: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq remove-import: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit('remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, withDoc, optsJson));
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		return CliEdit.finishEdit(
+			'remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, withDoc, optsJson)
+		);
 	}
 
 	/**
@@ -3401,15 +3229,15 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					typeName = expectValue(args, ++i, '--type');
+					typeName = CliArgs.expectValue(args, ++i, '--type');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -3425,7 +3253,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq remove-member: unknown option "$a"\n');
+						CliIo.stderr('apq remove-member: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -3433,7 +3261,7 @@ final class Cli {
 					else if (memberName == null)
 						memberName = a;
 					else {
-						stderr('apq remove-member: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq remove-member: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
@@ -3442,30 +3270,30 @@ final class Cli {
 		final addressed: Bool = selectExpr != null || matchExpr != null;
 		final byName: Null<NamedMember> = typeName != null && memberName != null ? { type: typeName, member: memberName } : null;
 		if (addressed && (typeName != null || memberName != null)) {
-			stderr('apq remove-member: give either --select / --match or --type <T> <memberName>, not both\n');
+			CliIo.stderr('apq remove-member: give either --select / --match or --type <T> <memberName>, not both\n');
 			return EXIT_USAGE;
 		}
 		if (file == null || (!addressed && byName == null)) {
-			stderr("apq remove-member: expected <file> (--select '<sel>' | --match '<pattern>' | --type <T> <memberName>)\n");
+			CliIo.stderr("apq remove-member: expected <file> (--select '<sel>' | --match '<pattern>' | --type <T> <memberName>)\n");
 			printRemoveMemberUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq remove-member: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq remove-member: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 		// The caching plugin so the address resolution's parse is the one `RemoveMember` reparses.
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		// One spelling of the op name for both seats — a third copy of the literal is what
 		// `string-literal-dup` counts, and the address resolver prefixes its own diagnostics with it.
 		final op: String = 'remove-member';
 		final named: Null<NamedMember> = addressed ? resolveMemberAddress(op, source, plugin, selectExpr, matchExpr, nth) : byName;
 		if (named == null) return EXIT_RUNTIME;
 		final target: NamedMember = named;
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit(
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		return CliEdit.finishEdit(
 			op, filePath, write, RemoveMember.removeMember(source, target.type, target.member, reformat, plugin, withDoc, optsJson)
 		);
 	}
@@ -3489,13 +3317,13 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		var newSource: Null<String> = o.newSource;
 		if (o.fromFile != null || newSource == '-') {
-			final resolved: Null<String> = resolveCodeArg('replace-node', newSource, o.fromFile, true);
+			final resolved: Null<String> = CliArgs.resolveCodeArg('replace-node', newSource, o.fromFile, true);
 			if (resolved == null) return EXIT_RUNTIME;
 			newSource = resolved;
 		}
 		final file: Null<String> = o.file;
 		if (file == null || newSource == null) {
-			stderr(
+			CliIo.stderr(
 				"apq replace-node: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) ("
 				+ '<newSource> | --from-file <path> | -)\n'
 			);
@@ -3505,73 +3333,20 @@ final class Cli {
 
 		final filePath: String = file;
 		final newSrc: String = newSource;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq replace-node: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq replace-node: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
-		final target: Null<ReplaceTarget> = resolveEditTarget(
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
+		final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget(
 			'replace-node', source, filePath, plugin, o.selectExpr, o.matchExpr, o.atSpec, o.nth, o.kind
 		);
 		if (target == null) return EXIT_RUNTIME;
 
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit(
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		return CliEdit.finishEdit(
 			'replace-node', filePath, o.write, ReplaceNode.replaceNode(source, target, newSrc, o.reformat, plugin, o.withDoc, optsJson)
 		);
-	}
-
-	/**
-	 * Resolve the shared addressing flags (`--select` / `--match` / `--at`, plus
-	 * the `--kind` narrow / lift) to a `ReplaceTarget` — the common front half of
-	 * `replace-node` and `patch`. Exactly one addressing mode must be given.
-	 * Returns null after printing the reason to stderr.
-	 */
-	private static function resolveEditTarget(
-		opName: String, source: String, filePath: String, plugin: GrammarPlugin, selectExpr: Null<String>, matchExpr: Null<String>,
-		atSpec: Null<String>, nth: Null<Int>, kind: Null<String>
-	): Null<ReplaceTarget> {
-		final modes: Int = (selectExpr != null ? 1 : 0) + (matchExpr != null ? 1 : 0) + (atSpec != null ? 1 : 0);
-		if (modes != 1) {
-			stderr('apq $opName: provide exactly one of --select \'<sel>\', --match \'<pattern>\', or --at <line>[:<col>]\n');
-			return null;
-		}
-		if (atSpec != null) {
-			// `--kind` with `--at` narrows to the innermost node of that kind at the cursor.
-			final pos: Null<Position> = resolveAddressPos(opName, source, plugin, atSpec, null, null, null);
-			return if (pos == null)
-				null
-			else if (kind != null)
-				ByKindPosition(pos.line, pos.col, kind)
-			else
-				ByPosition(pos.line, pos.col);
-		}
-		// --select / --match resolve through the shared address layer (exactly-one
-		// discipline, --nth pick, candidate-listing errors); the caching plugin
-		// guarantees the resolved node belongs to the op's own parse. `--kind`
-		// here LIFTS the resolved node to its innermost enclosing node of that
-		// kind — a pattern matches the expression (`addCase(x)` = the Call),
-		// while a statement edit wants the ExprStmt.
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree != null) return switch Address.resolve(tree, source, plugin, { select: selectExpr, match: matchExpr, nth: nth }) {
-			case Ok(_, node):
-				if (node == null) {
-					null;
-				} else if (kind != null) {
-					final lifted: Null<QueryNode> = Address.liftToKind(tree, node, kind, plugin.selectKindEquivalence());
-					if (lifted == null) {
-						stderr('apq $opName: the resolved ${node.kind} node has no enclosing "$kind" node\n');
-						null;
-					} else
-						ByNode(lifted);
-				} else
-					ByNode(node);
-			case Err(message):
-				stderr('apq $opName: $message\n');
-				null;
-		};
-		stderr('apq $opName: $filePath does not parse\n');
-		return null;
 	}
 
 	/**
@@ -3587,22 +3362,22 @@ final class Cli {
 		final file: Null<String> = o.file;
 		final meta: Null<String> = o.meta;
 		if (file == null || meta == null) {
-			stderr("apq add-meta: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) '<@:meta>'\n");
+			CliIo.stderr("apq add-meta: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) '<@:meta>'\n");
 			printAddMetaUsage();
 			return EXIT_USAGE;
 		}
 		final filePath: String = file;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq add-meta: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq add-meta: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
-		final target: Null<ReplaceTarget> = resolveEditTarget(
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
+		final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget(
 			'add-meta', source, filePath, plugin, o.selectExpr, o.matchExpr, o.atSpec, o.nth, o.kind
 		);
 		if (target == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit('add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson));
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		return CliEdit.finishEdit('add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson));
 	}
 
 	/** The all-default `AddMetaOpts` carrying a terminal exit code, for the `-h` / bad-flag arms. */
@@ -3640,17 +3415,17 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--at':
-					atSpec = expectValue(args, ++i, '--at');
+					atSpec = CliArgs.expectValue(args, ++i, '--at');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--kind':
-					kind = expectValue(args, ++i, '--kind');
+					kind = CliArgs.expectValue(args, ++i, '--kind');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -3660,7 +3435,7 @@ final class Cli {
 					return addMetaParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq add-meta: unknown option "$a"\n');
+						CliIo.stderr('apq add-meta: unknown option "$a"\n');
 						return addMetaParseExit(EXIT_USAGE);
 					}
 					if (file == null)
@@ -3668,7 +3443,7 @@ final class Cli {
 					else if (meta == null)
 						meta = a;
 					else {
-						stderr('apq add-meta: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq add-meta: unexpected extra argument "$a"\n');
 						return addMetaParseExit(EXIT_USAGE);
 					}
 			}
@@ -3691,26 +3466,26 @@ final class Cli {
 
 	/** `apq add-meta --help`. */
 	private static function printAddMetaUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq add-meta <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) '<@:meta>' [--reformat] "
 			+ '[--write]\n'
 		);
 		printSelectorAddressingOptions();
-		sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
-		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
+		CliIo.sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
-		sysPrint('Add one metadata entry to the addressed declaration — a type or a member:\n');
-		sysPrint('\n');
-		sysPrint("  apq add-meta File.hx --select 'ClassDecl:Foo' '@:nullSafety(Strict)' --write\n");
-		sysPrint("  apq add-meta File.hx --select 'FnMember:go' '@:noCompletion' --write\n");
-		sysPrint('\n');
-		sysPrint('The entry lands at the END of the run already there — BELOW the doc comment,\n');
-		sysPrint('above `public` / `static` / `final` and the declaration keyword. An entry of\n');
-		sysPrint('the same name already present is refused. Writer-formatted and re-parse-\n');
-		sysPrint('validated; the file must be canonical unless --reformat is given.\n');
-		sysPrint('\n');
-		sysPrint("To REMOVE one: apq remove-element <file> --select 'MetaCall:@:name' --write\n");
-		sysPrint("(or 'Meta:@:name' for an entry with no arguments).\n");
+		CliIo.sysPrint('Add one metadata entry to the addressed declaration — a type or a member:\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint("  apq add-meta File.hx --select 'ClassDecl:Foo' '@:nullSafety(Strict)' --write\n");
+		CliIo.sysPrint("  apq add-meta File.hx --select 'FnMember:go' '@:noCompletion' --write\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The entry lands at the END of the run already there — BELOW the doc comment,\n');
+		CliIo.sysPrint('above `public` / `static` / `final` and the declaration keyword. An entry of\n');
+		CliIo.sysPrint('the same name already present is refused. Writer-formatted and re-parse-\n');
+		CliIo.sysPrint('validated; the file must be canonical unless --reformat is given.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint("To REMOVE one: apq remove-element <file> --select 'MetaCall:@:name' --write\n");
+		CliIo.sysPrint("(or 'Meta:@:name' for an entry with no arguments).\n");
 	}
 
 	/**
@@ -3727,19 +3502,21 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		var payload: Null<String> = o.payload;
 		if (o.fromFile != null || payload == '-') {
-			final resolved: Null<String> = resolveCodeArg('patch', payload, o.fromFile, true);
+			final resolved: Null<String> = CliArgs.resolveCodeArg('patch', payload, o.fromFile, true);
 			if (resolved == null) return EXIT_RUNTIME;
 			payload = resolved;
 		}
 		final file: Null<String> = o.file;
 		if (file == null || payload == null) {
-			stderr("apq patch: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>)\n");
+			CliIo.stderr(
+				"apq patch: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>)\n"
+			);
 			printPatchUsage();
 			return EXIT_USAGE;
 		}
 		final pairs: Null<Array<{ oldText: String, newText: String }>> = splitPatchPayload(payload, o.sep);
 		if (pairs == null) {
-			stderr(
+			CliIo.stderr(
 				'apq patch: the payload must alternate old / new fragments separated by "${o.sep}'
 				+ '" lines — an EVEN number of sections (2 = one pair, 4 = two pairs, …)\n'
 			);
@@ -3747,20 +3524,20 @@ final class Cli {
 		}
 
 		final filePath: String = file;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq patch: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq patch: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
-		final target: Null<ReplaceTarget> = resolveEditTarget(
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
+		final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget(
 			'patch', source, filePath, plugin, o.selectExpr, o.matchExpr, o.atSpec, o.nth, o.kind
 		);
 		if (target == null) return EXIT_RUNTIME;
 
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		// A multi-pair call is all-or-nothing, so a success line that names the count is
 		// the one thing that settles "did all of them land?" without re-reading the file.
-		return finishEdit(
+		return CliEdit.finishEdit(
 			'patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson, o.all),
 			pairs.length > 1 ? '${pairs.length} fragment pairs applied' : null
 		);
@@ -3819,13 +3596,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -3833,54 +3610,55 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq change-sig: unknown option "$a"\n');
+						CliIo.stderr('apq change-sig: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
 						file = a;
 					else if (
-						posSpec == null && selectExpr == null && matchExpr == null && permSpec == null && isPosSpec(a) && a.indexOf(',') < 0
+						posSpec == null && selectExpr == null && matchExpr == null && permSpec == null && CliArgs.isPosSpec(a)
+						&& a.indexOf(',') < 0
 					)
 						posSpec = a;
 					else if (permSpec == null)
 						permSpec = a;
 					else {
-						stderr('apq change-sig: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq change-sig: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || permSpec == null) {
-			stderr("apq change-sig: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <perm>\n");
+			CliIo.stderr("apq change-sig: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <perm>\n");
 			printChangeSigUsage();
 			return EXIT_USAGE;
 		}
 
 		final filePath: String = file;
 		final permStr: String = permSpec;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq change-sig: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq change-sig: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		final op: String = 'change-sig';
-		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: ChangeSigResult = ChangeSig.changeSig(source, pos.line, pos.col, permStr, plugin, shape);
 		switch result {
 			case Ok(text, advisory):
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq change-sig: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq change-sig: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
-				if (advisory != null) stderr('apq change-sig: $advisory\n');
+					CliEdit.previewEdit(op, filePath, text);
+				if (advisory != null) CliIo.stderr('apq change-sig: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq change-sig: $message\n');
+				CliIo.stderr('apq change-sig: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -3920,13 +3698,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -3934,7 +3712,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq remove-param: unknown option "$a"\n');
+						CliIo.stderr('apq remove-param: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -3947,62 +3725,49 @@ final class Cli {
 					else if (indexSpec == null)
 						indexSpec = a;
 					else {
-						stderr('apq remove-param: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq remove-param: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || indexSpec == null) {
-			stderr("apq remove-param: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <index>\n");
+			CliIo.stderr("apq remove-param: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <index>\n");
 			printRemoveParamUsage();
 			return EXIT_USAGE;
 		}
 		final index: Null<Int> = RefactorSupport.parseStrictInt(indexSpec);
 		if (index == null) {
-			stderr('apq remove-param: malformed index "$indexSpec" — expected a non-negative integer\n');
+			CliIo.stderr('apq remove-param: malformed index "$indexSpec" — expected a non-negative integer\n');
 			return EXIT_USAGE;
 		}
 		final paramIndex: Int = index;
 
 		final filePath: String = file;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq remove-param: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq remove-param: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		final op: String = 'remove-param';
-		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: RemoveParamResult = RemoveParam.removeParam(source, pos.line, pos.col, paramIndex, plugin, shape);
 		switch result {
 			case Ok(text, advisory):
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq remove-param: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq remove-param: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
-				if (advisory != null) stderr('apq remove-param: $advisory\n');
+					CliEdit.previewEdit(op, filePath, text);
+				if (advisory != null) CliIo.stderr('apq remove-param: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq remove-param: $message\n');
+				CliIo.stderr('apq remove-param: $message\n');
 				return EXIT_RUNTIME;
 		}
-	}
-
-	/**
-	 * Parse a `<line>:<col>` coordinate. Both components must be
-	 * non-negative integers; returns null on any malformed shape so the
-	 * caller emits a usage error rather than silently clamping.
-	 */
-	private static function parseLineCol(spec: String): Null<Position> {
-		final colon: Int = spec.indexOf(':');
-		if (colon <= 0 || colon >= spec.length - 1) return null;
-		final line: Null<Int> = RefactorSupport.parseStrictInt(spec.substring(0, colon));
-		final col: Null<Int> = RefactorSupport.parseStrictInt(spec.substring(colon + 1));
-		return line == null || col == null ? null : { line: line, col: col };
 	}
 
 	private static function runUses(args: Array<String>): Int {
@@ -4010,24 +3775,24 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		final name: Null<String> = o.name;
 		if (name == null) {
-			stderr('apq uses: missing <type-name> argument\n');
+			CliIo.stderr('apq uses: missing <type-name> argument\n');
 			printUsesUsage();
 			return EXIT_USAGE;
 		}
 		if (o.inputSpecs.length == 0) {
-			stderr('apq uses: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq uses: missing <file-or-dir-or-glob> argument\n');
 			printUsesUsage();
 			return EXIT_USAGE;
 		}
 		final nameStr: String = name;
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final shape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq uses: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
+			CliIo.stderr('apq uses: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -4039,16 +3804,16 @@ final class Cli {
 		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
-			stderr('${emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
+			CliIo.stderr('${CliWalk.emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('uses', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> = limitEntries(
+		final cappedLimit: Int = CliWalk.effectiveAutoLimit('uses', o.limit, totalHits);
+		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> = CliWalk.limitEntries(
 			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		for (entry in shown)
-			sysPrint(
+			CliIo.sysPrint(
 				Text.renderUses(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat, plugin.lexicalRegions(entry.source))
 			);
 		return emptyExit(allEntries.length == 0);
@@ -4081,7 +3846,7 @@ final class Cli {
 		final argFilter: Null<String> = rawAnnotation != null ? annotationArgFilter(rawAnnotation) : null;
 		final inputSpecs: Array<String> = rawAnnotation != null ? positionals.slice(1) : positionals.copy();
 		if (inputSpecs.length == 0) {
-			stderr('apq meta: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq meta: missing <file-or-dir-or-glob> argument\n');
 			printMetaUsage();
 			return EXIT_USAGE;
 		}
@@ -4089,17 +3854,17 @@ final class Cli {
 			// One bare positional with no `--on`: ambiguous — it is taken
 			// as the <file-or-dir-or-glob>, leaving no annotation/kind to scope
 			// the query. Spell out both halves the grammar needs.
-			stderr('apq meta: need an <annotation> or --on <decl-kind>, plus a <file-or-dir-or-glob>\n');
+			CliIo.stderr('apq meta: need an <annotation> or --on <decl-kind>, plus a <file-or-dir-or-glob>\n');
 			printMetaUsage();
 			return EXIT_USAGE;
 		}
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final shape: MetaShape = plugin.metaShape();
 
-		final expanded: ExpandedInputs = expandInputs(inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq meta: no input files matched ${quotedSpecs(inputSpecs)}\n');
+			CliIo.stderr('apq meta: no input files matched ${CliArgs.quotedSpecs(inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -4114,18 +3879,18 @@ final class Cli {
 		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
-			stderr('${emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
+			CliIo.stderr('${CliWalk.emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('meta', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> = limitEntries(
+		final cappedLimit: Int = CliWalk.effectiveAutoLimit('meta', o.limit, totalHits);
+		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> = CliWalk.limitEntries(
 			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		if (o.json) {
-			sysPrint(Json.renderMeta(shown));
+			CliIo.sysPrint(Json.renderMeta(shown));
 		} else {
-			for (entry in shown) sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits, o.flat));
+			for (entry in shown) CliIo.sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits, o.flat));
 		}
 		return emptyExit(allEntries.length == 0);
 	}
@@ -4150,12 +3915,12 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
 						return EXIT_USAGE;
 					}
 				case '-h', '--help':
@@ -4163,7 +3928,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq diff: unknown option "$a"\n');
+						CliIo.stderr('apq diff: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (fileA == null)
@@ -4171,56 +3936,56 @@ final class Cli {
 					else if (fileB == null)
 						fileB = a;
 					else {
-						stderr('apq diff: only two file arguments supported (got "$fileA", "$fileB", "$a")\n');
+						CliIo.stderr('apq diff: only two file arguments supported (got "$fileA", "$fileB", "$a")\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (fileA == null || fileB == null) {
-			stderr('apq diff: missing <a> <b> arguments\n');
+			CliIo.stderr('apq diff: missing <a> <b> arguments\n');
 			printDiffUsage();
 			return EXIT_USAGE;
 		}
 		final a: String = fileA;
 		final b: String = fileB;
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final sourceA: String = readSourceForParse(a);
-		final sourceB: String = readSourceForParse(b);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
+		final sourceA: String = CliIo.readSourceForParse(a);
+		final sourceB: String = CliIo.readSourceForParse(b);
 		final treeA: QueryNode = try plugin.parseFile(sourceA) catch (e: ParseError) {
-			stderr('apq diff: $a: $e\n');
+			CliIo.stderr('apq diff: $a: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
-			stderr('apq diff: $a: ${e.message}\n');
+			CliIo.stderr('apq diff: $a: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final treeB: QueryNode = try plugin.parseFile(sourceB) catch (e: ParseError) {
-			stderr('apq diff: $b: $e\n');
+			CliIo.stderr('apq diff: $b: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
-			stderr('apq diff: $b: ${e.message}\n');
+			CliIo.stderr('apq diff: $b: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 
 		var hits: Array<DiffHit> = Diff.diff(treeA, treeB);
 		if (limit >= 0 && hits.length > limit) hits = hits.slice(0, limit);
-		sysPrint(Diff.render(a, sourceA, b, sourceB, hits, flat));
+		CliIo.sysPrint(Diff.render(a, sourceA, b, sourceB, hits, flat));
 		return EXIT_OK;
 	}
 
 	private static function printDiffUsage(): Void {
-		sysPrint('Usage: apq diff [options] <a> <b>\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --flat              Legacy flat `file:line:col:` per-hit format (default: paired-header)\n');
-		sysPrint('  --limit <n>         Stop after n hits (default: no limit)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Structural AST diff: walks both trees pairwise and reports nodes\n');
-		sysPrint('where kind / name slot / child count diverges. No LCS realignment\n');
-		sysPrint('— mid-list inserts cascade the tail as `differs`. Useful for strip-\n');
-		sysPrint('test reconciliation when a byte diff is whitespace-noisy.\n');
+		CliIo.sysPrint('Usage: apq diff [options] <a> <b>\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` per-hit format (default: paired-header)\n');
+		CliIo.sysPrint('  --limit <n>         Stop after n hits (default: no limit)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Structural AST diff: walks both trees pairwise and reports nodes\n');
+		CliIo.sysPrint('where kind / name slot / child count diverges. No LCS realignment\n');
+		CliIo.sysPrint('— mid-list inserts cascade the tail as `differs`. Useful for strip-\n');
+		CliIo.sysPrint('test reconciliation when a byte diff is whitespace-noisy.\n');
 	}
 
 	/**
@@ -4265,11 +4030,11 @@ final class Cli {
 		// cluster-mode discovers N files from a recon walk, never one).
 		if (o.perPattern) {
 			if (o.dryRun) {
-				stderr('apq strip: --per-pattern is incompatible with --dry-run (dry-run skips the parse step)\n');
+				CliIo.stderr('apq strip: --per-pattern is incompatible with --dry-run (dry-run skips the parse step)\n');
 				return EXIT_USAGE;
 			}
 			if (o.fromCluster != null) {
-				stderr('apq strip: --per-pattern is incompatible with --from-cluster (single-file isolation only)\n');
+				CliIo.stderr('apq strip: --per-pattern is incompatible with --from-cluster (single-file isolation only)\n');
 				return EXIT_USAGE;
 			}
 		}
@@ -4280,7 +4045,7 @@ final class Cli {
 		final fromCluster: Null<String> = o.fromCluster;
 		if (fromCluster != null) {
 			if (o.files.length > 1) {
-				stderr(
+				CliIo.stderr(
 					'apq strip: --from-cluster takes at most one positional (corpus root); got ${o.files.length} (${o.files.join(', ')})\n'
 				);
 				return EXIT_USAGE;
@@ -4295,18 +4060,18 @@ final class Cli {
 			o.files.resize(0);
 			for (p in (discovered: Array<String>)) o.files.push(p);
 		} else if (o.files.length == 0) {
-			stderr('apq strip: missing <file> argument (one or more, applies same substitutions to each)\n');
+			CliIo.stderr('apq strip: missing <file> argument (one or more, applies same substitutions to each)\n');
 			printStripUsage();
 			return EXIT_USAGE;
 		}
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		if (!o.perPattern) return executeStrip(plugin, o, compiledRegex);
 		if (o.files.length != 1) {
-			stderr('apq strip: --per-pattern takes exactly one file (got ${o.files.length})\n');
+			CliIo.stderr('apq strip: --per-pattern takes exactly one file (got ${o.files.length})\n');
 			return EXIT_USAGE;
 		}
 		if (o.patterns.length < 2) {
-			stderr(
+			CliIo.stderr(
 				'apq strip: --per-pattern requires ≥2 patterns (got ${o.patterns.length}'
 				+ ') — isolation diagnostic only useful when patterns can be tested independently\n'
 			);
@@ -4335,11 +4100,11 @@ final class Cli {
 	private static function runStripPerPattern(
 		plugin: GrammarPlugin, filePath: String, patterns: Array<String>, replacements: Array<String>, compiledRegex: Null<Array<EReg>>
 	): Int {
-		final source: String = readSourceForParse(filePath);
+		final source: String = CliIo.readSourceForParse(filePath);
 		final regexMode: Bool = compiledRegex != null;
 		final regexes: Array<EReg> = compiledRegex ?? [];
 		final baseline: { ok: Bool, msg: String } = stripTryParse(plugin, source);
-		sysPrint('baseline (no patterns): ${baseline.ok ? 'PARSE OK' : 'PARSE FAIL: ' + baseline.msg}\n');
+		CliIo.sysPrint('baseline (no patterns): ${baseline.ok ? 'PARSE OK' : 'PARSE FAIL: ' + baseline.msg}\n');
 		final isolatedResults: Array<{ ok: Bool, hits: Int }> = [];
 		for (idx in 0...patterns.length) {
 			final hits: Int = regexMode ? countRegexHits(regexes[idx], source) : countOccurrences(source, patterns[idx]);
@@ -4349,7 +4114,7 @@ final class Cli {
 			final r: { ok: Bool, msg: String } = stripTryParse(plugin, isolated);
 			isolatedResults.push({ ok: r.ok, hits: hits });
 			final pat: String = patterns[idx];
-			sysPrint('pattern[$idx] "$pat" ($hits match${hits == 1 ? '' : 'es'}): ${r.ok ? 'PARSE OK' : 'PARSE FAIL: ' + r.msg}\n');
+			CliIo.sysPrint('pattern[$idx] "$pat" ($hits match${hits == 1 ? '' : 'es'}): ${r.ok ? 'PARSE OK' : 'PARSE FAIL: ' + r.msg}\n');
 		}
 		var combinedStripped: String = source;
 		for (idx in 0...patterns.length)
@@ -4357,7 +4122,7 @@ final class Cli {
 				? regexes[idx].replace(combinedStripped, replacements[idx])
 				: combinedStripped.replace(patterns[idx], replacements[idx]);
 		final combined: { ok: Bool, msg: String } = stripTryParse(plugin, combinedStripped);
-		sysPrint('combined (all patterns): ${combined.ok ? 'PARSE OK' : 'PARSE FAIL: ' + combined.msg}\n');
+		CliIo.sysPrint('combined (all patterns): ${combined.ok ? 'PARSE OK' : 'PARSE FAIL: ' + combined.msg}\n');
 		reportStripVerdict(baseline.ok, combined.ok, isolatedResults, patterns.length);
 		return combined.ok ? EXIT_OK : EXIT_RUNTIME;
 	}
@@ -4377,34 +4142,36 @@ final class Cli {
 		#if (sys || nodejs)
 		final root: String = rootArg ?? defaultReconRoot();
 		if (root == '') {
-			stderr("apq strip: --from-cluster requires a corpus root (positional <dir> or $ANYPARSE_HXFORMAT_FORK env var).\n");
+			CliIo.stderr("apq strip: --from-cluster requires a corpus root (positional <dir> or $ANYPARSE_HXFORMAT_FORK env var).\n");
 			return null;
 		}
 		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
-			stderr('apq strip: --from-cluster: "$root" is not a directory.\n');
+			CliIo.stderr('apq strip: --from-cluster: "$root" is not a directory.\n');
 			return null;
 		}
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
 		if (!walk.wired) {
-			stderr('apq strip: --from-cluster: no recon parser wired up for lang "$lang"\n');
+			CliIo.stderr('apq strip: --from-cluster: no recon parser wired up for lang "$lang"\n');
 			return null;
 		}
 		final cluster: Null<ReconCluster> = walk.clusters[key];
 		if (cluster == null) {
-			stderr('apq strip: --from-cluster "$key" matched no cluster key (exact match).\n');
+			CliIo.stderr('apq strip: --from-cluster "$key" matched no cluster key (exact match).\n');
 			final keyEntries: Array<{ key: String, count: Int }> = [
 				for (k => v in walk.clusters) { key: k, count: v.count }
 			];
 			keyEntries.sort((a, b) -> b.count - a.count);
 			final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
 			if (preview == 0) {
-				stderr('  (no skip-parse failures in this sweep)\n');
+				CliIo.stderr('  (no skip-parse failures in this sweep)\n');
 			} else {
-				stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
-				for (idx in 0...preview) stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
+				CliIo.stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
+				for (idx in 0...preview) CliIo.stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
 				if (keyEntries.length > preview)
-					stderr('    … (${keyEntries.length - preview} more — run `apq recon` on the same root to see the full histogram)\n');
+					CliIo.stderr(
+						'    … (${keyEntries.length - preview} more — run `apq recon` on the same root to see the full histogram)\n'
+					);
 			}
 			return null;
 		}
@@ -4420,7 +4187,7 @@ final class Cli {
 			0);
 		return out;
 		#else
-		stderr('apq strip: --from-cluster requires a sys target (filesystem walk)\n');
+		CliIo.stderr('apq strip: --from-cluster requires a sys target (filesystem walk)\n');
 		return null;
 		#end
 	}
@@ -4460,7 +4227,7 @@ final class Cli {
 			try {
 				out.push(new EReg(pat, 'g'));
 			} catch (e: Exception) {
-				stderr('apq $tool: --regex: pattern[$idx] "$pat" is not a valid EReg: ${e.message}\n');
+				CliIo.stderr('apq $tool: --regex: pattern[$idx] "$pat" is not a valid EReg: ${e.message}\n');
 				return null;
 			}
 		}
@@ -4484,38 +4251,38 @@ final class Cli {
 	}
 
 	private static function printStripUsage(): Void {
-		sysPrint('Usage: apq strip [options] <file> [<file2> ...] --replace <pat> --with <repl> [...]\n');
-		sysPrint('       apq strip --from-cluster <key> [<dir>] --replace <pat> --with <repl> [...]\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --replace <pat>     Literal substring to replace (paired with the next --with)\n');
-		sysPrint('  --with <repl>       Replacement for the most recent --replace\n');
-		sysPrint('  --delete <pat>      Shortcut for --replace <pat> --with \'\'\n');
-		sysPrint('  --regex             Treat --replace / --delete patterns as EReg (global match)\n');
-		sysPrint('                      instead of literal substrings. Backrefs in --with via $1.\n');
-		sysPrint('  --show              Dump the stripped source to stderr (debug)\n');
-		sysPrint('  --dry-run           Skip parse, only verify each pattern matched ≥1 occurrence somewhere (typo guard)\n');
-		sysPrint('  --per-pattern       Isolation diagnostic for multi-pattern strip on a single file. Runs baseline,\n');
-		sysPrint('                      each pattern alone, and combined. Surfaces interlocking blockers (combined OK +\n');
-		sysPrint('                      every isolated row FAIL = slice needs N separate code mechanisms, not one).\n');
-		sysPrint('                      Requires single file and ≥2 patterns; incompatible with --dry-run / --from-cluster.\n');
-		sysPrint('  --from-cluster <key>\n');
-		sysPrint('                      Discover file list via a recon walk and filter by EXACT cluster\n');
-		sysPrint('                      key (same shape as `apq recon --cluster <key>`). Positional <dir>\n');
-		sysPrint("                      becomes the corpus root (env fallback to $ANYPARSE_HXFORMAT_FORK\n");
-		sysPrint('                      /test/testcases). Apply complement of `recon --predict-strip`.\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Apply literal substitutions in order, then parse the result via the\n');
-		sysPrint('grammar plugin. Emits PARSE OK / PARSE FAIL: <err> and exits 0/2 —\n');
-		sysPrint('scriptable sole-blocker confirmation for the skip-parse campaign.\n');
-		sysPrint('StringTools.replace semantics: every occurrence is replaced.\n');
-		sysPrint('\n');
-		sysPrint('Pass multiple file paths to run the SAME substitutions against each\n');
-		sysPrint('(batch mode); per-file output is prefixed with the path, and a final\n');
-		sysPrint('summary line totals pass/fail counts. Exit 0 only when ALL files\n');
-		sysPrint('PARSE OK; exit 2 when any file PARSE FAIL — useful for sole-blocker\n');
-		sysPrint('sweeps across a list of candidate fixtures.\n');
+		CliIo.sysPrint('Usage: apq strip [options] <file> [<file2> ...] --replace <pat> --with <repl> [...]\n');
+		CliIo.sysPrint('       apq strip --from-cluster <key> [<dir>] --replace <pat> --with <repl> [...]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --replace <pat>     Literal substring to replace (paired with the next --with)\n');
+		CliIo.sysPrint('  --with <repl>       Replacement for the most recent --replace\n');
+		CliIo.sysPrint('  --delete <pat>      Shortcut for --replace <pat> --with \'\'\n');
+		CliIo.sysPrint('  --regex             Treat --replace / --delete patterns as EReg (global match)\n');
+		CliIo.sysPrint('                      instead of literal substrings. Backrefs in --with via $1.\n');
+		CliIo.sysPrint('  --show              Dump the stripped source to stderr (debug)\n');
+		CliIo.sysPrint('  --dry-run           Skip parse, only verify each pattern matched ≥1 occurrence somewhere (typo guard)\n');
+		CliIo.sysPrint('  --per-pattern       Isolation diagnostic for multi-pattern strip on a single file. Runs baseline,\n');
+		CliIo.sysPrint('                      each pattern alone, and combined. Surfaces interlocking blockers (combined OK +\n');
+		CliIo.sysPrint('                      every isolated row FAIL = slice needs N separate code mechanisms, not one).\n');
+		CliIo.sysPrint('                      Requires single file and ≥2 patterns; incompatible with --dry-run / --from-cluster.\n');
+		CliIo.sysPrint('  --from-cluster <key>\n');
+		CliIo.sysPrint('                      Discover file list via a recon walk and filter by EXACT cluster\n');
+		CliIo.sysPrint('                      key (same shape as `apq recon --cluster <key>`). Positional <dir>\n');
+		CliIo.sysPrint("                      becomes the corpus root (env fallback to $ANYPARSE_HXFORMAT_FORK\n");
+		CliIo.sysPrint('                      /test/testcases). Apply complement of `recon --predict-strip`.\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Apply literal substitutions in order, then parse the result via the\n');
+		CliIo.sysPrint('grammar plugin. Emits PARSE OK / PARSE FAIL: <err> and exits 0/2 —\n');
+		CliIo.sysPrint('scriptable sole-blocker confirmation for the skip-parse campaign.\n');
+		CliIo.sysPrint('StringTools.replace semantics: every occurrence is replaced.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Pass multiple file paths to run the SAME substitutions against each\n');
+		CliIo.sysPrint('(batch mode); per-file output is prefixed with the path, and a final\n');
+		CliIo.sysPrint('summary line totals pass/fail counts. Exit 0 only when ALL files\n');
+		CliIo.sysPrint('PARSE OK; exit 2 when any file PARSE FAIL — useful for sole-blocker\n');
+		CliIo.sysPrint('sweeps across a list of candidate fixtures.\n');
 	}
 
 	/**
@@ -4548,17 +4315,17 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--plain':
 					plain = true;
 				case '--config':
-					configPath = expectValue(args, ++i, '--config');
+					configPath = CliArgs.expectValue(args, ++i, '--config');
 				case '-h', '--help':
 					printWriterEqualsUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq writer-equals: unknown option "$a"\n');
+						CliIo.stderr('apq writer-equals: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (inputPath == null)
@@ -4566,45 +4333,45 @@ final class Cli {
 					else if (expectedPath == null)
 						expectedPath = a;
 					else {
-						stderr('apq writer-equals: expects exactly two paths (input, expected); got extra "$a"\n');
+						CliIo.stderr('apq writer-equals: expects exactly two paths (input, expected); got extra "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (inputPath == null || expectedPath == null) {
-			stderr('apq writer-equals: missing <input> and/or <expected> argument\n');
+			CliIo.stderr('apq writer-equals: missing <input> and/or <expected> argument\n');
 			printWriterEqualsUsage();
 			return EXIT_USAGE;
 		}
 		final inputPathFinal: String = inputPath;
 		final expectedPathFinal: String = expectedPath;
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final source: String = readSourceForParse(inputPathFinal);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
+		final source: String = CliIo.readSourceForParse(inputPathFinal);
 		final expected: String = readExpectedForCompare(expectedPathFinal);
 		// Config precedence: section-1 from a `.hxtest` input wins (per-
 		// fixture intent), fall back to `--config <path>` (project-wide
 		// opt-in for plain `.hx` files — dogfood `.hxformat.json` etc.),
 		// then plugin defaults.
-		final sectionOpts: Null<String> = readWriteOptionsJsonOrNull(inputPathFinal);
-		final optsJson: Null<String> = sectionOpts ?? (configPath != null ? readFile(configPath) : null);
+		final sectionOpts: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPathFinal);
+		final optsJson: Null<String> = sectionOpts ?? (configPath != null ? CliIo.readFile(configPath) : null);
 
 		final emitted: Null<String> = try (
 			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
 		) catch (e: ParseError) {
-			stderr('apq writer-equals: $inputPathFinal: $e\n');
+			CliIo.stderr('apq writer-equals: $inputPathFinal: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
-			stderr('apq writer-equals: $inputPathFinal: ${e.message}\n');
+			CliIo.stderr('apq writer-equals: $inputPathFinal: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		if (emitted == null) {
 			final flagName: String = plain ? '--plain' : '(trivia)';
-			stderr('apq writer-equals: no writer wired up for lang "$lang" $flagName\n');
+			CliIo.stderr('apq writer-equals: no writer wired up for lang "$lang" $flagName\n');
 			return EXIT_USAGE;
 		}
 		if (emitted == expected) return EXIT_OK;
-		sysPrint('${describeByteDiff(emitted, expected)}\n');
+		CliIo.sysPrint('${describeByteDiff(emitted, expected)}\n');
 		return EXIT_RUNTIME;
 	}
 
@@ -4642,18 +4409,18 @@ final class Cli {
 	}
 
 	private static function printWriterEqualsUsage(): Void {
-		sysPrint('Usage: apq writer-equals [options] <input> <expected>\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --plain             Use the plain (non-trivia) writer (mirrors unit tests)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('  --config <path>     Load writer options from JSON file (hxformat.json-shaped).\n');
-		sysPrint('                      Used for plain .hx inputs (dogfood opt-in); a .hxtest section-1\n');
-		sysPrint('                      always wins over this flag.\n');
-		sysPrint('\n');
-		sysPrint('Parse <input>, write through the grammar plugin (trivia pipeline by\n');
-		sysPrint('default, plain pipeline with --plain), compare against bytes of <expected>.\n');
-		sysPrint('Exit 0 on match, 1 on byte-diff or parse/write failure.\n');
+		CliIo.sysPrint('Usage: apq writer-equals [options] <input> <expected>\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --plain             Use the plain (non-trivia) writer (mirrors unit tests)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --config <path>     Load writer options from JSON file (hxformat.json-shaped).\n');
+		CliIo.sysPrint('                      Used for plain .hx inputs (dogfood opt-in); a .hxtest section-1\n');
+		CliIo.sysPrint('                      always wins over this flag.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Parse <input>, write through the grammar plugin (trivia pipeline by\n');
+		CliIo.sysPrint('default, plain pipeline with --plain), compare against bytes of <expected>.\n');
+		CliIo.sysPrint('Exit 0 on match, 1 on byte-diff or parse/write failure.\n');
 	}
 
 	/**
@@ -4674,12 +4441,12 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		final target: Null<String> = o.target;
 		if (target == null) {
-			stderr('apq lit: missing <text> argument\n');
+			CliIo.stderr('apq lit: missing <text> argument\n');
 			printLitUsage();
 			return EXIT_USAGE;
 		}
 		if (o.inputSpecs.length == 0) {
-			stderr('apq lit: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq lit: missing <file-or-dir-or-glob> argument\n');
 			printLitUsage();
 			return EXIT_USAGE;
 		}
@@ -4697,7 +4464,7 @@ final class Cli {
 		// and an `IdentExpr` widening would add noise (e.g. `hxq lit 'foo'`
 		// inside a corpus of strings).
 		final effectiveKindFilter: Array<String> = kindFilter ?? (
-			looksLikeMixedIdentifier(targetStr) ? ['Literal', 'IdentExpr'] : ['Literal']
+			CliWalk.looksLikeMixedIdentifier(targetStr) ? ['Literal', 'IdentExpr'] : ['Literal']
 		);
 		// Comment scan fires when the user explicitly opted in (`--include-comments`),
 		// when the kind filter is the catch-all (`--any-kind` ⇒ empty array),
@@ -4719,10 +4486,10 @@ final class Cli {
 		// the raw bytes coincide, so the pre-filter is safe.
 		final litPrefilterKey: Null<String> = targetStr.indexOf('\\') < 0 ? targetStr : null;
 
-		final io = resolveInputPaths(o.lang, o.inputSpecs);
+		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq lit: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
+			CliIo.stderr('apq lit: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -4749,15 +4516,15 @@ final class Cli {
 			// access heuristic mis-fires on patterns like `foo\|bar` and
 			// sends the user toward `search '$x.field'`, which is wrong.
 			final regexLabel: Null<String> = looksLikeRegex(targetStr);
-			stderr(
+			CliIo.stderr(
 				regexLabel != null
 					? 'apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel) — lit is substring-only. Run separate lit '
 						+ 'calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n'
-					: '${emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n'
+					: '${CliWalk.emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n'
 			);
 		} else if (collected.autoWidened) {
 			final tried: String = effectiveKindFilter.join(',');
-			stderr(
+			CliIo.stderr(
 				'apq lit: NOTE auto-widened to --any-kind (default kind=$tried'
 				+ ' returned 0 hits). Pass `--any-kind` explicitly to silence this notice.\n'
 			);
@@ -4765,11 +4532,11 @@ final class Cli {
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('lit', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = limitEntries(
+		final cappedLimit: Int = CliWalk.effectiveAutoLimit('lit', o.limit, totalHits);
+		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.limitEntries(
 			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
-		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, o.flat));
+		for (entry in shown) CliIo.sysPrint(Lit.render(entry.file, entry.source, entry.hits, o.flat));
 		return emptyExit(allEntries.length == 0);
 	}
 
@@ -4831,101 +4598,6 @@ final class Cli {
 	}
 
 	/**
-	 * `apq cases <Ctor> <file-or-dir-or-glob>...` — precise case-pattern
-	 * lookup. Finds every `case <Ctor>(_):` / `case <Ctor>:` / `case A |
-	 * <Ctor>:` shape across the input tree. Solves the "search 'case
-	 * Foo(_)' is not a valid pattern" pain — case-patterns are not
-	 * parseable as top-level decl/stmt/expr, and `mentions` over-matches
-	 * (imports, NewExpr, IdentExpr in non-pattern positions). Walks the
-	 * QueryNode tree for `CaseBranch` nodes and emits one hit per
-	 * matching pattern slot.
-	 */
-	private static function runCases(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var flat: Bool = false;
-		var limit: Int = -1;
-		var target: Null<String> = null;
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
-						return EXIT_USAGE;
-					}
-				case '-h', '--help':
-					printCasesUsage();
-					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						stderr('apq cases: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (target == null)
-						target = a;
-					else
-						inputSpecs.push(a);
-			}
-			i++;
-		}
-		if (target == null) {
-			stderr('apq cases: missing <Ctor> argument\n');
-			printCasesUsage();
-			return EXIT_USAGE;
-		}
-		if (inputSpecs.length == 0) {
-			stderr('apq cases: missing <file-or-dir-or-glob> argument\n');
-			printCasesUsage();
-			return EXIT_USAGE;
-		}
-		final targetStr: String = target;
-
-		final io = resolveInputPaths(lang, inputSpecs);
-		final paths: Array<String> = io.paths;
-		if (paths.length == 0) {
-			stderr('apq cases: no input files matched ${quotedSpecs(inputSpecs)}\n');
-			return EXIT_RUNTIME;
-		}
-		final plugin: GrammarPlugin = io.plugin;
-
-		final singleFile: Bool = io.singleFile;
-		final allEntries: Array<{ file: String, source: String, hits: Array<CasesHit> }> = [];
-		final skipEntries: Array<SkipEntry> = [];
-		var scanned: Int = 0;
-		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('cases', plugin.parseFile, path, source, singleFile, skipEntries, targetStr);
-			streamProgress('cases', ++scanned, paths.length, singleFile);
-			if (tree == null) {
-				if (singleFile) return EXIT_RUNTIME;
-				continue;
-			}
-			final hits: Array<CasesHit> = Cases.find(targetStr, tree);
-			if (hits.length == 0) continue;
-			allEntries.push({ file: path, source: source, hits: hits });
-		}
-
-		if (allEntries.length == 0)
-			stderr('${emptyWalkerNudge('cases', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
-
-		var totalHits: Int = 0;
-		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('cases', limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<CasesHit> }> = limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-		);
-		for (entry in shown) sysPrint(Cases.render(entry.file, entry.source, entry.hits, flat));
-		return emptyExit(allEntries.length == 0);
-	}
-
-	/**
 	 * `apq gates [<file-or-dir-or-glob>...]` — list every ctor decl
 	 * carrying `@:fmt(trailOptParseGate('<predicate>'))` or
 	 * `@:fmt(trailOptShapeGate('<predicate>'))`. THE structural answer
@@ -4968,18 +4640,18 @@ final class Cli {
 			'kw-lead'
 		];
 		if (!validMechanisms.contains(mechanism)) {
-			stderr('apq gates: unknown --mechanism "$mechanism" (valid: ${validMechanisms.join(', ')})\n');
+			CliIo.stderr('apq gates: unknown --mechanism "$mechanism" (valid: ${validMechanisms.join(', ')})\n');
 			return EXIT_USAGE;
 		}
 		// Default scope: the grammar tree for the selected lang.
 		final effectiveSpecs: Array<String> = o.inputSpecs.length > 0 ? o.inputSpecs : ['src/anyparse/grammar/$lang/'];
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 		final shape: MetaShape = plugin.metaShape();
-		final expanded: ExpandedInputs = expandInputs(effectiveSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs(effectiveSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq gates: no input files matched ${quotedSpecs(effectiveSpecs)}\n');
+			CliIo.stderr('apq gates: no input files matched ${CliArgs.quotedSpecs(effectiveSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -4988,8 +4660,8 @@ final class Cli {
 		final allHits: Array<{ file: String, source: String, hits: Array<GateHit> }> = [];
 		var totalHits: Int = 0;
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('gates', plugin.parseFile, path, source, singleFile, skipEntries);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked('gates', plugin.parseFile, path, source, singleFile, skipEntries);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
@@ -5003,7 +4675,7 @@ final class Cli {
 		}
 
 		if (allHits.length == 0) {
-			stderr('apq gates: no ${gatesNoHitsLabel(mechanism)} in ${paths.length} file(s) scanned\n');
+			CliIo.stderr('apq gates: no ${gatesNoHitsLabel(mechanism)} in ${paths.length} file(s) scanned\n');
 			return EXIT_OK;
 		}
 
@@ -5178,34 +4850,24 @@ final class Cli {
 	}
 
 	private static function printGatesUsage(): Void {
-		sysPrint('Usage: apq gates [<file-or-dir-or-glob>...] [--flat] [--limit N] [--mechanism <name>]\n');
-		sysPrint('\n');
-		sysPrint('Default (--mechanism trail-opt): list ctor decls carrying\n');
-		sysPrint('`@:fmt(trailOptParseGate(\'<pred>\'))` / `trailOptShapeGate(\'<pred>\')` and\n');
-		sysPrint('the predicate name they dispatch. Pre-`--mechanism` output 1:1.\n');
-		sysPrint('\n');
-		sysPrint('Other --mechanism values inventory grammar surface by Lowering pattern:\n');
-		sysPrint('  optional-ref          — `@:optional` Ref fields with @:lead/@:kw/@:absentOn\n');
-		sysPrint('                          (already-relaxed precedent sites).\n');
-		sysPrint('  optional-ref-trail    — `@:optional @:lead @:trail` Ref bracket-pair\n');
-		sysPrint('                          (Slice 40 mechanism — current consumers).\n');
-		sysPrint('  mandatory-ref-lead-trail\n');
-		sysPrint('                        — mandatory Ref with @:lead+@:trail (no @:optional).\n');
-		sysPrint('                          THE predict-optional fallback candidate list —\n');
-		sysPrint('                          fields you could relax via Slice 40\'s mechanism.\n');
-		sysPrint('  kw-lead               — fields with @:kw (keyword-dispatched).\n');
-		sysPrint('\n');
-		sysPrint('Default scope: src/anyparse/grammar/<lang>/ (haxe by default).\n');
-	}
-
-	private static function printCasesUsage(): Void {
-		sysPrint('Usage: apq cases <Ctor> <file-or-dir-or-glob>... [--flat] [--limit N]\n');
-		sysPrint('\n');
-		sysPrint('Match every switch case-pattern whose top-level ctor is <Ctor>:\n');
-		sysPrint('  case Ctor:           case Ctor(_):         case A | Ctor:\n');
-		sysPrint('\n');
-		sysPrint('Use when `search \'case Foo(_)\'` rejects the pattern and `mentions` over-\n');
-		sysPrint('matches (imports / NewExpr / IdentExpr in non-pattern positions).\n');
+		CliIo.sysPrint('Usage: apq gates [<file-or-dir-or-glob>...] [--flat] [--limit N] [--mechanism <name>]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Default (--mechanism trail-opt): list ctor decls carrying\n');
+		CliIo.sysPrint('`@:fmt(trailOptParseGate(\'<pred>\'))` / `trailOptShapeGate(\'<pred>\')` and\n');
+		CliIo.sysPrint('the predicate name they dispatch. Pre-`--mechanism` output 1:1.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Other --mechanism values inventory grammar surface by Lowering pattern:\n');
+		CliIo.sysPrint('  optional-ref          — `@:optional` Ref fields with @:lead/@:kw/@:absentOn\n');
+		CliIo.sysPrint('                          (already-relaxed precedent sites).\n');
+		CliIo.sysPrint('  optional-ref-trail    — `@:optional @:lead @:trail` Ref bracket-pair\n');
+		CliIo.sysPrint('                          (Slice 40 mechanism — current consumers).\n');
+		CliIo.sysPrint('  mandatory-ref-lead-trail\n');
+		CliIo.sysPrint('                        — mandatory Ref with @:lead+@:trail (no @:optional).\n');
+		CliIo.sysPrint('                          THE predict-optional fallback candidate list —\n');
+		CliIo.sysPrint('                          fields you could relax via Slice 40\'s mechanism.\n');
+		CliIo.sysPrint('  kw-lead               — fields with @:kw (keyword-dispatched).\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Default scope: src/anyparse/grammar/<lang>/ (haxe by default).\n');
 	}
 
 	/**
@@ -5234,25 +4896,25 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		final name: Null<String> = o.name;
 		if (name == null) {
-			stderr('apq blast: missing <type-name> argument\n');
+			CliIo.stderr('apq blast: missing <type-name> argument\n');
 			printBlastUsage();
 			return EXIT_USAGE;
 		}
 		if (o.inputSpecs.length == 0) {
-			stderr('apq blast: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq blast: missing <file-or-dir-or-glob> argument\n');
 			printBlastUsage();
 			return EXIT_USAGE;
 		}
 		final typeName: String = name;
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final refShape: RefShape = plugin.refShape();
 		final typeShape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq blast: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
+			CliIo.stderr('apq blast: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -5268,9 +4930,9 @@ final class Cli {
 		final valueTrees: Array<{ path: String, source: String, tree: QueryNode }> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('blast', plugin.parseFile, path, source, expanded.singleFile);
-			streamProgress('blast', ++scanned, paths.length, expanded.singleFile);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked('blast', plugin.parseFile, path, source, expanded.singleFile);
+			CliIo.streamProgress('blast', ++scanned, paths.length, expanded.singleFile);
 			if (tree == null) {
 				if (expanded.singleFile) return EXIT_RUNTIME;
 				continue;
@@ -5288,16 +4950,16 @@ final class Cli {
 		if (blastRefsSection(valueTrees, typeName, refShape, o.flat, plugin.lexicalRegions)) any = true;
 
 		if (memberNames.length == 0) {
-			stderr(
+			CliIo.stderr(
 				'apq blast: no declaration of "$typeName" in the scanned set — '
 				+ 'heuristic field-access section skipped (uses/refs above are complete).\n'
 			);
-			if (!any) stderr('apq blast: no uses / refs of "$typeName" found\n');
+			if (!any) CliIo.stderr('apq blast: no uses / refs of "$typeName" found\n');
 			return emptyExit(!any);
 		}
 		if (blastHeuristicSection(valueTrees, memberNames, declSpans, typeName, o.showAll, o.limit)) any = true;
 
-		if (!any) stderr('apq blast: no uses / refs / member-access of "$typeName" found\n');
+		if (!any) CliIo.stderr('apq blast: no uses / refs / member-access of "$typeName" found\n');
 		return emptyExit(!any);
 	}
 
@@ -5324,25 +4986,25 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		final name: Null<String> = o.name;
 		if (name == null) {
-			stderr('apq mentions: missing <name> argument\n');
+			CliIo.stderr('apq mentions: missing <name> argument\n');
 			printMentionsUsage();
 			return EXIT_USAGE;
 		}
 		if (o.inputSpecs.length == 0) {
-			stderr('apq mentions: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq mentions: missing <file-or-dir-or-glob> argument\n');
 			printMentionsUsage();
 			return EXIT_USAGE;
 		}
 		final target: String = name;
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final refShape: RefShape = plugin.refShape();
 		final typeShape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq mentions: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
+			CliIo.stderr('apq mentions: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -5356,7 +5018,7 @@ final class Cli {
 		final litAny: Bool = emitMentionsLit(target, valueTrees, o.limit, o.flat);
 
 		final any: Bool = usesAny || refsAny || litAny;
-		if (!any) stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
+		if (!any) CliIo.stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
 		return emptyExit(!any);
 	}
 
@@ -5462,12 +5124,12 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		final pattern: Null<String> = o.pattern;
 		if (pattern == null) {
-			stderr('apq search: missing <pattern> argument\n');
+			CliIo.stderr('apq search: missing <pattern> argument\n');
 			printSearchUsage();
 			return EXIT_USAGE;
 		}
 		if (o.inputSpecs.length == 0) {
-			stderr('apq search: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq search: missing <file-or-dir-or-glob> argument\n');
 			printSearchUsage();
 			return EXIT_USAGE;
 		}
@@ -5482,7 +5144,7 @@ final class Cli {
 		// Detect the sigil before parsing and point at the right tool.
 		final reif: Null<String> = detectMacroReification(patternStr);
 		if (reif != null) {
-			stderr(
+			CliIo.stderr(
 				'apq search: pattern "$patternStr" contains macro reification ($reif'
 				+ ') which is a macro-time construct, not an AST shape pattern. For literal-string lookup use: apq lit \'<text>\' <files>. '
 				+ 'For identifier shape patterns use a metavar `$$x` (lowercase).\n'
@@ -5490,9 +5152,9 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final parsed: Pattern = try plugin.parsePattern(patternStr) catch (e: Exception) {
-			stderr('apq search: pattern: ${e.message}\n');
+			CliIo.stderr('apq search: pattern: ${e.message}\n');
 			return EXIT_RUNTIME;
 		};
 
@@ -5508,7 +5170,7 @@ final class Cli {
 		//                        the right tool (refs/uses don't apply).
 		//  - IdentExpr / other — bare identifier; refs/uses/lit all
 		//                        plausible depending on intent.
-		if (parsed.isDegenerate()) stderr('${degenerateNudge(patternStr, parsed.root.kind)}\n');
+		if (parsed.isDegenerate()) CliIo.stderr('${CliWalk.degenerateNudge(patternStr, parsed.root.kind)}\n');
 
 		// A metavar the grammar does not project as a node is dropped from the
 		// pattern SILENTLY, and the search then answers a wider question than the
@@ -5519,7 +5181,7 @@ final class Cli {
 			final ignored: String = 'apq search: metavariable(s) $$${parsed.ignoredMetavars.join(', $')} are not part of the parsed '
 				+ 'pattern - the grammar projects no node at that position, so the search is WIDER than written (a declared type is '
 				+ 'not a node; a metadata name is not decoded). Searching anyway.\n';
-			stderr(ignored);
+			CliIo.stderr(ignored);
 		}
 
 		// `--explain`: emit the parsed pattern's S-expr to stderr at
@@ -5529,14 +5191,14 @@ final class Cli {
 		// is a kind mismatch (e.g. searching `switch $x { … }` against
 		// a tree whose actual kind is `SwitchExpr`, not `Switch`).
 		if (o.explain) {
-			stderr('apq search: pattern parses as:\n');
-			stderr(Text.render(parsed.root));
+			CliIo.stderr('apq search: pattern parses as:\n');
+			CliIo.stderr(Text.render(parsed.root));
 		}
 
-		final expanded: ExpandedInputs = expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq search: no input files matched ${quotedSpecs(o.inputSpecs)}\n');
+			CliIo.stderr('apq search: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -5554,8 +5216,8 @@ final class Cli {
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.matches.length;
-		final cappedLimit: Int = effectiveAutoLimit('search', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, matches: Array<Match> }> = limitEntries(
+		final cappedLimit: Int = CliWalk.effectiveAutoLimit('search', o.limit, totalHits);
+		final shown: Array<{ file: String, source: String, matches: Array<Match> }> = CliWalk.limitEntries(
 			allEntries, cappedLimit, e -> e.matches.length, (e, k) -> {file: e.file, source: e.source, matches: e.matches.slice(0, k) }
 		);
 		renderSearchResults(shown, o.json, o.flat);
@@ -5584,15 +5246,15 @@ final class Cli {
 		// Exactly one of the three must be set.
 		final sourceProvidersSet: Int = (o.codeArg != null ? 1 : 0) + (o.stdinFlag ? 1 : 0) + (o.file != null ? 1 : 0);
 		if (sourceProvidersSet == 0) {
-			stderr('apq ast: missing <file>, --code <s>, or --stdin\n');
+			CliIo.stderr('apq ast: missing <file>, --code <s>, or --stdin\n');
 			printAstUsage();
 			return EXIT_USAGE;
 		}
 		if (sourceProvidersSet > 1) {
-			stderr('apq ast: <file>, --code, and --stdin are mutually exclusive\n');
+			CliIo.stderr('apq ast: <file>, --code, and --stdin are mutually exclusive\n');
 			return EXIT_USAGE;
 		}
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		// Capture nullable struct fields into locals so Strict narrows them;
 		// the source/label resolution then branches once and narrows `file`
 		// in its own arm. File label drives error / hit-location prefixes —
@@ -5608,10 +5270,10 @@ final class Cli {
 			source = codeArg;
 			fileLabel = '<probe>';
 		} else if (o.stdinFlag) {
-			source = readStdin();
+			source = CliIo.readStdin();
 			fileLabel = '<stdin>';
 		} else if (file != null) {
-			source = readSourceForParse(file);
+			source = CliIo.readSourceForParse(file);
 			fileLabel = file;
 		} else
 			throw new Exception('apq ast: no source provider after mutex check (unreachable)');
@@ -5630,11 +5292,11 @@ final class Cli {
 		// (writer produced syntactically broken Haxe).
 		if (o.writerOutput) {
 			if (!o.typeRefs) return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
-			stderr('apq ast: --type-refs cannot be combined with --writer-output (the type-ref projection is not writable)\n');
+			CliIo.stderr('apq ast: --type-refs cannot be combined with --writer-output (the type-ref projection is not writable)\n');
 			return EXIT_USAGE;
 		}
 		if (o.writerDiff) {
-			stderr('apq ast: --diff requires --writer-output (it diffs input vs writer-emitted output)\n');
+			CliIo.stderr('apq ast: --diff requires --writer-output (it diffs input vs writer-emitted output)\n');
 			return EXIT_USAGE;
 		}
 
@@ -5643,10 +5305,10 @@ final class Cli {
 		// the same code path the default tree uses, so the dump is directly
 		// comparable with a plain `ast` run of the same file.
 		final tree: QueryNode = try (o.typeRefs ? plugin.parseFileTypeRefs(source) : plugin.parseFile(source)) catch (e: ParseError) {
-			stderr('apq ast: $fileLabel: $e\n');
+			CliIo.stderr('apq ast: $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
-			stderr('apq ast: $fileLabel: ${e.message}\n');
+			CliIo.stderr('apq ast: $fileLabel: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -5657,11 +5319,11 @@ final class Cli {
 		if (selectExpr != null) return runAstSelect(o, selectExpr, tree, source, fileLabel, plugin);
 
 		if (o.countOnly) {
-			sysPrint('${tree.children.length}\n');
+			CliIo.sysPrint('${tree.children.length}\n');
 			return EXIT_OK;
 		}
 		final shaped: QueryNode = shapeAstOutput(tree, o.depth, o.childrenLimit);
-		sysPrint(o.json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped, o.spans));
+		CliIo.sysPrint(o.json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped, o.spans));
 		return EXIT_OK;
 	}
 
@@ -5728,7 +5390,7 @@ final class Cli {
 				continue;
 			}
 			if (a == '--lang') {
-				lang = expectValue(args, ++i, '--lang');
+				lang = CliArgs.expectValue(args, ++i, '--lang');
 				forwarded.push('--lang');
 				forwarded.push(lang);
 				i++;
@@ -5748,14 +5410,14 @@ final class Cli {
 				continue;
 			}
 			if (codeArg != null) {
-				stderr('apq probe: only one code argument supported (got "$codeArg" and "$a")\n');
+				CliIo.stderr('apq probe: only one code argument supported (got "$codeArg" and "$a")\n');
 				return EXIT_USAGE;
 			}
 			codeArg = a;
 			i++;
 		}
 		if (codeArg == null) {
-			stderr('apq probe: missing <code> argument\n');
+			CliIo.stderr('apq probe: missing <code> argument\n');
 			printProbeUsage();
 			return EXIT_USAGE;
 		}
@@ -5768,8 +5430,8 @@ final class Cli {
 		// downstream loader sees the same source we staged).
 		final stagedSource: Null<String> = stageProbeSource(codeFinal);
 		if (writerProbeMode) {
-			final source: String = stagedSource ?? (codeFinal == '-' ? readStdin() : codeFinal);
-			final plugin: GrammarPlugin = pickPlugin(lang);
+			final source: String = stagedSource ?? (codeFinal == '-' ? CliIo.readStdin() : codeFinal);
+			final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 			// `<probe>` is the synthetic file label — matches the byte
 			// shape `apq writer-probe` uses on real files and keeps any
 			// downstream error message format consistent.
@@ -5813,10 +5475,10 @@ final class Cli {
 	 */
 	private static function stageProbeSource(codeArg: String): Null<String> {
 		#if (sys || nodejs)
-		final source: String = codeArg == '-' ? readStdin() : codeArg;
+		final source: String = codeArg == '-' ? CliIo.readStdin() : codeArg;
 		try {
 			sys.io.File.saveContent(STAGE_PROBE_PATH, source);
-			stderr(
+			CliIo.stderr(
 				'apq probe: staged source -> $STAGE_PROBE_PATH (use it with `apq strip $STAGE_PROBE_PATH …` or `apq recon --probe '
 				+ '$STAGE_PROBE_PATH`).\n'
 			);
@@ -5860,17 +5522,17 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printWriterProbeUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq writer-probe: unknown option "$a"\n');
+						CliIo.stderr('apq writer-probe: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file != null) {
-						stderr('apq writer-probe: only one file argument supported (got "$file" and "$a")\n');
+						CliIo.stderr('apq writer-probe: only one file argument supported (got "$file" and "$a")\n');
 						return EXIT_USAGE;
 					}
 					file = a;
@@ -5878,17 +5540,17 @@ final class Cli {
 			i++;
 		}
 		if (file == null) {
-			stderr('apq writer-probe: missing <file> argument\n');
+			CliIo.stderr('apq writer-probe: missing <file> argument\n');
 			printWriterProbeUsage();
 			return EXIT_USAGE;
 		}
 		final fileFinal: String = file;
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final source: String = readSourceForParse(fileFinal);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
+		final source: String = CliIo.readSourceForParse(fileFinal);
 		// `.hxtest` section-1 config drives BOTH labelled probes so the
 		// trivia ↔ plain comparison reflects the corpus harness's actual
 		// writer surface for this fixture.
-		final optsJson: Null<String> = readWriteOptionsJsonOrNull(fileFinal);
+		final optsJson: Null<String> = CliArgs.readWriteOptionsJsonOrNull(fileFinal);
 		final triviaOk: Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, false, optsJson);
 		final plainOk: Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, true, optsJson);
 		return triviaOk && plainOk ? EXIT_OK : EXIT_RUNTIME;
@@ -5898,23 +5560,23 @@ final class Cli {
 		plugin: GrammarPlugin, source: String, file: String, lang: String, plain: Bool, optsJson: Null<String>
 	): Bool {
 		final label: String = plain ? 'plain' : 'trivia';
-		sysPrint('=== $label ===\n');
+		CliIo.sysPrint('=== $label ===\n');
 		final emitted: Null<String> = try (
 			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
 		) catch (e: ParseError) {
-			stderr('apq writer-probe: $label: $file: $e\n');
+			CliIo.stderr('apq writer-probe: $label: $file: $e\n');
 			return false;
 		} catch (e: Exception) {
-			stderr('apq writer-probe: $label: $file: ${e.message}\n');
+			CliIo.stderr('apq writer-probe: $label: $file: ${e.message}\n');
 			return false;
 		}
 		if (emitted == null) {
 			final flag: String = plain ? '--writer-output-plain' : '--writer-output';
-			stderr('apq writer-probe: $label: no writer wired up for lang "$lang" ($flag equivalent)\n');
+			CliIo.stderr('apq writer-probe: $label: no writer wired up for lang "$lang" ($flag equivalent)\n');
 			return false;
 		}
-		sysPrint(emitted);
-		if (!StringTools.endsWith(emitted, '\n')) sysPrint('\n');
+		CliIo.sysPrint(emitted);
+		if (!StringTools.endsWith(emitted, '\n')) CliIo.sysPrint('\n');
 		// DX v10: source-preservation note. The trivia pipeline is meant
 		// to round-trip source bytes verbatim (subject to the writer's
 		// fidelity); a byte-diff signals an actual writer-fidelity gap
@@ -5941,9 +5603,9 @@ final class Cli {
 		final sFrom: Int = diffAt - wnd >= 0 ? diffAt - wnd : 0;
 		final sExp: String = escapeProbeWindow(source.substring(sFrom, diffAt + wnd < source.length ? diffAt + wnd : source.length));
 		final sAct: String = escapeProbeWindow(emitted.substring(sFrom, diffAt + wnd < emitted.length ? diffAt + wnd : emitted.length));
-		stderr('apq writer-probe: NOTE trivia output differs from source at offset $diffAt (writer-fidelity gap)\n');
-		stderr('  source : "$sExp"\n');
-		stderr('  emitted: "$sAct"\n');
+		CliIo.stderr('apq writer-probe: NOTE trivia output differs from source at offset $diffAt (writer-fidelity gap)\n');
+		CliIo.stderr('  source : "$sExp"\n');
+		CliIo.stderr('  emitted: "$sAct"\n');
 	}
 
 	private static function escapeProbeWindow(s: String): String {
@@ -5966,553 +5628,183 @@ final class Cli {
 		return buf.toString();
 	}
 
-	private static function pickPlugin(lang: String): GrammarPlugin {
-		return switch lang {
-			case 'haxe': new HaxeQueryPlugin();
-			case _: throw 'apq: no grammar plugin for --lang "$lang"';
-		};
-	}
-
 	private static function printReconUsage(): Void {
-		sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--cluster <substr> [--source]]\n');
-		sysPrint('                 [--predict-strip --replace <pat> --with <repl> ... [--source]]\n');
-		sysPrint('                 [--probe <file>]\n');
-		sysPrint('\n');
-		sysPrint('Sweep mode: walks every .hxtest under <dir> (section-2 auto-extracted),\n');
-		sysPrint('runs the trivia parser, clusters failures by normalised forward-locus,\n');
-		sysPrint('and prints SKIP lines + histogram. Default <dir> is\n');
-		sysPrint("$ANYPARSE_HXFORMAT_FORK/test/testcases when the env var is set.\n");
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --lang <name>           Grammar plugin (default: haxe)\n');
-		sysPrint('  --top N                 Show top N clusters (default: 30)\n');
-		sysPrint('  --all                   Show every cluster\n');
-		sysPrint('  --cluster <key>         Drill into ONE cluster: full path list instead of\n');
-		sysPrint('                          histogram. EXACT match against the cluster key\n');
-		sysPrint('                          shown in the histogram (with \\n / \\t escapes).\n');
-		sysPrint('                          0-match exits non-zero with top keys for ref.\n');
-		sysPrint('  --no-target-cluster <expected-msg>\n');
-		sysPrint('                          With --predict-relax: drill into ONE bucket of the\n');
-		sysPrint('                          footer NO TARGET breakdown — print every fixture\n');
-		sysPrint('                          whose predict-relax outcome is NoTarget with\n');
-		sysPrint('                          message == <expected-msg>. EXACT match against the\n');
-		sysPrint('                          key shown in the footer histogram. Bridges the\n');
-		sysPrint('                          footer aggregate to the file list — --cluster uses\n');
-		sysPrint('                          a different namespace (forward-locus on raw bytes).\n');
-		sysPrint('                          0-match exits non-zero with top NO TARGET keys.\n');
-		sysPrint('                          Mutex with --cluster / --probe.\n');
-		sysPrint('  --source                With --cluster, append a windowed source slice\n');
-		sysPrint('                          around the fail-locus for each path (L±3).\n');
-		sysPrint('                          With --predict-strip, also emits the window for\n');
-		sysPrint('                          each STILL FAIL entry around the NEW fail-locus\n');
-		sysPrint('                          (the moved-locus payload). With --predict-relax,\n');
-		sysPrint('                          emits the window for STILL FAIL (around NEW locus\n');
-		sysPrint('                          in patched source) and for NO TARGET entries in\n');
-		sysPrint('                          drill/probe modes (around the ORIGINAL fail-locus,\n');
-		sysPrint('                          which has no patch). Sweep-mode NO TARGET stays\n');
-		sysPrint('                          collapsed into the footer histogram. Usage error\n');
-		sysPrint('                          outside these modes.\n');
-		sysPrint('  --predict-strip         Apply substitutions to each skip-parse source\n');
-		sysPrint('                          and retry; print PREDICT UNBLOCK / STILL FAIL /\n');
-		sysPrint('                          NO MATCH per file. Requires --replace/--with or\n');
-		sysPrint('                          --delete; combinable with --cluster.\n');
-		sysPrint('  --replace <pat> --with <repl>\n');
-		sysPrint('                          Substitution pair (with --predict-strip; repeatable).\n');
-		sysPrint('  --delete <pat>          Shortcut for --replace <pat> --with "".\n');
-		sysPrint('  --regex                 Treat --replace / --delete patterns as EReg patterns\n');
-		sysPrint('                          (global, applies to every match) instead of literal\n');
-		sysPrint('                          substrings. Requires --predict-strip. One regex\n');
-		sysPrint('                          covers every site of a construct in the corpus.\n');
-		sysPrint('  --candidates <regex>    Cross-cluster enumeration: walk skip-parse fixtures,\n');
-		sysPrint('                          print `<path> :: N matches` for every file with ≥1\n');
-		sysPrint('                          regex hit (sorted by count desc) + summary. Use when\n');
-		sysPrint('                          the histogram clusters by exact forward-locus and a\n');
-		sysPrint('                          construct lives in differently-shaped multi-blocker\n');
-		sysPrint('                          fixtures. Mutually exclusive with --predict-strip /\n');
-		sysPrint('                          --cluster / --probe / --regression-probe.\n');
-		sysPrint('  --probe <file>          Single-file probe instead of sweep. Composes with\n');
-		sysPrint('                          --predict-strip: applies substitutions to the file and\n');
-		sysPrint('                          retries the parse, printing PREDICT UNBLOCK / STILL\n');
-		sysPrint('                          FAIL / NO MATCH + per-pattern totals + typo guard\n');
-		sysPrint('                          (same shape as sweep mode).\n');
-		sysPrint('  --regression-probe      Diff current corpus parse OK / SKIP_PARSE state against\n');
-		sysPrint('                          the prior sweep snapshot (`bin/.last-sweep.json`).\n');
-		sysPrint('                          Reports every fixture whose parse status FLIPPED since\n');
-		sysPrint('                          the snapshot — REGRESSED (was PASS / FAIL / SKIP_WRITE,\n');
-		sysPrint('                          now skip-parse) and UNBLOCKED (was SKIP_PARSE, now\n');
-		sysPrint('                          parses). Cheap pre-edit / post-edit sanity check —\n');
-		sysPrint('                          only runs the trivia parse, no writer / no expected-\n');
-		sysPrint('                          bytes diff. Non-zero exit when any regression found.\n');
-		sysPrint('                          Mutually exclusive with --probe / --predict-strip /\n');
-		sysPrint('                          --cluster.\n');
-		sysPrint('  --permissive-construct  Field-optionalization predictor for Slice 40\'s\n');
-		sysPrint('                          `@:optional + @:lead + @:trail` mechanism. Walks every\n');
-		sysPrint('                          `mandatory-ref-lead-trail` candidate from `apq gates\n');
-		sysPrint('                          --mechanism mandatory-ref-lead-trail`, strips the\n');
-		sysPrint('                          `<lead>...<trail>` bracket-pair from each skip-parse\n');
-		sysPrint('                          fixture, re-parses, and aggregates UNBLOCK / STILL FAIL\n');
-		sysPrint('                          / NO MATCH per candidate. THE pre-edit upper-bound\n');
-		sysPrint('                          view of which field-optionalization would unblock\n');
-		sysPrint('                          which fixtures. Mutually exclusive with every other\n');
-		sysPrint('                          recon mode.\n');
-		sysPrint('  --writer-equals         After --probe PARSE OK, also run writer round-trip +\n');
-		sysPrint('                          byte-equality check vs the fixture\'s expected section\n');
-		sysPrint('                          (or `--expected <path>` for plain .hx). Prints WRITER\n');
-		sysPrint('                          PASS / FAIL upfront so you see whether the slice would\n');
-		sysPrint('                          yield +1 PASS or skip→fail without running the corpus\n');
-		sysPrint('                          sweep. Incompatible with --predict-strip / --predict-\n');
-		sysPrint('                          relax (their patched source diverges from expected by\n');
-		sysPrint('                          construction). Requires --probe.\n');
-		sysPrint('  --writer-equals-plain   Same as --writer-equals but routes through the PLAIN\n');
-		sysPrint('                          (non-trivia) pipeline (HxModuleParser → HxModuleWriter).\n');
-		sysPrint('  --expected <path>       Override the expected-bytes source (default: .hxtest\n');
-		sysPrint('                          section 3, or the input itself for raw .hx). Requires\n');
-		sysPrint('                          --writer-equals.\n');
-		sysPrint('  -h, --help              Show this help.\n');
-	}
-
-	private static function readFile(path: String): String {
-		#if (sys || nodejs)
-		return File.getContent(path);
-		#else
-		throw 'apq: file IO requires a sys target';
-		#end
-	}
-
-	/**
-	 * Write `content` to `path` — through a temporary beside the target, never into the target
-	 * itself. One file is a change set of one, so this is `writeFiles` of a single member.
-	 *
-	 * `File.saveContent` opens with truncation, so a write that fails PART WAY leaves the source
-	 * file destroyed rather than unchanged. Measured on a 10 MB volume filled to zero free blocks:
-	 * `fmt --write` over five files reported `rewrote 3 of 5 file(s), 2 failed` and left the two
-	 * failures at 0 bytes — the per-file catch turns the crash into a message and then goes on to
-	 * the next file, so a full disk zeroes a tree one source file at a time. Staging the bytes
-	 * beside the target and renaming them into place makes each write all-or-nothing: the same run
-	 * leaves every file byte-identical and still reports.
-	 *
-	 * The rename is what costs something, and it is paid for deliberately — see `stageWrite` for
-	 * the writability probe, the symlink resolution and the mode copy that keep it from defeating a
-	 * read-only file, replacing a link, or flattening a file's permission bits.
-	 */
-	private static function writeFile(path: String, content: String): Void {
-		writeFiles([
-			{
-				path: path,
-				content: content
-			}
-		]);
-	}
-
-	/**
-	 * Write a whole change set, or none of it.
-	 *
-	 * Every file is staged first and only then renamed into place, so a set one member of
-	 * which cannot be written leaves the tree exactly as it found it. Without that a
-	 * `rename --scope` over five files whose third is unwritable committed the first two
-	 * and died — and a rename applied to some of its files is not a partial success, it is
-	 * a tree that no longer compiles.
-	 *
-	 * The commit loop can still fail part way and nothing could undo that: by then the
-	 * originals are gone. It is the narrow half of the window — a rename into a directory
-	 * this process has just created a file in — while the whole of ENOSPC, EACCES and a
-	 * read-only target is decided in the staging loop above it.
-	 */
-	private static function writeFiles(writes: Array<{ path: String, content: String }>): Void {
-		#if (sys || nodejs)
-		final staged: Array<StagedWrite> = [];
-		try {
-			for (w in writes) staged.push(stageWrite(w.path, w.content));
-		} catch (failure: WriteFailure) {
-			for (pending in staged) discardStage(pending.staged);
-			throw failure;
-		}
-		for (i in 0...staged.length) try commitStagedWrite(staged[i]) catch (failure: WriteFailure) {
-			// The renames already done cannot be undone — the originals are gone. What CAN be
-			// tidied is the tail nobody has moved yet, and it must be: an ordinary handled error
-			// would otherwise leave a `.apq-tmp` beside every remaining member of the set, which
-			// is the one thing the suffix's own doc treats as a killed-process artefact.
-			for (j in i + 1...staged.length) discardStage(staged[j].staged);
-			throw failure;
-		}
-		#else
-		throw 'apq: file IO requires a sys target';
-		#end
-	}
-
-	#if (sys || nodejs)
-	/**
-	 * Stage `content` for `path` in a sibling temporary, answering the pair `commitStagedWrite`
-	 * renames into place.
-	 *
-	 * Three things a rename changes that an in-place write does not, and every one is repaired
-	 * here rather than accepted, because a seat every write in this class goes through cannot
-	 * afford to behave differently from the call it replaces:
-	 *
-	 * - A SYMLINK. `File.saveContent` writes THROUGH it; a rename replaces it with a regular file
-	 *   and the link is gone. `FileSystem.fullPath` resolves it first, so the bytes land on the
-	 *   same file the in-place write would have hit.
-	 * - A READ-ONLY file. `rename(2)` needs write permission on the DIRECTORY, not on the file, so
-	 *   a naked stage-and-rename silently overwrites a `chmod 444` file that `File.saveContent`
-	 *   refuses with EACCES. Opening the target for append asks the kernel the same question the
-	 *   in-place write asked, and writes nothing.
-	 * - The MODE. A fresh temporary is created under the process umask, so renaming it over an
-	 *   0755 file leaves 0644. Copied across before the rename — but on NODE only: `sys.FileSystem`
-	 *   exposes no chmod, and the guard below says why that gap is recorded rather than closed.
-	 *
-	 * One difference survives, deliberately: a writable file inside a read-only DIRECTORY can no
-	 * longer be rewritten, because there is nowhere beside it to stage. Falling back to the
-	 * in-place write there would put the truncation window back exactly where this seat exists to
-	 * close it, so the write fails and names the reason instead.
-	 *
-	 * The staging path is `<target>.apq-tmp`, derived and not randomised, which is what lets a test
-	 * block it with a directory and pin the mechanism. Two apq PROCESSES writing the same file
-	 * concurrently therefore share a temporary — already undefined behaviour before this change,
-	 * since both used to truncate the same target, but the failure is now a spurious `ENOENT` on
-	 * the loser rather than interleaved bytes.
-	 */
-	private static function stageWrite(path: String, content: String): StagedWrite {
-		// INSIDE the try, both of them: a `fullPath` that throws (the file vanishing between the
-		// two calls) would otherwise escape as a bare `Exception`, miss `run`'s WriteFailure-only
-		// catch, and produce exactly the raw host trace this seat exists to remove.
-		var target: String = path;
-		var staged: String = path + STAGED_WRITE_SUFFIX;
-		try {
-			target = FileSystem.exists(path) ? FileSystem.fullPath(path) : path;
-			staged = target + STAGED_WRITE_SUFFIX;
-			// The kernel's own answer to the question `File.saveContent` used to ask, asked
-			// before anything is staged: `open(…, 'a')` needs W_OK on the file and writes nothing.
-			final mode: Null<Int> = if (FileSystem.exists(target)) {
-				File.append(target, true).close();
-				FileSystem.stat(target).mode & PERMISSION_BITS;
-			} else
-				null;
-			File.saveContent(staged, content);
-			// NODE ONLY, and the doc above says so: `sys.FileSystem` has no chmod, so a target
-			// without `js.node.Fs` cannot put the mode back and a staged write there resets it to
-			// the umask default. js/node is the only runner this CLI ships on, and nothing builds
-			// `Cli` for another target — `tools/jvm-portability.hxml` never reaches this module —
-			// so the gap is recorded rather than papered over with a per-write `chmod` process.
-			#if nodejs
-			if (mode != null) js.node.Fs.chmodSync(staged, mode);
-			#end
-		} catch (exception: Exception) {
-			discardStage(staged);
-			// `path`, not the resolved `target`: every other line this CLI prints names a file the
-			// way the caller spelled it, and a diagnostic that suddenly answers in absolute
-			// symlink-resolved form reads as being about a different file.
-			throw new WriteFailure(path, exception.message);
-		}
-		return {
-			staged: staged,
-			target: target,
-			asked: path
-		};
-	}
-
-	/**
-	 * Move a staged temporary onto its target, or report the file — never the temporary — as unwritable. The host message it quotes can still name the temporary; the path this CLI prints is the one the caller gave.
-	 */
-	private static function commitStagedWrite(pending: StagedWrite): Void {
-		try FileSystem.rename(pending.staged, pending.target) catch (exception: Exception) {
-			discardStage(pending.staged);
-			throw new WriteFailure(pending.asked, exception.message);
-		}
-	}
-
-	/**
-	 * Drop a staged temporary.
-	 *
-	 * Best effort by construction: every caller is already reporting a write failure, and a
-	 * temporary that cannot be removed must not replace the diagnostic the caller is
-	 * carrying with one about the cleanup.
-	 */
-	private static function discardStage(staged: String): Void {
-		try {
-			if (FileSystem.exists(staged)) FileSystem.deleteFile(staged);
-		} catch (exception: Exception) { // noqa: swallowed-exception
-			// Deliberately swallowed — see the doc above: this runs only while a `WriteFailure` is
-			// already on its way out, and a cleanup that cannot finish must not replace it.
-		}
-	}
-	#end
-
-	/**
-	 * Read all bytes from stdin and decode as UTF-8 source. Used by
-	 * `apq ast --stdin` (and `apq probe -`) to accept inline source
-	 * via shell pipe / heredoc / process substitution instead of
-	 * `--code <s>` or a file path.
-	 *
-	 * On Node, `Sys.stdin().readAll()` raises `haxe.io.Error.Blocked`
-	 * when stdin is a pipe (hxnodejs's sync stdin doesn't survive a
-	 * partial read). Fall back to Node's native `fs.readFileSync(0)`
-	 * which reads the full pipe to EOF synchronously.
-	 */
-	private static function readStdin(): String {
-		#if nodejs
-		final fs: Dynamic = js.Lib.require('fs');
-		final buf: Dynamic = fs.readFileSync(0);
-		return buf.toString('utf8');
-		#elseif sys
-		return Sys.stdin().readAll().toString();
-		#else
-		throw 'apq: stdin requires a sys target';
-		#end
-	}
-
-	/**
-	 * Resolve the new-code text for a writer-emit mutation op (`add-member`
-	 * / `replace-node` / `add-element`) when it comes from somewhere other
-	 * than the inline positional argument: a `--from-file <path>`, or stdin
-	 * when the positional is the literal `-` (mirroring `apq probe -`). This
-	 * is the quote-safe input path for code containing `$` or `'` that the
-	 * shell would otherwise mangle as a positional argument. Called only
-	 * when `fromFile != null` or `code == '-'`; returns the resolved text,
-	 * or null after printing the reason to stderr (the caller then exits
-	 * non-zero). `opName` names the op in those messages.
-	 */
-	private static function resolveCodeArg(
-		opName: String, code: Null<String>, fromFile: Null<String>, stripTrailing: Bool = false
-	): Null<String> {
-		if (fromFile != null && code != null) {
-			stderr('apq $opName: provide the code inline, via --from-file, or as - for stdin — not more than one\n');
-			return null;
-		}
-		if (fromFile != null) {
-			try {
-				return stripTrailing ? withoutTrailingNewline(readFile(fromFile)) : readFile(fromFile);
-			} catch (exception: Exception) {
-				stderr('apq $opName: $fromFile: ${exception.message}\n');
-				return null;
-			}
-		}
-		// code == '-' → read the new code from stdin.
-		try {
-			return stripTrailing ? withoutTrailingNewline(readStdin()) : readStdin();
-		} catch (exception: Exception) {
-			stderr('apq $opName: reading stdin: ${exception.message}\n');
-			return null;
-		}
-	}
-
-	/**
-	 * Drop a single trailing newline (`\r\n` or `\n`) from `s`. The span-splice ops
-	 * (`replace-node` / `add-element`) pass `stripTrailing = true` so a heredoc's mandatory
-	 * trailing newline does not land inside the replaced span as a stray blank line — the
-	 * writer regenerates the trivia after the span. Append ops (`add-member` / `new --raw`)
-	 * leave it: there the writer already normalises the trailing newline away.
-	 */
-	private static function withoutTrailingNewline(s: String): String {
-		return if (s.endsWith('\r\n'))
-			s.substring(0, s.length - 2)
-		else if (s.endsWith('\n'))
-			s.substring(0, s.length - 1)
-		else
-			s;
-	}
-
-	/**
-	 * Common backend for the two `.hxtest`-aware readers. `sectionIdx`
-	 * is the 0-based section index into the `\n---\n` split — `1` for
-	 * the input source, `2` for the expected output. Trims exactly one
-	 * leading and one trailing `\n` to mirror
-	 * `HxFormatterCorpusHelpers.stripPadNewlines`.
-	 */
-	private static function readHxtestSectionOrRaw(path: String, sectionIdx: Int): String {
-		final content: String = readFile(path);
-		if (!path.endsWith('.hxtest')) return content;
-		final parts: Array<String> = content.split('\n---\n');
-		if (parts.length != 3) return content;
-		var section: String = parts[sectionIdx];
-		if (section.length > 0 && section.charAt(0) == '\n') section = section.substr(1);
-		return section.length > 0 && section.charAt(section.length - 1) == '\n' ? section.substr(0, section.length - 1) : section;
-	}
-
-	/**
-	 * Resolve the writer-config JSON for `path`. For a `.hxtest` input it
-	 * auto-extracts section-1 (the harness's per-fixture config), returning
-	 * `null` when the file lacks the canonical 3-section layout. For a
-	 * normal `.hx` it falls back to project-config DISCOVERY — the first
-	 * `hxformat.json` found walking up from the file's directory (see
-	 * `discoverFormatConfig`), so `apq` formats a file by its project's own
-	 * style. `null` (no `.hxtest` section, no discovered config) leaves the
-	 * plugin on its compiled defaults. The result feeds
-	 * `plugin.writeRoundTrip(source, optsJson)`.
-	 */
-	private static function readWriteOptionsJsonOrNull(path: String): Null<String> {
-		if (!path.endsWith('.hxtest')) return discoverFormatConfig(path);
-		final content: String = readFile(path);
-		final parts: Array<String> = content.split('\n---\n');
-		if (parts.length != 3) return null;
-		final section: String = parts[0];
-		return section.length > 0 && section.charAt(section.length - 1) == '\n' ? section.substr(0, section.length - 1) : section;
-	}
-
-	private static function expectValue(args: Array<String>, idx: Int, flag: String): String {
-		if (idx >= args.length) throw 'apq: $flag requires a value';
-		return args[idx];
-	}
-
-	/**
-	 * Expand one-or-more file/dir/glob specs into a deduped path list,
-	 * order-preserving. `singleFile` (parse-fail becomes a hard error,
-	 * mirroring `apq ast`) holds only when exactly one spec was given
-	 * and it resolved to exactly that one concrete file — multi-spec or
-	 * glob/dir scans skip unparseable files silently.
-	 *
-	 * `unmatched` is every spec that expanded to NOTHING, in the order given. The union alone cannot
-	 * answer for them: a spec naming a file that is not there disappears into it the moment any OTHER
-	 * spec matched, and the run then analyses a scope that is silently short of what was asked for.
-	 * The list is a fact about the arguments, so it is computed here and REPORTED by the caller that
-	 * owns the arguments (`resolveInputPaths`) — this function stays free of output.
-	 */
-	private static function expandInputs(specs: Array<String>, ext: String): ExpandedInputs {
-		final paths: Array<String> = [];
-		final unmatched: Array<String> = [];
-		for (spec in specs) {
-			final hits: Array<String> = Glob.expand(spec, ext);
-			if (hits.length == 0) unmatched.push(spec);
-			for (p in hits) if (!paths.contains(p)) paths.push(p);
-		}
-		final singleFile: Bool = specs.length == 1 && paths.length == 1 && paths[0] == specs[0];
-		return { paths: paths, singleFile: singleFile, unmatched: unmatched };
-	}
-
-	/**
-	 * Keep at most `limit` hits total across the per-file entries,
-	 * truncating the entry that crosses the budget and dropping the
-	 * rest. `limit < 0` is "no limit" (the no-flag default). Generic
-	 * over the entry shape: `len` reads a hit count, `trim` rebuilds an
-	 * entry capped to the first `k` hits.
-	 */
-	private static function limitEntries<T>(entries: Array<T>, limit: Int, len: T -> Int, trim: (T, Int) -> T): Array<T> {
-		if (limit < 0) return entries;
-		final out: Array<T> = [];
-		var remaining: Int = limit;
-		for (e in entries) {
-			if (remaining <= 0) break;
-			final n: Int = len(e);
-			if (n <= remaining) {
-				out.push(e);
-				remaining -= n;
-			} else {
-				out.push(trim(e, remaining));
-				remaining = 0;
-			}
-		}
-		return out;
-	}
-
-	/**
-	 * Parse `--limit <n>` at position `i` (the flag itself already
-	 * matched). Returns the parsed non-negative count, or throws the
-	 * same way `expectValue` does on a missing/!int value — callers
-	 * surface it as a usage error.
-	 */
-	private static function parseLimit(args: Array<String>, idx: Int): Int {
-		final v: String = expectValue(args, idx, '--limit');
-		final n: Null<Int> = Std.parseInt(v);
-		if (n == null || n < 0) throw 'apq: --limit expects a non-negative integer, got "$v"';
-		return n;
-	}
-
-	/**
-	 * Walker flood guard. When the caller did NOT pass `--limit` (`limit < 0`)
-	 * and the total hit count exceeds `AUTO_LIMIT_THRESHOLD`, returns the
-	 * threshold AND prints a stderr nudge so the user sees the truncation
-	 * happened. Otherwise returns `limit` unchanged.
-	 *
-	 * Killer case: `apq lit '/*' src/ --any-kind` would flood ~165KB of leaf hits; the guard caps to `AUTO_LIMIT_THRESHOLD` automatically and surfaces the count so the user can re-run with an explicit `--limit N`
-	 * for a precise budget.
-	 *
-	 * `--limit 0` (any explicit value) is honoured verbatim — the guard
-	 * only fires on the implicit "no limit" default.
-	 */
-	private static function effectiveAutoLimit(cmdName: String, limit: Int, totalHits: Int): Int {
-		if (limit >= 0 || totalHits <= AUTO_LIMIT_THRESHOLD) return limit;
-		stderr('apq $cmdName: auto-capped to $AUTO_LIMIT_THRESHOLD of $totalHits hits — pass `--limit N` for an explicit cap.\n');
-		return AUTO_LIMIT_THRESHOLD;
+		CliIo.sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--cluster <substr> [--source]]\n');
+		CliIo.sysPrint('                 [--predict-strip --replace <pat> --with <repl> ... [--source]]\n');
+		CliIo.sysPrint('                 [--probe <file>]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Sweep mode: walks every .hxtest under <dir> (section-2 auto-extracted),\n');
+		CliIo.sysPrint('runs the trivia parser, clusters failures by normalised forward-locus,\n');
+		CliIo.sysPrint('and prints SKIP lines + histogram. Default <dir> is\n');
+		CliIo.sysPrint("$ANYPARSE_HXFORMAT_FORK/test/testcases when the env var is set.\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --lang <name>           Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --top N                 Show top N clusters (default: 30)\n');
+		CliIo.sysPrint('  --all                   Show every cluster\n');
+		CliIo.sysPrint('  --cluster <key>         Drill into ONE cluster: full path list instead of\n');
+		CliIo.sysPrint('                          histogram. EXACT match against the cluster key\n');
+		CliIo.sysPrint('                          shown in the histogram (with \\n / \\t escapes).\n');
+		CliIo.sysPrint('                          0-match exits non-zero with top keys for ref.\n');
+		CliIo.sysPrint('  --no-target-cluster <expected-msg>\n');
+		CliIo.sysPrint('                          With --predict-relax: drill into ONE bucket of the\n');
+		CliIo.sysPrint('                          footer NO TARGET breakdown — print every fixture\n');
+		CliIo.sysPrint('                          whose predict-relax outcome is NoTarget with\n');
+		CliIo.sysPrint('                          message == <expected-msg>. EXACT match against the\n');
+		CliIo.sysPrint('                          key shown in the footer histogram. Bridges the\n');
+		CliIo.sysPrint('                          footer aggregate to the file list — --cluster uses\n');
+		CliIo.sysPrint('                          a different namespace (forward-locus on raw bytes).\n');
+		CliIo.sysPrint('                          0-match exits non-zero with top NO TARGET keys.\n');
+		CliIo.sysPrint('                          Mutex with --cluster / --probe.\n');
+		CliIo.sysPrint('  --source                With --cluster, append a windowed source slice\n');
+		CliIo.sysPrint('                          around the fail-locus for each path (L±3).\n');
+		CliIo.sysPrint('                          With --predict-strip, also emits the window for\n');
+		CliIo.sysPrint('                          each STILL FAIL entry around the NEW fail-locus\n');
+		CliIo.sysPrint('                          (the moved-locus payload). With --predict-relax,\n');
+		CliIo.sysPrint('                          emits the window for STILL FAIL (around NEW locus\n');
+		CliIo.sysPrint('                          in patched source) and for NO TARGET entries in\n');
+		CliIo.sysPrint('                          drill/probe modes (around the ORIGINAL fail-locus,\n');
+		CliIo.sysPrint('                          which has no patch). Sweep-mode NO TARGET stays\n');
+		CliIo.sysPrint('                          collapsed into the footer histogram. Usage error\n');
+		CliIo.sysPrint('                          outside these modes.\n');
+		CliIo.sysPrint('  --predict-strip         Apply substitutions to each skip-parse source\n');
+		CliIo.sysPrint('                          and retry; print PREDICT UNBLOCK / STILL FAIL /\n');
+		CliIo.sysPrint('                          NO MATCH per file. Requires --replace/--with or\n');
+		CliIo.sysPrint('                          --delete; combinable with --cluster.\n');
+		CliIo.sysPrint('  --replace <pat> --with <repl>\n');
+		CliIo.sysPrint('                          Substitution pair (with --predict-strip; repeatable).\n');
+		CliIo.sysPrint('  --delete <pat>          Shortcut for --replace <pat> --with "".\n');
+		CliIo.sysPrint('  --regex                 Treat --replace / --delete patterns as EReg patterns\n');
+		CliIo.sysPrint('                          (global, applies to every match) instead of literal\n');
+		CliIo.sysPrint('                          substrings. Requires --predict-strip. One regex\n');
+		CliIo.sysPrint('                          covers every site of a construct in the corpus.\n');
+		CliIo.sysPrint('  --candidates <regex>    Cross-cluster enumeration: walk skip-parse fixtures,\n');
+		CliIo.sysPrint('                          print `<path> :: N matches` for every file with ≥1\n');
+		CliIo.sysPrint('                          regex hit (sorted by count desc) + summary. Use when\n');
+		CliIo.sysPrint('                          the histogram clusters by exact forward-locus and a\n');
+		CliIo.sysPrint('                          construct lives in differently-shaped multi-blocker\n');
+		CliIo.sysPrint('                          fixtures. Mutually exclusive with --predict-strip /\n');
+		CliIo.sysPrint('                          --cluster / --probe / --regression-probe.\n');
+		CliIo.sysPrint('  --probe <file>          Single-file probe instead of sweep. Composes with\n');
+		CliIo.sysPrint('                          --predict-strip: applies substitutions to the file and\n');
+		CliIo.sysPrint('                          retries the parse, printing PREDICT UNBLOCK / STILL\n');
+		CliIo.sysPrint('                          FAIL / NO MATCH + per-pattern totals + typo guard\n');
+		CliIo.sysPrint('                          (same shape as sweep mode).\n');
+		CliIo.sysPrint('  --regression-probe      Diff current corpus parse OK / SKIP_PARSE state against\n');
+		CliIo.sysPrint('                          the prior sweep snapshot (`bin/.last-sweep.json`).\n');
+		CliIo.sysPrint('                          Reports every fixture whose parse status FLIPPED since\n');
+		CliIo.sysPrint('                          the snapshot — REGRESSED (was PASS / FAIL / SKIP_WRITE,\n');
+		CliIo.sysPrint('                          now skip-parse) and UNBLOCKED (was SKIP_PARSE, now\n');
+		CliIo.sysPrint('                          parses). Cheap pre-edit / post-edit sanity check —\n');
+		CliIo.sysPrint('                          only runs the trivia parse, no writer / no expected-\n');
+		CliIo.sysPrint('                          bytes diff. Non-zero exit when any regression found.\n');
+		CliIo.sysPrint('                          Mutually exclusive with --probe / --predict-strip /\n');
+		CliIo.sysPrint('                          --cluster.\n');
+		CliIo.sysPrint('  --permissive-construct  Field-optionalization predictor for Slice 40\'s\n');
+		CliIo.sysPrint('                          `@:optional + @:lead + @:trail` mechanism. Walks every\n');
+		CliIo.sysPrint('                          `mandatory-ref-lead-trail` candidate from `apq gates\n');
+		CliIo.sysPrint('                          --mechanism mandatory-ref-lead-trail`, strips the\n');
+		CliIo.sysPrint('                          `<lead>...<trail>` bracket-pair from each skip-parse\n');
+		CliIo.sysPrint('                          fixture, re-parses, and aggregates UNBLOCK / STILL FAIL\n');
+		CliIo.sysPrint('                          / NO MATCH per candidate. THE pre-edit upper-bound\n');
+		CliIo.sysPrint('                          view of which field-optionalization would unblock\n');
+		CliIo.sysPrint('                          which fixtures. Mutually exclusive with every other\n');
+		CliIo.sysPrint('                          recon mode.\n');
+		CliIo.sysPrint('  --writer-equals         After --probe PARSE OK, also run writer round-trip +\n');
+		CliIo.sysPrint('                          byte-equality check vs the fixture\'s expected section\n');
+		CliIo.sysPrint('                          (or `--expected <path>` for plain .hx). Prints WRITER\n');
+		CliIo.sysPrint('                          PASS / FAIL upfront so you see whether the slice would\n');
+		CliIo.sysPrint('                          yield +1 PASS or skip→fail without running the corpus\n');
+		CliIo.sysPrint('                          sweep. Incompatible with --predict-strip / --predict-\n');
+		CliIo.sysPrint('                          relax (their patched source diverges from expected by\n');
+		CliIo.sysPrint('                          construction). Requires --probe.\n');
+		CliIo.sysPrint('  --writer-equals-plain   Same as --writer-equals but routes through the PLAIN\n');
+		CliIo.sysPrint('                          (non-trivia) pipeline (HxModuleParser → HxModuleWriter).\n');
+		CliIo.sysPrint('  --expected <path>       Override the expected-bytes source (default: .hxtest\n');
+		CliIo.sysPrint('                          section 3, or the input itself for raw .hx). Requires\n');
+		CliIo.sysPrint('                          --writer-equals.\n');
+		CliIo.sysPrint('  -h, --help              Show this help.\n');
 	}
 
 	private static function printUsage(): Void {
-		sysPrint('apq — anyparse query CLI\n');
-		sysPrint('\n');
-		sysPrint('Usage: apq <command> [options] <file>\n');
-		sysPrint('\n');
-		sysPrint('Commands:\n');
-		sysPrint('  ast           Dump parsed AST (S-expr or JSON)\n');
-		sysPrint('  probe         AST/writer probe with inline source (no file IO)\n');
-		sysPrint('  search        Structural pattern search\n');
-		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
-		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
-		sysPrint('  move          Move a type declaration to another file (same package)\n');
-		sysPrint('  move-member   Move members to another type (any package if all static), rewriting call sites\n');
-		sysPrint('  extract-interface  Generate an interface from a class\'s public methods + implement it\n');
-		sysPrint('  pull-up       Move an instance member up to its superclass\n');
-		sysPrint('  push-down     Move an instance member down to a subclass\n');
-		sysPrint('  extract-superclass  Generate a superclass, pull members up into it + extend it\n');
-		sysPrint('  safe-delete   Remove a member only if unreferenced across the scope\n');
-		sysPrint('  encapsulate-field   Turn a var field into a get/set property (@:isVar)\n');
-		sysPrint('  make-final    Turn a never-reassigned var field into final\n');
-		sysPrint('  introduce-parameter-object  Fold contiguous params into one object param\n');
-		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
-		sysPrint('  importers     List files importing a given module (cross-file)\n');
-		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
-		sysPrint('  lint          Run analysis checks and report violations (e.g. unused-import)\n');
-		sysPrint('  lint-diff     Multiset diff of two lint --format json snapshots (blast radius)\n');
-		sysPrint('  oracle        Typecheck the project once and record the verdict for lint\n');
-		sysPrint('  mutation-verdict  Classify one utest transcript as KILLED/SURVIVED/… for mutation-check\n');
-		sysPrint('  shard-plan    Deal a runner\'s test classes onto N APQ_TEST shards\n');
-		sysPrint('  inline        Inline a local variable into its uses\n');
-		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
-		sysPrint('  extract-var   Hoist an expression into a new local final\n');
-		sysPrint('  extract-constant Replace a repeated single-quoted literal with a named constant\n');
-		sysPrint('  extract-method Extract a statement run into a local function (closure)\n');
-		sysPrint('  add-param     Add a backward-compatible parameter to a function\n');
-		sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
-		sysPrint('  remove-param  Remove a function parameter + call-site args\n');
-		sysPrint('  add-member    Append a member to a type body (writer-formatted, canonical-gated)\n');
-		sysPrint('  add-import    Add an import / using to a module (writer-formatted, canonical-gated)\n');
-		sysPrint('  add-meta      Add one @:metadata entry to a type or member (canonical-gated)\n');
-		sysPrint('  add-element   Insert a sibling element — statement/case/list elem (--after/--before)\n');
-		sysPrint('  replace-node  Replace a node\'s source span (--select / --at; writer-formatted)\n');
-		sysPrint('  patch         Replace ONE unique fragment inside a node (old ==== new, stdin)\n');
-		sysPrint('  remove-element Remove a sibling element by cursor (inverse of add-element)\n');
-		sysPrint('  remove-import Remove an import / using by module path (backend of lint --fix)\n');
-		sysPrint('  remove-member Remove a member by --type + name (inverse of add-member)\n');
-		sysPrint('  uses          Type references (field/param/type-param positions)\n');
-		sysPrint('  meta          Annotation-on-decl shortcut\n');
-		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
-		sysPrint('  lit           Leaf-name probe (string literals, identifiers — prose-in-code)\n');
-		sysPrint('  mentions      Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
-		sysPrint('  cases         Precise case-pattern lookup (case Ctor: / case Ctor(_): / case A | Ctor:)\n');
-		sysPrint('  callees       Transitive call tree FROM a function (approximate call graph)\n');
-		sysPrint('  callers       Transitive call tree INTO a function (approximate call graph)\n');
-		sysPrint('  reach         Shortest call path(s) --from A --to B over the call graph\n');
-		sysPrint('  clusters      Partition a type\'s members by call-edge connectivity (hub bucket + components)\n');
-		sysPrint('  stdlib-dup    Report pure functions a differential run proves equal to a stdlib call\n');
-		sysPrint('  gates         List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names\n');
-		sysPrint('  diff          Structural AST diff between two files\n');
-		sysPrint('  strip         Sed-strip + parse-check (sole-blocker confirmation)\n');
-		sysPrint('  writer-equals Byte-equality check on writer output (trivia + --plain)\n');
-		sysPrint('  writer-probe  Emit trivia + plain writer outputs side-by-side\n');
-		sysPrint('  recon         Skip-parse drill — corpus sweep + locus-cluster histogram\n');
-		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
-		sysPrint('  set-modifier  Flip visibility / add-remove modifiers at a cursor (no retype)\n');
-		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
-		sysPrint('  rewrite       Structural search-and-replace (search-pattern metavars)\n');
-		sysPrint('  set-doc       Add/replace a declaration\'s doc-comment at a cursor\n');
-		sysPrint('  set-comment   Replace the comment at a cursor (line run or block)\n');
-		sysPrint('  comment-rewrite  Text find/replace inside comments (write-twin of lit; --regex)\n');
-		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
-		sysPrint('  new           Create a new module — final class / implements <iface> (canonical)\n');
-		sysPrint('  source        Emit RAW verbatim file lines (no parse; --range L:L2)\n');
-		sysPrint('  show          Alias of `source`, for a sandbox that vetoes that word\n');
-		sysPrint('  fmt           Canonicalise Haxe source (writer round-trip; --write / --list)\n');
-		sysPrint('\n');
-		sysPrint('Global options:\n');
-		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show help\n');
+		CliIo.sysPrint('apq — anyparse query CLI\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Usage: apq <command> [options] <file>\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Commands:\n');
+		CliIo.sysPrint('  ast           Dump parsed AST (S-expr or JSON)\n');
+		CliIo.sysPrint('  probe         AST/writer probe with inline source (no file IO)\n');
+		CliIo.sysPrint('  search        Structural pattern search\n');
+		CliIo.sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
+		CliIo.sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
+		CliIo.sysPrint('  move          Move a type declaration to another file (same package)\n');
+		CliIo.sysPrint('  move-member   Move members to another type (any package if all static), rewriting call sites\n');
+		CliIo.sysPrint('  extract-interface  Generate an interface from a class\'s public methods + implement it\n');
+		CliIo.sysPrint('  pull-up       Move an instance member up to its superclass\n');
+		CliIo.sysPrint('  push-down     Move an instance member down to a subclass\n');
+		CliIo.sysPrint('  extract-superclass  Generate a superclass, pull members up into it + extend it\n');
+		CliIo.sysPrint('  safe-delete   Remove a member only if unreferenced across the scope\n');
+		CliIo.sysPrint('  encapsulate-field   Turn a var field into a get/set property (@:isVar)\n');
+		CliIo.sysPrint(CliRegistry.helpLine('make-final'));
+		CliIo.sysPrint('  introduce-parameter-object  Fold contiguous params into one object param\n');
+		CliIo.sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
+		CliIo.sysPrint('  importers     List files importing a given module (cross-file)\n');
+		CliIo.sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
+		CliIo.sysPrint('  lint          Run analysis checks and report violations (e.g. unused-import)\n');
+		CliIo.sysPrint('  lint-diff     Multiset diff of two lint --format json snapshots (blast radius)\n');
+		CliIo.sysPrint('  oracle        Typecheck the project once and record the verdict for lint\n');
+		CliIo.sysPrint('  mutation-verdict  Classify one utest transcript as KILLED/SURVIVED/… for mutation-check\n');
+		CliIo.sysPrint('  shard-plan    Deal a runner\'s test classes onto N APQ_TEST shards\n');
+		CliIo.sysPrint('  inline        Inline a local variable into its uses\n');
+		CliIo.sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
+		CliIo.sysPrint('  extract-var   Hoist an expression into a new local final\n');
+		CliIo.sysPrint('  extract-constant Replace a repeated single-quoted literal with a named constant\n');
+		CliIo.sysPrint('  extract-method Extract a statement run into a local function (closure)\n');
+		CliIo.sysPrint('  add-param     Add a backward-compatible parameter to a function\n');
+		CliIo.sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
+		CliIo.sysPrint('  remove-param  Remove a function parameter + call-site args\n');
+		CliIo.sysPrint('  add-member    Append a member to a type body (writer-formatted, canonical-gated)\n');
+		CliIo.sysPrint('  add-import    Add an import / using to a module (writer-formatted, canonical-gated)\n');
+		CliIo.sysPrint('  add-meta      Add one @:metadata entry to a type or member (canonical-gated)\n');
+		CliIo.sysPrint('  add-element   Insert a sibling element — statement/case/list elem (--after/--before)\n');
+		CliIo.sysPrint('  replace-node  Replace a node\'s source span (--select / --at; writer-formatted)\n');
+		CliIo.sysPrint('  patch         Replace ONE unique fragment inside a node (old ==== new, stdin)\n');
+		CliIo.sysPrint('  remove-element Remove a sibling element by cursor (inverse of add-element)\n');
+		CliIo.sysPrint('  remove-import Remove an import / using by module path (backend of lint --fix)\n');
+		CliIo.sysPrint('  remove-member Remove a member by --type + name (inverse of add-member)\n');
+		CliIo.sysPrint('  uses          Type references (field/param/type-param positions)\n');
+		CliIo.sysPrint('  meta          Annotation-on-decl shortcut\n');
+		CliIo.sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
+		CliIo.sysPrint('  lit           Leaf-name probe (string literals, identifiers — prose-in-code)\n');
+		CliIo.sysPrint('  mentions      Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
+		CliIo.sysPrint(CliRegistry.helpLine('cases'));
+		CliIo.sysPrint('  callees       Transitive call tree FROM a function (approximate call graph)\n');
+		CliIo.sysPrint('  callers       Transitive call tree INTO a function (approximate call graph)\n');
+		CliIo.sysPrint('  reach         Shortest call path(s) --from A --to B over the call graph\n');
+		CliIo.sysPrint('  clusters      Partition a type\'s members by call-edge connectivity (hub bucket + components)\n');
+		CliIo.sysPrint('  stdlib-dup    Report pure functions a differential run proves equal to a stdlib call\n');
+		CliIo.sysPrint('  gates         List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names\n');
+		CliIo.sysPrint('  diff          Structural AST diff between two files\n');
+		CliIo.sysPrint('  strip         Sed-strip + parse-check (sole-blocker confirmation)\n');
+		CliIo.sysPrint('  writer-equals Byte-equality check on writer output (trivia + --plain)\n');
+		CliIo.sysPrint('  writer-probe  Emit trivia + plain writer outputs side-by-side\n');
+		CliIo.sysPrint('  recon         Skip-parse drill — corpus sweep + locus-cluster histogram\n');
+		CliIo.sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
+		CliIo.sysPrint('  set-modifier  Flip visibility / add-remove modifiers at a cursor (no retype)\n');
+		CliIo.sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
+		CliIo.sysPrint('  rewrite       Structural search-and-replace (search-pattern metavars)\n');
+		CliIo.sysPrint('  set-doc       Add/replace a declaration\'s doc-comment at a cursor\n');
+		CliIo.sysPrint(CliRegistry.helpLine('set-comment'));
+		CliIo.sysPrint('  comment-rewrite  Text find/replace inside comments (write-twin of lit; --regex)\n');
+		CliIo.sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
+		CliIo.sysPrint('  new           Create a new module — final class / implements <iface> (canonical)\n');
+		CliIo.sysPrint('  source        Emit RAW verbatim file lines (no parse; --range L:L2)\n');
+		CliIo.sysPrint('  show          Alias of `source`, for a sandbox that vetoes that word\n');
+		CliIo.sysPrint('  fmt           Canonicalise Haxe source (writer round-trip; --write / --list)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Global options:\n');
+		CliIo.sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help      Show help\n');
 	}
 
 	/**
@@ -6541,11 +5833,11 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--limit':
-					limit = Std.parseInt(expectValue(args, ++i, '--limit')) ?? 0;
+					limit = Std.parseInt(CliArgs.expectValue(args, ++i, '--limit')) ?? 0;
 				case '--work':
-					work = expectValue(args, ++i, '--work');
+					work = CliArgs.expectValue(args, ++i, '--work');
 				case '--census':
 					censusOnly = true;
 				case '-h', '--help':
@@ -6553,7 +5845,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq stdlib-dup: unknown option "$a"\n');
+						CliIo.stderr('apq stdlib-dup: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					inputSpecs.push(a);
@@ -6561,36 +5853,36 @@ final class Cli {
 			i++;
 		}
 		if (inputSpecs.length == 0) {
-			stderr('apq stdlib-dup: expected <scope> (one or more file/dir/glob specs)\n');
+			CliIo.stderr('apq stdlib-dup: expected <scope> (one or more file/dir/glob specs)\n');
 			printStdlibDupUsage();
 			return EXIT_USAGE;
 		}
 
-		final io = resolveInputPaths(lang, inputSpecs);
+		final io = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq stdlib-dup: ${quotedSpecs(inputSpecs)} matched no source files\n');
+			CliIo.stderr('apq stdlib-dup: ${CliArgs.quotedSpecs(inputSpecs)} matched no source files\n');
 			return EXIT_RUNTIME;
 		}
 
 		final files: Array<{ file: String, source: String }> = [];
 		for (path in paths) {
-			final source: Null<String> = try readSourceForParse(path) catch (exception: Exception) null;
+			final source: Null<String> = try CliIo.readSourceForParse(path) catch (exception: Exception) null;
 			if (source == null)
-				stderr('apq stdlib-dup: $path: unreadable, skipped\n')
+				CliIo.stderr('apq stdlib-dup: $path: unreadable, skipped\n')
 			else
 				files.push({ file: path, source: source });
 		}
 		final scan: StdlibDupScan.ScanResult = StdlibDupScan.scanAll(files, io.plugin);
 		final stages: StdlibDupScan.ScanStages = scan.stages;
-		stderr('apq stdlib-dup: ${files.length} file(s); functions ${stages.functions}');
-		stderr(' -> bodied ${stages.bodied} -> arity<=3 ${stages.arityOk}');
-		stderr(' -> primitive signature ${stages.primitiveSig} -> self-contained ${stages.selfContained}\n');
+		CliIo.stderr('apq stdlib-dup: ${files.length} file(s); functions ${stages.functions}');
+		CliIo.stderr(' -> bodied ${stages.bodied} -> arity<=3 ${stages.arityOk}');
+		CliIo.stderr(' -> primitive signature ${stages.primitiveSig} -> self-contained ${stages.selfContained}\n');
 		if (censusOnly) return EXIT_OK;
 
 		final dir: Null<String> = stdlibDupWorkDir(work);
 		if (dir == null) {
-			stderr('apq stdlib-dup: could not create a work directory for the probes\n');
+			CliIo.stderr('apq stdlib-dup: could not create a work directory for the probes\n');
 			return EXIT_RUNTIME;
 		}
 		final sourceOf: Map<String, String> = [];
@@ -6609,23 +5901,23 @@ final class Cli {
 					// matching that identity, not the candidate. Report the reason, never the calls.
 					final trivial: Array<StdlibDifferential.Mapping> = hits.filter(StdlibDifferential.isTrivial);
 					if (trivial.length > 0)
-						stderr(
+						CliIo.stderr(
 							'apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: trivial — returns ${trivial[0].display}'
 							+ ' unchanged over the grid\n'
 						)
 					else
 						for (hit in hits) {
 							found++;
-							sysPrint('$where: info: ${stdlibDupSubject(candidate)} looks like ${hit.display}');
-							sysPrint(' — agreed on $inputs generated inputs, ${maps.length} mapping(s) tried [stdlib-dup]\n');
+							CliIo.sysPrint('$where: info: ${stdlibDupSubject(candidate)} looks like ${hit.display}');
+							CliIo.sysPrint(' — agreed on $inputs generated inputs, ${maps.length} mapping(s) tried [stdlib-dup]\n');
 						}
 				case NoMatch(inputs, tried):
-					stderr('apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: no match ($tried mapping(s), $inputs inputs)\n');
+					CliIo.stderr('apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: no match ($tried mapping(s), $inputs inputs)\n');
 				case Skipped(reason):
-					stderr('apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: skipped — $reason\n');
+					CliIo.stderr('apq stdlib-dup: $where: ${stdlibDupSubject(candidate)}: skipped — $reason\n');
 			}
 		}
-		stderr('apq stdlib-dup: drove $driven candidate(s), $found finding(s)\n');
+		CliIo.stderr('apq stdlib-dup: drove $driven candidate(s), $found finding(s)\n');
 		return EXIT_OK;
 	}
 
@@ -6665,876 +5957,782 @@ final class Cli {
 	}
 
 	private static function printStdlibDupUsage(): Void {
-		sysPrint('Usage: apq stdlib-dup <scope...> [options]\n');
-		sysPrint('\n');
-		sysPrint('Report pure, self-contained, primitive-signature functions that a differential\n');
-		sysPrint('run cannot tell apart from a stdlib call — "this looks like StringTools.lpad,\n');
-		sysPrint('check it". Findings are informational: nothing is ever rewritten.\n');
-		sysPrint('\n');
-		sysPrint('The per-stage candidate census always goes to stderr. With --census the run\n');
-		sysPrint('stops there and spawns no compiler.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --census        Candidate census only — no probe generation, no haxe spawn\n');
-		sysPrint('  --limit <n>     Drive at most n candidates through the differential\n');
-		sysPrint('  --work <dir>    Stage the generated probes here (default: a temp directory)\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('Usage: apq stdlib-dup <scope...> [options]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Report pure, self-contained, primitive-signature functions that a differential\n');
+		CliIo.sysPrint('run cannot tell apart from a stdlib call — "this looks like StringTools.lpad,\n');
+		CliIo.sysPrint('check it". Findings are informational: nothing is ever rewritten.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The per-stage candidate census always goes to stderr. With --census the run\n');
+		CliIo.sysPrint('stops there and spawns no compiler.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --census        Candidate census only — no probe generation, no haxe spawn\n');
+		CliIo.sysPrint('  --limit <n>     Drive at most n candidates through the differential\n');
+		CliIo.sysPrint('  --work <dir>    Stage the generated probes here (default: a temp directory)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printSymbolsUsage(): Void {
-		sysPrint('Usage: apq symbols <scope...> [options]\n');
-		sysPrint('\n');
-		sysPrint('List every top-level type declaration across the scope (one or more\n');
-		sysPrint('file/dir/glob specs) as <import-path>\\t<Kind>\\t<file>:<line>:<col>.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --kind <Kind>   Only list this decl kind (ClassDecl/InterfaceDecl/\n');
-		sysPrint('                  EnumDecl/TypedefDecl/AbstractDecl)\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('Usage: apq symbols <scope...> [options]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('List every top-level type declaration across the scope (one or more\n');
+		CliIo.sysPrint('file/dir/glob specs) as <import-path>\\t<Kind>\\t<file>:<line>:<col>.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --kind <Kind>   Only list this decl kind (ClassDecl/InterfaceDecl/\n');
+		CliIo.sysPrint('                  EnumDecl/TypedefDecl/AbstractDecl)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printImportersUsage(): Void {
-		sysPrint('Usage: apq importers <module> <scope...> [options]\n');
-		sysPrint('\n');
-		sysPrint('List the files in the scope (file/dir/glob specs after the module) that\n');
-		sysPrint('import <module> — the module itself or one of its sub-types. A wildcard\n');
-		sysPrint('import pkg.*; is not counted.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('Usage: apq importers <module> <scope...> [options]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('List the files in the scope (file/dir/glob specs after the module) that\n');
+		CliIo.sysPrint('import <module> — the module itself or one of its sub-types. A wildcard\n');
+		CliIo.sysPrint('import pkg.*; is not counted.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printDeclaresUsage(): Void {
-		sysPrint('Usage: apq declares <type> <scope...> [options]\n');
-		sysPrint('\n');
-		sysPrint('Print the declaration site(s) of the type named <type> across the scope\n');
-		sysPrint('(file/dir/glob specs after the type), matching the simple name or the fully\n');
-		sysPrint('qualified import path. Each row is qualified<TAB>kind<TAB>file:line:col. More\n');
-		sysPrint('than one row is an ambiguity; zero means the type is not declared in the\n');
-		sysPrint('scope. The focused, single-type counterpart of symbols.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('Usage: apq declares <type> <scope...> [options]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Print the declaration site(s) of the type named <type> across the scope\n');
+		CliIo.sysPrint('(file/dir/glob specs after the type), matching the simple name or the fully\n');
+		CliIo.sysPrint('qualified import path. Each row is qualified<TAB>kind<TAB>file:line:col. More\n');
+		CliIo.sysPrint('than one row is an ambiguity; zero means the type is not declared in the\n');
+		CliIo.sysPrint('scope. The focused, single-type counterpart of symbols.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printLintUsage(): Void {
-		sysPrint('Usage: apq lint <scope...> [options]\n');
-		sysPrint('\n');
-		sysPrint('Run the analysis checks over the scope (one or more file/dir/glob specs) and\n');
-		sysPrint('report violations grouped by file as <line>:<col>: [severity] message (rule).\n');
-		sysPrint('Info advisories are hidden from the TEXT report unless --all; json and\n');
-		sysPrint('checkstyle always carry every finding, since their stdout is the answer a\n');
-		sysPrint('machine consumer gets. The exit code is success unless\n');
-		sysPrint('--fail-on selects a severity present in the findings. Run --list-rules for\n');
-		sysPrint('the full check list (id + description, one per line).\n');
-		sysPrint('\n');
-		sysPrint('Inline suppression: a trailing "// noqa" (or "// noqa: <rule>,<rule>") clears\n');
-		sysPrint('findings on its line; "// CHECKSTYLE:OFF" ... "// CHECKSTYLE:ON" clears a region.\n');
-		sysPrint('\n');
-		sysPrint('Project config: an "apqlint.json" discovered by walking up from a linted file\n');
-		sysPrint('enables/disables rules and overrides their severity or options, e.g.\n');
-		sysPrint('{ "rules": { "naming": { "severity": "error" }, "complexity": { "max": 15 },\n');
-		sysPrint('"fold-adjacent-string-literals": { "enabled": false } } }.\n');
-		sysPrint('\n');
-		sysPrint('A top-level "compilerOracle" key (path to an .hxml, relative to the config)\n');
-		sysPrint('runs "haxe <hxml> --no-output" as a ground-truth typecheck: a compile error\n');
-		sysPrint('fails the run, a RiskyFix rule fix is reverted under --fix if it breaks the\n');
-		sysPrint('build, and an OracleAssisted rule (explicit-local-type, explicit-type) asks a\n');
-		sysPrint('warm display server for the type of each finding it cannot resolve structurally,\n');
-		sysPrint('reverting any annotated file that fails to typecheck. Without the key no\n');
-		sysPrint('compiler is ever spawned.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
-		sysPrint('  --list-rules      List every registered check and exit\n');
-		sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
-		sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
-		sysPrint('                    (error|warning|info)\n');
-		sysPrint('  --no-oracle       Skip the compiler-oracle typecheck (a PROJECT-WIDE build\n');
-		sysPrint('                    regardless of scope: 16s of an 18.7s single-file run).\n');
-		sysPrint('                    Report mode: findings are unchanged, the run just cannot\n');
-		sysPrint('                    claim compiler-confirmed nullSafety trust. With --fix it\n');
-		sysPrint('                    ALSO turns off every oracle-backed net, as if no\n');
-		sysPrint('                    compilerOracle were configured: a fix that breaks the build\n');
-		sysPrint('                    is NOT reverted, RiskyFix rules stay report-only and\n');
-		sysPrint('                    OracleAssisted rules are inert. Use it in an iteration loop\n');
-		sysPrint('                    (the only way to see the fixer raw), NEVER in a gate\n');
-		sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle\n');
-		sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
-		sysPrint('                   json and checkstyle are never capped)\n');
-		sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
-		sysPrint('  --lang <name>    Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help       Show this help\n');
+		CliIo.sysPrint('Usage: apq lint <scope...> [options]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Run the analysis checks over the scope (one or more file/dir/glob specs) and\n');
+		CliIo.sysPrint('report violations grouped by file as <line>:<col>: [severity] message (rule).\n');
+		CliIo.sysPrint('Info advisories are hidden from the TEXT report unless --all; json and\n');
+		CliIo.sysPrint('checkstyle always carry every finding, since their stdout is the answer a\n');
+		CliIo.sysPrint('machine consumer gets. The exit code is success unless\n');
+		CliIo.sysPrint('--fail-on selects a severity present in the findings. Run --list-rules for\n');
+		CliIo.sysPrint('the full check list (id + description, one per line).\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Inline suppression: a trailing "// noqa" (or "// noqa: <rule>,<rule>") clears\n');
+		CliIo.sysPrint('findings on its line; "// CHECKSTYLE:OFF" ... "// CHECKSTYLE:ON" clears a region.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Project config: an "apqlint.json" discovered by walking up from a linted file\n');
+		CliIo.sysPrint('enables/disables rules and overrides their severity or options, e.g.\n');
+		CliIo.sysPrint('{ "rules": { "naming": { "severity": "error" }, "complexity": { "max": 15 },\n');
+		CliIo.sysPrint('"fold-adjacent-string-literals": { "enabled": false } } }.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A top-level "compilerOracle" key (path to an .hxml, relative to the config)\n');
+		CliIo.sysPrint('runs "haxe <hxml> --no-output" as a ground-truth typecheck: a compile error\n');
+		CliIo.sysPrint('fails the run, a RiskyFix rule fix is reverted under --fix if it breaks the\n');
+		CliIo.sysPrint('build, and an OracleAssisted rule (explicit-local-type, explicit-type) asks a\n');
+		CliIo.sysPrint('warm display server for the type of each finding it cannot resolve structurally,\n');
+		CliIo.sysPrint('reverting any annotated file that fails to typecheck. Without the key no\n');
+		CliIo.sysPrint('compiler is ever spawned.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
+		CliIo.sysPrint('  --list-rules      List every registered check and exit\n');
+		CliIo.sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
+		CliIo.sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
+		CliIo.sysPrint('                    (error|warning|info)\n');
+		CliIo.sysPrint('  --no-oracle       Skip the compiler-oracle typecheck (a PROJECT-WIDE build\n');
+		CliIo.sysPrint('                    regardless of scope: 16s of an 18.7s single-file run).\n');
+		CliIo.sysPrint('                    Report mode: findings are unchanged, the run just cannot\n');
+		CliIo.sysPrint('                    claim compiler-confirmed nullSafety trust. With --fix it\n');
+		CliIo.sysPrint('                    ALSO turns off every oracle-backed net, as if no\n');
+		CliIo.sysPrint('                    compilerOracle were configured: a fix that breaks the build\n');
+		CliIo.sysPrint('                    is NOT reverted, RiskyFix rules stay report-only and\n');
+		CliIo.sysPrint('                    OracleAssisted rules are inert. Use it in an iteration loop\n');
+		CliIo.sysPrint('                    (the only way to see the fixer raw), NEVER in a gate\n');
+		CliIo.sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle\n');
+		CliIo.sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
+		CliIo.sysPrint('                   json and checkstyle are never capped)\n');
+		CliIo.sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
+		CliIo.sysPrint('  --lang <name>    Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help       Show this help\n');
 	}
 
 	private static function printExtractMethodUsage(): Void {
-		sysPrint('Usage: apq extract-method <file> <startLine>:<col> <endLine>:<col> <name> [options]\n');
-		sysPrint('\n');
-		sysPrint('Extract the contiguous run of statements bounded by the two positions into\n');
-		sysPrint('a fresh local function <name> (a closure), replacing the run with a call.\n');
-		sysPrint('A local defined in the run and used after it becomes the return value.\n');
+		CliIo.sysPrint('Usage: apq extract-method <file> <startLine>:<col> <endLine>:<col> <name> [options]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Extract the contiguous run of statements bounded by the two positions into\n');
+		CliIo.sysPrint('a fresh local function <name> (a closure), replacing the run with a call.\n');
+		CliIo.sysPrint('A local defined in the run and used after it becomes the return value.\n');
 		printOptionsEditTail();
 	}
 
 	private static function printAddElementUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq add-element <file> (--after | --before | --append) (<l>[:<c>] | --select '<sel>' | --match '<pattern>') ("
 			+ '<code> | --from-file <path> | -) [options]\n'
 		);
-		sysPrint('\n');
-		sysPrint('Insert <code> as a new element into a list-shaped slot. With --after / --before,\n');
-		sysPrint('the address is an existing SIBLING element (a statement in a block, a case in\n');
-		sysPrint('a switch, an array / object / call-argument element). With --append, it is\n');
-		sysPrint('the CONTAINER itself (block / array / object / call / new / class / switch); the\n');
-		sysPrint('element is added as the last child — which also works on an empty container that\n');
-		sysPrint('has no sibling to point at. The slot separator (comma or newline) is added\n');
-		sysPrint('automatically; the element is writer-formatted + re-parse-validated. The element\n');
-		sysPrint('text may be inline, from --from-file, or stdin when it is the literal `-`.\n');
-		sysPrint('\n');
-		sysPrint('A BRACE-LESS body slot — the sole statement of an if / else / loop body or an arrow\n');
-		sysPrint('lambda expression body — holds one statement and has no sibling position, so it GAINS\n');
-		sysPrint('braces and the element lands inside it. Address the statement for that; address the\n');
-		sysPrint('enclosing if to insert after the whole construct.\n');
-		sysPrint('\n');
-		sysPrint('Addressing (the mode flag takes an inline position, or combine it with --select / --match):\n');
-		sysPrint("  <l>[:<c>]           1-based position; column omitted = the line's first\n");
-		sysPrint('                      non-whitespace character\n');
-		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
-		sysPrint('                      (descendant); must resolve to exactly one node\n');
-		sysPrint("  --match '<pattern>' apq-search structural pattern ($x metavars); exactly one\n");
-		sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --after [<l>[:<c>]]   Insert after the addressed sibling element\n');
-		sysPrint('  --before [<l>[:<c>]]  Insert before the addressed sibling element\n');
-		sysPrint('  --append [<l>[:<c>]]  Append as the last child of the addressed container\n');
-		sysPrint('  --from-file <path> Read the element text from a file instead of the argument\n');
-		sysPrint('  --write           Overwrite the file in place (default: print to stdout)\n');
-		sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
-		sysPrint('  --lang <name>     Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help        Show this help\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Insert <code> as a new element into a list-shaped slot. With --after / --before,\n');
+		CliIo.sysPrint('the address is an existing SIBLING element (a statement in a block, a case in\n');
+		CliIo.sysPrint('a switch, an array / object / call-argument element). With --append, it is\n');
+		CliIo.sysPrint('the CONTAINER itself (block / array / object / call / new / class / switch); the\n');
+		CliIo.sysPrint('element is added as the last child — which also works on an empty container that\n');
+		CliIo.sysPrint('has no sibling to point at. The slot separator (comma or newline) is added\n');
+		CliIo.sysPrint('automatically; the element is writer-formatted + re-parse-validated. The element\n');
+		CliIo.sysPrint('text may be inline, from --from-file, or stdin when it is the literal `-`.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A BRACE-LESS body slot — the sole statement of an if / else / loop body or an arrow\n');
+		CliIo.sysPrint('lambda expression body — holds one statement and has no sibling position, so it GAINS\n');
+		CliIo.sysPrint('braces and the element lands inside it. Address the statement for that; address the\n');
+		CliIo.sysPrint('enclosing if to insert after the whole construct.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Addressing (the mode flag takes an inline position, or combine it with --select / --match):\n');
+		CliIo.sysPrint("  <l>[:<c>]           1-based position; column omitted = the line's first\n");
+		CliIo.sysPrint('                      non-whitespace character\n');
+		CliIo.sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
+		CliIo.sysPrint('                      (descendant); must resolve to exactly one node\n');
+		CliIo.sysPrint("  --match '<pattern>' apq-search structural pattern ($x metavars); exactly one\n");
+		CliIo.sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --after [<l>[:<c>]]   Insert after the addressed sibling element\n');
+		CliIo.sysPrint('  --before [<l>[:<c>]]  Insert before the addressed sibling element\n');
+		CliIo.sysPrint('  --append [<l>[:<c>]]  Append as the last child of the addressed container\n');
+		CliIo.sysPrint('  --from-file <path> Read the element text from a file instead of the argument\n');
+		CliIo.sysPrint('  --write           Overwrite the file in place (default: print to stdout)\n');
+		CliIo.sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
+		CliIo.sysPrint('  --lang <name>     Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help        Show this help\n');
 	}
 
 	private static function printRemoveElementUsage(): Void {
-		sysPrint("Usage: apq remove-element <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') [options]\n");
-		sysPrint('\n');
-		sysPrint('Remove the sibling element at the address — a statement in a block, a case in\n');
-		sysPrint('a switch, an array / object / call-argument element, or a class member (with\n');
-		sysPrint('its modifier / meta group). The structural inverse of add-element; one\n');
-		sysPrint('separating comma is removed for comma lists. The result is writer-formatted +\n');
-		sysPrint('re-parse-validated.\n');
+		CliIo.sysPrint("Usage: apq remove-element <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') [options]\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Remove the sibling element at the address — a statement in a block, a case in\n');
+		CliIo.sysPrint('a switch, an array / object / call-argument element, or a class member (with\n');
+		CliIo.sysPrint('its modifier / meta group). The structural inverse of add-element; one\n');
+		CliIo.sysPrint('separating comma is removed for comma lists. The result is writer-formatted +\n');
+		CliIo.sysPrint('re-parse-validated.\n');
 		printAddressingHelp();
-		sysPrint('                      (descendant); must resolve to exactly one node\n');
-		sysPrint("  --match '<pattern>' apq-search structural pattern ($x metavars); exactly one\n");
-		sysPrint('  --nth <k>           Pick the k-th (1-based) of several --select/--match matches\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --keep-doc      Leave the element\'s leading doc comment behind\n');
+		CliIo.sysPrint('                      (descendant); must resolve to exactly one node\n');
+		CliIo.sysPrint("  --match '<pattern>' apq-search structural pattern ($x metavars); exactly one\n");
+		CliIo.sysPrint('  --nth <k>           Pick the k-th (1-based) of several --select/--match matches\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --keep-doc      Leave the element\'s leading doc comment behind\n');
 		printEditOptionsTail();
 	}
 
 	private static function printRemoveImportUsage(): Void {
-		sysPrint('Usage: apq remove-import <file> <module.path> [options]\n');
-		sysPrint('\n');
-		sysPrint('Remove the import / using statement whose exposed path equals <module.path>\n');
-		sysPrint('(the alias for an aliased import). The path must name exactly one statement.\n');
-		sysPrint('The by-name counterpart of remove-element; backend of lint --fix.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --keep-doc      Leave the import\'s leading block comment behind\n');
+		CliIo.sysPrint('Usage: apq remove-import <file> <module.path> [options]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Remove the import / using statement whose exposed path equals <module.path>\n');
+		CliIo.sysPrint('(the alias for an aliased import). The path must name exactly one statement.\n');
+		CliIo.sysPrint('The by-name counterpart of remove-element; backend of lint --fix.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --keep-doc      Leave the import\'s leading block comment behind\n');
 		printOptionsEditTail();
 	}
 
 	private static function printRemoveMemberUsage(): Void {
-		sysPrint("Usage: apq remove-member <file> (--select '<sel>' | --match '<pattern>' | --type <T> <memberName>) [options]\n");
-		sysPrint('\n');
-		sysPrint('Remove a member (a field or method) with its modifier / meta group. When the\n');
-		sysPrint('name is declared in several conditional-compilation branches, ALL of those\n');
-		sysPrint('declarations go — they are one logical member — and a region left with no\n');
-		sysPrint('member takes its directives with it. The by-name counterpart of add-member.\n');
-		sysPrint('\n');
-		sysPrint('The member is addressed either by the v2 forms the sibling ops take or by\n');
-		sysPrint('--type <T> <memberName>; giving both is a usage error. An address resolves\n');
-		sysPrint('to ONE node and is reduced to the (type, member) name pair — so it is a way\n');
-		sysPrint('to SPELL that pair, not a way to remove one branch and keep its twin.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint("  --select <sel>  Selector path for the member, e.g. 'ClassDecl:C >> FnMember:f'\n");
-		sysPrint('  --match <pat>   apq search pattern; the member holding the hit is the target\n');
-		sysPrint('  --nth <k>       Pick the k-th (1-based) --select / --match candidate\n');
-		sysPrint('  --type <T>      The enclosing type (with <memberName>, the by-name form)\n');
-		sysPrint('  --keep-doc      Leave the member\'s leading doc comment behind\n');
+		CliIo.sysPrint("Usage: apq remove-member <file> (--select '<sel>' | --match '<pattern>' | --type <T> <memberName>) [options]\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Remove a member (a field or method) with its modifier / meta group. When the\n');
+		CliIo.sysPrint('name is declared in several conditional-compilation branches, ALL of those\n');
+		CliIo.sysPrint('declarations go — they are one logical member — and a region left with no\n');
+		CliIo.sysPrint('member takes its directives with it. The by-name counterpart of add-member.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The member is addressed either by the v2 forms the sibling ops take or by\n');
+		CliIo.sysPrint('--type <T> <memberName>; giving both is a usage error. An address resolves\n');
+		CliIo.sysPrint('to ONE node and is reduced to the (type, member) name pair — so it is a way\n');
+		CliIo.sysPrint('to SPELL that pair, not a way to remove one branch and keep its twin.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint("  --select <sel>  Selector path for the member, e.g. 'ClassDecl:C >> FnMember:f'\n");
+		CliIo.sysPrint('  --match <pat>   apq search pattern; the member holding the hit is the target\n');
+		CliIo.sysPrint('  --nth <k>       Pick the k-th (1-based) --select / --match candidate\n');
+		CliIo.sysPrint('  --type <T>      The enclosing type (with <memberName>, the by-name form)\n');
+		CliIo.sysPrint('  --keep-doc      Leave the member\'s leading doc comment behind\n');
 		printEditOptionsTail();
 	}
 
 	private static function printInlineMethodUsage(): Void {
-		sysPrint("Usage: apq inline-method <file> (<line>[:<col>] | --select 'FnMember:<name>' | --match '<pattern>') [options]\n");
-		sysPrint('\n');
-		sysPrint('Inline the single-return function declared at <line>:<col> into every\n');
-		sysPrint('in-file call site (arguments substituted for parameters) and delete the\n');
-		sysPrint('declaration. The call-site set is proven complete before any rewrite.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint("Usage: apq inline-method <file> (<line>[:<col>] | --select 'FnMember:<name>' | --match '<pattern>') [options]\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Inline the single-return function declared at <line>:<col> into every\n');
+		CliIo.sysPrint('in-file call site (arguments substituted for parameters) and delete the\n');
+		CliIo.sysPrint('declaration. The call-site set is proven complete before any rewrite.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printSearchUsage(): Void {
-		sysPrint('Usage: apq search [options] <pattern> <file-or-dir-or-glob>\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --json              Emit JSON instead of text\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('  --kind <Kind>       Only match nodes of this AST kind\n');
-		sysPrint('  --explain           Print parsed pattern AST; on 0 hits show input-kind histogram\n');
-		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
-		sysPrint('\n');
-		sysPrint("Pattern syntax: language source with `$X` / `$_` metavars and the `...` ellipsis.\n");
-		sysPrint("  $X      — bind a subtree; reuses must match structurally.\n");
-		sysPrint("  $_      — wildcard, no binding.\n");
-		sysPrint('  ...     — any run of siblings, zero or more. Binds NOTHING.\n');
-		sysPrint('\n');
-		sysPrint('`...` is what makes an ANY-ARITY question one pattern instead of one per arity:\n');
-		sysPrint("  new $T(...)        every construction        f(...)      every call\n");
-		sysPrint('  [...]              every array literal       g(1, ...)   calls whose FIRST arg is 1\n');
-		sysPrint('  g(..., 1)          calls whose LAST arg is 1  g(1, ..., 1) both ends\n');
-		sysPrint('\n');
-		sysPrint('The children before the `...` anchor from the left, those after it from the right,\n');
-		sysPrint('and the star absorbs the run between — so ONE per child list (two is refused).\n');
-		sysPrint('It does not bind, so `apq rewrite` refuses a `...` pattern rather than dropping\n');
-		sysPrint('the children it absorbed; `--match` (op addressing) accepts one, it only locates.\n');
-		sysPrint('A constructor keeps its type arguments and its value arguments in ONE child list,\n');
-		sysPrint("so `new $T(...)` counts `new Map<K,V>()` too — write the type args out\n");
-		sysPrint("(`new $T<$K>(...)`) when that is the question.\n");
-		sysPrint('\n');
-		sysPrint('Use `--` before a pattern that starts with `--` (e.g. the\n');
-		sysPrint("prefix-decrement pattern `--$x`): apq search -- '--\\$x' <file>\n");
+		CliIo.sysPrint('Usage: apq search [options] <pattern> <file-or-dir-or-glob>\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --json              Emit JSON instead of text\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --kind <Kind>       Only match nodes of this AST kind\n');
+		CliIo.sysPrint('  --explain           Print parsed pattern AST; on 0 hits show input-kind histogram\n');
+		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
+		CliIo.sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint("Pattern syntax: language source with `$X` / `$_` metavars and the `...` ellipsis.\n");
+		CliIo.sysPrint("  $X      — bind a subtree; reuses must match structurally.\n");
+		CliIo.sysPrint("  $_      — wildcard, no binding.\n");
+		CliIo.sysPrint('  ...     — any run of siblings, zero or more. Binds NOTHING.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('`...` is what makes an ANY-ARITY question one pattern instead of one per arity:\n');
+		CliIo.sysPrint("  new $T(...)        every construction        f(...)      every call\n");
+		CliIo.sysPrint('  [...]              every array literal       g(1, ...)   calls whose FIRST arg is 1\n');
+		CliIo.sysPrint('  g(..., 1)          calls whose LAST arg is 1  g(1, ..., 1) both ends\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The children before the `...` anchor from the left, those after it from the right,\n');
+		CliIo.sysPrint('and the star absorbs the run between — so ONE per child list (two is refused).\n');
+		CliIo.sysPrint('It does not bind, so `apq rewrite` refuses a `...` pattern rather than dropping\n');
+		CliIo.sysPrint('the children it absorbed; `--match` (op addressing) accepts one, it only locates.\n');
+		CliIo.sysPrint('A constructor keeps its type arguments and its value arguments in ONE child list,\n');
+		CliIo.sysPrint("so `new $T(...)` counts `new Map<K,V>()` too — write the type args out\n");
+		CliIo.sysPrint("(`new $T<$K>(...)`) when that is the question.\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Use `--` before a pattern that starts with `--` (e.g. the\n');
+		CliIo.sysPrint("prefix-decrement pattern `--$x`): apq search -- '--\\$x' <file>\n");
 	}
 
 	private static function printLitUsage(): Void {
-		sysPrint('Usage: apq lit [options] <text> <file-or-dir-or-glob>...\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --exact              Require exact string equality (default: substring)\n');
-		sysPrint('  --kind <K1,K2,...>   Restrict to leaves of these kinds (default: shape-based, see below)\n');
-		sysPrint('                       The synthetic kind `Comment` triggers a comment-only\n');
-		sysPrint('                       scan (no AST walk) — `--kind Comment` searches `//…`\n');
-		sysPrint('                       and `/* … */` bodies only.\n');
-		sysPrint('  --any-kind           Match every named leaf regardless of kind (also\n');
-		sysPrint('                       scans comments).\n');
-		sysPrint('  --include-comments   Scan source comments ALONGSIDE the AST walk. Sugar\n');
-		sysPrint('                       for "default kinds AS-IS, plus Comment" — keeps the\n');
-		sysPrint('                       smart-default `--kind` resolution and adds comment\n');
-		sysPrint('                       bodies. Use when the same text may live in either a\n');
-		sysPrint('                       string literal or a `//`/`/**` comment (TODO/FIXME\n');
-		sysPrint('                       hunts, doc-keyword cross-checks). Comments are\n');
-		sysPrint('                       string-literal-aware: `//` inside `"…"`/`\'…\'` is\n');
-		sysPrint('                       not a comment.\n');
-		sysPrint('  --include-directives Scan conditional-compilation DIRECTIVES alongside the AST\n');
-		sysPrint('                       walk — `#if (sys)`, `#elseif js`, `#end`. The condition is\n');
-		sysPrint('                       neither a literal leaf nor a node, so no other kind filter\n');
-		sysPrint('                       reaches it. OPT-IN ONLY: unlike --include-comments it does\n');
-		sysPrint('                       NOT ride --any-kind, so every existing query keeps exactly\n');
-		sysPrint('                       the hits it returns today. The synthetic kind `Directive`\n');
-		sysPrint('                       in --kind scans directives ONLY.\n');
-		sysPrint('  --flat               Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>          Stop after n hits total (default: no limit)\n');
-		sysPrint('  --lang <name>        Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n');
-		sysPrint('Smart-default --kind: when <text> is camelCase / snake_case the\n');
-		sysPrint('default widens to `Literal,IdentExpr` (clearly an identifier query —\n');
-		sysPrint('`hxq lit trailOptShapeGate src/` finds both literals and identifier\n');
-		sysPrint('references without a re-run). Pure-lowercase / all-uppercase single\n');
-		sysPrint('words stay `Literal`-only — they ambiguously match string content and\n');
-		sysPrint('identifier widening would flood prose hits. Override with --kind /\n');
-		sysPrint('--any-kind. AST kinds skip comments and string interpolation by routing\n');
-		sysPrint('through the parser; `--include-comments` / `--kind Comment` re-enables\n');
-		sysPrint('them via a separate string-literal-aware scan over the raw source.\n');
-		sysPrint('Directive lines need `--include-directives` / `--kind Directive`; the\n');
-		sysPrint('matched text is the directive itself (keyword plus condition), never the\n');
-		sysPrint('code that follows it on a single-line `#if … #end` region.\n');
+		CliIo.sysPrint('Usage: apq lit [options] <text> <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --exact              Require exact string equality (default: substring)\n');
+		CliIo.sysPrint('  --kind <K1,K2,...>   Restrict to leaves of these kinds (default: shape-based, see below)\n');
+		CliIo.sysPrint('                       The synthetic kind `Comment` triggers a comment-only\n');
+		CliIo.sysPrint('                       scan (no AST walk) — `--kind Comment` searches `//…`\n');
+		CliIo.sysPrint('                       and `/* … */` bodies only.\n');
+		CliIo.sysPrint('  --any-kind           Match every named leaf regardless of kind (also\n');
+		CliIo.sysPrint('                       scans comments).\n');
+		CliIo.sysPrint('  --include-comments   Scan source comments ALONGSIDE the AST walk. Sugar\n');
+		CliIo.sysPrint('                       for "default kinds AS-IS, plus Comment" — keeps the\n');
+		CliIo.sysPrint('                       smart-default `--kind` resolution and adds comment\n');
+		CliIo.sysPrint('                       bodies. Use when the same text may live in either a\n');
+		CliIo.sysPrint('                       string literal or a `//`/`/**` comment (TODO/FIXME\n');
+		CliIo.sysPrint('                       hunts, doc-keyword cross-checks). Comments are\n');
+		CliIo.sysPrint('                       string-literal-aware: `//` inside `"…"`/`\'…\'` is\n');
+		CliIo.sysPrint('                       not a comment.\n');
+		CliIo.sysPrint('  --include-directives Scan conditional-compilation DIRECTIVES alongside the AST\n');
+		CliIo.sysPrint('                       walk — `#if (sys)`, `#elseif js`, `#end`. The condition is\n');
+		CliIo.sysPrint('                       neither a literal leaf nor a node, so no other kind filter\n');
+		CliIo.sysPrint('                       reaches it. OPT-IN ONLY: unlike --include-comments it does\n');
+		CliIo.sysPrint('                       NOT ride --any-kind, so every existing query keeps exactly\n');
+		CliIo.sysPrint('                       the hits it returns today. The synthetic kind `Directive`\n');
+		CliIo.sysPrint('                       in --kind scans directives ONLY.\n');
+		CliIo.sysPrint('  --flat               Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
+		CliIo.sysPrint('  --limit <n>          Stop after n hits total (default: no limit)\n');
+		CliIo.sysPrint('  --lang <name>        Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n');
+		CliIo.sysPrint('Smart-default --kind: when <text> is camelCase / snake_case the\n');
+		CliIo.sysPrint('default widens to `Literal,IdentExpr` (clearly an identifier query —\n');
+		CliIo.sysPrint('`hxq lit trailOptShapeGate src/` finds both literals and identifier\n');
+		CliIo.sysPrint('references without a re-run). Pure-lowercase / all-uppercase single\n');
+		CliIo.sysPrint('words stay `Literal`-only — they ambiguously match string content and\n');
+		CliIo.sysPrint('identifier widening would flood prose hits. Override with --kind /\n');
+		CliIo.sysPrint('--any-kind. AST kinds skip comments and string interpolation by routing\n');
+		CliIo.sysPrint('through the parser; `--include-comments` / `--kind Comment` re-enables\n');
+		CliIo.sysPrint('them via a separate string-literal-aware scan over the raw source.\n');
+		CliIo.sysPrint('Directive lines need `--include-directives` / `--kind Directive`; the\n');
+		CliIo.sysPrint('matched text is the directive itself (keyword plus condition), never the\n');
+		CliIo.sysPrint('code that follows it on a single-line `#if … #end` region.\n');
 	}
 
 	private static function printBlastUsage(): Void {
-		sysPrint('Usage: apq blast [options] <type-name> <file-or-dir-or-glob>...\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Explicit cap on the heuristic section (overrides smart default)\n');
-		sysPrint('  --all               Disable the smart-default cap on the heuristic section\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Heuristic field-access (`.member` superset) is capped at ${HEUR_DEFAULT_CAP} by default.\n');
-		sysPrint('Pass --all for the full list, or --limit N for an explicit cap.\n');
-		sysPrint('Precise uses / refs sections are uncapped.\n');
-		sysPrint('\n');
-		sysPrint('Change-impact checklist for a type. Unions three sections:\n');
-		sysPrint('  uses  — type-position references (precise)\n');
-		sysPrint('  refs  — value-binding references (precise)\n');
-		sysPrint('  heuristic field-access — `expr.member` whose member name is\n');
-		sysPrint('          a member of the type\'s decl. SUPERSET / name-based —\n');
-		sysPrint('          over-matches, VERIFY each. This is the signal plain\n');
-		sysPrint('          `uses`/`refs` are blind to (the typedef->enum gap).\n');
-		sysPrint('Needs the type\'s declaration in the scanned set for the\n');
-		sysPrint('heuristic; absent ⇒ that section is skipped (uses/refs stand).\n');
+		CliIo.sysPrint('Usage: apq blast [options] <type-name> <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
+		CliIo.sysPrint('  --limit <n>         Explicit cap on the heuristic section (overrides smart default)\n');
+		CliIo.sysPrint('  --all               Disable the smart-default cap on the heuristic section\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Heuristic field-access (`.member` superset) is capped at ${HEUR_DEFAULT_CAP} by default.\n');
+		CliIo.sysPrint('Pass --all for the full list, or --limit N for an explicit cap.\n');
+		CliIo.sysPrint('Precise uses / refs sections are uncapped.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Change-impact checklist for a type. Unions three sections:\n');
+		CliIo.sysPrint('  uses  — type-position references (precise)\n');
+		CliIo.sysPrint('  refs  — value-binding references (precise)\n');
+		CliIo.sysPrint('  heuristic field-access — `expr.member` whose member name is\n');
+		CliIo.sysPrint('          a member of the type\'s decl. SUPERSET / name-based —\n');
+		CliIo.sysPrint('          over-matches, VERIFY each. This is the signal plain\n');
+		CliIo.sysPrint('          `uses`/`refs` are blind to (the typedef->enum gap).\n');
+		CliIo.sysPrint('Needs the type\'s declaration in the scanned set for the\n');
+		CliIo.sysPrint('heuristic; absent ⇒ that section is skipped (uses/refs stand).\n');
 	}
 
 	private static function printMentionsUsage(): Void {
-		sysPrint('Usage: apq mentions [options] <name> <file-or-dir-or-glob>...\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Cap the lit section at n hits\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Every named-leaf occurrence of an identifier. Unions:\n');
-		sysPrint('  uses  — type-position references (precise)\n');
-		sysPrint('  refs  — value-binding references (precise)\n');
-		sysPrint('  lit   — every other leaf with that exact name:\n');
-		sysPrint('          case-patterns (`case Foo(_):` → IdentExpr),\n');
-		sysPrint('          imports, `new Foo()`, field-name slots.\n');
-		sysPrint('\n');
-		sysPrint('Use this when refs/uses/blast return 0 but you know the\n');
-		sysPrint('name appears (case-patterns are the canonical example —\n');
-		sysPrint('blind to refs/uses/blast). All three sections are exact-\n');
-		sysPrint('name and structural; no heuristic / no over-match.\n');
+		CliIo.sysPrint('Usage: apq mentions [options] <name> <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
+		CliIo.sysPrint('  --limit <n>         Cap the lit section at n hits\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Every named-leaf occurrence of an identifier. Unions:\n');
+		CliIo.sysPrint('  uses  — type-position references (precise)\n');
+		CliIo.sysPrint('  refs  — value-binding references (precise)\n');
+		CliIo.sysPrint('  lit   — every other leaf with that exact name:\n');
+		CliIo.sysPrint('          case-patterns (`case Foo(_):` → IdentExpr),\n');
+		CliIo.sysPrint('          imports, `new Foo()`, field-name slots.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Use this when refs/uses/blast return 0 but you know the\n');
+		CliIo.sysPrint('name appears (case-patterns are the canonical example —\n');
+		CliIo.sysPrint('blind to refs/uses/blast). All three sections are exact-\n');
+		CliIo.sysPrint('name and structural; no heuristic / no over-match.\n');
 	}
 
 	private static function printRefsUsage(): Void {
-		sysPrint('Usage: apq refs [options] <name> <file-or-dir-or-glob>...\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --json              Emit JSON instead of text\n');
-		sysPrint('  --decls             Filter to declarations\n');
-		sysPrint('  --reads             Filter to read references\n');
-		sysPrint('  --writes            Filter to write references (Phase 3.3)\n');
+		CliIo.sysPrint('Usage: apq refs [options] <name> <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --json              Emit JSON instead of text\n');
+		CliIo.sysPrint('  --decls             Filter to declarations\n');
+		CliIo.sysPrint('  --reads             Filter to read references\n');
+		CliIo.sysPrint('  --writes            Filter to write references (Phase 3.3)\n');
 		printDocSourceFlatLimitLangHelp();
-		sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
-		sysPrint('inclusively — passing `--decls --reads` keeps both kinds.\n');
+		CliIo.sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
+		CliIo.sysPrint('inclusively — passing `--decls --reads` keeps both kinds.\n');
 	}
 
 	private static function printRenameUsage(): Void {
-		sysPrint("Usage: apq rename <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <newName> [--write] [--scope <dir>]\n");
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --scope <dir>       Cross-file rename of a TYPE or a MEMBER across <dir>\n');
-		sysPrint('  --qualify-shadowed  Insert `this.` instead of refusing a capture: on the\n');
-		sysPrint('                      member access when a PARAMETER of the same name\n');
-		sysPrint('                      captures it, and on the captured references when a\n');
-		sysPrint('                      renamed LOCAL shadows a member. Reaching an INHERITED\n');
-		sysPrint('                      member needs a resolution scope, which this in-file op\n');
-		sysPrint('                      carries none of - there it repairs only a member of the\n');
-		sysPrint('                      enclosing type (`apq lint --fix` has the wider scope)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Scope-correct, format-preserving rename of the binding identified by\n');
-		sysPrint('the symbol at <line>:<col>. The position selects the EXACT binding —\n');
-		sysPrint('a shadowing param / loop var / field with the same name is left\n');
-		sysPrint('untouched. <line>:<col> uses the same column convention `apq refs`\n');
-		sysPrint('prints, so a coordinate copied from `apq refs --decls` selects the\n');
-		sysPrint('intended binding. The rewrite is verified to re-parse; a cursor not on\n');
-		sysPrint('a renameable identifier, or an unparseable result, exits non-zero with\n');
-		sysPrint('the file untouched.\n');
-		sysPrint('\n');
-		sysPrint('A cursor on a TYPE declaration renames the TYPE namespace (the forms\n');
-		sysPrint('listed under --scope below), confined to <file>: references in other\n');
-		sysPrint('files keep the old name and dangle into a compile error. Pass --scope\n');
-		sysPrint('to cover them; the in-file form is for a type no other file names, and\n');
-		sysPrint('for one whose simple name --scope would reject as ambiguous.\n');
-		sysPrint('\n');
-		sysPrint('A cursor on a MEMBER declaration takes the same route through the\n');
-		sysPrint('MEMBER namespace, also confined to <file>: value-binding resolution\n');
-		sysPrint('binds a name lexically and never through a receiver type, so without\n');
-		sysPrint('it the declaration was rewritten and every obj.member access left on\n');
-		sysPrint('the old name. The refusals listed under --scope apply here too.\n');
-		sysPrint('\n');
-		sysPrint('With --scope <dir> the cursor selects a TYPE or a MEMBER declaration.\n');
-		sysPrint('On a TYPE declaration (class /\n');
-		sysPrint('interface / enum / typedef / abstract) that type is renamed across\n');
-		sysPrint('every .hx file under <dir> — type positions, new T, cast, extends /\n');
-		sysPrint('implements, type params, the decl name, import / using segments,\n');
-		sysPrint('qualified positions naming the type through its module path\n');
-		sysPrint('(pkg.Mod.T, and Mod.T from the module own package), and\n');
-		sysPrint('static-receiver accesses (T.staticMethod() / T.CONST / pkg.Mod.CONST\n');
-		sysPrint('whose receiver is not a value binding). Type-namespace only: bare\n');
-		sysPrint('Class<T> value uses (var c = T;) and aliased imports are NOT rewritten\n');
-		sysPrint('(a missed form dangles into a compile error, never a silent change).\n');
-		sysPrint('Renaming the MAIN type of a module renames the module path with it —\n');
-		sysPrint('rename the FILE to match by hand. The rename refuses\n');
-		sysPrint('if the type is declared in more than one file under scope, if any scope\n');
-		sysPrint('file does not parse, or if any rewritten file fails to re-parse — the\n');
-		sysPrint('write is atomic. Without --write a per-file occurrence summary is printed.\n');
-		sysPrint('\n');
-		sysPrint('On a MEMBER declaration (field / method, e.g. --select FnMember:foo)\n');
-		sysPrint('that member is renamed across scope: the decl, in-type references, and\n');
-		sysPrint('qualified accesses — Src.member / pkg.Src.member for a static member\n');
-		sysPrint('(a dotted receiver must name the declaring module WHOLE, the same\n');
-		sysPrint('spellings the type rename accepts, so other.Src.member is left alone),\n');
-		sysPrint('obj.member whose receiver resolves to the source type for an instance\n');
-		sysPrint('member. Receivers whose type does not resolve, a dotted static receiver\n');
-		sysPrint('spelling no legal path to the declaring module, super-access,\n');
-		sysPrint('using-extension calls, and overrides are left as loud compile errors.\n');
-		sysPrint('An enum-abstract VALUE also renames where Haxe resolves it from the\n');
-		sysPrint('EXPECTED type: a bare VALUE in RETURN position whose enclosing function\n');
-		sysPrint('declares the abstract as its return type (one Null<..> wrapper unwrapped,\n');
-		sysPrint('the annotation resolved from the READING file by whole path, never by\n');
-		sysPrint('last segment), reached through the type-transparent slots under a return\n');
-		sysPrint('— parentheses, both ternary and if-expression arms, and the last\n');
-		sysPrint('statement of a switch-expression arm. A nested function owns its own\n');
-		sysPrint('return type and stops the proof; a member the enclosing type or an\n');
-		sysPrint('ancestor declares shadows the expected-type reading and is left alone.\n');
-		sysPrint('An expected-type value OUTSIDE return position (x == VALUE, an annotated\n');
-		sysPrint('assignment, a typed argument) or one in a function with no return\n');
-		sysPrint('annotation is not proven and is left for the compiler to reject.\n');
-		sysPrint('A member a #if region\n');
-		sysPrint('declares once per branch is one logical member: every branch declaration\n');
-		sysPrint('moves in the same edit set. Refuses an override member,\n');
-		sysPrint('a member an ancestor under scope declares (an implementation of an\n');
-		sysPrint('abstract or interface method carries no override modifier, so the\n');
-		sysPrint('keyword alone never saw it), a name already declared on the type, or a\n');
-		sysPrint('type declared more than once under scope.\n');
+		CliIo.sysPrint(
+			"Usage: apq rename <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <newName> [--write] [--scope <dir>]\n"
+		);
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		CliIo.sysPrint('  --scope <dir>       Cross-file rename of a TYPE or a MEMBER across <dir>\n');
+		CliIo.sysPrint('  --qualify-shadowed  Insert `this.` instead of refusing a capture: on the\n');
+		CliIo.sysPrint('                      member access when a PARAMETER of the same name\n');
+		CliIo.sysPrint('                      captures it, and on the captured references when a\n');
+		CliIo.sysPrint('                      renamed LOCAL shadows a member. Reaching an INHERITED\n');
+		CliIo.sysPrint('                      member needs a resolution scope, which this in-file op\n');
+		CliIo.sysPrint('                      carries none of - there it repairs only a member of the\n');
+		CliIo.sysPrint('                      enclosing type (`apq lint --fix` has the wider scope)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Scope-correct, format-preserving rename of the binding identified by\n');
+		CliIo.sysPrint('the symbol at <line>:<col>. The position selects the EXACT binding —\n');
+		CliIo.sysPrint('a shadowing param / loop var / field with the same name is left\n');
+		CliIo.sysPrint('untouched. <line>:<col> uses the same column convention `apq refs`\n');
+		CliIo.sysPrint('prints, so a coordinate copied from `apq refs --decls` selects the\n');
+		CliIo.sysPrint('intended binding. The rewrite is verified to re-parse; a cursor not on\n');
+		CliIo.sysPrint('a renameable identifier, or an unparseable result, exits non-zero with\n');
+		CliIo.sysPrint('the file untouched.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A cursor on a TYPE declaration renames the TYPE namespace (the forms\n');
+		CliIo.sysPrint('listed under --scope below), confined to <file>: references in other\n');
+		CliIo.sysPrint('files keep the old name and dangle into a compile error. Pass --scope\n');
+		CliIo.sysPrint('to cover them; the in-file form is for a type no other file names, and\n');
+		CliIo.sysPrint('for one whose simple name --scope would reject as ambiguous.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A cursor on a MEMBER declaration takes the same route through the\n');
+		CliIo.sysPrint('MEMBER namespace, also confined to <file>: value-binding resolution\n');
+		CliIo.sysPrint('binds a name lexically and never through a receiver type, so without\n');
+		CliIo.sysPrint('it the declaration was rewritten and every obj.member access left on\n');
+		CliIo.sysPrint('the old name. The refusals listed under --scope apply here too.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('With --scope <dir> the cursor selects a TYPE or a MEMBER declaration.\n');
+		CliIo.sysPrint('On a TYPE declaration (class /\n');
+		CliIo.sysPrint('interface / enum / typedef / abstract) that type is renamed across\n');
+		CliIo.sysPrint('every .hx file under <dir> — type positions, new T, cast, extends /\n');
+		CliIo.sysPrint('implements, type params, the decl name, import / using segments,\n');
+		CliIo.sysPrint('qualified positions naming the type through its module path\n');
+		CliIo.sysPrint('(pkg.Mod.T, and Mod.T from the module own package), and\n');
+		CliIo.sysPrint('static-receiver accesses (T.staticMethod() / T.CONST / pkg.Mod.CONST\n');
+		CliIo.sysPrint('whose receiver is not a value binding). Type-namespace only: bare\n');
+		CliIo.sysPrint('Class<T> value uses (var c = T;) and aliased imports are NOT rewritten\n');
+		CliIo.sysPrint('(a missed form dangles into a compile error, never a silent change).\n');
+		CliIo.sysPrint('Renaming the MAIN type of a module renames the module path with it —\n');
+		CliIo.sysPrint('rename the FILE to match by hand. The rename refuses\n');
+		CliIo.sysPrint('if the type is declared in more than one file under scope, if any scope\n');
+		CliIo.sysPrint('file does not parse, or if any rewritten file fails to re-parse — the\n');
+		CliIo.sysPrint('write is atomic. Without --write a per-file occurrence summary is printed.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('On a MEMBER declaration (field / method, e.g. --select FnMember:foo)\n');
+		CliIo.sysPrint('that member is renamed across scope: the decl, in-type references, and\n');
+		CliIo.sysPrint('qualified accesses — Src.member / pkg.Src.member for a static member\n');
+		CliIo.sysPrint('(a dotted receiver must name the declaring module WHOLE, the same\n');
+		CliIo.sysPrint('spellings the type rename accepts, so other.Src.member is left alone),\n');
+		CliIo.sysPrint('obj.member whose receiver resolves to the source type for an instance\n');
+		CliIo.sysPrint('member. Receivers whose type does not resolve, a dotted static receiver\n');
+		CliIo.sysPrint('spelling no legal path to the declaring module, super-access,\n');
+		CliIo.sysPrint('using-extension calls, and overrides are left as loud compile errors.\n');
+		CliIo.sysPrint('An enum-abstract VALUE also renames where Haxe resolves it from the\n');
+		CliIo.sysPrint('EXPECTED type: a bare VALUE in RETURN position whose enclosing function\n');
+		CliIo.sysPrint('declares the abstract as its return type (one Null<..> wrapper unwrapped,\n');
+		CliIo.sysPrint('the annotation resolved from the READING file by whole path, never by\n');
+		CliIo.sysPrint('last segment), reached through the type-transparent slots under a return\n');
+		CliIo.sysPrint('— parentheses, both ternary and if-expression arms, and the last\n');
+		CliIo.sysPrint('statement of a switch-expression arm. A nested function owns its own\n');
+		CliIo.sysPrint('return type and stops the proof; a member the enclosing type or an\n');
+		CliIo.sysPrint('ancestor declares shadows the expected-type reading and is left alone.\n');
+		CliIo.sysPrint('An expected-type value OUTSIDE return position (x == VALUE, an annotated\n');
+		CliIo.sysPrint('assignment, a typed argument) or one in a function with no return\n');
+		CliIo.sysPrint('annotation is not proven and is left for the compiler to reject.\n');
+		CliIo.sysPrint('A member a #if region\n');
+		CliIo.sysPrint('declares once per branch is one logical member: every branch declaration\n');
+		CliIo.sysPrint('moves in the same edit set. Refuses an override member,\n');
+		CliIo.sysPrint('a member an ancestor under scope declares (an implementation of an\n');
+		CliIo.sysPrint('abstract or interface method carries no override modifier, so the\n');
+		CliIo.sysPrint('keyword alone never saw it), a name already declared on the type, or a\n');
+		CliIo.sysPrint('type declared more than once under scope.\n');
 	}
 
 	private static function printMoveUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq move <file> (<line>:<col> | --select 'ClassDecl:<Name>' | --match '<pattern>') <dest-file> --scope <dir> ["
 			+ '--write]\n'
 		);
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --scope <dir>       Directory whose .hx imports are fixed (required)\n');
-		sysPrint('  --write             Write each changed file in place (default: print summary)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Move the TYPE declaration (class / interface / enum / typedef /\n');
-		sysPrint('abstract) at <line>:<col> in <file> into <dest-file>, in the same package\n');
-		sysPrint('or another one. <dest-file> must already EXIST (a bare `package p;` module\n');
-		sysPrint('is enough; create one with `apq new`). The decl is CUT and PASTED as\n');
-		sysPrint('source — its leading doc-comment, annotations and conditional modifier\n');
-		sysPrint('prefix move with it, byte for byte. What lands on disk is those bytes\n');
-		sysPrint('unless the file was ALREADY writer-canonical before the move, in which\n');
-		sysPrint('case the whole rewritten file is re-emitted through the writer under the\n');
-		sysPrint('destination\'s own hxformat.json — canonical in, canonical out. Every file\n');
-		sysPrint('under --scope that reached the type through its old module path — an\n');
-		sysPrint('import, a `using`, a wildcard or bare package visibility — is repointed\n');
-		sysPrint('or given a statement, and the imports the moved body depends on are\n');
-		sysPrint('carried into the destination — a type position, an upper-initial\n');
-		sysPrint('static receiver T.x(), and every unguarded `using` of the source file\n');
-		sysPrint('the destination lacks when the decl holds a member access at all (one\n');
-		sysPrint('whose bound type name collides at the destination is skipped; a\n');
-		sysPrint('destination whose own `using` run offers no seat above it is refused).\n');
-		sysPrint('An import the moved body needs that the source reaches only through a\n');
-		sysPrint('`#if`-guarded statement carries too: it is re-emitted at the destination\n');
-		sysPrint('under the condition that guards it at the source, merged into a region\n');
-		sysPrint('the destination already spells that condition for. Where one condition\n');
-		sysPrint('cannot carry it the move is REFUSED by name — two different regions\n');
-		sysPrint('binding one name, a statement nested in more than one region, one in an\n');
-		sysPrint('`#else` / `#elseif` branch (whose condition is the negation of the ones\n');
-		sysPrint('above it), and one sharing its line with a directive.\n');
-		sysPrint('Best-effort: a bare VALUE position (Type.createInstance(Dep, [])), a\n');
-		sysPrint('constructor pattern and a lowercase receiver are not auto-detected and\n');
-		sysPrint('may need a manual import — surfaced in the advisory. So is a dependency\n');
-		sysPrint('whose module lies OUTSIDE --scope: the scope is the resolution index as\n');
-		sysPrint('well as the rewrite set, and a module it does not hold binds nothing this\n');
-		sysPrint('op can name — widen --scope to cover the dependency roots. <line>:<col>\n');
-		sysPrint('uses the same column convention `apq refs` prints.\n');
-		sysPrint('\n');
-		sysPrint('Refuses a scope file that names the type by its fully-qualified path, an\n');
-		sysPrint('ambiguous / missing type, a decl that shares a source line with other code,\n');
-		sysPrint('any scope file that does not parse, or any rewritten file that fails to\n');
-		sysPrint('re-parse — naming that file and the line and column the parse stopped at.\n');
-		sysPrint('The write is atomic (all changed files or none).\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --scope <dir>       Directory whose .hx imports are fixed (required)\n');
+		CliIo.sysPrint('  --write             Write each changed file in place (default: print summary)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Move the TYPE declaration (class / interface / enum / typedef /\n');
+		CliIo.sysPrint('abstract) at <line>:<col> in <file> into <dest-file>, in the same package\n');
+		CliIo.sysPrint('or another one. <dest-file> must already EXIST (a bare `package p;` module\n');
+		CliIo.sysPrint('is enough; create one with `apq new`). The decl is CUT and PASTED as\n');
+		CliIo.sysPrint('source — its leading doc-comment, annotations and conditional modifier\n');
+		CliIo.sysPrint('prefix move with it, byte for byte. What lands on disk is those bytes\n');
+		CliIo.sysPrint('unless the file was ALREADY writer-canonical before the move, in which\n');
+		CliIo.sysPrint('case the whole rewritten file is re-emitted through the writer under the\n');
+		CliIo.sysPrint('destination\'s own hxformat.json — canonical in, canonical out. Every file\n');
+		CliIo.sysPrint('under --scope that reached the type through its old module path — an\n');
+		CliIo.sysPrint('import, a `using`, a wildcard or bare package visibility — is repointed\n');
+		CliIo.sysPrint('or given a statement, and the imports the moved body depends on are\n');
+		CliIo.sysPrint('carried into the destination — a type position, an upper-initial\n');
+		CliIo.sysPrint('static receiver T.x(), and every unguarded `using` of the source file\n');
+		CliIo.sysPrint('the destination lacks when the decl holds a member access at all (one\n');
+		CliIo.sysPrint('whose bound type name collides at the destination is skipped; a\n');
+		CliIo.sysPrint('destination whose own `using` run offers no seat above it is refused).\n');
+		CliIo.sysPrint('An import the moved body needs that the source reaches only through a\n');
+		CliIo.sysPrint('`#if`-guarded statement carries too: it is re-emitted at the destination\n');
+		CliIo.sysPrint('under the condition that guards it at the source, merged into a region\n');
+		CliIo.sysPrint('the destination already spells that condition for. Where one condition\n');
+		CliIo.sysPrint('cannot carry it the move is REFUSED by name — two different regions\n');
+		CliIo.sysPrint('binding one name, a statement nested in more than one region, one in an\n');
+		CliIo.sysPrint('`#else` / `#elseif` branch (whose condition is the negation of the ones\n');
+		CliIo.sysPrint('above it), and one sharing its line with a directive.\n');
+		CliIo.sysPrint('Best-effort: a bare VALUE position (Type.createInstance(Dep, [])), a\n');
+		CliIo.sysPrint('constructor pattern and a lowercase receiver are not auto-detected and\n');
+		CliIo.sysPrint('may need a manual import — surfaced in the advisory. So is a dependency\n');
+		CliIo.sysPrint('whose module lies OUTSIDE --scope: the scope is the resolution index as\n');
+		CliIo.sysPrint('well as the rewrite set, and a module it does not hold binds nothing this\n');
+		CliIo.sysPrint('op can name — widen --scope to cover the dependency roots. <line>:<col>\n');
+		CliIo.sysPrint('uses the same column convention `apq refs` prints.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Refuses a scope file that names the type by its fully-qualified path, an\n');
+		CliIo.sysPrint('ambiguous / missing type, a decl that shares a source line with other code,\n');
+		CliIo.sysPrint('any scope file that does not parse, or any rewritten file that fails to\n');
+		CliIo.sysPrint('re-parse — naming that file and the line and column the parse stopped at.\n');
+		CliIo.sysPrint('The write is atomic (all changed files or none).\n');
 	}
 
 	private static function printInlineUsage(): Void {
-		sysPrint("Usage: apq inline <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') [--write]\n");
+		CliIo.sysPrint("Usage: apq inline <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') [--write]\n");
 		printOptionsWriteLangHelp();
-		sysPrint('Scope-correct, format-preserving inline of the local var / final\n');
-		sysPrint('binding identified by the symbol at <line>:<col>. Every read of the\n');
-		sysPrint('binding is replaced with its initializer source (parenthesised when\n');
-		sysPrint('the initializer is an operator expression) and the declaration line is\n');
-		sysPrint('removed. The inline refuses unless the binding is single-assignment and\n');
-		sysPrint('its initializer is side-effect-free (no calls / field access / new /\n');
-		sysPrint('collections / lambdas / interpolation) and reads only stable locals.\n');
-		sysPrint('<line>:<col> uses the same column convention `apq refs` prints. The\n');
-		sysPrint('rewrite is verified to re-parse; a cursor not on an inlinable local, an\n');
-		sysPrint('unsafe initializer, or an unparseable result, exits non-zero with the\n');
-		sysPrint('file untouched.\n');
+		CliIo.sysPrint('Scope-correct, format-preserving inline of the local var / final\n');
+		CliIo.sysPrint('binding identified by the symbol at <line>:<col>. Every read of the\n');
+		CliIo.sysPrint('binding is replaced with its initializer source (parenthesised when\n');
+		CliIo.sysPrint('the initializer is an operator expression) and the declaration line is\n');
+		CliIo.sysPrint('removed. The inline refuses unless the binding is single-assignment and\n');
+		CliIo.sysPrint('its initializer is side-effect-free (no calls / field access / new /\n');
+		CliIo.sysPrint('collections / lambdas / interpolation) and reads only stable locals.\n');
+		CliIo.sysPrint('<line>:<col> uses the same column convention `apq refs` prints. The\n');
+		CliIo.sysPrint('rewrite is verified to re-parse; a cursor not on an inlinable local, an\n');
+		CliIo.sysPrint('unsafe initializer, or an unparseable result, exits non-zero with the\n');
+		CliIo.sysPrint('file untouched.\n');
 	}
 
 	private static function printExtractVarUsage(): Void {
-		sysPrint("Usage: apq extract-var <file> (<line>:<col> | --match '<expr-pattern>') <name> [--write]\n");
+		CliIo.sysPrint("Usage: apq extract-var <file> (<line>:<col> | --match '<expr-pattern>') <name> [--write]\n");
 		printOptionsWriteLangHelp();
-		sysPrint('Scope-correct, format-preserving extract-variable — the inverse of\n');
-		sysPrint('inline. The expression starting at <line>:<col> is hoisted into a fresh\n');
-		sysPrint('local `final <name> = <expr>;` inserted on its own line immediately\n');
-		sysPrint('before the nearest enclosing block-level statement (at that statement\'s\n');
-		sysPrint('indentation), and the expression occurrence is replaced with <name>.\n');
-		sysPrint('The cursor must point at the FIRST token of an expression; the\n');
-		sysPrint('outermost expression starting there is selected. The enclosing\n');
-		sysPrint('statement must be a direct child of a { } block — an expression buried\n');
-		sysPrint('in a braceless branch is refused. <line>:<col> uses the same column\n');
-		sysPrint('convention `apq refs` prints. The rewrite is verified to re-parse; a\n');
-		sysPrint('cursor not on an expression start, an enclosing statement outside a\n');
-		sysPrint('block, or an unparseable result exits non-zero with the file untouched.\n');
+		CliIo.sysPrint('Scope-correct, format-preserving extract-variable — the inverse of\n');
+		CliIo.sysPrint('inline. The expression starting at <line>:<col> is hoisted into a fresh\n');
+		CliIo.sysPrint('local `final <name> = <expr>;` inserted on its own line immediately\n');
+		CliIo.sysPrint('before the nearest enclosing block-level statement (at that statement\'s\n');
+		CliIo.sysPrint('indentation), and the expression occurrence is replaced with <name>.\n');
+		CliIo.sysPrint('The cursor must point at the FIRST token of an expression; the\n');
+		CliIo.sysPrint('outermost expression starting there is selected. The enclosing\n');
+		CliIo.sysPrint('statement must be a direct child of a { } block — an expression buried\n');
+		CliIo.sysPrint('in a braceless branch is refused. <line>:<col> uses the same column\n');
+		CliIo.sysPrint('convention `apq refs` prints. The rewrite is verified to re-parse; a\n');
+		CliIo.sysPrint('cursor not on an expression start, an enclosing statement outside a\n');
+		CliIo.sysPrint('block, or an unparseable result exits non-zero with the file untouched.\n');
 	}
 
 	private static function printAddParamUsage(): Void {
-		sysPrint("Usage: apq add-param <file> (<line>[:<col>] | --select 'FnMember:<name>' | --match '<pattern>') <paramText> [--write]\n");
+		CliIo.sysPrint(
+			"Usage: apq add-param <file> (<line>[:<col>] | --select 'FnMember:<name>' | --match '<pattern>') <paramText> [--write]\n"
+		);
 		printOptionsWriteLangHelp();
-		sysPrint('Add a backward-compatible parameter to a function declaration. The\n');
-		sysPrint('function whose declaration is at <line>:<col> gains <paramText> as a new\n');
-		sysPrint('trailing parameter (e.g. `?flag:Bool`, `count:Int = 0`, `?cb:Void->Void`).\n');
-		sysPrint('The parameter MUST be optional (`?name:T`) or defaulted (`name:T = v`),\n');
-		sysPrint('so existing call sites need no update — a required parameter would break\n');
-		sysPrint('them and is refused. This is a DECL-ONLY operation: no call site is\n');
-		sysPrint('touched, which makes it safe for methods AND local functions alike.\n');
-		sysPrint('Quote <paramText> if it contains spaces. <line>:<col> uses the same\n');
-		sysPrint('column convention `apq refs` prints. The rewrite is verified to\n');
-		sysPrint('re-parse; a cursor not on a function, a required parameter, a name\n');
-		sysPrint('collision, or an unparseable result exits non-zero with the file\n');
-		sysPrint('untouched.\n');
+		CliIo.sysPrint('Add a backward-compatible parameter to a function declaration. The\n');
+		CliIo.sysPrint('function whose declaration is at <line>:<col> gains <paramText> as a new\n');
+		CliIo.sysPrint('trailing parameter (e.g. `?flag:Bool`, `count:Int = 0`, `?cb:Void->Void`).\n');
+		CliIo.sysPrint('The parameter MUST be optional (`?name:T`) or defaulted (`name:T = v`),\n');
+		CliIo.sysPrint('so existing call sites need no update — a required parameter would break\n');
+		CliIo.sysPrint('them and is refused. This is a DECL-ONLY operation: no call site is\n');
+		CliIo.sysPrint('touched, which makes it safe for methods AND local functions alike.\n');
+		CliIo.sysPrint('Quote <paramText> if it contains spaces. <line>:<col> uses the same\n');
+		CliIo.sysPrint('column convention `apq refs` prints. The rewrite is verified to\n');
+		CliIo.sysPrint('re-parse; a cursor not on a function, a required parameter, a name\n');
+		CliIo.sysPrint('collision, or an unparseable result exits non-zero with the file\n');
+		CliIo.sysPrint('untouched.\n');
 	}
 
 	private static function printAddMemberUsage(): Void {
-		sysPrint('Usage: apq add-member <file> --type <TypeName> (<memberText> | --from-file <path> | -) [--reformat] [--write]\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --type <TypeName>   Type whose body gains the member (required)\n');
-		sysPrint('  --from-file <path>  Read <memberText> from a file instead of the argument\n');
-		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('Usage: apq add-member <file> --type <TypeName> (<memberText> | --from-file <path> | -) [--reformat] [--write]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --type <TypeName>   Type whose body gains the member (required)\n');
+		CliIo.sysPrint('  --from-file <path>  Read <memberText> from a file instead of the argument\n');
+		CliIo.sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
-		sysPrint('The member text may be given inline, read from a file with --from-file, or\n');
-		sysPrint('read from stdin when it is the literal `-` (heredoc-friendly for code with\n');
-		sysPrint('`$` or quotes the shell would mangle). Append <memberText> as a new member\n');
-		sysPrint('of <TypeName>. The member is\n');
-		sysPrint('WRITER-FORMATTED — indented and laid out by the grammar\'s rules, not\n');
-		sysPrint('inserted as-is — by re-emitting the whole file through the writer (this\n');
-		sysPrint('also re-parse-validates). Works for class / interface / abstract / enum /\n');
-		sysPrint('typedef bodies; positioning is append-only (ordering is the formatting\n');
-		sysPrint('layer\'s job). The file must already be in canonical form (its own writer\n');
-		sysPrint('output); otherwise it is refused unless --reformat is given (which\n');
-		sysPrint('canonicalises the whole file). Quote <memberText> if it contains spaces.\n');
-		sysPrint('A name <TypeName> already declares — in ANY conditional-compilation branch —\n');
-		sysPrint('is refused: the result would not compile. An unknown / ambiguous type name,\n');
-		sysPrint('a non-canonical file without --reformat, or an unparseable result, likewise\n');
-		sysPrint('exits non-zero with the file untouched.\n');
+		CliIo.sysPrint('The member text may be given inline, read from a file with --from-file, or\n');
+		CliIo.sysPrint('read from stdin when it is the literal `-` (heredoc-friendly for code with\n');
+		CliIo.sysPrint('`$` or quotes the shell would mangle). Append <memberText> as a new member\n');
+		CliIo.sysPrint('of <TypeName>. The member is\n');
+		CliIo.sysPrint('WRITER-FORMATTED — indented and laid out by the grammar\'s rules, not\n');
+		CliIo.sysPrint('inserted as-is — by re-emitting the whole file through the writer (this\n');
+		CliIo.sysPrint('also re-parse-validates). Works for class / interface / abstract / enum /\n');
+		CliIo.sysPrint('typedef bodies; positioning is append-only (ordering is the formatting\n');
+		CliIo.sysPrint('layer\'s job). The file must already be in canonical form (its own writer\n');
+		CliIo.sysPrint('output); otherwise it is refused unless --reformat is given (which\n');
+		CliIo.sysPrint('canonicalises the whole file). Quote <memberText> if it contains spaces.\n');
+		CliIo.sysPrint('A name <TypeName> already declares — in ANY conditional-compilation branch —\n');
+		CliIo.sysPrint('is refused: the result would not compile. An unknown / ambiguous type name,\n');
+		CliIo.sysPrint('a non-canonical file without --reformat, or an unparseable result, likewise\n');
+		CliIo.sysPrint('exits non-zero with the file untouched.\n');
 	}
 
 	private static function printAddImportUsage(): Void {
-		sysPrint('Usage: apq add-import <file> <module.path> [--using] [--reformat] [--write]\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --using             Add a `using` instead of an `import`\n');
-		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('Usage: apq add-import <file> <module.path> [--using] [--reformat] [--write]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --using             Add a `using` instead of an `import`\n');
+		CliIo.sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
-		sysPrint('Add `import <module.path>;` (or `using` with --using) after the last\n');
-		sysPrint('existing import / using, else after the `package` declaration, else at the\n');
-		sysPrint('start of the file. The result is WRITER-FORMATTED (the whole file is\n');
-		sysPrint('re-emitted through the writer, which also re-parse-validates). The file\n');
-		sysPrint('must already be canonical; otherwise it is refused unless --reformat is\n');
-		sysPrint('given. An import of the same kind already present is refused (a no-op). An\n');
-		sysPrint('empty path, a duplicate, a non-canonical file without --reformat, or an\n');
-		sysPrint('unparseable result exits non-zero with the file untouched.\n');
+		CliIo.sysPrint('Add `import <module.path>;` (or `using` with --using) after the last\n');
+		CliIo.sysPrint('existing import / using, else after the `package` declaration, else at the\n');
+		CliIo.sysPrint('start of the file. The result is WRITER-FORMATTED (the whole file is\n');
+		CliIo.sysPrint('re-emitted through the writer, which also re-parse-validates). The file\n');
+		CliIo.sysPrint('must already be canonical; otherwise it is refused unless --reformat is\n');
+		CliIo.sysPrint('given. An import of the same kind already present is refused (a no-op). An\n');
+		CliIo.sysPrint('empty path, a duplicate, a non-canonical file without --reformat, or an\n');
+		CliIo.sysPrint('unparseable result exits non-zero with the file untouched.\n');
 	}
 
 	private static function printReplaceNodeUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq replace-node <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) ("
 			+ '<newSource> | --from-file <path> | -) [--reformat] [--write]\n'
 		);
 		printSelectorAddressingOptions();
-		sysPrint('  --kind <Kind>       With --at: the innermost node of <Kind> at the cursor.\n');
-		sysPrint('                      With --select / --match: LIFT the resolved node to its\n');
-		sysPrint('                      innermost enclosing <Kind> (a pattern matches the Call —\n');
-		sysPrint('                      lift to ExprStmt to replace the whole statement)\n');
-		sysPrint('  --with-doc          Also replace the leading doc comment (rewrite its docs)\n');
-		sysPrint('  --from-file <path>  Read <newSource> from a file instead of the argument\n');
-		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('  --kind <Kind>       With --at: the innermost node of <Kind> at the cursor.\n');
+		CliIo.sysPrint('                      With --select / --match: LIFT the resolved node to its\n');
+		CliIo.sysPrint('                      innermost enclosing <Kind> (a pattern matches the Call —\n');
+		CliIo.sysPrint('                      lift to ExprStmt to replace the whole statement)\n');
+		CliIo.sysPrint('  --with-doc          Also replace the leading doc comment (rewrite its docs)\n');
+		CliIo.sysPrint('  --from-file <path>  Read <newSource> from a file instead of the argument\n');
+		CliIo.sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
-		sysPrint('The new source may be inline, read from a file with --from-file, or read\n');
-		sysPrint('from stdin when it is the literal `-` (heredoc-friendly for code with `$`\n');
-		sysPrint('or quotes the shell would mangle). Replace the source span of a single\n');
-		sysPrint('node with <newSource>. Provide exactly one of --select / --match / --at.\n');
-		sysPrint('The result is WRITER-FORMATTED — the whole file is re-emitted through the\n');
-		sysPrint('writer (which also re-parse-validates), so the replacement is laid out by\n');
-		sysPrint("the grammar's rules. The file must already be canonical; otherwise it is\n");
-		sysPrint('refused unless --reformat is given. Quote <newSource> if it contains\n');
-		sysPrint('spaces. A target that resolves to no / multiple nodes, a non-canonical\n');
-		sysPrint('file without --reformat, or an unparseable result, exits non-zero with\n');
-		sysPrint('the file untouched.\n');
+		CliIo.sysPrint('The new source may be inline, read from a file with --from-file, or read\n');
+		CliIo.sysPrint('from stdin when it is the literal `-` (heredoc-friendly for code with `$`\n');
+		CliIo.sysPrint('or quotes the shell would mangle). Replace the source span of a single\n');
+		CliIo.sysPrint('node with <newSource>. Provide exactly one of --select / --match / --at.\n');
+		CliIo.sysPrint('The result is WRITER-FORMATTED — the whole file is re-emitted through the\n');
+		CliIo.sysPrint('writer (which also re-parse-validates), so the replacement is laid out by\n');
+		CliIo.sysPrint("the grammar's rules. The file must already be canonical; otherwise it is\n");
+		CliIo.sysPrint('refused unless --reformat is given. Quote <newSource> if it contains\n');
+		CliIo.sysPrint('spaces. A target that resolves to no / multiple nodes, a non-canonical\n');
+		CliIo.sysPrint('file without --reformat, or an unparseable result, exits non-zero with\n');
+		CliIo.sysPrint('the file untouched.\n');
 	}
 
 	private static function printChangeSigUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq change-sig <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <perm>  ("
 			+ 'perm = comma-separated 0-based new order, e.g. 2,0,1)\n'
 		);
 		printOptionsWriteLangHelp();
-		sysPrint('Scope-correct, format-preserving change-signature (parameter reorder).\n');
-		sysPrint('The function whose declaration / binding is at <line>:<col> has its\n');
-		sysPrint('parameters reordered per <perm> — a comma-separated 0-based list giving\n');
-		sysPrint('the NEW order of OLD parameter indices (for g(a,b,c), `2,0,1` reorders\n');
-		sysPrint('to c,a,b). The positional arguments at every resolvable in-file call\n');
-		sysPrint('site are permuted to match. The reorder is a slot swap — only the\n');
-		sysPrint('parameter / argument contents move, so the existing layout is preserved.\n');
-		sysPrint('Methods (called via bare `name(...)` / `this.name(...)`) and named local\n');
-		sysPrint('functions are supported; a receiver-qualified `obj.name(...)` call, an\n');
-		sysPrint('unresolvable call, or a call with omitted optional arguments is refused\n');
-		sysPrint('(change-sig never leaves a call site with stale argument order). A method\n');
-		sysPrint('reorder also emits a cross-file advisory (callers in other files are out\n');
-		sysPrint('of scope). <line>:<col> uses the same column convention `apq refs`\n');
-		sysPrint('prints. The rewrite is verified to re-parse; a cursor not on a function,\n');
-		sysPrint('a non-permutation <perm>, or an unparseable result, exits non-zero with\n');
-		sysPrint('the file untouched.\n');
+		CliIo.sysPrint('Scope-correct, format-preserving change-signature (parameter reorder).\n');
+		CliIo.sysPrint('The function whose declaration / binding is at <line>:<col> has its\n');
+		CliIo.sysPrint('parameters reordered per <perm> — a comma-separated 0-based list giving\n');
+		CliIo.sysPrint('the NEW order of OLD parameter indices (for g(a,b,c), `2,0,1` reorders\n');
+		CliIo.sysPrint('to c,a,b). The positional arguments at every resolvable in-file call\n');
+		CliIo.sysPrint('site are permuted to match. The reorder is a slot swap — only the\n');
+		CliIo.sysPrint('parameter / argument contents move, so the existing layout is preserved.\n');
+		CliIo.sysPrint('Methods (called via bare `name(...)` / `this.name(...)`) and named local\n');
+		CliIo.sysPrint('functions are supported; a receiver-qualified `obj.name(...)` call, an\n');
+		CliIo.sysPrint('unresolvable call, or a call with omitted optional arguments is refused\n');
+		CliIo.sysPrint('(change-sig never leaves a call site with stale argument order). A method\n');
+		CliIo.sysPrint('reorder also emits a cross-file advisory (callers in other files are out\n');
+		CliIo.sysPrint('of scope). <line>:<col> uses the same column convention `apq refs`\n');
+		CliIo.sysPrint('prints. The rewrite is verified to re-parse; a cursor not on a function,\n');
+		CliIo.sysPrint('a non-permutation <perm>, or an unparseable result, exits non-zero with\n');
+		CliIo.sysPrint('the file untouched.\n');
 	}
 
 	private static function printRemoveParamUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq remove-param <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <index> [--write]  ("
 			+ 'index = 0-based parameter to remove)\n'
 		);
 		printOptionsWriteLangHelp();
-		sysPrint('Scope-correct, format-preserving remove-parameter — the inverse of\n');
-		sysPrint('add-param. The function whose declaration / binding is at <line>:<col>\n');
-		sysPrint('loses the parameter at 0-based <index>, and the corresponding positional\n');
-		sysPrint('argument is deleted at every resolvable in-file call site (the separating\n');
-		sysPrint('comma goes too, so the surviving list stays well-formed). Unlike\n');
-		sysPrint('add-param (decl-only, always backward-compatible), removing a parameter\n');
-		sysPrint('BREAKS calls, so remove-param updates call sites with the SAME strict\n');
-		sysPrint('completeness proof change-sig uses: a receiver-qualified `obj.name(...)`\n');
-		sysPrint('call, an unresolvable call, a value capture, or a call with omitted\n');
-		sysPrint('optional arguments is refused (the removal never leaves a call with a\n');
-		sysPrint('stale argument). The removed parameter must be unused in the body — a\n');
-		sysPrint('remaining use is refused (the result would reference an undefined\n');
-		sysPrint('identifier). Methods (called via bare `name(...)` / `this.name(...)`) and\n');
-		sysPrint('named local functions are supported; a method removal also emits a\n');
-		sysPrint('cross-file advisory (callers in other files are out of scope).\n');
-		sysPrint('<line>:<col> uses the same column convention `apq refs` prints. The\n');
-		sysPrint('rewrite is verified to re-parse; a cursor not on a function, an\n');
-		sysPrint('out-of-range index, a used parameter, or an unparseable result, exits\n');
-		sysPrint('non-zero with the file untouched.\n');
+		CliIo.sysPrint('Scope-correct, format-preserving remove-parameter — the inverse of\n');
+		CliIo.sysPrint('add-param. The function whose declaration / binding is at <line>:<col>\n');
+		CliIo.sysPrint('loses the parameter at 0-based <index>, and the corresponding positional\n');
+		CliIo.sysPrint('argument is deleted at every resolvable in-file call site (the separating\n');
+		CliIo.sysPrint('comma goes too, so the surviving list stays well-formed). Unlike\n');
+		CliIo.sysPrint('add-param (decl-only, always backward-compatible), removing a parameter\n');
+		CliIo.sysPrint('BREAKS calls, so remove-param updates call sites with the SAME strict\n');
+		CliIo.sysPrint('completeness proof change-sig uses: a receiver-qualified `obj.name(...)`\n');
+		CliIo.sysPrint('call, an unresolvable call, a value capture, or a call with omitted\n');
+		CliIo.sysPrint('optional arguments is refused (the removal never leaves a call with a\n');
+		CliIo.sysPrint('stale argument). The removed parameter must be unused in the body — a\n');
+		CliIo.sysPrint('remaining use is refused (the result would reference an undefined\n');
+		CliIo.sysPrint('identifier). Methods (called via bare `name(...)` / `this.name(...)`) and\n');
+		CliIo.sysPrint('named local functions are supported; a method removal also emits a\n');
+		CliIo.sysPrint('cross-file advisory (callers in other files are out of scope).\n');
+		CliIo.sysPrint('<line>:<col> uses the same column convention `apq refs` prints. The\n');
+		CliIo.sysPrint('rewrite is verified to re-parse; a cursor not on a function, an\n');
+		CliIo.sysPrint('out-of-range index, a used parameter, or an unparseable result, exits\n');
+		CliIo.sysPrint('non-zero with the file untouched.\n');
 	}
 
 	private static function printUsesUsage(): Void {
-		sysPrint('Usage: apq uses [options] <type-name> <file-or-dir-or-glob>...\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
+		CliIo.sysPrint('Usage: apq uses [options] <type-name> <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
 		printDocSourceFlatLimitLangHelp();
-		sysPrint('Finds type-position references — a field/var type annotation,\n');
-		sysPrint('an enum-constructor parameter type, a type parameter. Sister of\n');
-		sysPrint('`refs` (value bindings). `Array<T>` reports both `Array` and\n');
-		sysPrint('`T`. For "where is X declared" use `refs --decls` / `ast --select`.\n');
+		CliIo.sysPrint('Finds type-position references — a field/var type annotation,\n');
+		CliIo.sysPrint('an enum-constructor parameter type, a type parameter. Sister of\n');
+		CliIo.sysPrint('`refs` (value bindings). `Array<T>` reports both `Array` and\n');
+		CliIo.sysPrint('`T`. For "where is X declared" use `refs --decls` / `ast --select`.\n');
 	}
 
 	private static function printMetaUsage(): Void {
-		sysPrint('Usage: apq meta [<annotation>[(<arg>)]] [options] <file-or-dir-or-glob>...\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --arg-contains <s>  Keep hits whose argument list contains <s> (substring)\n');
-		sysPrint('  --on <decl-kind>    Keep hits attached to the given decl kind\n');
+		CliIo.sysPrint('Usage: apq meta [<annotation>[(<arg>)]] [options] <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --arg-contains <s>  Keep hits whose argument list contains <s> (substring)\n');
+		CliIo.sysPrint('  --on <decl-kind>    Keep hits attached to the given decl kind\n');
 		printFlatLimitLangHelp();
-		sysPrint('<annotation> is the target language source syntax (e.g. `@:foo`),\n');
-		sysPrint('recognised by its leading `@`. Omit it with `--on` to list every\n');
-		sysPrint('annotation on a decl kind.\n');
-		sysPrint('\n');
-		sysPrint('Inline arg filter `@:tag(arg)` keeps only hits whose meta has a\n');
-		sysPrint('top-level argument that is the bare ident `arg` OR a call `arg(...)`\n');
-		sysPrint('(callee match) — e.g. `apq meta \'@:fmt(propagateExprPosition)\' src/`.\n');
-		sysPrint('Unlike --arg-contains (substring), the inline form is exact per arg.\n');
+		CliIo.sysPrint('<annotation> is the target language source syntax (e.g. `@:foo`),\n');
+		CliIo.sysPrint('recognised by its leading `@`. Omit it with `--on` to list every\n');
+		CliIo.sysPrint('annotation on a decl kind.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Inline arg filter `@:tag(arg)` keeps only hits whose meta has a\n');
+		CliIo.sysPrint('top-level argument that is the bare ident `arg` OR a call `arg(...)`\n');
+		CliIo.sysPrint('(callee match) — e.g. `apq meta \'@:fmt(propagateExprPosition)\' src/`.\n');
+		CliIo.sysPrint('Unlike --arg-contains (substring), the inline form is exact per arg.\n');
 	}
 
 	private static function printAstUsage(): Void {
-		sysPrint('Usage: apq ast [options] <file> | --code <s> | --stdin\n');
-		sysPrint('\n');
-		sysPrint('Source (exactly one):\n');
-		sysPrint('  <file>              Path to a parseable source file (or .hxtest — section 2 auto-extracted)\n');
-		sysPrint('  --code <s>          Inline source string (typically via the `probe` subcommand)\n');
-		sysPrint('  --stdin             Read all of stdin as source\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --json              Emit JSON instead of S-expr\n');
-		sysPrint('  --depth <n>         Truncate beyond depth n. Counted from the displayed root:\n');
-		sysPrint('                      module (default), the matched node when paired with --select / --at.\n');
-		sysPrint('                      --depth 0 prints just the root with no children.\n');
-		sysPrint('  --select <path>     Subtree(s) matching a selector (e.g. "ClassDecl > FnDecl:foo")\n');
-		sysPrint('  --at <line>:<col>   Innermost node enclosing the 1-indexed position\n');
-		sysPrint('  --doc               With --select/--at: emit the match\'s leading doc-comment\n');
-		sysPrint('  --source            With --select/--at: emit the match\'s verbatim source — the\n');
-		sysPrint('                      bytes replace-node overwrites, so a declaration arrives\n');
-		sysPrint('                      with the modifier / @:meta run the grammar projects as its\n');
-		sysPrint('                      siblings, and stopping below its doc block as replace-node\n');
-		sysPrint('                      does without --with-doc (apq source --select means the same\n');
-		sysPrint('                      declaration, widened to whole lines; --json carries it\n');
-		sysPrint('                      un-indented under the "source" key)\n');
-		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
-		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
-		sysPrint(
+		CliIo.sysPrint('Usage: apq ast [options] <file> | --code <s> | --stdin\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Source (exactly one):\n');
+		CliIo.sysPrint('  <file>              Path to a parseable source file (or .hxtest — section 2 auto-extracted)\n');
+		CliIo.sysPrint('  --code <s>          Inline source string (typically via the `probe` subcommand)\n');
+		CliIo.sysPrint('  --stdin             Read all of stdin as source\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --json              Emit JSON instead of S-expr\n');
+		CliIo.sysPrint('  --depth <n>         Truncate beyond depth n. Counted from the displayed root:\n');
+		CliIo.sysPrint('                      module (default), the matched node when paired with --select / --at.\n');
+		CliIo.sysPrint('                      --depth 0 prints just the root with no children.\n');
+		CliIo.sysPrint('  --select <path>     Subtree(s) matching a selector (e.g. "ClassDecl > FnDecl:foo")\n');
+		CliIo.sysPrint('  --at <line>:<col>   Innermost node enclosing the 1-indexed position\n');
+		CliIo.sysPrint('  --doc               With --select/--at: emit the match\'s leading doc-comment\n');
+		CliIo.sysPrint('  --source            With --select/--at: emit the match\'s verbatim source — the\n');
+		CliIo.sysPrint('                      bytes replace-node overwrites, so a declaration arrives\n');
+		CliIo.sysPrint('                      with the modifier / @:meta run the grammar projects as its\n');
+		CliIo.sysPrint('                      siblings, and stopping below its doc block as replace-node\n');
+		CliIo.sysPrint('                      does without --with-doc (apq source --select means the same\n');
+		CliIo.sysPrint('                      declaration, widened to whole lines; --json carries it\n');
+		CliIo.sysPrint('                      un-indented under the "source" key)\n');
+		CliIo.sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
+		CliIo.sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
+		CliIo.sysPrint(
 			'  --spans             Append `@from-to` byte-range annotation to every rendered node — same-span duplicates ('
 			+ 'parser bug emitting two nodes at the same position) become a trivial visual signal.\n'
 		);
-		sysPrint(
+		CliIo.sysPrint(
 			'  --count             Print just the integer direct-child count at the displayed root ('
 			+ 'one line per match with --select). Sanity-check for member counts before writing a corpus-driver test assertion.\n'
 		);
-		sysPrint(
+		CliIo.sysPrint(
 			'  --type-refs         Render the type-position projection (parseFileTypeRefs) instead of the default tree — the dotted type '
 			+ 'references of the file (field/var annotations, param + return types, enum-ctor params, type parameters, and the field types '
 			+ 'of an anonymous structure in any of those). Field NAMES never project as TYPE REFERENCES — the raw dump still shows them as '
 			+ 'node names, but uses/blast and the rewriting ops see only types.\n'
 		);
-		sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
-		sysPrint(
+		CliIo.sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
+		CliIo.sysPrint(
 			'  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) writer — mirrors the unit-test entry '
 			+ 'HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n'
 		);
-		sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 	}
 
 	private static function printProbeUsage(): Void {
-		sysPrint('Usage: apq probe <code> [ast-options]\n');
-		sysPrint('       apq probe - [ast-options]   (read code from stdin)\n');
-		sysPrint('       apq probe <code> --writer-probe   (trivia + plain side-by-side)\n');
-		sysPrint('\n');
-		sysPrint('Inline-source variant of `apq ast`. Accepts every ast option\n');
-		sysPrint('(--depth/--select/--at/--json/--writer-output/--writer-output-plain/\n');
-		sysPrint('--writer-output --diff/--min-children/--max-children/--lang).\n');
-		sysPrint('\n');
-		sysPrint('--writer-probe diverts to the `writer-probe` aggregator: emits BOTH\n');
-		sysPrint('the trivia and plain writer outputs separated by `=== trivia ===` /\n');
-		sysPrint('`=== plain ===` fences. Mirrors `apq writer-probe <file>` for inline\n');
-		sysPrint('source — no scratch file needed.\n');
-		sysPrint('\n');
-		sysPrint('Example:\n');
-		sysPrint("  apq probe 'class C { function f() { @:m return switch x { case _: 0; } } }' --depth 6\n");
-		sysPrint("  apq probe 'class C {}' --writer-probe\n");
+		CliIo.sysPrint('Usage: apq probe <code> [ast-options]\n');
+		CliIo.sysPrint('       apq probe - [ast-options]   (read code from stdin)\n');
+		CliIo.sysPrint('       apq probe <code> --writer-probe   (trivia + plain side-by-side)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Inline-source variant of `apq ast`. Accepts every ast option\n');
+		CliIo.sysPrint('(--depth/--select/--at/--json/--writer-output/--writer-output-plain/\n');
+		CliIo.sysPrint('--writer-output --diff/--min-children/--max-children/--lang).\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('--writer-probe diverts to the `writer-probe` aggregator: emits BOTH\n');
+		CliIo.sysPrint('the trivia and plain writer outputs separated by `=== trivia ===` /\n');
+		CliIo.sysPrint('`=== plain ===` fences. Mirrors `apq writer-probe <file>` for inline\n');
+		CliIo.sysPrint('source — no scratch file needed.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Example:\n');
+		CliIo.sysPrint("  apq probe 'class C { function f() { @:m return switch x { case _: 0; } } }' --depth 6\n");
+		CliIo.sysPrint("  apq probe 'class C {}' --writer-probe\n");
 	}
 
 	private static function printWriterProbeUsage(): Void {
-		sysPrint('Usage: apq writer-probe [options] <file>\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Parse <file>, run BOTH the trivia and plain writer pipelines, and\n');
-		sysPrint('emit each output between labelled fences:\n');
-		sysPrint('  === trivia ===\n');
-		sysPrint('  <bytes>\n');
-		sysPrint('  === plain ===\n');
-		sysPrint('  <bytes>\n');
-		sysPrint('\n');
-		sysPrint('Replaces the two-command dance (`hxq ast … --writer-output` then\n');
-		sysPrint('`hxq ast … --writer-output-plain`) when constructing a unit-test\n');
-		sysPrint('`writerEquals` expected literal: side-by-side output makes the\n');
-		sysPrint('pipeline divergence (anon flatten, terminators, comments) visible.\n');
-		sysPrint('Exit 0 only when both pipelines succeed.\n');
-	}
-
-	private static function stderr(s: String): Void {
-		#if (sys || nodejs)
-		Sys.stderr().writeString(s);
-		#end
-	}
-
-	/**
-	 * Per-file walk progress heartbeat (multi-file scans only). Writes a
-	 * `scanned <done>/<total>` line to **stderr** — never stdout — so the
-	 * walker's machine-readable hit output stays byte-identical while a
-	 * long run still produces incremental output. Fires every
-	 * `PROGRESS_INTERVAL` files plus once at completion, and is a no-op
-	 * for single-file queries (`singleFile`), tiny scans (`total <=
-	 * PROGRESS_INTERVAL`), or when `HXQ_NO_PROGRESS` is set (so a caller
-	 * merging streams via `2>&1` can suppress it).
-	 *
-	 * `done` is 1-based (the count of files processed so far, inclusive
-	 * of the current one).
-	 */
-	private static function streamProgress(cmd: String, done: Int, total: Int, singleFile: Bool): Void {
-		if (singleFile || total <= PROGRESS_INTERVAL) return;
-		#if (sys || nodejs)
-		if (Sys.getEnv('HXQ_NO_PROGRESS') != null) return;
-		#end
-		if (done % PROGRESS_INTERVAL == 0 || done == total) stderr('apq $cmd: scanned $done/$total files…\n');
-	}
-
-	/**
-	 * Parse one walked file for the scan subcommands
-	 * (`refs`/`uses`/`meta`/`search`). The behaviour on a parse failure
-	 * depends on how the input was given. When the user named exactly
-	 * one file (`singleFile`), the failure IS the query's answer: it is
-	 * reported and the caller turns it into a hard error, mirroring
-	 * `apq ast`. In directory / glob / multi-file scan mode an
-	 * unparseable file is out of scope by nature, so it is skipped
-	 * silently — no per-file error noise on every walk. Returns the
-	 * parsed tree, or `null` to skip (scan) / fail (single file).
-	 *
-	 * Substring pre-filter: a name-walker only ever emits hits whose
-	 * leaf text equals `searchKey`. An identifier / annotation key is
-	 * carried verbatim into the AST (never escaped, case-sensitive), so
-	 * `source.indexOf(searchKey) >= 0` is a strict necessary condition
-	 * for ANY hit — if the raw bytes do not contain the key, no parse
-	 * can produce a match. When `searchKey` is non-null and absent from
-	 * `source`, the file is skipped WITHOUT parsing (the dominant cost
-	 * on a corpus-wide walk) and WITHOUT a skip-entry: the file parses
-	 * fine, it is a confirmed no-match, not a parse failure. The raw
-	 * read is shared with the parse — the caller already read `source`
-	 * once and passes the same buffer here, so the pre-filter adds no
-	 * extra IO.
-	 *
-	 * `lit` searches the DECODED literal value while the raw file holds
-	 * the ESCAPED form, so a raw `indexOf` can false-negative on a key
-	 * containing escape sequences. Callers that cannot guarantee the key
-	 * appears verbatim in source (e.g. `lit` on a backslash-bearing key)
-	 * pass `searchKey == null` to opt out — correctness over speed.
-	 *
-	 * The pre-filter is suppressed in `singleFile` mode: there a `null`
-	 * tree means "parse failed" and the caller turns it into a hard
-	 * error. A pre-filter skip is a confirmed no-match, NOT a parse
-	 * failure, so suppressing it preserves the single-file contract
-	 * (parse the named file, emit 0 hits + nudge, exit 0). The win is a
-	 * corpus-wide-scan win anyway — skipping one named file is moot.
-	 */
-	private static function parseWalked(
-		cmd: String, parse: String -> QueryNode, path: String, source: String, singleFile: Bool, ?skipOut: Array<SkipEntry>,
-		?searchKey: String
-	): Null<QueryNode> {
-		return !singleFile && searchKey != null && source.indexOf(searchKey) < 0
-			? null
-			: try parse(source) catch (exception: ParseError) {
-				if (singleFile) stderr('apq $cmd: $path: $exception\n');
-				skipOut?.push({ path: path, locus: formatParseErrorLocus(exception, source) });
-				null;
-			}
-			catch (exception: Exception) {
-				if (singleFile) stderr('apq $cmd: $path: ${exception.message}\n');
-				skipOut?.push({ path: path, locus: exception.message });
-				null;
-			};
-	}
-
-	/**
-	 * Render a `ParseError` as the skip-entry locus suffix shown in the
-	 * 0-hit walker nudge: `LINE:COL <message>[ (expected <X>)]`.
-	 *
-	 * The locus tells the reader whether the parse failure is at the
-	 * top of the file (so the file is effectively invisible to the walk)
-	 * or far past where the searched name would plausibly live (warning
-	 * can be ignored). Saves a follow-up `hxq ast <path>` probe to read
-	 * the same information.
-	 */
-	private static function formatParseErrorLocus(exception: ParseError, source: String): String {
-		final pos: Position = exception.span.lineCol(source);
-		final base: String = '${pos.line}:${pos.col} ${exception.message}';
-		return exception.expected == null ? base : '$base (expected ${exception.expected})';
+		CliIo.sysPrint('Usage: apq writer-probe [options] <file>\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Parse <file>, run BOTH the trivia and plain writer pipelines, and\n');
+		CliIo.sysPrint('emit each output between labelled fences:\n');
+		CliIo.sysPrint('  === trivia ===\n');
+		CliIo.sysPrint('  <bytes>\n');
+		CliIo.sysPrint('  === plain ===\n');
+		CliIo.sysPrint('  <bytes>\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Replaces the two-command dance (`hxq ast … --writer-output` then\n');
+		CliIo.sysPrint('`hxq ast … --writer-output-plain`) when constructing a unit-test\n');
+		CliIo.sysPrint('`writerEquals` expected literal: side-by-side output makes the\n');
+		CliIo.sysPrint('pipeline divergence (anon flatten, terminators, comments) visible.\n');
+		CliIo.sysPrint('Exit 0 only when both pipelines succeed.\n');
 	}
 
 	/**
@@ -7562,86 +6760,6 @@ final class Cli {
 		if (s.length == 0) return false;
 		final c: Int = s.fastCodeAt(0);
 		return c >= 'A'.code && c <= 'Z'.code && s.indexOf('/') < 0 && s.indexOf('.') < 0;
-	}
-
-	/**
-	 * Heuristic: is the string clearly an identifier rather than a string
-	 * fragment? Drives `lit`'s smart-default kind filter — when the query
-	 * is camelCase (`trailOptShapeGate`) or snake_case (`MAX_LEN`,
-	 * `endsWith_close_brace`) the user almost always wants the identifier
-	 * tier promoted alongside `Literal`. Pure-lowercase single words
-	 * (`foo`) and all-uppercase single words (`API`) stay ambiguous and
-	 * keep the conservative `Literal`-only default — widening them would
-	 * flood the result with prose hits.
-	 *
-	 * Rule: every char is alpha / digit / `_`, AND the string contains
-	 * either a lower-then-upper transition (camelCase) or a `_` between
-	 * letters (snake_case). Single letters / pure digits / strings with
-	 * spaces / punctuation never qualify.
-	 */
-	private static function looksLikeMixedIdentifier(s: String): Bool {
-		if (s.length < 2) return false;
-		var hasLower: Bool = false;
-		var hasUpper: Bool = false;
-		var hasUnderscore: Bool = false;
-		var hasLetter: Bool = false;
-		var mixedTransition: Bool = false;
-		var prevLower: Bool = false;
-		for (idx in 0...s.length) {
-			final c: Int = s.fastCodeAt(idx);
-			final isLower: Bool = c >= 'a'.code && c <= 'z'.code;
-			final isUpper: Bool = c >= 'A'.code && c <= 'Z'.code;
-			final isDigit: Bool = c >= '0'.code && c <= '9'.code;
-			final isUnderscore: Bool = c == '_'.code;
-			if (!(isLower || isUpper || isDigit || isUnderscore)) return false;
-			if (isLower) {
-				hasLower = true;
-				hasLetter = true;
-			}
-			if (isUpper) {
-				hasUpper = true;
-				hasLetter = true;
-				if (prevLower) mixedTransition = true;
-			}
-			if (isUnderscore) hasUnderscore = true;
-			prevLower = isLower;
-		}
-		return hasLetter && (mixedTransition || (hasUnderscore && (hasLower || hasUpper)));
-	}
-
-	/**
-	 * Heuristic: does the query look like a leading-dot field-name slot
-	 * (`.expr`, `.body`)? A single `.` prefix followed by an identifier-
-	 * shaped tail. Used by the 0-hit nudge on `lit` / `refs` / `uses`:
-	 * a leading-dot literal is never a captured leaf (lit) / value
-	 * binding (refs) / type position (uses) — the user is looking for
-	 * a `$x.<rest>` field-access shape, the structural answer is
-	 * `apq search`.
-	 *
-	 * Returns the dot-stripped tail (`.expr` → `expr`) when the query
-	 * qualifies, null otherwise. Composes with `looksLikeDottedAccess`
-	 * (which rejects empty leading segments) — that heuristic is for
-	 * `Type.method` / `obj.field` SOURCE notation; this one is for the
-	 * field-name-only `.x` lookup intent.
-	 */
-	private static function looksLikeLeadingDotField(s: String): Null<String> {
-		if (s.length < 2) return null;
-		if (s.fastCodeAt(0) != '.'.code) return null;
-		final tail: String = s.substr(1);
-		// Tail must be a single identifier — multi-segment chains like
-		// `.obj.field` are not the intended shape (they would also
-		// produce false positives on the `obj.field` SOURCE form).
-		if (tail.indexOf('.') >= 0) return null;
-		final first: Int = tail.fastCodeAt(0);
-		final firstOk: Bool = (first >= 'a'.code && first <= 'z'.code) || (first >= 'A'.code && first <= 'Z'.code) || first == '_'.code;
-		if (!firstOk) return null;
-		for (idx in 1...tail.length) {
-			final c: Int = tail.fastCodeAt(idx);
-			final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
-				|| c == '_'.code;
-			if (!ok) return null;
-		}
-		return tail;
 	}
 
 	/**
@@ -7698,25 +6816,6 @@ final class Cli {
 		return null;
 	}
 
-	private static function looksLikeDottedAccess(s: String): Null<Array<String>> {
-		if (s.indexOf('.') < 0) return null;
-		final parts: Array<String> = s.split('.');
-		if (parts.length < 2) return null;
-		for (p in parts) {
-			if (p.length == 0) return null;
-			final first: Int = p.fastCodeAt(0);
-			final firstOk: Bool = (first >= 'a'.code && first <= 'z'.code) || (first >= 'A'.code && first <= 'Z'.code) || first == '_'.code;
-			if (!firstOk) return null;
-			for (idx in 1...p.length) {
-				final c: Int = p.fastCodeAt(idx);
-				final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
-					|| c == '_'.code;
-				if (!ok) return null;
-			}
-		}
-		return parts;
-	}
-
 	/**
 	 * Heuristic: does the string look like a file/dir path? Contains `/`
 	 * or `.hx` suffix, OR is an existing filesystem entry. Pairs with
@@ -7724,79 +6823,6 @@ final class Cli {
 	 */
 	private static function looksLikePath(s: String): Bool {
 		return s.indexOf('/') >= 0 || s.endsWith('.hx') || #if (sys || nodejs) sys.FileSystem.exists(s) #else false #end;
-	}
-
-	/**
-	 * Build the per-kind nudge for `search` on a degenerate (single-leaf)
-	 * pattern. Kind-aware: a lone metavar has no name to refs/uses; a
-	 * literal value goes through `lit`; a bare identifier supports all
-	 * three (refs/uses/lit). Sister of `emptyWalkerNudge` — both emit
-	 * tool-suggestion messages on a structurally-valid-but-misaimed query.
-	 */
-	private static function degenerateNudge(patternStr: String, rootKind: String): String {
-		final prefix: String = 'apq search: pattern "$patternStr" ';
-		return switch rootKind {
-			case 'Metavar':
-				'${prefix}is a lone metavar — matches every node. Narrow with structural context ('
-					+ 'e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
-			case 'Literal', 'StringLit', 'BoolLit', 'IntLit', 'FloatLit', 'SingleStringExpr', 'DoubleStringExpr', 'RawString':
-				'${prefix}is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
-			case _:
-				// Bare identifier (IdentExpr) and anything else that
-				// parses to a single leaf.
-				'${prefix}has no code structure — search matches shape, not bare names. Try one of: apq refs $patternStr'
-					+ ' --decls (value binding), apq uses $patternStr (type position), apq lit \'$patternStr\' (string-literal content), '
-					+ 'apq ast --select. Searching anyway.';
-		}
-	}
-
-	/**
-	 * Stderr nudge emitted by walker subcommands (refs/uses/meta/lit) when
-	 * they return zero hits. Composes up to three diagnostic layers:
-	 *
-	 *  - SUMMARY: counts of files scanned vs parseable — turns a silent
-	 *    miss into an observable signal.
-	 *  - KIND HINT: when `name` is non-null, a kind-aware tool suggestion
-	 *    (`refs <X>` on UpperCase → try `uses`/`blast`; `uses <x>` on
-	 *    lowercase → try `refs`/`lit`; etc.). `meta` has no `<name>` and
-	 *    skips this layer.
-	 *  - SKIP-PARSE WARNING: when `skipEntries` lists files that failed to
-	 *    parse, surface count + first few paths AND their failure locus
-	 *    (`LINE:COL <message>`). The locus lets the reader judge whether
-	 *    the parse failure is upstream of the searched-for content (the
-	 *    file is effectively invisible — warning critical) or far past it
-	 *    (warning can be ignored) without a follow-up `hxq ast` probe.
-	 *  - FUZZY DID-YOU-MEAN: for refs/uses with a non-null `candidates`
-	 *    name pool, suggest top-K candidates within Levenshtein distance.
-	 *    Silent when nothing close enough qualifies.
-	 */
-	private static function emptyWalkerNudge(
-		cmd: String, name: Null<String>, scanned: Int, parseable: Int, ?skipEntries: Array<SkipEntry>, ?candidates: Map<String, Bool>
-	): String {
-		final summary: String = 'apq $cmd: 0 hits ($scanned file(s) scanned, $parseable parseable)';
-		final tail: StringBuf = new StringBuf();
-		if (name != null) tail.add(nudgeNameHint(cmd, name));
-		tail.add(nudgeSkipWarning(cmd, skipEntries));
-		tail.add(nudgeFuzzy(cmd, name, candidates));
-		return summary + tail.toString();
-	}
-
-	/**
-	 * The warning `cmd` prints when the scope holds member-access occurrences of `name`
-	 * (`Type.name`, `expr?.name`, `expr!.name`) that the value-binding walker cannot bind.
-	 * `bindings` is the UNFILTERED count of resolved reads + writes, so the severity does
-	 * not swing with `--decls` / `--reads`: at zero the omission is the dangerous kind (an
-	 * empty result reads as "unreferenced"), otherwise the result is merely partial. The
-	 * caller only invokes this when `memberAccesses > 0`, so a name with nothing missed
-	 * never gets a line.
-	 */
-	private static function memberAccessNudge(cmd: String, name: String, memberAccesses: Int, bindings: Int): String {
-		final head: String = bindings == 0
-			? 'apq $cmd: no read/write resolved, but $memberAccesses member-access occurrence(s) of \'$name\' cannot be bound '
-				+ 'lexically — this is NOT proof \'$name\' is unreferenced'
-			: 'apq $cmd: $memberAccesses member-access occurrence(s) of \'$name\' are not shown';
-		return '$head (refs resolves value bindings; \'Type.$name\' / \'expr?.$name\' bind through the receiver type). '
-			+ 'Run: apq mentions $name <dir>';
 	}
 
 	/**
@@ -7814,46 +6840,6 @@ final class Cli {
 	}
 
 	/**
-	 * Append a hint when `name` appears to be macro-generated — scan
-	 * `src/anyparse/macro/*.hx` for a `<name>Field` Field-builder function
-	 * declaration (the canonical `Codegen.<name>Field()` shape that emits
-	 * runtime helpers like `peekKw` / `matchLit` / `expectLit`). When found,
-	 * point the user at the macro source where the literal name appears,
-	 * since the runtime caller search (refs/uses) cannot reach the FFun
-	 * `name: '<name>'` string-literal slot inside the builder body.
-	 *
-	 * Returns empty string when:
-	 *  - `sys` target not available (no FileSystem access);
-	 *  - `src/anyparse/macro` doesn't exist (running outside the project);
-	 *  - no `<name>Field` function found in any macro source.
-	 *
-	 * Sniff is conservative (substring match for the exact FFun signature
-	 * prefix `function <name>Field(`) — false positives require an
-	 * unrelated function with that exact suffix, which the project does
-	 * not produce.
-	 */
-	private static function macroEmitHint(name: String): String {
-		#if (sys || nodejs)
-		final macroDir: String = 'src/anyparse/macro';
-		if (!FileSystem.exists(macroDir) || !FileSystem.isDirectory(macroDir)) return '';
-		final marker: String = 'function ${name}Field(';
-		try {
-			for (entry in FileSystem.readDirectory(macroDir)) if (StringTools.endsWith(entry, '.hx')) {
-				final src: String = sys.io.File.getContent('$macroDir/$entry');
-				if (src.indexOf(marker) < 0) continue;
-				return ' If "$name" is a macro-emitted parser runtime helper, the emit site lives in src/anyparse/macro/$entry'
-					+ ' — try apq lit \'$name\' src/anyparse/macro/ --any-kind to see the FFun name slot.';
-			}
-		} catch (_: Exception) {
-			// best-effort: return '' if building the hint text fails
-		}
-		return '';
-		#else
-		return '';
-		#end
-	}
-
-	/**
 	 * Collect every named leaf/inner-node into `out` for fuzzy
 	 * "did you mean" suggestions. The full vocabulary covered by the
 	 * walked tree — wider than just decls — keeps the suggestion list
@@ -7867,56 +6853,6 @@ final class Cli {
 			for (c in n.children) walk(c);
 		}
 		walk(root);
-	}
-
-	/**
-	 * Top-`FUZZY_TOP_K` "did you mean" candidates ranked in two tiers:
-	 *
-	 *  - Tier 0 — substring match: `query` is a contiguous substring of
-	 *    `cand` (prefix/suffix/inner). Score = extra char count
-	 *    `cand.length - query.length`. Catches the common grammar miss
-	 *    `HxTypeParam` → `HxTypeParamDecl` (Levenshtein distance 4 from
-	 *    appending "Decl" — beyond `FUZZY_MAX_DIST`, but `HxTypeParam` IS
-	 *    a substring of `HxTypeParamDecl`). Guarded by
-	 *    `FUZZY_SUBSTRING_MIN_QUERY` (avoids `Hx` matching everything)
-	 *    and `FUZZY_SUBSTRING_MAX_EXTRA` (avoids `Foo` crowding out true
-	 *    neighbours with a long-name match).
-	 *
-	 *  - Tier 1 — Levenshtein within `FUZZY_MAX_DIST`. Catches typos and
-	 *    transpositions a substring scan can't.
-	 *
-	 * A candidate that qualifies under Tier 0 is NOT also evaluated under
-	 * Tier 1 — the substring tier always wins, and we don't double-add.
-	 * Returns empty when nothing qualifies; the caller emits the "did you
-	 * mean" line only on a non-empty result (never fabricates hints).
-	 */
-	private static function findFuzzy(query: String, pool: Map<String, Bool>): Array<String> {
-		final scored: Array<{ name: String, tier: Int, score: Int }> = [];
-		final qLen: Int = query.length;
-		final substringEnabled: Bool = qLen >= FUZZY_SUBSTRING_MIN_QUERY;
-		for (cand in pool.keys()) if (cand != query) {
-			if (substringEnabled && cand.length > qLen && cand.length - qLen <= FUZZY_SUBSTRING_MAX_EXTRA && cand.indexOf(query) >= 0) {
-				scored.push({ name: cand, tier: 0, score: cand.length - qLen });
-				continue;
-			}
-			// `FUZZY_MAX_DIST + 1` as the ceiling: every distance the tier
-			// keeps comes back exact, and anything further comes back as the
-			// ceiling itself, which the test below rejects.
-			final d: Int = EditDistance.between(query, cand, FUZZY_MAX_DIST + 1);
-			if (d <= FUZZY_MAX_DIST) scored.push({ name: cand, tier: 1, score: d });
-		}
-		scored.sort((a, b) ->
-			if (a.tier != b.tier)
-				a.tier - b.tier
-			else if (a.score != b.score)
-				a.score - b.score
-			else if (a.name < b.name)
-				-1
-			else
-				1
-		);
-		final take: Int = scored.length < FUZZY_TOP_K ? scored.length : FUZZY_TOP_K;
-		return [for (i in 0...take) scored[i].name];
 	}
 
 	/**
@@ -8023,7 +6959,7 @@ final class Cli {
 	 */
 	private static function runFmt(args: Array<String>): Int {
 		final run: FmtRunResult = fmtRun(args);
-		if (run.summary.length > 0) stderr(run.summary);
+		if (run.summary.length > 0) CliIo.stderr(run.summary);
 		return run.exit;
 	}
 
@@ -8047,15 +6983,15 @@ final class Cli {
 		}
 		warnCommentGuardDeclined();
 		if (o.inputSpecs.length == 0) {
-			stderr('apq fmt: expected <file/dir/glob>...\n');
+			CliIo.stderr('apq fmt: expected <file/dir/glob>...\n');
 			printFmtUsage();
 			return { exit: EXIT_USAGE, summary: '' };
 		}
 
-		final io = resolveInputPaths(o.lang, o.inputSpecs);
+		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq fmt: ${quotedSpecs(o.inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq fmt: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
 			return { exit: EXIT_RUNTIME, summary: '' };
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -8198,45 +7134,45 @@ final class Cli {
 	 */
 	private static function warnCommentGuardDeclined(): Void {
 		if (CommentInventory.guardDeclined())
-			stderr('apq: ${CommentInventory.DECLINE_ENV} is set — the comment-loss guard is OFF; a rewrite may DELETE comments\n');
+			CliIo.stderr('apq: ${CommentInventory.DECLINE_ENV} is set — the comment-loss guard is OFF; a rewrite may DELETE comments\n');
 	}
 
 	private static function printFmtUsage(): Void {
-		sysPrint('Usage: apq fmt <file/dir/glob>... [--write] [--list] [--verify] [--one-pass]\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write, -w     Rewrite each file in place with its canonical form\n');
-		sysPrint('  --list, -l      Print paths whose output differs (gofmt -l); no rewrite\n');
-		sysPrint('  --verify        Audit: the output must differ from the input by WHITESPACE\n');
-		sysPrint('                  only. Reports every other divergence; never writes\n');
-		sysPrint('  --one-pass      Also require every file to reach its fixed point in ONE\n');
-		sysPrint('                  writer rewrite; exit non-zero otherwise. Composes with\n');
-		sysPrint('                  every mode above and changes none of them\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Canonicalise Haxe source by re-emitting it through the writer, formatted\n');
-		sysPrint('by the project hxformat.json discovered from each file\'s directory. With\n');
-		sysPrint('no flags on a single file the formatted source goes to stdout; on multiple\n');
-		sysPrint('files or a directory, --list mode is implied. A file that fails to parse is\n');
-		sysPrint('reported and skipped; the exit code is non-zero if any file failed.\n');
-		sysPrint('\n');
-		sysPrint('A file whose re-emission would DROP a comment (an inline comment in a seam\n');
-		sysPrint('the parser has no capture slot for, e.g. `if (/* c */ x)`) is reported with\n');
-		sysPrint('the comment and left byte-identical rather than rewritten without it.\n');
-		sysPrint('\n');
-		sysPrint('--one-pass catches the class NO other tree-level gate can see: `fmt` writes\n');
-		sysPrint('the writer\'s FIXED POINT, so a file the writer settles only on its second\n');
-		sysPrint('rewrite is reported canonical by --list while the next writer-emit op\n');
-		sysPrint('refuses it — that op\'s gate is one round trip, not the fixed point. Off by\n');
-		sysPrint('default so a project whose config reaches the writer\'s convergence tail can\n');
-		sysPrint('still run --write; on for a gate.\n');
-		sysPrint('\n');
-		sysPrint('--verify catches what the writer round-trip cannot: a writer defect whose\n');
-		sysPrint('output this parser still accepts is invisible to a tree-level gate, so\n');
-		sysPrint('self-status, --list and lint all report green on a tree that no longer\n');
-		sysPrint('compiles. Note that some policies change tokens on purpose — a trailing\n');
-		sysPrint('comma, braces around a single statement, an optional semicolon — and those\n');
-		sysPrint('are reported too; read the diff rather than treating any hit as a bug.\n');
+		CliIo.sysPrint('Usage: apq fmt <file/dir/glob>... [--write] [--list] [--verify] [--one-pass]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --write, -w     Rewrite each file in place with its canonical form\n');
+		CliIo.sysPrint('  --list, -l      Print paths whose output differs (gofmt -l); no rewrite\n');
+		CliIo.sysPrint('  --verify        Audit: the output must differ from the input by WHITESPACE\n');
+		CliIo.sysPrint('                  only. Reports every other divergence; never writes\n');
+		CliIo.sysPrint('  --one-pass      Also require every file to reach its fixed point in ONE\n');
+		CliIo.sysPrint('                  writer rewrite; exit non-zero otherwise. Composes with\n');
+		CliIo.sysPrint('                  every mode above and changes none of them\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Canonicalise Haxe source by re-emitting it through the writer, formatted\n');
+		CliIo.sysPrint('by the project hxformat.json discovered from each file\'s directory. With\n');
+		CliIo.sysPrint('no flags on a single file the formatted source goes to stdout; on multiple\n');
+		CliIo.sysPrint('files or a directory, --list mode is implied. A file that fails to parse is\n');
+		CliIo.sysPrint('reported and skipped; the exit code is non-zero if any file failed.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A file whose re-emission would DROP a comment (an inline comment in a seam\n');
+		CliIo.sysPrint('the parser has no capture slot for, e.g. `if (/* c */ x)`) is reported with\n');
+		CliIo.sysPrint('the comment and left byte-identical rather than rewritten without it.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('--one-pass catches the class NO other tree-level gate can see: `fmt` writes\n');
+		CliIo.sysPrint('the writer\'s FIXED POINT, so a file the writer settles only on its second\n');
+		CliIo.sysPrint('rewrite is reported canonical by --list while the next writer-emit op\n');
+		CliIo.sysPrint('refuses it — that op\'s gate is one round trip, not the fixed point. Off by\n');
+		CliIo.sysPrint('default so a project whose config reaches the writer\'s convergence tail can\n');
+		CliIo.sysPrint('still run --write; on for a gate.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('--verify catches what the writer round-trip cannot: a writer defect whose\n');
+		CliIo.sysPrint('output this parser still accepts is invisible to a tree-level gate, so\n');
+		CliIo.sysPrint('self-status, --list and lint all report green on a tree that no longer\n');
+		CliIo.sysPrint('compiles. Note that some policies change tokens on purpose — a trailing\n');
+		CliIo.sysPrint('comma, braces around a single statement, an optional semicolon — and those\n');
+		CliIo.sysPrint('are reported too; read the diff rather than treating any hit as a bug.\n');
 	}
 
 	/**
@@ -8305,12 +7241,12 @@ final class Cli {
 			}
 			if (srcRoot == null) return null;
 			final file: String = '${srcRoot + iface.split('.').join('/')}.hx';
-			return !FileSystem.exists(file) ? null : { source: readFile(file), ifaceModule: iface, simple: simple };
+			return !FileSystem.exists(file) ? null : { source: CliIo.readFile(file), ifaceModule: iface, simple: simple };
 		}
 		final file: String = '${Path.directory(FileSystem.absolutePath(newPath))}/$iface.hx';
 		if (!FileSystem.exists(file)) return null;
 		final newPkg: String = derivePackage(newPath);
-		return { source: readFile(file), ifaceModule: newPkg == '' ? iface : '$newPkg.$iface', simple: iface };
+		return { source: CliIo.readFile(file), ifaceModule: newPkg == '' ? iface : '$newPkg.$iface', simple: iface };
 	}
 
 	/**
@@ -8362,14 +7298,14 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		var docText: Null<String> = o.docText;
 		if (o.fromFile != null || docText == '-') {
-			final resolved: Null<String> = resolveCodeArg('set-doc', docText == '-' ? '-' : null, o.fromFile);
+			final resolved: Null<String> = CliArgs.resolveCodeArg('set-doc', docText == '-' ? '-' : null, o.fromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			docText = resolved;
 		}
 		final file: Null<String> = o.file;
 		final pos: Null<String> = o.pos;
 		if (file == null || (pos == null && o.selectExpr == null && o.matchExpr == null) || docText == null) {
-			stderr(
+			CliIo.stderr(
 				"apq set-doc: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<text> | --from-file <path> | -)\n"
 			);
 			printSetDocUsage();
@@ -8378,37 +7314,37 @@ final class Cli {
 
 		final filePath: String = file;
 		final docStr: String = docText;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq set-doc: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq set-doc: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
-		final loc: Null<Position> = resolveAddressPos('set-doc', source, plugin, pos, o.selectExpr, o.matchExpr, o.nth);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
+		final loc: Null<Position> = CliEdit.resolveAddressPos('set-doc', source, plugin, pos, o.selectExpr, o.matchExpr, o.nth);
 		if (loc == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = SetDoc.setDoc(source, loc.line, loc.col, docStr, o.reformat, plugin, optsJson);
-		return finishEdit('set-doc', filePath, o.write, result);
+		return CliEdit.finishEdit('set-doc', filePath, o.write, result);
 	}
 
 	private static function printSetDocUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq set-doc <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<text> | --from-file <path> | -) ["
 			+ '--reformat] [--write]\n'
 		);
 		printSelectorAddressingSection();
-		sysPrint('  --from-file <path>  Read the doc text from a file instead of the argument\n');
-		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('  --from-file <path>  Read the doc text from a file instead of the argument\n');
+		CliIo.sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
-		sysPrint('Add or replace the doc-comment of the addressed declaration. The text is\n');
-		sysPrint('formatted into a doc-comment block and spliced before the declaration; an\n');
-		sysPrint('existing leading doc comment is replaced, the declaration itself is left\n');
-		sysPrint('untouched. The text may be inline, --from-file, or - for stdin\n');
-		sysPrint('(heredoc-friendly, multi-line). Writer-formatted + validated.\n');
-		sysPrint('\n');
-		sysPrint('The text is PLAIN prose, one line per doc line: this op owns the ` * `\n');
-		sysPrint('gutter and adds it. A gutter you write yourself is stripped rather than\n');
-		sysPrint('doubled, and only the two spellings the writer emits count as one, so a\n');
-		sysPrint('`* bullet` and an indented code sample keep what they were given.\n');
+		CliIo.sysPrint('Add or replace the doc-comment of the addressed declaration. The text is\n');
+		CliIo.sysPrint('formatted into a doc-comment block and spliced before the declaration; an\n');
+		CliIo.sysPrint('existing leading doc comment is replaced, the declaration itself is left\n');
+		CliIo.sysPrint('untouched. The text may be inline, --from-file, or - for stdin\n');
+		CliIo.sysPrint('(heredoc-friendly, multi-line). Writer-formatted + validated.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The text is PLAIN prose, one line per doc line: this op owns the ` * `\n');
+		CliIo.sysPrint('gutter and adds it. A gutter you write yourself is stripped rather than\n');
+		CliIo.sysPrint('doubled, and only the two spellings the writer emits count as one, so a\n');
+		CliIo.sysPrint('`* bullet` and an indented code sample keep what they were given.\n');
 	}
 
 	/**
@@ -8435,13 +7371,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -8451,12 +7387,12 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq set-modifier: unknown option "$a"\n');
+						CliIo.stderr('apq set-modifier: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
 						file = a;
-					else if (pos == null && selectExpr == null && matchExpr == null && isPosSpec(a))
+					else if (pos == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a))
 						pos = a;
 					else
 						changes.push(a);
@@ -8464,7 +7400,7 @@ final class Cli {
 			i++;
 		}
 		if (file == null || (pos == null && selectExpr == null && matchExpr == null) || changes.length == 0) {
-			stderr(
+			CliIo.stderr(
 				"apq set-modifier: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <change>... ("
 				+ 'e.g. public, +static, -inline)\n'
 			);
@@ -8473,54 +7409,54 @@ final class Cli {
 		}
 
 		final filePath: String = file;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq set-modifier: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq set-modifier: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		final op: String = 'set-modifier';
-		final loc: Null<Position> = resolveAddressPos(op, source, plugin, pos, selectExpr, matchExpr, nth);
+		final loc: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, pos, selectExpr, matchExpr, nth);
 		if (loc == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		switch SetModifier.setModifier(source, loc.line, loc.col, changes, reformat, plugin, optsJson) {
 			case Ok(text, rewrites):
-				warnRewrites(op, filePath, rewrites);
+				CliEdit.warnRewrites(op, filePath, rewrites);
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq set-modifier: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq set-modifier: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq set-modifier: $message\n');
+				CliIo.stderr('apq set-modifier: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printSetModifierUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq set-modifier <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <change>... [--reformat] [--write]\n"
 		);
-		sysPrint('\n');
-		sysPrint('Changes:\n');
-		sysPrint('  public | private    Set the visibility\n');
-		sysPrint('  +<mod> | -<mod>     Add / remove a boolean modifier\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Changes:\n');
+		CliIo.sysPrint('  public | private    Set the visibility\n');
+		CliIo.sysPrint('  +<mod> | -<mod>     Add / remove a boolean modifier\n');
 		// Read off the DEFAULT grammar's own set rather than spelled here: a seventh hand-copy of
 		// the modifier vocabulary is how `overload` and `abstract` stayed unmentioned while the
 		// grammar projected them.
-		final shape: RefShape = pickPlugin('haxe').refShape();
+		final shape: RefShape = CliArgs.pickPlugin('haxe').refShape();
 		final visibility: Array<String> = [for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase()];
 		final booleans: Array<String> = [
 			for (kind in CheckScan.modifierKinds(shape)) if (!visibility.contains(kind.toLowerCase())) kind.toLowerCase()
 		];
-		sysPrint('                      (${booleans.join(', ')})\n');
+		CliIo.sysPrint('                      (${booleans.join(', ')})\n');
 		printSelectorAddressingSection();
-		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
-		sysPrint('Flip the visibility / add or remove modifiers of the addressed declaration\n');
-		sysPrint('without retyping it — the safe replacement for replace-node on a modifier.\n');
-		sysPrint('`final` is not handled (it wraps the declaration; use replace-node).\n');
-		sysPrint('The result is WRITER-FORMATTED + re-parse-validated.\n');
+		CliIo.sysPrint('Flip the visibility / add or remove modifiers of the addressed declaration\n');
+		CliIo.sysPrint('without retyping it — the safe replacement for replace-node on a modifier.\n');
+		CliIo.sysPrint('`final` is not handled (it wraps the declaration; use replace-node).\n');
+		CliIo.sysPrint('The result is WRITER-FORMATTED + re-parse-validated.\n');
 	}
 
 	/**
@@ -8540,28 +7476,28 @@ final class Cli {
 		if (o.errExit != null) return o.errExit;
 		final path: Null<String> = o.path;
 		if (path == null) {
-			stderr('apq new: expected <path>\n');
+			CliIo.stderr('apq new: expected <path>\n');
 			printNewUsage();
 			return EXIT_USAGE;
 		}
 		if (!o.raw && ['class', 'interface', 'enum', 'typedef', 'abstract'].indexOf(o.kind) < 0) {
-			stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "${o.kind}")\n');
+			CliIo.stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "${o.kind}")\n');
 			return EXIT_USAGE;
 		}
 		final hasIntent: Bool = o.raw || o.asClass || o.iface != null || o.kind != 'class' || o.extendsList.length > 0 || o.fields.length
 			> 0;
 		if (!hasIntent) {
-			stderr('apq new: specify --class / --implements <iface> / --kind <k> / --raw -\n');
+			CliIo.stderr('apq new: specify --class / --implements <iface> / --kind <k> / --raw -\n');
 			return EXIT_USAGE;
 		}
 		final filePath: String = path;
 		if (FileSystem.exists(filePath)) {
-			stderr('apq new: $filePath already exists (create-only; use the ops / fmt to modify)\n');
+			CliIo.stderr('apq new: $filePath already exists (create-only; use the ops / fmt to modify)\n');
 			return EXIT_RUNTIME;
 		}
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		return executeNew(o, filePath, plugin, optsJson);
 	}
 
@@ -8569,102 +7505,50 @@ final class Cli {
 	private static function emitNew(filePath: String, result: EditResult, stubbed: Array<String>, write: Bool): Int {
 		switch result {
 			case Ok(text, rewrites):
-				warnRewrites('new', filePath, rewrites);
-				for (m in stubbed) stderr('apq new: $m() left as a NotImplementedException stub\n');
+				CliEdit.warnRewrites('new', filePath, rewrites);
+				for (m in stubbed) CliIo.stderr('apq new: $m() left as a NotImplementedException stub\n');
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq new: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq new: wrote $filePath\n');
 				} else
-					previewEdit('new', filePath, text);
+					CliEdit.previewEdit('new', filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq new: $message\n');
+				CliIo.stderr('apq new: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printNewUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			'Usage: apq new <path> (--class | --implements <iface> | --kind <k> | --raw -) [--extends <T>]... [--open] ['
 			+ '--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]\n'
 		);
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --kind <k>          class (default) | interface | enum | typedef | abstract\n');
-		sysPrint('  --class             Shorthand for --kind class\n');
-		sysPrint('  --raw -            Read the COMPLETE file from stdin (validated atomic\n');
-		sysPrint('                      write; for shapes no spec covers, e.g. multi-type files)\n');
-		sysPrint('  --implements <i>    (class) implement interface <i> — stub every method\n');
-		sysPrint('                      with its real signature (simple name = same package,\n');
-		sysPrint('                      or a qualified pkg.Name)\n');
-		sysPrint('  --extends <T>       (class) superclass / (interface, typedef) extension;\n');
-		sysPrint('                      repeatable for interface/typedef; a qualified pkg.T is imported\n');
-		sysPrint('  --underlying <T>    (abstract) the underlying type — required for --kind abstract\n');
-		sysPrint('  --from <T> / --to <T>  (abstract) implicit-cast clauses (repeatable)\n');
-		sysPrint('  --open              Emit a non-final class (default: final)\n');
-		sysPrint('  --field <member>    Add a verbatim member (repeatable)\n');
-		sysPrint('  --bodies -          Read @@ sections from stdin: @@ <method> bodies,\n');
-		sysPrint('                      @@ members (a free-form member block), @@ imports, @@ doc;\n');
-		sysPrint('                      an unfilled interface method gets a NotImplementedException stub\n');
-		sysPrint('  --write             Write the new file (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
-		sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
-		sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
-		sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
-	}
-
-	/**
-	 * `apq set-comment <file> <line>:<col> (<text> | --from-file | -) [--reformat]
-	 * [--write]` — replace the comment at the cursor (see `SetComment`). Line
-	 * comments are trivia no other op reaches; a block comment is replaced whole, a
-	 * full-line line-comment run as one unit. The replacement must itself be a
-	 * comment; the result is writer-formatted and re-parse-validated (canonical-
-	 * gated unless `--reformat`).
-	 */
-	private static function runSetComment(args: Array<String>): Int {
-		final o: SetCommentOpts = parseSetCommentArgs(args);
-		if (o.errExit != null) return o.errExit;
-		var commentText: Null<String> = o.commentText;
-		if (o.fromFile != null || commentText == '-') {
-			final resolved: Null<String> = resolveCodeArg('set-comment', commentText == '-' ? '-' : null, o.fromFile);
-			if (resolved == null) return EXIT_RUNTIME;
-			commentText = resolved;
-		}
-		final file: Null<String> = o.file;
-		final pos: Null<String> = o.pos;
-		if (file == null || pos == null || commentText == null) {
-			stderr('apq set-comment: expected <file> <line>:<col> (<text> | --from-file <path> | -)\n');
-			printSetCommentUsage();
-			return EXIT_USAGE;
-		}
-		final loc: Null<Position> = parseLineCol(pos);
-		if (loc == null) {
-			stderr('apq set-comment: bad position "$pos" (expected <line>:<col>)\n');
-			return EXIT_USAGE;
-		}
-
-		final filePath: String = file;
-		final commentStr: String = commentText;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq set-comment: $filePath: ${exception.message}\n');
-			return EXIT_RUNTIME;
-		};
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit(
-			'set-comment', filePath, o.write, SetComment.setComment(source, loc.line, loc.col, commentStr, o.reformat, plugin, optsJson)
-		);
-	}
-
-	private static function printSetCommentUsage(): Void {
-		sysPrint('Usage: apq set-comment <file> <line>:<col> (<text> | --from-file <path> | -) [--reformat] [--write]\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --from-file <path>  Read the comment text from a file instead of the argument\n');
-		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --kind <k>          class (default) | interface | enum | typedef | abstract\n');
+		CliIo.sysPrint('  --class             Shorthand for --kind class\n');
+		CliIo.sysPrint('  --raw -            Read the COMPLETE file from stdin (validated atomic\n');
+		CliIo.sysPrint('                      write; for shapes no spec covers, e.g. multi-type files)\n');
+		CliIo.sysPrint('  --implements <i>    (class) implement interface <i> — stub every method\n');
+		CliIo.sysPrint('                      with its real signature (simple name = same package,\n');
+		CliIo.sysPrint('                      or a qualified pkg.Name)\n');
+		CliIo.sysPrint('  --extends <T>       (class) superclass / (interface, typedef) extension;\n');
+		CliIo.sysPrint('                      repeatable for interface/typedef; a qualified pkg.T is imported\n');
+		CliIo.sysPrint('  --underlying <T>    (abstract) the underlying type — required for --kind abstract\n');
+		CliIo.sysPrint('  --from <T> / --to <T>  (abstract) implicit-cast clauses (repeatable)\n');
+		CliIo.sysPrint('  --open              Emit a non-final class (default: final)\n');
+		CliIo.sysPrint('  --field <member>    Add a verbatim member (repeatable)\n');
+		CliIo.sysPrint('  --bodies -          Read @@ sections from stdin: @@ <method> bodies,\n');
+		CliIo.sysPrint('                      @@ members (a free-form member block), @@ imports, @@ doc;\n');
+		CliIo.sysPrint('                      an unfilled interface method gets a NotImplementedException stub\n');
+		CliIo.sysPrint('  --write             Write the new file (default: emit to stdout)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
+		CliIo.sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
+		CliIo.sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
+		CliIo.sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
 	}
 
 	/**
@@ -8688,7 +7572,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -8698,7 +7582,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq rewrite: unknown option "$a"\n');
+						CliIo.stderr('apq rewrite: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -8708,14 +7592,14 @@ final class Cli {
 					else if (replacement == null)
 						replacement = a;
 					else {
-						stderr('apq rewrite: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq rewrite: unexpected extra argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || pattern == null || replacement == null) {
-			stderr('apq rewrite: expected <file> <pattern> <replacement>\n');
+			CliIo.stderr('apq rewrite: expected <file> <pattern> <replacement>\n');
 			printRewriteUsage();
 			return EXIT_USAGE;
 		}
@@ -8723,43 +7607,43 @@ final class Cli {
 		final filePath: String = file;
 		final pat: String = pattern;
 		final repl: String = replacement;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq rewrite: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq rewrite: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final op: String = 'rewrite';
 		switch Rewrite.rewrite(source, pat, repl, reformat, plugin, optsJson) {
 			case Ok(text, rewrites):
-				warnRewrites(op, filePath, rewrites);
+				CliEdit.warnRewrites(op, filePath, rewrites);
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq rewrite: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq rewrite: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq rewrite: $message\n');
+				CliIo.stderr('apq rewrite: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printRewriteUsage(): Void {
-		sysPrint('Usage: apq rewrite <file> <pattern> <replacement> [--reformat] [--write]\n');
-		sysPrint('\n');
-		sysPrint("Structural search-and-replace. <pattern> uses apq search syntax with $x\n");
-		sysPrint("metavariables; <replacement> is a template where $x / ${x} expand to the\n");
-		sysPrint("captured source and ${x+N} / ${x-N} shift an integer-literal metavar by N.\n");
-		sysPrint('\n');
-		sysPrint('A template reads as a TREE, so it is spliced as one: a capture whose new\n');
-		sysPrint('surroundings would re-read it, and a replacement the matched context would,\n');
-		sysPrint('get the parentheses that keep the parse — and only where dropping them\n');
-		sysPrint("would change it, so `$x * 2` over `v` stays `v * 2`.\n");
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --reformat  Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --write     Overwrite <file> in place (default: emit to stdout)\n');
+		CliIo.sysPrint('Usage: apq rewrite <file> <pattern> <replacement> [--reformat] [--write]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint("Structural search-and-replace. <pattern> uses apq search syntax with $x\n");
+		CliIo.sysPrint("metavariables; <replacement> is a template where $x / ${x} expand to the\n");
+		CliIo.sysPrint("captured source and ${x+N} / ${x-N} shift an integer-literal metavar by N.\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A template reads as a TREE, so it is spliced as one: a capture whose new\n');
+		CliIo.sysPrint('surroundings would re-read it, and a replacement the matched context would,\n');
+		CliIo.sysPrint('get the parentheses that keep the parse — and only where dropping them\n');
+		CliIo.sysPrint("would change it, so `$x * 2` over `v` stays `v * 2`.\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --reformat  Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('  --write     Overwrite <file> in place (default: emit to stdout)\n');
 	}
 
 	private static function runCommentRewrite(args: Array<String>): Int {
@@ -8768,17 +7652,17 @@ final class Cli {
 		final find: Null<String> = o.find;
 		final replace: Null<String> = o.replace;
 		if (find == null || replace == null || o.inputSpecs.length == 0) {
-			stderr('apq comment-rewrite: expected <find> <replace> <file/dir/glob>...\n');
+			CliIo.stderr('apq comment-rewrite: expected <find> <replace> <file/dir/glob>...\n');
 			printCommentRewriteUsage();
 			return EXIT_USAGE;
 		}
 
 		final findStr: String = find;
 		final replaceStr: String = replace;
-		final io = resolveInputPaths(o.lang, o.inputSpecs);
+		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			stderr('apq comment-rewrite: ${quotedSpecs(o.inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq comment-rewrite: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -8791,16 +7675,16 @@ final class Cli {
 		final failed: Int = tally.failed;
 
 		if (o.write)
-			stderr('apq comment-rewrite: rewrote ${tally.changed} file(s)${failed > 0 ? ', $failed failed' : ''}\n');
+			CliIo.stderr('apq comment-rewrite: rewrote ${tally.changed} file(s)${failed > 0 ? ', $failed failed' : ''}\n');
 		else if (listMode && failed > 0)
-			stderr('apq comment-rewrite: $failed file(s) failed\n');
+			CliIo.stderr('apq comment-rewrite: $failed file(s) failed\n');
 		// "rewrote 0 file(s)" reads as "the text was there and needed no change", which is the one
 		// thing it never means. Say that nothing MATCHED, and say where the two matching modes
 		// differ — a literal find sees a body whose line breaks are one space, a regex sees the raw
 		// body with its ` * ` prefixes, and that asymmetry is what a silent zero hides.
 		if (tally.changed == 0 && failed == 0) {
-			stderr('apq comment-rewrite: no comment body in ${paths.length} file(s) contains the find text\n');
-			stderr(
+			CliIo.stderr('apq comment-rewrite: no comment body in ${paths.length} file(s) contains the find text\n');
+			CliIo.stderr(
 				o.regex
 					? 'apq comment-rewrite: (a --regex find is matched against the RAW body — a multi-line pattern needs \\s+\\*\\s+)\n'
 					: 'apq comment-rewrite: (a literal find is matched with every line break collapsed to one space, in the find too)\n'
@@ -8810,47 +7694,47 @@ final class Cli {
 	}
 
 	private static function printCommentRewriteUsage(): Void {
-		sysPrint('Usage: apq comment-rewrite <find> <replace> <file/dir/glob>... [--regex] [--write] [--list]\n');
-		sysPrint('       [--allow-wide]\n');
-		sysPrint('\n');
-		sysPrint('Text search-and-replace scoped to COMMENT bodies (the write-twin of\n');
-		sysPrint('apq lit). Code and comment delimiters are never touched; strings are\n');
-		sysPrint('skipped. The result is canonical + re-parse-validated.\n');
-		sysPrint('\n');
-		sysPrint("A replacement holding real newlines (a shell $'a\\nb' literal) is re-prefixed\n");
-		sysPrint("with the comment's own continuation, so write plain lines — a ` * ` you add\n");
-		sysPrint('yourself is stripped, not doubled.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint("  --regex        <find> is a regex; <replace> a template where ${0}/${N}\n");
-		sysPrint("                 expand to group N and ${N+K}/${N-K} shift group N by K\n");
-		sysPrint('  --write, -w    Rewrite each file in place (default: stdout for one file,\n');
-		sysPrint('                 list of changed paths for a dir / multiple files)\n');
-		sysPrint('  --list, -l     Print paths whose comments would change; no rewrite\n');
-		sysPrint('  --reformat     Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --allow-wide   Accept a replacement that pushes a comment line past the\n');
-		sysPrint('                 configured wrapping.maxLineLength (refused by default)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('MATCHING. A LITERAL find is matched against a body whose line breaks — and the\n');
-		sysPrint('` * ` continuation after each of them — are collapsed to ONE SPACE. The find is\n');
-		sysPrint('normalised the same way, so a multi-line find works written either with those\n');
-		sysPrint('prefixes or without them. A --regex find is matched against the RAW body\n');
-		sysPrint('instead, prefixes included, so a multi-line pattern needs `\\s+\\*\\s+`.\n');
-		sysPrint('\n');
-		sysPrint("SPLICING. Write plain lines and real newlines (a shell $'a\\nb' literal): each\n");
-		sysPrint("new line gets the comment's own continuation, and a ` * ` you add yourself is\n");
-		sysPrint("stripped rather than doubled. The continuation is read off the block's own\n");
-		sysPrint('first interior line, so a GUTTER-LESS block keeps its indentation and a\n');
-		sysPrint('star-guttered one keeps its star; a one-line /** … */ that grows past one line\n');
-		sysPrint('is re-opened so its closer gets a line of its own.\n');
-		sysPrint('\n');
-		sysPrint('WIDTH is not re-wrapped either, but it is no longer silent: a replacement that\n');
-		sysPrint('leaves a comment line past wrapping.maxLineLength is REFUSED, naming the line,\n');
-		sysPrint('because neither `fmt --list` nor any lint rule reports one. An edit that only\n');
-		sysPrint('touches a line already over-width is fine — the gate compares how many such\n');
-		sysPrint('lines there are and how wide the widest is, so shortening one is not gaining\n');
-		sysPrint('one. Break it where you want it broken, or pass --allow-wide.\n');
+		CliIo.sysPrint('Usage: apq comment-rewrite <find> <replace> <file/dir/glob>... [--regex] [--write] [--list]\n');
+		CliIo.sysPrint('       [--allow-wide]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Text search-and-replace scoped to COMMENT bodies (the write-twin of\n');
+		CliIo.sysPrint('apq lit). Code and comment delimiters are never touched; strings are\n');
+		CliIo.sysPrint('skipped. The result is canonical + re-parse-validated.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint("A replacement holding real newlines (a shell $'a\\nb' literal) is re-prefixed\n");
+		CliIo.sysPrint("with the comment's own continuation, so write plain lines — a ` * ` you add\n");
+		CliIo.sysPrint('yourself is stripped, not doubled.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint("  --regex        <find> is a regex; <replace> a template where ${0}/${N}\n");
+		CliIo.sysPrint("                 expand to group N and ${N+K}/${N-K} shift group N by K\n");
+		CliIo.sysPrint('  --write, -w    Rewrite each file in place (default: stdout for one file,\n');
+		CliIo.sysPrint('                 list of changed paths for a dir / multiple files)\n');
+		CliIo.sysPrint('  --list, -l     Print paths whose comments would change; no rewrite\n');
+		CliIo.sysPrint('  --reformat     Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('  --allow-wide   Accept a replacement that pushes a comment line past the\n');
+		CliIo.sysPrint('                 configured wrapping.maxLineLength (refused by default)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('MATCHING. A LITERAL find is matched against a body whose line breaks — and the\n');
+		CliIo.sysPrint('` * ` continuation after each of them — are collapsed to ONE SPACE. The find is\n');
+		CliIo.sysPrint('normalised the same way, so a multi-line find works written either with those\n');
+		CliIo.sysPrint('prefixes or without them. A --regex find is matched against the RAW body\n');
+		CliIo.sysPrint('instead, prefixes included, so a multi-line pattern needs `\\s+\\*\\s+`.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint("SPLICING. Write plain lines and real newlines (a shell $'a\\nb' literal): each\n");
+		CliIo.sysPrint("new line gets the comment's own continuation, and a ` * ` you add yourself is\n");
+		CliIo.sysPrint("stripped rather than doubled. The continuation is read off the block's own\n");
+		CliIo.sysPrint('first interior line, so a GUTTER-LESS block keeps its indentation and a\n');
+		CliIo.sysPrint('star-guttered one keeps its star; a one-line /** … */ that grows past one line\n');
+		CliIo.sysPrint('is re-opened so its closer gets a line of its own.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('WIDTH is not re-wrapped either, but it is no longer silent: a replacement that\n');
+		CliIo.sysPrint('leaves a comment line past wrapping.maxLineLength is REFUSED, naming the line,\n');
+		CliIo.sysPrint('because neither `fmt --list` nor any lint rule reports one. An edit that only\n');
+		CliIo.sysPrint('touches a line already over-width is fine — the gate compares how many such\n');
+		CliIo.sysPrint('lines there are and how wide the widest is, so shortening one is not gaining\n');
+		CliIo.sysPrint('one. Break it where you want it broken, or pass --allow-wide.\n');
 	}
 
 	/**
@@ -8867,52 +7751,52 @@ final class Cli {
 	private static function resolveNodeLineBounds(
 		path: String, content: String, lang: String, selectExpr: Null<String>, atSpec: Null<String>
 	): Null<{ from: Int, to: Int }> {
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 		final tree: QueryNode = try plugin.parseFile(content) catch (exception: Exception) {
-			stderr('apq source: $path does not parse: ${exception.message}\n');
+			CliIo.stderr('apq source: $path does not parse: ${exception.message}\n');
 			return null;
 		};
 
 		var node: Null<QueryNode>;
 		if (selectExpr != null) {
 			final selector: Selector = try Selector.parse(selectExpr) catch (exception: Exception) {
-				stderr('apq source: malformed selector "$selectExpr": ${exception.message}\n');
+				CliIo.stderr('apq source: malformed selector "$selectExpr": ${exception.message}\n');
 				return null;
 			};
 			final matches: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
 			if (matches.length == 0) {
-				stderr('apq source: no node matched --select "$selectExpr"\n');
+				CliIo.stderr('apq source: no node matched --select "$selectExpr"\n');
 				return null;
 			}
 			if (matches.length > 1) {
-				stderr('apq source: --select "$selectExpr" matched ${matches.length} nodes — narrow it (e.g. Kind:name)\n');
+				CliIo.stderr('apq source: --select "$selectExpr" matched ${matches.length} nodes — narrow it (e.g. Kind:name)\n');
 				return null;
 			}
 			node = matches[0];
 		} else if (atSpec != null) {
-			final pos: Null<Position> = parseLineCol(atSpec);
+			final pos: Null<Position> = CliArgs.parseLineCol(atSpec);
 			if (pos == null) {
-				stderr('apq source: malformed position "$atSpec" — expected <line>:<col>\n');
+				CliIo.stderr('apq source: malformed position "$atSpec" — expected <line>:<col>\n');
 				return null;
 			}
 			node = Engine.at(tree, Span.offsetOf(content, pos.line, pos.col));
 			if (node == null) {
-				stderr('apq source: no node at $atSpec\n');
+				CliIo.stderr('apq source: no node at $atSpec\n');
 				return null;
 			}
 		} else {
-			stderr('apq source: provide --select <sel> or --at <line>:<col>\n');
+			CliIo.stderr('apq source: provide --select <sel> or --at <line>:<col>\n');
 			return null;
 		}
 
 		final resolved: Null<QueryNode> = node;
 		if (resolved == null) {
-			stderr('apq source: could not resolve a node from the address\n');
+			CliIo.stderr('apq source: could not resolve a node from the address\n');
 			return null;
 		}
 		final rawSpan: Null<Span> = resolved.span;
 		if (rawSpan == null) {
-			stderr('apq source: the matched node has no source span\n');
+			CliIo.stderr('apq source: the matched node has no source span\n');
 			return null;
 		}
 		// The printed window must be the bytes the node OWNS: a `@:trailOpt` decl whose
@@ -8987,27 +7871,27 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--replace':
 					if (pendingReplace != null) {
-						stderr('apq strip: --replace "$pendingReplace" needs a --with before the next --replace\n');
+						CliIo.stderr('apq strip: --replace "$pendingReplace" needs a --with before the next --replace\n');
 						return stripParseExit(EXIT_USAGE);
 					}
-					pendingReplace = expectValue(args, ++i, '--replace');
+					pendingReplace = CliArgs.expectValue(args, ++i, '--replace');
 				case '--with':
 					if (pendingReplace == null) {
-						stderr('apq strip: --with requires a preceding --replace\n');
+						CliIo.stderr('apq strip: --with requires a preceding --replace\n');
 						return stripParseExit(EXIT_USAGE);
 					}
 					patterns.push(pendingReplace);
-					replacements.push(expectValue(args, ++i, '--with'));
+					replacements.push(CliArgs.expectValue(args, ++i, '--with'));
 					pendingReplace = null;
 				case '--delete':
 					if (pendingReplace != null) {
-						stderr('apq strip: --replace "$pendingReplace" needs a --with before --delete\n');
+						CliIo.stderr('apq strip: --replace "$pendingReplace" needs a --with before --delete\n');
 						return stripParseExit(EXIT_USAGE);
 					}
-					patterns.push(expectValue(args, ++i, '--delete'));
+					patterns.push(CliArgs.expectValue(args, ++i, '--delete'));
 					replacements.push('');
 				case '--regex':
 					regexMode = true;
@@ -9018,13 +7902,13 @@ final class Cli {
 				case '--per-pattern':
 					perPattern = true;
 				case '--from-cluster':
-					fromCluster = expectValue(args, ++i, '--from-cluster');
+					fromCluster = CliArgs.expectValue(args, ++i, '--from-cluster');
 				case '-h', '--help':
 					printStripUsage();
 					return stripParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq strip: unknown option "$a"\n');
+						CliIo.stderr('apq strip: unknown option "$a"\n');
 						return stripParseExit(EXIT_USAGE);
 					}
 					files.push(a);
@@ -9032,7 +7916,7 @@ final class Cli {
 			i++;
 		}
 		if (pendingReplace != null) {
-			stderr('apq strip: --replace "$pendingReplace" needs a --with\n');
+			CliIo.stderr('apq strip: --replace "$pendingReplace" needs a --with\n');
 			return stripParseExit(EXIT_USAGE);
 		}
 		if (patterns.length != 0) return {
@@ -9047,7 +7931,7 @@ final class Cli {
 			replacements: replacements,
 			errExit: null
 		};
-		stderr('apq strip: missing at least one --replace/--with or --delete\n');
+		CliIo.stderr('apq strip: missing at least one --replace/--with or --delete\n');
 		printStripUsage();
 		return stripParseExit(EXIT_USAGE);
 	}
@@ -9068,14 +7952,14 @@ final class Cli {
 		for (idx => pat in patterns) {
 			final total: Int = patternHits[idx];
 			if (total == 0) anyZero = true;
-			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+			CliIo.sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
 		}
 		if (!anyChanged) {
-			stderr('apq strip: --dry-run: WARNING: no pattern matched in any file (typo? pattern bytes vs. file bytes mismatch?)\n');
+			CliIo.stderr('apq strip: --dry-run: WARNING: no pattern matched in any file (typo? pattern bytes vs. file bytes mismatch?)\n');
 			return EXIT_RUNTIME;
 		}
 		if (!anyZero) return EXIT_OK;
-		stderr('apq strip: --dry-run: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals above\n');
+		CliIo.stderr('apq strip: --dry-run: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals above\n');
 		return EXIT_RUNTIME;
 	}
 
@@ -9116,12 +8000,12 @@ final class Cli {
 		if (o.dryRun) return reportStripDryRun(o.patterns, patternHits, anyChanged);
 		if (!anyChanged) {
 			final scope: String = multi ? 'across all ${o.files.length} files' : '';
-			stderr(
+			CliIo.stderr(
 				'apq strip: WARNING: no substitution changed the source (patterns matched 0 occurrences${scope == '' ? '' : ' $scope'})\n'
 			);
 		}
 		if (multi) {
-			sysPrint('--- $passCount PARSE OK, $failCount PARSE FAIL (total ${o.files.length}) ---\n');
+			CliIo.sysPrint('--- $passCount PARSE OK, $failCount PARSE FAIL (total ${o.files.length}) ---\n');
 		}
 		return anyFailed ? EXIT_RUNTIME : EXIT_OK;
 	}
@@ -9136,7 +8020,7 @@ final class Cli {
 	private static function stripOneFile(
 		plugin: GrammarPlugin, o: StripOpts, regexes: Array<EReg>, filePath: String, multi: Bool, patternHits: Array<Int>
 	): { changed: Bool, status: Int } {
-		final source: String = readSourceForParse(filePath);
+		final source: String = CliIo.readSourceForParse(filePath);
 		var stripped: String = source;
 		var fileHits: Int = 0;
 		for (idx in 0...o.patterns.length) {
@@ -9151,23 +8035,23 @@ final class Cli {
 		}
 		final changed: Bool = stripped != source;
 		if (o.showSource) {
-			stderr('--- stripped source (${filePath}) ---\n$stripped\n--- end ---\n');
+			CliIo.stderr('--- stripped source (${filePath}) ---\n$stripped\n--- end ---\n');
 		}
 		final prefix: String = multi ? '$filePath: ' : '';
 		if (o.dryRun) {
 			final tag: String = fileHits > 0 ? 'WOULD CHANGE' : 'NO MATCH';
-			sysPrint('${prefix}$tag ($fileHits substitution${plural(fileHits)})\n');
+			CliIo.sysPrint('${prefix}$tag ($fileHits substitution${plural(fileHits)})\n');
 			return { changed: changed, status: -1 };
 		}
 		try {
 			plugin.parseFile(stripped);
-			sysPrint('${prefix}PARSE OK\n');
+			CliIo.sysPrint('${prefix}PARSE OK\n');
 			return { changed: changed, status: 0 };
 		} catch (e: ParseError) {
-			sysPrint('${prefix}PARSE FAIL: $e\n');
+			CliIo.sysPrint('${prefix}PARSE FAIL: $e\n');
 			return { changed: changed, status: 1 };
 		} catch (e: Exception) {
-			sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
+			CliIo.sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
 			return { changed: changed, status: 1 };
 		}
 	}
@@ -9188,7 +8072,7 @@ final class Cli {
 		// window, so make the misuse a hard usage error rather than a
 		// silent no-op.
 		if (o.showSource && o.clusterFilter == null && o.noTargetClusterFilter == null && !o.predictStrip && !o.predictRelax) {
-			stderr(
+			CliIo.stderr(
 				'apq recon: --source requires --cluster <key> / --no-target-cluster <key> / --predict-strip / --predict-relax ('
 				+ 'drill / STILL-FAIL modes only; would flood the sweep otherwise)\n'
 			);
@@ -9199,15 +8083,15 @@ final class Cli {
 		// usage error instead of silently picking one path.
 		if (o.regressionProbe) {
 			if (o.probePath != null) {
-				stderr('apq recon: --regression-probe and --probe are mutually exclusive\n');
+				CliIo.stderr('apq recon: --regression-probe and --probe are mutually exclusive\n');
 				return EXIT_USAGE;
 			}
 			if (o.predictStrip) {
-				stderr('apq recon: --regression-probe and --predict-strip are mutually exclusive\n');
+				CliIo.stderr('apq recon: --regression-probe and --predict-strip are mutually exclusive\n');
 				return EXIT_USAGE;
 			}
 			if (o.clusterFilter != null) {
-				stderr('apq recon: --regression-probe and --cluster are mutually exclusive\n');
+				CliIo.stderr('apq recon: --regression-probe and --cluster are mutually exclusive\n');
 				return EXIT_USAGE;
 			}
 		}
@@ -9216,7 +8100,7 @@ final class Cli {
 			&& !o.predictRelax
 		)
 			return null;
-		stderr(
+		CliIo.stderr(
 			'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / '
 			+ '--predict-relax\n'
 		);
@@ -9232,18 +8116,18 @@ final class Cli {
 	private static function validateReconModesB(o: ReconOpts): Null<Int> {
 		if (o.predictRelax) {
 			if (o.predictStrip) {
-				stderr(
+				CliIo.stderr(
 					'apq recon: --predict-relax and --predict-strip are mutually exclusive ('
 					+ 'opposite models — strip removes tokens, relax inserts the expected one)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.regressionProbe) {
-				stderr('apq recon: --predict-relax and --regression-probe are mutually exclusive\n');
+				CliIo.stderr('apq recon: --predict-relax and --regression-probe are mutually exclusive\n');
 				return EXIT_USAGE;
 			}
 			if (o.patterns.length > 0) {
-				stderr(
+				CliIo.stderr(
 					'apq recon: --predict-relax does not take --replace/--with/--delete ('
 					+ 'the injected token comes from the parser`s `expected` hint)\n'
 				);
@@ -9252,21 +8136,21 @@ final class Cli {
 		}
 		if (o.noTargetClusterFilter != null) {
 			if (!o.predictRelax) {
-				stderr(
+				CliIo.stderr(
 					'apq recon: --no-target-cluster requires --predict-relax ('
 					+ 'the footer NO TARGET breakdown is only produced in predict-relax sweep mode)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.clusterFilter != null) {
-				stderr(
+				CliIo.stderr(
 					'apq recon: --cluster and --no-target-cluster are mutually exclusive ('
 					+ 'one drill at a time — --cluster drills by forward-locus, --no-target-cluster drills by expected-message)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.probePath != null) {
-				stderr(
+				CliIo.stderr(
 					'apq recon: --no-target-cluster requires sweep mode ('
 					+ 'no NO TARGET aggregation in --probe mode — pass a corpus directory instead)\n'
 				);
@@ -9279,7 +8163,7 @@ final class Cli {
 				|| o.candidatesRegex != null || o.patterns.length > 0
 			)
 		) {
-			stderr(
+			CliIo.stderr(
 				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax '
 				+ '/ --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
 			);
@@ -9297,21 +8181,21 @@ final class Cli {
 	private static function validateReconWriterEquals(o: ReconOpts): Null<Int> {
 		if (o.writerEqualsAfter) {
 			if (o.probePath == null) {
-				stderr(
+				CliIo.stderr(
 					'apq recon: --writer-equals requires --probe <file> ('
 					+ 'single-file mode; sweep mode already does byte-comparison via the corpus harness)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.predictStrip) {
-				stderr(
+				CliIo.stderr(
 					'apq recon: --writer-equals is incompatible with --predict-strip (the stripped source diverges from expected by '
 					+ 'construction — apply the slice first, then probe + writer-equals on the unstripped source)\n'
 				);
 				return EXIT_USAGE;
 			}
 			if (o.predictRelax) {
-				stderr(
+				CliIo.stderr(
 					'apq recon: --writer-equals is incompatible with --predict-relax ('
 					+ 'relax synthesises a missing token; expected bytes won`t match the patched source)\n'
 				);
@@ -9319,7 +8203,7 @@ final class Cli {
 			}
 		}
 		if (o.expectedPath == null || o.writerEqualsAfter) return null;
-		stderr('apq recon: --expected requires --writer-equals\n');
+		CliIo.stderr('apq recon: --expected requires --writer-equals\n');
 		return EXIT_USAGE;
 	}
 
@@ -9425,22 +8309,22 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--top':
-					final v: Null<Int> = Std.parseInt(expectValue(args, ++i, '--top'));
+					final v: Null<Int> = Std.parseInt(CliArgs.expectValue(args, ++i, '--top'));
 					if (v == null || v <= 0) {
-						stderr('apq recon: --top requires a positive integer\n');
+						CliIo.stderr('apq recon: --top requires a positive integer\n');
 						return reconParseExit(EXIT_USAGE);
 					}
 					topN = v;
 				case '--all':
 					topN = MAX_INT;
 				case '--probe':
-					probePath = expectValue(args, ++i, '--probe');
+					probePath = CliArgs.expectValue(args, ++i, '--probe');
 				case '--cluster':
-					clusterFilter = expectValue(args, ++i, '--cluster');
+					clusterFilter = CliArgs.expectValue(args, ++i, '--cluster');
 				case '--no-target-cluster':
-					noTargetClusterFilter = expectValue(args, ++i, '--no-target-cluster');
+					noTargetClusterFilter = CliArgs.expectValue(args, ++i, '--no-target-cluster');
 				case '--source':
 					showSource = true;
 				case '--predict-strip':
@@ -9452,27 +8336,27 @@ final class Cli {
 				case '--permissive-construct':
 					permissiveConstruct = true;
 				case '--candidates':
-					candidatesRegex = expectValue(args, ++i, '--candidates');
+					candidatesRegex = CliArgs.expectValue(args, ++i, '--candidates');
 				case '--replace':
 					if (pendingReplace != null) {
-						stderr('apq recon: --replace "$pendingReplace" needs a --with before the next --replace\n');
+						CliIo.stderr('apq recon: --replace "$pendingReplace" needs a --with before the next --replace\n');
 						return reconParseExit(EXIT_USAGE);
 					}
-					pendingReplace = expectValue(args, ++i, '--replace');
+					pendingReplace = CliArgs.expectValue(args, ++i, '--replace');
 				case '--with':
 					if (pendingReplace == null) {
-						stderr('apq recon: --with requires a preceding --replace\n');
+						CliIo.stderr('apq recon: --with requires a preceding --replace\n');
 						return reconParseExit(EXIT_USAGE);
 					}
 					patterns.push(pendingReplace);
-					replacements.push(expectValue(args, ++i, '--with'));
+					replacements.push(CliArgs.expectValue(args, ++i, '--with'));
 					pendingReplace = null;
 				case '--delete':
 					if (pendingReplace != null) {
-						stderr('apq recon: --replace "$pendingReplace" needs a --with before --delete\n');
+						CliIo.stderr('apq recon: --replace "$pendingReplace" needs a --with before --delete\n');
 						return reconParseExit(EXIT_USAGE);
 					}
-					patterns.push(expectValue(args, ++i, '--delete'));
+					patterns.push(CliArgs.expectValue(args, ++i, '--delete'));
 					replacements.push('');
 				case '--regex':
 					regexMode = true;
@@ -9482,17 +8366,17 @@ final class Cli {
 					writerEqualsAfter = true;
 					writerEqualsPlain = true;
 				case '--expected':
-					expectedPath = expectValue(args, ++i, '--expected');
+					expectedPath = CliArgs.expectValue(args, ++i, '--expected');
 				case '-h', '--help':
 					printReconUsage();
 					return reconParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq recon: unknown option "$a"\n');
+						CliIo.stderr('apq recon: unknown option "$a"\n');
 						return reconParseExit(EXIT_USAGE);
 					}
 					if (rootDir != null) {
-						stderr('apq recon: only one positional <dir> argument supported (got "$rootDir" and "$a")\n');
+						CliIo.stderr('apq recon: only one positional <dir> argument supported (got "$rootDir" and "$a")\n');
 						return reconParseExit(EXIT_USAGE);
 					}
 					rootDir = a;
@@ -9539,19 +8423,19 @@ final class Cli {
 	 */
 	private static function validateReconStripArgs(o: ReconOpts, pendingReplace: Null<String>): Null<Int> {
 		if (pendingReplace != null) {
-			stderr('apq recon: --replace "$pendingReplace" needs a --with\n');
+			CliIo.stderr('apq recon: --replace "$pendingReplace" needs a --with\n');
 			return EXIT_USAGE;
 		}
 		if (o.predictStrip && o.patterns.length == 0) {
-			stderr('apq recon: --predict-strip requires at least one --replace/--with or --delete\n');
+			CliIo.stderr('apq recon: --predict-strip requires at least one --replace/--with or --delete\n');
 			return EXIT_USAGE;
 		}
 		if (!o.predictStrip && o.patterns.length > 0) {
-			stderr('apq recon: --replace/--with/--delete require --predict-strip\n');
+			CliIo.stderr('apq recon: --replace/--with/--delete require --predict-strip\n');
 			return EXIT_USAGE;
 		}
 		if (o.regexMode && !o.predictStrip) {
-			stderr('apq recon: --regex requires --predict-strip (regex applies to --replace patterns)\n');
+			CliIo.stderr('apq recon: --regex requires --predict-strip (regex applies to --replace patterns)\n');
 			return EXIT_USAGE;
 		}
 		final compiled: Null<Array<EReg>> = o.regexMode ? compileStripRegexes('recon', o.patterns) : null;
@@ -9574,7 +8458,7 @@ final class Cli {
 		final maybeTypeArg: String = file;
 		final maybeDirArg: String = a;
 		if (looksLikeTypeName(maybeTypeArg) && looksLikePath(maybeDirArg))
-			stderr(
+			CliIo.stderr(
 				'apq ast: only one file argument supported (got "$maybeTypeArg" and "$maybeDirArg").\n         "$maybeTypeArg'
 				+ '" looks like a TypeName and "$maybeDirArg" like a path — `ast` is single-file.\n'
 				+ '         For type lookup across a directory:\n           apq refs $maybeTypeArg $maybeDirArg'
@@ -9584,7 +8468,7 @@ final class Cli {
 				+ '         For a subtree of one file:\n           apq ast <path-to-file.hx> --select Kind:$maybeTypeArg\n'
 			);
 		else
-			stderr('apq ast: only one file argument supported (got "$file" and "$a")\n');
+			CliIo.stderr('apq ast: only one file argument supported (got "$file" and "$a")\n');
 	}
 
 	/**
@@ -9624,7 +8508,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--json':
 					json = true;
 				case '--depth':
@@ -9636,17 +8520,17 @@ final class Cli {
 					// the root, no children" regardless of mode. The three
 					// `Engine.truncate` callsites below pass the right
 					// subtree-root in each branch.
-					final v: String = expectValue(args, ++i, '--depth');
+					final v: String = CliArgs.expectValue(args, ++i, '--depth');
 					final parsed: Null<Int> = Std.parseInt(v);
 					if (parsed == null) {
-						stderr('apq ast: --depth expects an integer, got "$v"\n');
+						CliIo.stderr('apq ast: --depth expects an integer, got "$v"\n');
 						return astParseExit(EXIT_USAGE);
 					}
 					depth = parsed;
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--at':
-					atExpr = expectValue(args, ++i, '--at');
+					atExpr = CliArgs.expectValue(args, ++i, '--at');
 				case '--doc':
 					wantDoc = true;
 				case '--source':
@@ -9659,18 +8543,18 @@ final class Cli {
 				case '--diff':
 					writerDiff = true;
 				case '--min-children':
-					final v: String = expectValue(args, ++i, '--min-children');
+					final v: String = CliArgs.expectValue(args, ++i, '--min-children');
 					final parsed: Null<Int> = Std.parseInt(v);
 					if (parsed == null || parsed < 0) {
-						stderr('apq ast: --min-children expects a non-negative integer, got "$v"\n');
+						CliIo.stderr('apq ast: --min-children expects a non-negative integer, got "$v"\n');
 						return astParseExit(EXIT_USAGE);
 					}
 					minChildren = parsed;
 				case '--max-children':
-					final v: String = expectValue(args, ++i, '--max-children');
+					final v: String = CliArgs.expectValue(args, ++i, '--max-children');
 					final parsed: Null<Int> = Std.parseInt(v);
 					if (parsed == null || parsed < 0) {
-						stderr('apq ast: --max-children expects a non-negative integer, got "$v"\n');
+						CliIo.stderr('apq ast: --max-children expects a non-negative integer, got "$v"\n');
 						return astParseExit(EXIT_USAGE);
 					}
 					maxChildren = parsed;
@@ -9680,15 +8564,15 @@ final class Cli {
 					// matches by arity, this one TRUNCATES the printed tree
 					// horizontally with an `(... N more)` sentinel). Composes
 					// with --depth N for "first N children up to depth M".
-					final v: String = expectValue(args, ++i, '--children-limit');
+					final v: String = CliArgs.expectValue(args, ++i, '--children-limit');
 					final parsed: Null<Int> = Std.parseInt(v);
 					if (parsed == null || parsed < 0) {
-						stderr('apq ast: --children-limit expects a non-negative integer, got "$v"\n');
+						CliIo.stderr('apq ast: --children-limit expects a non-negative integer, got "$v"\n');
 						return astParseExit(EXIT_USAGE);
 					}
 					childrenLimit = parsed;
 				case '--code':
-					codeArg = expectValue(args, ++i, '--code');
+					codeArg = CliArgs.expectValue(args, ++i, '--code');
 				case '--stdin':
 					stdinFlag = true;
 				case '--spans':
@@ -9726,7 +8610,7 @@ final class Cli {
 					return astParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq ast: unknown option "$a"\n');
+						CliIo.stderr('apq ast: unknown option "$a"\n');
 						return astParseExit(EXIT_USAGE);
 					}
 					if (file != null) {
@@ -9778,44 +8662,44 @@ final class Cli {
 		// `HaxeFormatConfigLoader` so a fixture reproduces the corpus
 		// harness's writer settings in a single command. `--code` /
 		// `--stdin` modes have no path → defaults stay.
-		final optsJson: Null<String> = file != null ? readWriteOptionsJsonOrNull((file: String)) : null;
+		final optsJson: Null<String> = file != null ? CliArgs.readWriteOptionsJsonOrNull((file: String)) : null;
 		final emitted: Null<String> = try (
 			writerOutputPlain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
 		) catch (e: ParseError) {
-			stderr('apq ast: $fileLabel: $e\n');
+			CliIo.stderr('apq ast: $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
-			stderr('apq ast: $fileLabel: ${e.message}\n');
+			CliIo.stderr('apq ast: $fileLabel: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		if (emitted == null) {
 			final flagName: String = writerOutputPlain ? '--writer-output-plain' : '--writer-output';
-			stderr('apq ast: $flagName: no writer wired up for lang "$lang"\n');
+			CliIo.stderr('apq ast: $flagName: no writer wired up for lang "$lang"\n');
 			return EXIT_USAGE;
 		}
 		if (!writerDiff) {
-			sysPrint(emitted);
+			CliIo.sysPrint(emitted);
 			return EXIT_OK;
 		}
 		final emittedSrc: String = emitted;
 		final treeIn: QueryNode = try plugin.parseFile(source) catch (e: ParseError) {
-			stderr('apq ast: --writer-output --diff: input $fileLabel: $e\n');
+			CliIo.stderr('apq ast: --writer-output --diff: input $fileLabel: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
-			stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.message}\n');
+			CliIo.stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final treeOut: QueryNode = try plugin.parseFile(emittedSrc) catch (e: ParseError) {
-			stderr('apq ast: --writer-output --diff: writer output failed to re-parse: $e\n');
-			stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
+			CliIo.stderr('apq ast: --writer-output --diff: writer output failed to re-parse: $e\n');
+			CliIo.stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
-			stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.message}\n');
-			stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
+			CliIo.stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.message}\n');
+			CliIo.stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
 			return EXIT_RUNTIME;
 		}
 		final hits: Array<DiffHit> = Diff.diff(treeIn, treeOut);
-		sysPrint(Diff.render(fileLabel, source, '<writer-output>', emittedSrc, hits, false));
+		CliIo.sysPrint(Diff.render(fileLabel, source, '<writer-output>', emittedSrc, hits, false));
 		return EXIT_OK;
 	}
 
@@ -9829,13 +8713,13 @@ final class Cli {
 	): Int {
 		final colonIdx: Int = atExpr.indexOf(':');
 		if (colonIdx < 0) {
-			stderr('apq ast: --at expects LINE:COL, got "$atExpr"\n');
+			CliIo.stderr('apq ast: --at expects LINE:COL, got "$atExpr"\n');
 			return EXIT_USAGE;
 		}
 		final atLine: Null<Int> = Std.parseInt(atExpr.substring(0, colonIdx));
 		final atCol: Null<Int> = Std.parseInt(atExpr.substring(colonIdx + 1));
 		if (atLine == null || atCol == null) {
-			stderr('apq ast: --at expects integer LINE:COL, got "$atExpr"\n');
+			CliIo.stderr('apq ast: --at expects integer LINE:COL, got "$atExpr"\n');
 			return EXIT_USAGE;
 		}
 		// Capture into non-null locals immediately after the null
@@ -9844,20 +8728,20 @@ final class Cli {
 		final atLineN: Int = atLine;
 		final atColN: Int = atCol;
 		if (atLineN < 1 || atColN < 1) {
-			stderr('apq ast: --at expects 1-indexed LINE:COL, got "$atExpr"\n');
+			CliIo.stderr('apq ast: --at expects 1-indexed LINE:COL, got "$atExpr"\n');
 			return EXIT_USAGE;
 		}
 		final offset: Int = Span.offsetOf(source, atLineN, atColN);
 		final node: Null<QueryNode> = Engine.at(tree, offset);
 		if (o.countOnly) {
-			if (node != null) sysPrint('${node.children.length}\n');
+			if (node != null) CliIo.sysPrint('${node.children.length}\n');
 			return EXIT_OK;
 		}
 		final windows: Array<Null<Span>> = node == null || !(o.wantDoc || o.wantSource)
 			? []
 			: sourceWindows(tree, [node], source, () -> regions);
 		final matches: Array<QueryNode> = node == null ? [] : [shapeAstOutput(node, o.depth, o.childrenLimit)];
-		sysPrint(
+		CliIo.sysPrint(
 			o.json
 				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource, regions)
 				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, regions, o.spans)
@@ -9893,7 +8777,7 @@ final class Cli {
 		// `Kinds present here:` list. Silent when nothing close.
 		final firstKind: String = extractFirstKindToken(selectExpr);
 		final presentMap: Map<String, Bool> = [for (k in present) k => true];
-		final suggestions: Array<String> = firstKind.length > 0 ? findFuzzy(firstKind, presentMap) : [];
+		final suggestions: Array<String> = firstKind.length > 0 ? CliWalk.findFuzzy(firstKind, presentMap) : [];
 		final fuzzyLine: String = suggestions.length > 0 ? ' Did you mean: ${suggestions.join(', ')}?' : '';
 		// Cross-project hint: when the first kind token starts uppercase
 		// (TypeName-shaped — e.g. `HxCatchClause`, `HxModule`), the user
@@ -9905,7 +8789,7 @@ final class Cli {
 			? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind src/ --decls ('
 				+ 'declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind src/ (full change-impact).'
 			: '';
-		stderr(
+		CliIo.stderr(
 			'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. Kinds present here: ${present.join(', ')}.'
 			+ '$fuzzyLine$crossProjectHint Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n'
 		);
@@ -9937,7 +8821,7 @@ final class Cli {
 		];
 		if (raw.length == 0) reportAstSelectEmpty(tree, selectExpr, fileLabel, o.minChildren, o.maxChildren, preFilter.length);
 		if (o.countOnly) {
-			for (m in raw) sysPrint('${m.children.length}\n');
+			for (m in raw) CliIo.sysPrint('${m.children.length}\n');
 			return EXIT_OK;
 		}
 		// The `--source` / `--doc` windows come from the RAW matches, before the reshape below: a
@@ -9947,7 +8831,7 @@ final class Cli {
 			? sourceWindows(tree, raw, source, plugin.lexicalRegions.bind(source))
 			: [];
 		final matches: Array<QueryNode> = [for (m in raw) shapeAstOutput(m, o.depth, o.childrenLimit)];
-		sysPrint(
+		CliIo.sysPrint(
 			o.json
 				? Json.renderMatches(fileLabel, source, matches, windows, o.wantDoc, o.wantSource, plugin.lexicalRegions(source))
 				: Text.renderMatches(matches, source, windows, o.wantDoc, o.wantSource, plugin.lexicalRegions(source), o.spans)
@@ -9969,18 +8853,18 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--json':
 					json = true;
 				case '--arg-contains':
-					argContains = expectValue(args, ++i, '--arg-contains');
+					argContains = CliArgs.expectValue(args, ++i, '--arg-contains');
 				case '--on':
-					onKind = expectValue(args, ++i, '--on');
+					onKind = CliArgs.expectValue(args, ++i, '--on');
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
 						return metaParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
@@ -9988,7 +8872,7 @@ final class Cli {
 					return metaParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq meta: unknown option "$a"\n');
+						CliIo.stderr('apq meta: unknown option "$a"\n');
 						return metaParseExit(EXIT_USAGE);
 					}
 					positionals.push(a);
@@ -10017,8 +8901,8 @@ final class Cli {
 	): Null<Array<{ file: String, source: String, hits: Array<MetaHit> }>> {
 		final allEntries: Array<{ file: String, source: String, hits: Array<MetaHit> }> = [];
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile, skipEntries);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked('meta', plugin.parseFile, path, source, singleFile, skipEntries);
 			if (tree == null) {
 				// In single-file mode a parse failure is fatal; signal the
 				// caller (null) to return EXIT_RUNTIME. In multi-file mode the
@@ -10051,12 +8935,12 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
 						return blastParseExit(EXIT_USAGE);
 					}
 				case '--all':
@@ -10066,7 +8950,7 @@ final class Cli {
 					return blastParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq blast: unknown option "$a"\n');
+						CliIo.stderr('apq blast: unknown option "$a"\n');
 						return blastParseExit(EXIT_USAGE);
 					}
 					if (name == null)
@@ -10094,7 +8978,7 @@ final class Cli {
 		var any: Bool = false;
 		var usesHeader: Bool = false;
 		for (entry in valueTrees) {
-			final typeTree: Null<QueryNode> = parseWalked(
+			final typeTree: Null<QueryNode> = CliWalk.parseWalked(
 				'blast', plugin.parseFileTypeRefs, entry.path, entry.source, singleFile, null, typeName
 			);
 			if (typeTree == null) continue;
@@ -10102,10 +8986,10 @@ final class Cli {
 			if (hits.length == 0) continue;
 			any = true;
 			if (!usesHeader) {
-				sysPrint('# uses (type positions)\n');
+				CliIo.sysPrint('# uses (type positions)\n');
 				usesHeader = true;
 			}
-			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat, plugin.lexicalRegions(entry.source)));
+			CliIo.sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat, plugin.lexicalRegions(entry.source)));
 		}
 		return any;
 	}
@@ -10121,10 +9005,10 @@ final class Cli {
 			if (hits.length == 0) continue;
 			any = true;
 			if (!refsHeader) {
-				sysPrint('# refs (value bindings)\n');
+				CliIo.sysPrint('# refs (value bindings)\n');
 				refsHeader = true;
 			}
-			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, lexicalRegions(entry.source), flat));
+			CliIo.sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, lexicalRegions(entry.source), flat));
 		}
 		return any;
 	}
@@ -10150,11 +9034,11 @@ final class Cli {
 			? heur.slice(0, effectiveLimit)
 			: heur;
 		final hint: String = capped.length < heur.length ? (limit >= 0 ? '' : ' — pass --all to show all, --limit N for explicit cap') : '';
-		sysPrint(
+		CliIo.sysPrint(
 			'# heuristic field-access (member-name superset of "$typeName" — VERIFY each; '
 			+ 'name-based, over-matches; ${capped.length}/${heur.length} shown$hint)\n'
 		);
-		for (h in capped) sysPrint('${h.line}\n');
+		for (h in capped) CliIo.sysPrint('${h.line}\n');
 		return true;
 	}
 
@@ -10174,11 +9058,11 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--exact':
 					exact = true;
 				case '--kind':
-					kindFilter = expectValue(args, ++i, '--kind').split(',');
+					kindFilter = CliArgs.expectValue(args, ++i, '--kind').split(',');
 				case '--any-kind':
 					kindFilter = [];
 				case '--include-comments':
@@ -10188,8 +9072,8 @@ final class Cli {
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
 						return litParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
@@ -10197,7 +9081,7 @@ final class Cli {
 					return litParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq lit: unknown option "$a"\n');
+						CliIo.stderr('apq lit: unknown option "$a"\n');
 						return litParseExit(EXIT_USAGE);
 					}
 					if (target == null)
@@ -10237,9 +9121,11 @@ final class Cli {
 		final trees: Array<{ path: String, source: String, tree: QueryNode }> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile, skipEntries, query.prefilterKey);
-			streamProgress('lit', ++scanned, paths.length, singleFile);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked(
+				'lit', plugin.parseFile, path, source, singleFile, skipEntries, query.prefilterKey
+			);
+			CliIo.streamProgress('lit', ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				if (singleFile) return null;
 				continue;
@@ -10295,23 +9181,23 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--class':
 					asClass = true;
 				case '--kind':
-					kind = expectValue(args, ++i, '--kind');
+					kind = CliArgs.expectValue(args, ++i, '--kind');
 					// An explicit `--kind class` is intent, same as `--class`;
 					// without this it collapses to the default and runNew's
 					// hasIntent check rejects it.
 					if (kind == 'class') asClass = true;
 				case '--extends':
-					extendsList.push(expectValue(args, ++i, '--extends'));
+					extendsList.push(CliArgs.expectValue(args, ++i, '--extends'));
 				case '--underlying':
-					underlying = expectValue(args, ++i, '--underlying');
+					underlying = CliArgs.expectValue(args, ++i, '--underlying');
 				case '--from':
-					fromList.push(expectValue(args, ++i, '--from'));
+					fromList.push(CliArgs.expectValue(args, ++i, '--from'));
 				case '--to':
-					toList.push(expectValue(args, ++i, '--to'));
+					toList.push(CliArgs.expectValue(args, ++i, '--to'));
 				case '--open':
 					open = true;
 				case '--raw':
@@ -10319,13 +9205,13 @@ final class Cli {
 					if (i + 1 < args.length && args[i + 1] == '-') i++;
 
 				case '--implements':
-					iface = expectValue(args, ++i, '--implements');
+					iface = CliArgs.expectValue(args, ++i, '--implements');
 				case '--field':
-					fields.push(expectValue(args, ++i, '--field'));
+					fields.push(CliArgs.expectValue(args, ++i, '--field'));
 				case '--bodies':
-					bodiesArg = expectValue(args, ++i, '--bodies');
+					bodiesArg = CliArgs.expectValue(args, ++i, '--bodies');
 				case '--from-file':
-					bodiesFromFile = expectValue(args, ++i, '--from-file');
+					bodiesFromFile = CliArgs.expectValue(args, ++i, '--from-file');
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -10333,13 +9219,13 @@ final class Cli {
 					return newParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq new: unknown option "$a"\n');
+						CliIo.stderr('apq new: unknown option "$a"\n');
 						return newParseExit(EXIT_USAGE);
 					}
 					if (path == null)
 						path = a;
 					else {
-						stderr('apq new: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq new: unexpected extra argument "$a"\n');
 						return newParseExit(EXIT_USAGE);
 					}
 			}
@@ -10367,13 +9253,13 @@ final class Cli {
 
 	private static function executeNew(o: NewOpts, filePath: String, plugin: GrammarPlugin, optsJson: Null<String>): Int {
 		if (o.raw) {
-			final content: Null<String> = resolveCodeArg('new', '-', null);
+			final content: Null<String> = CliArgs.resolveCodeArg('new', '-', null);
 			return content == null ? EXIT_RUNTIME : emitNew(filePath, NewFile.createRaw(content, plugin, optsJson), [], o.write);
 		}
 
 		var bodiesRaw: Null<String> = null;
 		if (o.bodiesArg == '-' || o.bodiesFromFile != null) {
-			final resolved: Null<String> = resolveCodeArg('new', o.bodiesArg == '-' ? '-' : null, o.bodiesFromFile);
+			final resolved: Null<String> = CliArgs.resolveCodeArg('new', o.bodiesArg == '-' ? '-' : null, o.bodiesFromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			bodiesRaw = resolved;
 		} else if (o.bodiesArg != null)
@@ -10389,7 +9275,7 @@ final class Cli {
 		if (iface != null) {
 			final resolved: Null<{ source: String, ifaceModule: String, simple: String }> = resolveInterface(iface, filePath);
 			if (resolved == null) {
-				stderr('apq new: could not locate interface "$iface" (expected a .hx beside the new file or at its package path)\n');
+				CliIo.stderr('apq new: could not locate interface "$iface" (expected a .hx beside the new file or at its package path)\n');
 				return EXIT_RUNTIME;
 			}
 			ifaceSimple = resolved.simple;
@@ -10440,18 +9326,18 @@ final class Cli {
 				isOption = true;
 				switch a {
 					case '--lang':
-						lang = expectValue(args, ++i, '--lang');
+						lang = CliArgs.expectValue(args, ++i, '--lang');
 					case '--json':
 						json = true;
 					case '--kind':
-						kind = expectValue(args, ++i, '--kind');
+						kind = CliArgs.expectValue(args, ++i, '--kind');
 					case '--explain':
 						explain = true;
 					case '--flat':
 						flat = true;
 					case '--limit':
-						try limit = parseLimit(args, ++i) catch (e: Exception) {
-							stderr('${e.message}\n');
+						try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+							CliIo.stderr('${e.message}\n');
 							return searchParseExit(EXIT_USAGE);
 						}
 					case '-h', '--help':
@@ -10461,7 +9347,7 @@ final class Cli {
 						optsEnded = true;
 					case _:
 						if (a.startsWith('--')) {
-							stderr('apq search: unknown option "$a"\n');
+							CliIo.stderr('apq search: unknown option "$a"\n');
 							return searchParseExit(EXIT_USAGE);
 						}
 						isOption = false;
@@ -10494,8 +9380,8 @@ final class Cli {
 		final allEntries: Array<{ file: String, source: String, matches: Array<Match> }> = [];
 		final kindCounts: Map<String, Int> = [];
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('search', plugin.parseFile, path, source, singleFile);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked('search', plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return null;
 				continue;
@@ -10512,14 +9398,14 @@ final class Cli {
 		final entries: Array<{ k: String, n: Int }> = [for (k => n in kindCounts) { k: k, n: n }];
 		entries.sort((a, b) -> a.n == b.n ? (a.k < b.k ? -1 : 1) : b.n - a.n);
 		final topN: Int = entries.length < 12 ? entries.length : 12; // noqa: magic-number
-		stderr('apq search: 0 matches; pattern root kind is "$patternKind". Top kinds seen in input (${entries.length} distinct):\n');
+		CliIo.stderr('apq search: 0 matches; pattern root kind is "$patternKind". Top kinds seen in input (${entries.length} distinct):\n');
 		for (k in 0...topN) {
 			final e: { k: String, n: Int } = entries[k];
 			final marker: String = e.k == patternKind ? ' ← matches pattern root' : '';
-			stderr('  ${e.k} (${e.n})$marker\n');
+			CliIo.stderr('  ${e.k} (${e.n})$marker\n');
 		}
 		if (!entries.exists(e -> e.k == patternKind))
-			stderr(
+			CliIo.stderr(
 				'  (pattern root kind "$patternKind" NOT present in any scanned file — likely the wrong kind for this construct; check '
 				+ '`apq ast <file>` to see the actual node shape)\n'
 			);
@@ -10540,9 +9426,9 @@ final class Cli {
 				}
 			}
 			combined.add(']}\n');
-			sysPrint(combined.toString());
+			CliIo.sysPrint(combined.toString());
 		} else {
-			for (entry in shown) sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches, flat));
+			for (entry in shown) CliIo.sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches, flat));
 		}
 	}
 
@@ -10562,9 +9448,9 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--rule':
-					ruleFilters.push(expectValue(args, ++i, '--rule'));
+					ruleFilters.push(CliArgs.expectValue(args, ++i, '--rule'));
 				case '--all', '-a':
 					includeInfo = true;
 				case '--flat':
@@ -10574,16 +9460,16 @@ final class Cli {
 				case '--no-oracle':
 					noOracle = true;
 				case '--fail-on':
-					final level: String = expectValue(args, ++i, '--fail-on');
+					final level: String = CliArgs.expectValue(args, ++i, '--fail-on');
 					failOn = Severity.fromName(level);
 					if (failOn == null) {
-						stderr('apq lint: unknown --fail-on value "$level" (expected error|warning|info)\n');
+						CliIo.stderr('apq lint: unknown --fail-on value "$level" (expected error|warning|info)\n');
 						return lintParseExit(EXIT_USAGE);
 					}
 				case '--format':
-					format = expectValue(args, ++i, '--format');
+					format = CliArgs.expectValue(args, ++i, '--format');
 					if (format != FORMAT_TEXT && format != FORMAT_JSON && format != FORMAT_CHECKSTYLE) {
-						stderr('apq lint: unknown --format value "$format" (expected text|json|checkstyle)\n');
+						CliIo.stderr('apq lint: unknown --format value "$format" (expected text|json|checkstyle)\n');
 						return lintParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
@@ -10594,7 +9480,7 @@ final class Cli {
 					return lintParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq lint: unknown option "$a"\n');
+						CliIo.stderr('apq lint: unknown option "$a"\n');
 						return lintParseExit(EXIT_USAGE);
 					}
 					inputSpecs.push(a);
@@ -10623,7 +9509,7 @@ final class Cli {
 			for (id in ruleFilters) {
 				final check: Null<Check> = Linter.byId(id);
 				if (check == null) {
-					stderr('apq lint: unknown rule "$id"\n');
+					CliIo.stderr('apq lint: unknown rule "$id"\n');
 					return null;
 				}
 				checks.push(check);
@@ -10694,7 +9580,7 @@ final class Cli {
 				// handed a node it never saw degrades every address to `<line>:<col>` in
 				// silence.
 				final addresser: TreeAddresser = new TreeAddresser(plugin.selectKindEquivalence());
-				sysPrint(LintFormat.json(ordered, sourceOf, v -> {
+				CliIo.sysPrint(LintFormat.json(ordered, sourceOf, v -> {
 					final span: Null<Span> = v.span;
 					final source: Null<String> = sourceOf[v.file];
 					if (span == null || source == null) return null;
@@ -10703,11 +9589,11 @@ final class Cli {
 					return tree == null ? null : addresser.addressAt(tree, source, span.from);
 				}));
 			case FORMAT_CHECKSTYLE:
-				sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
+				CliIo.sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
 			case _:
 				for (path in paths) {
 					final group: Null<Array<Violation>> = byFile[path];
-					if (group != null) sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
+					if (group != null) CliIo.sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
 				}
 		}
 	}
@@ -10726,9 +9612,9 @@ final class Cli {
 		// and nothing in the report says so. Naming the files is what lets a reader tell "no
 		// findings" from "could not look".
 		if (skipped != null && skipped.length > 0) {
-			stderr('apq lint: ${skipped.length} file(s) could not be parsed and are invisible to cross-file proofs:\n');
-			for (path in skipped.slice(0, SKIP_PATHS_SHOWN)) stderr('  $path\n');
-			if (skipped.length > SKIP_PATHS_SHOWN) stderr('  ... +${skipped.length - SKIP_PATHS_SHOWN} more\n');
+			CliIo.stderr('apq lint: ${skipped.length} file(s) could not be parsed and are invisible to cross-file proofs:\n');
+			for (path in skipped.slice(0, CliWalk.SKIP_PATHS_SHOWN)) CliIo.stderr('  $path\n');
+			if (skipped.length > CliWalk.SKIP_PATHS_SHOWN) CliIo.stderr('  ... +${skipped.length - CliWalk.SKIP_PATHS_SHOWN} more\n');
 		}
 		var errors: Int = 0;
 		var warnings: Int = 0;
@@ -10742,10 +9628,10 @@ final class Cli {
 				infos++;
 		}
 		if (all.length == 0) {
-			stderr('apq lint: no issues in ${paths.length} file(s)\n');
+			CliIo.stderr('apq lint: no issues in ${paths.length} file(s)\n');
 		} else {
-			stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
-			if (!reportedAll && infos > 0) stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
+			CliIo.stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
+			if (!reportedAll && infos > 0) CliIo.stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
 		}
 	}
 
@@ -10768,17 +9654,17 @@ final class Cli {
 			if (res.message == filter) matched.push({ record: r, result: res });
 		}
 		if (matched.length == 0) {
-			stderr('apq recon: --no-target-cluster "$filter" matched no NO TARGET records (predict-relax mode)\n');
+			CliIo.stderr('apq recon: --no-target-cluster "$filter" matched no NO TARGET records (predict-relax mode)\n');
 			if (noTargetReasonsTop.length > 0) {
 				noTargetReasonsTop.sort((a, b) -> b.count - a.count);
 				final maxKeys: Int = noTargetReasonsTop.length < NO_TARGET_TOP_N ? noTargetReasonsTop.length : NO_TARGET_TOP_N;
-				stderr('  available NO TARGET keys (top $maxKeys):\n');
-				for (entry in noTargetReasonsTop.slice(0, NO_TARGET_TOP_N)) stderr('    ${entry.count}× ${entry.key}\n');
+				CliIo.stderr('  available NO TARGET keys (top $maxKeys):\n');
+				for (entry in noTargetReasonsTop.slice(0, NO_TARGET_TOP_N)) CliIo.stderr('    ${entry.count}× ${entry.key}\n');
 			}
 			return EXIT_RUNTIME;
 		}
 		for (m in matched) reportPredictRelax(m.record.path, m.record.source, m.result, showSource);
-		sysPrint('--- relax (no-target-cluster "$filter"): ${matched.length} files ---\n');
+		CliIo.sysPrint('--- relax (no-target-cluster "$filter"): ${matched.length} files ---\n');
 		return EXIT_OK;
 	}
 
@@ -10812,17 +9698,17 @@ final class Cli {
 					noTargetCount++;
 			}
 		}
-		sysPrint(
+		CliIo.sysPrint(
 			'--- relax: $unblockCount unblock, $stillFailCount still fail, $noTargetCount no target (of ${records.length}'
 			+ ' skip-parse files) ---\n'
 		);
 		if (!keepNoTargetPerFile && noTargetReasons.length > 0) {
 			noTargetReasons.sort((a, b) -> b.count - a.count);
-			sysPrint(
+			CliIo.sysPrint(
 				'   no target breakdown ('
 				+ 'use --no-target-cluster <key> to drill into a specific shape, or --cluster <locus-key> for forward-locus drill):\n'
 			);
-			for (entry in noTargetReasons) sysPrint('     ${entry.count}× ${entry.key}\n');
+			for (entry in noTargetReasons) CliIo.sysPrint('     ${entry.count}× ${entry.key}\n');
 		}
 		return EXIT_OK;
 	}
@@ -10859,7 +9745,7 @@ final class Cli {
 				final priorStatus: Null<String> = prior[relPath];
 				if (priorStatus == null) continue; // present locally but absent from snapshot — silent
 				scanned++;
-				final source: String = readSourceForParse(path);
+				final source: String = CliIo.readSourceForParse(path);
 				final current: ReconCurrentParse = reconRegressionParse(plugin, source);
 				if (current.unwired) return {
 					regressed: regressed,
@@ -10874,10 +9760,10 @@ final class Cli {
 					final locus: String = current.line > 0
 						? ' :: ${current.line}:${current.col} expected="${current.msg}"'
 						: ' :: ${current.msg}';
-					sysPrint('REGRESSED $relPath: was $priorStatus, now SKIP_PARSE$locus\n');
+					CliIo.sysPrint('REGRESSED $relPath: was $priorStatus, now SKIP_PARSE$locus\n');
 				} else if (priorSkipParse && current.ok) {
 					unblocked++;
-					sysPrint('UNBLOCKED $relPath: was SKIP_PARSE, now parses OK\n');
+					CliIo.sysPrint('UNBLOCKED $relPath: was SKIP_PARSE, now parses OK\n');
 				}
 				// SKIP_CONFIG / MALFORMED in prior: orthogonal to grammar; silent.
 				// No flip: silent.
@@ -10962,18 +9848,18 @@ final class Cli {
 			if (anyIsolatedOk) {
 				var soleCount: Int = 0;
 				for (r in isolatedResults) if (r.ok) soleCount++;
-				sysPrint(
+				CliIo.sysPrint(
 					'VERDICT $soleCount of $patternCount pattern${plural(patternCount)}'
 					+ ' unblock alone — the rest are redundant (or compose into a tighter slice).\n'
 				);
 			} else {
-				sysPrint(
+				CliIo.sysPrint(
 					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely '
 					+ 'needs $patternCount separate code mechanisms.\n'
 				);
 			}
 		} else if (!combinedOk && baselineOk) {
-			sysPrint('VERDICT no-op — baseline already parses; the strip diagnostic does not apply.\n');
+			CliIo.sysPrint('VERDICT no-op — baseline already parses; the strip diagnostic does not apply.\n');
 		}
 	}
 
@@ -11062,7 +9948,7 @@ final class Cli {
 					// AND uncounted (`skippedTail` says `partly fixed first, then refused` when the
 					// salvage did land the rest).
 					if (!noted.contains(entry.file)) {
-						stderr('apq lint --fix: ${entry.file}: ${blamed.length == 0 ? message : blamed.join('; ')}\n');
+						CliIo.stderr('apq lint --fix: ${entry.file}: ${blamed.length == 0 ? message : blamed.join('; ')}\n');
 						noted.push(entry.file);
 					}
 			}
@@ -11249,7 +10135,7 @@ final class Cli {
 		// `noted` is the SKIPPED-file set the run summary counts, and a file that merely tripped this
 		// note was fixed.
 		if (FormatFixedPoint.rewritesNote(settled.rewrites) != null && !notedRewrites.contains(entry.file)) {
-			warnRewrites('lint --fix', entry.file, settled.rewrites);
+			CliEdit.warnRewrites('lint --fix', entry.file, settled.rewrites);
 			notedRewrites.push(entry.file);
 		}
 		if (settled.text == entry.source) return 0;
@@ -11450,14 +10336,14 @@ final class Cli {
 					opts.errExit = EXIT_OK;
 					return opts;
 				case '--lang':
-					opts.lang = expectValue(args, ++i, '--lang');
+					opts.lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--strict':
 					opts.strict = true;
 				case '--source':
 					opts.showSource = true;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq self-status: unknown option "$a"\n');
+						CliIo.stderr('apq self-status: unknown option "$a"\n');
 						opts.errExit = EXIT_USAGE;
 						return opts;
 					}
@@ -11478,7 +10364,7 @@ final class Cli {
 		var skipParse: Int = 0;
 		final skipLines: Array<String> = [];
 		for (path in paths) {
-			final source: String = try readSourceForParse(path) catch (_: Exception) continue;
+			final source: String = try CliIo.readSourceForParse(path) catch (_: Exception) continue;
 			try {
 				plugin.parseFile(source);
 				parseable++;
@@ -11576,29 +10462,29 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--range':
-					opts.range = expectValue(args, ++i, '--range');
+					opts.range = CliArgs.expectValue(args, ++i, '--range');
 				case '--select':
-					opts.selectExpr = expectValue(args, ++i, '--select');
+					opts.selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--at':
-					opts.atSpec = expectValue(args, ++i, '--at');
+					opts.atSpec = CliArgs.expectValue(args, ++i, '--at');
 				case '--number', '-n':
 					opts.number = true;
 				case '--raw':
 					opts.raw = true;
 				case '--lang':
-					opts.lang = expectValue(args, ++i, '--lang');
+					opts.lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printSourceUsage();
 					opts.errExit = EXIT_OK;
 					return opts;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq source: unknown option "$a"\n');
+						CliIo.stderr('apq source: unknown option "$a"\n');
 						opts.errExit = EXIT_USAGE;
 						return opts;
 					}
 					if (opts.file != null) {
-						stderr('apq source: only one file argument supported (got "${opts.file}" and "$a")\n');
+						CliIo.stderr('apq source: only one file argument supported (got "${opts.file}" and "$a")\n');
 						opts.errExit = EXIT_USAGE;
 						return opts;
 					}
@@ -11625,7 +10511,7 @@ final class Cli {
 			buf.add(strip > 0 ? dedentLine(line, strip) : line);
 			buf.add('\n');
 		}
-		sysPrint(buf.toString());
+		CliIo.sysPrint(buf.toString());
 	}
 
 	/**
@@ -11691,127 +10577,6 @@ final class Cli {
 		};
 	}
 
-	/**
-	 * Build the kind/case-aware tool-suggestion hint for a 0-hit walker
-	 * with a non-null query name. Leading-dot and dotted-access queries get
-	 * a structural-search redirect; otherwise the per-command cascade
-	 * (refs/uses/blast/lit) suggests the right walker for the name's case.
-	 */
-	private static function nudgeNameHint(cmd: String, n: String): String {
-		final first: Int = n.length > 0 ? n.fastCodeAt(0) : 0;
-		final isUpper: Bool = first >= 'A'.code && first <= 'Z'.code;
-		final isLower: Bool = first >= 'a'.code && first <= 'z'.code;
-		final leadingDot: Null<String> = looksLikeLeadingDotField(n);
-		final dotted: Null<Array<String>> = looksLikeDottedAccess(n);
-		if (leadingDot == null || cmd != 'lit' && cmd != 'refs' && cmd != 'uses')
-			return dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')
-				? nudgeDottedHint(cmd, n, dotted)
-				: nudgeCommandHint(cmd, n, isUpper, isLower);
-		// Leading-dot query (`.expr`, `.body`) — user is hunting a
-		// field-access shape but typed the SLOT name only. lit
-		// won't capture the leading `.` (FieldAccess leaves are
-		// the identifier after `.`, the `.` is a postfix
-		// operator); refs/uses don't know about field positions.
-		// The structural answer is `apq search '$x.<tail>'`.
-		final t: String = leadingDot;
-		return ' — "$n" is a leading-dot field-name slot. $cmd matches leaf names / single bindings / type positions, never `expr.field` '
-			+ 'shape. Try: apq search \'$$x.$t\' <dir> (field-access shape), apq lit \'$t'
-			+ '\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t <dir> --decls (where the field is declared).';
-	}
-
-	/**
-	 * Hint for a dotted query (`TypeName.method`, `obj.field`) — never a
-	 * leaf-name / value-binding / type-position match. LHS uppercase ⇒
-	 * static-call shape; otherwise instance access.
-	 */
-	private static function nudgeDottedHint(cmd: String, n: String, dotted: Array<String>): String {
-		final lhs: String = dotted[0];
-		final rhs: String = dotted[dotted.length - 1];
-		final lhsFirst: Int = lhs.fastCodeAt(0);
-		final lhsIsUpper: Bool = lhsFirst >= 'A'.code && lhsFirst <= 'Z'.code;
-		return lhsIsUpper
-			? ' — "$n" is a dotted access (Type.method / pkg.Module). $cmd matches leaf names / single bindings / type positions, never '
-				+ '`Type.method` shape. Try: apq search \'$n($$_)\' <dir> (call shape), apq search \'$lhs.$rhs'
-				+ '\' <dir> (field-access shape), or apq refs $rhs <dir> --decls (where the method is declared).'
-			: ' — "$n" is a dotted access (obj.field). $cmd'
-				+ ' matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs\' <dir> (field-access '
-				+ 'shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs <dir> --decls (where the field is declared).';
-	}
-
-	/**
-	 * Per-command 0-hit hint (refs/uses/blast/lit), branching on the query
-	 * name's leading case to point at the complementary walker.
-	 */
-	private static function nudgeCommandHint(cmd: String, n: String, isUpper: Bool, isLower: Bool): String {
-		return switch cmd {
-			case 'refs':
-				if (isUpper)
-					' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions), apq blast $n'
-						+ ' <dir> (full change-impact incl. field-access), or apq lit \'$n'
-						+ '\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
-				else
-					' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every '
-						+ 'leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).${macroEmitHint(n)}';
-			case 'uses':
-				if (isLower)
-					' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n'
-						+ '\' <dir> --any-kind (every leaf).${macroEmitHint(n)}';
-				else
-					' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>, or apq lit \''
-						+ '$n\' <dir> --any-kind (every leaf — incl. case-patterns).';
-			case 'blast':
-				' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n'
-					+ ' <dir> + apq refs $n <dir> directly.';
-			case 'lit':
-				if (looksLikeMixedIdentifier(n))
-					' — no Literal/IdentExpr leaf matches "$n" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; '
-						+ '--exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs $n'
-						+ ' <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
-				else
-					' — no string-literal content matches "$n'
-						+ '" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,'
-						+ 'IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
-			case 'meta':
-				''; // meta has no <name> arg (annotation is its own thing) — leave silent.
-			case _:
-				'';
-		};
-	}
-
-	/**
-	 * Skip-parse warning: parseable < scanned means the answer may be hiding
-	 * in unparsed files. Surface it loudly (with up to SKIP_PATHS_SHOWN
-	 * loci) so a 0-hit query on a broken corpus is not silently trusted.
-	 * Empty string when nothing skip-parsed.
-	 */
-	private static function nudgeSkipWarning(cmd: String, ?skipEntries: Array<SkipEntry>): String {
-		if (skipEntries == null || skipEntries.length == 0) return '';
-		final tail: StringBuf = new StringBuf();
-		final n: Int = skipEntries.length;
-		tail.add(
-			'\napq $cmd: WARNING: $n file(s) skip-parse — answer may be hiding in unparsed files. Locus shows the parse-failure '
-			+ 'position; if it is far past the construct you searched for, the warning can be ignored.'
-		);
-		final shown: Int = n < SKIP_PATHS_SHOWN ? n : SKIP_PATHS_SHOWN;
-		for (i in 0...shown) {
-			final entry: SkipEntry = skipEntries[i];
-			tail.add('\n  skip: ${entry.path} :: ${entry.locus}');
-		}
-		if (n > shown) tail.add('\n  ... and ${n - shown} more');
-		return tail.toString();
-	}
-
-	/**
-	 * Fuzzy "did you mean": for refs/uses on 0 hits, propose the top-K
-	 * decl/type names within Levenshtein distance. Empty string when no
-	 * candidate qualifies — don't fabricate hints.
-	 */
-	private static function nudgeFuzzy(cmd: String, name: Null<String>, ?candidates: Map<String, Bool>): String {
-		if (name == null || candidates == null || (cmd != 'refs' && cmd != 'uses')) return '';
-		final suggestions: Array<String> = findFuzzy(name, candidates);
-		return suggestions.length > 0 ? '\napq $cmd: Did you mean: ${suggestions.join(', ')}?' : '';
-	}
-
 	private static function parseUsesArgs(args: Array<String>): UsesOpts {
 		var lang: String = 'haxe';
 		var wantDoc: Bool = false;
@@ -11826,7 +10591,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--doc':
 					wantDoc = true;
 				case '--source':
@@ -11834,8 +10599,8 @@ final class Cli {
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
 						return usesParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
@@ -11843,7 +10608,7 @@ final class Cli {
 					return usesParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq uses: unknown option "$a"\n');
+						CliIo.stderr('apq uses: unknown option "$a"\n');
 						return usesParseExit(EXIT_USAGE);
 					}
 					if (name == null)
@@ -11872,9 +10637,10 @@ final class Cli {
 		final allEntries: Array<{ file: String, source: String, hits: Array<UsesHit> }> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile, skipEntries, name);
-			streamProgress('uses', ++scanned, paths.length, singleFile);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> =
+				CliWalk.parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile, skipEntries, name);
+			CliIo.streamProgress('uses', ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				// Single-file mode treats a parse failure as fatal — null tells
 				// the caller to return EXIT_RUNTIME. Multi-file mode records the
@@ -11906,7 +10672,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -11916,7 +10682,7 @@ final class Cli {
 					return extractMethodParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq extract-method: unknown option "$a"\n');
+						CliIo.stderr('apq extract-method: unknown option "$a"\n');
 						return extractMethodParseExit(EXIT_USAGE);
 					}
 					if (file == null)
@@ -11928,23 +10694,23 @@ final class Cli {
 					else if (name == null)
 						name = a;
 					else {
-						stderr('apq extract-method: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq extract-method: unexpected extra argument "$a"\n');
 						return extractMethodParseExit(EXIT_USAGE);
 					}
 			}
 			i++;
 		}
 		if (file == null || startSpec == null || endSpec == null || name == null) {
-			stderr('apq extract-method: expected <file> <startLine>:<col> <endLine>:<col> <name>\n');
+			CliIo.stderr('apq extract-method: expected <file> <startLine>:<col> <endLine>:<col> <name>\n');
 			printExtractMethodUsage();
 			return extractMethodParseExit(EXIT_USAGE);
 		}
-		final startPos: Null<Position> = parseLineCol(startSpec);
+		final startPos: Null<Position> = CliArgs.parseLineCol(startSpec);
 		if (startPos == null) {
-			stderr('apq extract-method: malformed start position "$startSpec" — expected <line>:<col>\n');
+			CliIo.stderr('apq extract-method: malformed start position "$startSpec" — expected <line>:<col>\n');
 			return extractMethodParseExit(EXIT_USAGE);
 		}
-		final endPos: Null<Position> = parseLineCol(endSpec);
+		final endPos: Null<Position> = CliArgs.parseLineCol(endSpec);
 		if (endPos != null) return {
 			lang: lang,
 			write: write,
@@ -11955,7 +10721,7 @@ final class Cli {
 			name: name,
 			errExit: null
 		};
-		stderr('apq extract-method: malformed end position "$endSpec" — expected <line>:<col>\n');
+		CliIo.stderr('apq extract-method: malformed end position "$endSpec" — expected <line>:<col>\n');
 		return extractMethodParseExit(EXIT_USAGE);
 	}
 
@@ -11973,11 +10739,11 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					typeName = expectValue(args, ++i, '--type');
+					typeName = CliArgs.expectValue(args, ++i, '--type');
 				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
+					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -11987,7 +10753,7 @@ final class Cli {
 					return addMemberParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq add-member: unknown option "$a"\n');
+						CliIo.stderr('apq add-member: unknown option "$a"\n');
 						return addMemberParseExit(EXIT_USAGE);
 					}
 					if (file == null)
@@ -11995,7 +10761,7 @@ final class Cli {
 					else if (memberText == null)
 						memberText = a;
 					else {
-						stderr('apq add-member: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq add-member: unexpected extra argument "$a"\n');
 						return addMemberParseExit(EXIT_USAGE);
 					}
 			}
@@ -12030,15 +10796,15 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
+					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -12048,17 +10814,17 @@ final class Cli {
 					return setDocParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq set-doc: unknown option "$a"\n');
+						CliIo.stderr('apq set-doc: unknown option "$a"\n');
 						return setDocParseExit(EXIT_USAGE);
 					}
 					if (file == null)
 						file = a;
-					else if (pos == null && selectExpr == null && matchExpr == null && isPosSpec(a))
+					else if (pos == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a))
 						pos = a;
 					else if (docText == null)
 						docText = a;
 					else {
-						stderr('apq set-doc: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq set-doc: unexpected extra argument "$a"\n');
 						return setDocParseExit(EXIT_USAGE);
 					}
 			}
@@ -12092,7 +10858,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--write', '-w':
 					write = true;
 				case '--list', '-l':
@@ -12106,7 +10872,7 @@ final class Cli {
 					return fmtParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq fmt: unknown option "$a"\n');
+						CliIo.stderr('apq fmt: unknown option "$a"\n');
 						return fmtParseExit(EXIT_USAGE);
 					}
 					inputSpecs.push(a);
@@ -12127,11 +10893,11 @@ final class Cli {
 	private static function formatOneFile(
 		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, verify: Bool = false, onePass: Bool = false
 	): FmtFileResult {
-		final source: String = try readFile(path) catch (exception: Exception) {
-			stderr('apq fmt: $path: ${exception.message}\n');
+		final source: String = try CliIo.readFile(path) catch (exception: Exception) {
+			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
 			return { changed: false, failed: true, fatalExit: null };
 		};
-		final optsJson: Null<String> = discoverFormatConfig(path);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(path);
 		// The FIXED POINT, not one round trip. `--list` and `--write` decide from
 		// the same `formatted == source` comparison, so they cannot disagree within
 		// a run — they disagreed ACROSS runs, because a writer whose output is not
@@ -12139,12 +10905,12 @@ final class Cli {
 		// `--list` looked. `FormatFixedPoint` carries the measured instance.
 		final roundTrip: (text:String) -> Null<String> = text -> plugin.writeRoundTrip(text, optsJson);
 		final fixedPoint: FormatFixedPointResult = try FormatFixedPoint.run(roundTrip, source) catch (exception: Exception) {
-			stderr('apq fmt: $path: ${exception.message}\n');
+			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
 			return { changed: false, failed: true, fatalExit: null };
 		};
 		final formatted: Null<String> = fixedPoint.text;
 		if (formatted == null) {
-			stderr('apq fmt: no writer for lang "$lang"\n');
+			CliIo.stderr('apq fmt: no writer for lang "$lang"\n');
 			return { changed: false, failed: false, fatalExit: EXIT_RUNTIME };
 		}
 		// Every mode fails here, deliberately. A file `--list` reports and `--write`
@@ -12152,7 +10918,7 @@ final class Cli {
 		// close, so no mode may report it as ordinary drift — and writing a
 		// non-fixed-point would churn the bytes again on the next run.
 		if (!fixedPoint.converged) {
-			stderr('apq fmt: $path: ${fixedPoint.failure}; left unchanged\n');
+			CliIo.stderr('apq fmt: $path: ${fixedPoint.failure}; left unchanged\n');
 			return { changed: false, failed: true, fatalExit: null };
 		}
 		// Converged, but not on the first rewrite: the file is formatted correctly
@@ -12160,7 +10926,7 @@ final class Cli {
 		// loop would hide it behind output that now looks stable. Same sentence the
 		// mutation ops now print off `EditResult.Ok`'s `rewrites`, from one copy, so
 		// a user who meets the note twice can tell it is one finding.
-		warnRewrites('fmt', path, fixedPoint.rewrites);
+		CliEdit.warnRewrites('fmt', path, fixedPoint.rewrites);
 		// ω-one-pass-gate: `--one-pass` turns that note into a VERDICT. The project's
 		// canonical gate is `writeRoundTrip(s) == s` after ONE pass, and every
 		// writer-emit op is built on it — but a tree holding a file the writer only
@@ -12190,9 +10956,9 @@ final class Cli {
 				unsettled: unsettled,
 				fatalExit: null
 			};
-			sysPrint('$path:${divergence.line}: formatting changed more than whitespace\n');
-			sysPrint('  source: ${divergence.expected}\n');
-			sysPrint('  writer: ${divergence.actual}\n');
+			CliIo.sysPrint('$path:${divergence.line}: formatting changed more than whitespace\n');
+			CliIo.sysPrint('  source: ${divergence.expected}\n');
+			CliIo.sysPrint('  writer: ${divergence.actual}\n');
 			return {
 				changed: true,
 				failed: true,
@@ -12214,8 +10980,8 @@ final class Cli {
 				// Continuing past a TRUNCATING write is what turned a full disk into a tree
 				// of empty source files: measured, five files on a volume with no free
 				// blocks gave `rewrote 3 of 5 file(s), 2 failed` and two files of 0 bytes.
-				try writeFile(path, formatted) catch (failure: WriteFailure) {
-					stderr('apq fmt: ${failure.message}\n');
+				try CliIo.writeFile(path, formatted) catch (failure: WriteFailure) {
+					CliIo.stderr('apq fmt: ${failure.message}\n');
 					return {
 						changed: false,
 						failed: true,
@@ -12233,7 +10999,7 @@ final class Cli {
 			}
 		} else if (listMode) {
 			if (!isCanonical) {
-				sysPrint('$path\n');
+				CliIo.sysPrint('$path\n');
 				return {
 					changed: true,
 					failed: false,
@@ -12242,7 +11008,7 @@ final class Cli {
 				};
 			}
 		} else
-			sysPrint(formatted);
+			CliIo.sysPrint(formatted);
 		return {
 			changed: false,
 			failed: false,
@@ -12267,40 +11033,40 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '--scope':
-					scope = expectValue(args, ++i, '--scope');
+					scope = CliArgs.expectValue(args, ++i, '--scope');
 				case '-h', '--help':
 					printMoveUsage();
 					return moveParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq move: unknown option "$a"\n');
+						CliIo.stderr('apq move: unknown option "$a"\n');
 						return moveParseExit(EXIT_USAGE);
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null && selectExpr == null && matchExpr == null && destFileArg == null && isPosSpec(a))
+					else if (posSpec == null && selectExpr == null && matchExpr == null && destFileArg == null && CliArgs.isPosSpec(a))
 						posSpec = a;
 					else if (destFileArg == null)
 						destFileArg = a;
 					else {
-						stderr('apq move: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq move: unexpected extra argument "$a"\n');
 						return moveParseExit(EXIT_USAGE);
 					}
 			}
 			i++;
 		}
 		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || destFileArg == null) {
-			stderr("apq move: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <dest-file>\n");
+			CliIo.stderr("apq move: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <dest-file>\n");
 			printMoveUsage();
 			return moveParseExit(EXIT_USAGE);
 		}
@@ -12316,7 +11082,7 @@ final class Cli {
 			destFile: destFileArg,
 			errExit: null
 		};
-		stderr('apq move: --scope <dir> is required (imports are fixed across the scope)\n');
+		CliIo.stderr('apq move: --scope <dir> is required (imports are fixed across the scope)\n');
 		printMoveUsage();
 		return moveParseExit(EXIT_USAGE);
 	}
@@ -12331,20 +11097,20 @@ final class Cli {
 				// for nothing observable.
 				final changes: Array<MoveChange> = write ? [for (c in rawChanges) canonicalMoveChange(cmd, c, plugin)] : rawChanges;
 				if (write) {
-					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
-					stderr('apq $cmd: wrote ${changes.length} file(s)\n');
+					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+					CliIo.stderr('apq $cmd: wrote ${changes.length} file(s)\n');
 				} else {
 					for (c in changes) {
 						final tag: String = c.file == cursorFile || c.file == destFile ? 'moved' : 'updated';
-						sysPrint('${c.file}: $tag\n');
+						CliIo.sysPrint('${c.file}: $tag\n');
 					}
-					sysPrint('total: ${changes.length} file(s)\n');
-					stderr('apq $cmd: NOTHING written — this is a preview; re-run with --write to apply\n');
+					CliIo.sysPrint('total: ${changes.length} file(s)\n');
+					CliIo.stderr('apq $cmd: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
-				if (advisory != null) stderr('apq $cmd: $advisory\n');
+				if (advisory != null) CliIo.stderr('apq $cmd: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq $cmd: $message\n');
+				CliIo.stderr('apq $cmd: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -12380,9 +11146,9 @@ final class Cli {
 		// build the very sources this move was computed from, and it is `.hxtest`-aware. Reading
 		// the raw three-section file instead would answer "not canonical" for every `.hxtest`
 		// fixture and silently switch the gate off there.
-		final original: Null<String> = try readSourceForParse(change.file) catch (exception: Exception) null;
+		final original: Null<String> = try CliIo.readSourceForParse(change.file) catch (exception: Exception) null;
 		if (original == null) return change;
-		final opts: Null<String> = discoverFormatConfig(change.file);
+		final opts: Null<String> = CliArgs.discoverFormatConfig(change.file);
 		if (!RefactorSupport.isWriterCanonical(original, plugin, opts)) return change;
 		// The FIXED POINT, not one round trip — the same loop `apq fmt` and
 		// `RefactorSupport.canonicalize` run, and for the same recorded reason: a writer whose
@@ -12395,7 +11161,7 @@ final class Cli {
 			// rather than emitting lossy output. Keeping the raw splice is right for a span
 			// splice (the move's own re-parse already validated it), but silence here would
 			// leave a file `fmt --list` flags with nothing said about why.
-			stderr(
+			CliIo.stderr(
 				'apq $cmd: ${change.file} kept the raw splice — canonicalising it would lose the comment '
 				+ '`${exception.comment}`; run `apq fmt --list` on it\n'
 			);
@@ -12423,7 +11189,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--json':
 					json = true;
 				case '--decls':
@@ -12439,8 +11205,8 @@ final class Cli {
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
 						return refsParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
@@ -12448,7 +11214,7 @@ final class Cli {
 					return refsParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq refs: unknown option "$a"\n');
+						CliIo.stderr('apq refs: unknown option "$a"\n');
 						return refsParseExit(EXIT_USAGE);
 					}
 					if (name == null)
@@ -12488,9 +11254,9 @@ final class Cli {
 		var bindings: Int = 0;
 		var scanned: Int = 0;
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile, skipEntries, name);
-			streamProgress('refs', ++scanned, paths.length, singleFile);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked('refs', plugin.parseFile, path, source, singleFile, skipEntries, name);
+			CliIo.streamProgress('refs', ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				// Single-file mode treats a parse failure as fatal — null tells
 				// the caller to return EXIT_RUNTIME. Multi-file mode records the
@@ -12516,60 +11282,6 @@ final class Cli {
 		return { entries: allEntries, memberAccesses: memberAccesses, bindings: bindings };
 	}
 
-	private static function parseSetCommentArgs(args: Array<String>): SetCommentOpts {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var reformat: Bool = false;
-		var fromFile: Null<String> = null;
-		var file: Null<String> = null;
-		var pos: Null<String> = null;
-		var commentText: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
-				case '--reformat':
-					reformat = true;
-				case '--write':
-					write = true;
-				case '-h', '--help':
-					printSetCommentUsage();
-					return setCommentParseExit(EXIT_OK);
-				case _:
-					if (a.startsWith('--')) {
-						stderr('apq set-comment: unknown option "$a"\n');
-						return setCommentParseExit(EXIT_USAGE);
-					}
-					if (file == null)
-						file = a;
-					else if (pos == null)
-						pos = a;
-					else if (commentText == null)
-						commentText = a;
-					else {
-						stderr('apq set-comment: unexpected extra argument "$a"\n');
-						return setCommentParseExit(EXIT_USAGE);
-					}
-			}
-			i++;
-		}
-		return {
-			lang: lang,
-			write: write,
-			reformat: reformat,
-			fromFile: fromFile,
-			file: file,
-			pos: pos,
-			commentText: commentText,
-			errExit: null
-		};
-	}
-
 	private static function parseReplaceNodeArgs(args: Array<String>): ReplaceNodeOpts {
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -12589,21 +11301,21 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--at':
-					atSpec = expectValue(args, ++i, '--at');
+					atSpec = CliArgs.expectValue(args, ++i, '--at');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--kind':
-					kind = expectValue(args, ++i, '--kind');
+					kind = CliArgs.expectValue(args, ++i, '--kind');
 				case '--with-doc':
 					withDoc = true;
 				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
+					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -12613,7 +11325,7 @@ final class Cli {
 					return replaceNodeParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq replace-node: unknown option "$a"\n');
+						CliIo.stderr('apq replace-node: unknown option "$a"\n');
 						return replaceNodeParseExit(EXIT_USAGE);
 					}
 					if (file == null)
@@ -12621,7 +11333,7 @@ final class Cli {
 					else if (newSource == null)
 						newSource = a;
 					else {
-						stderr('apq replace-node: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq replace-node: unexpected extra argument "$a"\n');
 						return replaceNodeParseExit(EXIT_USAGE);
 					}
 			}
@@ -12664,21 +11376,21 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--at':
-					atSpec = expectValue(args, ++i, '--at');
+					atSpec = CliArgs.expectValue(args, ++i, '--at');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--kind':
-					kind = expectValue(args, ++i, '--kind');
+					kind = CliArgs.expectValue(args, ++i, '--kind');
 				case '--sep':
-					sep = expectValue(args, ++i, '--sep');
+					sep = CliArgs.expectValue(args, ++i, '--sep');
 				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
+					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -12690,7 +11402,7 @@ final class Cli {
 					return patchParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq patch: unknown option "$a"\n');
+						CliIo.stderr('apq patch: unknown option "$a"\n');
 						return patchParseExit(EXIT_USAGE);
 					}
 					if (file == null)
@@ -12698,7 +11410,7 @@ final class Cli {
 					else if (payload == null)
 						payload = a;
 					else {
-						stderr('apq patch: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq patch: unexpected extra argument "$a"\n');
 						return patchParseExit(EXIT_USAGE);
 					}
 			}
@@ -12742,37 +11454,37 @@ final class Cli {
 	}
 
 	private static function printPatchUsage(): Void {
-		sysPrint(
+		CliIo.sysPrint(
 			"Usage: apq patch <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>) ["
 			+ '--sep <marker>] [--all] [--reformat] [--write]\n'
 		);
 		printSelectorAddressingOptions();
-		sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
-		sysPrint('  --sep <marker>      Separator line between the fragments (default: ====)\n');
-		sysPrint('  --from-file <path>  Read the payload from a file instead of stdin\n');
-		sysPrint('  --all               Rewrite EVERY occurrence of each old fragment, not just a unique one\n');
-		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		CliIo.sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
+		CliIo.sysPrint('  --sep <marker>      Separator line between the fragments (default: ====)\n');
+		CliIo.sysPrint('  --from-file <path>  Read the payload from a file instead of stdin\n');
+		CliIo.sysPrint('  --all               Rewrite EVERY occurrence of each old fragment, not just a unique one\n');
+		CliIo.sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		printWriteLangHelp();
-		sysPrint('Replace ONE unique fragment inside the addressed node without resending\n');
-		sysPrint('the whole declaration. The payload is the OLD fragment, a separator line\n');
-		sysPrint('(a line that is exactly the marker, default `====`), and the NEW fragment:\n');
-		sysPrint('\n');
-		sysPrint("  apq patch File.hx --select 'FnMember:walk' --write - <<'EOF'\n");
-		sysPrint('  old line;\n');
-		sysPrint('  ====\n');
-		sysPrint('  new line;\n');
-		sysPrint('  EOF\n');
-		sysPrint('\n');
-		sysPrint('Copy the old fragment VERBATIM from `apq source --select` — it must occur\n');
-		sysPrint('exactly once within the resolved node (widen it until unique, or pass --all\n');
-		sysPrint('to rewrite every occurrence — for a fan-out you mean, such as the same arm\n');
-		sysPrint('added to every switch that lists a sister enum ctor); a multi-line\n');
-		sysPrint('fragment is matched with per-line indentation ignored, so the dedented\n');
-		sysPrint('`apq source --select` output works as-is. SEVERAL pairs may be applied in\n');
-		sysPrint('one call: alternate old / new sections (an even count) — old1 ==== new1\n');
-		sysPrint('==== old2 ==== new2 — matched against the ORIGINAL node text, ranges must\n');
-		sysPrint('not overlap. The result is writer-formatted and re-parse-validated like\n');
-		sysPrint('replace-node; the file must already be canonical unless --reformat is given.\n');
+		CliIo.sysPrint('Replace ONE unique fragment inside the addressed node without resending\n');
+		CliIo.sysPrint('the whole declaration. The payload is the OLD fragment, a separator line\n');
+		CliIo.sysPrint('(a line that is exactly the marker, default `====`), and the NEW fragment:\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint("  apq patch File.hx --select 'FnMember:walk' --write - <<'EOF'\n");
+		CliIo.sysPrint('  old line;\n');
+		CliIo.sysPrint('  ====\n');
+		CliIo.sysPrint('  new line;\n');
+		CliIo.sysPrint('  EOF\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Copy the old fragment VERBATIM from `apq source --select` — it must occur\n');
+		CliIo.sysPrint('exactly once within the resolved node (widen it until unique, or pass --all\n');
+		CliIo.sysPrint('to rewrite every occurrence — for a fan-out you mean, such as the same arm\n');
+		CliIo.sysPrint('added to every switch that lists a sister enum ctor); a multi-line\n');
+		CliIo.sysPrint('fragment is matched with per-line indentation ignored, so the dedented\n');
+		CliIo.sysPrint('`apq source --select` output works as-is. SEVERAL pairs may be applied in\n');
+		CliIo.sysPrint('one call: alternate old / new sections (an even count) — old1 ==== new1\n');
+		CliIo.sysPrint('==== old2 ==== new2 — matched against the ORIGINAL node text, ranges must\n');
+		CliIo.sysPrint('not overlap. The result is writer-formatted and re-parse-validated like\n');
+		CliIo.sysPrint('replace-node; the file must already be canonical unless --reformat is given.\n');
 	}
 
 	private static function parseMentionsArgs(args: Array<String>): MentionsOpts {
@@ -12787,12 +11499,12 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
 						return mentionsParseExit(EXIT_USAGE);
 					}
 				case '-h', '--help':
@@ -12800,7 +11512,7 @@ final class Cli {
 					return mentionsParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq mentions: unknown option "$a"\n');
+						CliIo.stderr('apq mentions: unknown option "$a"\n');
 						return mentionsParseExit(EXIT_USAGE);
 					}
 					if (name == null)
@@ -12834,9 +11546,11 @@ final class Cli {
 		final valueTrees: Array<{ path: String, source: String, tree: QueryNode }> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('mentions', plugin.parseFile, path, source, singleFile, null, mentionsPrefilterKey);
-			streamProgress('mentions', ++scanned, paths.length, singleFile);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked(
+				'mentions', plugin.parseFile, path, source, singleFile, null, mentionsPrefilterKey
+			);
+			CliIo.streamProgress('mentions', ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				if (singleFile) return null;
 				continue;
@@ -12856,7 +11570,7 @@ final class Cli {
 		var any: Bool = false;
 		var header: Bool = false;
 		for (entry in valueTrees) {
-			final typeTree: Null<QueryNode> = parseWalked(
+			final typeTree: Null<QueryNode> = CliWalk.parseWalked(
 				'mentions', plugin.parseFileTypeRefs, entry.path, entry.source, singleFile, null, target
 			);
 			if (typeTree == null) continue;
@@ -12864,10 +11578,10 @@ final class Cli {
 			if (hits.length == 0) continue;
 			any = true;
 			if (!header) {
-				sysPrint('# uses (type positions)\n');
+				CliIo.sysPrint('# uses (type positions)\n');
 				header = true;
 			}
-			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat, plugin.lexicalRegions(entry.source)));
+			CliIo.sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat, plugin.lexicalRegions(entry.source)));
 		}
 		return any;
 	}
@@ -12884,10 +11598,10 @@ final class Cli {
 			if (hits.length == 0) continue;
 			any = true;
 			if (!header) {
-				sysPrint('# refs (value bindings)\n');
+				CliIo.sysPrint('# refs (value bindings)\n');
 				header = true;
 			}
-			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, lexicalRegions(entry.source), flat));
+			CliIo.sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, lexicalRegions(entry.source), flat));
 		}
 		return any;
 	}
@@ -12908,12 +11622,12 @@ final class Cli {
 		if (litEntries.length == 0) return false;
 		var totalHits: Int = 0;
 		for (e in litEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('mentions', limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = limitEntries(
+		final cappedLimit: Int = CliWalk.effectiveAutoLimit('mentions', limit, totalHits);
+		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.limitEntries(
 			litEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
-		sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
-		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
+		CliIo.sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
+		for (entry in shown) CliIo.sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		return true;
 	}
 
@@ -12948,22 +11662,22 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--flat':
 					flat = true;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+						CliIo.stderr('${e.message}\n');
 						return gatesParseExit(EXIT_USAGE);
 					}
 				case '--mechanism':
-					mechanism = expectValue(args, ++i, '--mechanism');
+					mechanism = CliArgs.expectValue(args, ++i, '--mechanism');
 				case '-h', '--help':
 					printGatesUsage();
 					return gatesParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq gates: unknown option "$a"\n');
+						CliIo.stderr('apq gates: unknown option "$a"\n');
 						return gatesParseExit(EXIT_USAGE);
 					}
 					inputSpecs.push(a);
@@ -13000,7 +11714,7 @@ final class Cli {
 		allHits: Array<{ file: String, source: String, hits: Array<GateHit> }>, mechanism: String, flat: Bool
 	): Void {
 		for (entry in allHits) {
-			if (!flat) sysPrint('${entry.file}:\n');
+			if (!flat) CliIo.sysPrint('${entry.file}:\n');
 			for (h in entry.hits) {
 				final declLabel: String = h.declName == null ? h.declKind : '${h.declKind} ${h.declName}';
 				final prefix: String = flat ? '${entry.file}:${h.line}:${h.col}: ' : '  ${h.line}:${h.col}: ';
@@ -13010,7 +11724,7 @@ final class Cli {
 				// where `<metas>` is the relevant subset of `@:` annotations
 				// already-quoted in `predicate` (raw string from classifier).
 				final tail: String = mechanism == 'trail-opt' ? '${h.gateKind}(\'${h.predicate}\')' : h.predicate;
-				sysPrint('$prefix$declLabel → $tail\n');
+				CliIo.sysPrint('$prefix$declLabel → $tail\n');
 			}
 		}
 	}
@@ -13031,7 +11745,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--write', '-w':
 					write = true;
 				case '--list', '-l':
@@ -13047,7 +11761,7 @@ final class Cli {
 					return commentRewriteParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq comment-rewrite: unknown option "$a"\n');
+						CliIo.stderr('apq comment-rewrite: unknown option "$a"\n');
 						return commentRewriteParseExit(EXIT_USAGE);
 					}
 					if (find == null)
@@ -13081,15 +11795,15 @@ final class Cli {
 		var changed: Int = 0;
 		var failed: Int = 0;
 		for (path in paths) {
-			final source: String = try readFile(path) catch (exception: Exception) {
-				stderr('apq comment-rewrite: $path: ${exception.message}\n');
+			final source: String = try CliIo.readFile(path) catch (exception: Exception) {
+				CliIo.stderr('apq comment-rewrite: $path: ${exception.message}\n');
 				failed++;
 				continue;
 			};
-			final optsJson: Null<String> = discoverFormatConfig(path);
+			final optsJson: Null<String> = CliArgs.discoverFormatConfig(path);
 			switch CommentRewrite.rewrite(source, findStr, replaceStr, regex, reformat, plugin, optsJson, allowWide) {
 				case Ok(text, rewrites):
-					warnRewrites(op, path, rewrites);
+					CliEdit.warnRewrites(op, path, rewrites);
 					final isChanged: Bool = text != source;
 					// Symmetric with the `readFile` catch at the head of this loop, and safe to
 					// continue on now that a failed write leaves its file byte-identical: this op
@@ -13097,15 +11811,15 @@ final class Cli {
 					// unreadable one, not a reason to abandon the rest.
 					if (write) {
 						if (isChanged) try {
-							writeFile(path, text);
+							CliIo.writeFile(path, text);
 							changed++;
 						} catch (failure: WriteFailure) {
-							stderr('apq comment-rewrite: ${failure.message}\n');
+							CliIo.stderr('apq comment-rewrite: ${failure.message}\n');
 							failed++;
 						}
 					} else if (listMode) {
 						if (isChanged) {
-							sysPrint('$path\n');
+							CliIo.sysPrint('$path\n');
 							changed++;
 						}
 					} else {
@@ -13114,11 +11828,11 @@ final class Cli {
 						// the rewritten file on stdout and then said on stderr that no comment body
 						// contained the find text — a false negative on the op's own diagnostic, and
 						// the shape a user reaches for first when checking what an edit would do.
-						previewEdit(op, path, text);
+						CliEdit.previewEdit(op, path, text);
 						if (isChanged) changed++;
 					}
 				case Err(message):
-					stderr('apq comment-rewrite: $path: $message\n');
+					CliIo.stderr('apq comment-rewrite: $path: $message\n');
 					failed++;
 			}
 		}
@@ -13144,7 +11858,7 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				// The mode flags take a position value only when one follows —
 				// `--after --select '<sel>'` and a trailing `--append` are valueless
 				// (the address then comes from --select / --match); '' marks the mode.
@@ -13155,13 +11869,13 @@ final class Cli {
 				case '--append':
 					appendSpec = isPosToken(args, i) ? args[++i] : '';
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
+					fromFile = CliArgs.expectValue(args, ++i, '--from-file');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -13171,7 +11885,7 @@ final class Cli {
 					return addElementParseExit(EXIT_OK);
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq add-element: unknown option "$a"\n');
+						CliIo.stderr('apq add-element: unknown option "$a"\n');
 						return addElementParseExit(EXIT_USAGE);
 					}
 					if (file == null)
@@ -13179,7 +11893,7 @@ final class Cli {
 					else if (code == null)
 						code = a;
 					else {
-						stderr('apq add-element: unexpected extra argument "$a"\n');
+						CliIo.stderr('apq add-element: unexpected extra argument "$a"\n');
 						return addElementParseExit(EXIT_USAGE);
 					}
 			}
@@ -13199,47 +11913,6 @@ final class Cli {
 			code: code,
 			fromFile: fromFile,
 			errExit: null
-		};
-	}
-
-	/**
-	 * Resolve the shared address flags (`<line>[:<col>]` / `--select` /
-	 * `--match` [+ `--nth`]) to a 1-based position, printing the op-prefixed
-	 * error on failure. The file is parsed here — pass a CACHING plugin so the
-	 * op's own parse reuses the identical tree (node identity matters to
-	 * `RefactorSupport.parentOf`-based span logic downstream, and the shared
-	 * cache makes this parse free). `preferName` shifts a select/match-resolved
-	 * NAMED node's position to its name token — the cursor-based fn-ops
-	 * (rename / change-sig / …) resolve an identifier at the cursor, so the
-	 * address must land on the name, not the `function` keyword; element ops
-	 * keep the first-token position.
-	 *
-	 * A position / pattern resolution also echoes the target's CANONICAL
-	 * selector (`Address.describe`) to stderr — the edit-stable address a
-	 * follow-up op can use without re-locating after this edit shifts lines.
-	 */
-	private static function resolveAddressPos(
-		op: String, source: String, plugin: GrammarPlugin, at: Null<String>, select: Null<String>, matchPat: Null<String>, nth: Null<Int>,
-		preferName: Bool = false
-	): Null<Position> {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: Exception) {
-			stderr('apq $op: source does not parse: ${exception.message}\n');
-			return null;
-		};
-		return switch Address.resolve(tree, source, plugin, {
-			at: at,
-			select: select,
-			match: matchPat,
-			nth: nth
-		}) {
-			case Ok(offset, node):
-				if (node != null && select == null)
-					stderr('apq $op: target ${Address.describe(tree, source, node, plugin.selectKindEquivalence())}\n');
-				final named: Null<Int> = preferName && at == null && node != null ? Address.nameTokenOffset(source, node) : null;
-				new Span(named ?? offset, named ?? offset).lineCol(source);
-			case Err(message):
-				stderr('apq $op: $message\n');
-				null;
 		};
 	}
 
@@ -13264,7 +11937,7 @@ final class Cli {
 	): Null<NamedMember> {
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
 		if (tree == null) {
-			stderr('apq $op: source does not parse\n');
+			CliIo.stderr('apq $op: source does not parse\n');
 			return null;
 		}
 		final root: QueryNode = tree;
@@ -13276,13 +11949,13 @@ final class Cli {
 			case Ok(_, node):
 				node;
 			case Err(message):
-				stderr('apq $op: $message\n');
+				CliIo.stderr('apq $op: $message\n');
 				null;
 		};
 		if (resolved == null) return null;
 		final path: Null<Array<QueryNode>> = TreePath.pathTo(root, resolved);
 		if (path == null) {
-			stderr('apq $op: the resolved node is not in this file\n');
+			CliIo.stderr('apq $op: the resolved node is not in this file\n');
 			return null;
 		}
 		final chain: Array<QueryNode> = path;
@@ -13298,7 +11971,7 @@ final class Cli {
 			i--;
 		}
 		if (member == null) {
-			stderr(
+			CliIo.stderr(
 				'apq $op: the resolved ${resolved.kind} node is not a type member — use `apq remove-element` for a statement or element\n'
 			);
 			return null;
@@ -13314,10 +11987,10 @@ final class Cli {
 			j--;
 		}
 		if (typeName == null) {
-			stderr('apq $op: the member "$member" is not inside a named type\n');
+			CliIo.stderr('apq $op: the member "$member" is not inside a named type\n');
 			return null;
 		}
-		stderr('apq $op: target $typeName.$member\n');
+		CliIo.stderr('apq $op: target $typeName.$member\n');
 		return { type: typeName, member: member };
 	}
 
@@ -13335,13 +12008,6 @@ final class Cli {
 		return c >= '0'.code && c <= '9'.code;
 	}
 
-	/** Whether a bare argument is a position spec (`<line>[:<col>]` — starts with a digit) rather than another positional. */
-	private static function isPosSpec(s: String): Bool {
-		if (s.length == 0) return false;
-		final c: Int = s.fastCodeAt(0);
-		return c >= '0'.code && c <= '9'.code;
-	}
-
 	/**
 	 * Shared scope→graph builder for the `callees` / `callers` / `reach`
 	 * subcommands: expands inputs, reads sources (kept for `line:col`
@@ -13351,29 +12017,29 @@ final class Cli {
 	private static function buildCallGraphScope(
 		cmd: String, inputSpecs: Array<String>, lang: String
 	): Null<{ graph: CallGraph, sources: Map<String, String> }> {
-		final cached: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final expanded: ExpandedInputs = expandInputs(inputSpecs, '.hx');
+		final cached: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final expanded: ExpandedInputs = CliArgs.expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq $cmd: no input files matched ${quotedSpecs(inputSpecs)}\n');
+			CliIo.stderr('apq $cmd: no input files matched ${CliArgs.quotedSpecs(inputSpecs)}\n');
 			return null;
 		}
 		final files: Array<{ file: String, source: String }> = [];
 		final sources: Map<String, String> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
-			final source: String = readSourceForParse(path);
+			final source: String = CliIo.readSourceForParse(path);
 			files.push({ file: path, source: source });
 			sources[path] = source;
 			try cached.parseFile(source) catch (exception: ParseError) {} catch (exception: Exception) {}
-			streamProgress(cmd, ++scanned, paths.length, expanded.singleFile);
+			CliIo.streamProgress(cmd, ++scanned, paths.length, expanded.singleFile);
 		}
 		final graph: CallGraph = CallGraph.build(files, cached);
 		if (graph.skippedFiles.length > 0) {
-			final shown: Array<String> = graph.skippedFiles.slice(0, SKIP_PATHS_SHOWN);
-			stderr('apq $cmd: WARNING ${graph.skippedFiles.length} file(s) failed to parse and are invisible to the graph:\n');
-			for (p in shown) stderr('  $p\n');
-			if (graph.skippedFiles.length > shown.length) stderr('  ... +${graph.skippedFiles.length - shown.length} more\n');
+			final shown: Array<String> = graph.skippedFiles.slice(0, CliWalk.SKIP_PATHS_SHOWN);
+			CliIo.stderr('apq $cmd: WARNING ${graph.skippedFiles.length} file(s) failed to parse and are invisible to the graph:\n');
+			for (p in shown) CliIo.stderr('  $p\n');
+			if (graph.skippedFiles.length > shown.length) CliIo.stderr('  ... +${graph.skippedFiles.length - shown.length} more\n');
 			if (expanded.singleFile) return null;
 		}
 		return { graph: graph, sources: sources };
@@ -13393,7 +12059,7 @@ final class Cli {
 				case _: null;
 			};
 			if (kind == null) {
-				stderr('apq $cmd: unknown edge kind "$token" (call, ref, new, virtual, contains)\n');
+				CliIo.stderr('apq $cmd: unknown edge kind "$token" (call, ref, new, virtual, contains)\n');
 				return null;
 			}
 			result.push(kind);
@@ -13414,29 +12080,29 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--depth':
-					final raw: String = expectValue(args, ++i, '--depth');
+					final raw: String = CliArgs.expectValue(args, ++i, '--depth');
 					final parsedDepth: Null<Int> = Std.parseInt(raw);
 					if (parsedDepth == null || parsedDepth < 1) {
-						stderr('apq $cmd: --depth expects a positive integer\n');
+						CliIo.stderr('apq $cmd: --depth expects a positive integer\n');
 						return EXIT_USAGE;
 					}
 					depth = parsedDepth;
 				case '--limit':
-					try limit = parseLimit(args, ++i) catch (exception: Exception) {
-						stderr('${exception.message}\n');
+					try limit = CliArgs.parseLimit(args, ++i) catch (exception: Exception) {
+						CliIo.stderr('${exception.message}\n');
 						return EXIT_USAGE;
 					}
 				case '--kinds':
-					kinds = parseEdgeKinds(cmd, expectValue(args, ++i, '--kinds'));
+					kinds = parseEdgeKinds(cmd, CliArgs.expectValue(args, ++i, '--kinds'));
 					if (kinds == null) return EXIT_USAGE;
 				case '-h', '--help':
 					printCallChainsUsage(cmd, outward);
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq $cmd: unknown option "$a"\n');
+						CliIo.stderr('apq $cmd: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (target == null)
@@ -13447,12 +12113,12 @@ final class Cli {
 			i++;
 		}
 		if (target == null) {
-			stderr('apq $cmd: missing <Type.method|method> argument\n');
+			CliIo.stderr('apq $cmd: missing <Type.method|method> argument\n');
 			printCallChainsUsage(cmd, outward);
 			return EXIT_USAGE;
 		}
 		if (inputSpecs.length == 0) {
-			stderr('apq $cmd: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq $cmd: missing <file-or-dir-or-glob> argument\n');
 			printCallChainsUsage(cmd, outward);
 			return EXIT_USAGE;
 		}
@@ -13464,12 +12130,12 @@ final class Cli {
 		final sources: Map<String, String> = built.sources;
 		final matches: Array<FnNode> = graph.resolveTarget(targetStr);
 		if (matches.length == 0) {
-			stderr('apq $cmd: no function in scope matches "$targetStr"\n');
+			CliIo.stderr('apq $cmd: no function in scope matches "$targetStr"\n');
 			return emptyExit(true);
 		}
 		// --limit 0 = uncapped; unset = DEFAULT_CHAIN_LINES; the budget is
 		final provenEmpty: Bool = renderChains(graph, matches, depth, outward, kinds, sources, limit);
-		if (graph.unresolved.length > 0) stderr('${chainUnresolvedNote(cmd, targetStr, graph.unresolved.length, provenEmpty)}\n');
+		if (graph.unresolved.length > 0) CliIo.stderr('${chainUnresolvedNote(cmd, targetStr, graph.unresolved.length, provenEmpty)}\n');
 		return emptyExit(provenEmpty);
 	}
 
@@ -13494,7 +12160,7 @@ final class Cli {
 		var anyEdge: Bool = false;
 		for (m in matches) {
 			final rendered: String = CallChains.render(graph, m.id, depth, outward, kinds, f -> sources[f], budget);
-			sysPrint(rendered);
+			CliIo.sysPrint(rendered);
 			final lines: Int = rendered.split('\n').length - 1;
 			if (lines > 1) anyEdge = true;
 			if (limit == 0) continue;
@@ -13519,28 +12185,28 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--from':
-					from = expectValue(args, ++i, '--from');
+					from = CliArgs.expectValue(args, ++i, '--from');
 				case '--to':
-					toPatterns.push(expectValue(args, ++i, '--to'));
+					toPatterns.push(CliArgs.expectValue(args, ++i, '--to'));
 				case '--max-paths':
-					final raw: String = expectValue(args, ++i, '--max-paths');
+					final raw: String = CliArgs.expectValue(args, ++i, '--max-paths');
 					final parsedMax: Null<Int> = Std.parseInt(raw);
 					if (parsedMax == null || parsedMax < 1) {
-						stderr('apq reach: --max-paths expects a positive integer\n');
+						CliIo.stderr('apq reach: --max-paths expects a positive integer\n');
 						return EXIT_USAGE;
 					}
 					maxPaths = parsedMax;
 				case '--kinds':
-					kinds = parseEdgeKinds('reach', expectValue(args, ++i, '--kinds'));
+					kinds = parseEdgeKinds('reach', CliArgs.expectValue(args, ++i, '--kinds'));
 					if (kinds == null) return EXIT_USAGE;
 				case '-h', '--help':
 					printReachUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq reach: unknown option "$a"\n');
+						CliIo.stderr('apq reach: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					inputSpecs.push(a);
@@ -13548,12 +12214,12 @@ final class Cli {
 			i++;
 		}
 		if (from == null || toPatterns.length == 0) {
-			stderr('apq reach: both --from and --to are required\n');
+			CliIo.stderr('apq reach: both --from and --to are required\n');
 			printReachUsage();
 			return EXIT_USAGE;
 		}
 		if (inputSpecs.length == 0) {
-			stderr('apq reach: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq reach: missing <file-or-dir-or-glob> argument\n');
 			printReachUsage();
 			return EXIT_USAGE;
 		}
@@ -13567,41 +12233,41 @@ final class Cli {
 		final toIds: Array<String> = [];
 		for (p in toPatterns) for (id in graph.matchIds(p)) if (!toIds.contains(id)) toIds.push(id);
 		if (fromIds.length == 0) {
-			stderr('apq reach: no function in scope matches --from "$fromStr"\n');
+			CliIo.stderr('apq reach: no function in scope matches --from "$fromStr"\n');
 			return emptyExit(true);
 		}
 		if (toIds.length == 0) {
-			stderr('apq reach: no function in scope matches --to ${toPatterns.join(', ')}\n');
+			CliIo.stderr('apq reach: no function in scope matches --to ${toPatterns.join(', ')}\n');
 			return emptyExit(true);
 		}
 		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New, Virtual];
 		final found: Array<Array<CallEdge>> = Reach.paths(graph, fromIds, toIds, maxPaths, effectiveKinds);
-		for (path in found) sysPrint('${Reach.render(graph, path, f -> sources[f])}\n');
-		if (found.length == 0) stderr('apq reach: no path found (${fromIds.length} from-node(s), ${toIds.length} to-node(s))\n');
+		for (path in found) CliIo.sysPrint('${Reach.render(graph, path, f -> sources[f])}\n');
+		if (found.length == 0) CliIo.stderr('apq reach: no path found (${fromIds.length} from-node(s), ${toIds.length} to-node(s))\n');
 		if (graph.unresolved.length > 0)
-			stderr('apq reach: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
+			CliIo.stderr('apq reach: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
 		return emptyExit(found.length == 0);
 	}
 
 	private static function printCallChainsUsage(cmd: String, outward: Bool): Void {
 		final what: String = outward ? 'functions CALLED BY the target (out-edges)' : 'functions CALLING the target (in-edges)';
-		sysPrint('Usage: apq $cmd <Type.method|method> <file-or-dir-or-glob>... [options]\n\n');
-		sysPrint('Transitive call tree: $what.\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --depth <n>    Levels to expand (default 1)\n');
-		sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains (default all)\n');
-		sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('Usage: apq $cmd <Type.method|method> <file-or-dir-or-glob>... [options]\n\n');
+		CliIo.sysPrint('Transitive call tree: $what.\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --depth <n>    Levels to expand (default 1)\n');
+		CliIo.sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains (default all)\n');
+		CliIo.sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 	private static function printReachUsage(): Void {
-		sysPrint('Usage: apq reach --from <Type.method> --to <Type.method|Type.*> <file-or-dir-or-glob>... [options]\n\n');
-		sysPrint('Shortest call path(s) from --from to each --to (BFS; one path per pair).\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --to <target>     Repeatable; accepts Type.method, bare method, Type.*\n');
-		sysPrint('  --max-paths <n>   Cap on reported paths (default $DEFAULT_REACH_PATHS)\n');
-		sysPrint('  --kinds <k,..>    Edge kinds to traverse (default call,ref,new,virtual)\n');
-		sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('Usage: apq reach --from <Type.method> --to <Type.method|Type.*> <file-or-dir-or-glob>... [options]\n\n');
+		CliIo.sysPrint('Shortest call path(s) from --from to each --to (BFS; one path per pair).\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --to <target>     Repeatable; accepts Type.method, bare method, Type.*\n');
+		CliIo.sysPrint('  --max-paths <n>   Cap on reported paths (default $DEFAULT_REACH_PATHS)\n');
+		CliIo.sysPrint('  --kinds <k,..>    Edge kinds to traverse (default call,ref,new,virtual)\n');
+		CliIo.sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
 	}
 
 	private static function runClusters(args: Array<String>): Int {
@@ -13616,24 +12282,24 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--hubs':
-					final raw: String = expectValue(args, ++i, '--hubs');
+					final raw: String = CliArgs.expectValue(args, ++i, '--hubs');
 					final parsed: Null<Int> = Std.parseInt(raw);
 					if (parsed == null || parsed < 0) {
-						stderr('apq clusters: --hubs expects a non-negative integer (0 = no hub extraction)\n');
+						CliIo.stderr('apq clusters: --hubs expects a non-negative integer (0 = no hub extraction)\n');
 						return EXIT_USAGE;
 					}
 					hubCount = parsed;
 				case '--kinds':
-					kinds = parseEdgeKinds('clusters', expectValue(args, ++i, '--kinds'));
+					kinds = parseEdgeKinds('clusters', CliArgs.expectValue(args, ++i, '--kinds'));
 					if (kinds == null) return EXIT_USAGE;
 				case '-h', '--help':
 					printClustersUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq clusters: unknown option "$a"\n');
+						CliIo.stderr('apq clusters: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (target == null)
@@ -13644,12 +12310,12 @@ final class Cli {
 			i++;
 		}
 		if (target == null) {
-			stderr('apq clusters: missing <TypeName> argument\n');
+			CliIo.stderr('apq clusters: missing <TypeName> argument\n');
 			printClustersUsage();
 			return EXIT_USAGE;
 		}
 		if (inputSpecs.length == 0) {
-			stderr('apq clusters: missing <file-or-dir-or-glob> argument\n');
+			CliIo.stderr('apq clusters: missing <file-or-dir-or-glob> argument\n');
 			printClustersUsage();
 			return EXIT_USAGE;
 		}
@@ -13661,24 +12327,24 @@ final class Cli {
 		final sources: Map<String, String> = built.sources;
 		final report: Null<ClusterReport> = Clusters.analyze(graph, typeName, hubCount, kinds);
 		if (report == null) {
-			stderr('apq clusters: no type in scope has members named "$typeName"\n');
+			CliIo.stderr('apq clusters: no type in scope has members named "$typeName"\n');
 			return emptyExit(true);
 		}
-		sysPrint(Clusters.render(graph, report, f -> sources[f]));
+		CliIo.sysPrint(Clusters.render(graph, report, f -> sources[f]));
 		if (graph.unresolved.length > 0)
-			stderr('apq clusters: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
+			CliIo.stderr('apq clusters: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
 		return emptyExit(false);
 	}
 
 	private static function printClustersUsage(): Void {
-		sysPrint('Usage: apq clusters <TypeName> <file-or-dir-or-glob>... [options]\n\n');
-		sysPrint('Partition analytics over the call graph: cluster the members of one type\n');
-		sysPrint('by intra-type call-edge connectivity, extracting high-fan-in hub members\n');
-		sysPrint('into a utils bucket first (else one hub glues everything into a blob).\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --hubs <n>     Extract exactly the top-n fan-in hubs (0 = off; default auto)\n');
-		sysPrint('  --kinds <k,..> Edge kinds for connectivity: call,ref,new,virtual,contains (default call,ref,new)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('Usage: apq clusters <TypeName> <file-or-dir-or-glob>... [options]\n\n');
+		CliIo.sysPrint('Partition analytics over the call graph: cluster the members of one type\n');
+		CliIo.sysPrint('by intra-type call-edge connectivity, extracting high-fan-in hub members\n');
+		CliIo.sysPrint('into a utils bucket first (else one hub glues everything into a blob).\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --hubs <n>     Extract exactly the top-n fan-in hubs (0 = off; default auto)\n');
+		CliIo.sysPrint('  --kinds <k,..> Edge kinds for connectivity: call,ref,new,virtual,contains (default call,ref,new)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 	private static function runMoveMember(args: Array<String>): Int {
@@ -13698,15 +12364,15 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					srcType = expectValue(args, ++i, '--type');
+					srcType = CliArgs.expectValue(args, ++i, '--type');
 				case '--to':
-					destType = expectValue(args, ++i, '--to');
+					destType = CliArgs.expectValue(args, ++i, '--to');
 				case '--scope':
-					scopeDir = expectValue(args, ++i, '--scope');
+					scopeDir = CliArgs.expectValue(args, ++i, '--scope');
 				case '--via':
-					via = expectValue(args, ++i, '--via');
+					via = CliArgs.expectValue(args, ++i, '--via');
 				case '--closure':
 					closure = true;
 				case '--scaffold':
@@ -13718,7 +12384,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq move-member: unknown option "$a"\n');
+						CliIo.stderr('apq move-member: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (srcFile == null)
@@ -13726,14 +12392,14 @@ final class Cli {
 					else if (memberArg == null)
 						memberArg = a;
 					else {
-						stderr('apq move-member: unexpected argument "$a"\n');
+						CliIo.stderr('apq move-member: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (srcFile == null || memberArg == null || destType == null || scopeDir == null) {
-			stderr('apq move-member: missing required arguments\n');
+			CliIo.stderr('apq move-member: missing required arguments\n');
 			printMoveMemberUsage();
 			return EXIT_USAGE;
 		}
@@ -13741,9 +12407,9 @@ final class Cli {
 		final srcFileNN: String = srcFile;
 		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
 		final destTypeName: String = destType;
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles('move-member', scopeDir, [srcFileNN]);
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles('move-member', scopeDir, [srcFileNN]);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: MoveResult = MoveMember.move(
@@ -13753,47 +12419,25 @@ final class Cli {
 	}
 
 	private static function printMoveMemberUsage(): Void {
-		sysPrint('Usage: apq move-member <srcFile> <member[,member...]> --to <DestType> --scope <dir> [options]\n\n');
-		sysPrint('Move one or more members (method / var / final) to another type — the\n');
-		sysPrint('SAME package, or any package when every moved member is static. Static:\n');
-		sysPrint('Src.member -> Dest.member across the scope, bare references qualified,\n');
-		sysPrint('imports carried. Instance (sibling-fields contract):\n');
-		sysPrint('moved bodies may read final fields the destination declares under the same\n');
-		sysPrint('names; remaining bare callers are rewired through a Src field of type Dest\n');
-		sysPrint('(--via, auto-detected when unique); calls between moved members stay bare;\n');
-		sysPrint('receiver-qualified external calls (x.member()) are NOT rewritten. Atomic\n');
-		sysPrint('(all files re-parse or none).\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --type <Src>   Source type name (default: the file\'s main type)\n');
-		sysPrint('  --to <Dest>    Destination type name (must exist under --scope)\n');
-		sysPrint('  --scope <dir>  Rewrite scope (dir/glob; srcFile auto-included)\n');
-		sysPrint('  --via <field>  Src instance field of type Dest routing remaining callers\n');
-		sysPrint('  --closure      Auto-expand the set to instance methods it calls (transitive)\n');
-		sysPrint('  --scaffold     Generate the dest final fields + ctor and the via field wiring\n');
-		sysPrint('  --write        Apply in place (default: print per-file summary)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
-	}
-
-	/**
-	 * Expand a --scope dir/glob and read every file plus the extras (the
-	 * op's own files), reporting read failures; null aborts the op.
-	 */
-	private static function collectScopeFiles(
-		cmd: String, scopeDir: String, extraFiles: Array<String>
-	): Null<Array<{ file: String, source: String }>> {
-		final expanded: ExpandedInputs = expandInputs([scopeDir], '.hx');
-		final paths: Array<String> = expanded.paths;
-		for (extra in extraFiles) if (!paths.contains(extra)) paths.push(extra);
-		return ([
-			for (path in paths)
-				{
-					file: path,
-					source: (try readSourceForParse(path) catch (exception: Exception) {
-						stderr('apq $cmd: $path: ${exception.message}\n');
-						return null;
-					}: String)
-				}
-		]: Array<{ file: String, source: String }>);
+		CliIo.sysPrint('Usage: apq move-member <srcFile> <member[,member...]> --to <DestType> --scope <dir> [options]\n\n');
+		CliIo.sysPrint('Move one or more members (method / var / final) to another type — the\n');
+		CliIo.sysPrint('SAME package, or any package when every moved member is static. Static:\n');
+		CliIo.sysPrint('Src.member -> Dest.member across the scope, bare references qualified,\n');
+		CliIo.sysPrint('imports carried. Instance (sibling-fields contract):\n');
+		CliIo.sysPrint('moved bodies may read final fields the destination declares under the same\n');
+		CliIo.sysPrint('names; remaining bare callers are rewired through a Src field of type Dest\n');
+		CliIo.sysPrint('(--via, auto-detected when unique); calls between moved members stay bare;\n');
+		CliIo.sysPrint('receiver-qualified external calls (x.member()) are NOT rewritten. Atomic\n');
+		CliIo.sysPrint('(all files re-parse or none).\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --type <Src>   Source type name (default: the file\'s main type)\n');
+		CliIo.sysPrint('  --to <Dest>    Destination type name (must exist under --scope)\n');
+		CliIo.sysPrint('  --scope <dir>  Rewrite scope (dir/glob; srcFile auto-included)\n');
+		CliIo.sysPrint('  --via <field>  Src instance field of type Dest routing remaining callers\n');
+		CliIo.sysPrint('  --closure      Auto-expand the set to instance methods it calls (transitive)\n');
+		CliIo.sysPrint('  --scaffold     Generate the dest final fields + ctor and the via field wiring\n');
+		CliIo.sysPrint('  --write        Apply in place (default: print per-file summary)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 	/**
@@ -13815,7 +12459,7 @@ final class Cli {
 	 */
 	private static function refuseOccupiedDestination(op: String, path: String): Bool {
 		if (!FileSystem.exists(path)) return false;
-		stderr(
+		CliIo.stderr(
 			'apq $op: $path already exists — $op generates a whole module and would overwrite it '
 			+ '(create-only, as `apq new` is); pass --out <path> naming a free file, or move that one aside\n'
 		);
@@ -13836,13 +12480,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					srcType = expectValue(args, ++i, '--type');
+					srcType = CliArgs.expectValue(args, ++i, '--type');
 				case '--members':
-					members = expectValue(args, ++i, '--members');
+					members = CliArgs.expectValue(args, ++i, '--members');
 				case '--out':
-					out = expectValue(args, ++i, '--out');
+					out = CliArgs.expectValue(args, ++i, '--out');
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -13850,7 +12494,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq extract-interface: unknown option "$a"\n');
+						CliIo.stderr('apq extract-interface: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (srcFile == null)
@@ -13858,14 +12502,14 @@ final class Cli {
 					else if (ifaceName == null)
 						ifaceName = a;
 					else {
-						stderr('apq extract-interface: unexpected argument "$a"\n');
+						CliIo.stderr('apq extract-interface: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (srcFile == null || ifaceName == null) {
-			stderr('apq extract-interface: missing required arguments\n');
+			CliIo.stderr('apq extract-interface: missing required arguments\n');
 			printExtractInterfaceUsage();
 			return EXIT_USAGE;
 		}
@@ -13878,53 +12522,53 @@ final class Cli {
 		final ifaceFile: String = out ?? '$dir$ifaceNameNN.hx';
 		if (refuseOccupiedDestination('extract-interface', ifaceFile)) return EXIT_RUNTIME;
 
-		final source: String = try readFile(srcFileNN) catch (exception: Exception) {
-			stderr('apq extract-interface: $srcFileNN: ${exception.message}\n');
+		final source: String = try CliIo.readFile(srcFileNN) catch (exception: Exception) {
+			CliIo.stderr('apq extract-interface: $srcFileNN: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		// One config per FILE, because each is judged by the one that governs where IT lands
 		// and `--out` can put the interface under a different `hxformat.json` from the class.
 		// Passing null for the created file styled it by compiled defaults, so `fmt --list`
 		// called it drifted the moment it was written; passing null for the source would make
 		// a project-canonical class read as drifted and silently forfeit the canonical-out
 		// half of the edit.
-		final optsJson: Null<String> = discoverFormatConfig(ifaceFile);
-		final srcOptsJson: Null<String> = discoverFormatConfig(srcFileNN);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(ifaceFile);
+		final srcOptsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN);
 		final result: MoveResult = ExtractInterface.extract(
 			srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin, optsJson, srcOptsJson
 		);
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
-					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
-					stderr('apq extract-interface: wrote ${changes.length} file(s)\n');
+					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+					CliIo.stderr('apq extract-interface: wrote ${changes.length} file(s)\n');
 				} else {
-					for (c in changes) sysPrint('${c.file}: ${c.file == ifaceFile ? 'created' : 'updated'}\n');
-					sysPrint('total: ${changes.length} file(s)\n');
-					stderr('apq extract-interface: NOTHING written — this is a preview; re-run with --write to apply\n');
+					for (c in changes) CliIo.sysPrint('${c.file}: ${c.file == ifaceFile ? 'created' : 'updated'}\n');
+					CliIo.sysPrint('total: ${changes.length} file(s)\n');
+					CliIo.stderr('apq extract-interface: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
-				if (advisory != null) stderr('apq extract-interface: $advisory\n');
+				if (advisory != null) CliIo.stderr('apq extract-interface: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq extract-interface: $message\n');
+				CliIo.stderr('apq extract-interface: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printExtractInterfaceUsage(): Void {
-		sysPrint('Usage: apq extract-interface <srcFile> <IfaceName> [options]\n\n');
-		sysPrint('Generate an interface from a class\'s public instance methods and make\n');
-		sysPrint('the class implement it. The interface lands in the source type\'s package\n');
-		sysPrint('(sibling file <IfaceName>.hx by default), carrying the imports its\n');
-		sysPrint('signatures reference; the class gains an "implements <IfaceName>" clause.\n');
-		sysPrint('No call sites change (an interface is additive).\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --type <Src>       Source class name (default: the file\'s main type)\n');
-		sysPrint('  --members m1,m2    Only these methods (default: every public method)\n');
-		sysPrint('  --out <path>       Interface file path (default: sibling <IfaceName>.hx)\n');
-		sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
-		sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('Usage: apq extract-interface <srcFile> <IfaceName> [options]\n\n');
+		CliIo.sysPrint('Generate an interface from a class\'s public instance methods and make\n');
+		CliIo.sysPrint('the class implement it. The interface lands in the source type\'s package\n');
+		CliIo.sysPrint('(sibling file <IfaceName>.hx by default), carrying the imports its\n');
+		CliIo.sysPrint('signatures reference; the class gains an "implements <IfaceName>" clause.\n');
+		CliIo.sysPrint('No call sites change (an interface is additive).\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --type <Src>       Source class name (default: the file\'s main type)\n');
+		CliIo.sysPrint('  --members m1,m2    Only these methods (default: every public method)\n');
+		CliIo.sysPrint('  --out <path>       Interface file path (default: sibling <IfaceName>.hx)\n');
+		CliIo.sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
+		CliIo.sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
 	}
 
 	private static function runInheritanceMove(args: Array<String>, up: Bool): Int {
@@ -13942,13 +12586,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					srcType = expectValue(args, ++i, '--type');
+					srcType = CliArgs.expectValue(args, ++i, '--type');
 				case '--to':
-					targetType = expectValue(args, ++i, '--to');
+					targetType = CliArgs.expectValue(args, ++i, '--to');
 				case '--scope':
-					scopeDir = expectValue(args, ++i, '--scope');
+					scopeDir = CliArgs.expectValue(args, ++i, '--scope');
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -13956,7 +12600,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq $cmd: unknown option "$a"\n');
+						CliIo.stderr('apq $cmd: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (srcFile == null)
@@ -13964,23 +12608,23 @@ final class Cli {
 					else if (memberName == null)
 						memberName = a;
 					else {
-						stderr('apq $cmd: unexpected argument "$a"\n');
+						CliIo.stderr('apq $cmd: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (srcFile == null || memberName == null || targetType == null || scopeDir == null) {
-			stderr('apq $cmd: missing required arguments\n');
+			CliIo.stderr('apq $cmd: missing required arguments\n');
 			printInheritanceMoveUsage(up);
 			return EXIT_USAGE;
 		}
 		final srcFileNN: String = srcFile;
 		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
 		final targetTypeName: String = targetType;
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles(cmd, scopeDir, [srcFileNN]);
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(cmd, scopeDir, [srcFileNN]);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: MoveResult = up
@@ -13992,22 +12636,22 @@ final class Cli {
 	private static function printInheritanceMoveUsage(up: Bool): Void {
 		final cmd: String = up ? 'pull-up' : 'push-down';
 		final rel: String = up ? 'superclass' : 'subclass';
-		sysPrint('Usage: apq $cmd <srcFile> <member> --to <$rel> --scope <dir> [options]\n\n');
+		CliIo.sysPrint('Usage: apq $cmd <srcFile> <member> --to <$rel> --scope <dir> [options]\n\n');
 		if (up) {
-			sysPrint('Move an instance member from a subclass up to its superclass. No call\n');
-			sysPrint('sites change (subclass instances still see the inherited member). Refuses\n');
-			sysPrint('when the moved body references a subclass-only member.\n\n');
+			CliIo.sysPrint('Move an instance member from a subclass up to its superclass. No call\n');
+			CliIo.sysPrint('sites change (subclass instances still see the inherited member). Refuses\n');
+			CliIo.sysPrint('when the moved body references a subclass-only member.\n\n');
 		} else {
-			sysPrint('Move an instance member from a superclass down to a subclass. No call\n');
-			sysPrint('sites are rewritten; callers holding a superclass-typed receiver stop\n');
-			sysPrint('compiling (a loud error, never a silent change).\n\n');
+			CliIo.sysPrint('Move an instance member from a superclass down to a subclass. No call\n');
+			CliIo.sysPrint('sites are rewritten; callers holding a superclass-typed receiver stop\n');
+			CliIo.sysPrint('compiling (a loud error, never a silent change).\n\n');
 		}
-		sysPrint('Options:\n');
-		sysPrint('  --type <Src>   Source type name (default: the file\'s main type)\n');
-		sysPrint('  --to <$rel>  Target type name (must be in the direct inheritance relation)\n');
-		sysPrint('  --scope <dir>  Scope to locate the target type (dir/glob; srcFile auto-included)\n');
-		sysPrint('  --write        Apply in place (default: print a per-file summary)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --type <Src>   Source type name (default: the file\'s main type)\n');
+		CliIo.sysPrint('  --to <$rel>  Target type name (must be in the direct inheritance relation)\n');
+		CliIo.sysPrint('  --scope <dir>  Scope to locate the target type (dir/glob; srcFile auto-included)\n');
+		CliIo.sysPrint('  --write        Apply in place (default: print a per-file summary)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 	private static function runExtractSuperclass(args: Array<String>): Int {
@@ -14024,13 +12668,13 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					srcType = expectValue(args, ++i, '--type');
+					srcType = CliArgs.expectValue(args, ++i, '--type');
 				case '--members':
-					members = expectValue(args, ++i, '--members');
+					members = CliArgs.expectValue(args, ++i, '--members');
 				case '--out':
-					out = expectValue(args, ++i, '--out');
+					out = CliArgs.expectValue(args, ++i, '--out');
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -14038,7 +12682,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq extract-superclass: unknown option "$a"\n');
+						CliIo.stderr('apq extract-superclass: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (srcFile == null)
@@ -14046,14 +12690,14 @@ final class Cli {
 					else if (superName == null)
 						superName = a;
 					else {
-						stderr('apq extract-superclass: unexpected argument "$a"\n');
+						CliIo.stderr('apq extract-superclass: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (srcFile == null || superName == null || members == null) {
-			stderr('apq extract-superclass: missing required arguments (need <srcFile> <SuperName> --members m1,m2)\n');
+			CliIo.stderr('apq extract-superclass: missing required arguments (need <srcFile> <SuperName> --members m1,m2)\n');
 			printExtractSuperclassUsage();
 			return EXIT_USAGE;
 		}
@@ -14067,47 +12711,47 @@ final class Cli {
 		final superFile: String = out ?? '$dir$superNameNN.hx';
 		if (refuseOccupiedDestination('extract-superclass', superFile)) return EXIT_RUNTIME;
 
-		final source: String = try readFile(srcFileNN) catch (exception: Exception) {
-			stderr('apq extract-superclass: $srcFileNN: ${exception.message}\n');
+		final source: String = try CliIo.readFile(srcFileNN) catch (exception: Exception) {
+			CliIo.stderr('apq extract-superclass: $srcFileNN: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		// One config per FILE — see `runExtractInterface` for why each needs its own.
-		final optsJson: Null<String> = discoverFormatConfig(superFile);
-		final srcOptsJson: Null<String> = discoverFormatConfig(srcFileNN);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(superFile);
+		final srcOptsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN);
 		final result: MoveResult = ExtractSuperclass.extract(
 			srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin, optsJson, srcOptsJson
 		);
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
-					writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
-					stderr('apq extract-superclass: wrote ${changes.length} file(s)\n');
+					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+					CliIo.stderr('apq extract-superclass: wrote ${changes.length} file(s)\n');
 				} else {
-					for (c in changes) sysPrint('${c.file}: ${c.file == superFile ? 'created' : 'updated'}\n');
-					sysPrint('total: ${changes.length} file(s)\n');
-					stderr('apq extract-superclass: NOTHING written — this is a preview; re-run with --write to apply\n');
+					for (c in changes) CliIo.sysPrint('${c.file}: ${c.file == superFile ? 'created' : 'updated'}\n');
+					CliIo.sysPrint('total: ${changes.length} file(s)\n');
+					CliIo.stderr('apq extract-superclass: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
-				if (advisory != null) stderr('apq extract-superclass: $advisory\n');
+				if (advisory != null) CliIo.stderr('apq extract-superclass: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq extract-superclass: $message\n');
+				CliIo.stderr('apq extract-superclass: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printExtractSuperclassUsage(): Void {
-		sysPrint('Usage: apq extract-superclass <srcFile> <SuperName> --members m1,m2 [options]\n\n');
-		sysPrint('Generate a superclass, pull the named instance members up into it, and\n');
-		sysPrint('make the class extend it. The superclass lands in the source package\n');
-		sysPrint('(sibling <SuperName>.hx by default) with no constructor, carrying the\n');
-		sysPrint('imports the moved bodies reference. No call sites change (inheritance).\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --members m1,m2    Members to pull up (required)\n');
-		sysPrint('  --type <Src>       Source class name (default: the file\'s main type)\n');
-		sysPrint('  --out <path>       Superclass file path (default: sibling <SuperName>.hx)\n');
-		sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
-		sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('Usage: apq extract-superclass <srcFile> <SuperName> --members m1,m2 [options]\n\n');
+		CliIo.sysPrint('Generate a superclass, pull the named instance members up into it, and\n');
+		CliIo.sysPrint('make the class extend it. The superclass lands in the source package\n');
+		CliIo.sysPrint('(sibling <SuperName>.hx by default) with no constructor, carrying the\n');
+		CliIo.sysPrint('imports the moved bodies reference. No call sites change (inheritance).\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --members m1,m2    Members to pull up (required)\n');
+		CliIo.sysPrint('  --type <Src>       Source class name (default: the file\'s main type)\n');
+		CliIo.sysPrint('  --out <path>       Superclass file path (default: sibling <SuperName>.hx)\n');
+		CliIo.sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
+		CliIo.sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
 	}
 
 	private static function runSafeDelete(args: Array<String>): Int {
@@ -14124,11 +12768,11 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					srcType = expectValue(args, ++i, '--type');
+					srcType = CliArgs.expectValue(args, ++i, '--type');
 				case '--scope':
-					scopeDir = expectValue(args, ++i, '--scope');
+					scopeDir = CliArgs.expectValue(args, ++i, '--scope');
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -14138,7 +12782,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq safe-delete: unknown option "$a"\n');
+						CliIo.stderr('apq safe-delete: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (srcFile == null)
@@ -14146,24 +12790,24 @@ final class Cli {
 					else if (memberName == null)
 						memberName = a;
 					else {
-						stderr('apq safe-delete: unexpected argument "$a"\n');
+						CliIo.stderr('apq safe-delete: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (srcFile == null || memberName == null || scopeDir == null) {
-			stderr('apq safe-delete: missing required arguments (need <srcFile> <member> --scope <dir>)\n');
+			CliIo.stderr('apq safe-delete: missing required arguments (need <srcFile> <member> --scope <dir>)\n');
 			printSafeDeleteUsage();
 			return EXIT_USAGE;
 		}
 		final srcFileNN: String = srcFile;
 		final memberNameNN: String = memberName;
 		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
 		final op: String = 'safe-delete';
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles(op, scopeDir, [srcFileNN]);
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(op, scopeDir, [srcFileNN]);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		// The op WRITES `srcFile`, so the canonical gate and the re-emit are judged by the
@@ -14172,33 +12816,33 @@ final class Cli {
 		// defaults and refuse it, naming `apq fmt --write` as the remedy for the state that
 		// command had just produced; `--reformat` then re-canonicalised under the defaults,
 		// so the escape hatch de-formatted the file.
-		final optsJson: Null<String> = discoverFormatConfig(srcFileNN);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN);
 		final result: EditResult = SafeDelete.safeDelete(
 			srcFileNN, srcTypeName, memberNameNN, reformat, scopeFiles, plugin, plugin.refShape(), optsJson
 		);
 		switch result {
 			case Ok(text):
 				if (write) {
-					writeFile(srcFileNN, text);
-					stderr('apq safe-delete: removed "$memberNameNN" from $srcFileNN\n');
+					CliIo.writeFile(srcFileNN, text);
+					CliIo.stderr('apq safe-delete: removed "$memberNameNN" from $srcFileNN\n');
 				} else
-					previewEdit(op, srcFileNN, text);
+					CliEdit.previewEdit(op, srcFileNN, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq safe-delete: $message\n');
+				CliIo.stderr('apq safe-delete: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printSafeDeleteUsage(): Void {
-		sysPrint('Usage: apq safe-delete <srcFile> <member> --scope <dir> [options]\n\n');
-		sysPrint('Remove a member only when no reference to it survives under the scope —\n');
-		sysPrint('the guarded, cross-file, any-visibility form of remove-member. Any\n');
-		sysPrint('x.member field access or bare in-type reference blocks the deletion and\n');
-		sysPrint('is listed. Self-references (recursion) do not count.\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --type <Src>   Declaring type name (default: the file\'s main type)\n');
-		sysPrint('  --scope <dir>  Reference-check scope (dir/glob; srcFile auto-included)\n');
+		CliIo.sysPrint('Usage: apq safe-delete <srcFile> <member> --scope <dir> [options]\n\n');
+		CliIo.sysPrint('Remove a member only when no reference to it survives under the scope —\n');
+		CliIo.sysPrint('the guarded, cross-file, any-visibility form of remove-member. Any\n');
+		CliIo.sysPrint('x.member field access or bare in-type reference blocks the deletion and\n');
+		CliIo.sysPrint('is listed. Self-references (recursion) do not count.\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --type <Src>   Declaring type name (default: the file\'s main type)\n');
+		CliIo.sysPrint('  --scope <dir>  Reference-check scope (dir/glob; srcFile auto-included)\n');
 		printShortReformatWriteLangHelp();
 	}
 
@@ -14215,9 +12859,9 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					typeName = expectValue(args, ++i, '--type');
+					typeName = CliArgs.expectValue(args, ++i, '--type');
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -14227,7 +12871,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq encapsulate-field: unknown option "$a"\n');
+						CliIo.stderr('apq encapsulate-field: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
@@ -14235,144 +12879,54 @@ final class Cli {
 					else if (fieldName == null)
 						fieldName = a;
 					else {
-						stderr('apq encapsulate-field: unexpected argument "$a"\n');
+						CliIo.stderr('apq encapsulate-field: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || fieldName == null) {
-			stderr('apq encapsulate-field: missing required arguments (need <file> <field>)\n');
+			CliIo.stderr('apq encapsulate-field: missing required arguments (need <file> <field>)\n');
 			printEncapsulateFieldUsage();
 			return EXIT_USAGE;
 		}
 		final filePath: String = file;
 		final fieldNameNN: String = fieldName;
 		final typeNameNN: String = typeName ?? RefactorSupport.baseNameOf(filePath);
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq encapsulate-field: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq encapsulate-field: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		// Discover the file's format config so the canonical gate matches the project's writer
 		// style (space-after-colon, etc.), else a non-default-formatted file is wrongly rejected.
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = EncapsulateField.encapsulate(source, typeNameNN, fieldNameNN, reformat, plugin, optsJson);
 		final op: String = 'encapsulate-field';
 		switch result {
 			case Ok(text, rewrites):
-				warnRewrites(op, filePath, rewrites);
+				CliEdit.warnRewrites(op, filePath, rewrites);
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq encapsulate-field: encapsulated "$fieldNameNN" in $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq encapsulate-field: encapsulated "$fieldNameNN" in $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq encapsulate-field: $message\n');
+				CliIo.stderr('apq encapsulate-field: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printEncapsulateFieldUsage(): Void {
-		sysPrint('Usage: apq encapsulate-field <file> <field> [options]\n\n');
-		sysPrint('Turn a stored var field into a property with get / set accessors\n');
-		sysPrint('(via @:isVar, so the field stays the backing storage and no reference\n');
-		sysPrint('is renamed). Requires a plain, non-final, non-static instance var with\n');
-		sysPrint('an explicit type.\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
+		CliIo.sysPrint('Usage: apq encapsulate-field <file> <field> [options]\n\n');
+		CliIo.sysPrint('Turn a stored var field into a property with get / set accessors\n');
+		CliIo.sysPrint('(via @:isVar, so the field stays the backing storage and no reference\n');
+		CliIo.sysPrint('is renamed). Requires a plain, non-final, non-static instance var with\n');
+		CliIo.sysPrint('an explicit type.\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
 		printShortReformatWriteLangHelp();
-	}
-
-	private static function runMakeFinal(args: Array<String>): Int {
-		final op: String = 'make-final';
-		var lang: String = 'haxe';
-		var typeName: Null<String> = null;
-		var scopeDir: Null<String> = null;
-		var write: Bool = false;
-		var file: Null<String> = null;
-		var fieldName: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--type':
-					typeName = expectValue(args, ++i, '--type');
-				case '--scope':
-					scopeDir = expectValue(args, ++i, '--scope');
-				case '--write':
-					write = true;
-				case '-h', '--help':
-					printMakeFinalUsage();
-					return EXIT_OK;
-				case _:
-					if (a.startsWith('--')) {
-						stderr('apq make-final: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file == null)
-						file = a;
-					else if (fieldName == null)
-						fieldName = a;
-					else {
-						stderr('apq make-final: unexpected argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (file == null || fieldName == null) {
-			stderr('apq make-final: missing required arguments (need <file> <field>)\n');
-			printMakeFinalUsage();
-			return EXIT_USAGE;
-		}
-		final filePath: String = file;
-		final fieldNameNN: String = fieldName;
-		final typeNameNN: String = typeName ?? RefactorSupport.baseNameOf(filePath);
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = scopeDir == null ? [
-			{
-				file: filePath,
-				source: try readFile(filePath) catch (exception: Exception) {
-					stderr('apq make-final: $filePath: ${exception.message}\n');
-					return EXIT_RUNTIME;
-				}
-			}
-		] : collectScopeFiles(op, scopeDir, [filePath]);
-		if (scopeFiles == null) return EXIT_RUNTIME;
-
-		final result: EditResult = MakeFinal.makeFinal(filePath, typeNameNN, fieldNameNN, scopeFiles, plugin);
-		switch result {
-			case Ok(text):
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq make-final: made "$fieldNameNN" final in $filePath\n');
-				} else
-					previewEdit(op, filePath, text);
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq make-final: $message\n');
-				return EXIT_RUNTIME;
-		}
-	}
-
-	private static function printMakeFinalUsage(): Void {
-		sysPrint('Usage: apq make-final <file> <field> [--scope <dir>] [options]\n\n');
-		sysPrint('Turn a mutable var field into final when it is never reassigned after its\n');
-		sysPrint('single initialisation — unblocks the move-member instance path (whose\n');
-		sysPrint('sibling-fields contract accepts only final fields). Any write outside the\n');
-		sysPrint('constructor refuses the change. --scope widens the reassignment check to\n');
-		sysPrint('cross-file obj.field writes.\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
-		sysPrint('  --scope <dir>  Widen the reassignment check across the scope\n');
-		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 	private static function runIntroduceParameterObject(args: Array<String>): Int {
@@ -14393,19 +12947,19 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--params':
-					params = expectValue(args, ++i, '--params');
+					params = CliArgs.expectValue(args, ++i, '--params');
 				case '--as':
-					typeName = expectValue(args, ++i, '--as');
+					typeName = CliArgs.expectValue(args, ++i, '--as');
 				case '--name':
-					objName = expectValue(args, ++i, '--name');
+					objName = CliArgs.expectValue(args, ++i, '--name');
 				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
+					selectExpr = CliArgs.expectValue(args, ++i, '--select');
 				case '--match':
-					matchExpr = expectValue(args, ++i, '--match');
+					matchExpr = CliArgs.expectValue(args, ++i, '--match');
 				case '--nth':
-					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+					nth = Std.parseInt(CliArgs.expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -14413,34 +12967,34 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq introduce-parameter-object: unknown option "$a"\n');
+						CliIo.stderr('apq introduce-parameter-object: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null && selectExpr == null && matchExpr == null && isPosSpec(a))
+					else if (posSpec == null && selectExpr == null && matchExpr == null && CliArgs.isPosSpec(a))
 						posSpec = a;
 					else {
-						stderr('apq introduce-parameter-object: unexpected argument "$a"\n');
+						CliIo.stderr('apq introduce-parameter-object: unexpected argument "$a"\n');
 						return EXIT_USAGE;
 					}
 			}
 			i++;
 		}
 		if (file == null || params == null || typeName == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
-			stderr('apq introduce-parameter-object: need <file> (<l>:<c> | --select | --match) --params a,b --as <TypeName>\n');
+			CliIo.stderr('apq introduce-parameter-object: need <file> (<l>:<c> | --select | --match) --params a,b --as <TypeName>\n');
 			printIntroduceParameterObjectUsage();
 			return EXIT_USAGE;
 		}
 		final filePath: String = file;
 		final paramsNN: String = params;
 		final typeNameNN: String = typeName;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq introduce-parameter-object: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq introduce-parameter-object: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final pos: Null<Position> = resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final paramNames: Array<String> = paramsNN.split(',').map(StringTools.trim).filter(n -> n != '');
 
@@ -14449,33 +13003,37 @@ final class Cli {
 		// plain splice — switching the canonical-out half of `editKeepingCanonical` off
 		// without saying so.
 		final result: EditResult = IntroduceParameterObject.introduce(
-			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape(), discoverFormatConfig(filePath)
+			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape(), CliArgs.discoverFormatConfig(filePath)
 		);
 		switch result {
 			case Ok(text):
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq introduce-parameter-object: folded ${paramNames.length} parameter(s) into "$typeNameNN" in $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr(
+						'apq introduce-parameter-object: folded ${paramNames.length} parameter(s) into "$typeNameNN" in $filePath\n'
+					);
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq introduce-parameter-object: $message\n');
+				CliIo.stderr('apq introduce-parameter-object: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printIntroduceParameterObjectUsage(): Void {
-		sysPrint('Usage: apq introduce-parameter-object <file> (<l>:<c> | --select | --match) --params a,b --as <TypeName> [options]\n\n');
-		sysPrint('Replace a contiguous run of a function\'s parameters with one object\n');
-		sysPrint('parameter of a generated typedef. The signature, the body\'s references,\n');
-		sysPrint('and every resolvable in-file call site are rewritten together.\n\n');
-		sysPrint('Options:\n');
-		sysPrint('  --params a,b   The contiguous parameters to fold (required)\n');
-		sysPrint('  --as <Type>    Name of the generated typedef (required)\n');
-		sysPrint('  --name <obj>   Object parameter name (default: lower-camel of the type)\n');
-		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint(
+			'Usage: apq introduce-parameter-object <file> (<l>:<c> | --select | --match) --params a,b --as <TypeName> [options]\n\n'
+		);
+		CliIo.sysPrint('Replace a contiguous run of a function\'s parameters with one object\n');
+		CliIo.sysPrint('parameter of a generated typedef. The signature, the body\'s references,\n');
+		CliIo.sysPrint('and every resolvable in-file call site are rewritten together.\n\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --params a,b   The contiguous parameters to fold (required)\n');
+		CliIo.sysPrint('  --as <Type>    Name of the generated typedef (required)\n');
+		CliIo.sysPrint('  --name <obj>   Object parameter name (default: lower-camel of the type)\n');
+		CliIo.sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 	/**
@@ -14493,136 +13051,86 @@ final class Cli {
 		// is below it never sees the finding, and this is where that becomes visible.
 		for (c in checks) {
 			final requires: String = c is VersionGated ? ' [needs ${(cast c: VersionGated).minLanguageVersion()}]' : '';
-			sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires\n');
+			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires\n');
 		}
 	}
 
 	private static function printWriteLangHelp(): Void {
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		CliIo.sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
 	}
 
 	private static function printOptionsWriteLangHelp(): Void {
-		sysPrint('\n');
-		sysPrint('Options:\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
 		printWriteLangHelp();
 	}
 
 	private static function printEditOptionsTail(): Void {
-		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
-		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
+		CliIo.sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printOptionsEditTail(): Void {
-		sysPrint('\n');
-		sysPrint('Options:\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
 		printEditOptionsTail();
 	}
 
 	private static function printAddressingHelp(): Void {
-		sysPrint('\n');
-		sysPrint('Addressing:\n');
-		sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
-		sysPrint('                      non-whitespace character\n');
-		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Addressing:\n');
+		CliIo.sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
+		CliIo.sysPrint('                      non-whitespace character\n');
+		CliIo.sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
 	}
 
 	private static function printSelectorAddressingOptions(): Void {
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --select <sel>      Address the node by selector: Kind / Kind:name / A > B\n');
-		sysPrint('                      (direct child) / A >> B (any-depth descendant); must\n');
-		sysPrint('                      resolve to exactly one node (or pick one with --nth)\n');
-		sysPrint("  --match '<pattern>' Address by apq-search structural pattern ($x metavars);\n");
-		sysPrint('                      same exactly-one / --nth discipline\n');
-		sysPrint('  --nth <k>           Pick the k-th (1-based, document order) match\n');
-		sysPrint('  --at <line>[:<col>] Address the innermost node at the cursor; column omitted\n');
-		sysPrint("                      = the line's first non-whitespace character\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --select <sel>      Address the node by selector: Kind / Kind:name / A > B\n');
+		CliIo.sysPrint('                      (direct child) / A >> B (any-depth descendant); must\n');
+		CliIo.sysPrint('                      resolve to exactly one node (or pick one with --nth)\n');
+		CliIo.sysPrint("  --match '<pattern>' Address by apq-search structural pattern ($x metavars);\n");
+		CliIo.sysPrint('                      same exactly-one / --nth discipline\n');
+		CliIo.sysPrint('  --nth <k>           Pick the k-th (1-based, document order) match\n');
+		CliIo.sysPrint('  --at <line>[:<col>] Address the innermost node at the cursor; column omitted\n');
+		CliIo.sysPrint("                      = the line's first non-whitespace character\n");
 	}
 
 	private static function printSelectorAddressingSection(): Void {
 		printAddressingHelp();
-		sysPrint("                      (descendant), e.g. --select 'FnMember:walk'; exactly one\n");
-		sysPrint("  --match '<pattern>' apq-search structural pattern; exactly one\n");
-		sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
+		CliIo.sysPrint("                      (descendant), e.g. --select 'FnMember:walk'; exactly one\n");
+		CliIo.sysPrint("  --match '<pattern>' apq-search structural pattern; exactly one\n");
+		CliIo.sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
 	}
 
 	private static function printFlatLimitLangHelp(): Void {
-		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
+		CliIo.sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
 	}
 
 	private static function printDocSourceFlatLimitLangHelp(): Void {
-		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
-		sysPrint('  --source            Also emit each hit\'s verbatim source slice — the HIT\'s own\n');
-		sysPrint('                      span, NOT a declaration group, so a decl hit prints without\n');
-		sysPrint('                      its modifiers. This is a listing snippet; copy from\n');
-		sysPrint('                      apq source --select (or apq ast --select --source) when the\n');
-		sysPrint('                      text is going back into an op.\n');
+		CliIo.sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
+		CliIo.sysPrint('  --source            Also emit each hit\'s verbatim source slice — the HIT\'s own\n');
+		CliIo.sysPrint('                      span, NOT a declaration group, so a decl hit prints without\n');
+		CliIo.sysPrint('                      its modifiers. This is a listing snippet; copy from\n');
+		CliIo.sysPrint('                      apq source --select (or apq ast --select --source) when the\n');
+		CliIo.sysPrint('                      text is going back into an op.\n');
 		printFlatLimitLangHelp();
 	}
 
 	private static function printShortReformatWriteLangHelp(): Void {
-		sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
-		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
-	}
-
-	/**
-	 * `specs` rendered for a diagnostic, one quoted argument per entry.
-	 *
-	 * The quotes are load-bearing rather than decorative: an argument carrying whitespace or newlines
-	 * — a shell that did not word-split a file list into separate arguments — renders unquoted as
-	 * something that reads like the list the tool WAS given, so the message blames the tool for
-	 * losing a path it never received as its own argument.
-	 */
-	private static function quotedSpecs(specs: Array<String>): String {
-		// The inner quotes are escaped for the same reason the outer ones are added: a spec that
-		// CONTAINS a quote would otherwise render as two arguments, which is the exact misreading this
-		// helper exists to prevent.
-		//
-		// CONCATENATED, not interpolated. Written as `'"${StringTools.replace(spec, '"', '\\"')}"'` the
-		// escape is decoded by the OUTER literal before the nested one is read, so the replacement
-		// argument arrives as a bare `"` and the call is a silent no-op — it compiles, and the only
-		// symptom is unescaped output.
-		return [for (spec in specs) '"' + spec.replace('"', '\\"') + '"'].join(', ');
-	}
-
-	/**
-	 * The plugin plus the `.hx` paths `specs` name, and the place a spec that named nothing is
-	 * reported.
-	 *
-	 * The empty case has always been reported by the caller (`<specs> matched no .hx files`); what was
-	 * silent is the MIXED one — a spec that matched nothing beside one that did, which vanishes into
-	 * the union and leaves the run analysing less than it was asked for with no word about it. Each
-	 * unmatched spec is QUOTED: an argument carrying whitespace or newlines (a shell that failed to
-	 * word-split a file list into separate arguments) is otherwise indistinguishable from a list of
-	 * paths the tool was given, which is exactly how one such invocation read as a tool defect.
-	 *
-	 * SCOPE OF THAT REPORT: this covers the twelve commands that resolve their scope THROUGH
-	 * here. THIRTEEN other call sites reach `expandInputs` directly and still drop an unmatched spec in
-	 * silence — `refs`, `uses`, `meta`, `search`, `blast`, `mentions`, `gates`, `rename --scope`, the
-	 * call-graph builder, `extract-constant`, `collectScopeFiles`, `collectPermissiveCandidates`, and
-	 * `readResolutionLibrary`. The last is the one to fix next: a `resolutionRoots` entry that matches
-	 * no `.hx` is dropped there in exactly the silence this function just closed for the report scope,
-	 * one screen away. `unmatched` is computed for all of them — they simply do not read it yet.
-	 */
-	private static function resolveInputPaths(lang: String, specs: Array<String>): ResolvedInputs {
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: ExpandedInputs = expandInputs(specs, '.hx');
-		if (expanded.unmatched.length > 0 && expanded.paths.length > 0)
-			stderr(
-				'apq: ${expanded.unmatched.length} of ${specs.length} scope argument(s) matched no .hx files and were skipped: '
-				+ '${quotedSpecs(expanded.unmatched)}\n'
-			);
-		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
+		CliIo.sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
+		CliIo.sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 	/**
@@ -14669,7 +13177,7 @@ final class Cli {
 					content: original
 				});
 			}
-			writeFiles(undo);
+			CliIo.writeFiles(undo);
 		}
 		final narrowing: SafePassNarrowing = LintFixSafePass.narrow(
 			errors, changedFiles, coupled, restore, CompilerOracle.typecheck.bind(hxml, oracleDir), LintFixSafePass.NARROW_ROUNDS
@@ -14712,7 +13220,7 @@ final class Cli {
 		final baseline: Null<OracleOutcome> = oracleHxml != null && changed.length > 0
 			? CompilerOracle.typecheck(oracleHxml, oracleDir)
 			: null;
-		writeFiles([
+		CliIo.writeFiles([
 			for (entry in files) if (changed.contains(entry.file)) { path: entry.file, content: entry.source }
 		]);
 		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracleHxml, oracleDir);
@@ -14788,7 +13296,9 @@ final class Cli {
 			ledgered: false,
 			coverage: null
 		};
-		final verified: FixVerifyResult = FixVerifier.verify(files, riskyChecks, cached, oracleHxml, oracleDir, writeFile, optsByFile);
+		final verified: FixVerifyResult = FixVerifier.verify(
+			files, riskyChecks, cached, oracleHxml, oracleDir, CliIo.writeFile, optsByFile
+		);
 		switch verified.baseline {
 			case Confirmed:
 				final unknownCoverage: Null<String> = verified.coverageUnknown;
@@ -14962,7 +13472,7 @@ final class Cli {
 	 * verdict, so it must never be able to produce one.
 	 */
 	private static function oracleSkippedNote(oracleHxml: Null<String>): Null<Int> {
-		if (oracleHxml != null) stderr('apq lint: compiler oracle SKIPPED (--no-oracle) — nullSafety trust unproved for this run\n');
+		if (oracleHxml != null) CliIo.stderr('apq lint: compiler oracle SKIPPED (--no-oracle) — nullSafety trust unproved for this run\n');
 		return null;
 	}
 
@@ -14992,7 +13502,7 @@ final class Cli {
 		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
 		// and the config key they never added. `LintFixSafePass.netNotice` owns which.
 		final notice: Null<String> = LintFixSafePass.netNotice(oracleHxml, noOracle);
-		if (notice != null) stderr(notice);
+		if (notice != null) CliIo.stderr(notice);
 		return !noOracle
 			? applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir)
 			: applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution);
@@ -15019,15 +13529,15 @@ final class Cli {
 				// provably compiled). `OracleCoverage` answers that question per edit for `--fix`;
 				// report mode does not probe, so the honest thing here is to say what the claim covers
 				// rather than to imply the whole scope.
-				stderr(
+				CliIo.stderr(
 					'apq lint: compiler oracle confirmed — build typechecks (nullSafety trust: compiler-confirmed for the code'
 					+ ' this hxml compiles — not for a file it never reads, nor for a #if branch its defines exclude)\n'
 				);
 			case Unavailable(reason):
-				stderr('apq lint: compiler oracle unavailable — $reason (skipped)\n');
+				CliIo.stderr('apq lint: compiler oracle unavailable — $reason (skipped)\n');
 			case Rejected(errors):
-				stderr('apq lint: compiler oracle REJECTED — build does not typecheck:\n');
-				stderr('$errors\n');
+				CliIo.stderr('apq lint: compiler oracle REJECTED — build does not typecheck:\n');
+				CliIo.stderr('$errors\n');
 				return EXIT_RUNTIME;
 		}
 		return null;
@@ -15051,7 +13561,7 @@ final class Cli {
 		if (fingerprint != null) {
 			final cached: Null<OracleOutcome> = OracleCache.lookup(hxml, dir, fingerprint);
 			if (cached != null) {
-				stderr(
+				CliIo.stderr(
 					'apq lint: compiler oracle verdict reused — the compile input hashes identical to the last typecheck (no compile)\n'
 				);
 				return cached;
@@ -15095,7 +13605,9 @@ final class Cli {
 	private static function coldAfterWarmRejection(hxml: String, dir: Null<String>): OracleOutcome {
 		final cold: OracleOutcome = CompilerOracle.typecheck(hxml, dir);
 		if (cold.match(Confirmed))
-			stderr('apq lint: warm compiler server rejected a build the compiler accepts — stale cached diagnostic, cold verdict used\n');
+			CliIo.stderr(
+				'apq lint: warm compiler server rejected a build the compiler accepts — stale cached diagnostic, cold verdict used\n'
+			);
 		return cold;
 	}
 
@@ -15119,13 +13631,13 @@ final class Cli {
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; the scope is resolved through the same
 					// helper `lint` uses, so accept + consume the value to keep shim invariance.
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printOracleUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('-')) {
-						stderr('apq oracle: unknown option "$a"\n');
+						CliIo.stderr('apq oracle: unknown option "$a"\n');
 						printOracleUsage();
 						return EXIT_USAGE;
 					}
@@ -15134,19 +13646,19 @@ final class Cli {
 			i++;
 		}
 		if (specs.length == 0) {
-			stderr('apq oracle: expected <scope> (one or more file/dir/glob specs)\n');
+			CliIo.stderr('apq oracle: expected <scope> (one or more file/dir/glob specs)\n');
 			printOracleUsage();
 			return EXIT_USAGE;
 		}
-		final paths: Array<String> = resolveInputPaths(lang, specs).paths;
+		final paths: Array<String> = CliArgs.resolveInputPaths(lang, specs).paths;
 		if (paths.length == 0) {
-			stderr('apq oracle: ${quotedSpecs(specs)} matched no .hx files\n');
+			CliIo.stderr('apq oracle: ${CliArgs.quotedSpecs(specs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final config: LintConfig = LintConfig.discover(paths[0]);
 		final hxml: Null<String> = config.compilerOracle();
 		if (hxml != null) return recordOracleVerdict(hxml, config.compilerOracleDir());
-		stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
+		CliIo.stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
 		return EXIT_OK;
 	}
 
@@ -15162,7 +13674,7 @@ final class Cli {
 		final outcome: OracleOutcome = CompilerOracle.typecheck(hxml, dir);
 		if (fingerprint != null) OracleCache.store(hxml, dir, fingerprint, outcome);
 		final exit: Int = reportOracleRun(outcome);
-		if (fingerprint == null) stderr('apq oracle: no fingerprint for this project — the verdict was not recorded\n');
+		if (fingerprint == null) CliIo.stderr('apq oracle: no fingerprint for this project — the verdict was not recorded\n');
 		return exit;
 	}
 
@@ -15170,32 +13682,32 @@ final class Cli {
 	private static function reportOracleRun(outcome: OracleOutcome): Int {
 		switch outcome {
 			case Confirmed:
-				stderr('apq oracle: build typechecks — verdict recorded (lint will not recompile an unchanged tree)\n');
+				CliIo.stderr('apq oracle: build typechecks — verdict recorded (lint will not recompile an unchanged tree)\n');
 			case Unavailable(reason):
-				stderr('apq oracle: unavailable — $reason (nothing recorded)\n');
+				CliIo.stderr('apq oracle: unavailable — $reason (nothing recorded)\n');
 			case Rejected(errors):
-				stderr('apq oracle: build does NOT typecheck:\n$errors\n');
+				CliIo.stderr('apq oracle: build does NOT typecheck:\n$errors\n');
 				return EXIT_RUNTIME;
 		}
 		return EXIT_OK;
 	}
 
 	private static function printOracleUsage(): Void {
-		sysPrint('Usage: apq oracle <scope>\n');
-		sysPrint('\n');
-		sysPrint('Typecheck the project ONCE, cold, and record the verdict under a content\n');
-		sysPrint('fingerprint of the whole compile input — every hxml in the include chain and\n');
-		sysPrint('every .hx on the classpath the compiler itself names. A later `apq lint`\n');
-		sysPrint('re-derives that fingerprint and reuses the verdict only while it still\n');
-		sysPrint('matches, so an edited tree is recompiled rather than trusted.\n');
-		sysPrint('\n');
-		sysPrint('The compiler ALWAYS runs here — there is no flag that records a verdict\n');
-		sysPrint('nobody observed. The scope only locates the project apqlint.json; without a\n');
-		sysPrint('`compilerOracle` key the command is inert. Exit 0 when the build typechecks\n');
-		sysPrint('or the oracle could not run, 1 when it does not typecheck, 2 on usage.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('Usage: apq oracle <scope>\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Typecheck the project ONCE, cold, and record the verdict under a content\n');
+		CliIo.sysPrint('fingerprint of the whole compile input — every hxml in the include chain and\n');
+		CliIo.sysPrint('every .hx on the classpath the compiler itself names. A later `apq lint`\n');
+		CliIo.sysPrint('re-derives that fingerprint and reuses the verdict only while it still\n');
+		CliIo.sysPrint('matches, so an edited tree is recompiled rather than trusted.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The compiler ALWAYS runs here — there is no flag that records a verdict\n');
+		CliIo.sysPrint('nobody observed. The scope only locates the project apqlint.json; without a\n');
+		CliIo.sysPrint('`compilerOracle` key the command is inert. Exit 0 when the build typechecks\n');
+		CliIo.sysPrint('or the oracle could not run, 1 when it does not typecheck, 2 on usage.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function runExtractConstant(args: Array<String>): Int {
@@ -15213,15 +13725,15 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--type':
-					typeName = expectValue(args, ++i, '--type');
+					typeName = CliArgs.expectValue(args, ++i, '--type');
 				case '--name':
-					name = expectValue(args, ++i, '--name');
+					name = CliArgs.expectValue(args, ++i, '--name');
 				case '--literal':
-					literal = expectValue(args, ++i, '--literal');
+					literal = CliArgs.expectValue(args, ++i, '--literal');
 				case '--into':
-					intoPath = expectValue(args, ++i, '--into');
+					intoPath = CliArgs.expectValue(args, ++i, '--into');
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -15231,7 +13743,7 @@ final class Cli {
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('--')) {
-						stderr('apq extract-constant: unknown option "$a"\n');
+						CliIo.stderr('apq extract-constant: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
 					scopeArgs.push(a);
@@ -15239,20 +13751,20 @@ final class Cli {
 			i++;
 		}
 		if (name == null || literal == null) {
-			stderr("apq extract-constant: expected --name <NAME> --literal '<text>'\n");
+			CliIo.stderr("apq extract-constant: expected --name <NAME> --literal '<text>'\n");
 			printExtractConstantUsage();
 			return EXIT_USAGE;
 		}
 		final nameStr: String = name;
 		final literalStr: String = literal;
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
 		// --into selects cross-file mode; its absence keeps the single-file --type mode.
 		final into: Null<String> = intoPath;
 		if (into != null) return runExtractConstantInto(scopeArgs, into, nameStr, literalStr, reformat, write, plugin);
 
 		if (scopeArgs.length != 1 || typeName == null) {
-			stderr(
+			CliIo.stderr(
 				"apq extract-constant: expected <file> --type <Type> --name <NAME> --literal '<text>' (or --into <module> for cross-file)\n"
 			);
 			printExtractConstantUsage();
@@ -15260,27 +13772,27 @@ final class Cli {
 		}
 		final filePath: String = scopeArgs[0];
 		final typeStr: String = typeName;
-		final source: String = try readFile(filePath) catch (exception: Exception) {
-			stderr('apq extract-constant: $filePath: ${exception.message}\n');
+		final source: String = try CliIo.readFile(filePath) catch (exception: Exception) {
+			CliIo.stderr('apq extract-constant: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 		// Discover the file's format config so the canonical gate matches the project's
 		// writer style (e.g. space-after-colon), exactly as the --into mode does — else a
 		// non-default-formatted file is wrongly rejected and --reformat rewrites its style.
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 
 		final op: String = 'extract-constant';
 		switch ExtractConstant.extractConstant(source, typeStr, nameStr, literalStr, reformat, plugin, optsJson) {
 			case Ok(text, rewrites):
-				warnRewrites(op, filePath, rewrites);
+				CliEdit.warnRewrites(op, filePath, rewrites);
 				if (write) {
-					writeFile(filePath, text);
-					stderr('apq extract-constant: wrote $filePath\n');
+					CliIo.writeFile(filePath, text);
+					CliIo.stderr('apq extract-constant: wrote $filePath\n');
 				} else
-					previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text);
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq extract-constant: $message\n');
+				CliIo.stderr('apq extract-constant: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -15297,12 +13809,12 @@ final class Cli {
 		scopeArgs: Array<String>, intoPath: String, name: String, literal: String, reformat: Bool, write: Bool, plugin: GrammarPlugin
 	): Int {
 		if (scopeArgs.length == 0) {
-			stderr('apq extract-constant: --into mode expects one or more <scope> files/dirs/globs to search\n');
+			CliIo.stderr('apq extract-constant: --into mode expects one or more <scope> files/dirs/globs to search\n');
 			return EXIT_USAGE;
 		}
-		final paths: Array<String> = expandInputs(scopeArgs, '.hx').paths;
+		final paths: Array<String> = CliArgs.expandInputs(scopeArgs, '.hx').paths;
 		if (paths.length == 0) {
-			stderr('apq extract-constant: scope matched no .hx files\n');
+			CliIo.stderr('apq extract-constant: scope matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -15313,8 +13825,8 @@ final class Cli {
 		final scopeFiles: Array<{ file: String, source: String }> = [
 			for (path in paths) if (FileSystem.absolutePath(path) != intoAbs) {
 				file: path,
-				source: (try readSourceForParse(path) catch (exception: Exception) {
-					stderr('apq extract-constant: $path: ${exception.message}\n');
+				source: (try CliIo.readSourceForParse(path) catch (exception: Exception) {
+					CliIo.stderr('apq extract-constant: $path: ${exception.message}\n');
 					return EXIT_RUNTIME;
 				}: String)
 			}
@@ -15324,17 +13836,17 @@ final class Cli {
 		final moduleSource: Null<String> = if (!moduleExists)
 			null
 		else
-			try readFile(intoPath) catch (exception: Exception) {
-				stderr('apq extract-constant: $intoPath: ${exception.message}\n');
+			try CliIo.readFile(intoPath) catch (exception: Exception) {
+				CliIo.stderr('apq extract-constant: $intoPath: ${exception.message}\n');
 				return EXIT_RUNTIME;
 			};
 		final modulePkg: String = derivePackage(intoPath);
 		final moduleClass: String = newFileClassName(intoPath);
-		final optsJson: Null<String> = discoverFormatConfig(intoPath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(intoPath);
 
 		// A short / generic literal risks coupling unrelated occurrences — warn but proceed.
 		if (literal.length < SHORT_LITERAL_LEN)
-			stderr(
+			CliIo.stderr(
 				'apq extract-constant: warning: literal \'$literal\' is short (<$SHORT_LITERAL_LEN'
 				+ ' chars) — eyeball the preview, unrelated occurrences may be coupled\n'
 			);
@@ -15350,47 +13862,49 @@ final class Cli {
 					// The module and the call sites that will reference its constant are ONE change
 					// set: a run that wrote the sites and then could not write the module would
 					// leave every one of them naming a constant that does not exist.
-					writeFiles([for (c in changes) { path: c.file, content: c.newSource }].concat([
+					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }].concat([
 						{
 							path: intoPath,
 							content: finalModule
 						}
 					]));
-					stderr('apq extract-constant: wrote ${changes.length} file(s), $total occurrence(s); module $verb $intoPath\n');
+					CliIo.stderr('apq extract-constant: wrote ${changes.length} file(s), $total occurrence(s); module $verb $intoPath\n');
 				} else {
-					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
-					sysPrint('total: ${changes.length} file(s), $total occurrence(s)\n');
-					sysPrint('module: $verb $intoPath\n');
-					stderr('apq extract-constant: NOTHING written — this is a preview; re-run with --write to apply\n');
+					for (c in changes) CliIo.sysPrint('${c.file}: ${c.count} occurrence(s)\n');
+					CliIo.sysPrint('total: ${changes.length} file(s), $total occurrence(s)\n');
+					CliIo.sysPrint('module: $verb $intoPath\n');
+					CliIo.stderr('apq extract-constant: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq extract-constant: $message\n');
+				CliIo.stderr('apq extract-constant: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
 
 	private static function printExtractConstantUsage(): Void {
-		sysPrint("Usage: apq extract-constant <file> --type <Type> --name <NAME> --literal '<text>' [--reformat] [--write]\n");
-		sysPrint("       apq extract-constant <scope...> --into <module.hx> --name <NAME> --literal '<text>' [--reformat] [--write]\n");
+		CliIo.sysPrint("Usage: apq extract-constant <file> --type <Type> --name <NAME> --literal '<text>' [--reformat] [--write]\n");
+		CliIo.sysPrint(
+			"       apq extract-constant <scope...> --into <module.hx> --name <NAME> --literal '<text>' [--reformat] [--write]\n"
+		);
 		printOptionsWriteLangHelp();
-		sysPrint('Single-file mode (--type): replace every plain single-quoted string\n');
-		sysPrint('literal equal to <text> inside <Type> with a reference to a fresh\n');
-		sysPrint('`private static final <NAME>`, spliced as the type\'s first member.\n');
-		sysPrint('Cross-file mode (--into): search every <scope> file/dir/glob for the\n');
-		sysPrint('literal and replace each occurrence with <Module>.<NAME>, where <Module>\n');
-		sysPrint('is the class at <module.hx> (created as a `final class` constants holder\n');
-		sysPrint('if absent, extended with a `public static final` otherwise). Files in a\n');
-		sysPrint('different package than the module gain an import; same-package files do\n');
-		sysPrint('not. Without --write, prints per-file occurrence counts and whether the\n');
-		sysPrint('module is created or extended.\n');
-		sysPrint('In both modes <text> is the literal CONTENT (no surrounding quotes); the\n');
-		sysPrint('constant reuses the first occurrence\'s verbatim source token, so escaping\n');
-		sysPrint('is preserved. Plain single- and double-quoted literals match; an\n');
-		sysPrint('interpolated literal and literals inside metadata are left untouched.\n');
-		sysPrint('Deciding the occurrences are the SAME concept is the caller\'s judgement.\n');
-		sysPrint('An invalid / colliding <NAME>, a missing type or module, or a literal\n');
-		sysPrint('that does not occur exits non-zero with nothing written. Rewrites re-parse.\n');
+		CliIo.sysPrint('Single-file mode (--type): replace every plain single-quoted string\n');
+		CliIo.sysPrint('literal equal to <text> inside <Type> with a reference to a fresh\n');
+		CliIo.sysPrint('`private static final <NAME>`, spliced as the type\'s first member.\n');
+		CliIo.sysPrint('Cross-file mode (--into): search every <scope> file/dir/glob for the\n');
+		CliIo.sysPrint('literal and replace each occurrence with <Module>.<NAME>, where <Module>\n');
+		CliIo.sysPrint('is the class at <module.hx> (created as a `final class` constants holder\n');
+		CliIo.sysPrint('if absent, extended with a `public static final` otherwise). Files in a\n');
+		CliIo.sysPrint('different package than the module gain an import; same-package files do\n');
+		CliIo.sysPrint('not. Without --write, prints per-file occurrence counts and whether the\n');
+		CliIo.sysPrint('module is created or extended.\n');
+		CliIo.sysPrint('In both modes <text> is the literal CONTENT (no surrounding quotes); the\n');
+		CliIo.sysPrint('constant reuses the first occurrence\'s verbatim source token, so escaping\n');
+		CliIo.sysPrint('is preserved. Plain single- and double-quoted literals match; an\n');
+		CliIo.sysPrint('interpolated literal and literals inside metadata are left untouched.\n');
+		CliIo.sysPrint('Deciding the occurrences are the SAME concept is the caller\'s judgement.\n');
+		CliIo.sysPrint('An invalid / colliding <NAME>, a missing type or module, or a literal\n');
+		CliIo.sysPrint('that does not occur exits non-zero with nothing written. Rewrites re-parse.\n');
 	}
 
 	/**
@@ -15508,13 +14022,13 @@ final class Cli {
 		for (i in 0...declines.length) {
 			declinedEdits += declines[i].edits;
 			if (i >= DECLINE_LINES_SHOWN) continue;
-			stderr(
+			CliIo.stderr(
 				'apq lint --fix: oracle-assisted DECLINED ${declines[i].file}: ${declines[i].reason}'
 				+ ' — ${declines[i].edits} edit(s) left report-only\n'
 			);
 		}
 		if (declines.length > DECLINE_LINES_SHOWN)
-			stderr('apq lint --fix: … and ${declines.length - DECLINE_LINES_SHOWN} more oracle-assisted decline(s) not listed\n');
+			CliIo.stderr('apq lint --fix: … and ${declines.length - DECLINE_LINES_SHOWN} more oracle-assisted decline(s) not listed\n');
 		final declinedTail: String = declines.length == 0
 			? ''
 			: ', ${declines.length} file(s) DECLINED unverifiable ($declinedEdits edit(s) the oracle does not typecheck)';
@@ -15623,7 +14137,7 @@ final class Cli {
 		// error text naming no candidate, a batch that never settles) and a fixture cannot stage
 		// them against a real haxe. A test supplies canned verdicts; production passes nothing.
 		final verdict: (String, Null<String>) -> OracleOutcome = typecheck ?? (h, d) -> CompilerOracle.typecheck(h, d);
-		writeFiles([for (c in candidates) { path: c.file, content: c.after }]);
+		CliIo.writeFiles([for (c in candidates) { path: c.file, content: c.after }]);
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;
 		var reason: String = 'compiler rejected';
@@ -15646,7 +14160,7 @@ final class Cli {
 						break;
 					}
 					for (f in culprits) {
-						for (c in candidates) if (c.file == f) writeFile(c.file, c.before);
+						for (c in candidates) if (c.file == f) CliIo.writeFile(c.file, c.before);
 						reverted.push(f);
 					}
 			}
@@ -15709,7 +14223,7 @@ final class Cli {
 		// circumstances. Per-CULPRIT reverts above stay individual — those are incremental by
 		// construction, one round per oracle verdict.
 		final undo: Array<{ file: String, before: String, after: String }> = candidates.filter(c -> !reverted.contains(c.file));
-		writeFiles([for (c in undo) { path: c.file, content: c.before }]);
+		CliIo.writeFiles([for (c in undo) { path: c.file, content: c.before }]);
 		for (c in undo) reverted.push(c.file);
 	}
 
@@ -16181,7 +14695,7 @@ final class Cli {
 	private static function runRecon(args: Array<String>): Int {
 		final o: ReconOpts = parseReconArgs(args);
 		if (o.errExit != null) return o.errExit;
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final probePath: Null<String> = o.probePath;
 		if (o.predictRelax && probePath != null) return runReconProbeRelax(plugin, probePath, o.showSource);
 		if (probePath != null)
@@ -16191,17 +14705,19 @@ final class Cli {
 			);
 		final rootFinal: String = o.rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
-			stderr(
+			CliIo.stderr(
 				"apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset ("
 				+ 'no cached path at ~/.config/anyparse/fork_path either).\n'
 			);
-			stderr('  Either pass a directory:  apq recon /path/to/corpus\n');
-			stderr('  or export the fork root:  ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter\n');
-			stderr('  (first env-supplied run caches the path under ~/.config/anyparse/; subsequent runs work without re-exporting)\n');
+			CliIo.stderr('  Either pass a directory:  apq recon /path/to/corpus\n');
+			CliIo.stderr('  or export the fork root:  ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter\n');
+			CliIo.stderr(
+				'  (first env-supplied run caches the path under ~/.config/anyparse/; subsequent runs work without re-exporting)\n'
+			);
 			return EXIT_USAGE;
 		}
 		if (!FileSystem.exists(rootFinal) || !FileSystem.isDirectory(rootFinal)) {
-			stderr('apq recon: "$rootFinal" is not a directory.\n');
+			CliIo.stderr('apq recon: "$rootFinal" is not a directory.\n');
 			return EXIT_RUNTIME;
 		}
 		final candidatesRegex: Null<String> = o.candidatesRegex;
@@ -16240,7 +14756,7 @@ final class Cli {
 	 * the parser's own error hint.
 	 */
 	private static function runReconProbeRelax(plugin: GrammarPlugin, path: String, showSource: Bool): Int {
-		final original: String = readSourceForParse(path);
+		final original: String = CliIo.readSourceForParse(path);
 		final res: PredictRelaxResult = tryPredictRelax(plugin, original);
 		return reportPredictRelax(path, original, res, showSource);
 	}
@@ -16270,7 +14786,7 @@ final class Cli {
 	): Int {
 		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
 		if (!walk.wired) {
-			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			CliIo.stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 			return EXIT_RUNTIME;
 		}
 		var records: Array<ReconRecord> = walk.records;
@@ -16278,7 +14794,7 @@ final class Cli {
 			final filter: String = clusterFilter;
 			records = records.filter(r -> r.clusterKey == filter);
 			if (records.length == 0) {
-				stderr('apq recon: --cluster "$filter" matched no skip-parse records (predict-relax mode)\n');
+				CliIo.stderr('apq recon: --cluster "$filter" matched no skip-parse records (predict-relax mode)\n');
 				return EXIT_RUNTIME;
 			}
 		}
@@ -16420,18 +14936,20 @@ final class Cli {
 	private static function reportPredictRelax(path: String, original: String, res: PredictRelaxResult, showSource: Bool): Int {
 		switch res.kind {
 			case Unblock:
-				sysPrint('PREDICT RELAX UNBLOCK   $path :: inserting "${res.injected}" at ${res.origLine}:${res.origCol} unblocks parse\n');
+				CliIo.sysPrint(
+					'PREDICT RELAX UNBLOCK   $path :: inserting "${res.injected}" at ${res.origLine}:${res.origCol} unblocks parse\n'
+				);
 				return EXIT_OK;
 			case StillFail:
 				final movedHint: String = movedLocusHint(res.origLine, res.origCol, res.newLine, res.newCol);
-				sysPrint(
+				CliIo.sysPrint(
 					'PREDICT RELAX STILL FAIL $path :: ${res.newLine}:${res.newCol}$movedHint after inserting "${res.injected}" — '
 					+ '${res.message}\n'
 				);
 				if (showSource && res.newLine > 0) printReconSourceWindow(res.patched, res.newLine);
 				return EXIT_RUNTIME;
 			case NoTarget:
-				sysPrint('PREDICT RELAX NO TARGET $path :: at ${res.origLine}:${res.origCol} — ${res.message}\n');
+				CliIo.sysPrint('PREDICT RELAX NO TARGET $path :: at ${res.origLine}:${res.origCol} — ${res.message}\n');
 				// NoTarget has no patched source (the parser found no
 				// `expected` hint to inject), so the window is anchored on
 				// the ORIGINAL fail-locus. `origLine == 0` is the
@@ -16485,12 +15003,12 @@ final class Cli {
 	 */
 	private static function runReconCandidates(plugin: GrammarPlugin, root: String, pattern: String): Int {
 		final re: EReg = try new EReg(pattern, 'g') catch (e: Exception) {
-			stderr('apq recon: --candidates: pattern "$pattern" is not a valid EReg: ${e.message}\n');
+			CliIo.stderr('apq recon: --candidates: pattern "$pattern" is not a valid EReg: ${e.message}\n');
 			return EXIT_USAGE;
 		}
 		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
 		if (!walk.wired) {
-			stderr('apq recon: --candidates: no recon parser wired up for this grammar plugin\n');
+			CliIo.stderr('apq recon: --candidates: no recon parser wired up for this grammar plugin\n');
 			return EXIT_RUNTIME;
 		}
 		final hits: Array<{ path: String, count: Int }> = [];
@@ -16502,8 +15020,8 @@ final class Cli {
 			totalHits += n;
 		}
 		hits.sort((a, b) -> b.count - a.count);
-		for (h in hits) sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
-		sysPrint(
+		for (h in hits) CliIo.sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
+		CliIo.sysPrint(
 			'--- candidates: ${hits.length} file${plural(hits.length)} matched ($totalHits total hit${plural(totalHits)} across '
 			+ '${walk.records.length} skip-parse file${plural(walk.records.length)}) ---\n'
 		);
@@ -16541,19 +15059,19 @@ final class Cli {
 	private static function runReconPermissive(plugin: GrammarPlugin, root: String, lang: String): Int {
 		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
 		if (!walk.wired) {
-			stderr('apq recon: --permissive-construct: no recon parser wired up for this grammar plugin\n');
+			CliIo.stderr('apq recon: --permissive-construct: no recon parser wired up for this grammar plugin\n');
 			return EXIT_RUNTIME;
 		}
 		final records: Array<ReconRecord> = walk.records;
 		final candidates: Array<PermissiveCandidate> = collectPermissiveCandidates(plugin, lang);
 		if (candidates.length == 0) {
-			stderr(
+			CliIo.stderr(
 				'apq recon: --permissive-construct: no mandatory-ref-lead-trail candidates found in src/anyparse/grammar/$lang'
 				+ '/ (cross-check with `apq gates --mechanism mandatory-ref-lead-trail`)\n'
 			);
 			return EXIT_RUNTIME;
 		}
-		sysPrint(
+		CliIo.sysPrint(
 			'=== permissive-construct: ${candidates.length} candidate${plural(candidates.length)}'
 			+ ' from gates --mechanism mandatory-ref-lead-trail, ${records.length} skip-parse fixture${plural(records.length)} ===\n'
 		);
@@ -16585,19 +15103,21 @@ final class Cli {
 			}
 			candidatesWithSignal++;
 			totalUnblocks += unblocks.length;
-			sysPrint('\nCANDIDATE $label\n');
-			sysPrint('  ${unblocks.length} UNBLOCK / ${stillFails.length} STILL FAIL / $noMatchCount NO MATCH\n');
-			for (p in unblocks) sysPrint('    UNBLOCK: $p\n');
-			for (p in stillFails) sysPrint('    STILL FAIL: $p\n');
+			CliIo.sysPrint('\nCANDIDATE $label\n');
+			CliIo.sysPrint('  ${unblocks.length} UNBLOCK / ${stillFails.length} STILL FAIL / $noMatchCount NO MATCH\n');
+			for (p in unblocks) CliIo.sysPrint('    UNBLOCK: $p\n');
+			for (p in stillFails) CliIo.sysPrint('    STILL FAIL: $p\n');
 		}
-		sysPrint(
+		CliIo.sysPrint(
 			'\n--- permissive-construct summary: $candidatesWithSignal of ${candidates.length} candidate${plural(candidates.length)}'
 			+ ' have ≥1 UNBLOCK or STILL FAIL ($totalUnblocks UNBLOCK${plural(totalUnblocks)} total) across ${records.length}'
 			+ ' skip-parse files ---\n'
 		);
 		if (noSignalLabels.length > 0) {
-			sysPrint('--- NO MATCH only (${noSignalLabels.length} candidate${plural(noSignalLabels.length)} with no fixture match) ---\n');
-			for (l in noSignalLabels) sysPrint('  $l\n');
+			CliIo.sysPrint(
+				'--- NO MATCH only (${noSignalLabels.length} candidate${plural(noSignalLabels.length)} with no fixture match) ---\n'
+			);
+			for (l in noSignalLabels) CliIo.sysPrint('  $l\n');
 		}
 		return totalUnblocks == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
@@ -16618,12 +15138,12 @@ final class Cli {
 		final out: Array<PermissiveCandidate> = [];
 		final grammarDir: String = 'src/anyparse/grammar/$lang/';
 		if (!FileSystem.exists(grammarDir) || !FileSystem.isDirectory(grammarDir)) return out;
-		final expanded: ExpandedInputs = expandInputs([grammarDir], '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandInputs([grammarDir], '.hx');
 		final shape: MetaShape = plugin.metaShape();
 		final skipEntries: Array<SkipEntry> = [];
 		for (path in expanded.paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('recon', plugin.parseFile, path, source, false, skipEntries);
+			final source: String = CliIo.readSourceForParse(path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked('recon', plugin.parseFile, path, source, false, skipEntries);
 			if (tree == null) continue;
 			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
 			final grouped: { order: Array<Int>, groups: Map<Int, Array<MetaHit>> } = groupMetaHitsByDeclSpan(raw);
@@ -16808,7 +15328,7 @@ final class Cli {
 		// exit OK so a fresh checkout doesn't fail the probe.
 		final snapshotPath: String = 'bin/.last-sweep.json';
 		if (!FileSystem.exists(snapshotPath)) {
-			sysPrint(
+			CliIo.sysPrint(
 				'apq recon: no prior sweep snapshot at $snapshotPath'
 				+ ' — run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK first to seed the baseline\n'
 			);
@@ -16816,7 +15336,7 @@ final class Cli {
 		}
 		final prior: Map<String, String> = loadSweepFixtureStatus(snapshotPath);
 		if (prior.iterator().hasNext() == false) {
-			sysPrint(
+			CliIo.sysPrint(
 				'apq recon: snapshot at $snapshotPath'
 				+ ' has no `fixtures` array — older format, re-run `node bin/test.js` to refresh the baseline\n'
 			);
@@ -16824,10 +15344,10 @@ final class Cli {
 		}
 		final walk: ReconRegressionResult = walkReconRegression(plugin, root, prior);
 		if (walk.unwired) {
-			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			CliIo.stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 			return EXIT_RUNTIME;
 		}
-		sysPrint(
+		CliIo.sysPrint(
 			'--- regression-probe: ${walk.regressed} regressed, ${walk.unblocked} unblocked, ${walk.scanned} scanned vs snapshot ---\n'
 		);
 		return walk.regressed > 0 ? EXIT_RUNTIME : EXIT_OK;
@@ -16885,10 +15405,10 @@ final class Cli {
 		?expectedPathOpt: String, lang: String = 'haxe'
 	): Int {
 		if (!FileSystem.exists(path)) {
-			stderr('apq recon: --probe path "$path" does not exist\n');
+			CliIo.stderr('apq recon: --probe path "$path" does not exist\n');
 			return EXIT_RUNTIME;
 		}
-		final original: String = readSourceForParse(path);
+		final original: String = CliIo.readSourceForParse(path);
 		// `--predict-strip --probe <file>` — apply substitutions to the
 		// single probed file's source, then re-run the strict trivia parse
 		// against the result. Mirrors the sweep-mode predict tag set
@@ -16902,19 +15422,19 @@ final class Cli {
 		if (predictStrip) return runReconProbePredict(plugin, path, original, patterns, replacements, compiledRegex, showSource);
 		try {
 			if (!plugin.reconParse(original)) {
-				stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+				CliIo.stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 				return EXIT_RUNTIME;
 			}
-			sysPrint('PARSE OK\n');
+			CliIo.sysPrint('PARSE OK\n');
 			return writerEqualsAfter ? runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang) : EXIT_OK;
 		} catch (exception: ParseError) {
 			final pos: Position = exception.span.lineCol(original);
 			final exp: String = reconNormalize(exception.expected);
 			final snip: String = reconNormalize(reconSnippet(original, exception.span.from));
-			sysPrint('PARSE FAIL :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
+			CliIo.sysPrint('PARSE FAIL :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
 			return EXIT_RUNTIME;
 		} catch (exception: Exception) {
-			sysPrint('PARSE FAIL :: <non-ParseError> ${reconNormalize(exception.message)}\n');
+			CliIo.sysPrint('PARSE FAIL :: <non-ParseError> ${reconNormalize(exception.message)}\n');
 			return EXIT_RUNTIME;
 		}
 	}
@@ -16954,19 +15474,19 @@ final class Cli {
 		} else {
 			source;
 		};
-		final optsJson: Null<String> = readWriteOptionsJsonOrNull(inputPath);
+		final optsJson: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPath);
 		final emittedRaw: Null<String> = try (
 			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
 		) catch (e: ParseError) {
-			sysPrint('WRITER FAIL :: $e\n');
+			CliIo.sysPrint('WRITER FAIL :: $e\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {
-			sysPrint('WRITER FAIL :: ${e.message}\n');
+			CliIo.sysPrint('WRITER FAIL :: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		if (emittedRaw == null) {
 			final flagName: String = plain ? '--writer-equals-plain' : '--writer-equals';
-			stderr('apq recon: no writer wired up for lang "$lang" ($flagName)\n');
+			CliIo.stderr('apq recon: no writer wired up for lang "$lang" ($flagName)\n');
 			return EXIT_USAGE;
 		}
 		final emitted: String = (emittedRaw: String);
@@ -16974,10 +15494,10 @@ final class Cli {
 			? emitted.substr(0, emitted.length - 1)
 			: emitted;
 		if (emittedNormalised == expectedSource) {
-			sysPrint('WRITER PASS\n');
+			CliIo.sysPrint('WRITER PASS\n');
 			return EXIT_OK;
 		}
-		sysPrint('WRITER FAIL :: ${describeByteDiff(emittedNormalised, expectedSource)}\n');
+		CliIo.sysPrint('WRITER FAIL :: ${describeByteDiff(emittedNormalised, expectedSource)}\n');
 		return EXIT_RUNTIME;
 	}
 
@@ -17011,33 +15531,33 @@ final class Cli {
 		}
 		var exitCode: Int = EXIT_OK;
 		if (fileHits == 0) {
-			sysPrint('PREDICT NO MATCH  $path\n');
+			CliIo.sysPrint('PREDICT NO MATCH  $path\n');
 		} else {
 			try {
 				if (!plugin.reconParse(stripped)) {
-					stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+					CliIo.stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 					return EXIT_RUNTIME;
 				}
-				sysPrint('PREDICT UNBLOCK   $path\n');
+				CliIo.sysPrint('PREDICT UNBLOCK   $path\n');
 			} catch (pe: ParseError) {
 				final pos: Position = pe.span.lineCol(stripped);
 				final movedHint: String = movedLocusHint(origLine, origCol, pos.line, pos.col);
-				sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				CliIo.sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
 				if (showSource) printReconSourceWindow(stripped, pos.line);
 				exitCode = EXIT_RUNTIME;
 			} catch (e: Exception) {
-				sysPrint('PREDICT STILL FAIL $path :: <no locus> ${e.message}\n');
+				CliIo.sysPrint('PREDICT STILL FAIL $path :: <no locus> ${e.message}\n');
 				exitCode = EXIT_RUNTIME;
 			}
 		}
 		// Per-pattern totals — same typo guard contract as sweep mode.
 		for (idx => pat in patterns) {
 			final total: Int = patternHits[idx];
-			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+			CliIo.sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
 		}
 		final anyZero: Bool = patternHits.exists(h -> h == 0);
 		if (!anyZero) return exitCode;
-		stderr('apq recon: --predict-strip --probe: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals\n');
+		CliIo.stderr('apq recon: --predict-strip --probe: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals\n');
 		return EXIT_RUNTIME;
 	}
 
@@ -17047,7 +15567,7 @@ final class Cli {
 	): Int {
 		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
 		if (!walk.wired) {
-			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			CliIo.stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 			return EXIT_RUNTIME;
 		}
 		final clusters: Map<String, ReconCluster> = walk.clusters;
@@ -17064,19 +15584,19 @@ final class Cli {
 			final wanted: String = (clusterFilter: String);
 			final hit: Null<ReconCluster> = clusters[wanted];
 			if (hit == null) {
-				stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
+				CliIo.stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
 				final keyEntries: Array<{ key: String, count: Int }> = [
 					for (k => v in clusters) { key: k, count: v.count }
 				];
 				keyEntries.sort((a, b) -> b.count - a.count);
 				final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
 				if (preview == 0) {
-					stderr('  (no skip-parse failures in this sweep)\n');
+					CliIo.stderr('  (no skip-parse failures in this sweep)\n');
 				} else {
-					stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
-					for (idx in 0...preview) stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
+					CliIo.stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
+					for (idx in 0...preview) CliIo.stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
 					if (keyEntries.length > preview)
-						stderr('    … (${keyEntries.length - preview} more — run without --cluster to see the full histogram)\n');
+						CliIo.stderr('    … (${keyEntries.length - preview} more — run without --cluster to see the full histogram)\n');
 				}
 				return EXIT_RUNTIME;
 			}
@@ -17085,7 +15605,7 @@ final class Cli {
 		}
 		if (predictStrip)
 			return runReconPredictStrip(filteredRecords, plugin, patterns, replacements, compiledRegex, clusterFilter, showSource);
-		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
+		for (r in filteredRecords) CliIo.sysPrint('${r.skipLine}\n');
 		return clusterFilter != null
 			? printReconClusterDrill(filteredClusters, records.length, (clusterFilter: String), filteredRecords, showSource)
 			: printReconHistogram(clusters, records.length, topN);
@@ -17123,7 +15643,7 @@ final class Cli {
 					continue;
 				}
 				if (!name.endsWith('.hxtest')) continue;
-				final source: String = readSourceForParse(path);
+				final source: String = CliIo.readSourceForParse(path);
 				try {
 					if (!plugin.reconParse(source)) {
 						wired = false;
@@ -17170,16 +15690,18 @@ final class Cli {
 		];
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		final shown: Int = entries.length > topN ? topN : entries.length;
-		sysPrint('\n');
-		sysPrint('--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint(
+			'--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---\n'
+		);
 		for (idx in 0...shown) {
 			final entry: { key: String, cluster: ReconCluster } = entries[idx];
 			final c: ReconCluster = entry.cluster;
 			final examplesStr: String = c.examples.length == 1 ? c.examples[0] : c.examples.join(', ');
 			final raw: String = reconNormalize(c.rawSample);
-			sysPrint('  ${c.count}× "${entry.key}"  e.g. "$raw"  in: $examplesStr\n');
+			CliIo.sysPrint('  ${c.count}× "${entry.key}"  e.g. "$raw"  in: $examplesStr\n');
 		}
-		if (entries.length > shown) sysPrint('  … (${entries.length - shown} more, use --top N or --all to see)\n');
+		if (entries.length > shown) CliIo.sysPrint('  … (${entries.length - shown} more, use --top N or --all to see)\n');
 		return EXIT_OK;
 	}
 
@@ -17209,14 +15731,14 @@ final class Cli {
 		// Built once for the drill block regardless of `showSource`
 		// (cost is negligible vs the walk itself).
 		final byPath: Map<String, ReconRecord> = [for (r in records) r.path => r];
-		sysPrint('\n');
-		sysPrint(
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint(
 			'--- cluster drill for "$needle" (${entries.length} cluster${plural(entries.length)}, $matched of $totalAcrossSweep'
 			+ ' skip-parse paths) ---\n'
 		);
 		for (entry in entries) {
 			final c: ReconCluster = entry.cluster;
-			sysPrint('  cluster "${entry.key}" — ${c.count} path${plural(c.count)}:\n');
+			CliIo.sysPrint('  cluster "${entry.key}" — ${c.count} path${plural(c.count)}:\n');
 			final sorted: Array<String> = c.paths.copy();
 			sorted.sort((a, b) -> if (a < b)
 				-1
@@ -17226,19 +15748,19 @@ final class Cli {
 				0);
 			for (p in sorted) {
 				if (!showSource) {
-					sysPrint('    $p\n');
+					CliIo.sysPrint('    $p\n');
 					continue;
 				}
 				final rec: Null<ReconRecord> = byPath[p];
 				if (rec == null) {
-					sysPrint('    $p   <no record>\n');
+					CliIo.sysPrint('    $p   <no record>\n');
 					continue;
 				}
 				if (rec.line <= 0) {
-					sysPrint('    $p   <no locus>\n');
+					CliIo.sysPrint('    $p   <no locus>\n');
 					continue;
 				}
-				sysPrint('    $p at ${rec.line}:${rec.col}\n');
+				CliIo.sysPrint('    $p at ${rec.line}:${rec.col}\n');
 				printReconSourceWindow(rec.source, rec.line);
 			}
 		}
@@ -17257,7 +15779,7 @@ final class Cli {
 		final radius: Int = RECON_SOURCE_WINDOW_RADIUS;
 		final start: Int = failLine - radius < 1 ? 1 : failLine - radius;
 		final end: Int = failLine + radius > lines.length ? lines.length : failLine + radius;
-		sysPrint('      --- src window (L±$radius) ---\n');
+		CliIo.sysPrint('      --- src window (L±$radius) ---\n');
 		// Compute the gutter width from `end` so all rows line up; e.g.
 		// a 3-digit end-line gives a 3-char gutter.
 		final gutter: Int = ('$end').length;
@@ -17265,9 +15787,9 @@ final class Cli {
 			final marker: String = ln == failLine ? '>>' : '  ';
 			final num: String = padLeft('$ln', gutter);
 			final body: String = lines[ln - 1];
-			sysPrint('      $marker$num | $body\n');
+			CliIo.sysPrint('      $marker$num | $body\n');
 		}
-		sysPrint('      --- end ---\n');
+		CliIo.sysPrint('      --- end ---\n');
 	}
 
 	private static inline function padLeft(s: String, width: Int): String {
@@ -17351,16 +15873,16 @@ final class Cli {
 					: stripped.replace(patterns[idx], replacements[idx]);
 			}
 			if (fileHits == 0) {
-				sysPrint('PREDICT NO MATCH  ${r.path}\n');
+				CliIo.sysPrint('PREDICT NO MATCH  ${r.path}\n');
 				noMatchCount++;
 				continue;
 			}
 			try {
 				if (!plugin.reconParse(stripped)) {
-					stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+					CliIo.stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 					return EXIT_RUNTIME;
 				}
-				sysPrint('PREDICT UNBLOCK   ${r.path}\n');
+				CliIo.sysPrint('PREDICT UNBLOCK   ${r.path}\n');
 				unblockCount++;
 			} catch (pe: ParseError) {
 				// New locus after substitution. When it differs from the
@@ -17375,21 +15897,21 @@ final class Cli {
 				// alone is ambiguous.
 				final pos: Position = pe.span.lineCol(stripped);
 				final movedHint: String = movedLocusHint(r.line, r.col, pos.line, pos.col);
-				sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				CliIo.sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
 				if (showSource) printReconSourceWindow(stripped, pos.line);
 				stillFailCount++;
 			} catch (e: Exception) {
-				sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${e.message}\n');
+				CliIo.sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${e.message}\n');
 				stillFailCount++;
 			}
 		}
-		sysPrint('\n');
+		CliIo.sysPrint('\n');
 		final scope: String = clusterFilter == null ? 'whole sweep' : 'cluster "$clusterFilter"';
-		sysPrint('--- predict-strip ($scope): ${records.length} skip-parse file${plural(records.length)}; ');
-		sysPrint('$unblockCount would unblock, $stillFailCount still fail, $noMatchCount unchanged ---\n');
+		CliIo.sysPrint('--- predict-strip ($scope): ${records.length} skip-parse file${plural(records.length)}; ');
+		CliIo.sysPrint('$unblockCount would unblock, $stillFailCount still fail, $noMatchCount unchanged ---\n');
 		for (idx => pat in patterns) {
 			final total: Int = patternHits[idx];
-			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+			CliIo.sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
 		}
 		// Mirror `strip --dry-run`: every supplied pattern matching 0
 		// across the whole filtered set is a typo signal worth surfacing
@@ -17398,7 +15920,7 @@ final class Cli {
 		// 0 case is the guard.
 		final anyZero: Bool = patternHits.exists(h -> h == 0);
 		if (!anyZero) return EXIT_OK;
-		stderr(
+		CliIo.stderr(
 			'apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see '
 			+ 'per-pattern totals\n'
 		);
@@ -17462,7 +15984,7 @@ final class Cli {
 		try {
 			final binTime: Float = FileSystem.stat(binPath).mtime.getTime();
 			if (anyHxNewerThan('src', binTime) || anyHxNewerThan('test', binTime)) {
-				stderr(
+				CliIo.stderr(
 					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before '
 					+ 'trusting these totals\n'
 				);
@@ -17666,9 +16188,9 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--file':
-					filePath = expectValue(args, ++i, '--file');
+					filePath = CliArgs.expectValue(args, ++i, '--file');
 				case '--prev':
-					prevPath = expectValue(args, ++i, '--prev');
+					prevPath = CliArgs.expectValue(args, ++i, '--prev');
 				case '--diff':
 					// Allow bare `--diff` (no arg) → default to
 					// `bin/.prev-sweep.json` (auto-rotated by the corpus
@@ -17676,20 +16198,20 @@ final class Cli {
 					// check follows expectValue's contract: a `--`-prefixed
 					// token is a flag, not a value.
 					diffPath = i + 1 < args.length && !StringTools.startsWith(args[i + 1], '--')
-						? expectValue(args, ++i, '--diff')
+						? CliArgs.expectValue(args, ++i, '--diff')
 						: autoRotatedBaseline;
 				case '--save':
-					savePath = expectValue(args, ++i, '--save');
+					savePath = CliArgs.expectValue(args, ++i, '--save');
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; harmless here (sweep
 					// reads a JSON snapshot, no grammar plugin needed). Accept
 					// + consume the value to keep shim invariance.
-					expectValue(args, ++i, '--lang');
+					CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printSweepUsage();
 					return EXIT_OK;
 				case _:
-					stderr('apq sweep: unknown option "$a"\n');
+					CliIo.stderr('apq sweep: unknown option "$a"\n');
 					printSweepUsage();
 					return EXIT_USAGE;
 			}
@@ -17697,22 +16219,22 @@ final class Cli {
 		}
 		final cur: Null<SweepTotals> = loadSweepJson(filePath);
 		if (cur == null) {
-			stderr(sweepNoSnapshot(filePath, savePath));
+			CliIo.stderr(sweepNoSnapshot(filePath, savePath));
 			return EXIT_RUNTIME;
 		}
 		warnIfTestJsStale('sweep');
 		final total: Int = cur.pass + cur.fail + cur.skipParse + cur.skipWrite + cur.skipConfig + cur.skipMalformed;
-		sysPrint(
+		CliIo.sysPrint(
 			'${cur.pass} pass / ${cur.fail} fail / ${cur.skipParse} skip-parse / ${cur.skipWrite} skip-write / ${cur.skipConfig}'
 			+ ' skip-config / ${cur.skipMalformed} malformed (total $total)\n'
 		);
 		if (prevPath != null) {
 			final prev: Null<SweepTotals> = loadSweepJson(prevPath);
 			if (prev == null) {
-				stderr(sweepNoSnapshot(prevPath, null, true));
+				CliIo.stderr(sweepNoSnapshot(prevPath, null, true));
 				return EXIT_RUNTIME;
 			}
-			sysPrint(
+			CliIo.sysPrint(
 				'  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse '
 				+ '${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n'
 			);
@@ -17721,9 +16243,9 @@ final class Cli {
 			try {
 				final raw: String = sys.io.File.getContent(filePath);
 				sys.io.File.saveContent((savePath: String), raw);
-				sysPrint('apq sweep: saved snapshot $filePath -> $savePath\n');
+				CliIo.sysPrint('apq sweep: saved snapshot $filePath -> $savePath\n');
 			} catch (e: Exception) {
-				stderr('apq sweep: --save failed: ${e.message}\n');
+				CliIo.stderr('apq sweep: --save failed: ${e.message}\n');
 				return EXIT_RUNTIME;
 			}
 		}
@@ -17759,32 +16281,32 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--old':
-					oldPath = expectValue(args, ++i, '--old');
+					oldPath = CliArgs.expectValue(args, ++i, '--old');
 				case '--new':
-					newPath = expectValue(args, ++i, '--new');
+					newPath = CliArgs.expectValue(args, ++i, '--new');
 				case '--root':
-					root = expectValue(args, ++i, '--root');
+					root = CliArgs.expectValue(args, ++i, '--root');
 				case '--label':
-					label = expectValue(args, ++i, '--label');
+					label = CliArgs.expectValue(args, ++i, '--label');
 				case '--limit':
-					limit = Std.parseInt(expectValue(args, ++i, '--limit')) ?? LINT_DIFF_EXAMPLE_LIMIT;
+					limit = Std.parseInt(CliArgs.expectValue(args, ++i, '--limit')) ?? LINT_DIFF_EXAMPLE_LIMIT;
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; harmless here (lint-diff
 					// reads two JSON reports, no grammar plugin needed). Accept +
 					// consume the value to keep shim invariance, as sweep does.
-					expectValue(args, ++i, '--lang');
+					CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printLintDiffUsage();
 					return EXIT_OK;
 				case _:
-					stderr('apq lint-diff: unknown option "$a"\n');
+					CliIo.stderr('apq lint-diff: unknown option "$a"\n');
 					printLintDiffUsage();
 					return EXIT_USAGE;
 			}
 			i++;
 		}
 		if (oldPath == null || newPath == null) {
-			stderr('apq lint-diff: both --old <path> and --new <path> are required\n');
+			CliIo.stderr('apq lint-diff: both --old <path> and --new <path> are required\n');
 			printLintDiffUsage();
 			return EXIT_USAGE;
 		}
@@ -17792,8 +16314,8 @@ final class Cli {
 		final newFile: String = newPath;
 		var result: Null<LintDiffResult> = null;
 		try {
-			final before: Array<LintFindingJson> = LintDiff.parseReport(readFile(oldFile));
-			final after: Array<LintFindingJson> = LintDiff.parseReport(readFile(newFile));
+			final before: Array<LintFindingJson> = LintDiff.parseReport(CliIo.readFile(oldFile));
+			final after: Array<LintFindingJson> = LintDiff.parseReport(CliIo.readFile(newFile));
 			// The rule -> `messageIdentity` map is asked of the check registry, so a rule that
 			// quotes a source coordinate is covered by declaring it on ITSELF. Both snapshots go
 			// through the same map, which is what lets a baseline cached before a declaration
@@ -17805,11 +16327,11 @@ final class Cli {
 			// "compared, and things moved". A half-read baseline UNDERSTATES the
 			// blast radius, and the caller that waives movement must still fail on
 			// this.
-			stderr('apq lint-diff: cannot compare $oldFile against $newFile: ${exception.message}\n');
+			CliIo.stderr('apq lint-diff: cannot compare $oldFile against $newFile: ${exception.message}\n');
 			return EXIT_USAGE;
 		}
 		if (result == null) throw 'apq lint-diff: the comparison neither produced a result nor threw';
-		for (line in LintDiff.render(result, label, limit)) sysPrint('$line\n');
+		for (line in LintDiff.render(result, label, limit)) CliIo.sysPrint('$line\n');
 		return result.addedTotal == 0 && result.removedTotal == 0 ? EXIT_OK : EXIT_RUNTIME;
 	}
 
@@ -17835,23 +16357,23 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--expect':
-					expectCsv = expectValue(args, ++i, '--expect');
+					expectCsv = CliArgs.expectValue(args, ++i, '--expect');
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; no grammar plugin is
 					// involved in reading a transcript. Consume it, as lint-diff
 					// and sweep do, to keep shim invariance.
-					expectValue(args, ++i, '--lang');
+					CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printMutationVerdictUsage();
 					return EXIT_OK;
 				case _:
 					if (a.startsWith('-')) {
-						stderr('apq mutation-verdict: unknown option "$a"\n');
+						CliIo.stderr('apq mutation-verdict: unknown option "$a"\n');
 						printMutationVerdictUsage();
 						return EXIT_USAGE;
 					}
 					if (logPath != null) {
-						stderr('apq mutation-verdict: only one transcript supported (got "$logPath" and "$a")\n');
+						CliIo.stderr('apq mutation-verdict: only one transcript supported (got "$logPath" and "$a")\n');
 						return EXIT_USAGE;
 					}
 					logPath = a;
@@ -17859,21 +16381,21 @@ final class Cli {
 			i++;
 		}
 		if (logPath == null) {
-			stderr('apq mutation-verdict: no transcript given\n');
+			CliIo.stderr('apq mutation-verdict: no transcript given\n');
 			printMutationVerdictUsage();
 			return EXIT_USAGE;
 		}
 		final source: String = logPath;
-		final raw: String = try readFile(source) catch (exception: Exception) {
-			stderr('apq mutation-verdict: read failed: ${exception.message}\n');
+		final raw: String = try CliIo.readFile(source) catch (exception: Exception) {
+			CliIo.stderr('apq mutation-verdict: read failed: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final expected: Array<String> = [
 			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
 		];
 		final verdict: MutationVerdictResult = MutationVerdict.classify(parseTestSummary(raw), expected);
-		sysPrint('${MutationVerdict.label(verdict.kind)}\n');
-		sysPrint('${verdict.detail}\n');
+		CliIo.sysPrint('${MutationVerdict.label(verdict.kind)}\n');
+		CliIo.sysPrint('${verdict.detail}\n');
 		return EXIT_OK;
 	}
 
@@ -17896,14 +16418,14 @@ final class Cli {
 		final cur: Map<String, String> = loadSweepFixtureStatus(curPath);
 		final prev: Map<String, String> = loadSweepFixtureStatus(prevPath);
 		if (!cur.iterator().hasNext()) {
-			stderr(
+			CliIo.stderr(
 				'apq sweep: --diff: $curPath'
 				+ ' has no `fixtures` array — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to seed it\n'
 			);
 			return EXIT_RUNTIME;
 		}
 		if (!prev.iterator().hasNext()) {
-			stderr(sweepDiffNoBaseline(prevPath, sweepSnapshotExists(prevPath), autoRotated));
+			CliIo.stderr(sweepDiffNoBaseline(prevPath, sweepSnapshotExists(prevPath), autoRotated));
 			return EXIT_RUNTIME;
 		}
 		final allPaths: Map<String, Bool> = [];
@@ -17925,7 +16447,7 @@ final class Cli {
 			changed++;
 			final moved: SweepFixtureMove = sweepDiffMove(path, ps, cs);
 			transitions[moved.key] = (transitions[moved.key] ?? 0) + 1;
-			sysPrint('${moved.line}\n');
+			CliIo.sysPrint('${moved.line}\n');
 		}
 		final breakdown: Array<String> = [for (k => v in transitions) '$k: $v'];
 		breakdown.sort((a: String, b: String) -> if (a < b)
@@ -17934,14 +16456,14 @@ final class Cli {
 			1
 		else
 			0);
-		sysPrint(
+		CliIo.sysPrint(
 			changed == 0
 				? '--- sweep --diff: 0 fixtures changed vs $prevPath (snapshots identical) ---\n'
 				: '--- sweep --diff: $changed fixtures changed vs $prevPath (${breakdown.join(', ')}) ---\n'
 		);
 		// The one line this gate was missing. A `0 changed` off the auto-rotated
 		// baseline is not a verdict about a change — see `sweepDiffAutoRotatedNote`.
-		if (changed == 0 && autoRotated) stderr(sweepDiffAutoRotatedNote(prevPath));
+		if (changed == 0 && autoRotated) CliIo.stderr(sweepDiffAutoRotatedNote(prevPath));
 		return EXIT_OK;
 	}
 
@@ -18079,83 +16601,83 @@ final class Cli {
 	private static inline function sweepSigned(n: Int): String return n > 0 ? '+$n' : '$n';
 
 	private static function printSweepUsage(): Void {
-		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]\n');
-		sysPrint('\n');
-		sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
-		sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
-		sysPrint('No corpus rerun — only reads JSON, so a tree that has never run the\n');
-		sysPrint('corpus harness has nothing to read. `node bin/test.js` under\n');
-		sysPrint('$$ANYPARSE_HXFORMAT_FORK is what writes the snapshot; every sweep form,\n');
-		sysPrint('--save included, fails until it has.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
-		sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
-		sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
-		sysPrint('                  FAIL->PASS, ADDED/REMOVED entries). Composes with --prev.\n');
-		sysPrint('                  Auto-default: `bin/.prev-sweep.json` (the corpus harness\n');
-		sysPrint('                  auto-rotates this before each sweep write), no path needed —\n');
-		sysPrint('                  but that default is the PREVIOUS RUN of this same tree, so\n');
-		sysPrint('                  its 0 is not a verdict about a change. For a gate that can\n');
-		sysPrint('                  fail, --save a baseline BEFORE the change and --diff it.\n');
-		sysPrint('  --save <path>   Copy the current snapshot to <path>. Use before a grammar\n');
-		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
-		sysPrint('                  Copies; it does not RUN anything, so it needs a snapshot\n');
-		sysPrint('                  already on disk.\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
+		CliIo.sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
+		CliIo.sysPrint('No corpus rerun — only reads JSON, so a tree that has never run the\n');
+		CliIo.sysPrint('corpus harness has nothing to read. `node bin/test.js` under\n');
+		CliIo.sysPrint('$$ANYPARSE_HXFORMAT_FORK is what writes the snapshot; every sweep form,\n');
+		CliIo.sysPrint('--save included, fails until it has.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
+		CliIo.sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
+		CliIo.sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
+		CliIo.sysPrint('                  FAIL->PASS, ADDED/REMOVED entries). Composes with --prev.\n');
+		CliIo.sysPrint('                  Auto-default: `bin/.prev-sweep.json` (the corpus harness\n');
+		CliIo.sysPrint('                  auto-rotates this before each sweep write), no path needed —\n');
+		CliIo.sysPrint('                  but that default is the PREVIOUS RUN of this same tree, so\n');
+		CliIo.sysPrint('                  its 0 is not a verdict about a change. For a gate that can\n');
+		CliIo.sysPrint('                  fail, --save a baseline BEFORE the change and --diff it.\n');
+		CliIo.sysPrint('  --save <path>   Copy the current snapshot to <path>. Use before a grammar\n');
+		CliIo.sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
+		CliIo.sysPrint('                  Copies; it does not RUN anything, so it needs a snapshot\n');
+		CliIo.sysPrint('                  already on disk.\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printLintDiffUsage(): Void {
-		sysPrint('Usage: apq lint-diff --old <a.json> --new <b.json> [--root <prefix>] [--label <name>]\n');
-		sysPrint('\n');
-		sysPrint('Compare two `apq lint --format json` snapshots as MULTISETS of\n');
-		sysPrint('(file, rule, severity, message) keys and report added and removed.\n');
-		sysPrint('Line, column and address are deliberately not part of the key —\n');
-		sysPrint('they move under any edit above them, and `apq lint --format json`\n');
-		sysPrint('records DO carry all three (file, line, col, severity, rule,\n');
-		sysPrint('message, address) for any caller that wants them.\n');
-		sysPrint('\n');
-		sysPrint('The MEASUREMENTS a message quotes are masked too, and each check\n');
-		sysPrint('declares its own: a type going 518 -> 519 members, a clone block\n');
-		sysPrint('whose partner moved a line, a repetition count — each re-keyed a\n');
-		sysPrint('finding that neither appeared nor went away. The `(max N)`\n');
-		sysPrint('THRESHOLDS beside them are NOT masked: a configuration change is a\n');
-		sysPrint('change this gate must show. So two snapshots can differ in the text\n');
-		sysPrint('they print and still compare equal here — that is the design, not a\n');
-		sysPrint('missed difference.\n');
-		sysPrint('\n');
-		sysPrint('Exit 0 when the two snapshots carry the same findings, 1 when\n');
-		sysPrint('anything moved, 2 when the comparison could not run (snapshot\n');
-		sysPrint('missing or malformed).\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --old <path>    Baseline snapshot (required)\n');
-		sysPrint('  --new <path>    Snapshot compared against it (required)\n');
-		sysPrint('  --root <prefix> Strip this path prefix from EITHER side before comparing,\n');
-		sysPrint('                  so a relative and an absolute snapshot of one tree agree\n');
-		sysPrint('  --label <name>  Name this comparison in the output (a battery run has two)\n');
-		sysPrint('  --limit <n>     Example keys shown per sign (default 20; -1 shows all)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('Usage: apq lint-diff --old <a.json> --new <b.json> [--root <prefix>] [--label <name>]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Compare two `apq lint --format json` snapshots as MULTISETS of\n');
+		CliIo.sysPrint('(file, rule, severity, message) keys and report added and removed.\n');
+		CliIo.sysPrint('Line, column and address are deliberately not part of the key —\n');
+		CliIo.sysPrint('they move under any edit above them, and `apq lint --format json`\n');
+		CliIo.sysPrint('records DO carry all three (file, line, col, severity, rule,\n');
+		CliIo.sysPrint('message, address) for any caller that wants them.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The MEASUREMENTS a message quotes are masked too, and each check\n');
+		CliIo.sysPrint('declares its own: a type going 518 -> 519 members, a clone block\n');
+		CliIo.sysPrint('whose partner moved a line, a repetition count — each re-keyed a\n');
+		CliIo.sysPrint('finding that neither appeared nor went away. The `(max N)`\n');
+		CliIo.sysPrint('THRESHOLDS beside them are NOT masked: a configuration change is a\n');
+		CliIo.sysPrint('change this gate must show. So two snapshots can differ in the text\n');
+		CliIo.sysPrint('they print and still compare equal here — that is the design, not a\n');
+		CliIo.sysPrint('missed difference.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Exit 0 when the two snapshots carry the same findings, 1 when\n');
+		CliIo.sysPrint('anything moved, 2 when the comparison could not run (snapshot\n');
+		CliIo.sysPrint('missing or malformed).\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --old <path>    Baseline snapshot (required)\n');
+		CliIo.sysPrint('  --new <path>    Snapshot compared against it (required)\n');
+		CliIo.sysPrint('  --root <prefix> Strip this path prefix from EITHER side before comparing,\n');
+		CliIo.sysPrint('                  so a relative and an absolute snapshot of one tree agree\n');
+		CliIo.sysPrint('  --label <name>  Name this comparison in the output (a battery run has two)\n');
+		CliIo.sysPrint('  --limit <n>     Example keys shown per sign (default 20; -1 shows all)\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printMutationVerdictUsage(): Void {
-		sysPrint('Usage: apq mutation-verdict <transcript> [--expect <csv>]\n');
-		sysPrint('\n');
-		sysPrint('Classify one utest stdout transcript for tools/mutation-check.sh.\n');
-		sysPrint('Prints the verdict on line 1 and the report-row detail on line 2:\n');
-		sysPrint('  KILLED    the run went red and every expectation matched something\n');
-		sysPrint('  SURVIVED  the run was GREEN by utest own predicate (warnings count as red)\n');
-		sysPrint('  MISMATCH  the run went red, but some expectation matched nothing\n');
-		sysPrint('  NO-TESTS  the filter matched no test class\n');
-		sysPrint('  RUN-FAIL  no usable transcript, or a red run whose rows did not parse\n');
-		sysPrint('\n');
-		sysPrint('The exit code says whether classification was possible, not what the\n');
-		sysPrint('verdict was: every verdict exits 0, a usage error or unreadable file 2.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --expect <csv>  Comma-separated substrings matched against the failing\n');
-		sysPrint('                  test names; empty means any red run kills\n');
-		sysPrint('  -h, --help      Show this help\n');
+		CliIo.sysPrint('Usage: apq mutation-verdict <transcript> [--expect <csv>]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Classify one utest stdout transcript for tools/mutation-check.sh.\n');
+		CliIo.sysPrint('Prints the verdict on line 1 and the report-row detail on line 2:\n');
+		CliIo.sysPrint('  KILLED    the run went red and every expectation matched something\n');
+		CliIo.sysPrint('  SURVIVED  the run was GREEN by utest own predicate (warnings count as red)\n');
+		CliIo.sysPrint('  MISMATCH  the run went red, but some expectation matched nothing\n');
+		CliIo.sysPrint('  NO-TESTS  the filter matched no test class\n');
+		CliIo.sysPrint('  RUN-FAIL  no usable transcript, or a red run whose rows did not parse\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The exit code says whether classification was possible, not what the\n');
+		CliIo.sysPrint('verdict was: every verdict exits 0, a usage error or unreadable file 2.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --expect <csv>  Comma-separated substrings matched against the failing\n');
+		CliIo.sysPrint('                  test names; empty means any red run kills\n');
+		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
 	/**
@@ -18188,10 +16710,10 @@ final class Cli {
 					return EXIT_OK;
 				case '--lang':
 					// Shim invariance — apq test-summary doesn't use a plugin.
-					expectValue(args, ++i, '--lang');
+					CliArgs.expectValue(args, ++i, '--lang');
 				case _:
 					if (sourcePath != null) {
-						stderr('apq test-summary: only one positional source supported (got "$sourcePath" and "$a")\n');
+						CliIo.stderr('apq test-summary: only one positional source supported (got "$sourcePath" and "$a")\n');
 						return EXIT_USAGE;
 					}
 					sourcePath = a;
@@ -18203,14 +16725,14 @@ final class Cli {
 				case null: if (sys.FileSystem.exists('/tmp/test.out'))
 					sys.io.File.getContent('/tmp/test.out');
 				else {
-					stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
+					CliIo.stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
 					return EXIT_USAGE;
 				}
-				case '-': readStdin();
+				case '-': CliIo.readStdin();
 				case _: sys.io.File.getContent((sourcePath: String));
 			}
 		} catch (e: Exception) {
-			stderr('apq test-summary: read failed: ${e.message}\n');
+			CliIo.stderr('apq test-summary: read failed: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final result: TestSummaryResult = parseTestSummary(raw);
@@ -18227,26 +16749,26 @@ final class Cli {
 		// (`0 Assertions 0 Success 0 Failures 0 Errors`) are both all-zero answers,
 		// and an all-zero test refused the second one outright.
 		if (!result.counted) {
-			stderr(
+			CliIo.stderr(
 				'apq test-summary: no report found in "$src" — no utest header block, no result row, and no tink reporter output. '
 				+ 'The run died before printing its report, or this is not a utest / tink transcript.\n'
 			);
 			return EXIT_RUNTIME;
 		}
-		sysPrint(
+		CliIo.sysPrint(
 			'${result.tests} tests / ${result.assertions} assertions / ${result.failures} failures / ${result.errors} errors  ($src)\n'
 		);
 		// utest synthesises the "No tests executed." row with an EMPTY method
 		// name, so it parses as neither a test row nor a failure row: the counts
 		// line for a filter that matched nothing reads all-zero, i.e. green.
-		if (result.noTests) sysPrint('no tests executed: the filter matched no test class\n');
+		if (result.noTests) CliIo.sysPrint('no tests executed: the filter matched no test class\n');
 		final ff: Null<TestSummaryFailureLocus> = result.firstFailure;
 		if (ff != null) {
 			final classQual: String = ff.className.length > 0 ? '${ff.className}.' : '';
 			final lineFrag: String = ff.line >= 0 ? '  line:${ff.line}' : '';
 			final msgFrag: String = ff.message.length > 0 ? '  ${ff.message}' : '';
 			final label: String = ff.kind == TestSummaryFailureKind.Error ? 'error' : 'failure';
-			sysPrint('first $label: $classQual${ff.testName}$lineFrag$msgFrag\n');
+			CliIo.sysPrint('first $label: $classQual${ff.testName}$lineFrag$msgFrag\n');
 		}
 		return EXIT_OK;
 	}
@@ -18270,9 +16792,9 @@ final class Cli {
 		final opts: SelfStatusOpts = parseSelfStatusArgs(args);
 		if (opts.errExit != null) return opts.errExit;
 		final specs: Array<String> = opts.roots.length > 0 ? opts.roots : ['src'];
-		final io: ResolvedInputs = resolveInputPaths(opts.lang, specs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(opts.lang, specs);
 		if (io.paths.length == 0) {
-			stderr('apq self-status: ${quotedSpecs(specs)} matched no .hx files\n');
+			CliIo.stderr('apq self-status: ${CliArgs.quotedSpecs(specs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final walk: SelfStatusWalk = walkSelfStatus(io.plugin, io.paths, opts.showSource);
@@ -18282,30 +16804,30 @@ final class Cli {
 			1
 		else
 			0);
-		for (line in walk.skipLines) sysPrint('$line\n');
+		for (line in walk.skipLines) CliIo.sysPrint('$line\n');
 		final total: Int = walk.parseable + walk.skipParse;
-		sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');
+		CliIo.sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');
 		return opts.strict && walk.skipParse > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
 
 	private static function printSelfStatusUsage(): Void {
-		sysPrint('apq self-status [<file/dir/glob>...] [--strict] [--source]\n');
-		sysPrint('\n');
-		sysPrint('Walks each input recursively (default `src/`) and prints which `.hx` files\n');
-		sysPrint('the grammar plugin cannot parse. Each failure shows as:\n');
-		sysPrint('  SKIP <path> :: LINE:COL expected="<X>"\n');
-		sysPrint('\n');
-		sysPrint('With --source the SKIP line gains a `:: src="<window>"` tail showing\n');
-		sysPrint('the bytes around the fail-locus (same format as `recon --probe`).\n');
-		sysPrint('\n');
-		sysPrint('Closes the dogfood gap: hxq walkers silently skip unparseable files;\n');
-		sysPrint('self-status surfaces the full set in one call.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --strict       Exit non-zero when any file skip-parses (CI guard).\n');
-		sysPrint('  --source       Append windowed source around each fail-locus.\n');
-		sysPrint('  --lang <name>  Grammar plugin (default `haxe`).\n');
-		sysPrint('  -h, --help     Show this help.\n');
+		CliIo.sysPrint('apq self-status [<file/dir/glob>...] [--strict] [--source]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Walks each input recursively (default `src/`) and prints which `.hx` files\n');
+		CliIo.sysPrint('the grammar plugin cannot parse. Each failure shows as:\n');
+		CliIo.sysPrint('  SKIP <path> :: LINE:COL expected="<X>"\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('With --source the SKIP line gains a `:: src="<window>"` tail showing\n');
+		CliIo.sysPrint('the bytes around the fail-locus (same format as `recon --probe`).\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Closes the dogfood gap: hxq walkers silently skip unparseable files;\n');
+		CliIo.sysPrint('self-status surfaces the full set in one call.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --strict       Exit non-zero when any file skip-parses (CI guard).\n');
+		CliIo.sysPrint('  --source       Append windowed source around each fail-locus.\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default `haxe`).\n');
+		CliIo.sysPrint('  -h, --help     Show this help.\n');
 	}
 
 	/**
@@ -18327,26 +16849,26 @@ final class Cli {
 
 		final file: Null<String> = opts.file;
 		if (file == null) {
-			stderr('apq source: missing <file> argument\n');
+			CliIo.stderr('apq source: missing <file> argument\n');
 			printSourceUsage();
 			return EXIT_USAGE;
 		}
 		final modes: Int = (opts.range != null ? 1 : 0) + (opts.selectExpr != null ? 1 : 0) + (opts.atSpec != null ? 1 : 0);
 		if (modes > 1) {
-			stderr('apq source: --range, --select and --at are mutually exclusive — pick one\n');
+			CliIo.stderr('apq source: --range, --select and --at are mutually exclusive — pick one\n');
 			return EXIT_USAGE;
 		}
 		final path: String = file;
 		if (!FileSystem.exists(path)) {
-			stderr('apq source: no such file "$path"\n');
+			CliIo.stderr('apq source: no such file "$path"\n');
 			return EXIT_RUNTIME;
 		}
 		if (FileSystem.isDirectory(path)) {
-			stderr('apq source: "$path" is a directory (source views one file)\n');
+			CliIo.stderr('apq source: "$path" is a directory (source views one file)\n');
 			return EXIT_RUNTIME;
 		}
 
-		final content: String = readFile(path);
+		final content: String = CliIo.readFile(path);
 		// Split on `\n` so a trailing newline does not synthesise a spurious
 		// empty final line — the standard "lines = N+1 splits, last empty"
 		// is dropped to keep line numbers aligned with an editor's view.
@@ -18361,7 +16883,7 @@ final class Cli {
 			: parseRangeSpec(opts.range, lines.length);
 		if (bounds == null) {
 			if (opts.selectExpr != null || opts.atSpec != null) return EXIT_RUNTIME;
-			stderr('apq source: bad --range "${opts.range}" (use L, L:L2, L:, or :L2 — 1-based)\n');
+			CliIo.stderr('apq source: bad --range "${opts.range}" (use L, L:L2, L:, or :L2 — 1-based)\n');
 			return EXIT_USAGE;
 		}
 
@@ -18408,33 +16930,33 @@ final class Cli {
 	}
 
 	private static function printSourceUsage(): Void {
-		sysPrint('Usage: apq source [options] <file>   (alias: apq show)\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --range <spec>     1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
-		sysPrint('  --select <sel>     Source of the node matching <sel> (apq ast selector,\n');
-		sysPrint("                     e.g. 'FnMember:foo' / 'ClassDecl:Bar') — must match exactly one\n");
-		sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
-		sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
-		sysPrint('  --raw              Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
-		sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
-		sysPrint('  -h, --help         Show this help\n');
-		sysPrint('\n');
-		sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');
-		sysPrint('works on any file (parseable or skip-parse). `--select` / `--at` parse the\n');
-		sysPrint('file and print the full lines spanning the matched node together with its\n');
-		sysPrint('leading modifier / annotation / conditional-prefix run — the span `patch`\n');
-		sysPrint('searches and `replace-node` overwrites — the clean way to\n');
-		sysPrint("read ONE function by name (no line numbers, no S-expr): apq source f.hx --select 'FnMember:foo'.\n");
-		sysPrint('\n');
-		sysPrint('By default the common leading indentation shared by the shown lines is\n');
-		sysPrint('stripped (dedent) so nested slices read cleanly; pass `--raw` to keep exact\n');
-		sysPrint('bytes — needed when the output anchors an Edit or you need true column\n');
-		sysPrint('positions. The gate-blessed replacement for `git show` / `readFileSync`.\n');
-		sysPrint('\n');
-		sysPrint('`apq show` is the SAME command. A shell sandbox refuses any command carrying\n');
-		sysPrint('the token `source` (it reads as the builtin that executes a file), which made\n');
-		sysPrint('this one unusable inside one — use the alias there.\n');
+		CliIo.sysPrint('Usage: apq source [options] <file>   (alias: apq show)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --range <spec>     1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
+		CliIo.sysPrint('  --select <sel>     Source of the node matching <sel> (apq ast selector,\n');
+		CliIo.sysPrint("                     e.g. 'FnMember:foo' / 'ClassDecl:Bar') — must match exactly one\n");
+		CliIo.sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
+		CliIo.sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
+		CliIo.sysPrint('  --raw              Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
+		CliIo.sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
+		CliIo.sysPrint('  -h, --help         Show this help\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');
+		CliIo.sysPrint('works on any file (parseable or skip-parse). `--select` / `--at` parse the\n');
+		CliIo.sysPrint('file and print the full lines spanning the matched node together with its\n');
+		CliIo.sysPrint('leading modifier / annotation / conditional-prefix run — the span `patch`\n');
+		CliIo.sysPrint('searches and `replace-node` overwrites — the clean way to\n');
+		CliIo.sysPrint("read ONE function by name (no line numbers, no S-expr): apq source f.hx --select 'FnMember:foo'.\n");
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('By default the common leading indentation shared by the shown lines is\n');
+		CliIo.sysPrint('stripped (dedent) so nested slices read cleanly; pass `--raw` to keep exact\n');
+		CliIo.sysPrint('bytes — needed when the output anchors an Edit or you need true column\n');
+		CliIo.sysPrint('positions. The gate-blessed replacement for `git show` / `readFileSync`.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('`apq show` is the SAME command. A shell sandbox refuses any command carrying\n');
+		CliIo.sysPrint('the token `source` (it reads as the builtin that executes a file), which made\n');
+		CliIo.sysPrint('this one unusable inside one — use the alias there.\n');
 	}
 
 	private static function tryCaptureDetail(locus: TestSummaryFailureLocus, line: String, full: EReg, lineOnly: EReg, bare: EReg): Bool {
@@ -18463,25 +16985,25 @@ final class Cli {
 	}
 
 	private static function printTestSummaryUsage(): Void {
-		sysPrint('Usage: apq test-summary [<file> | -]\n');
-		sysPrint('\n');
-		sysPrint('Parse a utest stdout transcript and report tests / assertions / failures /\n');
-		sysPrint('errors. Source resolution:\n');
-		sysPrint('  <file>     — read from the given path\n');
-		sysPrint('  -          — read from stdin (heredoc / pipe / process subst.)\n');
-		sysPrint('  (default)  — `/tmp/test.out` if it exists, else usage error\n');
-		sysPrint('\n');
-		sysPrint('Assertions come from utest\'s own `assertations:` block when the transcript\n');
-		sysPrint('has one, and the test total from the runner\'s `tests executed:` line — the\n');
-		sysPrint('quiet reporter prints no row for a passing test. Without a header, both\n');
-		sysPrint('fall back to the `  testName: OK <dots>` rows (one dot per assertion).\n');
-		sysPrint('Failure / error counts are always row-derived, so they count TESTS.\n');
-		sysPrint('When any FAIL / ERROR is present, appends a second line with the first\n');
-		sysPrint('failure\'s locus: `first failure: ClassName.testName  line:N  <message>`\n');
-		sysPrint('(class header / line / message included when utest emitted them).\n');
-		sysPrint('Exits 0 on a countable parse and 1 on a transcript that yields no counts\n');
-		sysPrint('at all — the test runner\'s own exit code stays the authoritative\n');
-		sysPrint('pass/fail signal.\n');
+		CliIo.sysPrint('Usage: apq test-summary [<file> | -]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Parse a utest stdout transcript and report tests / assertions / failures /\n');
+		CliIo.sysPrint('errors. Source resolution:\n');
+		CliIo.sysPrint('  <file>     — read from the given path\n');
+		CliIo.sysPrint('  -          — read from stdin (heredoc / pipe / process subst.)\n');
+		CliIo.sysPrint('  (default)  — `/tmp/test.out` if it exists, else usage error\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Assertions come from utest\'s own `assertations:` block when the transcript\n');
+		CliIo.sysPrint('has one, and the test total from the runner\'s `tests executed:` line — the\n');
+		CliIo.sysPrint('quiet reporter prints no row for a passing test. Without a header, both\n');
+		CliIo.sysPrint('fall back to the `  testName: OK <dots>` rows (one dot per assertion).\n');
+		CliIo.sysPrint('Failure / error counts are always row-derived, so they count TESTS.\n');
+		CliIo.sysPrint('When any FAIL / ERROR is present, appends a second line with the first\n');
+		CliIo.sysPrint('failure\'s locus: `first failure: ClassName.testName  line:N  <message>`\n');
+		CliIo.sysPrint('(class header / line / message included when utest emitted them).\n');
+		CliIo.sysPrint('Exits 0 on a countable parse and 1 on a transcript that yields no counts\n');
+		CliIo.sysPrint('at all — the test runner\'s own exit code stays the authoritative\n');
+		CliIo.sysPrint('pass/fail signal.\n');
 	}
 
 	/**
@@ -18500,37 +17022,37 @@ final class Cli {
 			final a: String = args[i];
 			switch a {
 				case '--runner':
-					runner = expectValue(args, ++i, '--runner');
+					runner = CliArgs.expectValue(args, ++i, '--runner');
 				case '--classes':
-					classesPath = expectValue(args, ++i, '--classes');
+					classesPath = CliArgs.expectValue(args, ++i, '--classes');
 				case '--shards':
-					shardsText = expectValue(args, ++i, '--shards');
+					shardsText = CliArgs.expectValue(args, ++i, '--shards');
 				case '--format':
-					format = expectValue(args, ++i, '--format');
+					format = CliArgs.expectValue(args, ++i, '--format');
 				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printShardPlanUsage();
 					return EXIT_OK;
 				case _:
-					stderr('apq shard-plan: unexpected argument "$a" — the class list is named by --runner or --classes\n');
+					CliIo.stderr('apq shard-plan: unexpected argument "$a" — the class list is named by --runner or --classes\n');
 					printShardPlanUsage();
 					return EXIT_USAGE;
 			}
 			i++;
 		}
 		if (runner != null && classesPath != null) {
-			stderr('apq shard-plan: --runner and --classes are mutually exclusive — one class list per plan\n');
+			CliIo.stderr('apq shard-plan: --runner and --classes are mutually exclusive — one class list per plan\n');
 			printShardPlanUsage();
 			return EXIT_USAGE;
 		}
 		if (shardsText == null) {
-			stderr('apq shard-plan: --shards <N> is required\n');
+			CliIo.stderr('apq shard-plan: --shards <N> is required\n');
 			printShardPlanUsage();
 			return EXIT_USAGE;
 		}
 		if (format != 'lines' && format != 'filters') {
-			stderr('apq shard-plan: --format expects lines or filters, got "$format"\n');
+			CliIo.stderr('apq shard-plan: --format expects lines or filters, got "$format"\n');
 			return EXIT_USAGE;
 		}
 		// The regex, not Std.parseInt alone: parseInt reads a leading number out
@@ -18538,7 +17060,7 @@ final class Cli {
 		final shardsRaw: String = shardsText;
 		final shards: Null<Int> = new EReg('^[0-9]+$', '').match(shardsRaw) ? Std.parseInt(shardsRaw) : null;
 		if (shards == null || shards < 1) {
-			stderr('apq shard-plan: --shards expects a positive integer, got "$shardsRaw"\n');
+			CliIo.stderr('apq shard-plan: --shards expects a positive integer, got "$shardsRaw"\n');
 			return EXIT_USAGE;
 		}
 		final shardCount: Int = shards;
@@ -18549,24 +17071,26 @@ final class Cli {
 		// rather than from a re-derivation of it out of source text.
 		final classes: Null<String> = classesPath;
 		if (classes != null) {
-			final listed: Array<String> = [for (line in readFile(classes).split('\n')) if (line.trim() != '') line.trim()];
+			final listed: Array<String> = [
+				for (line in CliIo.readFile(classes).split('\n')) if (line.trim() != '') line.trim()
+			];
 			return renderShardPlan(ShardPlan.planClasses(listed, shardCount, classes), format, shardCount);
 		}
 		if (runner == null) {
-			stderr('apq shard-plan: one of --runner <path> or --classes <path> is required\n');
+			CliIo.stderr('apq shard-plan: one of --runner <path> or --classes <path> is required\n');
 			printShardPlanUsage();
 			return EXIT_USAGE;
 		}
 
-		final io: ResolvedInputs = resolveInputPaths(lang, [runner]);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, [runner]);
 		final paths: Array<String> = io.paths;
 		if (paths.length != 1) {
-			stderr('apq shard-plan: --runner must name ONE file, "$runner" matched ${paths.length}\n');
+			CliIo.stderr('apq shard-plan: --runner must name ONE file, "$runner" matched ${paths.length}\n');
 			return EXIT_RUNTIME;
 		}
 		final path: String = paths[0];
-		final source: String = readSourceForParse(path);
-		final tree: Null<QueryNode> = parseWalked('shard-plan', io.plugin.parseFile, path, source, true);
+		final source: String = CliIo.readSourceForParse(path);
+		final tree: Null<QueryNode> = CliWalk.parseWalked('shard-plan', io.plugin.parseFile, path, source, true);
 		if (tree == null) return EXIT_RUNTIME;
 
 		// Re-bound: a narrowed local never reaches an anonymous-structure literal
@@ -18588,43 +17112,43 @@ final class Cli {
 		return switch result {
 			case Planned(placements):
 				final rows: Array<ShardPlacement> = placements;
-				sysPrint(format == 'filters' ? ShardPlan.renderFilters(rows, shardCount) : ShardPlan.renderLines(rows));
+				CliIo.sysPrint(format == 'filters' ? ShardPlan.renderFilters(rows, shardCount) : ShardPlan.renderLines(rows));
 				EXIT_OK;
 			case Refused(message):
-				stderr('$message\n');
+				CliIo.stderr('$message\n');
 				EXIT_RUNTIME;
 		};
 	}
 
 	/** `apq shard-plan --help`. */
 	private static function printShardPlanUsage(): Void {
-		sysPrint('Usage: apq shard-plan (--runner <RunTests.hx> | --classes <list>) --shards <N>\n');
-		sysPrint('                      [--format lines|filters]\n');
-		sysPrint('\n');
-		sysPrint('Deal N APQ_TEST shards for tools/suite-shard.sh, from one of two class lists.\n');
-		sysPrint('\n');
-		sysPrint('  --classes <path>  one fully-qualified class name per line, blank lines\n');
-		sysPrint('                    ignored — what `node bin/test.js --list-classes` prints,\n');
-		sysPrint('                    i.e. the GENERATED registry the run will actually use.\n');
-		sysPrint('  --runner <path>   a runner source file; its addCase(new X()) registrations\n');
-		sysPrint('                    are read as AST shapes, so both constructor arity and\n');
-		sysPrint('                    dotted-vs-bare names are structure rather than text.\n');
-		sysPrint('\n');
-		sysPrint('Output:\n');
-		sysPrint('  lines    (default) one "<shard>\\t<class>" row per registered class\n');
-		sysPrint('  filters  N lines, line i being the comma-joined APQ_TEST value of shard i\n');
-		sysPrint('\n');
-		sysPrint('Exits 1, printing the reason on stderr, for a registration it cannot name, a\n');
-		sysPrint('class registered twice, an APQ_TEST substring collision, a pinned class that\n');
-		sysPrint('is no longer registered, a plan that does not cover the class list, and an\n');
-		sysPrint('empty shard. The per-class weights only balance the split — no gate reads\n');
-		sysPrint('them, so a stale weight costs balance and never correctness.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --runner <path>  utest runner to read the registrations from (required)\n');
-		sysPrint('  --shards <N>     How many shards to deal onto (required, >= 1)\n');
-		sysPrint('  --format <fmt>   lines (default) or filters\n');
-		sysPrint('  -h, --help       Show this help\n');
+		CliIo.sysPrint('Usage: apq shard-plan (--runner <RunTests.hx> | --classes <list>) --shards <N>\n');
+		CliIo.sysPrint('                      [--format lines|filters]\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Deal N APQ_TEST shards for tools/suite-shard.sh, from one of two class lists.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('  --classes <path>  one fully-qualified class name per line, blank lines\n');
+		CliIo.sysPrint('                    ignored — what `node bin/test.js --list-classes` prints,\n');
+		CliIo.sysPrint('                    i.e. the GENERATED registry the run will actually use.\n');
+		CliIo.sysPrint('  --runner <path>   a runner source file; its addCase(new X()) registrations\n');
+		CliIo.sysPrint('                    are read as AST shapes, so both constructor arity and\n');
+		CliIo.sysPrint('                    dotted-vs-bare names are structure rather than text.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Output:\n');
+		CliIo.sysPrint('  lines    (default) one "<shard>\\t<class>" row per registered class\n');
+		CliIo.sysPrint('  filters  N lines, line i being the comma-joined APQ_TEST value of shard i\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Exits 1, printing the reason on stderr, for a registration it cannot name, a\n');
+		CliIo.sysPrint('class registered twice, an APQ_TEST substring collision, a pinned class that\n');
+		CliIo.sysPrint('is no longer registered, a plan that does not cover the class list, and an\n');
+		CliIo.sysPrint('empty shard. The per-class weights only balance the split — no gate reads\n');
+		CliIo.sysPrint('them, so a stale weight costs balance and never correctness.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --runner <path>  utest runner to read the registrations from (required)\n');
+		CliIo.sysPrint('  --shards <N>     How many shards to deal onto (required, >= 1)\n');
+		CliIo.sysPrint('  --format <fmt>   lines (default) or filters\n');
+		CliIo.sysPrint('  -h, --help       Show this help\n');
 	}
 
 	/**
@@ -18911,7 +17435,7 @@ final class Cli {
 		final reasons: Map<String, String> = [
 			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()
 		];
-		for (line in unfixedFixLedger(ledger, reasons, oracleIds, riskyIds)) stderr(line);
+		for (line in unfixedFixLedger(ledger, reasons, oracleIds, riskyIds)) CliIo.stderr(line);
 	}
 	#end
 
@@ -19357,23 +17881,6 @@ typedef RefsOpts = {
 };
 
 /**
- * Parsed options for `apq set-comment` — `lang`, `write` / `reformat`, the target `file`, the `pos` address, and the comment body (`commentText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
- */
-@:nullSafety(Strict)
-typedef SetCommentOpts = {
-	var lang: String;
-	var write: Bool;
-	var reformat: Bool;
-	var fromFile: Null<String>;
-	var file: Null<String>;
-	var pos: Null<String>;
-	var commentText: Null<String>;
-	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
-	// the caller returns this immediately and ignores the rest of the struct.
-	var errExit: Null<Int>;
-};
-
-/**
  * Parsed options for `apq replace-node` — `lang`, `write` / `reformat`, the address (`selectExpr` / `atSpec` / `matchExpr` / `nth` / `kind`), `withDoc`, and the replacement source (`newSource` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
@@ -19586,40 +18093,6 @@ private typedef RiskyFixOutcome = {
 	 */
 	var coverage: Null<OracleCoverage>;
 };
-
-/**
- * One file's pending write: `staged` holds the new bytes beside `target`, which is where
- * `Cli.commitStagedWrite` renames them, and `asked` is the spelling any diagnostic quotes.
- */
-@:nullSafety(Strict)
-private typedef StagedWrite = {
-	var staged: String;
-	var target: String;
-
-	/** The path as the CALLER spelled it, which is the one a diagnostic must name. */
-	var asked: String;
-};
-
-/**
- * A write that did not happen, carrying the file it was for.
- *
- * Its own type rather than a bare `Exception` because `Cli.run` catches exactly this and
- * nothing else. An internal error still reaches the reader as a stack trace, which is what a
- * bug wants; a file the run cannot write is a fact about the environment, and gets a sentence
- * and an exit code.
- */
-@:nullSafety(Strict)
-final class WriteFailure extends Exception {
-
-	/** The file the write was for, spelled the way the caller spelled it — never the staging temporary. */
-	public final path: String;
-
-	public function new(path: String, reason: String) {
-		super('cannot write $path: $reason');
-		this.path = path;
-	}
-
-}
 
 /**
  * Parsed options for `apq add-meta` — `lang`, `write` / `reformat`, the address
