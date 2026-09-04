@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.ReflectionScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.Cli;
+import anyparse.query.cli.command.LintCommand;
 import haxe.io.Path;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -167,12 +167,14 @@ class LintScopeGateTest extends Test {
 
 	@:access(anyparse.query.Cli)
 	private function fullScopeIds(): Array<String> {
-		return [for (c in Cli.partitionChecks(Linter.builtins(), true).fullScope) c.id()];
+		return [for (c in LintCommand.partitionChecks(Linter.builtins(), true).fullScope) c.id()];
 	}
 
 	@:access(anyparse.query.Cli)
 	private function activeScopeIds(): Array<String> {
-		return [for (c in Cli.partitionChecks(Linter.builtins(), true).activeScope) c.id()];
+		return [
+			for (c in LintCommand.partitionChecks(Linter.builtins(), true).activeScope) c.id()
+		];
 	}
 
 	/**

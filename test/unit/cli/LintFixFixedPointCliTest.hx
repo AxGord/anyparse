@@ -4,6 +4,7 @@ package unit.cli;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
+import anyparse.query.cli.command.LintFixLedger;
 import utest.Assert;
 import utest.Test;
 
@@ -266,7 +267,7 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerTellsNoAutofixApartFromDeclinedHere(): Void {
-		final lines: Array<String> = Cli.unfixedFixLedger([
+		final lines: Array<String> = LintFixLedger.unfixedFixLedger([
 			'complexity' => outcome(3, 3, 0),
 			'prefer-typed-throw' => outcome(9, 9, 0, [{ text: 'a String catch clause is in scope', count: 9 }]),
 			'naming' => outcome(7, 2, 5),
@@ -301,9 +302,9 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerIsSilentWhenNothingWasDeclined(): Void {
-		final fixedEverything: Array<String> = Cli.unfixedFixLedger(['unused-import' => outcome(4, 0, 4)], [], [], []);
+		final fixedEverything: Array<String> = LintFixLedger.unfixedFixLedger(['unused-import' => outcome(4, 0, 4)], [], [], []);
 		Assert.equals(0, fixedEverything.length, 'nothing was declined, so there is nothing to explain');
-		Assert.equals(0, Cli.unfixedFixLedger([], [], [], []).length, 'a clean run gains no noise');
+		Assert.equals(0, LintFixLedger.unfixedFixLedger([], [], [], []).length, 'a clean run gains no noise');
 	}
 
 	/**
@@ -323,7 +324,7 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerNamesTheRulesItDoesNotCover(): Void {
-		final all: String = Cli.unfixedFixLedger([
+		final all: String = LintFixLedger.unfixedFixLedger([
 			'magic-number' => outcome(1, 1, 0),
 			'explicit-local-type' => outcome(5, 5, 0)
 		], [], ['explicit-local-type'], ['avoid-dynamic', 'prefer-inline']).join('');
@@ -344,7 +345,7 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerCapsTheRuleListAndTotalsTheRest(): Void {
-		final all: String = Cli.unfixedFixLedger([
+		final all: String = LintFixLedger.unfixedFixLedger([
 			'r1' => outcome(8, 8, 0),
 			'r2' => outcome(7, 7, 0),
 			'r3' => outcome(6, 6, 0),
@@ -372,7 +373,7 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerSpellsOutEveryReasonWithItsCount(): Void {
-		final all: String = Cli.unfixedFixLedger([
+		final all: String = LintFixLedger.unfixedFixLedger([
 			'unused-import' => outcome(205, 204, 2, [
 				{ text: 'the import is `#if`-guarded', count: 54 },
 				{ text: 'the module is outside the lint scope', count: 110 },
@@ -403,7 +404,7 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerKeepsOneReasonInlineAndOwnsTheRemainder(): Void {
-		final one: String = Cli.unfixedFixLedger([
+		final one: String = LintFixLedger.unfixedFixLedger([
 			'prefer-typed-throw' => outcome(9, 9, 0, [{ text: 'a String catch clause is in scope', count: 9 }])
 		], [], [], [])
 			.join('');
@@ -412,7 +413,7 @@ class LintFixFixedPointCliTest extends Test {
 			'one reason covering every decline stays on the row, byte for byte - got: $one'
 		);
 		Assert.isTrue(one.indexOf('×') < 0, 'and gains no sub-line it does not need - got: $one');
-		final partial: String = Cli.unfixedFixLedger([
+		final partial: String = LintFixLedger.unfixedFixLedger([
 			'naming' => outcome(10, 10, 0, [{ text: 'the method is an `override`', count: 4 }])
 		], [], [], [])
 			.join('');

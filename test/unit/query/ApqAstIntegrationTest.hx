@@ -5,10 +5,10 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.Cli;
 import anyparse.query.Engine;
 import anyparse.query.QueryNode;
 import anyparse.query.Selector;
+import anyparse.query.cli.CliEdit;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
@@ -86,8 +86,8 @@ class ApqAstIntegrationTest extends Test {
 				final matches: Array<QueryNode> = Engine.select(tree, probeSelector, plugin.selectKindEquivalence());
 				if (matches.length > 0 && jsonSampled)
 					Json.renderMatches(
-						path, source, matches, Cli.sourceWindows(tree, matches, source, plugin.lexicalRegions.bind(source)), false, false,
-						plugin.lexicalRegions(source)
+						path, source, matches, CliEdit.sourceWindows(tree, matches, source, plugin.lexicalRegions.bind(source)), false,
+						false, plugin.lexicalRegions(source)
 					);
 				if (jsonSampled) jsonRendered++;
 				parsedOk++;

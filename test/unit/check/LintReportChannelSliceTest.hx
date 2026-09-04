@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.query.Cli;
 import anyparse.query.cli.CliArgs;
+import anyparse.query.cli.command.LintCommand;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -45,12 +46,14 @@ class LintReportChannelSliceTest extends Test {
 	 * assertion goes red while the machine ones stay green.
 	 */
 	public function testMachineFormatsAreNotSubjectToTheInfoCap(): Void {
-		Assert.equals(2, Cli.reportedViolations(findings(), false, 'json').length, 'json is a machine reader — it gets everything');
-		Assert.equals(2, Cli.reportedViolations(findings(), false, 'checkstyle').length, 'and so is checkstyle, by the same argument');
+		Assert.equals(2, LintCommand.reportedViolations(findings(), false, 'json').length, 'json is a machine reader — it gets everything');
 		Assert.equals(
-			1, Cli.reportedViolations(findings(), false, 'text').length, 'the TEXT report still caps — that is what --all is for'
+			2, LintCommand.reportedViolations(findings(), false, 'checkstyle').length, 'and so is checkstyle, by the same argument'
 		);
-		Assert.equals(2, Cli.reportedViolations(findings(), true, 'text').length, 'and --all lifts it');
+		Assert.equals(
+			1, LintCommand.reportedViolations(findings(), false, 'text').length, 'the TEXT report still caps — that is what --all is for'
+		);
+		Assert.equals(2, LintCommand.reportedViolations(findings(), true, 'text').length, 'and --all lifts it');
 	}
 
 	/**
@@ -155,14 +158,14 @@ class LintReportChannelSliceTest extends Test {
 	 */
 	public function testRealPathNeverAnswersNullForAPathThatIsNotThere(): Void {
 		#if (sys || nodejs)
-		final missing: String = Cli.realPath('/private/tmp/apq-s9-no-such-dir/NoSuchFile.hx');
+		final missing: String = LintCommand.realPath('/private/tmp/apq-s9-no-such-dir/NoSuchFile.hx');
 		Assert.notNull(missing);
 		Assert.notEquals('', missing);
 		Assert.notEquals('null', missing, 'a null that reached string conversion would key the dedup map under "null"');
 		Assert.isTrue(haxe.io.Path.isAbsolute(missing), 'the fallback still normalises: $missing');
 		// A path that DOES resolve is the discriminator — green before the bridge and after it, so
 		// it separates "the fallback works" from "the fallback replaced the real answer".
-		final here: String = Cli.realPath('.');
+		final here: String = LintCommand.realPath('.');
 		Assert.notNull(here);
 		Assert.isTrue(haxe.io.Path.isAbsolute(here), here);
 		#else

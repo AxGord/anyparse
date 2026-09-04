@@ -5,6 +5,8 @@ import sys.FileSystem;
 #end
 import anyparse.check.FixVerifier.FixRevertCause;
 import anyparse.query.Cli;
+import anyparse.query.cli.command.LintFixVerify;
+import anyparse.query.cli.command.SweepCommand;
 import utest.Assert;
 import utest.Test;
 
@@ -199,11 +201,11 @@ class ApqHxqDxV10CliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testSweepDiffAbsentBaselineIsNotReportedAsAFormatProblem(): Void {
-		final absent: String = Cli.sweepDiffNoBaseline('bin/.prev-sweep.json', false, true);
+		final absent: String = SweepCommand.sweepDiffNoBaseline('bin/.prev-sweep.json', false, true);
 		Assert.isTrue(absent.contains('does not exist'), 'names ABSENCE - got: $absent');
 		Assert.isFalse(absent.contains('`fixtures` array'), 'and never the format cause - got: $absent');
 		Assert.isTrue(absent.contains('ROTATION'), 'and says why a first sweep leaves it absent - got: $absent');
-		final malformed: String = Cli.sweepDiffNoBaseline('bin/.prev-sweep.json', true, true);
+		final malformed: String = SweepCommand.sweepDiffNoBaseline('bin/.prev-sweep.json', true, true);
 		Assert.isTrue(malformed.contains('carries no readable `fixtures` array'), 'a PRESENT one names the format - got: $malformed');
 		Assert.isFalse(malformed.contains('does not exist'), 'and never absence - got: $malformed');
 	}
@@ -211,7 +213,7 @@ class ApqHxqDxV10CliTest extends Test {
 	/** An EXPLICIT baseline that is absent gets the --save remedy, never the rotation explainer that does not apply to it. */
 	@:access(anyparse.query.Cli)
 	public function testSweepDiffExplicitAbsentBaselineGetsItsOwnRemedy(): Void {
-		final explicit: String = Cli.sweepDiffNoBaseline('/tmp/base.json', false, false);
+		final explicit: String = SweepCommand.sweepDiffNoBaseline('/tmp/base.json', false, false);
 		Assert.isTrue(explicit.contains('does not exist'), 'names ABSENCE - got: $explicit');
 		Assert.isTrue(explicit.contains('--save'), 'and points at the op that creates one - got: $explicit');
 		Assert.isFalse(explicit.contains('ROTATION'), 'and not at a rotation that never touches it - got: $explicit');
@@ -227,7 +229,7 @@ class ApqHxqDxV10CliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testSweepDiffAutoRotatedBaselineDeclaresItsProvenance(): Void {
-		final note: String = Cli.sweepDiffAutoRotatedNote('bin/.prev-sweep.json');
+		final note: String = SweepCommand.sweepDiffAutoRotatedNote('bin/.prev-sweep.json');
 		Assert.isTrue(note.contains('bin/.prev-sweep.json'), 'names the baseline - got: $note');
 		Assert.isTrue(note.contains('AUTO-ROTATED'), 'says what that baseline is - got: $note');
 		Assert.isTrue(note.contains('--save'), 'and names the form that can fail - got: $note');
@@ -336,12 +338,12 @@ class ApqHxqDxV10CliTest extends Test {
 		#if (sys || nodejs)
 		final gone: String = CliFixture.writeAs('apq_sweep_w23_absent', 'json', '');
 		FileSystem.deleteFile(gone);
-		final absent: String = Cli.sweepNoSnapshot(gone, null);
+		final absent: String = SweepCommand.sweepNoSnapshot(gone, null);
 		Assert.isTrue(absent.contains('no corpus snapshot'), 'names ABSENCE - got: $absent');
 		Assert.isTrue(absent.contains('node bin/test.js'), 'and the run that writes it - got: $absent');
 		Assert.isTrue(absent.contains('does not seed it'), 'and kills the plain-sweep-first workaround - got: $absent');
 		final present: String = CliFixture.writeAs('apq_sweep_w23_bad', 'json', 'not json');
-		final malformed: String = Cli.sweepNoSnapshot(present, null);
+		final malformed: String = SweepCommand.sweepNoSnapshot(present, null);
 		Assert.isTrue(malformed.contains('is not a sweep snapshot'), 'a PRESENT one names the format - got: $malformed');
 		Assert.isFalse(malformed.contains('no corpus snapshot'), 'and never absence - got: $malformed');
 		FileSystem.deleteFile(present);
@@ -356,9 +358,9 @@ class ApqHxqDxV10CliTest extends Test {
 		#if (sys || nodejs)
 		final gone: String = CliFixture.writeAs('apq_sweep_w23_save', 'json', '');
 		FileSystem.deleteFile(gone);
-		final save: String = Cli.sweepNoSnapshot(gone, '/tmp/base.json');
+		final save: String = SweepCommand.sweepNoSnapshot(gone, '/tmp/base.json');
 		Assert.isTrue(save.contains('--save /tmp/base.json has nothing to copy'), 'names the save and its cause - got: $save');
-		final read: String = Cli.sweepNoSnapshot(gone, null);
+		final read: String = SweepCommand.sweepNoSnapshot(gone, null);
 		Assert.isFalse(read.contains('--save'), 'a plain read never mentions --save - got: $read');
 		#else
 		Assert.pass('non-sys target');
@@ -378,9 +380,9 @@ class ApqHxqDxV10CliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testRevertCausesRenderDistinguishably(): Void {
-		final rejected: String = Cli.revertCauseText(OracleRejected);
-		final unavailable: String = Cli.revertCauseText(OracleUnavailable('no hxml'));
-		final uncanonical: String = Cli.revertCauseText(NotCanonical('the writer cannot settle this file'));
+		final rejected: String = LintFixVerify.revertCauseText(OracleRejected);
+		final unavailable: String = LintFixVerify.revertCauseText(OracleUnavailable('no hxml'));
+		final uncanonical: String = LintFixVerify.revertCauseText(NotCanonical('the writer cannot settle this file'));
 		Assert.isTrue(rejected.contains('compiler rejected'), 'the oracle verdict names the compiler - got: $rejected');
 		Assert.isTrue(unavailable.contains('could not run'), 'an absent oracle says so - got: $unavailable');
 		Assert.isTrue(uncanonical.contains('nothing reached the compiler'), 'a writer refusal denies it - got: $uncanonical');
@@ -394,7 +396,7 @@ class ApqHxqDxV10CliTest extends Test {
 		#if (sys || nodejs)
 		final gone: String = CliFixture.writeAs('apq_sweep_w23_prev', 'json', '');
 		FileSystem.deleteFile(gone);
-		final prev: String = Cli.sweepNoSnapshot(gone, null, true);
+		final prev: String = SweepCommand.sweepNoSnapshot(gone, null, true);
 		Assert.isTrue(prev.contains('--prev'), 'names the flag that failed - got: $prev');
 		Assert.isTrue(prev.contains('--save'), 'and the op that creates one - got: $prev');
 		Assert.isFalse(prev.contains('node bin/test.js'), 'never the harness, which does not write this path - got: $prev');

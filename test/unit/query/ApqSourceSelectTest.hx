@@ -1,7 +1,6 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.Cli;
 import anyparse.query.Engine;
 import anyparse.query.Patch;
 import anyparse.query.QueryNode;
@@ -9,6 +8,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.ReplaceNode;
 import anyparse.query.Selector;
 import anyparse.query.SourceSlice;
+import anyparse.query.cli.CliEdit;
+import anyparse.query.cli.command.SourceCommand;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -84,30 +85,30 @@ class ApqSourceSelectTest extends Test {
 
 	/** No match → null (the CLI maps this to a non-zero exit). */
 	public function testSelectNoMatchReturnsNull(): Void {
-		Assert.isNull(Cli.resolveNodeLineBounds('t.hx', SRC, 'haxe', 'FnMember:nope', null));
+		Assert.isNull(SourceCommand.resolveNodeLineBounds('t.hx', SRC, 'haxe', 'FnMember:nope', null));
 	}
 
 	/** An ambiguous selector (two functions) → null. */
 	public function testSelectAmbiguousReturnsNull(): Void {
-		Assert.isNull(Cli.resolveNodeLineBounds('t.hx', SRC, 'haxe', 'FnMember', null));
+		Assert.isNull(SourceCommand.resolveNodeLineBounds('t.hx', SRC, 'haxe', 'FnMember', null));
 	}
 
 	/** `--at` resolves the innermost node at the 1-based position. */
 	public function testAtPositionResolvesNode(): Void {
 		// 2:11 is the `a` name token on line 2.
-		final b: Null<{ from: Int, to: Int }> = Cli.resolveNodeLineBounds('t.hx', SRC, 'haxe', null, '2:11');
+		final b: Null<{ from: Int, to: Int }> = SourceCommand.resolveNodeLineBounds('t.hx', SRC, 'haxe', null, '2:11');
 		Assert.notNull(b);
 		if (b != null) Assert.equals(2, b.from);
 	}
 
 	/** A malformed position → null. */
 	public function testAtMalformedReturnsNull(): Void {
-		Assert.isNull(Cli.resolveNodeLineBounds('t.hx', SRC, 'haxe', null, 'nope'));
+		Assert.isNull(SourceCommand.resolveNodeLineBounds('t.hx', SRC, 'haxe', null, 'nope'));
 	}
 
 	/** A malformed selector → null (caught, not an uncaught throw). */
 	public function testSelectMalformedReturnsNull(): Void {
-		Assert.isNull(Cli.resolveNodeLineBounds('t.hx', SRC, 'haxe', 'A>', null));
+		Assert.isNull(SourceCommand.resolveNodeLineBounds('t.hx', SRC, 'haxe', 'A>', null));
 	}
 
 	/**
@@ -257,7 +258,7 @@ class ApqSourceSelectTest extends Test {
 	 * refusal path, and Strict will not narrow the local across the assertion.
 	 */
 	private function assertBounds(src: String, selector: String, from: Int, to: Int): Void {
-		final bounds: Null<{ from: Int, to: Int }> = Cli.resolveNodeLineBounds('t.hx', src, 'haxe', selector, null);
+		final bounds: Null<{ from: Int, to: Int }> = SourceCommand.resolveNodeLineBounds('t.hx', src, 'haxe', selector, null);
 		Assert.notNull(bounds);
 		if (bounds == null) return;
 		Assert.equals(from, bounds.from);
@@ -270,7 +271,7 @@ class ApqSourceSelectTest extends Test {
 		Assert.equals(1, resolved.matches.length, 'selector "$selector" did not resolve to exactly one node');
 		return resolved.matches.length == 1
 			? SourceSlice.slice(
-				src, Cli.sourceWindows(resolved.tree, resolved.matches, src, new HaxeQueryPlugin().lexicalRegions.bind(src))[0]
+				src, CliEdit.sourceWindows(resolved.tree, resolved.matches, src, new HaxeQueryPlugin().lexicalRegions.bind(src))[0]
 			)
 			: '';
 	}
@@ -279,8 +280,9 @@ class ApqSourceSelectTest extends Test {
 	private function astRender(src: String, selector: String): String {
 		final resolved: AstSelection = astSelect(src, selector);
 		return Text.renderMatches(
-			resolved.matches, src, Cli.sourceWindows(resolved.tree, resolved.matches, src, new HaxeQueryPlugin().lexicalRegions.bind(src)),
-			true, true, new HaxeQueryPlugin().lexicalRegions(src)
+			resolved.matches, src,
+			CliEdit.sourceWindows(resolved.tree, resolved.matches, src, new HaxeQueryPlugin().lexicalRegions.bind(src)), true, true,
+			new HaxeQueryPlugin().lexicalRegions(src)
 		);
 	}
 

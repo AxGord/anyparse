@@ -1,7 +1,7 @@
 package unit.query;
 
-import anyparse.query.Cli;
 import anyparse.query.MutationVerdict;
+import anyparse.query.cli.TestTranscript;
 import utest.Assert;
 import utest.Test;
 
@@ -154,7 +154,7 @@ class MutationVerdictTest extends Test {
 		final expected: Array<String> = [
 			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
 		];
-		return MutationVerdict.classify(Cli.parseTestSummary(raw), expected);
+		return MutationVerdict.classify(TestTranscript.parseTestSummary(raw), expected);
 	}
 
 	/**

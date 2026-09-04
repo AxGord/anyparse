@@ -4,7 +4,7 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.CompilerOracle.OracleOutcome;
-import anyparse.query.Cli;
+import anyparse.query.cli.command.LintFixVerify;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -31,7 +31,7 @@ class OracleBatchRevertReasonTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = makeDir(3);
 		final candidates: Array<{ file: String, before: String, after: String }> = batch(dir, 3);
-		final result = Cli.verifyOracleBatch(candidates, 'check.hxml', dir, canned([
+		final result = LintFixVerify.verifyOracleBatch(candidates, 'check.hxml', dir, canned([
 			Rejected('$dir/f1.hx:1: characters 1-2 : boom'),
 			Confirmed
 		]));
@@ -50,7 +50,7 @@ class OracleBatchRevertReasonTest extends Test {
 	public function testRejectionNamingNoCandidateRevertsAll(): Void {
 		#if (sys || nodejs)
 		final dir: String = makeDir(2);
-		final result = Cli.verifyOracleBatch(
+		final result = LintFixVerify.verifyOracleBatch(
 			batch(dir, 2), 'check.hxml', dir, canned([Rejected('some/other/File.hx:1: characters 1-2 : boom')])
 		);
 		Assert.equals('compiler rejected, no file named', result.reason);
@@ -67,7 +67,7 @@ class OracleBatchRevertReasonTest extends Test {
 	public function testUnavailableOracleRevertsAll(): Void {
 		#if (sys || nodejs)
 		final dir: String = makeDir(2);
-		final result = Cli.verifyOracleBatch(batch(dir, 2), 'check.hxml', dir, canned([Unavailable('no haxe')]));
+		final result = LintFixVerify.verifyOracleBatch(batch(dir, 2), 'check.hxml', dir, canned([Unavailable('no haxe')]));
 		Assert.equals('oracle unavailable', result.reason);
 		Assert.equals(2, result.reverted.length);
 		Assert.equals('before 1\n', File.getContent('$dir/f1.hx'));
@@ -81,7 +81,7 @@ class OracleBatchRevertReasonTest extends Test {
 	public function testNonConvergentBatchRevertsAll(): Void {
 		#if (sys || nodejs)
 		final dir: String = makeDir(8);
-		final result = Cli.verifyOracleBatch(batch(dir, 8), 'check.hxml', dir, canned([
+		final result = LintFixVerify.verifyOracleBatch(batch(dir, 8), 'check.hxml', dir, canned([
 			for (k in 0...8) Rejected('$dir/f$k.hx:1: characters 1-2 : boom')
 		]));
 		Assert.equals('not converged in 6 passes', result.reason);

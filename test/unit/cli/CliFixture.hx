@@ -141,4 +141,34 @@ final class CliFixture {
 		return temp != null && temp.length > 0 ? stripTrailingSlash(temp) : '/tmp';
 	}
 
+	/**
+	 * Run `fn` with stdout captured, and answer what it printed.
+	 *
+	 * The sibling of `captureStderr`, and the same mechanism: `CliIo.sysPrint`
+	 * reaches `fs.writeSync(1, …)` on node, so intercepting `writeSync` catches
+	 * everything the CLI writes without the test having to spawn a process.
+	 * Needed by the `--help` and usage-page pins, which compare what the binary
+	 * PRINTS against the bytes the pre-seam binary printed.
+	 */
+	public static function captureStdout(fn: () -> Void): String {
+		#if nodejs
+		final buffer: StringBuf = new StringBuf();
+		final stdout: Dynamic = js.Node.process.stdout; // noqa: avoid-dynamic
+		final original: Dynamic = Reflect.field(stdout, 'write'); // noqa: avoid-dynamic
+		Reflect.setField(stdout, 'write', (chunk: Any) -> {
+			buffer.add('$chunk');
+			return true;
+		});
+		try fn() catch (exception: haxe.Exception) {
+			Reflect.setField(stdout, 'write', original);
+			throw exception;
+		}
+		Reflect.setField(stdout, 'write', original);
+		return buffer.toString();
+		#else
+		fn();
+		return '';
+		#end
+	}
+
 }

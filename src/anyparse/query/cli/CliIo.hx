@@ -308,6 +308,64 @@ final class CliIo {
 	}
 	#end
 
+	/** The plural suffix for a count: `''` for 1, `'s'` otherwise. */
+	public static inline function plural(n: Int): String return n == 1 ? '' : 's';
+
+	/**
+	 * Emit a stderr nudge when any `.hx` file under `src/` or `test/` is
+	 * newer than `bin/test.js` — the next `node bin/test.js` will run
+	 * STALE bytes and a 0-delta sweep / clean test-summary can lie. Drives
+	 * the documented `[[feedback-rebuild-test-js-after-macro-edit]]`
+	 * trap: `bin/apq.js` auto-rebuilds (the hxq shim handles it) but
+	 * `bin/test.js` is a separate build artefact whose staleness has no
+	 * gate elsewhere in the workflow.
+	 *
+	 * Silent on `#if !sys`, on missing `bin/test.js` (caller will hit a
+	 * clean error from the missing binary), or when nothing under src/
+	 * or test/ is newer. Best-effort: a FileSystem failure short-circuits
+	 * without raising — the user always gets the requested totals.
+	 */
+	public static function warnIfTestJsStale(cmd: String): Void {
+		#if (sys || nodejs)
+		final binPath: String = 'bin/test.js';
+		if (!FileSystem.exists(binPath)) return;
+		try {
+			final binTime: Float = FileSystem.stat(binPath).mtime.getTime();
+			if (anyHxNewerThan('src', binTime) || anyHxNewerThan('test', binTime)) {
+				CliIo.stderr(
+					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before '
+					+ 'trusting these totals\n'
+				);
+			}
+		} catch (_: Exception) {
+			// best-effort: skip the staleness advisory on any FS error
+		}
+		#end
+	}
+
+	private static function anyHxNewerThan(root: String, threshold: Float): Bool {
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return false;
+		final stack: Array<String> = [root];
+		while (stack.length > 0) {
+			final dir: Null<String> = stack.pop();
+			if (dir == null) break;
+			try {
+				for (name in FileSystem.readDirectory(dir)) {
+					final path: String = '$dir/$name';
+					if (FileSystem.isDirectory(path)) {
+						stack.push(path);
+						continue;
+					}
+					if (!StringTools.endsWith(name, '.hx')) continue;
+					if (FileSystem.stat(path).mtime.getTime() > threshold) return true;
+				}
+			} catch (_: Exception) {
+				// best-effort: a stat failure falls through to return false
+			}
+		}
+		return false;
+	}
+
 }
 
 /**
