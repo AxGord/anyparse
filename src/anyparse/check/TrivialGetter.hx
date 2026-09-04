@@ -6,8 +6,9 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.CondRegionScan;
 import anyparse.query.ElementSpan;
+import anyparse.query.FieldRefScan;
+import anyparse.query.FieldRename;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -15,7 +16,6 @@ import anyparse.query.MemberWriteScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -166,33 +166,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 
 	/** The metadata that gives a property physical storage of its OWN — what makes a self-backed trivial getter legal, and dead the moment the collapse gives the property a `default` side. */
 	private static inline final IS_VAR_META: String = '@:isVar';
-
-	/**
-	 * Every node kind that opens a function scope binding parameters and locals — the function
-	 * VALUES `RefactorSupport.nestedFunctionKinds` is the authority for, plus this check's one
-	 * documented extra: the two METHOD-declaration kinds. Module-level function declarations are
-	 * deliberately NOT here — `this.` / `C.` is what a shadowed reference is rewritten to, and
-	 * neither is spellable at module level.
-	 *
-	 * A hand copy of a derivable set, kept because the alternative is not worth its price: this
-	 * check reaches the shape only in `run`, while `isFnScope` is called from three points inside
-	 * a rename walk whose functions carry no context object, so deriving it would add a parameter
-	 * to eight signatures and fourteen call sites — in a file that decides its other ~40 node
-	 * kinds by literal anyway. `TrivialGetterCheckTest.testFnScopeKindsMatchTheGrammarAuthority`
-	 * pins it against the plugin in BOTH directions instead, so a grammar that adds or drops a
-	 * function-value spelling fails a test rather than silently changing what this rename trusts.
-	 */
-	private static final FN_SCOPE_KINDS: Array<String> = [
-		'FnMember',
-		'FinalModifiedMember',
-		'LocalFnStmt',
-		'LocalInlineFnStmt',
-		'FnExpr',
-		'NamedFnExpr',
-		'ThinParenLambdaExpr',
-		'ParenLambdaExpr',
-		'ThinArrow'
-	];
 
 	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */
 	private static final MEMBER_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'];
@@ -359,7 +332,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(cls, src, prop.span, prop.name, prop.isStatic, c);
 				if (ownerEdits == null) return null;
 				final oe: Array<{ span: Span, text: String }> = ownerEdits;
-				final subtypeSlices: Null<Array<CrossFileEdits>> = crossFileReadRewrite(
+				final subtypeSlices: Null<Array<CrossFileEdits>> = BackingFieldRefs.crossFileReadRewrite(
 					owner, c.field, prop.name, v.file, subtypeIndex, sourceByFile, plugin
 				);
 				if (subtypeSlices == null) return null;
@@ -398,46 +371,10 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			&& index.subtypes.subtypeReferencesField(className, field);
 	}
 
-	/** Whether `c` is an identifier character. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
-	/** Whether `c` is whitespace. */
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
-	/** Whether `node` opens a new function scope (method / local fn / lambda) that binds parameters and locals. */
-	private static inline function isFnScope(node: QueryNode): Bool {
-		return FN_SCOPE_KINDS.contains(node.kind);
-	}
-
 	/** The last `.`-separated segment of `path` (its simple name). */
 	private static inline function simpleName(path: String): String {
 		final segments: Array<String> = path.split('.');
 		return segments[segments.length - 1] ?? path;
-	}
-
-	/**
-	 * The qualifier prefix for a shadowed backing-field reference: the enclosing class name
-	 * (`C.`) whenever `this` cannot carry it — inside a static method, where `this` is illegal,
-	 * and for a STATIC property, which `this` never reaches from any method — else `this.` for
-	 * an instance property in an instance method. A `(default, null)` property is writable from
-	 * within its own class, so `C.prop = value` is legal too.
-	 */
-	private static inline function shadowQualifier(classQualified: Bool, className: Null<String>): String {
-		return classQualified && className != null ? '$className.' : 'this.';
-	}
-
-	/** Whether `span` is fully contained in any of `spans`. */
-	private static inline function withinAny(spans: Array<Span>, span: Span): Bool {
-		return spans.exists(s -> span.from >= s.from && span.to <= s.to);
-	}
-
-	/** Whether `c` is a space or a tab (a line-internal separator, newline excluded). */
-	private static inline function isHorizontalSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code;
 	}
 
 	/**
@@ -501,7 +438,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			// occurrence is a provable READ (the cross-file collapse rewrites them), else stay blocked.
 			if (
 				subtypeFieldBlocks(subtypeIndex, className, c.field, c.selfBacked, c.inlineGetter)
-				&& crossFileReadRewrite(owner, c.field, prop.name, file, subtypeIndex, sourceByFile, plugin) == null
+				&& BackingFieldRefs.crossFileReadRewrite(owner, c.field, prop.name, file, subtypeIndex, sourceByFile, plugin) == null
 			)
 				continue;
 			out.push({
@@ -548,39 +485,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * or a `this.<name>` `FieldAccess` — else null.
 	 */
 	private static function returnedField(ret: QueryNode, returnKind: String): Null<String> {
-		return ret.kind != returnKind || ret.children.length != 1 ? null : fieldRefName(ret.children[0]);
-	}
-
-	/**
-	 * The two accessor identifiers of a property's `(read, write)` clause, read from the
-	 * source right after the field name — or null when the member is a plain field (no `(`
-	 * clause) or the clause is malformed. `span.from` is at the `var` keyword.
-	 */
-	private static function accessorClause(source: String, span: Span): Null<{ read: String, write: String }> {
-		final open: Int = accessorParenOpen(source, span);
-		if (open < 0) return null;
-		final n: Int = source.length;
-		final read: Null<{ id: String, next: Int }> = identAt(source, skipSpace(source, open + 1, n), n);
-		if (read == null) return null;
-		final i: Int = skipSpace(source, read.next, n);
-		if (i >= n || source.fastCodeAt(i) != ','.code) return null;
-		final write: Null<{ id: String, next: Int }> = identAt(source, skipSpace(source, i + 1, n), n);
-		return write == null ? null : { read: read.id, write: write.id };
-	}
-
-	/** The identifier at `i` (already past whitespace) and the offset after it, or null. */
-	private static function identAt(source: String, i: Int, n: Int): Null<{ id: String, next: Int }> {
-		final start: Int = i;
-		var j: Int = i;
-		while (j < n && isIdentChar(source.fastCodeAt(j))) j++;
-		return j > start ? { id: source.substring(start, j), next: j } : null;
-	}
-
-	/** Advance past a whitespace run starting at `i`. */
-	private static function skipSpace(source: String, i: Int, n: Int): Int {
-		var j: Int = i;
-		while (j < n && isSpace(source.fastCodeAt(j))) j++;
-		return j;
+		return ret.kind != returnKind || ret.children.length != 1 ? null : FieldRefScan.fieldRefName(ret.children[0]);
 	}
 
 	/**
@@ -663,14 +568,14 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (cs == null) return null;
 			skipSpans.push(cs);
 		}
-		final renames: Null<Array<{ span: Span, text: String }>> = collectRenameEdits(
+		final renames: Null<Array<{ span: Span, text: String }>> = FieldRename.collectRenameEdits(
 			cls, source, c.field, skipSpans, c.fieldNode, propName, propStatic
 		);
 		if (renames == null) return null;
 		for (e in renames) edits.push(e);
 		return if (!appendRemovalEdits(edits, source, cls, deleted, c.fieldNode, c.ctorInit))
 			null
-		else if (applyBypassMarks(c.bypassStmts, edits))
+		else if (BackingFieldRefs.applyBypassMarks(c.bypassStmts, edits))
 			edits
 		else
 			null;
@@ -689,7 +594,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		cls: QueryNode, source: String, clauseSpan: Span, clauseText: String, deletedAccessors: Array<QueryNode>, metaSpan: Null<Span>
 	): Null<Array<{ span: Span, text: String }>> {
 		final edits: Array<{ span: Span, text: String }> = [{ span: clauseSpan, text: clauseText }];
-		if (metaSpan != null) edits.push({ span: metaRemovalSpan(source, metaSpan), text: '' });
+		if (metaSpan != null) edits.push({ span: AccessorClauseText.metaRemovalSpan(source, metaSpan), text: '' });
 		for (acc in deletedAccessors) {
 			final span: Null<Span> = acc.span;
 			if (span == null) return null;
@@ -699,199 +604,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			});
 		}
 		return edits;
-	}
-
-	/**
-	 * The span to delete for an `@:isVar` annotation: its whole LINE when it sits on one alone
-	 * (`lineExtendedSpan` says so by returning a widened span), else the token plus the horizontal
-	 * space that separated it from what follows — or, when it was the last thing on its line, plus
-	 * the space that separated it from what precedes. Removing the bare token would otherwise leave
-	 * a doubled or trailing space next to a sibling annotation.
-	 */
-	private static function metaRemovalSpan(source: String, meta: Span): Span {
-		final line: Span = ElementSpan.lineExtendedSpan(source, meta);
-		if (line.from != meta.from || line.to != meta.to) return line;
-		var to: Int = meta.to;
-		while (to < source.length && isHorizontalSpace(source.fastCodeAt(to))) to++;
-		if (to > meta.to) return new Span(meta.from, to);
-		var from: Int = meta.from;
-		while (from > 0 && isHorizontalSpace(source.fastCodeAt(from - 1))) from--;
-		return new Span(from, meta.to);
-	}
-
-	/**
-	 * The rename edits for every backing-field reference in `cls`, or null when any reference is
-	 * not provably the field. `propStatic` marks a STATIC property: `this` cannot reach it from
-	 * anywhere, so a shadowed reference is class-qualified in every method, not only a static one.
-	 */
-	private static function collectRenameEdits(
-		cls: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, propStatic: Bool
-	): Null<Array<{ span: Span, text: String }>> {
-		final edits: Array<{ span: Span, text: String }> = [];
-		return renameWalk(cls, source, field, skipSpans, fieldNode, propName, false, false, cls.name, propStatic, edits) ? edits : null;
-	}
-
-	/**
-	 * Walk `node`, collecting `field -> propName` rename edits; returns false (refuse the whole
-	 * fix) on any reference that is not provably the field — a `<other>.<field>` access, a
-	 * binding that shadows the name, a case-pattern mention, or a construct whose dropped
-	 * binding slot could hide a shadow (`hidesBindingNamed`). The backing field decl and every
-	 * `skipSpans` subtree (each deleted accessor, plus a relocated constructor-init statement)
-	 * are skipped; the KEPT accessor is NOT in `skipSpans`, so its references ARE renamed.
-	 * `inPattern` marks a case-pattern subtree. `shadowsProp` is set once an enclosing function
-	 * binds `propName` in ANY form (`functionBindsName`): a bare `field` reference there must
-	 * rewrite to `this.propName` (or to `<ClassName>.propName` via `shadowQualifier` when
-	 * `classQualified` — inside a static method, where `this` is illegal, or for a static
-	 * property, which `this` never reaches), since a plain `propName` would resolve to that
-	 * binding instead of the field (silent data loss).
-	 */
-	private static function renameWalk(
-		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, inPattern: Bool,
-		shadowsProp: Bool, className: Null<String>, classQualified: Bool, out: Array<{ span: Span, text: String }>
-	): Bool {
-		if (node == fieldNode) return true;
-		final span: Null<Span> = node.span;
-		if (span != null && withinAny(skipSpans, span)) return true;
-		if (hidesBindingNamed(node, span, source, field)) return false;
-		final nowPattern: Bool = inPattern || node.kind == 'Plain';
-		if (!renameFieldRef(node, span, source, field, propName, shadowsProp, classQualified, className, nowPattern, out)) return false;
-		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
-		return renameChildren(
-			node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, classQualified, out
-		);
-	}
-
-	/**
-	 * Emit the rename edit for `node` when it is a bare-or-`this.` reference to the backing
-	 * field — an `IdentExpr <field>` (rewritten to `propName`, qualified `this.`/`C.` when a
-	 * binding of `propName` shadows it) or a `this.<field>` `FieldAccess` (its name token
-	 * rewritten). Returns false (refuse the whole fix) on a reference the rename cannot prove
-	 * safe: a pattern-position mention, an `<other>.<field>` access, or any other node kind
-	 * carrying the field name. A node that does not name the field is left untouched (true).
-	 */
-	private static function renameFieldRef(
-		node: QueryNode, span: Null<Span>, source: String, field: String, propName: String, shadowsProp: Bool, classQualified: Bool,
-		className: Null<String>, nowPattern: Bool, out: Array<{ span: Span, text: String }>
-	): Bool {
-		if (node.name != field) return true;
-		if (nowPattern) return false;
-		switch node.kind {
-			case 'IdentExpr':
-				if (span != null)
-					out.push({ span: span, text: shadowsProp ? shadowQualifier(classQualified, className) + propName : propName });
-			case 'FieldAccess':
-				if (span == null || node.children.length != 1 || node.children[0].kind != 'IdentExpr' || node.children[0].name != 'this')
-					return false;
-				return pushTokenRename(source, span, field, propName, out);
-			case 'Ident':
-				// A simple `$field` string-interpolation read: grammar kind `Ident` (not `IdentExpr`),
-				// its span covering `$field`, so rename only the identifier token. The `$name` form
-				// carries no `this.`/`C.` qualifier, so a prop-name local shadowing the field cannot be
-				// disambiguated -- refuse rather than bind the wrong slot.
-				if (shadowsProp || span == null) return false;
-				return pushTokenRename(source, span, field, propName, out);
-			case _:
-				return false;
-		}
-		return true;
-	}
-
-	/**
-	 * Emit the rename edit for a backing-field reference whose `span` includes syntax around the
-	 * identifier -- a `this.` receiver (`FieldAccess`) or a `$` interpolation sigil (`Ident`):
-	 * locate the `field` identifier token inside `span` and rewrite just that token to `propName`.
-	 * False when the token cannot be located.
-	 */
-	private static function pushTokenRename(
-		source: String, span: Span, field: String, propName: String, out: Array<{ span: Span, text: String }>
-	): Bool {
-		final off: Int = SourceText.identTokenOffset(source, span, field);
-		if (off < 0) return false;
-		out.push({ span: new Span(off, off + field.length), text: propName });
-		return true;
-	}
-
-	/**
-	 * Recurse `renameWalk` over `node`'s children, threading the pattern / shadow / qualifier
-	 * context. `mods` accumulates the modifier-sibling kinds preceding a member so a `static`
-	 * child function is recursed with `classQualified` set (`mods` resets at each member
-	 * boundary; `classQualified` itself is monotone — a static property seeds it for the whole
-	 * class). Returns false as soon as any descendant refuses the fix.
-	 */
-	private static function renameChildren(
-		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, nowPattern: Bool,
-		childShadows: Bool, className: Null<String>, classQualified: Bool, out: Array<{ span: Span, text: String }>
-	): Bool {
-		var mods: Array<String> = [];
-		for (c in node.children) {
-			final childQualified: Bool = classQualified || (isFnScope(c) && mods.contains('Static'));
-			if (!renameWalk(c, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, childQualified, out))
-				return false;
-			mods = switch c.kind {
-				case 'VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember': [];
-				case _: mods.concat([c.kind]);
-			};
-		}
-		return true;
-	}
-
-	/**
-	 * Whether the subtree `node` binds `name` in ANY form the language offers (`bindsNameHere`).
-	 * Scanned subtree-wide from a function scope, so a nested function's binding also trips it —
-	 * over-qualifying a backing-field reference with `this.` / `C.` is always semantically
-	 * correct, while MISSING a binder silently re-binds the reference to it (a loop variable
-	 * named like the property turned `if (color == _color)` into the always-true `color == color`).
-	 */
-	private static function functionBindsName(node: QueryNode, name: String): Bool {
-		return bindsNameHere(node, name) || node.children.exists(c -> functionBindsName(c, name));
-	}
-
-	/**
-	 * Whether `node` ITSELF binds `name`. Every binding form the grammar projects as a named
-	 * node: a parameter (`Required` / `Optional` / `Rest` / `LambdaParam`), a local declaration
-	 * (`VarStmt` / `FinalStmt`, their expression twins, and the `VarMore` continuation of a
-	 * multi-var list), a local function, a catch variable, the self-scoped `for` iterator
-	 * (`ForStmt` / `ForExpr` — the array-comprehension form is a `ForExpr`) and the `KeyValueBinder`
-	 * carrying the VALUE of a key-value `for (k => v in m)`, whose KEY is the loop node's own name.
-	 *
-	 * One shape carries no named binding node and is recovered here: a case PATTERN (`Plain`)
-	 * projects its captures as bare identifiers, so ANY mention of `name` inside one counts (a
-	 * constructor name that happens to match only over-qualifies).
-	 *
-	 * A single-parameter thin arrow `v -> ...` used to need a second recovery arm here, reading
-	 * child-0 of a `ThinArrow` for a bare `IdentExpr`. It no longer does:
-	 * `HxArrowParamProjection` re-labels that child `Required` in the query tree, so the
-	 * parameter arrives through the first arm like every other parameter. That private arm was
-	 * the tell — four `Refs`-based checks were one gap away from needing their own copy.
-	 */
-	private static function bindsNameHere(node: QueryNode, name: String): Bool {
-		return switch node.kind {
-			case 'Required', 'Optional', 'Rest', 'LambdaParam', 'VarStmt', 'FinalStmt', 'VarExpr', 'FinalExpr', 'VarMore',
-				'StaticVarStmt', 'StaticFinalStmt', 'LocalFnStmt', 'LocalInlineFnStmt', 'NamedFnExpr', 'CatchClause', 'ForStmt',
-				'ForExpr', 'KeyValueBinder', 'Capture': node.name == name;
-			case 'Plain': mentionsField(node, name);
-			case _: false;
-		}
-	}
-
-	/** The `(read, write)` accessor-clause span `[open, close]` of a property (`span.from` at `var`), or null. */
-	private static function accessorParenSpan(source: String, propSpan: Span): Null<Span> {
-		final open: Int = accessorParenOpen(source, propSpan);
-		if (open < 0) return null;
-		var i: Int = open + 1;
-		while (i < source.length && source.fastCodeAt(i) != ')'.code) i++;
-		return i >= source.length ? null : new Span(open, i + 1);
-	}
-
-	/** The offset just past the `var name` prefix of `span` (keyword + whitespace + identifier), or -1 when it does not begin with `var <name>`. */
-	private static function nameEndAfterVar(source: String, span: Span): Int {
-		final n: Int = source.length;
-		final kw: String = 'var';
-		if (span.from + kw.length > n || source.substring(span.from, span.from + kw.length) != kw) return -1;
-		var i: Int = skipSpace(source, span.from + kw.length, n);
-		final nameStart: Int = i;
-		while (i < n && isIdentChar(source.fastCodeAt(i))) i++;
-		return i == nameStart ? -1 : i;
 	}
 
 	/**
@@ -990,7 +702,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 						final isPublic: Bool = mods.contains('Public');
 						if (!isPublic) privateFieldNodes[name] = child;
 						if (child.kind == 'VarMember') {
-							final access: Null<{ read: String, write: String }> = accessorClause(source, span);
+							final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
 							if (
 								access != null && access.read == 'get'
 								&& (access.write == WRITE_NEVER || access.write == 'null' || access.write == 'set')
@@ -1032,36 +744,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			setters: setters,
 			properties: properties
 		};
-	}
-
-	/** The offset of the property's accessor-clause `(` (right after `var <name>`), or -1 when there is none. */
-	private static function accessorParenOpen(source: String, span: Span): Int {
-		final afterName: Int = nameEndAfterVar(source, span);
-		if (afterName < 0) return -1;
-		final open: Int = skipSpace(source, afterName, source.length);
-		return open < source.length && source.fastCodeAt(open) == '('.code ? open : -1;
-	}
-
-	/**
-	 * Whether `node` BINDS `field`, hiding the backing field from the by-name shadow refusal in
-	 * `renameWalk`. A loop binds its iterator (`ForStmt` / `ForExpr`) or, in the key-value form
-	 * `for (k => _x in m)` / `[for (k => _x in m) …]`, a second name on a `KeyValueBinder` child.
-	 * A multi-variable declaration's later bindings project as `VarMore`, so the multi-var arm ASKS
-	 * THE TREE for one: a text-level comma scan cannot tell `var a = 1, b = 2` from the comma inside
-	 * a `Map<K, V>` annotation, and refused the latter. In that one arm any word-match of `field` in
-	 * the declaration refuses the fix (conservative: a multi-var INIT reading the real field also
-	 * refuses). A missing span refuses everywhere — an unreadable construct binds everything.
-	 */
-	private static function hidesBindingNamed(node: QueryNode, span: Null<Span>, source: String, field: String): Bool {
-		switch node.kind {
-			case 'VarStmt', 'FinalStmt':
-				if (span == null) return true;
-				return node.children.exists(c -> c.kind == 'VarMore') && SourceText.identTokenOffset(source, span, field) >= 0;
-			case 'ForStmt', 'ForExpr', 'KeyValueBinder':
-				return span == null || node.name == field;
-			case _:
-				return false;
-		}
 	}
 
 	/**
@@ -1163,8 +845,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		// the inline arm keeps the getter, so a required interface accessor is never removed.
 		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index, file)) return null;
 		final clauseSpan: Null<Span> = raw.clauseText == '' && raw.inlineGetter == null
-			? clauseRemovalSpan(source, prop.span)
-			: accessorParenSpan(source, prop.span);
+			? AccessorClauseText.clauseRemovalSpan(source, prop.span)
+			: AccessorClauseText.accessorParenSpan(source, prop.span);
 		final metaSpan: Null<Span> = selfBacked ? prop.isVarMeta?.span : null;
 		return clauseSpan == null ? null : {
 			field: raw.field,
@@ -1264,35 +946,13 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final assign: QueryNode = ret.children[0];
 		if (assign.kind != 'Assign' || assign.children.length != 2) return null;
 		final value: QueryNode = assign.children[1];
-		return value.kind != 'IdentExpr' || value.name != paramName ? null : fieldRefName(assign.children[0]);
+		return value.kind != 'IdentExpr' || value.name != paramName ? null : FieldRefScan.fieldRefName(assign.children[0]);
 	}
 
 	/** The name of a setter's single value parameter (its first `Required` / `Optional` child), or null. */
 	private static function setterParamName(setter: QueryNode): Null<String> {
 		final param: Null<QueryNode> = setter.children.find(c -> c.kind == 'Required' || c.kind == 'Optional');
 		return param?.name;
-	}
-
-	/**
-	 * The field name a node references as a bare `IdentExpr <name>`, a simple `$<name>` string-interpolation `Ident`, or a `this.<name>` `FieldAccess`, else null.
-	 */
-	private static function fieldRefName(node: QueryNode): Null<String> {
-		return switch node.kind {
-			case 'IdentExpr', 'Ident': node.name;
-			case 'FieldAccess':
-				node.children.length == 1 && node.children[0].kind == 'IdentExpr' && node.children[0].name == 'this' ? node.name : null;
-			case _: null;
-		}
-	}
-
-	/** The field targeted by an assignment / compound-assignment / incr / decr node (bare or `this.`), else null. */
-	private static function writeTargetField(node: QueryNode): Null<String> {
-		final isWrite: Bool = switch node.kind {
-			case 'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign', 'ModAssign', 'BitAndAssign', 'BitOrAssign', 'BitXorAssign',
-				'ShlAssign', 'ShrAssign', 'UShrAssign', 'PreIncr', 'PostIncr', 'PreDecr', 'PostDecr': true;
-			case _: false;
-		}
-		return isWrite && node.children.length >= 1 ? fieldRefName(node.children[0]) : null;
 	}
 
 	/**
@@ -1310,7 +970,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (ctor == null) return null;
 		final body: Null<QueryNode> = bodyOf(ctor, shape);
 		if (body == null || body.kind != shape.blockBodyKind) return null;
-		final firstMention: Null<QueryNode> = body.children.find(stmt -> mentionsField(stmt, field));
+		final firstMention: Null<QueryNode> = body.children.find(stmt -> FieldRefScan.mentionsField(stmt, field));
 		return firstMention == null ? null : movableInitOf(firstMention, field);
 	}
 
@@ -1318,7 +978,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	private static function movableInitOf(stmt: QueryNode, field: String): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
 		if (stmt.kind != 'ExprStmt' || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != 'Assign' || assign.children.length != 2 || fieldRefName(assign.children[0]) != field) return null;
+		if (assign.kind != 'Assign' || assign.children.length != 2 || FieldRefScan.fieldRefName(assign.children[0]) != field) return null;
 		final rhs: QueryNode = assign.children[1];
 		if (!isMovableLiteral(rhs)) return null;
 		final rhsSpan: Null<Span> = rhs.span;
@@ -1333,18 +993,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				node.name != null && node.name.indexOf('$') == -1;
 			case _: false;
 		}
-	}
-
-	/** Whether `node`'s subtree references `field` (bare `IdentExpr` / `this.<field>`, read or write target). */
-	private static function mentionsField(node: QueryNode, field: String): Bool {
-		return fieldRefName(node) == field || node.children.exists(child -> mentionsField(child, field));
-	}
-
-	/** The span to delete for a plain-field collapse — ` (read, write)` after `var <name>`, leading space included. */
-	private static function clauseRemovalSpan(source: String, propSpan: Span): Null<Span> {
-		final afterName: Int = nameEndAfterVar(source, propSpan);
-		final paren: Null<Span> = accessorParenSpan(source, propSpan);
-		return afterName < 0 || paren == null ? null : new Span(afterName, paren.to);
 	}
 
 	/**
@@ -1415,7 +1063,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final getterSpan: Null<Span> = getterNode.span;
 		return if (getterSpan == null)
 			null
-		else if (hasExternalRead(cls, trivSet, getterSpan))
+		else if (BackingFieldRefs.hasExternalRead(cls, trivSet, getterSpan))
 			null
 		else
 			{
@@ -1427,104 +1075,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				bypassStmts: [],
 				inlineGetter: null
 			};
-	}
-
-	/**
-	 * Whether `node`'s subtree contains a READ of `field` outside `exclude` (the kept getter).
-	 * After the `(get, set)` -> `(get, default)` collapse, reading the property routes through the
-	 * non-trivial `get_field` EVERYWHERE except inside `get_field` itself (there the property is a
-	 * direct physical read, since the `default` write forces physical storage), so a backing-field
-	 * read outside the getter, once renamed to the property name, would newly route through the
-	 * real getter -- a behavior change. Writes are direct (`default` write) and never gate.
-	 *
-	 * A bare `field` / `this.field` that is the TARGET of a plain `=` is a pure write, not a read,
-	 * so its RHS is scanned but the target itself is not. A compound-assignment / incr / decr
-	 * target IS a read (`x += 1` compiles to `x = get_x() + 1`), so it disqualifies. Every other
-	 * `field` occurrence (RHS, call arg, `arr[field]` index, plain read) is a read.
-	 */
-	private static function hasExternalRead(node: QueryNode, field: String, exclude: Span): Bool {
-		final span: Null<Span> = node.span;
-		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return false;
-		if (node.kind == 'Plain') return false;
-		if (writeTargetField(node) == field) {
-			if (node.kind != 'Assign') return true;
-			for (i in 1...node.children.length) if (hasExternalRead(node.children[i], field, exclude)) return true;
-			return false;
-		}
-		return fieldRefName(node) == field || node.children.exists(child -> hasExternalRead(child, field, exclude));
-	}
-
-	/**
-	 * Prefix each statement-level bypass write in `bypassStmts` with `@:bypassAccessor ` — on the
-	 * collapsed `(default, set)` property such a write is a DIRECT physical field write, so the
-	 * marker preserves the pre-collapse semantics exactly. When a backing-field rename already
-	 * replaces the statement's first token (a bare `_x` write target, at the same offset), the
-	 * marker is FOLDED into that rename's replacement text instead of emitted as a separate
-	 * zero-width edit — a zero-width insert coinciding with the rename's start is dropped by
-	 * `dropContainedEdits`. A `this._x` write starts before its renamed name token, so its marker
-	 * is a standalone insert. Returns false only on an unspanned statement the fix cannot place.
-	 */
-	private static function applyBypassMarks(bypassStmts: Array<QueryNode>, edits: Array<{ span: Span, text: String }>): Bool {
-		for (stmt in bypassStmts) {
-			final span: Null<Span> = stmt.span;
-			if (span == null) return false;
-			final at: Int = span.from;
-			final folded: Null<{ span: Span, text: String }> = edits.find(e -> e.span.from == at && e.span.to > at);
-			if (folded != null)
-				folded.text = '@:bypassAccessor ${folded.text}';
-			else
-				edits.push({ span: new Span(at, at), text: '@:bypassAccessor ' });
-		}
-		return true;
-	}
-
-	/**
-	 * The statement-level external writes to `field` in `node`'s subtree, outside `exclude` (the
-	 * kept setter) and the `allowStmt` subtree (a relocatable constructor-init statement) — each an
-	 * `ExprStmt` whose single child writes `field` (`writeTargetField`, bare or `this.`). Null the
-	 * moment a write to `field` appears NOT in statement position (nested inside a larger
-	 * expression, e.g. `if ((_x = v)) ...`): such a write cannot be marked `@:bypassAccessor`, so
-	 * the caller must fall back to inlining the getter rather than collapsing.
-	 */
-	private static function collectExternalWrites(
-		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>
-	): Null<Array<QueryNode>> {
-		final out: Array<QueryNode> = [];
-		return collectExternalWritesInto(node, field, exclude, allowStmt, out) ? out : null;
-	}
-
-	/**
-	 * Recursive worker of `collectExternalWrites`: appends each statement-level write of `field` to
-	 * `out` and returns true, or returns false the moment a write to `field` sits in a non-statement
-	 * position. A subtree inside `exclude` or equal to `allowStmt` is skipped. A statement-level
-	 * write's own RHS is still scanned (its write target aside), so a nested write there is caught.
-	 */
-	private static function collectExternalWritesInto(
-		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>, out: Array<QueryNode>
-	): Bool {
-		final span: Null<Span> = node.span;
-		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return true;
-		if (node == allowStmt) return true;
-		if (node.kind == 'ExprStmt' && node.children.length == 1 && writeTargetField(node.children[0]) == field) {
-			out.push(node);
-			return node.children[0].children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
-		}
-		return writeTargetField(node) != field && node.children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
-	}
-
-	/**
-	 * The total number of writes to `field` in `node`'s subtree, at ANY expression position, outside
-	 * `exclude` and the `allowStmt` subtree — the count the inline-fallback message reports (the
-	 * statement-level list of `collectExternalWrites` is null when it bails, so the message uses this
-	 * position-agnostic count instead).
-	 */
-	private static function countExternalWrites(node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>): Int {
-		final span: Null<Span> = node.span;
-		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return 0;
-		if (node == allowStmt) return 0;
-		var n: Int = writeTargetField(node) == field ? 1 : 0;
-		for (c in node.children) n += countExternalWrites(c, field, exclude, allowStmt);
-		return n;
 	}
 
 	/**
@@ -1580,7 +1130,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			? findMovableCtorInit(cls, trivGet, shape)
 			: null;
 		final allowStmt: Null<QueryNode> = ci?.stmt;
-		final writes: Null<Array<QueryNode>> = collectExternalWrites(cls, trivGet, setterSpan, allowStmt);
+		final writes: Null<Array<QueryNode>> = BackingFieldRefs.collectExternalWrites(cls, trivGet, setterSpan, allowStmt);
 		// Too many writes, or a write nested inside a larger expression (unmarkable): keep the
 		// property and just inline the getter. Skip when the getter is already inline or overrides
 		// — inline + override do not mix, and an overriding accessor must stay overridable.
@@ -1604,7 +1154,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				clauseText: '',
 				deleted: [],
 				ctorInit: null,
-				message: messageFor('setAInline', prop.name, trivGet, countExternalWrites(cls, trivGet, setterSpan, allowStmt)),
+				message: messageFor(
+					'setAInline', prop.name, trivGet, BackingFieldRefs.countExternalWrites(cls, trivGet, setterSpan, allowStmt)
+				),
 				bypassStmts: [],
 				inlineGetter: getterNode
 			};
@@ -1642,221 +1194,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			edits.push({ span: ElementSpan.lineExtendedSpan(source, cs), text: '' });
 		}
 		return true;
-	}
-
-	/**
-	 * Whether `name` is distinctive enough (an underscore or an uppercase letter) that a
-	 * word-boundary comment mention is unlikely to be prose — a backing field like `_x` is, so its
-	 * comment mentions rename along with the code on a cross-file collapse.
-	 */
-	private static function isDistinctiveName(name: String): Bool {
-		for (i in 0...name.length) {
-			final code: Int = name.fastCodeAt(i);
-			if (code == '_'.code || (code >= 'A'.code && code <= 'Z'.code)) return true;
-		}
-		return false;
-	}
-
-	/** Whether `kind` is an assignment / compound-assignment / increment / decrement whose first child is its write target. */
-	private static function isWriteNodeKind(kind: String): Bool {
-		return switch kind {
-			case 'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign', 'ModAssign', 'BitAndAssign', 'BitOrAssign', 'BitXorAssign',
-				'ShlAssign', 'ShrAssign', 'UShrAssign', 'PreIncr', 'PostIncr', 'PreDecr', 'PostDecr': true;
-			case _: false;
-		}
-	}
-
-	/**
-	 * Every report file that may reference `owner`'s backing field through inheritance: the
-	 * declaring file of each TRANSITIVE subtype of `owner` (`SubtypeGraph.subtypeFiles`), plus
-	 * every file granting itself `@:access(owner)`. Deduped, in discovery order.
-	 *
-	 * The closure is the index's own subtype adjacency, not a `supertypes.contains(parent)` scan
-	 * of its own. Asking the same question a second way is what broke this: the private
-	 * scan could not follow an `import p.Owner as O;` supertype alias, so `class Child extends O`
-	 * was not an affected file, only the owner was rewritten, and the collapse left the subtype
-	 * naming a field that no longer existed (`Unknown identifier : _v`) — while `subtypeBlocks` /
-	 * `subtypeFieldBlocks`, which go through the index, saw that subtype perfectly well on the
-	 * same tree. Reaching the file is not the same as rewriting it: the occurrence there is
-	 * attributed through `isSubtype`, whose UPWARD walk cannot resolve the alias either, so the
-	 * completeness gate now refuses the collapse instead of half-applying it.
-	 */
-	private static function affectedSubtypeFiles(owner: String, index: SymbolIndex): Array<String> {
-		final out: Array<String> = index.subtypes.subtypeFiles(owner);
-		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
-		return out;
-	}
-
-	/** The `field` token offset inside a `this.`/`super.` field access `node` (`span` its whole access), or -1 for any other receiver shape. */
-	private static function fieldAccessTokenOffset(node: QueryNode, span: Span, source: String, field: String): Int {
-		if (node.children.length != 1) return -1;
-		final recv: QueryNode = node.children[0];
-		final recvSpan: Null<Span> = recv.span;
-		return recv.kind == 'IdentExpr' && (recv.name == 'this' || recv.name == 'super') && recvSpan != null
-			? SourceText.identTokenOffset(source, new Span(recvSpan.to, span.to), field)
-			: -1;
-	}
-
-	/**
-	 * Classify an owner-attributed occurrence at `off` by its enclosing class `cls`: an occurrence in
-	 * the OWNER class (only when its file is scanned) is excluded (`buildFix` rewrites it); a strict
-	 * subtype's READ is a rename edit (`_x` -> `x`, or `this.x` under a prop-name shadow when the ref
-	 * is a bare identifier), a strict subtype's WRITE returns false (block — the collapsed setter
-	 * would intercept it); an occurrence in a class that declares `field` itself or inherits it from a
-	 * non-owner supertype is excluded; any other (unresolvable) class leaves it uncovered so the
-	 * completeness gate blocks. `bareIdent` distinguishes a bare identifier (shadow-qualifiable) from
-	 * a `this.`/`super.` field-token rewrite (already receiver-qualified).
-	 */
-	private static function classifyOwnerBinding(
-		off: Int, bareIdent: Bool, owner: String, field: String, propName: String, index: SymbolIndex, ownerFileScan: Bool,
-		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
-	): Bool {
-		if (cls == null) return true;
-		final c: String = cls;
-		if (ownerFileScan && c == owner) {
-			excludeSpans.push(new Span(off, off + field.length));
-			return true;
-		}
-		if (index.subtypes.isSubtype(c, owner) && !index.members.typeDeclaresMember(c, field)) {
-			if (writePos) return false;
-			renameEdits.push({ span: new Span(off, off + field.length), text: bareIdent && shadowsProp ? 'this.$propName' : propName });
-			return true;
-		}
-		if (index.members.typeDeclaresMember(c, field) || index.members.supertypeDeclaresMember(c, field))
-			excludeSpans.push(new Span(off, off + field.length));
-		return true;
-	}
-
-	/**
-	 * Attribute ONE occurrence node whose name is `field`: a bare `IdentExpr` or a `this.`/`super.`
-	 * `FieldAccess` is bound by its enclosing `cls` (`classifyOwnerBinding`); any other shape (typed
-	 * receiver, interpolation, pattern) is left uncovered (returns true without recording, so the
-	 * completeness gate blocks). Returns false only on an owner-bound WRITE.
-	 */
-	private static function attributeOccurrence(
-		node: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool,
-		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
-	): Bool {
-		final span: Null<Span> = node.span;
-		if (span == null) return true;
-		final off: Int = switch node.kind {
-			case 'IdentExpr': SourceText.identTokenOffset(source, span, field);
-			case 'FieldAccess': fieldAccessTokenOffset(node, span, source, field);
-			case _: -1;
-		}
-		return off < 0
-			|| classifyOwnerBinding(
-				off, node.kind == 'IdentExpr', owner, field, propName, index, ownerFileScan, cls, writePos, shadowsProp, renameEdits,
-				excludeSpans
-			);
-	}
-
-	/**
-	 * Recursive worker of `collectSubtypeFieldRefs`: walks `node` tracking the enclosing class
-	 * (`cls`), whether the node sits in the WRITE-target position of its parent (`writePos`), and
-	 * whether an enclosing function binds `propName` (`shadowsProp`, so a bare rewritten read is
-	 * qualified `this.propName`). `#if...#end` interiors are not descended (they stay `ConditionalRaw`
-	 * for the completeness gate). Returns false on the first owner-bound WRITE.
-	 */
-	private static function subtypeRefWalk(
-		node: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool,
-		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
-	): Bool {
-		if (CondRegionScan.isConditionalKind(node.kind)) return true;
-		final isClass: Bool = CheckScan.isClassBodyKind(node.kind);
-		// The owner's own class is rewritten wholesale by `buildFix`; exclude its whole span from the
-		// completeness scan and stop descending, so a same-file sibling subtype is still walked.
-		if (ownerFileScan && isClass && node.name == owner) {
-			final ownerSpan: Null<Span> = node.span;
-			if (ownerSpan != null) excludeSpans.push(ownerSpan);
-			return true;
-		}
-		final cls2: Null<String> = isClass && node.name != null ? node.name : cls;
-		if (
-			node.name == field
-			&& !attributeOccurrence(
-				node, field, owner, propName, index, source, ownerFileScan, cls2, writePos, shadowsProp, renameEdits, excludeSpans
-			)
-		)
-			return false;
-		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
-		final isWrite: Bool = isWriteNodeKind(node.kind);
-		for (i in 0...node.children.length) if (!subtypeRefWalk(
-			node.children[i], field, owner, propName, index, source, ownerFileScan, cls2, isWrite && i == 0, childShadows, renameEdits,
-			excludeSpans
-		))
-			return false;
-		return true;
-	}
-
-	/**
-	 * Attribute every occurrence of `field` in one file's `tree` into `renameEdits` (owner-bound
-	 * subtype READS, `_x` -> `x`) and `excludeSpans` (owner-class / different-owner occurrences the
-	 * completeness gate must ignore). Null on the first owner-bound WRITE (`subtypeRefWalk` bails).
-	 * `ownerFileScan` marks the owner's own file, whose owner-class occurrences are excluded because
-	 * `buildFix` rewrites them.
-	 */
-	private static function collectSubtypeFieldRefs(
-		tree: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool
-	): Null<{ renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span> }> {
-		final renameEdits: Array<{ span: Span, text: String }> = [];
-		final excludeSpans: Array<Span> = [];
-		return subtypeRefWalk(tree, field, owner, propName, index, source, ownerFileScan, null, false, false, renameEdits, excludeSpans) ? {
-			renameEdits: renameEdits,
-			excludeSpans: excludeSpans
-		} : null;
-	}
-
-	/**
-	 * The per-file read-rewrite slices for every strict subtype of `owner` that READS the backing
-	 * field `field`, or null when the cross-file collapse cannot be proven safe. Enumerates the
-	 * transitive-subtype declaring files plus `@:access(owner)` grant files; in each, attributes
-	 * every occurrence of `field` (`collectSubtypeFieldRefs`) and gates the remainder through
-	 * `classifyOccurrences` (ConditionalRaw / StringLiteral / DirectiveComment / uncovered ActiveCode
-	 * block; a distinctive comment mention renames along). The owner's declaring file is scanned too
-	 * (its owner-class occurrences excluded — `buildFix` owns them) so a same-file sibling subtype is
-	 * handled. An empty result (no subtype reads) means the collapse is safe with no subtype edits.
-	 */
-	private static function crossFileReadRewrite(
-		owner: String, field: String, propName: String, ownerFile: String, index: SymbolIndex, sourceByFile: Map<String, String>,
-		plugin: GrammarPlugin
-	): Null<Array<CrossFileEdits>> {
-		final distinctive: Bool = isDistinctiveName(field);
-		final slices: Array<CrossFileEdits> = [];
-		for (file in affectedSubtypeFiles(owner, index)) {
-			final source: Null<String> = sourceByFile[file];
-			if (source == null) return null;
-			final src: String = source;
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
-			if (tree == null) return null;
-			final refs: Null<{ renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span> }> = collectSubtypeFieldRefs(
-				tree, field, owner, propName, index, src, file == ownerFile
-			);
-			if (refs == null) return null;
-			final excluded: Array<Span> = [for (e in refs.renameEdits) e.span];
-			for (s in refs.excludeSpans) excluded.push(s);
-			// A `package` / `import` path is a dotted module path, not a reference to the field —
-			// same reading as `Naming`'s collectors.
-			for (s in OccurrenceScan.modulePathSpans(tree, plugin.refShape())) excluded.push(s);
-			final classified: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
-				src, field, plugin, 0, src.length, excluded
-			);
-			final edits: Array<{ span: Span, text: String }> = refs.renameEdits.copy();
-			if (classified == null) {
-				if (OccurrenceScan.referencedInRange(src, field, 0, src.length, excluded)) return null;
-			} else
-				for (occ in classified) switch occ.kind {
-					case OccurrenceClass.CommentTrivia if (distinctive):
-						edits.push({ span: occ.span, text: propName });
-					// Neither renamed nor a blocker: a word inside a longer literal is prose, and a
-					// non-distinctive comment mention cannot make the collapse unsafe.
-					case OccurrenceClass.StringWord, OccurrenceClass.CommentTrivia:
-					case _:
-						return null;
-				}
-			if (edits.length > 0) slices.push({ file: file, edits: edits });
-		}
-		return slices;
 	}
 
 	/**

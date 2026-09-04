@@ -27,10 +27,14 @@ import anyparse.runtime.Span;
  * the rename-completeness gate (wider = fewer vetoes = a rename that ships with a real reference
  * unrewritten), so it goes through the stricter `visibleRegion` instead.
  *
- * Not to be confused with `Rename.innermostSpanOfKinds`, which resolves the same shape by a
- * different rule (last match in walk order rather than largest `span.from`, and with no
- * exclusion). The two are deliberately separate; folding them would change one caller's answer
- * for co-starting nodes.
+ * Not to be confused with `Rename.innermostOfKinds`, the same walk declared a second time and
+ * resolved by a different rule: last match in walk order rather than largest `span.from`, and
+ * with no `exclude`. `unit.query.InnermostScopeSpanParityTest` pins what that costs. The
+ * tie-break difference is REAL and it is unreachable: the two answer differently only when two
+ * matches share a `span.from` (`BindingScope` keeps the outer, `Rename` the inner), and the
+ * Haxe grammar's own `scopeKinds` vocabulary never puts two of its nodes at the same start —
+ * measured over a fixture spelling every scope-opening construct, at every offset in it, where
+ * the two walks agree. `exclude` is the whole reason the two are kept apart.
  */
 @:nullSafety(Strict)
 final class BindingScope {

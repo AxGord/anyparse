@@ -118,7 +118,8 @@ class BuildMacroMetaSeamTest extends Test {
 		'src/anyparse/query/NewFile.hx' => ['@:nullSafety'],
 		'src/anyparse/query/MemberWriteScan.hx' => ['@:build', '@:autoBuild', '@:genericBuild', '@:coreApi'],
 		'src/anyparse/query/RefactorSupport.hx' => ['@:allow'],
-		'src/anyparse/check/TrivialGetter.hx' => ['@:isVar', '@:bypassAccessor'],
+		'src/anyparse/check/TrivialGetter.hx' => ['@:isVar'],
+		'src/anyparse/check/BackingFieldRefs.hx' => ['@:bypassAccessor'],
 		'src/anyparse/check/RedundantBypassAccessor.hx' => ['@:bypassAccessor'],
 		'src/anyparse/check/PreferInline.hx' => [
 			'@:',
