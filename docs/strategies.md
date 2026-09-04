@@ -198,28 +198,41 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 
 | module | inventory flags it names |
 |---|---|
-| `WriterLowering` | 199 |
+| `WriterLowering` | 138 |
+| `WriterTriviaStarDispatch` | 43 |
+| `WriterKwRefLowering` | 31 |
 | `TriviaTypeSynth` | 17 |
+| `WriterCtorBlankLowering` | 17 |
 | `Lowering` | 16 |
+| `WriterPrattLowering` | 14 |
 | `WriterPolicyLowering` | 10 |
+| `WriterBodyPolicyLowering` | 3 |
 | `WriterCodegen` | 3 |
 | `WriterBlankLowering` | 2 |
 | `WriterLoweringSupport` | 2 |
+| `WriterArrowValueIfLowering` | 1 |
 | `TriviaSlotNames` | 1 |
 | `WriterChainLowering` | 1 |
 
-Read the shape of it, not just the numbers. `WriterLowering` answers 199 of 212 because
-the writer lowering is organised by grammar SHAPE — Star, Ref, Terminal, Alt branch, Pratt
-— and a flag is a branch INSIDE one of those emitters, not a unit of its own. A per-flag
-module split is therefore not a code motion; it would mean rewriting the emitters, and the
-thirteen flags that have left are the ones whose whole handler was a function.
+Read the shape of it, not just the numbers. The counts sum to far more than 212 because a
+flag is named wherever it is asked, and several are asked in two emitters.
 
-**Four flags are handler-only** — `WriterLowering` names them, no shipped grammar declares
-them, so they are absent from the inventory above: `blankLinesBeforeCtor`,
-`blankLinesBeforeCtorIf`, `fill` and `fillDoubleIndent`. That is the plugin contract
-working (a handler is available before a grammar asks for it), not dead code — but it is
-the state that has to be visible, because the same reading covers a handler whose grammar
-declaration was DELETED.
+`WriterLowering` still answers 138 of 212, and that number is not a per-flag split waiting
+to finish. The writer lowering is organised by grammar SHAPE — Star, Ref, Terminal, Alt
+branch, Pratt — and a flag is a branch INSIDE one of those emitters, not a unit of its own,
+so splitting by flag would mean rewriting the emitters. What the six `Writer*Lowering`
+modules below `WriterLowering` in the table are is a split by SHAPE FAMILY, which is code
+motion: each is one region of that module's call graph moved whole, with the flags its
+emitters happened to ask travelling along. Reading a family's row therefore tells you how
+`@:fmt`-dense that shape is, not that the flag belongs to it.
+
+**Four flags are handler-only** — a macro module names them, no shipped grammar declares
+them, so they are absent from the inventory above: `blankLinesBeforeCtor` and
+`blankLinesBeforeCtorIf` (named by `WriterCtorBlankLowering`), `fill` and
+`fillDoubleIndent` (named by `WriterLowering` and `WriterPrattLowering`). That is the
+plugin contract working (a handler is available before a grammar asks for it), not dead
+code — but it is the state that has to be visible, because the same reading covers a
+handler whose grammar declaration was DELETED.
 
 `unit.lowering.FmtFlagOwnershipTest` pins all of it: every inventory flag is named by at
 least one module, the module list and the per-module counts match the scan, and the four
