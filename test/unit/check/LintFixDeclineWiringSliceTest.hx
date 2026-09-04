@@ -10,6 +10,9 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.cli.command.LintFixDriver;
+import anyparse.query.cli.command.LintFixLedger;
+import anyparse.query.cli.command.LintFixVerify;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -83,9 +86,10 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = check.run(files, plugin);
 		Assert.isTrue(own.length > 0, 'the fixture reports at least one unused-local finding');
 		final ledger: Map<String, RuleFixOutcome> = [];
-		final groups: Array<RuleEdits> = Cli.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin));
-		Cli.ledgerFileLintEdits(ledger, groups, true);
-		final edits: Array<{ span: Span, text: String }> = Cli.contributedEdits(groups);
+		final groups: Array<RuleEdits> =
+			LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin));
+		LintFixDriver.ledgerFileLintEdits(ledger, groups, true);
+		final edits: Array<{ span: Span, text: String }> = LintFixDriver.contributedEdits(groups);
 		Assert.equals(0, edits.length, 'the guard drops the check edits');
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
@@ -104,7 +108,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		// carries must not be repeated as an unaccounted-for one. Drop that filter and this goes red
 		// while the later-pass pin below stays green.
 		final declared: Map<String, String> = [];
-		final lines: String = Cli.unfixedFixLedger(ledger, declared, [], []).join('');
+		final lines: String = LintFixLedger.unfixedFixLedger(ledger, declared, [], []).join('');
 		Assert.isTrue(lines.indexOf('fix DECLINED — ') != -1, 'a pass-1 refusal IS the rule\'s decline row: $lines');
 		Assert.isTrue(lines.indexOf('edit set(s) refused') == -1, 'and it is not repeated in the gate-refusal block: $lines');
 		#else
@@ -129,7 +133,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		}
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: NOT_CANONICAL }];
 		final noted: Array<String> = [];
-		Cli.applyLintPass(
+		LintFixDriver.applyLintPass(
 			files, files, plugin, [check], [], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 2, noted, [], [], [], []
 		);
 		Assert.isTrue(noted.contains('C.hx'), 'the pass-2 refusal is reported and counted as a skipped file');
@@ -164,9 +168,10 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = check.run(files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
 		// `countDeclines` false IS "this is not pass 1" — the driver passes `passes == 1`.
-		final groups: Array<RuleEdits> = Cli.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin));
-		Cli.ledgerFileLintEdits(ledger, groups, false);
-		final edits: Array<{ span: Span, text: String }> = Cli.contributedEdits(groups);
+		final groups: Array<RuleEdits> =
+			LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin));
+		LintFixDriver.ledgerFileLintEdits(ledger, groups, false);
+		final edits: Array<{ span: Span, text: String }> = LintFixDriver.contributedEdits(groups);
 		Assert.equals(0, edits.length, 'the guard drops the check edits on this pass too');
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
@@ -176,7 +181,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.equals(0, row.declined, 'a later pass adds nothing to the first-pass decline count');
 		Assert.equals(1, row.refusals.length, 'the gate refusal is recorded: ${row.refusals}');
 		final declared: Map<String, String> = [];
-		final lines: String = Cli.unfixedFixLedger(ledger, declared, [], []).join('');
+		final lines: String = LintFixLedger.unfixedFixLedger(ledger, declared, [], []).join('');
 		Assert.isTrue(lines.indexOf('unused-local') != -1, 'the rule reaches the report: $lines');
 		Assert.isTrue(lines.indexOf('the `if` at') != -1, 'and the block carries the guard\'s own sentence: $lines');
 		#else
@@ -207,16 +212,18 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final checks: Array<Check> = [order, quotes];
 		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: REFUSED_BY_WRITER }];
 		final own: Array<Violation> = Linter.run(files, plugin, checks, _ -> LintConfig.parse('{}'), false);
-		final groups: Array<RuleEdits> = Cli.collectFileLintEdits(REFUSED_BY_WRITER, own, checks, plugin, SymbolIndex.build(files, plugin));
+		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
+			REFUSED_BY_WRITER, own, checks, plugin, SymbolIndex.build(files, plugin)
+		);
 		Assert.equals(2, groups.length, 'both rules answered with edits: $groups');
 		// DETECT-PROOF: the whole set really is refused, so the salvage below is doing work rather
 		// than restating an `Ok` the gate would have given anyway.
-		switch RefactorSupport.canonicalize(REFUSED_BY_WRITER, Cli.contributedEdits(groups), false, plugin, null) {
+		switch RefactorSupport.canonicalize(REFUSED_BY_WRITER, LintFixDriver.contributedEdits(groups), false, plugin, null) {
 			case Ok(_, _):
 				Assert.fail('the fixture no longer trips the writer-emit gate');
 			case Err(message):
 				final blamed: Array<String> = [];
-				final settled: Null<{ text: String, rewrites: Null<Int> }> = Cli.salvageFileLintEdits(
+				final settled: Null<{ text: String, rewrites: Null<Int> }> = LintFixDriver.salvageFileLintEdits(
 					REFUSED_BY_WRITER, groups, message, plugin, null, blamed
 				);
 				if (settled == null) {
@@ -273,7 +280,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			refusal: null
 		};
 		final blamed: Array<String> = [];
-		final settled: Null<{ text: String, rewrites: Null<Int> }> = Cli.salvageFileLintEdits(
+		final settled: Null<{ text: String, rewrites: Null<Int> }> = LintFixDriver.salvageFileLintEdits(
 			OVERLAP_SOURCE, [refused, deferred], 'FILE LEVEL SENTENCE', plugin, null, blamed
 		);
 		if (settled == null) {
@@ -312,11 +319,11 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
 		final own: Array<Violation> = check.run(files, plugin);
 		Assert.isTrue(own.length > 0, 'the fixture reports a fixable finding');
-		final groups: Array<RuleEdits> = Cli.collectFileLintEdits(source, own, [check], plugin, SymbolIndex.build(files, plugin));
-		Assert.equals(1, Cli.contributedEdits(groups).length, 'and the check produced its edit');
+		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(source, own, [check], plugin, SymbolIndex.build(files, plugin));
+		Assert.equals(1, LintFixDriver.contributedEdits(groups).length, 'and the check produced its edit');
 		final blamed: Array<String> = [];
 		Assert.isNull(
-			Cli.salvageFileLintEdits(source, groups, 'FILE LEVEL SENTENCE', plugin, null, blamed),
+			LintFixDriver.salvageFileLintEdits(source, groups, 'FILE LEVEL SENTENCE', plugin, null, blamed),
 			'a source the writer cannot round-trip salvages nothing'
 		);
 		Assert.equals(0, blamed.length, 'and no rule is blamed for the file\'s own bytes: $blamed');
@@ -354,7 +361,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		};
 		final blamed: Array<String> = [];
 		Assert.isNull(
-			Cli.salvageFileLintEdits(NOT_CANONICAL, [accepted, deferred], 'FILE LEVEL SENTENCE', plugin, null, blamed),
+			LintFixDriver.salvageFileLintEdits(NOT_CANONICAL, [accepted, deferred], 'FILE LEVEL SENTENCE', plugin, null, blamed),
 			'a source the writer will not round-trip salvages nothing'
 		);
 		Assert.equals(0, blamed.length, 'and no rule is blamed for the file\'s own bytes: $blamed');
@@ -385,7 +392,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
 		final noted: Array<String> = [];
 		final changed: Array<String> = [];
-		Cli.applyLintPass(
+		LintFixDriver.applyLintPass(
 			files, files, plugin, [check], [], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 1, noted, [], changed, [], []
 		);
 		Assert.equals(0, noted.length, 'nothing was refused: $noted');
@@ -409,7 +416,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 */
 	public function testSkipTailNamesThePartlyFixedFiles(): Void {
 		#if (sys || nodejs)
-		Assert.equals(', 2 file(s) skipped (1 partly fixed first, then refused)', Cli.skippedTail(['a.hx', 'b.hx'], ['a.hx']));
+		Assert.equals(', 2 file(s) skipped (1 partly fixed first, then refused)', LintFixLedger.skippedTail(['a.hx', 'b.hx'], ['a.hx']));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -425,8 +432,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 */
 	public function testSkipTailIsUnchangedWhenNothingWasPartlyFixed(): Void {
 		#if (sys || nodejs)
-		Assert.equals(', 1 file(s) skipped', Cli.skippedTail(['a.hx'], ['b.hx']));
-		Assert.equals('', Cli.skippedTail([], ['b.hx']));
+		Assert.equals(', 1 file(s) skipped', LintFixLedger.skippedTail(['a.hx'], ['b.hx']));
+		Assert.equals('', LintFixLedger.skippedTail([], ['b.hx']));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -455,7 +462,9 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: REFUSED }];
 		final own: Array<Violation> = check.run(files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
-		Cli.ledgerFileLintEdits(ledger, Cli.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin)), true);
+		LintFixDriver.ledgerFileLintEdits(
+			ledger, LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, SymbolIndex.build(files, plugin)), true
+		);
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
 			Assert.fail('the refused rule has no ledger row');
@@ -464,7 +473,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.equals(0, row.reported, 'nothing on this path fills the pass-1 report count');
 		Assert.isTrue(row.declined > 0, 'while the declines are real findings');
 		final declared: Map<String, String> = [];
-		final lines: String = Cli.unfixedFixLedger(ledger, declared, [], []).join('');
+		final lines: String = LintFixLedger.unfixedFixLedger(ledger, declared, [], []).join('');
 		Assert.isTrue(lines.indexOf(' of 0') == -1, 'the label states no ratio out of nothing: $lines');
 		Assert.isTrue(lines.indexOf('unused-local ${row.declined}:') != -1, 'it states the plain count instead: $lines');
 		#else
@@ -489,7 +498,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	public function testARiskyRulesTalliesBecomeItsLedgerRow(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = [];
-		Cli.ledgerRiskyTallies(ledger, riskyResult());
+		LintFixVerify.ledgerRiskyTallies(ledger, riskyResult());
 		final row: Null<RuleFixOutcome> = ledger['avoid-dynamic'];
 		if (row == null) {
 			Assert.fail('the risky rule has no ledger row');
@@ -522,11 +531,11 @@ class LintFixDeclineWiringSliceTest extends Test {
 	public function testTheRiskyDisclaimerIsOnlyForAPhaseThatDidNotRun(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = [];
-		Cli.ledgerRiskyTallies(ledger, riskyResult());
+		LintFixVerify.ledgerRiskyTallies(ledger, riskyResult());
 		final declared: Map<String, String> = [];
-		final absent: String = Cli.unfixedFixLedger(ledger, declared, [], ['avoid-dynamic']).join('');
+		final absent: String = LintFixLedger.unfixedFixLedger(ledger, declared, [], ['avoid-dynamic']).join('');
 		Assert.isTrue(absent.indexOf('the risky-fix path never ran them this run') != -1, 'a phase that did not run says so: $absent');
-		final present: String = Cli.unfixedFixLedger(ledger, declared, [], []).join('');
+		final present: String = LintFixLedger.unfixedFixLedger(ledger, declared, [], []).join('');
 		Assert.isTrue(present.indexOf('risky-fix path') == -1, 'a phase that ran leaves the disclaimer off: $present');
 		Assert.isTrue(present.indexOf('avoid-dynamic 8 of 10:') != -1, 'and its row is what the reader gets instead: $present');
 		#else
@@ -555,7 +564,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	public function testACheckSOwnDeclineReasonsTakeOnlyTheirShareOfTheLedgerRow(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = [];
-		Cli.ledgerRiskyTallies(ledger, checkSpokenResult());
+		LintFixVerify.ledgerRiskyTallies(ledger, checkSpokenResult());
 		final row: Null<RuleFixOutcome> = ledger['shorten-type-ref'];
 		if (row == null) {
 			Assert.fail('the risky rule has no ledger row');

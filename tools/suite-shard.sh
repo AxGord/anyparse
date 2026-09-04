@@ -223,10 +223,13 @@ total_classes=$(wc -l < "$work/assigned.txt" | tr -d '[:space:]')
 # Everything above derives from the ONE list `--list-classes` printed, so the
 # "class parity OK: N/N" note at the end compares that list with itself and is
 # blind to a producer that DROPPED a class — the list simply arrives shorter and
-# every downstream check agrees with it. The independent number is the literal
-# `REGISTERED_CLASSES` in `unit.TestDiscoveryParityTest`: hand-maintained, bumped
-# deliberately when a test class is added or removed, and therefore not derived
-# from the generator under test. Compared here, BEFORE any shard runs, so a drop
+# every downstream check agrees with it. The independent number is the LENGTH
+# of `REGISTERED_CLASSES` in `unit.TestDiscoveryParityTest`: a hand-maintained list
+# of fully-qualified class names, one per line, extended deliberately when a test
+# class is added or removed, and therefore not derived from the generator under
+# test. It was a scalar until T526; counting its lines rather than reading one
+# integer is what that shape change costs here, and what it buys is that two
+# class-adding branches can no longer merge onto the same number in silence. Compared here, BEFORE any shard runs, so a drop
 # names itself in one line instead of arriving minutes later as a red shard —
 # and it is caught even when the pin's own class would have landed in a shard
 # this invocation is not running.
@@ -235,8 +238,11 @@ total_classes=$(wc -l < "$work/assigned.txt" | tr -d '[:space:]')
 # in that file must not fail an otherwise green suite. The pin's own assertion
 # inside the run stays the authority either way.
 registered_pin=$(
-    sed -n 's/.*REGISTERED_CLASSES[^=]*= *\([0-9][0-9]*\).*/\1/p' \
-        test/unit/TestDiscoveryParityTest.hx 2> /dev/null | sed -n 1p
+    awk '/REGISTERED_CLASSES[^=]*= *\[/ { inside = 1; next }
+         inside && /^\t\];/ { exit }
+         inside && /'"'"'/ { n++ }
+         END { if (n) print n }' \
+        test/unit/TestDiscoveryParityTest.hx 2> /dev/null
 )
 producer_note="producer count not cross-checked (REGISTERED_CLASSES unreadable)"
 if [ -n "$registered_pin" ]; then

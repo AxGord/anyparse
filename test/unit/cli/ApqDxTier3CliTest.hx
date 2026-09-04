@@ -5,6 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
+import anyparse.query.cli.TestTranscript;
 import utest.Assert;
 import utest.Test;
 
@@ -164,7 +165,7 @@ class ApqDxTier3CliTest extends Test {
 		// utest 1.13.x FAILURE shape: `  testName: FAILURE F\n    line: N, <msg>`.
 		// Class header sits one line above the test group at column 0.
 		final transcript: String = 'FailProbe\n  testOk: OK .\n  testIntentionalFail: FAILURE F\n    line: 9, intentional\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		// `tests` is the OK-pass count (legacy contract — matches the
 		// existing `N tests / F failures / E errors` semantics where N is
 		// passes, not the run total).
@@ -190,7 +191,7 @@ class ApqDxTier3CliTest extends Test {
 		// utest ERROR shape: `  testName: ERROR E\n    <bare message>` —
 		// no `line:` prefix, just the thrown payload. line stays -1.
 		final transcript: String = 'FailProbe\n  testIntentionalError: ERROR E\n    intentional error\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(0, r.tests);
 		Assert.equals(1, r.errors);
 		Assert.equals(0, r.failures);
@@ -211,7 +212,7 @@ class ApqDxTier3CliTest extends Test {
 		// both, firstFailure stays on the earliest (FAILURE before ERROR
 		// in source order).
 		final transcript: String = 'ClassA\n  testOne: FAILURE F\n    line: 5, first\n  testTwo: ERROR E\n    second\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(1, r.failures);
 		Assert.equals(1, r.errors);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
@@ -228,7 +229,7 @@ class ApqDxTier3CliTest extends Test {
 	public function testTestSummaryNoFailuresHasNullLocus(): Void {
 		#if (sys || nodejs)
 		final transcript: String = '  testFoo: OK ...\n  testBar: OK .\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(2, r.tests);
 		Assert.equals(4, r.assertions);
 		Assert.isNull(r.firstFailure);
@@ -243,7 +244,7 @@ class ApqDxTier3CliTest extends Test {
 		// awaitingDetail must NOT silently consume the second fail's
 		// header line.
 		final transcript: String = 'ClassA\n  testOne: FAILURE F\n  testTwo: FAILURE F\n    line: 7, second\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(2, r.failures);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
@@ -286,7 +287,7 @@ class ApqDxTier3CliTest extends Test {
 		#if (sys || nodejs)
 		final transcript: String = 'tests executed: 4\n\nassertations: 12\nsuccesses: 12\nerrors: 0\nfailures: 0\n'
 			+ 'warnings: 0\nexecution time: 1\n\nresults: ALL TESTS OK (success: true)\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(4, r.tests);
 		Assert.equals(12, r.assertions);
 		Assert.equals(0, r.failures);
@@ -308,7 +309,7 @@ class ApqDxTier3CliTest extends Test {
 		// so `failures` counts the failing TEST, not utest's assertation.
 		final transcript: String = 'tests executed: 9\nFoo\n  testBad: FAILURE F\n    line: 7, boom\n\nassertations: 9\nsuccesses: 8\n'
 			+ 'errors: 0\nfailures: 1\nwarnings: 0\n\nresults: SOME TESTS FAILURES (success: false)\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(9, r.tests);
 		Assert.equals(9, r.assertions);
 		Assert.equals(1, r.failures);
@@ -325,7 +326,7 @@ class ApqDxTier3CliTest extends Test {
 		// the phrase must not outrank it.
 		final transcript: String = 'tests executed: 999\nsome test chatter\ntests executed: 4\n\nassertations: 12\nsuccesses: 12\n'
 			+ 'errors: 0\nfailures: 0\nwarnings: 0\n\nresults: ALL TESTS OK (success: true)\n';
-		Assert.equals(4, Cli.parseTestSummary(transcript).tests);
+		Assert.equals(4, TestTranscript.parseTestSummary(transcript).tests);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -354,7 +355,7 @@ class ApqDxTier3CliTest extends Test {
 		final transcript: String = 'tests executed: 0\n\nassertations: 0\nsuccesses: 0\nerrors: 0\nfailures: 0\n'
 			+ 'warnings: 0\n\nresults: ALL TESTS OK (success: true)\n';
 		final path: String = CliFixture.writeAs('apq_test_summary_zero', 'log', transcript);
-		Assert.isTrue(Cli.parseTestSummary(transcript).counted);
+		Assert.isTrue(TestTranscript.parseTestSummary(transcript).counted);
 		Assert.equals(0, Cli.run(['test-summary', path]));
 		FileSystem.deleteFile(path);
 		#else
@@ -371,7 +372,7 @@ class ApqDxTier3CliTest extends Test {
 		// its report", on a transcript whose last line IS the report.
 		final transcript: String = 'Suite:\n  case: [OK]\n\n0 Assertions 0 Success 0 Failures 0 Errors\n';
 		final path: String = CliFixture.writeAs('apq_test_summary_tink_zero', 'log', transcript);
-		Assert.isTrue(Cli.parseTestSummary(transcript).counted);
+		Assert.isTrue(TestTranscript.parseTestSummary(transcript).counted);
 		Assert.equals(0, Cli.run(['test-summary', path]));
 		FileSystem.deleteFile(path);
 		#else
@@ -387,7 +388,7 @@ class ApqDxTier3CliTest extends Test {
 		// carried the phrase reported `999 tests` at exit 0; the count now falls
 		// back to the rows, and the failure the transcript DOES carry survives.
 		final transcript: String = 'SomeClass\n  testBad: FAILURE F\n    line: 3, boom\ntests executed: 999\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(0, r.tests);
 		Assert.equals(1, r.failures);
 		Assert.isTrue(r.counted);

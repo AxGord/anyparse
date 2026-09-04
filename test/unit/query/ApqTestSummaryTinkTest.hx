@@ -5,6 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.query.Cli;
+import anyparse.query.cli.TestTranscript;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -59,7 +60,7 @@ class ApqTestSummaryTinkTest extends Test {
 			'',
 			'Tests completed - watchdog thread will exit gracefully'
 		];
-		final r: TestSummaryResult = Cli.parseTestSummary(lines.join('\n'));
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(lines.join('\n'));
 		Assert.equals(4, r.assertions);
 		Assert.equals(0, r.failures);
 		Assert.equals(0, r.errors);
@@ -87,7 +88,7 @@ class ApqTestSummaryTinkTest extends Test {
 		final plain: String = esc.replace(lines.join('\n'), '');
 		// Sanity: the ESC bytes are really gone.
 		Assert.equals(-1, plain.indexOf(ESC));
-		final r: TestSummaryResult = Cli.parseTestSummary(plain);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(plain);
 		Assert.equals(1, r.assertions);
 		Assert.equals(0, r.failures);
 		Assert.equals(1, r.tests);
@@ -105,7 +106,7 @@ class ApqTestSummaryTinkTest extends Test {
 		final transcript: String = 'SampleTest: [src/tests/unit/SampleTest.hx:5]\n  does the thing: [src/tests/unit/SampleTest.hx:9] \n'
 			+ '    - [OK] [src/tests/unit/SampleTest.hx:11] ok\n    - [OK] [src/tests/unit/SampleTest.hx:12] ok\n'
 			+ '2 Assertions   2 Success   0 Failure   0 Error   \n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(2, r.assertions);
 		Assert.equals(0, r.failures);
 		Assert.equals(1, r.tests);
@@ -128,7 +129,7 @@ class ApqTestSummaryTinkTest extends Test {
 			failDetail('expected false but got true'),
 			summaryLine(2, 1, 1, 0)
 		];
-		final r: TestSummaryResult = Cli.parseTestSummary(lines.join('\n'));
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(lines.join('\n'));
 		Assert.equals(2, r.assertions);
 		Assert.equals(1, r.failures);
 		Assert.equals(0, r.errors);
@@ -162,7 +163,7 @@ class ApqTestSummaryTinkTest extends Test {
 			failDetail('boom two'),
 			summaryLine(2, 0, 2, 0)
 		];
-		final r: TestSummaryResult = Cli.parseTestSummary(lines.join('\n'));
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(lines.join('\n'));
 		Assert.equals(2, r.failures);
 		final ff: Null<TestSummaryFailureLocus> = r.firstFailure;
 		Assert.notNull(ff);
@@ -187,7 +188,7 @@ class ApqTestSummaryTinkTest extends Test {
 			caseThrow('Null Object Reference'),
 			summaryLine(0, 0, 0, 1)
 		];
-		final r: TestSummaryResult = Cli.parseTestSummary(lines.join('\n'));
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(lines.join('\n'));
 		Assert.equals(0, r.failures);
 		Assert.equals(1, r.errors);
 		Assert.equals(0, r.tests);
@@ -214,7 +215,7 @@ class ApqTestSummaryTinkTest extends Test {
 			+ '${caseHeader('trivial', 'src/tests/unit/SampleFinalTest.hx', 2)}\n'
 			+ '${assertRow(true, 'src/tests/unit/SampleFinalTest.hx', 3, 'ok')}\n$real\nTests completed - watchdog thread will exit '
 			+ 'gracefully\nStopping FileSystem background threads...\nFileSystem stopped\nEXIT=0\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(1111, r.assertions);
 		Assert.equals(1111, r.assertions); // Success mirrors assertions in an all-green run
 		Assert.equals(0, r.failures);
@@ -251,7 +252,7 @@ class ApqTestSummaryTinkTest extends Test {
 	public function testUtestTranscriptStillTakesUtestPath(): Void {
 		#if (sys || nodejs)
 		final transcript: String = '  testFoo: OK ...\n  testBar: OK .\n  testBaz: FAIL: expected 1\n';
-		final r: TestSummaryResult = Cli.parseTestSummary(transcript);
+		final r: TestSummaryResult = TestTranscript.parseTestSummary(transcript);
 		Assert.equals(2, r.tests);
 		Assert.equals(4, r.assertions);
 		Assert.equals(1, r.failures);

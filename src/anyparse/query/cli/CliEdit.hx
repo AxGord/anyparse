@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.ReplaceNode;
 import anyparse.runtime.ParseError;
@@ -172,6 +173,48 @@ final class CliEdit {
 				CliIo.stderr('apq $op: $message\n');
 				null;
 		};
+	}
+
+	/**
+	 * The window each match's `--source` / `--doc` block is cut from — one per match, in `Patch`'s own
+	 * order: `declGroupSpan` folds in the modifier / `@:meta` run the grammar projects as SIBLINGS of a
+	 * declaration, then `trailingTrimmedSpan` drops the run a `@:trailOpt` decl written without its
+	 * terminator swallows past its own closing brace.
+	 *
+	 * That is byte-for-byte the span `patch` searches and `replace-node` overwrites, and the same fold
+	 * `resolveNodeLineBounds` applies before widening it to whole LINES for `apq source --select` — so
+	 * the two reads agree about which declaration they mean, though `source --select` prints whole
+	 * lines and this prints exact bytes. Cutting the BARE node span instead handed back a declaration
+	 * without its `@:keep` / `public` / `#if … enum #end`, and feeding that straight to `replace-node`
+	 * dropped them at rc 0 — the hazard the ops' documentation blames on the caller, produced by a read
+	 * the documentation offers as the copy source. `--doc` and `--source` also stopped agreeing about
+	 * the same declaration: the doc block is found by walking BACK over the annotation lines, so with
+	 * both flags on the `@:keep` between them was printed by neither, and below a `#if … enum #end`
+	 * prefix the walk hit the `#end` and reported no doc at all.
+	 *
+	 * `--spans` is untouched: it reports the node's own span, which is what an AST view owes. So does
+	 * the JSON `span` key, which is emitted unconditionally — a JSON consumer that slices `span` out of
+	 * the file and one that reads the `source` key get different bytes for the same match, by design:
+	 * `span` describes the NODE, `source` describes the declaration it belongs to.
+	 *
+	 * The `refs` / `uses` `--source` opt-in still cuts the bare hit span. A hit is an OCCURRENCE in a
+	 * multi-file listing rather than a node the caller addressed, its entry record carries no tree to
+	 * fold against, and for every non-declaration hit the fold is a no-op; a caller that wants op-ready
+	 * text should read it with `apq source --select` or `apq ast --select`.
+	 *
+	 * The spans are taken from the RAW matches, before `--depth` / `--children-limit` reshape them: a
+	 * reshaped node is a COPY and has no parent in the tree. The caller computes them only when a flag
+	 * asks, since `trailingTrimmedSpan` lexes the whole file per match.
+	 */
+	public static function sourceWindows(
+		tree: QueryNode, nodes: Array<QueryNode>, source: String, regions: () -> Array<LexRegion>
+	): Array<Null<Span>> {
+		return [
+			for (n in nodes) {
+				final raw: Null<Span> = n.span;
+				raw == null ? null : RefactorSupport.declEditSpan(source, tree, n, raw, regions);
+			}
+		];
 	}
 
 }
