@@ -3372,7 +3372,24 @@ class WriterLowering {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
 			pos: Context.currentPos()
 		} : null;
-		final sepBaseExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
+		// omega-bracket-body-glue CLOSE side: the gap before a keyword whose PRECEDING
+		// sibling is a body the knob hugs to its head. `HxIfExpr.elseBranch` is the one
+		// consumer — `sameLineExpressionElse` resolves to `Keep` under
+		// `expressionIf: next`, so the gap answers from the source, and a source that
+		// wrote `];` on its own line keeps `else` on the next one forever. Turning the
+		// knob on is the explicit statement that this shape closes with `] else`, the
+		// mirror of the `if (c) [` it already opens with. Layered OUTSIDE
+		// `sameLineSeparator` so the `Keep` slot, the `shapeAware` switch and the
+		// `padTrailing` drop keep their exact bytes for every other field, and INSIDE the
+		// comment layers below so a captured own-line comment still replaces the gap.
+		final sepPlainExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
+		final glueTest: Null<Expr> = prevBodyField == null
+			? null
+			: buildBracketBodyGlueTest(child.fmtReadStringArgs(BRACKET_BODY_GLUE), prevBodyField.typePath, prevBodyField.access);
+		final sepBaseExpr: Expr = glueTest == null ? sepPlainExpr : {
+			final glued: Expr = withPadTrailingDrop(prevPadTrailing, macro _dt(' '));
+			macro ($glueTest ? $glued : $sepPlainExpr);
+		};
 		final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
 			? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
 			: sepBaseExpr;
@@ -4337,19 +4354,26 @@ class WriterLowering {
 	 * `@:fmt(bracketBodyGlueIfFlag(...))`, or when the body type has no bracket
 	 * block ctor at all, so every other grammar and every other field keep their
 	 * bytes.
+	 *
+	 * One core for all THREE seams the knob owns — the body placement
+	 * (`bodyPolicyWrap`), the branch terminator (`semicolonBeforeSiblingWrap`) and
+	 * the pre-`else` gap (`beforeKwSeparator`) — so a grammar that opts one field
+	 * in cannot get a different answer from another. The last two are the CLOSE
+	 * side of the hug: a `[` glued to its branch head is only half a shape while
+	 * the matching `]` is left alone on its line by a `;` the source wrote and a
+	 * source-preserving `Keep` gap.
 	 */
-	private function buildBracketBodyGlueTest(opts: WrapBodyOpts): Null<Expr> {
-		final args: Null<Array<String>> = opts.bracketBodyGlueArgs;
-		if (args == null) return null;
+	private function buildBracketBodyGlueTest(args: Null<Array<String>>, bodyTypePath: Null<String>, bodyValueExpr: Expr): Null<Expr> {
+		if (args == null || bodyTypePath == null) return null;
 		if (args.length != 1)
 			Context.fatalError(
-				'WriterLowering: bodyPolicyWrap bracketBodyGlueArgs requires (flagName), got ${args.length} args', Context.currentPos()
+				'WriterLowering: @:fmt($BRACKET_BODY_GLUE) requires 1 string arg (flagName), got ${args.length} args', Context.currentPos()
 			);
-		final patterns: Array<Expr> = collectBracketBlockCtorPatterns(opts.bodyTypePath);
+		final patterns: Array<Expr> = collectBracketBlockCtorPatterns(bodyTypePath);
 		if (patterns.length == 0) return null;
 		final flagAccess: Expr = optFieldAccess(args[0]);
 		final ctorTest: Expr = {
-			expr: ESwitch(opts.bodyValueExpr, [{ values: patterns, expr: macro true, guard: null }], macro false),
+			expr: ESwitch(bodyValueExpr, [{ values: patterns, expr: macro true, guard: null }], macro false),
 			pos: Context.currentPos()
 		};
 		return macro $flagAccess && $ctorTest;
@@ -7347,7 +7371,7 @@ class WriterLowering {
 		// omega-bracket-body-glue: same substitution seam, same reason — a `[` body
 		// that hugs its branch head is the `Same` layout, so it costs one ternary
 		// here instead of a whole extra outer arm.
-		final bracketTest: Null<Expr> = buildBracketBodyGlueTest(opts);
+		final bracketTest: Null<Expr> = buildBracketBodyGlueTest(opts.bracketBodyGlueArgs, opts.bodyTypePath, opts.bodyValueExpr);
 		final effPolicy: Expr = bracketTest == null ? elseSwitchPolicy : macro ($bracketTest ? $samePat : $elseSwitchPolicy);
 		final policySwitch: Expr = { expr: ESwitch(effPolicy, policyCases, sameLayoutExpr), pos: Context.currentPos() };
 		final outerCases: Array<Case> = [];
@@ -11297,19 +11321,27 @@ class WriterLowering {
 			case EField(base, _): { expr: EField(base, args[0]), pos: fieldAccess.pos };
 			case _: null;
 		};
-		return siblingAccess == null
-			? null
-			: macro {
-				final _sbeSibling: Bool = $siblingAccess != null;
-				switch opt.semicolonBeforeElse {
-					case anyparse.format.OptionalSemicolon.Never:
-						_sbeSibling ? _de() : $sourcePresent;
-					case anyparse.format.OptionalSemicolon.Always:
-						_sbeSibling ? _dt($v{trailOptText}) : $sourcePresent;
-					case _:
-						$sourcePresent;
-				}
-			};
+		if (siblingAccess == null) return null;
+		final policyDispatch: Expr = macro switch opt.semicolonBeforeElse {
+			case anyparse.format.OptionalSemicolon.Never:
+				_sbeSibling ? _de() : $sourcePresent;
+			case anyparse.format.OptionalSemicolon.Always:
+				_sbeSibling ? _dt($v{trailOptText}) : $sourcePresent;
+			case _:
+				$sourcePresent;
+		};
+		// omega-bracket-body-glue CLOSE side: a branch value the knob hugs to its head
+		// (`if (c) [`) has to close the same way (`] else`), and `];` cannot cuddle. So
+		// when the glue fires AND a sibling follows, the slot is dropped whatever
+		// `semicolonBeforeElse` says — the knob is the narrower, explicit statement.
+		final glueTest: Null<Expr> = buildBracketBodyGlueTest(
+			child.fmtReadStringArgs(BRACKET_BODY_GLUE), child.annotations[AnnotationKeys.BASE_REF], fieldAccess
+		);
+		final emit: Expr = glueTest == null ? policyDispatch : macro (_sbeSibling && $glueTest ? _de() : $policyDispatch);
+		return macro {
+			final _sbeSibling: Bool = $siblingAccess != null;
+			$emit;
+		};
 	}
 
 	/**

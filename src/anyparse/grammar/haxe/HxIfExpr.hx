@@ -33,10 +33,15 @@ package anyparse.grammar.haxe;
  * inert: Haxe accepts the chain with or without it, and even a
  * `var`-valued branch (`if (c) var x = 1 else var y = 2`) compiles
  * both ways — so `never` may drop it. With NO `else` the same slot
- * can be holding the ENCLOSING statement's terminator (the value-`if`
- * ate it on the way in and the grammar has nowhere else to park it),
- * and dropping it there would emit code that does not compile; every
- * policy value therefore falls back to source presence in that shape.
+ * can be holding the ENCLOSING statement's terminator (the value-`if` ate it
+ * on the way in and the grammar has nowhere else to park it), and dropping it
+ * there would emit code that does not compile; every policy value therefore
+ * falls back to source presence in that shape.
+ *
+ * `expressionIfWithBrackets` OVERRIDES that policy for the one shape it owns:
+ * when the knob hugs a `[` branch value to its head, the `;` before `else`
+ * goes whatever `semicolonBeforeElse` says, because `];` cannot cuddle. The
+ * matching pre-`else` gap is forced with it -- see `elseBranch` below.
  *
  * `@:fmt(valueBraceSymmetry('<sibling>', 'BlockExpr', 'ExprStmt', 'IfExpr', 'ObjectLit'))` on BOTH
  * branches (omega-value-brace-symmetry) — under `whitespace.bracesConfig.singleStatementBraces:
@@ -119,8 +124,19 @@ package anyparse.grammar.haxe;
  * `{stmt;}` regardless of width. Mirrors fork's
  * `sameLine.expressionIfWithBlocks` knob (`MarkSameLine.markBody`
  * with `includeBrOpen=true` triggers `markBlockBody` Same-policy
- * collapse). Non-BlockExpr bodies and `expressionIfWithBlocks=false`
- * fall through to the regular `bodyPolicy` cascade. Caveat: under
+ * collapse). Non-BlockExpr bodies and `expressionIfWithBlocks=false` fall through to the
+ * regular `bodyPolicy` cascade.
+ *
+ * `@:fmt(bracketBodyGlueIfFlag('expressionIfWithBrackets'))` is the `[`
+ * sibling of that meta, and owns THREE seams rather than one: the branch
+ * value hugs its head (`bodyPolicyWrap`), the `@:trailOpt(';')` slot above
+ * is dropped when an `elseBranch` follows (`semicolonBeforeSiblingWrap`), and
+ * the pre-`else` gap becomes a plain space (`beforeKwSeparator`). The last
+ * two are the CLOSE side: `sameLineExpressionElse` resolves to `Keep` under
+ * `sameLine.expressionIf: next`, so without them a source that wrote `];` on
+ * its own line keeps `else` on the next one no matter what the knob says, and
+ * the hug reads as half a shape. Keyed on the `[` ctor, so a block-valued or
+ * plain-valued branch is byte-identical either way. Caveat: under
  * Trivia mode `// line comments` inside the block body fold against
  * the next token and break syntax — same limitation as fork; the
  * knob is opt-in.

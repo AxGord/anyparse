@@ -25,8 +25,13 @@ import utest.Test;
  *
  * `testTheFlatComprehensionStaysOnOneLine` is the flat clause of the rule and
  * answers the same under both configs: a comprehension that renders flat keeps
- * its body on the head line, so a one-liner is never exploded. That is what
- * separates the strict `fitLine` from `next`, which breaks it.
+ * its body on the head line, so a one-liner is never exploded. That is what separates the strict `fitLine` from `next`, which breaks it.
+ *
+ * The CLOSE side is pinned below it: the knob also drops the branch `;` before an `else` and
+ * pulls the `else` up to the `]`, so the target bytes come out of the source shape the swept tree
+ * actually holds (`];` alone on its line) and not only out of a flat one. A flat source leaves the
+ * pre-`else` `Keep` gap slot inline, which is why the fixtures above could be green while the real
+ * file was not.
  */
 @:nullSafety(Strict)
 final class HxValueIfBracketHugSliceTest extends Test {
@@ -79,6 +84,44 @@ final class HxValueIfBracketHugSliceTest extends Test {
 		+ '\t\t\t[\n\t\t\t\tfirstLongElementNameHereThatIsQuiteLongIndeed,\n'
 		+ '\t\t\t\tsecondLongElementNameHereThatIsAlsoLongIndeed\n\t\t\t] else\n\t\t\t[];\n\t}\n}';
 
+	/** The reported `Matrix.hor` AS THE SWEPT TREE HOLDS IT: each branch closed by `];` with `else` on the next line. */
+	private static final HOR_SEMI: String = 'class C {\n\tpublic function hor(d: Int): Matrix<T> {\n'
+		+ '\t\treturn if (d > 0) [ for (e in this)\n\t\t\t[ for (i in 0...e.length)\n\t\t\t\tif (i + d '
+		+ '< e.length)\n\t\t\t\t\te[i + d]\n\t\t\t\telse\n\t\t\t\t\te[i + d - e.length]\n\t\t\t]\n\t'
+		+ '\t];\n\t\telse if (d < 0) [ for (e in this)\n\t\t\t[ for (i in 0...e.length)\n\t\t\t\tif (i + d >= 0)\n\t\t\t\t\te[i +'
+		+ ' d]\n\t\t\t\telse\n\t\t\t\t\te[i + d + e.length]\n\t\t\t]\n\t\t];\n\t\telse\n\t\t\tthis;\n\t}\n}';
+
+	/** The same shape with NO `;` — the break before `else` is the only thing left to close. */
+	private static final HOR_SPLIT: String = 'class C {\n\tpublic function hor(d: Int): Matrix<T> {\n'
+		+ '\t\treturn if (d > 0) [ for (e in this)\n\t\t\t[ for (i in 0...e.length)\n\t\t\t\tif (i + '
+		+ 'd < e.length)\n\t\t\t\t\te[i + d]\n\t\t\t\telse\n\t\t\t\t\te[i + d - e.length]\n\t\t\t]\n\t'
+		+ '\t]\n\t\telse if (d < 0) [ for (e in this)\n\t\t\t[ for (i in 0...e.length)\n\t\t\t\tif (i + d >= 0)\n\t\t\t\t\te[i + '
+		+ 'd]\n\t\t\t\telse\n\t\t\t\t\te[i + d + e.length]\n\t\t\t]\n\t\t]\n\t\telse\n\t\t\tthis;\n\t}\n}';
+
+	/** Base-binary answer for `HOR_SEMI` without the key: the `;` stays and so does the break. */
+	private static final HOR_SEMI_KEPT: String = 'class C {\n\tpublic function hor(d: Int): Matrix<T> {\n\t\treturn if (d > 0)\n'
+		+ '\t\t\t[ for (e in this)\n\t\t\t\t[ for (i in 0...e.length)\n\t\t\t\t\tif (i + d < '
+		+ 'e.length)\n\t\t\t\t\t\te[i + d]\n\t\t\t\t\telse\n\t\t\t\t\t\te[i + d - e.length]\n'
+		+ '\t\t\t\t]\n\t\t\t];\n\t\telse if (d < 0)\n\t\t\t[ for (e in this)\n\t\t\t\t[ for ('
+		+ 'i in 0...e.length)\n\t\t\t\t\tif (i + d >= 0)\n\t\t\t\t\t\te[i + d]\n\t\t\t\t\telse\n'
+		+ '\t\t\t\t\t\te[i + d + e.length]\n\t\t\t\t]\n\t\t\t];\n\t\telse\n\t\t\tthis;\n\t}\n}';
+
+	/** Base-binary answer for `HOR_SPLIT` without the key: the break survives on its own. */
+	private static final HOR_SPLIT_KEPT: String = 'class C {\n\tpublic function hor(d: Int): Matrix<T> {\n\t\treturn if (d > 0)\n'
+		+ '\t\t\t[ for (e in this)\n\t\t\t\t[ for (i in 0...e.length)\n\t\t\t\t\tif (i + d < '
+		+ 'e.length)\n\t\t\t\t\t\te[i + d]\n\t\t\t\t\telse\n\t\t\t\t\t\te[i + d - e.length]\n'
+		+ '\t\t\t\t]\n\t\t\t]\n\t\telse if (d < 0)\n\t\t\t[ for (e in this)\n\t\t\t\t[ for ('
+		+ 'i in 0...e.length)\n\t\t\t\t\tif (i + d >= 0)\n\t\t\t\t\t\te[i + d]\n\t\t\t\t\telse\n'
+		+ '\t\t\t\t\t\te[i + d + e.length]\n\t\t\t\t]\n\t\t\t]\n\t\telse\n\t\t\tthis;\n\t}\n}';
+
+	/** A BLOCK-valued value-`if` closed by `};` — the knob is about `[`, so this one is a fixed point under it. */
+	private static final BLOCK_SEMI: String = 'class C {\n\tpublic function f(d: Int): Int {\n\t\treturn if (d > 0) {\n'
+		+ '\t\t\ttraceSomethingHere(1);\n\t\t\t1;\n\t\t};\n\t\telse {\n\t\t\ttraceSomethingHere(2);\n\t\t\t2;\n' + '\t\t}\n\t}\n}';
+
+	/** A STATEMENT-`if` whose then-body owns the `;` — valid idiomatic Haxe the knob must never reach. */
+	private static final STMT_SEMI: String = 'class C {\n\tpublic function f(d: Int): Void {\n\t\tif (d > 0)\n'
+		+ '\t\t\ttraceSomethingHere(1);\n\t\telse\n\t\t\ttraceSomethingHere(2);\n\t}\n}';
+
 	public function new(): Void {
 		super();
 	}
@@ -117,6 +160,42 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	/** VACUITY GUARD for the literal arm: without the key it keeps the base `[` / `] else` / `[];` shape. */
 	public function testAnArrayLiteralBranchWithoutTheKeyKeepsItsOwnLine(): Void {
 		Assert.equals(ARRAY_UNHUGGED, HxWriteFixture.triviaWrite(ARRAY_FLAT, CFG_OFF));
+	}
+
+	/**
+	 * CLOSE side, on the source the swept tree actually holds: `];` on its own line, `else` on the next. The
+	 * `;` goes and the `else` comes up to the `]`, reaching the SAME target bytes as the flat input above —
+	 * which is what the flat input could not prove, since a flat source leaves the `Keep` gap slot inline.
+	 */
+	public function testTheSemicolonClosedSourceReachesTheTargetLayout(): Void {
+		Assert.equals(HOR_HUGGED, HxWriteFixture.triviaWrite(HOR_SEMI, CFG_ON));
+	}
+
+	/** The gap half on its own: no `;` to drop, only the source break before `else`, and it still closes. */
+	public function testTheSplitCloserCuddlesTheElseWithNoSemicolonToDrop(): Void {
+		Assert.equals(HOR_HUGGED, HxWriteFixture.triviaWrite(HOR_SPLIT, CFG_ON));
+	}
+
+	/** VACUITY GUARD: without the key both halves survive — the `;` and the break. Green on the base binary. */
+	public function testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive(): Void {
+		Assert.equals(HOR_SEMI_KEPT, HxWriteFixture.triviaWrite(HOR_SEMI, CFG_OFF));
+		Assert.equals(HOR_SPLIT_KEPT, HxWriteFixture.triviaWrite(HOR_SPLIT, CFG_OFF));
+	}
+
+	/**
+	 * The knob is keyed on the `[` ctor, so a BLOCK-valued branch keeps its `};` and its break under BOTH
+	 * configs. `expressionIfWithBlocks` collapses a block body's CONTENTS and has never hugged anything, so
+	 * the curly twin of this close side would be a new behaviour with no corpus consumer.
+	 */
+	public function testABlockValuedBranchIsUntouchedByTheBracketKnob(): Void {
+		Assert.equals(BLOCK_SEMI, HxWriteFixture.triviaWrite(BLOCK_SEMI, CFG_ON));
+		Assert.equals(BLOCK_SEMI, HxWriteFixture.triviaWrite(BLOCK_SEMI, CFG_OFF));
+	}
+
+	/** A statement-`if`'s `foo();` / `else` is valid idiomatic Haxe and stays byte-identical under the key. */
+	public function testAStatementIfKeepsItsOwnTerminatorAndBreak(): Void {
+		Assert.equals(STMT_SEMI, HxWriteFixture.triviaWrite(STMT_SEMI, CFG_ON));
+		Assert.equals(STMT_SEMI, HxWriteFixture.triviaWrite(STMT_SEMI, CFG_OFF));
 	}
 
 	/** Pony-shaped config text with `sameLine.expressionIfWithBrackets` as the only variable. */
