@@ -50,7 +50,7 @@ using Lambda;
  * (a constructor cannot yield null); a literal; and a call whose declared return type is recovered
  * and is not a nullable wrapper — a STATIC from the curated `RefShape.staticMethodReturns` table
  * (hand-picked stdlib statics whose contract excludes null), or an INSTANCE call resolved through
- * `SymbolIndex.returnNominalOf`, which additionally requires `@:nullSafety` active at the call site.
+ * `MemberLookup.returnNominalOf`, which additionally requires `@:nullSafety` active at the call site.
  * The NULL LITERAL is excluded explicitly rather than by its absence from `literalTypeNames`, an
  * omission maintained for another consumer.
  *
@@ -318,7 +318,7 @@ final class RedundantToString implements Check implements DefaultOff {
 	/** Every in-scope top-level declaration named `typeName`. */
 	private static function declsOf(typeName: String, ctx: Ctx): Array<TypeDeclInfo> {
 		return [
-			for (info in ctx.index.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName) decl
+			for (info in ctx.index.refs.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName) decl
 		];
 	}
 
@@ -398,7 +398,7 @@ final class RedundantToString implements Check implements DefaultOff {
 	 * and is not a nullable wrapper. A genuine `Type.method()` goes through the curated
 	 * `RefShape.staticMethodReturns` table, whose entries are hand-picked stdlib statics whose
 	 * contract excludes null, so no further gate applies. An INSTANCE call is resolved through
-	 * `SymbolIndex.returnNominalOf` and is non-null only while `@:nullSafety` is active at the call
+	 * `MemberLookup.returnNominalOf` and is non-null only while `@:nullSafety` is active at the call
 	 * site — the same trust `isProvablyNonNull` places in a declared field type, with the same
 	 * residual: a declarer under `@:nullSafety(Off)` could still return null.
 	 */
@@ -419,7 +419,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		final ownerType: Null<String> = TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes);
 		final metaName: Null<String> = seams.shape.nullSafetyMetaName;
 		if (ownerType == null || metaName == null) return unresolved;
-		final returned: Null<String> = nonWrapperNominal(ctx.index.returnNominalOf(ownerType, method), seams);
+		final returned: Null<String> = nonWrapperNominal(ctx.index.members.returnNominalOf(ownerType, method), seams);
 		return returned == null ? unresolved : {
 			typeName: returned,
 			nonNull: TypeResolver.enclosingIsNullSafe(ctx.root, callSpan, metaName, seams.shape.nullSafetyDisableArg)

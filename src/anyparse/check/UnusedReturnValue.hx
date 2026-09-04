@@ -24,10 +24,10 @@ import anyparse.runtime.Span;
  *  - a plain-identifier call `f()` — the callee binds (scope resolver) to a
  *    same-file function / local function whose `TypeInfoProvider.returnTypes` outer
  *    nominal is read; failing a lexical binding (an unqualified implicit-`this`
- *    method), the enclosing type's member is resolved via `SymbolIndex.returnNominalOf`;
+ *    method), the enclosing type's member is resolved via `MemberLookup.returnNominalOf`;
  *  - a `recv.method()` call — `recv`'s declared type (`TypeResolver.identTypeName`) or,
- *    unbound, its own name as a static receiver, keys `SymbolIndex.returnNominalOf`;
- *  - a `this.method()` call — the enclosing type keys `SymbolIndex.returnNominalOf`.
+ *    unbound, its own name as a static receiver, keys `MemberLookup.returnNominalOf`;
+ *  - a `this.method()` call — the enclosing type keys `MemberLookup.returnNominalOf`.
  *
  * A callee with no recovered return nominal (unannotated / inferred / stdlib type
  * absent from the project index / a complex non-identifier receiver / an unresolved
@@ -244,7 +244,7 @@ final class UnusedReturnValue implements Check implements ConfigAware {
 			// static / type receiver, looked up by its own name.
 			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, ctx.shape);
 			final lookupType: Null<String> = bindingFrom == null ? name : declaredTypes[bindingFrom];
-			lookupType == null ? null : ctx.index.returnNominalOf(lookupType, method);
+			lookupType == null ? null : ctx.index.members.returnNominalOf(lookupType, method);
 		}
 		return discarded(nominal, '${name}.${method}()');
 	}
@@ -252,7 +252,7 @@ final class UnusedReturnValue implements Check implements ConfigAware {
 	/** The enclosing type's `member` return nominal (for `this.` / implicit-`this` calls), or null. */
 	private static function memberReturn(root: QueryNode, span: Null<Span>, member: String, ctx: Ctx): Null<String> {
 		final enclosing: Null<String> = enclosingTypeName(root, span);
-		return enclosing == null ? null : ctx.index.returnNominalOf(enclosing, member);
+		return enclosing == null ? null : ctx.index.members.returnNominalOf(enclosing, member);
 	}
 
 	/** The `{nominal, desc}` finding when `nominal` is a discardable value, or null for `Void` / untyped / unknown. */

@@ -1249,7 +1249,7 @@ typedef RefShape = {
 	 * survive dead-code elimination, this says its member NAMES are data some consumer looks up. So
 	 * a rewrite that keeps the member and merely changes its name, its storage or where its value
 	 * lives is unsound here and sound there. `inline-constant` and `static-constant` decline such a
-	 * type's fields; `SymbolIndex.transitivelyCarriesRtti` propagates it down a hierarchy for the
+	 * type's fields; `TypeTraits.transitivelyCarriesRtti` propagates it down a hierarchy for the
 	 * naming autofix. Optional; unset → no declaration is reflected.
 	 */
 	@:optional var reflectedDeclMetaName: String;
@@ -2259,7 +2259,7 @@ typedef RefShape = {
 	 * non-generic type its call returns, for the methods whose std source leaves the
 	 * return type INFERRED — `haxe.ds.Map`'s abstract wrappers are written
 	 * `public inline function exists(key:K) return this.exists(key);`, so
-	 * `TypeInfoProvider.returnTypes` has no entry and `SymbolIndex.returnNominalOf`
+	 * `TypeInfoProvider.returnTypes` has no entry and `MemberLookup.returnNominalOf`
 	 * answers null however wide the resolution scope is. The value is the type the
 	 * forwarded-to underlying declares (`haxe.Constraints.IMap.exists(k:K):Bool`), which
 	 * is fixed on every target.

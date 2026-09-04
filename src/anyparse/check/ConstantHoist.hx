@@ -393,7 +393,7 @@ final class ConstantHoist {
 	private static function receivable(
 		match: TypeDeclMatch, name: String, ownerName: String, declSpan: Span, ctx: HoistContext, regions: () -> Array<LexRegion>
 	): Bool {
-		return !staticsForbidden(ctx.tree, match, ctx.plugin) && ctx.index.typeProvablyLacksMember(ownerName, name, ctx.file)
+		return !staticsForbidden(ctx.tree, match, ctx.plugin) && ctx.index.members.typeProvablyLacksMember(ownerName, name, ctx.file)
 			&& !conditionalBetween(match.nameNode, declSpan.from) && !commentAbove(ctx.source, declSpan, regions)
 			&& occupiesNameAlone(name, declSpan.from, ctx);
 	}

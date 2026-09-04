@@ -35,7 +35,7 @@ using StringTools;
  *    reach: the body scan runs over the resolution scope, so a subtype declared in a
  *    configured library root counts, but the `writtenAnywhere(subtype, …)` arm reads the
  *    report-scoped `FieldWriteIndex`. Residual blind spot: a library-side write through a
- *    library subtype stays invisible until that index is widened too. `SymbolIndex.supertypeDeclaresMember`
+ *    library subtype stays invisible until that index is widened too. `MemberLookup.supertypeDeclaresMember`
  *    still bails when a supertype declares the same field.
  * 2. No write to the field NAME anywhere is unresolved
  *    (`FieldWriteIndex.hasUnresolvedWrite`) — an unresolved `recv.field = …` could be
@@ -45,7 +45,7 @@ using StringTools;
  * 4. No resolved write to the field lies outside that decl range
  *    (`FieldWriteIndex.writtenExternally`).
  * 5. No STRUCTURAL type pins the field mutable —
- *    `SymbolIndex.structuralConformanceForbidsWriteRestriction`. A `(default, null)` field does not
+ *    `StructuralTypes.structuralConformanceForbidsWriteRestriction`. A `(default, null)` field does not
  *    satisfy a structural `var x:T` the type may be unified with ("Inconsistent setter for
  *    field x : null should be default"). Narrower by one kind than the finalizing rules'
  *    gate: a `(default, null)` field of function type DOES satisfy a structural `function x():T`,
@@ -136,18 +136,18 @@ final class PreferReadOnlyField implements Check {
 		// survives it — but only when it can reach this MEMBER, which it can only do by
 		// spelling the name. A whole-project veto here silenced the rule for every file in a
 		// scope holding one unparseable file.
-		if (index.skippedMayReference(name)) return;
+		if (index.text.skippedMayReference(name)) return;
 		// A macro-built type's fields are not what the declaration says — see
-		// `SymbolIndex.transitivelyCarriesBuildMacro`.
-		if (index.transitivelyCarriesBuildMacro(owner, file)) return;
-		if (index.supertypeDeclaresMember(owner, name)) return;
+		// `TypeTraits.transitivelyCarriesBuildMacro`.
+		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
+		if (index.members.supertypeDeclaresMember(owner, name)) return;
 		// An implemented interface that cannot be resolved may still declare `name` as a
 		// mutable member, whose property access `(default, null)` would violate.
-		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
+		if (index.members.implementsInterfaceDeclaringMember(owner, name)) return;
 		// Structural-conformance gate: a `(default, null)` field does not satisfy a structural
 		// `var name:T` the type may be unified with. A structural METHOD member is fine here —
 		// that is the one kind this gate is narrower than `prefer-final-public-field`'s.
-		if (index.structuralConformanceForbidsWriteRestriction(owner, name)) return;
+		if (index.structural.structuralConformanceForbidsWriteRestriction(owner, name)) return;
 		// Core-API gate: `(default, null)` is a property-access change, and a `@:coreApi` type's
 		// members are pinned to the access of a core type in the compiler's std path that no scope
 		// here holds — measured as "Field <name> has different property access than core type" for
@@ -169,7 +169,7 @@ final class PreferReadOnlyField implements Check {
 		// unconditional cession there drops the finding on the floor — neither rule reports it.
 		// That is exactly the `Iterator`-shaped field this gate was added for, whose correct
 		// answer is this rule's `(default, null)`, not silence.
-		final finalizable: Bool = !index.structuralConformanceForbidsFinal(owner, name);
+		final finalizable: Bool = !index.structural.structuralConformanceForbidsFinal(owner, name);
 		if (finalizable && CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (finalizable && CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
 		out.push({

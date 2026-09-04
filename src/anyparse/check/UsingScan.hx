@@ -188,7 +188,7 @@ final class UsingScan {
 		if (headerDeclaresType(header, module) || headerRebindsName(header, module)) return false;
 		final index: Null<SymbolIndex> = symbols();
 		if (index == null) return true;
-		for (fi in index.declaringFiles(module))
+		for (fi in index.refs.declaringFiles(module))
 			for (t in fi.types)
 				if (t.name == module && !t.members.exists(m -> m.name == method && m.isStatic)) return false;
 		return true;
@@ -222,7 +222,7 @@ final class UsingScan {
 			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
 			// dotted name by import path, so a module whose simple name another package reuses
 			// no longer reads as ambiguous-and-therefore-conflicting.
-			if (index == null || !index.typeProvablyLacksMember(path, method)) return true;
+			if (index == null || !index.members.typeProvablyLacksMember(path, method)) return true;
 		}
 		return false;
 	}

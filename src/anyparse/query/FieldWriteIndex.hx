@@ -128,10 +128,10 @@ typedef ScanCtx = {
  *    `Dynamic` / `Any` / a non-nominal annotation never resolve.
  *  - An UNBOUND identifier (a receiver, or a bare write target) — an inherited
  *    field, resolved through the enclosing type's supertype chain
- *    (`SymbolIndex.memberTypeSourceOf` per step), or a capitalized name declaring
+ *    (`MemberLookup.memberTypeSourceOf` per step), or a capitalized name declaring
  *    an indexed type (a static access).
  *  - A field-access / index-access chain — resolved recursively: member steps
- *    through `SymbolIndex.memberTypeSourceOf` (supertype closure, unanimous),
+ *    through `MemberLookup.memberTypeSourceOf` (supertype closure, unanimous),
  *    index steps through the container's element type parameter
  *    (`RefShape.indexedElementTypeParams`: `Map<K, V>` → V, `Array<T>` → T).
  *
@@ -274,7 +274,7 @@ final class FieldWriteIndex {
 		}
 		if (!any) return false;
 		if (!allTyped) return true;
-		final candidateTypeSource: Null<String> = _index.memberTypeSourceOf(owner, field);
+		final candidateTypeSource: Null<String> = _index.members.memberTypeSourceOf(owner, field);
 		if (candidateTypeSource == null) return true;
 		final cand: Null<String> = nominalSimpleName(candidateTypeSource, _unwrapNames, _rejectNames);
 		if (cand == null || _builtinNames.contains(cand)) return true;
@@ -581,7 +581,7 @@ final class FieldWriteIndex {
 
 	/**
 	 * The unanimous member type source of `typeName`.`member`, resolved through the
-	 * supertype closure: a direct member first (`SymbolIndex.memberTypeSourceOf` —
+	 * supertype closure: a direct member first (`MemberLookup.memberTypeSourceOf` —
 	 * sound alone, Haxe forbids redeclaring an inherited field), then each
 	 * supertype recursively. A simple-name collision on the walk origin, a
 	 * disagreement between supertype branches, or a cycle yields null.
@@ -591,7 +591,7 @@ final class FieldWriteIndex {
 	): Null<String> {
 		if (seen.contains(typeName)) return null;
 		seen.push(typeName);
-		final direct: Null<String> = index.memberTypeSourceOf(typeName, member);
+		final direct: Null<String> = index.members.memberTypeSourceOf(typeName, member);
 		if (direct != null) return direct;
 		final decls: Array<TypeDeclInfo> = declsNamedIn(index, typeName);
 		if (decls.length != 1) return null;
@@ -612,7 +612,7 @@ final class FieldWriteIndex {
 
 	/** Whether the symbol index has a type declaration named `name`. */
 	private static function declaresType(index: SymbolIndex, name: String): Bool {
-		return index.declaringFiles(name).length > 0;
+		return index.refs.declaringFiles(name).length > 0;
 	}
 
 	/**

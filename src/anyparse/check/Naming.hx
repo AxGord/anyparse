@@ -681,7 +681,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// declaration's relation to the owner is unprovable, and a partial family is worse than none.
 		// Asked of the RESOLUTION index, the superset - a family it reports too large only refuses more.
 		final family: Null<Array<OverrideFamilyMember>> = decl.category == NamingCategory.Method
-			? resolutionIndex.overrideFamilyOf(ownerName, decl.name)
+			? resolutionIndex.subtypes.overrideFamilyOf(ownerName, decl.name)
 			: [];
 		if (family == null) return null;
 		final overrides: Array<OverrideFamilyMember> = family;
@@ -706,10 +706,10 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// scan is now `RefactorSupport.carriesAllowGrant` — the single reader, comment- and
 		// literal-masked — so the sentence is true when it is written; the order still stands on its
 		// own, since a duplicate type name is the more actionable of two real causes.
-		final declarers: Array<FileInfo> = index.declaringFiles(ownerName);
+		final declarers: Array<FileInfo> = index.refs.declaringFiles(ownerName);
 		if (declarers.length != 1)
 			return RenameRefusal.candidate(v, RenameRefusal.crossOwnerNotUnique(ownerName, declarers.map(f -> f.file)));
-		if (index.sourceCarriesAllowGrant(source)) return RenameRefusal.candidate(v, RenameRefusal.CROSS_ALLOW_GRANT);
+		if (index.text.sourceCarriesAllowGrant(source)) return RenameRefusal.candidate(v, RenameRefusal.CROSS_ALLOW_GRANT);
 		// Every refusal from here down belongs to THIS path: the gates above either hand the
 		// declaration to the single-file rename or are not about it at all, and speaking for those
 		// would overwrite the more accurate sentence that path is about to write. The category gate is
@@ -729,7 +729,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// file already declaring it under this owner. Asked as `skippedFiles().length > 0` this refused
 		// EVERY cross-file rename in any scope holding one unparseable file, however unrelated; asked
 		// per NAME it refuses the renames a skipped file could actually invalidate, and names it.
-		final unreadable: Array<String> = index.skippedFilesMentioning([decl.name, ownerName, targetName]);
+		final unreadable: Array<String> = index.text.skippedFilesMentioning([decl.name, ownerName, targetName]);
 		return unreadable.length > 0 ? RenameRefusal.candidate(v, RenameRefusal.crossSkipParse(unreadable)) : {
 			declFile: declFile,
 			source: source,
@@ -767,9 +767,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final newName: Null<String> = correctedName(decl.name, rule, say);
 		return if (newName == null)
 			null
-		else if (!resolutionIndex.typeProvablyLacksMember(ownerName, newName, declFile))
+		else if (!resolutionIndex.members.typeProvablyLacksMember(ownerName, newName, declFile))
 			no(RenameRefusal.INHERITED_COLLISION)
-		else if (resolutionIndex.transitivelyCarriesRtti(ownerName))
+		else if (resolutionIndex.traits.transitivelyCarriesRtti(ownerName))
 			no(RenameRefusal.RTTI_HIERARCHY)
 		else
 			newName;
@@ -1120,9 +1120,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			final cls: Null<String> = occ.cls;
 			if (cls == null) continue;
 			final c: String = cls;
-			if (c == ownerName || resolutionIndex.isSubtype(c, ownerName))
+			if (c == ownerName || resolutionIndex.subtypes.isSubtype(c, ownerName))
 				OccurrenceScan.pushUniqueSpan(bareBound, seenOwner, occ.off, name.length);
-			else if (resolutionIndex.provablyNotSubtype(c, ownerName) && resolutionIndex.supertypeDeclaresMember(c, name))
+			else if (resolutionIndex.subtypes.provablyNotSubtype(c, ownerName) && resolutionIndex.members.supertypeDeclaresMember(c, name))
 				OccurrenceScan.pushUniqueSpan(ignore, seenIgnore, occ.off, name.length);
 		}
 		if (typed.length > 0)
@@ -1341,9 +1341,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			if (recvType == null) continue;
 			final off: Int = SourceText.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), name);
 			if (off < 0) continue;
-			if (recvType == ownerName || resolutionIndex.isSubtype(recvType, ownerName))
+			if (recvType == ownerName || resolutionIndex.subtypes.isSubtype(recvType, ownerName))
 				OccurrenceScan.pushUniqueSpan(ownerBound, seenOwner, off, name.length);
-			else if (resolutionIndex.provablyNotSubtype(recvType, ownerName))
+			else if (resolutionIndex.subtypes.provablyNotSubtype(recvType, ownerName))
 				OccurrenceScan.pushUniqueSpan(ignore, seenIgnore, off, name.length);
 		}
 	}
@@ -1551,7 +1551,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			final span: Null<Span> = child.span;
 			if (!kinds.contains(child.kind) || name == null || span == null) continue;
 			final n: String = name;
-			if (resolutionIndex.provablyNotSubtype(n, ownerName)) out.push(span);
+			if (resolutionIndex.subtypes.provablyNotSubtype(n, ownerName)) out.push(span);
 		}
 		return out;
 	}
@@ -2002,9 +2002,9 @@ private class RenameRefusal {
 		if (owner == null) return NO_OWNER;
 		if (resolutionIndex == null) return NO_INDEX;
 		final idx: SymbolIndex = resolutionIndex;
-		return if (!idx.typeProvablyLacksMember(owner, newName, file))
+		return if (!idx.members.typeProvablyLacksMember(owner, newName, file))
 			INHERITED_COLLISION
-		else if (idx.transitivelyCarriesRtti(owner))
+		else if (idx.traits.transitivelyCarriesRtti(owner))
 			RTTI_HIERARCHY
 		else
 			null;

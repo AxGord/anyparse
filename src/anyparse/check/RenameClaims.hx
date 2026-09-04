@@ -13,7 +13,7 @@ import anyparse.query.SymbolIndex;
  * `Naming.fix` for a confined one. Those are not the same code path even for two members of ONE
  * hierarchy — a type with a subtype is never confined, so a superclass renames cross-file while its
  * subclass renames per-file. Both ask the pass-start index whether the new name is already
- * inherited (`SymbolIndex.typeProvablyLacksMember`), and in that snapshot neither new name exists
+ * inherited (`MemberLookup.typeProvablyLacksMember`), and in that snapshot neither new name exists
  * yet: `class A { private var CAPS; }` plus `class B extends A { private var Caps; }` therefore both
  * cleared the proof and both landed `_caps`, which Haxe rejects with "Redefinition of variable
  * _caps in subclass is not allowed" (verified). `Naming`'s own same-pass claim list is local to one
@@ -49,14 +49,14 @@ final class RenameClaims {
 	 *
 	 * The test is a HIERARCHY one, not a bare-name one: two unrelated types may both take `_caps` in
 	 * one pass, and refusing that would strand every same-named twin in the tree. Unrelatedness must
-	 * be PROVEN (`SymbolIndex.unrelatedClasses` — both names unique, both supertype closures fully
+	 * be PROVEN (`SubtypeGraph.unrelatedClasses` — both names unique, both supertype closures fully
 	 * enumerated, neither reaching the other), so an ambiguous or unresolvable pair defers rather
 	 * than lands. A declaration that cannot collide by inheritance at all (null `owner`), or a run
 	 * with no index to prove a hierarchy with, defers to nothing.
 	 */
 	public function defers(owner: Null<String>, newName: String, index: Null<SymbolIndex>): Bool {
 		if (owner == null || index == null) return false;
-		for (c in ledger(index)) if (c.newName == newName && !index.unrelatedClasses(owner, c.owner)) return true;
+		for (c in ledger(index)) if (c.newName == newName && !index.subtypes.unrelatedClasses(owner, c.owner)) return true;
 		return false;
 	}
 

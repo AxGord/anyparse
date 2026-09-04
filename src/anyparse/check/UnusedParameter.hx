@@ -564,7 +564,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 		if (index == null || parent == null || fn.kind == 'LocalFnStmt') return false;
 		final owner: Null<String> = parent.name;
 		final method: Null<String> = fn.name;
-		return owner != null && method != null && index.subtypeDeclaresMember(owner, method);
+		return owner != null && method != null && index.subtypes.subtypeDeclaresMember(owner, method);
 	}
 
 }

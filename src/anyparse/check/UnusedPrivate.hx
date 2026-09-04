@@ -174,12 +174,12 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// Keying on a TYPE name is the alias hole `skippedMayReference`'s own doc warns about — a
 		// file extending a `typedef` of the owner never spells it. `hasSubtype` beside it USED to
 		// share that hole, which is what made the pair look balanced; it now walks the typedef alias
-		// chain (`SymbolIndex.subtypesOf`), so this half is the weaker of the two and the residue is
+		// chain (`SubtypeGraph.subtypesOf`), so this half is the weaker of the two and the residue is
 		// exact: an UNREADABLE file that extends an alias of the owner. What is left needs the
 		// skipped file's own supertype clause, which is precisely what not parsing it withholds.
 		for (c in ctorCandidates) if (
-			!index.skippedMayReference(c.className) && !index.hasSubtype(c.className) && !isInstantiatedAnywhere(c.className, files)
-			&& !mentionedInStrings(c.className, reflected)
+			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className)
+			&& !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
 		) violations.push({
 			file: c.file,
 			span: c.span,
@@ -341,7 +341,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	): Bool {
 		return name == null || (
 			scopeIndex != null
-				? scopeIndex.nameOccursOutside(name, file, span)
+				? scopeIndex.text.nameOccursOutside(name, file, span)
 				: OccurrenceScan.referencedInRange(source, name, 0, source.length, [span])
 		);
 	}
@@ -401,7 +401,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// while the base invokes it polymorphically through its own declaration. Asked of the
 		// WIDEST index, because the declaring base may live in a resolution library rather than
 		// the report scope. An unresolvable supertype leaves the member flaggable, as before.
-		if (scopeIndex.supertypeDeclaresMember(owner, decl.name)) return null;
+		if (scopeIndex.members.supertypeDeclaresMember(owner, decl.name)) return null;
 		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, index)
 			? !OccurrenceScan.referencedInRange(source, decl.name, 0, source.length, [span])
 			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex);
@@ -439,8 +439,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	private static function provablyDeadProjectWide(
 		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex
 	): Bool {
-		return !OccurrenceScan.referencedInRange(source, name, 0, source.length, [span]) && !index.nameOccursOutside(name, file, span)
-			&& (scopeIndex == index || !scopeIndex.nameOccursOutside(name, file, span));
+		return !OccurrenceScan.referencedInRange(source, name, 0, source.length, [span]) && !index.text.nameOccursOutside(name, file, span)
+			&& (scopeIndex == index || !scopeIndex.text.nameOccursOutside(name, file, span));
 	}
 
 	/**
@@ -707,7 +707,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		if (!deletableMember(node)) return false;
 		if (mayImplementAbstractMethod(node, inExtends)) return false;
 		if (owner != null) {
-			if (index != null && index.transitivelyCarriesRtti(owner)) return false;
+			if (index != null && index.traits.transitivelyCarriesRtti(owner)) return false;
 			final meta: Null<{ hasBuild: Bool, hasKeep: Bool }> = classMeta[owner];
 			if (meta != null && (meta.hasBuild || meta.hasKeep)) return false;
 		}

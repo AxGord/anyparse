@@ -74,7 +74,7 @@ typedef LexRegion = {
  *
  * The consumers that hold a plugin and ask it directly: `BodySlotGuard`, `Patch`,
  * `RefactorSupport.classifyOccurrences`, `RefactorSupport.nameBoundInRange` and — since S55 —
- * `SymbolIndex.sourceCarriesAllowGrant`.
+ * `RawSourceScan.sourceCarriesAllowGrant`.
  */
 @:nullSafety(Strict)
 final class LexicalRegions {

@@ -311,7 +311,7 @@ final class ExpectedType {
 		if (param == null) return null;
 		final paramType: Null<String> = earliestTypeSourceWithin(param, types.declaredTypeSources);
 		final simple: Null<String> = TypeResolver.simpleNominalName(paramType);
-		return simple != null && resolutionIndex().declaringFiles(simple).length > 0 ? paramType : null;
+		return simple != null && resolutionIndex().refs.declaringFiles(simple).length > 0 ? paramType : null;
 	}
 
 	/**

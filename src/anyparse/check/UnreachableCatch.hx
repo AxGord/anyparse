@@ -25,7 +25,7 @@ using StringTools;
  *   via `TypeResolver.sameTypeSource` (so `e:Eof` and `e:haxe.io.Eof` reconcile). Sound
  *   within one file.
  * - **Subtype-after-supertype**: `i`'s type transitively extends/implements `j`'s type —
- *   `SymbolIndex.isSubtype` (the cross-file hierarchy the index already builds). A value
+ *   `SubtypeGraph.isSubtype` (the cross-file hierarchy the index already builds). A value
  *   `i` would catch is already a `j`, so `j` caught it first.
  *
  * Conservative: the exception type is recovered from the clause header source between the
@@ -99,7 +99,7 @@ final class UnreachableCatch implements Check {
 	 * Flag every clause in `clauses` (the in-order catch clauses of one `try`) that an
 	 * EARLIER clause already covers: an earlier catch-all (`Dynamic` / `Any`, or an untyped
 	 * `catch (e)`) covers any later clause; otherwise an earlier clause covers a later one of
-	 * the same type (`sameTypeSource`, import-aware) or of a subtype (`SymbolIndex.isSubtype`).
+	 * the same type (`sameTypeSource`, import-aware) or of a subtype (`SubtypeGraph.isSubtype`).
 	 */
 	private static function checkClauses(
 		clauses: Array<QueryNode>, entry: { file: String, source: String }, catchAll: Array<String>, importMap: Map<String, String>,
@@ -124,7 +124,7 @@ final class UnreachableCatch implements Check {
 				if (earlierRaw == null || laterRaw == null) continue;
 				final earlierSimple: Null<String> = simples[j];
 				final duplicate: Bool = TypeResolver.sameTypeSource(laterRaw, earlierRaw, importMap);
-				final subtype: Bool = laterSimple != null && earlierSimple != null && index.isSubtype(laterSimple, earlierSimple);
+				final subtype: Bool = laterSimple != null && earlierSimple != null && index.subtypes.isSubtype(laterSimple, earlierSimple);
 				if (!duplicate && !subtype) continue;
 				covered = earlierRaw;
 				break;

@@ -6,7 +6,7 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * `SymbolIndex.hasSubtype` across TYPEDEF and IMPORT aliases — the walk `subtypesOf` does
+ * `SubtypeGraph.hasSubtype` across TYPEDEF and IMPORT aliases — the walk `subtypesOf` does
  * over the alias edges before it answers, and the one alias shape it deliberately stops at.
  *
  * Its own class rather than three more methods on `SymbolIndexSliceTest`, which sits at exactly
@@ -43,11 +43,11 @@ class SymbolIndexAliasSliceTest extends Test {
 			{ file: 'pkg/Lonely.hx', source: 'package pkg;\nclass Lonely {}' }
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.isTrue(index.hasSubtype('One'), 'a one-hop typedef alias of the supertype');
-		Assert.isTrue(index.hasSubtype('Two'), 'a two-hop typedef alias chain');
-		Assert.isTrue(index.hasSubtype('Three'), 'a typedef whose target is written qualified, in another package');
-		Assert.isTrue(index.hasSubtype('AliasOne'), 'the alias name itself still answers');
-		Assert.isFalse(index.hasSubtype('Lonely'), 'and a type nothing extends still has no subtype');
+		Assert.isTrue(index.subtypes.hasSubtype('One'), 'a one-hop typedef alias of the supertype');
+		Assert.isTrue(index.subtypes.hasSubtype('Two'), 'a two-hop typedef alias chain');
+		Assert.isTrue(index.subtypes.hasSubtype('Three'), 'a typedef whose target is written qualified, in another package');
+		Assert.isTrue(index.subtypes.hasSubtype('AliasOne'), 'the alias name itself still answers');
+		Assert.isFalse(index.subtypes.hasSubtype('Lonely'), 'and a type nothing extends still has no subtype');
 	}
 
 	/**
@@ -62,8 +62,8 @@ class SymbolIndexAliasSliceTest extends Test {
 			{ file: 'pkg/Spin.hx', source: 'package pkg;\nclass Spin extends Loop {}' }
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.isTrue(index.hasSubtype('Loop'));
-		Assert.isTrue(index.hasSubtype('Ring'));
+		Assert.isTrue(index.subtypes.hasSubtype('Loop'));
+		Assert.isTrue(index.subtypes.hasSubtype('Ring'));
 	}
 
 	/**
@@ -86,11 +86,11 @@ class SymbolIndexAliasSliceTest extends Test {
 			{ file: 'pkg/Lonely.hx', source: 'package pkg;\nclass Lonely {}' }
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.isTrue(index.hasSubtype('Named'), 'an `import ... as` alias is followed');
-		Assert.isTrue(index.hasSubtype('InForm'), 'and so is the `import ... in` spelling');
-		Assert.isTrue(index.hasSubtype('Distant'), 'a target in another package resolves through its qualified path');
-		Assert.isTrue(index.hasSubtype('Alias'), 'the written name still answers, so nothing that worked before stops');
-		Assert.isFalse(index.hasSubtype('Lonely'), 'and a type nothing extends still has no subtype');
+		Assert.isTrue(index.subtypes.hasSubtype('Named'), 'an `import ... as` alias is followed');
+		Assert.isTrue(index.subtypes.hasSubtype('InForm'), 'and so is the `import ... in` spelling');
+		Assert.isTrue(index.subtypes.hasSubtype('Distant'), 'a target in another package resolves through its qualified path');
+		Assert.isTrue(index.subtypes.hasSubtype('Alias'), 'the written name still answers, so nothing that worked before stops');
+		Assert.isFalse(index.subtypes.hasSubtype('Lonely'), 'and a type nothing extends still has no subtype');
 	}
 
 	/**
@@ -108,8 +108,8 @@ class SymbolIndexAliasSliceTest extends Test {
 			{ file: 'pkg/ByTypedefOfImport.hx', source: 'package pkg;\nclass ByTypedefOfImport extends Hop {}' }
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.isTrue(index.hasSubtype('Root'), 'an import alias of a typedef reaches the typedef target');
-		Assert.isTrue(index.hasSubtype('Leaf'), 'a typedef of an import alias reaches the imported target');
+		Assert.isTrue(index.subtypes.hasSubtype('Root'), 'an import alias of a typedef reaches the typedef target');
+		Assert.isTrue(index.subtypes.hasSubtype('Leaf'), 'a typedef of an import alias reaches the imported target');
 	}
 
 	/**
@@ -133,8 +133,8 @@ class SymbolIndexAliasSliceTest extends Test {
 			{ file: 'pkg/SubGuarded.hx', source: 'package pkg;\nclass SubGuarded extends GuardedAlias {}' }
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.isFalse(index.hasSubtype('Guarded'), 'a `#if`-guarded typedef is not followed');
-		Assert.isTrue(index.hasSubtype('GuardedAlias'), 'the written name still answers, so the subtype is not lost');
+		Assert.isFalse(index.subtypes.hasSubtype('Guarded'), 'a `#if`-guarded typedef is not followed');
+		Assert.isTrue(index.subtypes.hasSubtype('GuardedAlias'), 'the written name still answers, so the subtype is not lost');
 	}
 
 	/**
@@ -189,23 +189,23 @@ class SymbolIndexAliasSliceTest extends Test {
 			{ file: 'pkg/Lonely.hx', source: 'package pkg;\nclass Lonely {}' }
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.isTrue(index.isSubtype('ByImport', 'Named'), 'an `import ... as` supertype');
-		Assert.isTrue(index.isSubtype('ByIn', 'InForm'), 'the `import ... in` spelling');
-		Assert.isTrue(index.isSubtype('ByFar', 'Distant'), 'a target written qualified, in another package');
-		Assert.isTrue(index.isSubtype('ByTypedef', 'Root'), 'a typedef hop, upward');
-		Assert.isTrue(index.isSubtype('ByTypedefOfImport', 'Leaf'), 'a typedef of an import alias');
-		Assert.isTrue(index.isSubtype('Deep', 'Named'), 'the alias hop composes with a further class hop above it');
-		Assert.isTrue(index.isSubtype('ByImport', 'Alias'), 'the written name still answers, so nothing that worked stops');
-		Assert.isFalse(index.isSubtype('Lonely', 'Named'), 'a class extending nothing is no subtype');
-		Assert.isFalse(index.isSubtype('ByIn', 'Named'), 'the binding is per FILE — `Alias` in ByIn.hx is InForm');
+		Assert.isTrue(index.subtypes.isSubtype('ByImport', 'Named'), 'an `import ... as` supertype');
+		Assert.isTrue(index.subtypes.isSubtype('ByIn', 'InForm'), 'the `import ... in` spelling');
+		Assert.isTrue(index.subtypes.isSubtype('ByFar', 'Distant'), 'a target written qualified, in another package');
+		Assert.isTrue(index.subtypes.isSubtype('ByTypedef', 'Root'), 'a typedef hop, upward');
+		Assert.isTrue(index.subtypes.isSubtype('ByTypedefOfImport', 'Leaf'), 'a typedef of an import alias');
+		Assert.isTrue(index.subtypes.isSubtype('Deep', 'Named'), 'the alias hop composes with a further class hop above it');
+		Assert.isTrue(index.subtypes.isSubtype('ByImport', 'Alias'), 'the written name still answers, so nothing that worked stops');
+		Assert.isFalse(index.subtypes.isSubtype('Lonely', 'Named'), 'a class extending nothing is no subtype');
+		Assert.isFalse(index.subtypes.isSubtype('ByIn', 'Named'), 'the binding is per FILE — `Alias` in ByIn.hx is InForm');
 		// The ambiguity gate holds THROUGH the alias path, which is the property a later hoist of the
 		// per-file map to a project-wide one would silently lose: a second declaration named `Mid`
 		// makes the hop unresolvable, and the walk goes back to answering false.
 		final ambiguous: SymbolIndex = SymbolIndex.build(
 			files.concat([{ file: 'far/Mid.hx', source: 'package far;\nclass Mid {}' }]), new HaxeQueryPlugin()
 		);
-		Assert.isFalse(ambiguous.isSubtype('ByTypedef', 'Root'), 'a hop whose name two declarations share is not followed');
-		Assert.isTrue(ambiguous.isSubtype('ByImport', 'Named'), 'and the unrelated hops still answer');
+		Assert.isFalse(ambiguous.subtypes.isSubtype('ByTypedef', 'Root'), 'a hop whose name two declarations share is not followed');
+		Assert.isTrue(ambiguous.subtypes.isSubtype('ByImport', 'Named'), 'and the unrelated hops still answer');
 	}
 
 	/**
@@ -226,23 +226,23 @@ class SymbolIndexAliasSliceTest extends Test {
 			], new HaxeQueryPlugin());
 		}
 		final extending: SymbolIndex = index('class Both extends U {}');
-		Assert.isTrue(extending.hasSubtype(first), '$first (the #if branch) is followed');
-		Assert.isTrue(extending.hasSubtype(second), '$second (the #else branch) is followed');
+		Assert.isTrue(extending.subtypes.hasSubtype(first), '$first (the #if branch) is followed');
+		Assert.isTrue(extending.subtypes.hasSubtype(second), '$second (the #else branch) is followed');
 		// UPWARD the same region answers NEITHER, and that asymmetry is the point. `hasSubtype` is a
 		// veto: naming both targets makes more types answer "something subtypes me", which withholds.
 		// `isSubtype` is read affirmatively by autofixes that DELETE, and `Both` is a subtype of
 		// exactly one of these per compilation — measured, offering both made `unreachable-catch`
 		// report the clause after `catch (e:$first)` AND the one after `catch (e:$second)`, and
 		// `--fix` deleted both. So a guarded alias is refused here, as a guarded TYPEDEF already is.
-		Assert.isFalse(extending.isSubtype('Both', first), 'a guarded alias is not followed upward ($first)');
-		Assert.isFalse(extending.isSubtype('Both', second), 'a guarded alias is not followed upward ($second)');
+		Assert.isFalse(extending.subtypes.isSubtype('Both', first), 'a guarded alias is not followed upward ($first)');
+		Assert.isFalse(extending.subtypes.isSubtype('Both', second), 'a guarded alias is not followed upward ($second)');
 		Assert.isTrue(
-			index('import pkg.$first as V;\nclass Both extends V {}').isSubtype('Both', first),
+			index('import pkg.$first as V;\nclass Both extends V {}').subtypes.isSubtype('Both', first),
 			'and the same file WITHOUT the guard is followed upward, so the refusal is the `#if` and not the alias'
 		);
 		final plain: SymbolIndex = index('class Both {}');
-		Assert.isFalse(plain.hasSubtype(first), '$first is not subtyped without the extends');
-		Assert.isFalse(plain.hasSubtype(second), '$second is not subtyped without the extends');
+		Assert.isFalse(plain.subtypes.hasSubtype(first), '$first is not subtyped without the extends');
+		Assert.isFalse(plain.subtypes.hasSubtype(second), '$second is not subtyped without the extends');
 	}
 
 }

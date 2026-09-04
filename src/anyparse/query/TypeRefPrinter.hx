@@ -481,7 +481,7 @@ final class TypeRefPrinter {
 		if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return false;
 		final index: Null<SymbolIndex> = _index;
 		if (index == null) return true;
-		final declarers: Array<FileInfo> = index.declaringFiles(simple);
+		final declarers: Array<FileInfo> = index.refs.declaringFiles(simple);
 		return declarers.length == 0 || declarers.exists(f -> f.module == module);
 	}
 
@@ -608,7 +608,7 @@ final class TypeRefPrinter {
 	/** Whether the index knows a type named `simple` whose own import path IS `path` — i.e. `path` is real and needs no repair. */
 	private function declaredAtPath(path: String, simple: String): Bool {
 		final index: Null<SymbolIndex> = _index;
-		return index != null && index.declaringFiles(simple).exists(f -> ModuleScan.pathOfTypeIn(f, simple) == path);
+		return index != null && index.refs.declaringFiles(simple).exists(f -> ModuleScan.pathOfTypeIn(f, simple) == path);
 	}
 
 	/**
@@ -621,7 +621,8 @@ final class TypeRefPrinter {
 	private function alwaysInScope(canonical: String, simple: String): Bool {
 		if (ALWAYS_IN_SCOPE[simple] == canonical) return true;
 		final index: Null<SymbolIndex> = _index;
-		return index != null && index.declaringFiles(simple).exists(f -> f.pkg == '' && ModuleScan.pathOfTypeIn(f, simple) == canonical);
+		return index != null && index.refs.declaringFiles(simple)
+			.exists(f -> f.pkg == '' && ModuleScan.pathOfTypeIn(f, simple) == canonical);
 	}
 
 	/**
@@ -648,7 +649,7 @@ final class TypeRefPrinter {
 		if (root != null && ModuleScan.declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) != canonical) return true;
 		if (_pkg != null && packageDeclaresOtherType(canonical, simple)) return true;
 		final index: Null<SymbolIndex> = _index;
-		if (index != null && index.declaringFiles(simple).exists(f -> f.pkg == '' && ModuleScan.pathOfTypeIn(f, simple) != canonical))
+		if (index != null && index.refs.declaringFiles(simple).exists(f -> f.pkg == '' && ModuleScan.pathOfTypeIn(f, simple) != canonical))
 			return true;
 		// An EXPLICIT import or a module-local declaration that binds `simple` to `canonical`
 		// OUTRANKS a bulk import in Haxe's own resolution order (verified against the compiler:
@@ -689,7 +690,8 @@ final class TypeRefPrinter {
 		if (index == null) return false;
 		if (moduleLocalBinds(canonical, simple)) return false;
 		final imported: Array<String> = [for (path in _importMap) path];
-		return index.declaringFiles(simple).exists(f -> imported.contains(f.module) && ModuleScan.pathOfTypeIn(f, simple) != canonical);
+		return index.refs.declaringFiles(simple)
+			.exists(f -> imported.contains(f.module) && ModuleScan.pathOfTypeIn(f, simple) != canonical);
 	}
 
 	/**
@@ -722,7 +724,7 @@ final class TypeRefPrinter {
 		final index: Null<SymbolIndex> = _index;
 		// One index scan per question, not one per bulk statement: `declaringFiles` filters EVERY
 		// indexed file (the std is in the default resolution scope), and the argument is loop-invariant.
-		final declarers: Array<FileInfo> = index == null ? [] : index.declaringFiles(simple);
+		final declarers: Array<FileInfo> = index == null ? [] : index.refs.declaringFiles(simple);
 		if (index != null && declarers.length == 0) return false;
 		for (c in _bulkImports) {
 			final path: Null<String> = c.name;
@@ -795,7 +797,7 @@ final class TypeRefPrinter {
 		final index: Null<SymbolIndex> = _index;
 		final pkg: Null<String> = _pkg;
 		return index != null && pkg != null
-			&& index.declaringFiles(simple).exists(f -> f.pkg == pkg && ModuleScan.pathOfTypeIn(f, simple) != canonical);
+			&& index.refs.declaringFiles(simple).exists(f -> f.pkg == pkg && ModuleScan.pathOfTypeIn(f, simple) != canonical);
 	}
 
 	/** The dotted path a type named `simple` declared in THIS module carries: `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type. */

@@ -666,7 +666,7 @@ final class SwitchChain {
 	private static function provesConstantMember(typeName: String, memberName: String, seams: ChainSeams, scope: ChainScope): Bool {
 		final index: Null<SymbolIndex> = scope.resolveIndex();
 		if (index == null) return false;
-		final decls: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.memberDeclarationsOf(typeName, memberName);
+		final decls: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.members.memberDeclarationsOf(typeName, memberName);
 		return decls.length != 0 && decls.foreach(decl -> isPatternConstant(decl.type, decl.member, seams));
 	}
 

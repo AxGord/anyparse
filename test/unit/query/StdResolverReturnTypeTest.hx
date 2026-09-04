@@ -11,7 +11,7 @@ import utest.Test;
 
 /**
  * Verifies item 3(b): the derivable `staticMethodReturns` values are ANSWERED by the
- * resolution index itself once std is joined — `SymbolIndex.returnNominalOf` resolves
+ * resolution index itself once std is joined — `MemberLookup.returnNominalOf` resolves
  * `Date.now` → `Date` and `Context.resolvePath` → `String` straight from the std
  * declarations, so the T36 table is redundant when std is indexed (it stays only as
  * the import-safe config-less fallback). Skips when no std is installed.
@@ -33,9 +33,11 @@ class StdResolverReturnTypeTest extends Test {
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		Assert.equals(
-			'Date', index.returnNominalOf('Date', 'now'), 'the index resolves Date.now -> Date, so the tabled entry is derivable'
+			'Date', index.members.returnNominalOf('Date', 'now'), 'the index resolves Date.now -> Date, so the tabled entry is derivable'
 		);
-		Assert.equals('String', index.returnNominalOf('Context', 'resolvePath'), 'the index resolves Context.resolvePath -> String');
+		Assert.equals(
+			'String', index.members.returnNominalOf('Context', 'resolvePath'), 'the index resolves Context.resolvePath -> String'
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

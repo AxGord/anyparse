@@ -21,28 +21,28 @@ class StructuralMembershipTest extends Test {
 	public function testStructuralIterableMembership(): Void {
 		final index: SymbolIndex = SymbolIndex.build(iterableFiles(), new HaxeQueryPlugin());
 
-		Assert.isTrue(index.satisfiesIterable('Bag'));
+		Assert.isTrue(index.structural.satisfiesIterable('Bag'));
 		// Inherited through the supertype closure, exactly as a member lookup is.
-		Assert.isTrue(index.satisfiesIterable('SubBag'));
+		Assert.isTrue(index.structural.satisfiesIterable('SubBag'));
 		// `iterator()` may name the structural `Iterator` itself, or a type that satisfies it.
-		Assert.isTrue(index.satisfiesIterable('DirectBag'));
+		Assert.isTrue(index.structural.satisfiesIterable('DirectBag'));
 		// Each refusal is a DIFFERENT wrong signature for the same member name.
-		Assert.isFalse(index.satisfiesIterable('ArityBag'));
-		Assert.isFalse(index.satisfiesIterable('PlainBag'));
-		Assert.isFalse(index.satisfiesIterable('FieldBag'));
+		Assert.isFalse(index.structural.satisfiesIterable('ArityBag'));
+		Assert.isFalse(index.structural.satisfiesIterable('PlainBag'));
+		Assert.isFalse(index.structural.satisfiesIterable('FieldBag'));
 		// An `Iterator` is not an `Iterable` — the two memberships are separate.
-		Assert.isFalse(index.satisfiesIterable('BagIter'));
+		Assert.isFalse(index.structural.satisfiesIterable('BagIter'));
 		// The `iterator()` return is written QUALIFIED and imported by nobody — the shape of
 		// `Array.iterator():haxe.iterators.ArrayIterator`, and unreachable without the
 		// package-blind fallback.
-		Assert.isTrue(index.satisfiesIterable('DeepBag'));
+		Assert.isTrue(index.structural.satisfiesIterable('DeepBag'));
 
-		Assert.isTrue(index.satisfiesIterator('BagIter'));
+		Assert.isTrue(index.structural.satisfiesIterator('BagIter'));
 		// One half of the membership is not the membership.
-		Assert.isFalse(index.satisfiesIterator('HalfIter'));
+		Assert.isFalse(index.structural.satisfiesIterator('HalfIter'));
 		// Annotated FIELDS carrying those names are not the methods an iterator declares.
-		Assert.isFalse(index.satisfiesIterator('FieldIter'));
-		Assert.isFalse(index.satisfiesIterator('Widget'));
+		Assert.isFalse(index.structural.satisfiesIterator('FieldIter'));
+		Assert.isFalse(index.structural.satisfiesIterator('Widget'));
 	}
 
 	/**
@@ -53,16 +53,16 @@ class StructuralMembershipTest extends Test {
 	public function testStructuralParameterAcceptGate(): Void {
 		final index: SymbolIndex = SymbolIndex.build(iterableFiles(), new HaxeQueryPlugin());
 
-		Assert.equals('Widget', index.extensionReturnNominal('IterExt', 'pick', 'Bag'));
-		Assert.equals('Widget', index.extensionReturnNominal('IterExt', 'step', 'BagIter'));
+		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'pick', 'Bag'));
+		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'step', 'BagIter'));
 		// A receiver satisfying neither membership, and one satisfying the OTHER one.
-		Assert.isNull(index.extensionReturnNominal('IterExt', 'pick', 'Widget'));
-		Assert.isNull(index.extensionReturnNominal('IterExt', 'step', 'Bag'));
+		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'pick', 'Widget'));
+		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'step', 'Bag'));
 		// The type ARGUMENT gate: a concrete element type binds nothing, a nested application is
 		// not a bare parameter, and an unapplied `Iterable` names no element at all.
-		Assert.isNull(index.extensionReturnNominal('IterExt', 'fixed', 'Bag'));
-		Assert.isNull(index.extensionReturnNominal('IterExt', 'nest', 'Bag'));
-		Assert.isNull(index.extensionReturnNominal('IterExt', 'bare', 'Bag'));
+		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'fixed', 'Bag'));
+		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'nest', 'Bag'));
+		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'bare', 'Bag'));
 	}
 
 	/**
@@ -76,45 +76,45 @@ class StructuralMembershipTest extends Test {
 
 		// `typedef List<T> = haxe.ds.List<T>` -> a class whose `iterator()` returns a sub-module
 		// type of its OWN module, which only the target's file can resolve.
-		Assert.isTrue(index.satisfiesIterable('List', 'Use.hx'));
+		Assert.isTrue(index.structural.satisfiesIterable('List', 'Use.hx'));
 		// `typedef Map<K, V> = haxe.ds.Map<K, V>` -> an abstract naming `Iterator` directly.
-		Assert.isTrue(index.satisfiesIterable('Map', 'Use.hx'));
+		Assert.isTrue(index.structural.satisfiesIterable('Map', 'Use.hx'));
 		// The same hop where the alias and its target do NOT share a simple name.
-		Assert.isTrue(index.satisfiesIterable('Renamed', 'Use.hx'));
+		Assert.isTrue(index.structural.satisfiesIterable('Renamed', 'Use.hx'));
 		// Two hops: an alias to an alias.
-		Assert.isTrue(index.satisfiesIterable('Chained', 'Use.hx'));
+		Assert.isTrue(index.structural.satisfiesIterable('Chained', 'Use.hx'));
 		// The hop carries no proof of its own — a target that is not iterable stays refused.
-		Assert.isFalse(index.satisfiesIterable('PlainAlias', 'Use.hx'));
+		Assert.isFalse(index.structural.satisfiesIterable('PlainAlias', 'Use.hx'));
 		// An alias whose target nothing indexes is unresolvable, not iterable.
-		Assert.isFalse(index.satisfiesIterable('Outside', 'Use.hx'));
+		Assert.isFalse(index.structural.satisfiesIterable('Outside', 'Use.hx'));
 		// An alias to an anonymous structure hosts no nominal target at all.
-		Assert.isFalse(index.satisfiesIterable('Anon', 'Use.hx'));
+		Assert.isFalse(index.structural.satisfiesIterable('Anon', 'Use.hx'));
 		// An anon-struct typedef is NOT an alias: it hosts its own fields, and a `> Base`
 		// structural extension is a SUPERTYPE link the walk below must still take.
-		Assert.isTrue(index.satisfiesIterable('IterStruct', 'Use.hx'));
-		Assert.isTrue(index.satisfiesIterable('SubStruct', 'Use.hx'));
+		Assert.isTrue(index.structural.satisfiesIterable('IterStruct', 'Use.hx'));
+		Assert.isTrue(index.structural.satisfiesIterable('SubStruct', 'Use.hx'));
 		// A function-type alias has no nominal head to follow.
-		Assert.isFalse(index.satisfiesIterable('Fn', 'Use.hx'));
+		Assert.isFalse(index.structural.satisfiesIterable('Fn', 'Use.hx'));
 		// The head is RAW source, so a comment before the path rides along in it. The raw answer
 		// falls back to the simple name there rather than handing a comment on as a type
 		// reference — which resolves here, because `Sack` is unique among the indexed decls.
-		Assert.isTrue(index.satisfiesIterable('Commented', 'Use.hx'));
+		Assert.isTrue(index.structural.satisfiesIterable('Commented', 'Use.hx'));
 		// The same fallback with a target whose SIMPLE name is not enough leaves it unproven,
 		// which is where the raw path would have been needed and is not available.
-		Assert.isFalse(index.satisfiesIterable('CommentedDup', 'Use.hx'));
+		Assert.isFalse(index.structural.satisfiesIterable('CommentedDup', 'Use.hx'));
 
 		// The second half of the same hop, and the one the REAL path reaches first:
 		// `NominalTypes.staticExtensionNominal` consults an extension only after the receiver is
 		// PROVEN to declare no such member, and that proof walks the alias too.
-		Assert.isTrue(index.typeProvablyLacksMember('List', 'pick', 'Use.hx'));
-		Assert.isTrue(index.typeProvablyLacksMember('Map', 'pick', 'Use.hx'));
+		Assert.isTrue(index.members.typeProvablyLacksMember('List', 'pick', 'Use.hx'));
+		Assert.isTrue(index.members.typeProvablyLacksMember('Map', 'pick', 'Use.hx'));
 		// The hop proves presence as readily as absence — `iterator()` IS declared on the target.
-		Assert.isFalse(index.typeProvablyLacksMember('List', 'iterator', 'Use.hx'));
+		Assert.isFalse(index.members.typeProvablyLacksMember('List', 'iterator', 'Use.hx'));
 
 		// The accept gate consumes it: `Lambda`-shaped extensions now bind on an aliased container.
-		Assert.equals('Widget', index.extensionReturnNominal('IterExt', 'pick', 'List', 'Use.hx'));
-		Assert.equals('Widget', index.extensionReturnNominal('IterExt', 'pick', 'Map', 'Use.hx'));
-		Assert.isNull(index.extensionReturnNominal('IterExt', 'pick', 'PlainAlias', 'Use.hx'));
+		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'pick', 'List', 'Use.hx'));
+		Assert.equals('Widget', index.structural.extensionReturnNominal('IterExt', 'pick', 'Map', 'Use.hx'));
+		Assert.isNull(index.structural.extensionReturnNominal('IterExt', 'pick', 'PlainAlias', 'Use.hx'));
 	}
 
 	/**
@@ -146,13 +146,13 @@ class StructuralMembershipTest extends Test {
 
 	/** The `aliasTargetNominal` of the single decl named `name`, or null. */
 	private function aliasNominal(index: SymbolIndex, name: String): Null<String> {
-		for (fi in index.declaringFiles(name)) for (t in fi.types) if (t.name == name) return t.aliasTargetNominal;
+		for (fi in index.refs.declaringFiles(name)) for (t in fi.types) if (t.name == name) return t.aliasTargetNominal;
 		return null;
 	}
 
 	/** The `aliasTargetRaw` of the single decl named `name`, or null. */
 	private function aliasRaw(index: SymbolIndex, name: String): Null<String> {
-		for (fi in index.declaringFiles(name)) for (t in fi.types) if (t.name == name) return t.aliasTargetRaw;
+		for (fi in index.refs.declaringFiles(name)) for (t in fi.types) if (t.name == name) return t.aliasTargetRaw;
 		return null;
 	}
 

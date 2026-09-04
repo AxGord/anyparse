@@ -414,7 +414,7 @@ final class PreferFind implements Check {
 	 * own type provably DECLARES `find`, in which case Haxe binds that member and the `using
 	 * Lambda;` the fix inserts is never consulted at the call.
 	 *
-	 * The question is `SymbolIndex.memberShadowsExtension`, shared with the three other
+	 * The question is `MemberLookup.memberShadowsExtension`, shared with the three other
 	 * `Lambda`-targeting rules and with `prefer-static-extension`. No container in the resolution
 	 * scope declares `find` (measured on the 4.3 std: `Lambda` alone, and it is static), so this
 	 * gate is about PROJECT types — a `Repo.find(id)` receiver whose loop would otherwise be
@@ -440,7 +440,7 @@ final class PreferFind implements Check {
 				final nominal: Null<String> = resolve(iterable);
 				if (nominal == null) return false;
 				final symbols: Null<SymbolIndex> = index();
-				return symbols != null && symbols.memberShadowsExtension(nominal, FIND_METHOD);
+				return symbols != null && symbols.members.memberShadowsExtension(nominal, FIND_METHOD);
 			},
 			qualified: () -> {
 				if (!reachesBuilt) {

@@ -1017,7 +1017,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	): Bool {
 		if (index == null) return true;
 		final owner: Null<String> = container.name;
-		if (owner == null || !index.transitivelyCarriesBuildMacro(owner, file)) return true;
+		if (owner == null || !index.traits.transitivelyCarriesBuildMacro(owner, file)) return true;
 		final before: Array<Int> = [for (m in members) if (m.hasMeta) m.index];
 		final after: Array<Int> = [for (m in sorted) if (m.hasMeta) m.index];
 		return before.join(',') == after.join(',');

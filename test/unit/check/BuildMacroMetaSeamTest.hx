@@ -236,8 +236,8 @@ class BuildMacroMetaSeamTest extends Test {
 	/** `takesPrivateAccessMetaName`: the type NAMED in the annotation is the one whose privates are reachable. */
 	public function testTheTakenAccessTagCollectsTheNamedType(): Void {
 		final tag: String = declaredName(new HaxeQueryPlugin().refShape().takesPrivateAccessMetaName, 'takesPrivateAccessMetaName');
-		Assert.isTrue(indexOf('$tag(pkg.Target) class C {}').hasAccessGrant('Target'), '$tag does not grant access to the named type');
-		Assert.isFalse(indexOf('${tag}or(pkg.Target) class C {}').hasAccessGrant('Target'), '${tag}or grants nothing');
+		Assert.isTrue(indexOf('$tag(pkg.Target) class C {}').text.hasAccessGrant('Target'), '$tag does not grant access to the named type');
+		Assert.isFalse(indexOf('${tag}or(pkg.Target) class C {}').text.hasAccessGrant('Target'), '${tag}or grants nothing');
 	}
 
 	/** `forwardingDeclMetaName`: the abstract republishes its underlying type's members, so the index records it. */

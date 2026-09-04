@@ -881,9 +881,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static function declaringIndex(index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, simple: String): Null<SymbolIndex> {
 		final report: Null<SymbolIndex> = index;
-		if (report != null && report.declaringFiles(simple).length > 0) return report;
+		if (report != null && report.refs.declaringFiles(simple).length > 0) return report;
 		final wide: Null<SymbolIndex> = resolution;
-		return wide != null && wide.declaringFiles(simple).length > 0 ? wide : null;
+		return wide != null && wide.refs.declaringFiles(simple).length > 0 ? wide : null;
 	}
 
 	/**
@@ -921,7 +921,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// INSTANCE field access, a distinct (cross-type instance) case not handled here.
 		// A genuine type reference resolves to no value binding.
 		if (TypeResolver.resolveBindingFrom(typeName, span, tree, shape) != null) return null;
-		final typeSrc: Null<String> = index.memberTypeSourceOf(typeName, member);
+		final typeSrc: Null<String> = index.members.memberTypeSourceOf(typeName, member);
 		// The source is spelled in the DECLARING file; copy it into the consumer only when
 		// every component is a builtin guaranteed in scope there (see the doc).
 		return typeSrc != null && allComponentsAlwaysInScope(typeSrc) ? typeSrc : null;
@@ -1071,7 +1071,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// The table is the FALLBACK for a type absent from the resolution index (a config-less
 		// run): its values are deliberately import-safe (`sys.io.FileOutput` fully qualified).
 		// When the type IS indexed (std joined via `StdResolver`, or a same-named project type),
-		// defer (null): `SymbolIndex.returnNominalOf` verifies these same return types (see
+		// defer (null): `MemberLookup.returnNominalOf` verifies these same return types (see
 		// `StdResolverReturnTypeTest`) but yields a SIMPLE nominal that may be out of the consumer's
 		// import scope, so the oracle — or report-only — resolves it rather than risk a wrong
 		// structural annotation. That is a STRICTER policy than the deep resolver's
@@ -1079,7 +1079,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// file, where an oracle-named type is always the better answer.
 		return if (hit == null)
 			null
-		else if (index != null && index.declaringFiles(hit.typeName).length > 0)
+		else if (index != null && index.refs.declaringFiles(hit.typeName).length > 0)
 			null
 		else
 			hit.returnSource;

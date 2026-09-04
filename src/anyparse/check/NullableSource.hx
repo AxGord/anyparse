@@ -134,7 +134,7 @@ final class NullableSource {
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
 		final lookupType: Null<String> = bindingFrom == null ? recvName : declaredTypes[bindingFrom];
 		if (lookupType == null) return null;
-		final retNominal: Null<String> = idx.returnNominalOf(lookupType, parts.method);
+		final retNominal: Null<String> = idx.members.returnNominalOf(lookupType, parts.method);
 		return retNominal != null && cfg.returnMarkers.contains(retNominal) ? '${recvName}.${parts.method}()' : null;
 	}
 

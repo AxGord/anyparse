@@ -582,7 +582,7 @@ class PreferInlineCheckTest extends Test {
 
 	/**
 	 * The build-macro grant is inherited through `extends`: the subclass carries no annotation of its
-	 * own, so only `SymbolIndex.transitivelyCarriesBuildMacro` can see it. Reverting that gate is the
+	 * own, so only `TypeTraits.transitivelyCarriesBuildMacro` can see it. Reverting that gate is the
 	 * one mutation this fixture flips.
 	 */
 	public function testBuildMacroSupertypeSkips(): Void {

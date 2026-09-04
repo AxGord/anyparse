@@ -162,7 +162,7 @@ using StringTools;
  *    tooling; inlining would erase its reflective value.
  * 6. NO macro-built OWNER. A `@:build` / `@:autoBuild` / `@:genericBuild` type's fields are not the
  *    fields the declaration holds, so neither arm can reason about them:
- *    `SymbolIndex.transitivelyCarriesBuildMacro` declines the whole container. Measured on Haxe
+ *    `TypeTraits.transitivelyCarriesBuildMacro` declines the whole container. Measured on Haxe
  *    4.3.7 — a builder that rewrites the flagged field's initializer makes the added `inline`
  *    "Inline variable initialization must be a constant value", for a `@:build` on the class and
  *    for an `@:autoBuild` reached through `implements` alike, and in the second shape the class
@@ -304,7 +304,7 @@ final class InlineConstant implements Check {
 	/** Whether `container`'s type — or anything in its supertype / interface closure — is built by a macro. */
 	private static inline function ownerIsMacroBuilt(container: QueryNode, file: String, index: SymbolIndex): Bool {
 		final owner: Null<String> = container.name;
-		return owner != null && index.transitivelyCarriesBuildMacro(owner, file);
+		return owner != null && index.traits.transitivelyCarriesBuildMacro(owner, file);
 	}
 
 	/**

@@ -2204,7 +2204,7 @@ final class MoveSymbol {
 		final typeName: String = declMatch.name;
 
 		// 3. Guards.
-		final declarers: Array<FileInfo> = index.declaringFiles(typeName);
+		final declarers: Array<FileInfo> = index.refs.declaringFiles(typeName);
 		if (declarers.length == 0) return PErr('no type "$typeName" declared under scope');
 		if (declarers.length > 1)
 			return PErr('type "$typeName" is declared in ${declarers.length} files under scope — ambiguous, refusing');

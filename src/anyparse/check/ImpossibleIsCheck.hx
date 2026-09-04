@@ -26,7 +26,7 @@ import anyparse.runtime.Span;
  * Conservative: flags only when BOTH `S` and `T` resolve to a unique indexed CLASS
  * decl (interface / abstract / enum / typedef on either side → open world or implicit
  * conversions → skip), are distinct, and neither is a transitive supertype of the other
- * with BOTH closures fully resolved inside the index — `SymbolIndex.unrelatedClasses`.
+ * with BOTH closures fully resolved inside the index — `SubtypeGraph.unrelatedClasses`.
  * An unindexed supertype link (an external type, or a project file not in the lint set)
  * makes the relation unknown → skip. Generics / parametric / `Null<...>` / `Dynamic`
  * operands or checked types never resolve to an indexed class → skip. Every skip is a safe miss. Residual boundary: type names resolve by SIMPLE name, so an external supertype whose simple name collides with an unrelated indexed class could mis-resolve — it does not arise within one self-contained project tree. Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
@@ -74,7 +74,7 @@ final class ImpossibleIsCheck implements Check {
 							TypeResolver.identTypeName(operand, root, shape, declaredTypes)
 						);
 						final tName: Null<String> = TypeResolver.simpleNominalName(entry.source.substring(typeSpan.from, typeSpan.to));
-						if (sName != null && tName != null && index.unrelatedClasses(sName, tName)) violations.push({
+						if (sName != null && tName != null && index.subtypes.unrelatedClasses(sName, tName)) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'impossible-is-check',

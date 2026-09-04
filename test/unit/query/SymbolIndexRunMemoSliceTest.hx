@@ -21,6 +21,7 @@ import utest.Test;
  * Its own class rather than more methods on `SymbolIndexSliceTest`, which sits at exactly the
  * `oversized-type` cap — the same reason `SymbolIndexAliasSliceTest` exists.
  */
+@:access(anyparse.query.RawSourceScan)
 @:access(anyparse.query.SymbolIndex)
 class SymbolIndexRunMemoSliceTest extends Test {
 
@@ -35,11 +36,11 @@ class SymbolIndexRunMemoSliceTest extends Test {
 			{ file: 'pkg/Mid.hx', source: 'package pkg;\nclass Mid extends Base {}' },
 			{ file: 'pkg/Leaf.hx', source: 'package pkg;\nclass Leaf extends Mid {}' }
 		]);
-		final first: Map<String, Array<String>> = index.supertypeNameUnion();
+		final first: Map<String, Array<String>> = index.subtypes.supertypeNameUnion();
 		Assert.isTrue(first.exists('Leaf'));
-		Assert.isTrue(index.supertypeNameUnion() == first);
+		Assert.isTrue(index.subtypes.supertypeNameUnion() == first);
 		// A second index is a second run and gets its own map.
-		Assert.isFalse(build([{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {}' }]).supertypeNameUnion() == first);
+		Assert.isFalse(build([{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {}' }]).subtypes.supertypeNameUnion() == first);
 	}
 
 	/**
@@ -52,7 +53,7 @@ class SymbolIndexRunMemoSliceTest extends Test {
 			{ file: 'p/Node.hx', source: 'package p;\nclass Node extends Alpha {}' },
 			{ file: 'q/Node.hx', source: 'package q;\nclass Node extends Beta {}' }
 		]);
-		final supers: Null<Array<String>> = index.supertypeNameUnion()['Node'];
+		final supers: Null<Array<String>> = index.subtypes.supertypeNameUnion()['Node'];
 		Assert.notNull(supers);
 		final names: Array<String> = supers ?? [];
 		Assert.isTrue(names.contains('Alpha'), 'expected Alpha in $names');
@@ -72,7 +73,7 @@ class SymbolIndexRunMemoSliceTest extends Test {
 			{ file: 'p/Alpha.hx', source: 'package p;\nclass Alpha {}' },
 			{ file: 'q/Beta.hx', source: 'package q;\nclass Beta {}' }
 		]);
-		Assert.notNull(index.supertypeNameUnion()['Node']);
+		Assert.notNull(index.subtypes.supertypeNameUnion()['Node']);
 		final info: Null<FileInfo> = index.fileInfo('p/Node.hx');
 		Assert.notNull(info);
 		final declared: Array<String> = info == null ? [] : info.types[0].supertypes;
@@ -89,13 +90,13 @@ class SymbolIndexRunMemoSliceTest extends Test {
 		final plain: String = 'package p;\nclass B {\n\tprivate var x: Int = 1;\n}';
 		final index: SymbolIndex = build([{ file: 'p/A.hx', source: granting }, { file: 'p/B.hx', source: plain }]);
 		for (i in 0...3) {
-			Assert.isTrue(index.sourceCarriesAllowGrant(granting));
-			Assert.isFalse(index.sourceCarriesAllowGrant(plain));
+			Assert.isTrue(index.text.sourceCarriesAllowGrant(granting));
+			Assert.isFalse(index.text.sourceCarriesAllowGrant(plain));
 		}
 		// Repeats of ONE source keep the same answer, which is what the slot is for.
-		Assert.isTrue(index.sourceCarriesAllowGrant(granting));
-		Assert.isTrue(index.sourceCarriesAllowGrant(granting));
-		Assert.equals(granting, index._grantScanSource);
+		Assert.isTrue(index.text.sourceCarriesAllowGrant(granting));
+		Assert.isTrue(index.text.sourceCarriesAllowGrant(granting));
+		Assert.equals(granting, index.text._grantScanSource);
 	}
 
 	/**
@@ -105,8 +106,8 @@ class SymbolIndexRunMemoSliceTest extends Test {
 	public function testGrantMemoKeepsTheCommentMasking(): Void {
 		final commented: String = 'package p;\n/** mentions @:allow in prose */\nclass A {}';
 		final index: SymbolIndex = build([{ file: 'p/A.hx', source: commented }]);
-		Assert.isFalse(index.sourceCarriesAllowGrant(commented));
-		Assert.equals(RefactorSupport.carriesAllowGrant(commented, new HaxeQueryPlugin()), index.sourceCarriesAllowGrant(commented));
+		Assert.isFalse(index.text.sourceCarriesAllowGrant(commented));
+		Assert.equals(RefactorSupport.carriesAllowGrant(commented, new HaxeQueryPlugin()), index.text.sourceCarriesAllowGrant(commented));
 	}
 
 	/**
@@ -120,8 +121,8 @@ class SymbolIndexRunMemoSliceTest extends Test {
 		final plain: String = 'package p;\nclass B {\n\tprivate var x: Int = 1;\n}';
 		final index: SymbolIndex = build([{ file: 'p/B.hx', source: plain }]);
 		Assert.isTrue(RefactorSupport.privateMemberScanIsSound(plain, index, 'x'));
-		index._grantScanSource = plain;
-		index._grantScanAnswer = true;
+		index.text._grantScanSource = plain;
+		index.text._grantScanAnswer = true;
 		Assert.isFalse(RefactorSupport.privateMemberScanIsSound(plain, index, 'x'));
 	}
 

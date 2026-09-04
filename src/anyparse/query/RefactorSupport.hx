@@ -88,7 +88,7 @@ final class RefactorSupport {
 	 * a read survives `final`.
 	 */
 	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex, member: String): Bool {
-		return !index.skippedMayReference(member) && !index.sourceCarriesAllowGrant(source);
+		return !index.text.skippedMayReference(member) && !index.text.sourceCarriesAllowGrant(source);
 	}
 
 	/**
@@ -508,7 +508,7 @@ final class RefactorSupport {
 	 * can expose its privates to another type). Conservative: any doubt is false.
 	 */
 	public static function isPrivateMemberConfined(owner: String, member: String, source: String, index: SymbolIndex): Bool {
-		return privateMemberScanIsSound(source, index, member) && !index.hasSubtype(owner) && !index.hasAccessGrant(owner);
+		return privateMemberScanIsSound(source, index, member) && !index.subtypes.hasSubtype(owner) && !index.text.hasAccessGrant(owner);
 	}
 
 	/**
@@ -538,7 +538,7 @@ final class RefactorSupport {
 	 * in a hotter loop without hoisting it out of one.
 	 *
 	 * The one shape this cannot see is a `@:allow` a BUILD MACRO adds; a check whose action depends
-	 * on that gates on the macro separately (`SymbolIndex.transitivelyCarriesBuildMacro`,
+	 * on that gates on the macro separately (`TypeTraits.transitivelyCarriesBuildMacro`,
 	 * `MemberWriteScan.carriesBuildMacro`), which is the right place for it — a text scan of the
 	 * carrier file could never have seen it either.
 	 */
@@ -612,7 +612,7 @@ final class RefactorSupport {
 		if (invisibleBinders == null || invisibleBinders.contains(name)) return null;
 		if (TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
-		return enclosing == null ? null : index.resolvePathFinalMemberTypeSource(file, enclosing, [name]);
+		return enclosing == null ? null : index.paths.resolvePathFinalMemberTypeSource(file, enclosing, [name]);
 	}
 
 	/**

@@ -145,7 +145,7 @@ final class RedundantImport implements Check implements RiskyFix {
 
 	/** Whether the index knows a file whose module IS `module` and which declares a top-level type named `name`. */
 	private static function moduleDeclaresType(index: SymbolIndex, module: String, name: String): Bool {
-		return index.declaringFiles(name).exists(f -> f.module == module);
+		return index.refs.declaringFiles(name).exists(f -> f.module == module);
 	}
 
 	/**

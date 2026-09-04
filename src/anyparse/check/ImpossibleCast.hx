@@ -24,7 +24,7 @@ import anyparse.runtime.Span;
  *
  * Conservative: flags only when the operand is a plain identifier whose declared type and
  * the target type BOTH resolve to a unique indexed CLASS, are distinct, and are unrelated
- * with fully index-resolved supertype closures (`SymbolIndex.unrelatedClasses`). An
+ * with fully index-resolved supertype closures (`SubtypeGraph.unrelatedClasses`). An
  * interface / abstract / enum / typedef on either side, a generic / `Null<…>` / `Dynamic`
  * type, an unindexed supertype link, or a non-identifier operand is a safe miss.
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
@@ -71,7 +71,7 @@ final class ImpossibleCast implements Check {
 							TypeResolver.identTypeName(node.children[0], root, shape, declaredTypes)
 						);
 						final tName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.castTargetWithin(span, castTargets));
-						if (sName != null && tName != null && index.unrelatedClasses(sName, tName)) violations.push({
+						if (sName != null && tName != null && index.subtypes.unrelatedClasses(sName, tName)) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'impossible-cast',

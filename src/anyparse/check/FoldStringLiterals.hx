@@ -1523,7 +1523,7 @@ private class MacroIndex {
 	/** Whether the index carries a TYPE declaration named `name`. */
 	public function declaresType(name: String): Bool {
 		build();
-		return index().declaringFiles(name).length > 0;
+		return index().refs.declaringFiles(name).length > 0;
 	}
 
 	/**

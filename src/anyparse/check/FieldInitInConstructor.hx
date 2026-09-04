@@ -251,7 +251,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		if (rule == null || !rule.format.match(newName)) return null;
 		if (ConstantHoist.staticsForbidden(tree, decl, plugin)) return null;
 		if (OccurrenceScan.referencedInRange(source, newName, 0, source.length, [])) return null;
-		if (!idx.typeProvablyLacksMember(ownerName, newName, file)) return null;
+		if (!idx.members.typeProvablyLacksMember(ownerName, newName, file)) return null;
 		if (_runClaims.defers(ownerName, newName, idx)) return null;
 		final at: Null<Int> = constantsRankSplice(site.container, decl, source, shape, ownerName, plugin.lexicalRegions(source));
 		if (at == null) return null;

@@ -160,7 +160,7 @@ final class MapValueScan {
 		final report: SymbolIndex = index;
 		if (!RefactorSupport.privateMemberScanIsSound(source, report, name)) return false;
 		final scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;
-		return !scope.hasAccessGrant(owner) && !scope.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
+		return !scope.text.hasAccessGrant(owner) && !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
 			if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
 			return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams);

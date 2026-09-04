@@ -31,7 +31,7 @@ using StringTools;
  * - **Typing a value or an expression.** `valueTypeNominal` and `expressionTypeNominal` are
  *   the entry points the analysis checks call. The private deep walk below them keeps the
  *   answer at SOURCE level (type arguments intact, for substitution) and adds the arms a
- *   plain path has not got: a method call resolved through `SymbolIndex.returnNominalOf` or, when
+ *   plain path has not got: a method call resolved through `MemberLookup.returnNominalOf` or, when
  *   the receiver provably lacks the member, through a `using` STATIC EXTENSION
  *   (`staticExtensionNominal`); a tabled `Type.method` static call; and the loop binder whose
  *   type is the ELEMENT type of what it iterates (`iterationValueBinder` / `iterationIterable` /
@@ -234,18 +234,18 @@ final class NominalTypes {
 		final wrappers: Array<String> = transparentWrappers ?? [];
 		var current: String = rootType;
 		for (i in 1...path.length - 1) {
-			final memberType: Null<String> = index.memberTypeSourceOf(current, path[i]);
+			final memberType: Null<String> = index.members.memberTypeSourceOf(current, path[i]);
 			final nominal: Null<String> = memberType == null ? null : outerNominalOf(memberLookupReceiverSource(memberType, wrappers));
 			if (nominal == null) return null;
 			current = nominal;
 		}
-		return index.memberTypeSourceOf(current, path[path.length - 1]);
+		return index.members.memberTypeSourceOf(current, path[path.length - 1]);
 	}
 
 	/**
 	 * The verbatim declared type SOURCE of a receiver path's final member, for a value / `this` /
 	 * static-TYPE-name root. Resolves PACKAGE-SAFE FIRST via the import- and inheritance-aware
-	 * `SymbolIndex.resolvePathFinalMemberTypeSource` (so an import-correct intermediate type's
+	 * `MemberPathWalk.resolvePathFinalMemberTypeSource` (so an import-correct intermediate type's
 	 * INHERITED member is read off THAT exact type, never a same-simple-named type in another
 	 * package — the cross-package poisoning that made the package-blind walk emit `[]` on a
 	 * non-Map). Only when the import-aware walk cannot follow the chain — an aliased conditional
@@ -257,7 +257,7 @@ final class NominalTypes {
 	 * TYPE root (then `path[0]` is the type). Null when unresolved / ambiguous (fails closed).
 	 *
 	 * `substituteTypeArgs` opts the import-aware walk into TYPE-ARGUMENT SUBSTITUTION
-	 * (`SymbolIndex.resolveGenericPathFinalMemberTypeSource`): `rootType` may then carry written
+	 * (`MemberPathWalk.resolveGenericPathFinalMemberTypeSource`): `rootType` may then carry written
 	 * arguments (`Box<Item>`), and a member declared as one of its type's parameters resolves to
 	 * the matching argument instead of the verbatim parameter name. Default false, so every
 	 * existing caller keeps today's answer byte for byte.
@@ -273,8 +273,8 @@ final class NominalTypes {
 		// untouched below, so a `Null<T>`-typed member still reads as `Null<T>`.
 		final startType: String = memberLookupReceiverSource(rootType ?? path[0], wrappers);
 		final resolved: Null<String> = substituteTypeArgs
-			? index.resolveGenericPathFinalMemberTypeSource(fromFile, startType, path.slice(1), wrappers)
-			: index.resolvePathFinalMemberTypeSource(fromFile, startType, path.slice(1));
+			? index.paths.resolveGenericPathFinalMemberTypeSource(fromFile, startType, path.slice(1), wrappers)
+			: index.paths.resolvePathFinalMemberTypeSource(fromFile, startType, path.slice(1));
 		if (resolved != null) return resolved;
 		// The package-blind fallback never substitutes; in substitute mode it is only fed the
 		// root's NOMINAL, since a `Box<Item>` start source is not a name any member lookup matches.
@@ -282,7 +282,7 @@ final class NominalTypes {
 			return pathFinalMemberTypeSource(
 				path, substituteTypeArgs ? outerNominalOf(startType) ?? startType : startType, index, wrappers
 			);
-		final firstSource: Null<String> = index.resolvePathFinalMemberTypeSource(fromFile, path[0], [path[1]]);
+		final firstSource: Null<String> = index.paths.resolvePathFinalMemberTypeSource(fromFile, path[0], [path[1]]);
 		if (firstSource == null) return null;
 		if (path.length == 2) return firstSource;
 		final firstNominal: Null<String> = outerNominalOf(memberLookupReceiverSource(firstSource, wrappers));
@@ -330,7 +330,7 @@ final class NominalTypes {
 	 * The simple nominal of the type ANY expression carries: `valueTypeNominal`'s identifier /
 	 * field-path answer, plus the METHOD-CALL tail it stops at — `<chain>.method(…)` resolves the
 	 * receiver's own nominal (recursively, so `a.b.c().d()` walks) and reads the method's return
-	 * nominal off it through `SymbolIndex.returnNominalOf`. Null stays "unknown", so every caller
+	 * nominal off it through `MemberLookup.returnNominalOf`. Null stays "unknown", so every caller
 	 * keeps its conservative branch exactly as with `valueTypeNominal`.
 	 *
 	 * A STRICT superset of `valueTypeNominal`, kept SEPARATE from it on purpose: that function is
@@ -359,7 +359,7 @@ final class NominalTypes {
 	 * clears the higher bar that demands.
 	 *
 	 * The four fail closed everywhere they are unsure, with ONE documented leak an acting consumer
-	 * must handle itself: `SymbolIndex.resolveGenericPathFinalMemberTypeSource` refuses an effective
+	 * must handle itself: `MemberPathWalk.resolveGenericPathFinalMemberTypeSource` refuses an effective
 	 * source that still mentions a parameter name, but that refusal is the SUBSTITUTING walk's, not
 	 * the whole answer's — `pathReceiverMemberTypeSource` still runs its package-blind fallback
 	 * afterwards, which CAN hand back the verbatim parameter source (`payload:T` on a `Box<T>`
@@ -373,7 +373,7 @@ final class NominalTypes {
 	 * walk will not otherwise guess that an unbound name is a type; and an extension whose first parameter names a
 	 * structural type OTHER than `Iterable` / `Iterator`, or whose ELEMENT type a receiver nominal
 	 * cannot bind (`Iterable<Widget>`, `Iterable<Iterable<A>>`) — the two the layer does model, it
-	 * models by MEMBERSHIP (`SymbolIndex.satisfiesIterable`), never by unification.
+	 * models by MEMBERSHIP (`StructuralTypes.satisfiesIterable`), never by unification.
 	 *
 	 * `asReceiver` answers about the node in MEMBER-LOOKUP position rather than as a value: a
 	 * member-TRANSPARENT wrapper is peeled off the top, so a `Null<Map<K, V>>` binding answers
@@ -430,7 +430,7 @@ final class NominalTypes {
 
 	/** Whether any indexed file OUTSIDE the auto-discovered Haxe std declares a top-level type named `typeName`. */
 	public static function shadowedByNonStdType(index: Null<SymbolIndex>, typeName: String): Bool {
-		return index != null && index.declaringFiles(typeName).exists(fi -> !StdResolver.isStdFile(fi.file));
+		return index != null && index.refs.declaringFiles(typeName).exists(fi -> !StdResolver.isStdFile(fi.file));
 	}
 
 	/**
@@ -530,7 +530,7 @@ final class NominalTypes {
 		final locals: Array<String> = (shape.localDeclKinds ?? []).concat(shape.paramKinds ?? []);
 		if (binding != null && locals.contains(binding.kind)) return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(root, span);
-		return enclosing == null ? null : index.returnNominalOf(enclosing, method);
+		return enclosing == null ? null : index.members.returnNominalOf(enclosing, method);
 	}
 
 	/**
@@ -551,7 +551,7 @@ final class NominalTypes {
 		final span: Null<Span> = receiver.span;
 		if (identKind == null || receiver.kind != identKind || name == null || span == null) return null;
 		if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
-		return index.declaringFiles(name).length == 0 ? null : index.returnNominalOf(name, method);
+		return index.refs.declaringFiles(name).length == 0 ? null : index.members.returnNominalOf(name, method);
 	}
 
 	private static function expressionNominalWalk(
@@ -586,7 +586,7 @@ final class NominalTypes {
 		final receiver: Null<String> =
 			expressionNominalWalk(callee.children[0], root, shape, declaredTypes, index, file, chain, seen, true);
 		if (receiver == null) return staticCallNominal(callee.children[0], root, shape, resolved, method);
-		final member: Null<String> = resolved.returnNominalOf(receiver, method);
+		final member: Null<String> = resolved.members.returnNominalOf(receiver, method);
 		return member ?? staticExtensionNominal(receiver, method, chain, resolved, file);
 	}
 
@@ -596,7 +596,7 @@ final class NominalTypes {
 	 * been proven NOT to declare `method`. Null everywhere it is unsure, so a caller keeps its
 	 * conservative branch exactly as it did before this arm existed.
 	 *
-	 * The gate is `SymbolIndex.typeProvablyLacksMember`, and nothing weaker will do. A real member
+	 * The gate is `MemberLookup.typeProvablyLacksMember`, and nothing weaker will do. A real member
 	 * BEATS an extension — verified against the compiler: under `using E`, a `d.tag()` on a `D`
 	 * declaring `tag():Void` binds to the MEMBER and errors as `Void should be Dynamic`, never to
 	 * `E.tag(d:D):String`. The member-side lookup that ran first (`returnNominalOf`) cannot stand in
@@ -621,9 +621,9 @@ final class NominalTypes {
 	): Null<String> {
 		if (chain == null) return null;
 		final usings: Array<String> = chain.usings;
-		if (usings.length == 0 || !index.typeProvablyLacksMember(receiver, method, file)) return null;
+		if (usings.length == 0 || !index.members.typeProvablyLacksMember(receiver, method, file)) return null;
 		for (k in 0...usings.length) {
-			final ret: Null<String> = index.extensionReturnNominal(usings[usings.length - 1 - k], method, receiver, file);
+			final ret: Null<String> = index.structural.extensionReturnNominal(usings[usings.length - 1 - k], method, receiver, file);
 			if (ret != null) return ret;
 		}
 		return null;
