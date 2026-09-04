@@ -6,7 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.StaticConstant;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -276,7 +276,7 @@ class StaticConstantCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		Assert.equals(
 			'class C {\n\tprivate static inline final _minScale:Float = 0.5;\n\tfunction f():Float return _minScale;\n}',
-			RefactorSupport.applyEdits(promoted, check.fix(promoted, check.run(files, plugin), plugin))
+			CanonicalEdit.applyEdits(promoted, check.fix(promoted, check.run(files, plugin), plugin))
 		);
 	}
 
@@ -298,7 +298,7 @@ class StaticConstantCheckTest extends Test {
 		final check: StaticConstant = new StaticConstant();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return RefactorSupport.applyEdits(src, check.fix(src, check.run(files, plugin), plugin));
+		return CanonicalEdit.applyEdits(src, check.fix(src, check.run(files, plugin), plugin));
 	}
 
 }

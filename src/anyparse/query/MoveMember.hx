@@ -256,7 +256,7 @@ final class MoveMember {
 			case PErr(message): return Err(message);
 			case POk(p): p;
 		};
-		final captures: Array<String> = RefactorSupport.casePatternCaptures(prep.srcTree, plugin.refShape());
+		final captures: Array<String> = BinderScan.casePatternCaptures(prep.srcTree, plugin.refShape());
 		final guard: Null<String> = moveGuardError(prep, captures);
 		if (guard != null) return Err(guard);
 		final editsByFile: Map<String, Array<{ span: Span, text: String }>> = [];
@@ -350,7 +350,7 @@ final class MoveMember {
 		// that missed it made every consumer here — the move set, the sibling-field scan, the closure
 		// walk, the scaffold — behave as though it did not exist.
 		MemberBranchScan.eachTypeMember(
-			decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
+			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind),
 			(node: QueryNode, run: Array<QueryNode>) -> {
 				final span: Null<Span> = node.span;
 				if (span == null) return;
@@ -409,15 +409,15 @@ final class MoveMember {
 		final out: Array<QualifiedHit> = [];
 		function walk(node: QueryNode): Void {
 			final children: Array<QueryNode> = node.children;
-			if (node.kind == RefactorSupport.FIELD_ACCESS_KIND && node.name == memberName && children.length > 0) {
+			if (node.kind == MemberKinds.FIELD_ACCESS_KIND && node.name == memberName && children.length > 0) {
 				final recv: QueryNode = children[0];
 				final recvSpan: Null<Span> = recv.span;
 				if (recvSpan != null && RefactorSupport.receiverIsTypeNamespace(recv, prep.srcTypeName, qualified, valueResolved)) {
-					final dotted: Bool = recv.kind == RefactorSupport.FIELD_ACCESS_KIND;
+					final dotted: Bool = recv.kind == MemberKinds.FIELD_ACCESS_KIND;
 					final path: String = dotted ? RefactorSupport.flattenPath(recv) : prep.srcTypeName;
 					final offset: Int = dotted
 						? RefactorSupport.pathOffset(source, recvSpan, path)
-						: RefactorSupport.identTokenOffset(source, recvSpan, prep.srcTypeName);
+						: SourceText.identTokenOffset(source, recvSpan, prep.srcTypeName);
 					if (offset >= 0 && !out.exists(h -> h.span.from == offset)) out.push({
 						span: new Span(offset, offset + path.length),
 						text: dotted ? destPath : prep.destTypeName,
@@ -457,7 +457,7 @@ final class MoveMember {
 		final bodySpan: Span = decl.nameNode.span ?? decl.fullSpan;
 		var bodyClose: Int = bodySpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
+		while (bodyClose >= bodySpan.from && SourceText.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
 		return bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code ? null : bodyClose;
 	}
 
@@ -601,9 +601,9 @@ final class MoveMember {
 			final info: Null<FileInfo> = index.fileInfo(entry.file);
 			if (info == null) continue;
 			for (imp in info.imports) {
-				if (imp.kind == ImportKind.Using && RefactorSupport.lastSegment(imp.raw) == srcTypeName)
+				if (imp.kind == ImportKind.Using && SourceText.lastSegment(imp.raw) == srcTypeName)
 					return '${entry.file} has "using ${imp.raw}" — extension-call sites are not findable, refusing';
-				if (imp.kind == ImportKind.Using && RefactorSupport.lastSegment(imp.raw) == destTypeName)
+				if (imp.kind == ImportKind.Using && SourceText.lastSegment(imp.raw) == destTypeName)
 					return '${entry.file} has "using ${imp.raw}" — moving a member into a type under `using` could '
 						+ 'hijack extension calls, refusing';
 				if (imp.kind == ImportKind.Import && memberNames.exists(name -> StringTools.endsWith(imp.raw, '.$srcTypeName.$name')))
@@ -619,8 +619,8 @@ final class MoveMember {
 	 * following blank line is swallowed.
 	 */
 	private static function cutSpanOf(srcSource: String, group: MemberGroup, regions: Array<LexRegion>): Span {
-		return RefactorSupport.blankExtendedSpan(
-			srcSource, RefactorSupport.lineExtendedSpan(srcSource, RefactorSupport.docExtendedSpan(srcSource, group.groupSpan, regions))
+		return ElementSpan.blankExtendedSpan(
+			srcSource, ElementSpan.lineExtendedSpan(srcSource, ElementSpan.docExtendedSpan(srcSource, group.groupSpan, regions))
 		);
 	}
 
@@ -791,7 +791,7 @@ final class MoveMember {
 		} else {
 			// Insert after any leading @:meta run — `public` before a meta
 			// line would not parse.
-			final at: Int = m.group.modifiers.find(mod -> !RefactorSupport.META_KINDS.contains(mod.kind))?.span?.from ?? m.span.from;
+			final at: Int = m.group.modifiers.find(mod -> !MemberKinds.META_KINDS.contains(mod.kind))?.span?.from ?? m.span.from;
 			movedTextEdits.push({ span: new Span(at, at), text: 'public ' });
 		}
 		advisoryExtras.push(
@@ -886,7 +886,7 @@ final class MoveMember {
 		for (file => edits in editsByFile) {
 			final original: Null<String> = sourceOf[file];
 			if (original == null) continue;
-			final newSource: String = RefactorSupport.applyEdits(original, edits);
+			final newSource: String = CanonicalEdit.applyEdits(original, edits);
 			if (newSource == original) continue;
 			try
 				plugin.parseFile(newSource)
@@ -902,7 +902,7 @@ final class MoveMember {
 	}
 
 	private static function isAllWhitespace(text: String): Bool {
-		for (i in 0...text.length) if (!RefactorSupport.isSpace(text.fastCodeAt(i))) return false;
+		for (i in 0...text.length) if (!SourceText.isSpace(text.fastCodeAt(i))) return false;
 		return true;
 	}
 
@@ -945,7 +945,7 @@ final class MoveMember {
 			if (siblingStatic) {
 				movedTextEdits.push({ span: new Span(hit.span.from, hit.span.from), text: '${prep.srcTypeName}.' });
 				if (!siblingPublic && !state.accessMembers.contains(host.name)) state.accessMembers.push(host.name);
-			} else if (RefactorSupport.isDataFieldKind(sibling.member.kind)) {
+			} else if (MemberKinds.isDataFieldKind(sibling.member.kind)) {
 				// Sibling-fields contract: a moved body may keep reading a
 				// FINAL field IF the destination declares a same-named final
 				// field wired with the same value at construction.
@@ -995,7 +995,7 @@ final class MoveMember {
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(prep.srcSource) : [];
 		final fields: Array<MemberGroup> = [
 			for (g in membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions))
-				if (RefactorSupport.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
+				if (MemberKinds.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
 		];
 		if (viaField != null) {
 			final g: Null<MemberGroup> = fields.find(f -> f.member.name == viaField);
@@ -1045,7 +1045,7 @@ final class MoveMember {
 			for (file => tree in prep.trees) { file: file, source: prep.sourceOf[file] ?? '', tree: tree }
 		];
 		for (m in prep.moved) {
-			final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(scope, m.name, prep.shape, 'move of "${m.name}"');
+			final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(scope, m.name, prep.shape, 'move of "${m.name}"');
 			if (opaque != null) return opaque;
 		}
 		for (m in prep.moved) if (captures.contains(m.name))
@@ -1112,7 +1112,7 @@ final class MoveMember {
 						if (e.span.from >= m.cut.from && e.span.from < m.cut.to)
 							{ span: new Span(e.span.from - m.cut.from, e.span.to - m.cut.from), text: e.text }
 				];
-				trimBlankEdges(RefactorSupport.applyEdits(prep.srcSource.substring(m.cut.from, m.cut.to), shifted));
+				trimBlankEdges(CanonicalEdit.applyEdits(prep.srcSource.substring(m.cut.from, m.cut.to), shifted));
 			}
 		];
 	}
@@ -1154,7 +1154,7 @@ final class MoveMember {
 			// — `wrote 2 file(s)`, exit 0, and `Abstract<pal.Colour> has no field RED` on the next
 			// build.
 			final modifierStatic: Bool = groupNN.modifiers.exists(m -> m.kind == 'Static');
-			final hostStatic: Bool = RefactorSupport.implicitlyStaticMember(srcDecl.kind, groupNN.member.kind, shape);
+			final hostStatic: Bool = MemberKinds.implicitlyStaticMember(srcDecl.kind, groupNN.member.kind, shape);
 			// Knowing it is static is not licence to MOVE it. Such a member is bound to its host in
 			// a way relocation cannot preserve: an `enum abstract` value is TYPED as its declaring
 			// type, so a class destination turns it into a plain `Int` (and a mutable `static var`,
@@ -1229,7 +1229,7 @@ final class MoveMember {
 			for (g in allMembers) {
 				final nm: Null<String> = g.member.name;
 				if (
-					nm != null && g.member.span != null && !names.contains(nm) && RefactorSupport.FN_DECL_KINDS.contains(g.member.kind)
+					nm != null && g.member.span != null && !names.contains(nm) && MemberKinds.FN_DECL_KINDS.contains(g.member.kind)
 					&& !g.modifiers.exists(mod -> mod.kind == 'Static') && slices.indexOf(nm) != -1
 				)
 					g;
@@ -1327,7 +1327,7 @@ final class MoveMember {
 		if (span == null) return null;
 		var close: Int = span.to - 1;
 		if (close >= source.length) close = source.length - 1;
-		while (close >= span.from && RefactorSupport.isSpace(source.fastCodeAt(close))) close--;
+		while (close >= span.from && SourceText.isSpace(source.fastCodeAt(close))) close--;
 		return close < span.from || source.fastCodeAt(close) != '}'.code ? null : close;
 	}
 
@@ -1416,7 +1416,7 @@ final class MoveMember {
 		final bodyClose: Null<Int> = ctorBodyClose(prep.srcSource, ctor.member);
 		if (bodyClose == null) return 'cannot --scaffold via field "$viaName": could not locate the "${prep.srcTypeName}" constructor body';
 		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(prep.srcSource, wsStart - 1))) wsStart--;
+		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(prep.srcSource, wsStart - 1))) wsStart--;
 		final args: String = [for (f in fields) f.name].join(', ');
 		editsFor(editsByFile, prep.srcFile).push({
 			span: new Span(wsStart, bodyClose),
@@ -1450,7 +1450,7 @@ final class MoveMember {
 		final bodyClose: Null<Int> = typeBodyClose(prep.destSource, prep.destDecl);
 		if (bodyClose == null) return '"${prep.destTypeName}" has no brace body to receive the member';
 		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(prep.destSource, wsStart - 1))) wsStart--;
+		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(prep.destSource, wsStart - 1))) wsStart--;
 		final destFrame: String = destPrepend == '' ? '\n\n${blocks.join('\n\n')}\n\n' : '\n\n$destPrepend\n\n${blocks.join('\n\n')}\n\n';
 		editsFor(editsByFile, prep.destFile).push({ span: new Span(wsStart, bodyClose), text: destFrame });
 		return null;

@@ -443,7 +443,7 @@ final class SymbolIndexBuilder {
 		typeSources: Map<Int, String>, seams: MemberSeams
 	): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
-		RefactorSupport.eachMemberHost(node, n -> {
+		MemberKinds.eachMemberHost(node, n -> {
 			// `guarded` is a property of the HOST, not of the member's own modifier run:
 			// `eachMemberHost` descends INTO a conditional-compilation region, so a member
 			// written under `#if` is visited with that region as its host node.
@@ -459,7 +459,7 @@ final class SymbolIndexBuilder {
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
 				// `import pkg.Enum;` whose constructors are used as bare identifiers is not judged unused.
 				// Enum-abstract values are already `FIELD_MEMBER_KINDS`.
-				if (RefactorSupport.isMemberDeclKind(child.kind) || (n.kind == ANON_KIND && ANON_SHORT_FIELD_KINDS.contains(child.kind))) {
+				if (MemberKinds.isMemberDeclKind(child.kind) || (n.kind == ANON_KIND && ANON_SHORT_FIELD_KINDS.contains(child.kind))) {
 					final nm: Null<String> = child.name;
 					if (nm != null && sp != null) {
 						// Re-bind to a non-null local — Strict null-safety takes a struct
@@ -915,7 +915,7 @@ final class SymbolIndexBuilder {
 		// run before the path (`typedef A = /* c */ pkg.B;`) rides along in it, and handing that on
 		// as a type reference would resolve to nothing where the simple name resolves fine.
 		final nominal: Null<String> = NominalTypes.outerNominalOf(head);
-		return nominal != null && head.split('.').foreach(RefactorSupport.isIdentifier) ? head : nominal;
+		return nominal != null && head.split('.').foreach(SourceText.isIdentifier) ? head : nominal;
 	}
 
 }

@@ -5,6 +5,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.check.UsingScan.UsingHeader;
+import anyparse.query.BinderScan;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CtorFieldFold;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
@@ -271,7 +274,7 @@ final class BoolLoopScan {
 			final cand: Null<Cand> = byKey['${span.from}:${span.to}'];
 			if (cand == null) continue;
 			final edit: Null<{ span: Span, text: String }> = buildEdit(cand, source, s, kind);
-			if (edit == null || RefactorSupport.editsOverlapAny([edit], rewrites)) continue;
+			if (edit == null || CanonicalEdit.editsOverlapAny([edit], rewrites)) continue;
 			rewrites.push(edit);
 			extensionForm.push(!cand.head.qualified);
 		}
@@ -296,7 +299,7 @@ final class BoolLoopScan {
 		final flat: Array<GroupedEdit> = [for (e in rewrites) { span: e.span, text: e.text, group: null }];
 		if (!extensionForm.contains(true) || UsingScan.hasUsingModule(header, LAMBDA_MODULE)) return flat;
 		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-		if (RefactorSupport.editsOverlapAny([usingEdit], rewrites)) return flat;
+		if (CanonicalEdit.editsOverlapAny([usingEdit], rewrites)) return flat;
 		final grouped: Array<GroupedEdit> = [
 			for (i in 0...rewrites.length)
 				{
@@ -509,7 +512,7 @@ final class BoolLoopScan {
 				// single declarator with a literal initializer has both. The two answers are also
 				// worth the same here — a dropped annotation still compiles, since the call's own
 				// type is the `Bool` it would have restated — so no branch separates them.
-				annotation: RefactorSupport.declaredTypeAnnotation(source, declSpan, initSpan, name)
+				annotation: CtorFieldFold.declaredTypeAnnotation(source, declSpan, initSpan, name)
 			}
 		};
 	}
@@ -558,7 +561,7 @@ final class BoolLoopScan {
 	 */
 	private static function forIfHead(forNode: QueryNode, source: String, s: Seams, probe: Probes, ?sink: FlagSink): Null<Head> {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
-		final operands: Array<QueryNode> = RefactorSupport.loopOperands(forNode, s.valueBinderKinds);
+		final operands: Array<QueryNode> = BinderScan.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
 		final iterable: QueryNode = operands[0];

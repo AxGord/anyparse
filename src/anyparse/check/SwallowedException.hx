@@ -2,8 +2,9 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -114,8 +115,8 @@ final class SwallowedException implements Check {
 		if (source.substring(bodySpan.from + 1, bodySpan.to - 1).trim() == '') return;
 		final varName: Null<String> = catchNode.name;
 		if (varName == null || StringTools.startsWith(varName, '_')) return;
-		if (RefactorSupport.referencedInRange(source, varName, bodySpan.from, bodySpan.to, [])) return;
-		for (k in exitKinds) if (RefactorSupport.subtreeContainsKind(body, k)) return;
+		if (OccurrenceScan.referencedInRange(source, varName, bodySpan.from, bodySpan.to, [])) return;
+		for (k in exitKinds) if (MemberKinds.subtreeContainsKind(body, k)) return;
 		out.push({
 			file: file,
 			span: bodySpan,

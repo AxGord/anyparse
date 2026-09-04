@@ -4,8 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.MemberOrder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -72,7 +73,7 @@ class MemberOrderModifierSpanSliceTest extends Test {
 		final span: Null<Span> = fn.span;
 		Assert.notNull(span);
 		if (span == null) return;
-		Assert.equals(src.indexOf('#if !flash'), RefactorSupport.declGroupSpan(fn, container, span).from);
+		Assert.equals(src.indexOf('#if !flash'), ElementSpan.declGroupSpan(fn, container, span).from);
 	}
 
 	/** The `TypedPool` shape: the `#if !flash inline #end` guard stays in front of the member it qualifies when a sibling sorts past it. */
@@ -139,7 +140,7 @@ class MemberOrderModifierSpanSliceTest extends Test {
 		final cfg: LintConfig = LintConfig.parse('{}');
 		check.setConfigResolver(_ -> cfg);
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
+		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail(message);

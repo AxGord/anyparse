@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -135,7 +135,7 @@ final class DoubleNegation implements Check {
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
 	private static function operandIsNullable(operand: QueryNode, nullableKinds: Array<String>): Bool {
-		return nullableKinds.exists(k -> RefactorSupport.subtreeContainsKind(operand, k));
+		return nullableKinds.exists(k -> MemberKinds.subtreeContainsKind(operand, k));
 	}
 
 

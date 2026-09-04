@@ -1,10 +1,17 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BinderScan;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CtorFieldFold;
+import anyparse.query.CtorFieldWrite;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -279,7 +286,7 @@ final class PreferComprehension implements Check {
 			final edits: Null<Array<{ span: Span, text: String }>> = byKey['${span.from}:${span.to}'];
 			if (edits != null) for (e in edits) out.push(e);
 		}
-		return RefactorSupport.dropContainedEdits(out);
+		return CanonicalEdit.dropContainedEdits(out);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -334,7 +341,7 @@ final class PreferComprehension implements Check {
 		final ctx: Ctx = {
 			source: source,
 			seams: s,
-			comments: RefactorSupport.collectCommentTokens(regions),
+			comments: SourceComments.collectCommentTokens(regions),
 			tree: tree,
 			shape: shape
 		};
@@ -431,13 +438,13 @@ final class PreferComprehension implements Check {
 		final scopeSpan: Null<Span> = scope.span;
 		if (declName == null || declSpan == null || initSpan == null || forSpan == null || scopeSpan == null) return null;
 		if (!gapAdmits(source, declName, declSpan, forSpan, gapped)) return null;
-		final annotation: Null<String> = RefactorSupport.declaredTypeAnnotation(source, declSpan, initSpan, declName);
+		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(source, declSpan, initSpan, declName);
 		final element: Null<String> = annotation == null ? null : elementTypeOf(annotation, s.elementTypeParams);
 		final acc: Acc = { checks: [], hoisted: [], elementType: element };
 		final inner: Null<String> = buildInner(forNode, declName, ctx, acc);
 		if (inner == null) return null;
 		for (cn in acc.checks) if (referencesName(cn, declName, s)) return null;
-		if (!RefactorSupport.referencedInRange(source, declName, forSpan.to, scopeSpan.to, [])) return null;
+		if (!OccurrenceScan.referencedInRange(source, declName, forSpan.to, scopeSpan.to, [])) return null;
 		final lead: Null<String> = hoistLeadOrRefuse(gapped ? forSpan : declSpan, ctx, acc);
 		if (lead == null) return null;
 		final prefix: String = source.substring(declSpan.from, initSpan.from);
@@ -453,7 +460,7 @@ final class PreferComprehension implements Check {
 		// attributing by POSITION-in-scope rather than by the resolver's binding is immune to
 		// the same-named-sibling-branch collision. Conservative in the safe direction — a
 		// sibling scope's write of the same name keeps `var`.
-		final upgrade: Bool = keyword == VAR_KEYWORD && !RefactorSupport.reassignedInScope(declName, ctx.tree, ctx.shape, scopeSpan);
+		final upgrade: Bool = keyword == VAR_KEYWORD && !CtorFieldWrite.reassignedInScope(declName, ctx.tree, ctx.shape, scopeSpan);
 		final normalized: String = upgrade ? 'final${prefix.substring(VAR_KEYWORD.length)}' : prefix;
 		return assemble(source, declSpan, forSpan, '$lead$normalized[$inner];', gapped);
 	}
@@ -469,7 +476,7 @@ final class PreferComprehension implements Check {
 	private static function gapAdmits(source: String, declName: String, declSpan: Span, forSpan: Span, gapped: Bool): Bool {
 		final commentTo: Int = gapped ? endOfLine(source, declSpan.to) : forSpan.from;
 		return !CheckScan.hasCommentMarker(source, declSpan.to, commentTo)
-			&& (!gapped || !RefactorSupport.referencedInRange(source, declName, declSpan.to, forSpan.from, []));
+			&& (!gapped || !OccurrenceScan.referencedInRange(source, declName, declSpan.to, forSpan.from, []));
 	}
 
 	/** The match for an assembled replacement `text`: one edit over both statements, or the two of `gappedEdits`. */
@@ -501,9 +508,9 @@ final class PreferComprehension implements Check {
 	private static function gappedEdits(
 		source: String, declSpan: Span, forSpan: Span, text: String
 	): Null<Array<{ span: Span, text: String }>> {
-		final line: Span = RefactorSupport.lineExtendedSpan(source, declSpan);
+		final line: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		final declOwnsLine: Bool = line.from != declSpan.from || line.to != declSpan.to;
-		final loopOwnsLine: Bool = source.substring(RefactorSupport.startOfLine(source, forSpan.from), forSpan.from).trim() == '';
+		final loopOwnsLine: Bool = source.substring(SourceText.startOfLine(source, forSpan.from), forSpan.from).trim() == '';
 		return declOwnsLine && loopOwnsLine ? [{ span: line, text: '' }, { span: forSpan, text: text }] : null;
 	}
 
@@ -526,7 +533,7 @@ final class PreferComprehension implements Check {
 	private static function buildInner(node: QueryNode, name: String, ctx: Ctx, acc: Acc): Null<String> {
 		final s: Seams = ctx.seams;
 		if (node.kind == s.forStmtKind) {
-			final operands: Array<QueryNode> = RefactorSupport.loopOperands(node, s.valueBinderKinds);
+			final operands: Array<QueryNode> = BinderScan.loopOperands(node, s.valueBinderKinds);
 			return operands.length != FOR_CHILD_COUNT ? null : buildHeaderLayer(node, operands[0], operands[1], name, ctx, acc);
 		}
 		if (node.kind == s.whileStmtKind)
@@ -578,7 +585,7 @@ final class PreferComprehension implements Check {
 	private static function transcribeHeader(from: Int, to: Int, ctx: Ctx): Null<String> {
 		final header: String = StringTools.rtrim(ctx.source.substring(from, to));
 		final lastLine: Int = header.lastIndexOf('\n');
-		return RefactorSupport.textHasCommentMarker(header.substring(lastLine + 1)) ? null : header;
+		return SourceComments.textHasCommentMarker(header.substring(lastLine + 1)) ? null : header;
 	}
 
 	/**
@@ -796,7 +803,7 @@ final class PreferComprehension implements Check {
 			name: boundName,
 			init: init,
 			initSpan: initRange,
-			annotation: RefactorSupport.declaredTypeAnnotation(ctx.source, declRange, initRange, boundName),
+			annotation: CtorFieldFold.declaredTypeAnnotation(ctx.source, declRange, initRange, boundName),
 			useSpan: useRange,
 			useParent: uses[0].parent,
 			useIndex: uses[0].index,
@@ -1080,7 +1087,7 @@ final class PreferComprehension implements Check {
 	 */
 	private static function hoistLeadOrRefuse(anchor: Span, ctx: Ctx, acc: Acc): Null<String> {
 		if (acc.hoisted.length == 0) return '';
-		final lineStart: Int = RefactorSupport.startOfLine(ctx.source, anchor.from);
+		final lineStart: Int = SourceText.startOfLine(ctx.source, anchor.from);
 		final indent: String = ctx.source.substring(lineStart, anchor.from);
 		if (indent.trim() != '') return null;
 		acc.hoisted.sort((a, b) -> a.from - b.from);

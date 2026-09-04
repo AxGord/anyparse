@@ -4,11 +4,14 @@ import anyparse.check.AssignmentTreeHoist.LvalueRef;
 import anyparse.check.Check.Violation;
 import anyparse.check.TryExpressionShape.TryParts;
 import anyparse.check.TryExpressionShape.TrySeams;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -155,7 +158,7 @@ final class PreferTryExpressionAssignment implements Check {
 		if (seams == null) return [];
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams)) byKey['${m.keySpan.from}:${m.keySpan.to}'] = m;
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
 	}
@@ -164,7 +167,7 @@ final class PreferTryExpressionAssignment implements Check {
 	private static function collect(plugin: GrammarPlugin, source: String, s: Seams): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final out: Array<Match> = [];
 		collectMatches(tree, tree, source, comments, s, out, false);
 		return out;
@@ -241,9 +244,9 @@ final class PreferTryExpressionAssignment implements Check {
 		final declSpan: Null<Span> = decl.span;
 		final trySpan: Null<Span> = tryStmt.span;
 		if (name == null || declSpan == null || trySpan == null) return null;
-		if (RefactorSupport.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // `var a, b;`
+		if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // `var a, b;`
 		final init: Null<QueryNode> = decl.children.length == 1 ? decl.children[0] : null;
-		if (init != null && !RefactorSupport.isSideEffectFree(init)) return null; // an impure init cannot be dropped
+		if (init != null && !MemberKinds.isSideEffectFree(init)) return null; // an impure init cannot be dropped
 
 		final ref: LvalueRef = { lvalue: null };
 		final targets: Array<Span> = [];
@@ -359,7 +362,7 @@ final class PreferTryExpressionAssignment implements Check {
 		final fieldAccessKind: Null<String> = s.fieldAccessKind;
 		if (fieldAccessKind == null || lvalue.kind != fieldAccessKind) return false;
 		final receiver: Null<QueryNode> = lvalue.children.length > 0 ? lvalue.children[0] : null;
-		return receiver != null && RefactorSupport.isSideEffectFree(receiver);
+		return receiver != null && MemberKinds.isSideEffectFree(receiver);
 	}
 
 	/**

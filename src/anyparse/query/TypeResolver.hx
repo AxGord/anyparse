@@ -162,7 +162,7 @@ final class TypeResolver {
 	public static function isDeletionPure(
 		node: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
 	): Bool {
-		if (RefactorSupport.isSideEffectFree(node)) return true;
+		if (MemberKinds.isSideEffectFree(node)) return true;
 		final arrayLiteralKind: Null<String> = shape.arrayLiteralKind;
 		if (arrayLiteralKind != null && node.kind == arrayLiteralKind) {
 			return node.children.foreach(c -> isDeletionPure(c, tree, shape, declaredTypes, index));
@@ -897,12 +897,12 @@ final class TypeResolver {
 
 	/** Whether `kind` is a member or type declaration — a scope a `@:nullSafety` meta can annotate. */
 	private static inline function isDeclScope(kind: String): Bool {
-		return RefactorSupport.isFieldMemberKind(kind) || isTypeDeclScope(kind);
+		return MemberKinds.isFieldMemberKind(kind) || isTypeDeclScope(kind);
 	}
 
 	/** Whether `kind` is a TYPE declaration (class / interface / enum / typedef / abstract) — the level a `@:nullSafety` may affirm at. */
 	private static inline function isTypeDeclScope(kind: String): Bool {
-		return RefactorSupport.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
+		return MemberKinds.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
 	}
 
 

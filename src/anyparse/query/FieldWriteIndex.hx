@@ -310,7 +310,7 @@ final class FieldWriteIndex {
 		for (imp in fi.imports) if (imp.kind != ImportKind.Wild) {
 			if (imp.kind == ImportKind.Alias) {
 				if (imp.raw == name) return true;
-			} else if (RefactorSupport.lastSegment(imp.raw) == name && imp.raw != declaredPath)
+			} else if (SourceText.lastSegment(imp.raw) == name && imp.raw != declaredPath)
 				return true;
 		}
 		return false;
@@ -500,8 +500,8 @@ final class FieldWriteIndex {
 	 */
 	private static function directMemberFroms(node: QueryNode): Array<Int> {
 		final out: Array<Int> = [];
-		RefactorSupport.eachMemberHost(node, host -> {
-			for (child in host.children) if (RefactorSupport.FIELD_MEMBER_KINDS.contains(child.kind)) {
+		MemberKinds.eachMemberHost(node, host -> {
+			for (child in host.children) if (MemberKinds.FIELD_MEMBER_KINDS.contains(child.kind)) {
 				final sp: Null<Span> = child.span;
 				if (sp != null) out.push(sp.from);
 			}
@@ -576,7 +576,7 @@ final class FieldWriteIndex {
 			final inherited: Null<String> = memberTypeSourceInChain(c.index, t.name, name, []);
 			if (inherited != null) return inherited;
 		}
-		return RefactorSupport.isUpperInitial(name) && declaresType(c.index, name) ? name : null;
+		return SourceText.isUpperInitial(name) && declaresType(c.index, name) ? name : null;
 	}
 
 	/**
@@ -628,7 +628,7 @@ final class FieldWriteIndex {
 		if (c.casePatternKind == null && c.binderKinds.length == 0) return true;
 		var names: Null<Array<String>> = c.patternNames;
 		if (names == null) {
-			names = RefactorSupport.casePatternNames(c.tree, c.casePatternKind, c.binderKinds);
+			names = BinderScan.casePatternNames(c.tree, c.casePatternKind, c.binderKinds);
 			c.patternNames = names;
 		}
 		return names.contains(name);
@@ -665,10 +665,10 @@ final class FieldWriteIndex {
 			}
 		}
 		final lt: Int = t.indexOf('<');
-		if (lt < 0) return isDottedIdentPath(t) ? { name: RefactorSupport.lastSegment(t), params: null } : null;
+		if (lt < 0) return isDottedIdentPath(t) ? { name: SourceText.lastSegment(t), params: null } : null;
 		if (!t.endsWith('>')) return null;
 		final head: String = t.substring(0, lt).trim();
-		return isDottedIdentPath(head) ? { name: RefactorSupport.lastSegment(head), params: t.substring(lt + 1, t.length - 1) } : null;
+		return isDottedIdentPath(head) ? { name: SourceText.lastSegment(head), params: t.substring(lt + 1, t.length - 1) } : null;
 	}
 
 	/**
@@ -694,11 +694,11 @@ final class FieldWriteIndex {
 		for (i in 0...s.length) {
 			final ch: Int = s.fastCodeAt(i);
 			if (expectStart) {
-				if (!RefactorSupport.isIdentStartChar(ch)) return false;
+				if (!SourceText.isIdentStartChar(ch)) return false;
 				expectStart = false;
 			} else if (ch == '.'.code)
 				expectStart = true;
-			else if (!RefactorSupport.isIdentChar(ch))
+			else if (!SourceText.isIdentChar(ch))
 				return false;
 		}
 		return !expectStart;
@@ -761,7 +761,7 @@ final class FieldWriteIndex {
 		final nameAt: Int = source.indexOf(name, from);
 		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return [];
 		var i: Int = nameAt + name.length;
-		while (i < source.length && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < source.length && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		if (i >= source.length || source.fastCodeAt(i) != '<'.code) return [];
 		var depth: Int = 1;
 		final start: Int = i + 1;

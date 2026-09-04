@@ -6,7 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport;
+import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import utest.Assert;
 
@@ -542,7 +542,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		// module-level declarations, which are deliberately excluded — a shadowed reference is
 		// rewritten to `this.` / `C.`, and neither is spellable at module level.
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
-		final expected: Array<String> = RefactorSupport.nestedFunctionKinds(shape);
+		final expected: Array<String> = MemberKinds.nestedFunctionKinds(shape);
 		final localOrModule: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.moduleValueDeclKinds);
 		for (kind in shape.functionKinds ?? []) if (!localOrModule.contains(kind) && !expected.contains(kind)) expected.push(kind);
 		Assert.isTrue(expected.length > 0, 'the plugin must declare at least one function scope kind');

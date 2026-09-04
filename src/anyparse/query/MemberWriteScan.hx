@@ -199,8 +199,8 @@ final class MemberWriteScan {
 			final idx: Int = source.indexOf(name, at);
 			if (idx < 0 || idx + len > to) return false;
 			at = idx + len;
-			final boundedBefore: Bool = idx == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(idx - 1));
-			final boundedAfter: Bool = at >= n || !RefactorSupport.isIdentChar(source.fastCodeAt(at));
+			final boundedBefore: Bool = idx == 0 || !SourceText.isIdentChar(source.fastCodeAt(idx - 1));
+			final boundedAfter: Bool = at >= n || !SourceText.isIdentChar(source.fastCodeAt(at));
 			if (!boundedBefore || !boundedAfter) continue;
 			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
 			if (precededByIncrDecr(source, idx) || followedByAssign(source, at)) return true;
@@ -238,7 +238,7 @@ final class MemberWriteScan {
 	 * inject a reference the text scan cannot see, or the name occurs as a word-boundary token.
 	 */
 	private static inline function mayReference(src: String, name: String, from: Int, to: Int): Bool {
-		return carriesBuildMacro(src) || RefactorSupport.referencedInRange(src, name, from, to, []);
+		return carriesBuildMacro(src) || OccurrenceScan.referencedInRange(src, name, from, to, []);
 	}
 
 	/** Whether `c` is an operator character that can form an assignment token. */
@@ -264,7 +264,7 @@ final class MemberWriteScan {
 			at = idx + meta.length;
 			if (at >= source.length) return true;
 			final next: Int = source.fastCodeAt(at);
-			if (!RefactorSupport.isIdentChar(next) && next != '.'.code) return true;
+			if (!SourceText.isIdentChar(next) && next != '.'.code) return true;
 		}
 	}
 
@@ -291,7 +291,7 @@ final class MemberWriteScan {
 		var i: Int = idx - 1;
 		while (i >= 0) {
 			final c: Int = source.fastCodeAt(i);
-			if (RefactorSupport.isSpace(c)) {
+			if (SourceText.isSpace(c)) {
 				i--;
 				continue;
 			}
@@ -316,7 +316,7 @@ final class MemberWriteScan {
 	 */
 	private static function followedByAssign(source: String, pos: Int): Bool {
 		final n: Int = source.length;
-		var i: Int = RefactorSupport.skipForwardTrivia(source, pos);
+		var i: Int = SourceComments.skipForwardTrivia(source, pos);
 		final start: Int = i;
 		while (i < n && isOperatorChar(source.fastCodeAt(i))) i++;
 		final token: String = source.substring(start, i);

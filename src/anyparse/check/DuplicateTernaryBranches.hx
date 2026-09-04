@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -69,7 +69,7 @@ final class DuplicateTernaryBranches implements Check {
 			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
 			if (node == null || node.children.length != TERNARY_CHILD_COUNT) continue;
 			// Only safe to drop the condition when evaluating it has no side effect.
-			if (!RefactorSupport.isSideEffectFree(node.children[0])) continue;
+			if (!MemberKinds.isSideEffectFree(node.children[0])) continue;
 			final branchSpan: Null<Span> = node.children[1].span;
 			if (branchSpan == null) continue;
 			edits.push({ span: span, text: source.substring(branchSpan.from, branchSpan.to) });
@@ -80,7 +80,7 @@ final class DuplicateTernaryBranches implements Check {
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String): Void {
 		if (
 			node.kind == ternaryKind && node.children.length == TERNARY_CHILD_COUNT
-			&& RefactorSupport.sameSource(node.children[1], node.children[2], source)
+			&& MemberKinds.sameSource(node.children[1], node.children[2], source)
 		) {
 			final span: Null<Span> = node.span;
 			if (span != null) {

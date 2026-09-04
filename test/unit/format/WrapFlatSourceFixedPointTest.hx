@@ -5,8 +5,8 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatFixedPoint;
-import anyparse.query.RefactorSupport;
 import utest.Assert;
 import utest.Test;
 
@@ -700,7 +700,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeWritesTheWriterFixedPoint(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch RefactorSupport.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_OBJECT) {
+		switch CanonicalEdit.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_OBJECT) {
 			case Ok(text):
 				Assert.equals(
 					text, plugin.writeRoundTrip(text, CASE_BODY_OBJECT),
@@ -724,7 +724,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeReportsTheRewriteCount(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch RefactorSupport.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_OBJECT) {
+		switch CanonicalEdit.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_OBJECT) {
 			case Ok(_, rewrites):
 				Assert.equals(2, rewrites, 'the divergent shape costs two rewrites and the count must reach the caller');
 				Assert.notNull(FormatFixedPoint.rewritesNote(rewrites), 'a count above 1 has a note to print');
@@ -745,7 +745,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 		// pins that the loop RAN — a fixture the writer already agrees with takes `run`'s
 		// pass-1 short-cut and answers 0, and a `<= 1` assertion would not tell them apart.
 		final src: String = 'class C {\n\tfunction  f( ) :Void {\n\t\tvar p = {x:1,   y:2};\n\t}\n}\n';
-		switch RefactorSupport.canonicalize(src, [], true, plugin, null) {
+		switch CanonicalEdit.canonicalize(src, [], true, plugin, null) {
 			case Ok(_, rewrites):
 				Assert.equals(1, rewrites, 'a normal file settles on the FIRST rewrite');
 				Assert.isNull(FormatFixedPoint.rewritesNote(rewrites), 'nothing to report for the healthy counts');

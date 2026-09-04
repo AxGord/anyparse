@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -23,7 +23,7 @@ class TrivialGetterCheckTestBase extends Test {
 
 	private function assertFixCanonical(src: String, present: String, absent: String): Void {
 		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 				Assert.isTrue(text.indexOf(absent) == -1);
@@ -34,7 +34,7 @@ class TrivialGetterCheckTestBase extends Test {
 
 	private function assertFixContains(src: String, present: String): Void {
 		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf(present) >= 0);
 			case Err(message):
@@ -68,7 +68,7 @@ class TrivialGetterCheckTestBase extends Test {
 
 	private function fixedText(src: String): String {
 		final r: { vs: Array<Violation>, check: TrivialGetter } = runAndExpectOne(src);
-		return switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');

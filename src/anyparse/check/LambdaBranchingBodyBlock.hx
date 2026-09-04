@@ -1,10 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -133,7 +133,7 @@ final class LambdaBranchingBodyBlock implements Check {
 			final body: String = source.substring(vspan.from, vspan.to);
 			edits.push({ span: vspan, text: '{\n${terminated(body)}\n}' });
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**

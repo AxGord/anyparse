@@ -2,10 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -209,7 +211,7 @@ final class PreferLocalFunction implements Check {
 
 	/** Every rewritable binding reachable under `tree`, in document order. */
 	private static function collectMatches(tree: QueryNode, source: String, s: Seams, regions: Array<LexRegion>): Array<Match> {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final out: Array<Match> = [];
 		walkBlocks(tree, source, comments, s, out);
 		return out;
@@ -237,7 +239,7 @@ final class PreferLocalFunction implements Check {
 	): Null<Match> {
 		if (!s.localDeclKinds.contains(st.kind) || s.localDeclContinuationKinds.contains(st.kind)) return null;
 		if (st.children.length != 1 || !s.literalKinds.contains(st.children[0].kind)) return null;
-		if (RefactorSupport.isMultiDeclarator(st, s.localDeclContinuationKinds)) return null;
+		if (SourceText.isMultiDeclarator(st, s.localDeclContinuationKinds)) return null;
 		final fn: QueryNode = st.children[0];
 		final name: Null<String> = st.name;
 		final stSpan: Null<Span> = st.span;
@@ -284,7 +286,7 @@ final class PreferLocalFunction implements Check {
 		if (!resultSurvives(parts, declared.returnsVoid)) return null;
 		if (!bindingIsSole(list, name, stSpan.from, lhsSpan, s)) return null;
 		if (commentOverlaps(comments, assignSpan.from, fnSpan.from)) return null;
-		final cut: Span = RefactorSupport.lineExtendedSpan(source, declSpan);
+		final cut: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		if (commentOverlaps(comments, cut.from, cut.to)) return null;
 		// The removal must not touch the host statement's start: an edit batch drops any edit another
 		// edit CONTAINS, so a cut ending exactly there would swallow the zero-width hoist insertion.
@@ -333,7 +335,7 @@ final class PreferLocalFunction implements Check {
 		for (i in 0...index) {
 			final st: QueryNode = kids[i];
 			if (!s.localDeclKinds.contains(st.kind) || st.name != name) continue;
-			return if (RefactorSupport.isMultiDeclarator(st, s.localDeclContinuationKinds))
+			return if (SourceText.isMultiDeclarator(st, s.localDeclContinuationKinds))
 				null
 			else if (declarationIsBare(st, s))
 				st
@@ -365,12 +367,12 @@ final class PreferLocalFunction implements Check {
 	private static function declaredType(source: String, declSpan: Span, name: String, voidTypeName: Null<String>): DeclaredType {
 		final text: String = source.substring(declSpan.from, declSpan.to);
 		var i: Int = 0;
-		while (i < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(i))) i++; // the var / final keyword
-		while (i < text.length && RefactorSupport.isSpace(text.fastCodeAt(i))) i++;
+		while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++; // the var / final keyword
+		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
 		final nameStart: Int = i;
-		while (i < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(i))) i++;
+		while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
 		if (text.substring(nameStart, i) != name) return { survives: false, returnsVoid: false };
-		while (i < text.length && RefactorSupport.isSpace(text.fastCodeAt(i))) i++;
+		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
 		if (i >= text.length || text.fastCodeAt(i) != ':'.code) return { survives: true, returnsVoid: false };
 		final returnType: Null<String> = topLevelReturnType(text, i + 1);
 		return { survives: returnType != null, returnsVoid: returnType != null && returnType == voidTypeName };
@@ -488,10 +490,10 @@ final class PreferLocalFunction implements Check {
 	private static function parameterIsTyped(text: String): Bool {
 		var i: Int = 0;
 		if (i < text.length && text.fastCodeAt(i) == '?'.code) i++;
-		while (i < text.length && RefactorSupport.isSpace(text.fastCodeAt(i))) i++;
-		if (i >= text.length || !RefactorSupport.isIdentStartChar(text.fastCodeAt(i))) return false;
-		while (i < text.length && RefactorSupport.isIdentChar(text.fastCodeAt(i))) i++;
-		while (i < text.length && RefactorSupport.isSpace(text.fastCodeAt(i))) i++;
+		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
+		if (i >= text.length || !SourceText.isIdentStartChar(text.fastCodeAt(i))) return false;
+		while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
+		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
 		return i < text.length && text.fastCodeAt(i) == ':'.code;
 	}
 

@@ -1,8 +1,8 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -50,7 +50,7 @@ final class ExtractConstant {
 	public static function extractConstant(
 		source: String, typeName: String, name: String, literal: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		if (!RefactorSupport.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
+		if (!SourceText.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
 
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
@@ -75,7 +75,7 @@ final class ExtractConstant {
 		];
 		for (occ in occurrences) edits.push({ span: occ, text: name });
 
-		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, edits, reformat, plugin, optsJson);
 	}
 
 	/**
@@ -85,7 +85,7 @@ final class ExtractConstant {
 		scopeFiles: Array<{ file: String, source: String }>, modulePkg: String, moduleClass: String, moduleExists: Bool,
 		moduleSource: Null<String>, name: String, literal: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): ExtractIntoResult {
-		if (!RefactorSupport.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
+		if (!SourceText.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
 
 		final modulePath: String = modulePkg == '' ? moduleClass : '$modulePkg.$moduleClass';
 		final ref: String = '$moduleClass.$name';
@@ -105,7 +105,7 @@ final class ExtractConstant {
 			if (token == null) token = sf.source.substring(occurrences[0].from, occurrences[0].to);
 
 			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: ref }];
-			final replaced: String = switch RefactorSupport.canonicalize(sf.source, edits, reformat, plugin, optsJson) {
+			final replaced: String = switch CanonicalEdit.canonicalize(sf.source, edits, reformat, plugin, optsJson) {
 				case Ok(text): text;
 				case Err(message): return Err('${sf.file}: $message');
 			};
@@ -143,7 +143,7 @@ final class ExtractConstant {
 		function walk(node: QueryNode): Void {
 			// A literal inside `@:meta('x')` must stay a literal — metadata needs a
 			// constant string, not an identifier reference.
-			if (RefactorSupport.META_KINDS.contains(node.kind)) return;
+			if (MemberKinds.META_KINDS.contains(node.kind)) return;
 			if (node.kind == 'SingleStringExpr' && node.children.length == 1) {
 				final only: QueryNode = node.children[0];
 				final span: Null<Span> = node.span;
@@ -171,13 +171,13 @@ final class ExtractConstant {
 		// the region as "no member at all" (which this scan used to do when every member was guarded)
 		// sent the caller down the append path instead.
 		for (child in decl.nameNode.children) if (
-			RefactorSupport.isFieldMemberKind(child.kind) || RefactorSupport.FN_DECL_KINDS.contains(child.kind)
+			MemberKinds.isFieldMemberKind(child.kind) || MemberKinds.FN_DECL_KINDS.contains(child.kind)
 			|| (condKind != null && child.kind == condKind)
 		) {
 			final span: Null<Span> = child.span;
 			if (span == null) continue;
-			final group: Span = RefactorSupport.declGroupSpan(child, decl.nameNode, span);
-			return RefactorSupport.docExtendedSpan(source, group, regions).from;
+			final group: Span = ElementSpan.declGroupSpan(child, decl.nameNode, span);
+			return ElementSpan.docExtendedSpan(source, group, regions).from;
 		}
 		return -1;
 	}
@@ -219,7 +219,7 @@ final class ExtractConstant {
 		final insertAt: Int = firstMemberStart(existing, declNN, shape, plugin.lexicalRegions(existing));
 		return insertAt < 0
 			? AddMember.addMember(existing, moduleClass, memberText, reformat, plugin, optsJson)
-			: RefactorSupport.canonicalize(
+			: CanonicalEdit.canonicalize(
 				existing,
 				[{ span: new Span(insertAt, insertAt), text: '$memberText\n' }],
 				reformat, plugin, optsJson

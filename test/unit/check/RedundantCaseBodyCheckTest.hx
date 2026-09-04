@@ -6,7 +6,7 @@ import anyparse.check.RedundantCaseBody;
 import anyparse.check.Severity;
 import anyparse.check.UnusedCaseBinder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -223,7 +223,7 @@ class RedundantCaseBodyCheckTest extends Test {
 	}
 
 	private function canonical(src: String, edits: Array<{ span: Span, text: String }>): String {
-		return switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

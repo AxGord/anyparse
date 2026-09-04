@@ -2,7 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
@@ -110,9 +110,9 @@ final class Suppression {
 	private static function collectEntries(source: String, index: LineIndex, regions: Array<LexRegion>): Array<Entry> {
 		final entries: Array<Entry> = [];
 		var openLine: Int = -1;
-		for (tok in RefactorSupport.collectCommentTokens(regions)) {
+		for (tok in SourceComments.collectCommentTokens(regions)) {
 			final line: Int = index.lineColAt(tok.from).line;
-			final body: Span = RefactorSupport.commentBody(source, tok);
+			final body: Span = SourceComments.commentBody(source, tok);
 			final text: String = source.substring(body.from, body.to).trim();
 
 			if (text.startsWith('CHECKSTYLE:OFF')) {

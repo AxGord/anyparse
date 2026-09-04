@@ -4,7 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.FragmentedDocComment.CommentTok;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -105,7 +106,7 @@ final class EmptyDocTag implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (tok in RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source))) if (isDoc(source, tok)) {
+		for (tok in SourceComments.collectCommentTokens(plugin.lexicalRegions(source))) if (isDoc(source, tok)) {
 			final lines: Array<Span> = interiorLines(source, tok);
 			final doomed: Array<TagSection> = emptySections(source, lines).filter(s -> flagged.contains(s.from));
 			if (doomed.length > 0) {
@@ -131,7 +132,7 @@ final class EmptyDocTag implements Check {
 
 	/** Scan every doc comment in `source`, flagging each content-free tag section. */
 	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
-		for (tok in RefactorSupport.collectCommentTokens(regions)) if (isDoc(source, tok)) {
+		for (tok in SourceComments.collectCommentTokens(regions)) if (isDoc(source, tok)) {
 			final lines: Array<Span> = interiorLines(source, tok);
 			for (section in emptySections(source, lines)) out.push({
 				file: file,
@@ -260,7 +261,7 @@ final class EmptyDocTag implements Check {
 	private static function isBlankLine(source: String, line: Span): Bool {
 		for (i in line.from ... line.to) {
 			final c: Int = source.fastCodeAt(i);
-			if (!RefactorSupport.isSpace(c) && c != '*'.code) return false;
+			if (!SourceText.isSpace(c) && c != '*'.code) return false;
 		}
 		return true;
 	}
@@ -274,22 +275,22 @@ final class EmptyDocTag implements Check {
 		if (bare >= to || source.fastCodeAt(bare) != '@'.code) return null;
 		var i: Int = bare + 1;
 		while (i < to && isLetter(source.fastCodeAt(i))) i++;
-		final terminated: Bool = i >= to || RefactorSupport.isSpace(source.fastCodeAt(i));
+		final terminated: Bool = i >= to || SourceText.isSpace(source.fastCodeAt(i));
 		return i > bare + 1 && terminated ? source.substring(bare + 1, i) : null;
 	}
 
 	/** The offset of a line's bare content: past its leading whitespace, gutter star run, and the whitespace after it. */
 	private static function bareFrom(source: String, line: Span): Int {
 		var i: Int = line.from;
-		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < line.to && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		while (i < line.to && source.fastCodeAt(i) == '*'.code) i++;
-		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < line.to && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		return i;
 	}
 
 	/** Whether `text` holds whitespace - i.e. more than one whitespace-delimited token. */
 	private static function hasSpace(text: String): Bool {
-		for (i in 0...text.length) if (RefactorSupport.isSpace(text.fastCodeAt(i))) return true;
+		for (i in 0...text.length) if (SourceText.isSpace(text.fastCodeAt(i))) return true;
 		return false;
 	}
 
@@ -301,9 +302,9 @@ final class EmptyDocTag implements Check {
 	 */
 	private static function isGutterLine(source: String, line: Span): Bool {
 		var i: Int = line.from;
-		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < line.to && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		if (i < line.to && source.fastCodeAt(i) == '*'.code) i++;
-		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < line.to && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		return i == line.to;
 	}
 
@@ -338,7 +339,7 @@ final class EmptyDocTag implements Check {
 	/** The offset of the line's first non-space byte - its gutter star when it carries one. */
 	private static function contentFrom(source: String, line: Span): Int {
 		var i: Int = line.from;
-		while (i < line.to && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+		while (i < line.to && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		return i;
 	}
 

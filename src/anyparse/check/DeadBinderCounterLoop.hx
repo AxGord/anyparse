@@ -4,9 +4,11 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.check.UsingScan.UsingHeader;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -155,10 +157,10 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		// edit an enclosing one swallows is not in the output, so neither is the `count()` that
 		// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
 		// widens static-extension resolution for the whole file.
-		final edits: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits([for (c in collected) c.edit]);
+		final edits: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([for (c in collected) c.edit]);
 		if (!keptNeedsLambda(collected, edits) || UsingScan.hasUsingModule(header, LAMBDA_MODULE)) return edits;
 		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-		if (!RefactorSupport.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
+		if (!CanonicalEdit.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
 		return edits;
 	}
 
@@ -265,9 +267,9 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		// The binder-is-dead proof is a TEXT scan, not a node walk. A bare `'$x'` interpolation read
 		// and a `macro` reification subtree both hide the mention from the tree, and HERE a missed
 		// mention is a licence to DELETE the binder — the unsafe direction of the imprecision.
-		if (RefactorSupport.referencedInRange(source, sh.binder, bodySpan.from, bodySpan.to, [])) return null;
+		if (OccurrenceScan.referencedInRange(source, sh.binder, bodySpan.from, bodySpan.to, [])) return null;
 		if (!bodyAdmitsRewrite(sh.body, sh.counter, sh.collection, s)) return null;
-		if (RefactorSupport.referencedInRange(source, sh.counter, forSpan.to, scopeSpan.to, [])) return null;
+		if (OccurrenceScan.referencedInRange(source, sh.counter, forSpan.to, scopeSpan.to, [])) return null;
 		if (LoopScan.capturedByClosure(scope, source, sh.counter, core)) return null;
 		final bound: Null<Bound> = boundOf(sh.collection, LoopScan.identTypeSource(sh.iterable, root, types, core), index, qualified);
 		return bound == null ? null : {

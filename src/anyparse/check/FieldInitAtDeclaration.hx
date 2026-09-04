@@ -1,8 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CondRegionScan;
+import anyparse.query.CtorFieldWrite;
+import anyparse.query.ElementSpan;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -259,7 +263,7 @@ final class FieldInitAtDeclaration implements Check {
 		final shape: RefShape = plugin.refShape();
 		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin);
 		final lazyIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		final classLike: Array<String> = RefactorSupport.classLikeContainerKinds(shape);
+		final classLike: Array<String> = MemberKinds.classLikeContainerKinds(shape);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
@@ -303,7 +307,7 @@ final class FieldInitAtDeclaration implements Check {
 				stmt: QueryNode,
 				rhs: QueryNode,
 				target: Span
-			}> = RefactorSupport.constructorFieldInitAt(tree, span.from, shape);
+			}> = CtorFieldWrite.constructorFieldInitAt(tree, span.from, shape);
 			if (loc != null) {
 				final rhsSpan: Null<Span> = loc.rhs.span;
 				final fieldSpan: Null<Span> = loc.field.span;
@@ -313,9 +317,9 @@ final class FieldInitAtDeclaration implements Check {
 					reportSkip(v.file, loc.field.name);
 					continue;
 				}
-				final insertPos: Int = RefactorSupport.fieldDeclInitInsertPos(source, fieldSpan);
+				final insertPos: Int = CtorFieldWrite.fieldDeclInitInsertPos(source, fieldSpan);
 				edits.push({ span: new Span(insertPos, insertPos), text: ' = ${source.substring(rhsSpan.from, rhsSpan.to)}' });
-				edits.push({ span: RefactorSupport.lineExtendedSpan(source, stmtSpan), text: '' });
+				edits.push({ span: ElementSpan.lineExtendedSpan(source, stmtSpan), text: '' });
 				continue;
 			}
 			// The EMBEDDED shape: the assignment's value is consumed where it stands, so the statement
@@ -339,7 +343,7 @@ final class FieldInitAtDeclaration implements Check {
 				reportSkip(v.file, emb.field.name);
 				continue;
 			}
-			final insertPos: Int = RefactorSupport.fieldDeclInitInsertPos(source, fieldSpan);
+			final insertPos: Int = CtorFieldWrite.fieldDeclInitInsertPos(source, fieldSpan);
 			edits.push({ span: new Span(insertPos, insertPos), text: ' = ${source.substring(rhsSpan.from, rhsSpan.to)}' });
 			edits.push({ span: assignSpan, text: source.substring(emb.target.from, emb.target.to) });
 		}
@@ -371,11 +375,11 @@ final class FieldInitAtDeclaration implements Check {
 		rhs: QueryNode,
 		target: Span
 	}> {
-		final loc: Null<{ container: QueryNode, field: QueryNode }> = RefactorSupport.classLikeFieldAt(tree, fieldFrom, shape);
+		final loc: Null<{ container: QueryNode, field: QueryNode }> = CtorFieldWrite.classLikeFieldAt(tree, fieldFrom, shape);
 		if (loc == null) return null;
-		final ctor: Null<QueryNode> = RefactorSupport.soleConstructor(loc.container, shape);
+		final ctor: Null<QueryNode> = CtorFieldWrite.soleConstructor(loc.container, shape);
 		if (ctor == null) return null;
-		final write: Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> = RefactorSupport.soleConstructorFieldWrite(
+		final write: Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> = CtorFieldWrite.soleConstructorFieldWrite(
 			loc.container, ctor, loc.field, shape
 		);
 		return write == null ? null : {
@@ -425,10 +429,10 @@ final class FieldInitAtDeclaration implements Check {
 	): Void {
 		final owner: Null<String> = container.name;
 		if (owner == null) return;
-		final ctor: Null<QueryNode> = RefactorSupport.soleConstructor(container, shape);
+		final ctor: Null<QueryNode> = CtorFieldWrite.soleConstructor(container, shape);
 		if (ctor == null) return;
 		final mayBeInherited: (String) -> Bool = inheritedProbe(file, lazyIndex);
-		final statics: Array<Int> = RefactorSupport.staticMemberFroms(container, shape);
+		final statics: Array<Int> = MemberKinds.staticMemberFroms(container, shape);
 		final found: Candidates = collectCandidates(container, ctor, owner, source, statics, shape, writeIndex, mayBeInherited);
 		// An EMBEDDED write joins NO chain, and cannot: the chain keys a candidate by the top-level
 		// statement it owns, while several embedded writes share one statement (every element of a
@@ -474,7 +478,7 @@ final class FieldInitAtDeclaration implements Check {
 		var coMoversOrderSafe: Bool = true;
 		// Every member host, not just the container's direct children: a field written inside a
 		// member-position `#if` sits one level down and was silently exempt.
-		RefactorSupport.eachMemberHost(container, host -> {
+		MemberKinds.eachMemberHost(container, host -> {
 			for (member in host.children) {
 				final cand: Null<Candidate> = candidateFor(
 					member, container, ctor, owner, source, statics, shape, writeIndex, mayBeInherited
@@ -594,9 +598,9 @@ final class FieldInitAtDeclaration implements Check {
 	private static function prefixMovesTogether(
 		container: QueryNode, boundary: Int, moving: Array<Int>, source: String, shape: RefShape, mayBeInherited: (String) -> Bool
 	): Bool {
-		final ctor: Null<QueryNode> = RefactorSupport.soleConstructor(container, shape);
+		final ctor: Null<QueryNode> = CtorFieldWrite.soleConstructor(container, shape);
 		if (ctor == null) return false;
-		final statics: Array<Int> = RefactorSupport.staticMemberFroms(container, shape);
+		final statics: Array<Int> = MemberKinds.staticMemberFroms(container, shape);
 		for (stmt in ctorStatements(ctor, shape)) {
 			final span: Null<Span> = stmt.span;
 			if (span == null || span.from >= boundary) continue;
@@ -635,9 +639,9 @@ final class FieldInitAtDeclaration implements Check {
 		final span: Null<Span> = stmt.span;
 		return if (mv == null || span == null)
 			null
-		else if (!RefactorSupport.contextFreeRhs(mv.rhs, container, statics, shape, false, mayBeInherited))
+		else if (!CtorFieldWrite.contextFreeRhs(mv.rhs, container, statics, shape, false, mayBeInherited))
 			null
-		else if (!RefactorSupport.ctorPrefixUnconditional(ctor, span.from, shape))
+		else if (!CtorFieldWrite.ctorPrefixUnconditional(ctor, span.from, shape))
 			null
 		else if (hoistCrossesSuper(ctor, container, span.from, shape))
 			null
@@ -716,9 +720,9 @@ final class FieldInitAtDeclaration implements Check {
 		// `hasSupertypeClause` is false for every container and this gate is ABSENT rather than coarser. The
 		// three seams are optional independently, so a grammar declaring none disarms it entirely;
 		// `HaxeQueryPlugin` declares all three.
-		if (superText == null || callKind == null) return RefactorSupport.hasSupertypeClause(container, shape);
+		if (superText == null || callKind == null) return CtorFieldWrite.hasSupertypeClause(container, shape);
 		final calls: Array<QueryNode> = [];
-		RefactorSupport.collectSuperCalls(ctor, superText, callKind, shape.identKind, calls);
+		CtorFieldWrite.collectSuperCalls(ctor, superText, callKind, shape.identKind, calls);
 		// No call up at all: the prologue crosses nothing. Several: they can sit on different branches,
 		// so "the write precedes THE super call" has no answer and the gate refuses.
 		if (calls.length == 0) return false;
@@ -755,11 +759,11 @@ final class FieldInitAtDeclaration implements Check {
 	private static function coMoverOrderUnsafe(
 		member: QueryNode, container: QueryNode, statics: Array<Int>, source: String, shape: RefShape, mayBeInherited: (String) -> Bool
 	): Bool {
-		if (RefactorSupport.isConditionalKind(member.kind)) return true;
+		if (CondRegionScan.isConditionalKind(member.kind)) return true;
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final span: Null<Span> = member.span;
 		return span != null && fields.contains(member.kind) && !statics.contains(span.from) && member.children.length >= 1
-			&& !RefactorSupport.contextFreeRhs(member.children[0], container, statics, shape, false, mayBeInherited);
+			&& !CtorFieldWrite.contextFreeRhs(member.children[0], container, statics, shape, false, mayBeInherited);
 	}
 
 	/**
@@ -784,12 +788,12 @@ final class FieldInitAtDeclaration implements Check {
 		// loop body) — shapes `soleConstructorFieldWrite` admits because Haxe accepts them for a `final`
 		// field. Hoisting one into the always-run prologue would make a conditional initialisation
 		// unconditional, so the move demands the separate whitelist proof.
-		if (write.embedded && !RefactorSupport.ctorWriteUnconditional(ctor, at, shape)) return null;
+		if (write.embedded && !CtorFieldWrite.ctorWriteUnconditional(ctor, at, shape)) return null;
 		// Gating the CANDIDATE rather than one of the two acceptance paths is what makes both
 		// inherit it: the chain path already demanded an unbroken run of accepted inits, so
 		// this is a no-op there, and the sole-write path — which looks at no prefix at all —
 		// is the one that needed it.
-		if (!RefactorSupport.ctorPrefixUnconditional(ctor, at, shape)) return null;
+		if (!CtorFieldWrite.ctorPrefixUnconditional(ctor, at, shape)) return null;
 		// Haxe emits declaration initializers ahead of the constructor BODY, an explicit `super()`
 		// included, so no init may be hoisted across one — except one written INSIDE that call's own
 		// arguments, which already runs before it. Gated on the CANDIDATE for the same reason as the
@@ -802,7 +806,7 @@ final class FieldInitAtDeclaration implements Check {
 		// hoisted ahead of that statement and observed the empty value. `final` on the static proves
 		// nothing: the binding is immutable, its contents are not. Both acceptance paths inherit the
 		// gate from here, so a candidate is order-safe by construction and needs no second tier.
-		return !RefactorSupport.contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited) || unsafeRead ? null : {
+		return !CtorFieldWrite.contextFreeRhs(write.rhs, container, statics, shape, false, mayBeInherited) || unsafeRead ? null : {
 			name: mv.name,
 			stmtFrom: at,
 			span: mv.span,
@@ -820,7 +824,7 @@ final class FieldInitAtDeclaration implements Check {
 	private static function ctorWriteFor(
 		container: QueryNode, ctor: QueryNode, member: QueryNode, shape: RefShape
 	): Null<{ rhs: QueryNode, at: Span, embedded: Bool }> {
-		final init: Null<{ stmt: QueryNode, rhs: QueryNode, target: Span }> = RefactorSupport.soleConstructorFieldInit(
+		final init: Null<{ stmt: QueryNode, rhs: QueryNode, target: Span }> = CtorFieldWrite.soleConstructorFieldInit(
 			container, ctor, member, shape
 		);
 		if (init != null) {
@@ -831,7 +835,7 @@ final class FieldInitAtDeclaration implements Check {
 				embedded: false
 			};
 		}
-		final write: Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> = RefactorSupport.soleConstructorFieldWrite(
+		final write: Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> = CtorFieldWrite.soleConstructorFieldWrite(
 			container, ctor, member, shape
 		);
 		if (write == null) return null;
@@ -856,7 +860,7 @@ final class FieldInitAtDeclaration implements Check {
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		final seen: Array<String> = [];
 		final duplicated: Array<String> = [];
-		RefactorSupport.eachMemberHost(container, host -> {
+		MemberKinds.eachMemberHost(container, host -> {
 			for (child in host.children) if (members.contains(child.kind)) {
 				final name: Null<String> = child.name;
 				if (name == null) continue;

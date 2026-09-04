@@ -3,7 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -111,7 +111,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
 		Assert.isTrue(vs.length >= 1);
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('a(thing:Int)') >= 0, text);
 				Assert.isTrue(text.indexOf('return thing;') >= 0, text);
@@ -247,7 +247,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.isTrue(vs.length >= 3);
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.equals(-1, text.indexOf('__id'));
 				Assert.isTrue(text.indexOf('var _id') >= 0);
@@ -302,7 +302,7 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 			+ '\tpublic function b(__x:Int):Int {\n\t\tvar x:Int = 5;\n\t\t// keep __x here\n\t\treturn __x + x;\n\t}\n}';
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('// keep __x here') >= 0);
 				Assert.isTrue(text.indexOf('a(x:Int)') >= 0);

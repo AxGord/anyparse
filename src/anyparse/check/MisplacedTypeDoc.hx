@@ -4,7 +4,8 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -156,10 +157,10 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 		final gapTo: Null<Span> = header.decls[1].span;
 		if (gapFrom == null || gapTo == null) return null;
 		if (source.substring(gapFrom.to, gapTo.from).indexOf(DOC_OPEN) < 0) return null;
-		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final docs: Array<CommentTok> = [
 			for (tok in comments)
-				if (RefactorSupport.isDocBlock(source, tok) && tok.from >= gapFrom.to && tok.to <= gapTo.from) tok
+				if (SourceComments.isDocBlock(source, tok) && tok.from >= gapFrom.to && tok.to <= gapTo.from) tok
 		];
 		return if (docs.length != 1)
 			null
@@ -246,7 +247,7 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 	 * end), in which case a line-granular move would take that code with it.
 	 */
 	private static function wholeLineSpan(source: String, tok: CommentTok): Null<Span> {
-		final lineStart: Int = RefactorSupport.startOfLine(source, tok.from);
+		final lineStart: Int = SourceText.startOfLine(source, tok.from);
 		if (source.substring(lineStart, tok.from).trim() != '') return null;
 		final newline: Int = source.indexOf('\n', tok.to);
 		return if (newline < 0)
@@ -261,7 +262,7 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 	private static function blankLineBefore(source: String, pos: Int): Bool {
 		var newlines: Int = 0;
 		var i: Int = pos - 1;
-		while (i >= 0 && RefactorSupport.isSpace(source.fastCodeAt(i))) {
+		while (i >= 0 && SourceText.isSpace(source.fastCodeAt(i))) {
 			if (source.fastCodeAt(i) == '\n'.code) newlines++;
 			i--;
 		}

@@ -2,9 +2,9 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -223,7 +223,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 			final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
 			if (candidate != null) edits.push({ span: candidate.span, text: candidate.text });
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Every collapsible arm in `scan`'s source, in document order. */

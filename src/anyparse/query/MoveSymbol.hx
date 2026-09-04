@@ -244,7 +244,7 @@ final class MoveSymbol {
 		// ONE lexical scan of the cursor file for the two span walks below. Both step BACKWARD over
 		// the declaration's leading trivia, and a per-line prefix test cannot tell a block comment's
 		// continuation line from ordinary code — see `triviaStartOf`.
-		final cursorComments: Array<Span> = RefactorSupport.collectCommentRegions(plugin.lexicalRegions(cursorSource));
+		final cursorComments: Array<Span> = SourceComments.collectCommentRegions(plugin.lexicalRegions(cursorSource));
 		final cutInfo: Null<{ span: Span, textEnd: Int }> = computeCutSpan(cursorSource, declSpan, target.declGroupEnd, cursorComments);
 		if (cutInfo == null) return Err('the type "$typeName" shares a source line with other code — refusing to move');
 		final cut: Span = cutInfo.span;
@@ -717,7 +717,7 @@ final class MoveSymbol {
 		return cursorInfo.imports.find(
 			imp ->
 				!imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
-				&& SymbolIndex.pathImportedBy(imp) != null && RefactorSupport.lastSegment(imp.raw) == dep
+				&& SymbolIndex.pathImportedBy(imp) != null && SourceText.lastSegment(imp.raw) == dep
 		);
 	}
 
@@ -751,7 +751,7 @@ final class MoveSymbol {
 		dep: String, cursorInfo: FileInfo, destInfo: FileInfo, files: Array<FileInfo>
 	): Null<String> {
 		final head: String = dep.substring(0, dep.indexOf('.'));
-		if (!RefactorSupport.isUpperInitial(head)) return null;
+		if (!SourceText.isUpperInitial(head)) return null;
 		final mineHead: Null<String> = headModuleOf(head, cursorInfo, files);
 		final theirsHead: Null<String> = headModuleOf(head, destInfo, files);
 		// Equal includes null == null: a head the index cannot see is a top-level module, which
@@ -838,7 +838,7 @@ final class MoveSymbol {
 		for (imp in info.imports) if (!imp.guarded) {
 			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (path == null) continue;
-			if (RefactorSupport.lastSegment(imp.raw) == name) {
+			if (SourceText.lastSegment(imp.raw) == name) {
 				imported = path;
 				continue;
 			}
@@ -904,7 +904,7 @@ final class MoveSymbol {
 	 */
 	private static function guardedImportPath(name: String, info: FileInfo): Null<String> {
 		var found: Null<String> = null;
-		for (imp in info.imports) if (imp.guarded && RefactorSupport.lastSegment(imp.raw) == name) {
+		for (imp in info.imports) if (imp.guarded && SourceText.lastSegment(imp.raw) == name) {
 			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (path != null) found = path;
 		}
@@ -1003,7 +1003,7 @@ final class MoveSymbol {
 	private static function headModuleOf(head: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
 		for (pkg in packageChainOf(info.pkg))
 			for (fi in files)
-				if (fi.pkg == pkg && RefactorSupport.lastSegment(fi.module) == head) return fi.module;
+				if (fi.pkg == pkg && SourceText.lastSegment(fi.module) == head) return fi.module;
 		return null;
 	}
 
@@ -1029,7 +1029,7 @@ final class MoveSymbol {
 		for (imp in info.imports) if (imp.kind != ImportKind.Wild) {
 			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (path == null) continue;
-			if (RefactorSupport.lastSegment(imp.raw) == name) {
+			if (SourceText.lastSegment(imp.raw) == name) {
 				if (!out.contains(path)) out.push(path);
 				continue;
 			}
@@ -1063,8 +1063,8 @@ final class MoveSymbol {
 		// is the direction that costs a refusal rather than a rebind.
 		final excluded: Array<Span> = [for (imp in destInfo.imports) imp.span];
 		for (t in destInfo.types) if (t.typeParamNames.contains(name) && !t.members.exists(m -> m.isStatic)) excluded.push(t.span);
-		return RefactorSupport.referencedUnqualifiedInRange(
-			destSource, name, 0, destSource.length, excluded, RefactorSupport.collectCommentRegions(regions)
+		return OccurrenceScan.referencedUnqualifiedInRange(
+			destSource, name, 0, destSource.length, excluded, SourceComments.collectCommentRegions(regions)
 		);
 	}
 
@@ -1247,8 +1247,8 @@ final class MoveSymbol {
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
 			if (
-				name != null && span != null && child.kind == identKind && RefactorSupport.isUpperInitial(name)
-				&& span.from >= declSpan.from && span.to <= declSpan.to && name != typeName
+				name != null && span != null && child.kind == identKind && SourceText.isUpperInitial(name) && span.from >= declSpan.from
+				&& span.to <= declSpan.to && name != typeName
 			)
 				pushNameSpan(out, name, span);
 		}
@@ -1328,11 +1328,7 @@ final class MoveSymbol {
 			// Skipping cannot rebind a TYPE name. It can leave the moved body's `x.f()` on whatever
 			// extension the destination already supplies — the same residual `carriedDestEdits` names —
 			// and otherwise it is a missing extension, which is loud.
-			if (
-				carryCollision(
-					RefactorSupport.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, files, true, destRegions
-				) != null
-			)
+			if (carryCollision(SourceText.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, files, true, destRegions) != null)
 				continue;
 			final line: String = importLineFor(imp, source);
 			if (!carried.contains(line)) carried.push(line);
@@ -1430,7 +1426,7 @@ final class MoveSymbol {
 		final open: Int = source.indexOf('(', span.from);
 		if (open <= span.from || open >= span.to) return null;
 		var close: Int = open - 1;
-		while (close > span.from && RefactorSupport.isSpace(source.fastCodeAt(close))) close--;
+		while (close > span.from && SourceText.isSpace(source.fastCodeAt(close))) close--;
 		if (source.fastCodeAt(close) != '>'.code) return null;
 		var depth: Int = 0;
 		var i: Int = close;
@@ -1598,7 +1594,7 @@ final class MoveSymbol {
 		final index: Int = siblings.indexOf(node);
 		if (index < 0) return true;
 		var start: Int = index;
-		while (start > 0 && RefactorSupport.isDeclPrefixSibling(siblings[start - 1])) start--;
+		while (start > 0 && ElementSpan.isDeclPrefixSibling(siblings[start - 1])) start--;
 		return adjoins(source, siblings, start - 1, cut.from, true, comments)
 			&& adjoins(source, siblings, index + 1, cut.to, false, comments);
 	}
@@ -1793,8 +1789,8 @@ final class MoveSymbol {
 	 * ONLY in a comment.
 	 */
 	private static function namesAnyOf(source: String, names: Array<String>, excluded: Array<Span>, regions: Array<LexRegion>): Bool {
-		final comments: Array<Span> = RefactorSupport.collectCommentRegions(regions);
-		return names.exists(n -> RefactorSupport.referencedUnqualifiedInRange(source, n, 0, source.length, excluded, comments));
+		final comments: Array<Span> = SourceComments.collectCommentRegions(regions);
+		return names.exists(n -> OccurrenceScan.referencedUnqualifiedInRange(source, n, 0, source.length, excluded, comments));
 	}
 
 	/**
@@ -2040,7 +2036,7 @@ final class MoveSymbol {
 		final out: Array<String> = [];
 		for (t in types) {
 			out.push(t.name);
-			for (m in t.members) if (RefactorSupport.isEnumConstructorKind(m.kind)) out.push(m.name);
+			for (m in t.members) if (MemberKinds.isEnumConstructorKind(m.kind)) out.push(m.name);
 		}
 		return out;
 	}
@@ -2237,10 +2233,10 @@ final class MoveSymbol {
 		//    that neighbour's leading trivia (the 816bb666 family).
 		final parseSpan: Span = declMatch.fullSpan;
 		final declParent: Null<QueryNode> = TreePath.parentOf(cursorTree, declMatch.declNode);
-		final groupSpan: Span = RefactorSupport.declGroupSpan(declMatch.declNode, declParent, parseSpan);
+		final groupSpan: Span = ElementSpan.declGroupSpan(declMatch.declNode, declParent, parseSpan);
 		return POk({
 			typeName: typeName,
-			declSpan: RefactorSupport.trailingTrimmedSpan(cursorSourceNN, groupSpan, plugin.lexicalRegions.bind(cursorSourceNN)),
+			declSpan: ElementSpan.trailingTrimmedSpan(cursorSourceNN, groupSpan, plugin.lexicalRegions.bind(cursorSourceNN)),
 			declGroupEnd: groupSpan.to,
 			declNode: declMatch.declNode,
 			declParent: declParent,
@@ -2347,7 +2343,7 @@ final class MoveSymbol {
 		for (file => edits in editsByFile) {
 			final original: Null<String> = sourceOf[file];
 			if (original == null) continue;
-			final newSource: String = RefactorSupport.applyEdits(original, edits);
+			final newSource: String = CanonicalEdit.applyEdits(original, edits);
 			if (newSource == original) continue;
 
 			// Atomic validation: every rewritten file must re-parse.
@@ -2397,9 +2393,9 @@ final class MoveSymbol {
 				final at: Int = source.indexOf(path, from);
 				if (at < 0) break;
 				from = at + 1;
-				final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(at - 1));
+				final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
 				final afterIdx: Int = at + path.length;
-				final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(afterIdx));
+				final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
 				if (!beforeOk || !afterOk) continue;
 				// An ALIAS statement's `raw` is the alias, so the path it spells is `aliasTarget` —
 				// read `raw` here and the statement's own `p.Thing` reads as a fully-qualified CODE

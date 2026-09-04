@@ -232,14 +232,14 @@ final class ModuleScan {
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = bare.fastCodeAt(i);
-			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
+			if (!SourceText.isIdentChar(c) && c != '.'.code) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
 			while (i < n) {
 				final cc: Int = bare.fastCodeAt(i);
-				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
+				if (!SourceText.isIdentChar(cc) && cc != '.'.code) break;
 				i++;
 			}
 			runs.push(bare.substring(start, i));
@@ -263,7 +263,7 @@ final class ModuleScan {
 		final parts: Array<String> = path.split('.');
 		if (parts.length < 3) return path;
 		final module: String = parts[parts.length - 2];
-		return !RefactorSupport.isUpperInitial(module) || module == parts[parts.length - 1]
+		return !SourceText.isUpperInitial(module) || module == parts[parts.length - 1]
 			? path
 			: parts.slice(0, parts.length - 2).concat([parts[parts.length - 1]]).join('.');
 	}

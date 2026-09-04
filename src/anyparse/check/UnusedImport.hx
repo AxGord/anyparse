@@ -2,7 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -197,7 +200,7 @@ final class UnusedImport implements Check {
 			// use) AND the comment regions (a comment resolves no type, so a name spelled only
 			// there is not a use either). String literals are deliberately NOT in it — see the
 			// class doc.
-			final comments: Array<Span> = RefactorSupport.collectCommentRegions(plugin.lexicalRegions(source));
+			final comments: Array<Span> = SourceComments.collectCommentRegions(plugin.lexicalRegions(source));
 			final scan: FileScan = {
 				source: source,
 				excluded: [for (imp in info.imports) imp.span].concat(comments),
@@ -271,7 +274,7 @@ final class UnusedImport implements Check {
 			case ImportKind.Using:
 				addUsingViolation(out, file, imp, scan, plugin, reportMembersByModule);
 			case _:
-				final bound: String = imp.alias ?? RefactorSupport.lastSegment(imp.raw);
+				final bound: String = imp.alias ?? SourceText.lastSegment(imp.raw);
 				if (referenced(scan, bound)) return;
 				// A plain `import pkg.Mod;` binds every top-level type of the
 				// module, not only the main one — a reference to a SECONDARY
@@ -315,7 +318,7 @@ final class UnusedImport implements Check {
 	 * a reference.
 	 */
 	private static function referenced(scan: FileScan, name: String): Bool {
-		return RefactorSupport.referencedUnqualifiedInRange(scan.source, name, 0, scan.source.length, scan.excluded, scan.commentRegions);
+		return OccurrenceScan.referencedUnqualifiedInRange(scan.source, name, 0, scan.source.length, scan.excluded, scan.commentRegions);
 	}
 
 	/**
@@ -368,14 +371,14 @@ final class UnusedImport implements Check {
 		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,
 		reportMembersByModule: Map<String, Array<String>>
 	): Void {
-		final bound: String = RefactorSupport.lastSegment(imp.raw);
+		final bound: String = SourceText.lastSegment(imp.raw);
 		if (referenced(scan, bound)) return;
 		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? reportMembersByModule[imp.raw];
 		if (methods == null) {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': $MSG_USING_UNTRACKED', DECLINE_USING_UNTRACKED));
 			return;
 		}
-		if (methods.exists(m -> RefactorSupport.methodCalledInSource(scan.source, m, bound))) return;
+		if (methods.exists(m -> OccurrenceScan.methodCalledInSource(scan.source, m, bound))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 

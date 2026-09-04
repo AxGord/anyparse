@@ -1,8 +1,9 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -141,7 +142,7 @@ final class LoopScan {
 		if (s.opaqueKinds.contains(scope.kind)) return false;
 		if (s.closureKinds.contains(scope.kind)) {
 			final span: Null<Span> = scope.span;
-			if (span != null && RefactorSupport.referencedInRange(source, name, span.from, span.to, [])) return true;
+			if (span != null && OccurrenceScan.referencedInRange(source, name, span.from, span.to, [])) return true;
 		}
 		return scope.children.exists(c -> capturedByClosure(c, source, name, s));
 	}
@@ -160,7 +161,7 @@ final class LoopScan {
 	public static function singleLocalDeclName(decl: QueryNode, kinds: Array<String>, s: LoopSeams): Null<String> {
 		return if (!kinds.contains(decl.kind) || decl.children.length != 1)
 			null
-		else if (RefactorSupport.isMultiDeclarator(decl, s.localDeclContinuationKinds))
+		else if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds))
 			null
 		else
 			decl.name;

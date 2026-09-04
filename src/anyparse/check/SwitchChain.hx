@@ -2,8 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
@@ -300,7 +302,7 @@ final class SwitchChain {
 		if (parsed == null) return [];
 		final tree: QueryNode = parsed;
 		final scope: ChainScope = { root: tree, resolveIndex: lazyIndexOf([{ file: '', source: source }], plugin, index) };
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> = [];
 		eachHead(tree, seams, hostAccepts, head -> {
 			final span: Null<Span> = head.span;
@@ -507,7 +509,7 @@ final class SwitchChain {
 	 * notice, the rewrite compiling either way.
 	 */
 	private static function cannotProveEvaluationSafe(pairs: Array<EqPair>, seams: ChainSeams): Bool {
-		return seams.callKind == null || pairs.exists(p -> seams.mutationKinds.exists(k -> RefactorSupport.subtreeContainsKind(p.disc, k)));
+		return seams.callKind == null || pairs.exists(p -> seams.mutationKinds.exists(k -> MemberKinds.subtreeContainsKind(p.disc, k)));
 	}
 
 	/** The verbatim source of each discriminant of `pairs`, or null when one lacks a coordinate. */
@@ -524,7 +526,7 @@ final class SwitchChain {
 	/** Whether `pairs` tests exactly the `known` discriminants, positionally — the uniform-tuple gate. */
 	private static function sameDiscriminants(known: Array<QueryNode>, pairs: Array<EqPair>, source: String): Bool {
 		if (pairs.length != known.length) return false;
-		for (i in 0...pairs.length) if (!RefactorSupport.sameSource(known[i], pairs[i].disc, source)) return false;
+		for (i in 0...pairs.length) if (!MemberKinds.sameSource(known[i], pairs[i].disc, source)) return false;
 		return true;
 	}
 

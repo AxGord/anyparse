@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferLocalFunction;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -354,7 +354,7 @@ class PreferLocalFunctionCheckTest extends Test {
 	}
 
 	private function fixed(src: String): String {
-		return RefactorSupport.applyEdits(src, edits(src));
+		return CanonicalEdit.applyEdits(src, edits(src));
 	}
 
 }

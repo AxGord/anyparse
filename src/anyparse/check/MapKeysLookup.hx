@@ -1,11 +1,15 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NominalTypes;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -165,7 +169,7 @@ final class MapKeysLookup implements Check {
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		fixWalk(tree, source, c, wanted, edits);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	private static inline function isIdentNamed(node: QueryNode, name: String, cfg: Cfg): Bool {
@@ -533,7 +537,7 @@ final class MapKeysLookup implements Check {
 		];
 		// The declaration's line span STRICTLY contains its initialiser's lookup span, so
 		// `dropContainedEdits` drops that lookup edit whichever order the two are pushed in.
-		if (reuse != null) edits.push({ span: RefactorSupport.lineExtendedSpan(source, reuse.span), text: '' });
+		if (reuse != null) edits.push({ span: ElementSpan.lineExtendedSpan(source, reuse.span), text: '' });
 		collectLookupEdits(p.body, p.path, p.keyName, cfg, valName, edits);
 		return edits;
 	}
@@ -577,7 +581,7 @@ final class MapKeysLookup implements Check {
 		if (colon < 0 || colon >= to) return null;
 		final start: Int = skipSpace(source, colon + 1, to);
 		var i: Int = start;
-		while (i < to && RefactorSupport.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < to && SourceText.isIdentChar(source.fastCodeAt(i))) i++;
 		return i == start ? null : source.substring(start, i);
 	}
 
@@ -601,7 +605,7 @@ final class MapKeysLookup implements Check {
 		var n: Int = 1;
 		while (
 			candidate == rootName || candidate == keyName
-			|| RefactorSupport.referencedInRange(source, candidate, bodySpan.from, bodySpan.to, [])
+			|| OccurrenceScan.referencedInRange(source, candidate, bodySpan.from, bodySpan.to, [])
 		) {
 			candidate = base + n;
 			n++;

@@ -6,7 +6,7 @@ import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
@@ -204,7 +204,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('var _shape:Int') >= 0, text);
 				// The prose keeps its own word.
@@ -271,7 +271,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(2, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('forceBuild') >= 0);
 				Assert.isTrue(text.indexOf('cacheSize') >= 0);
@@ -329,7 +329,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == '$dir/C.hx');
 		Assert.equals(1, cVs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(cSrc, cVs, new HaxeQueryPlugin(), index);
-		switch RefactorSupport.canonicalize(cSrc, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(cSrc, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('_shape') >= 0);
 				Assert.isTrue(text.indexOf('var shape') == -1);
@@ -506,7 +506,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('_size') >= 0);
 				Assert.isTrue(text.indexOf('__size') == -1);
@@ -540,7 +540,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
-		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('private var _logo:Null<Sprite>') >= 0, text);
 				// The field's own uses, on both sides of the switch.

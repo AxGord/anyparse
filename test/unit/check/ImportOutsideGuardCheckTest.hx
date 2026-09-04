@@ -5,7 +5,7 @@ import anyparse.check.ImportOutsideGuard;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -132,12 +132,12 @@ class ImportOutsideGuardCheckTest extends Test {
 
 	/** `src` with the edits spliced in VERBATIM — the relocation alone, before any writer pass. */
 	private function fixedRaw(src: String): String {
-		return RefactorSupport.applyEdits(src, edits(src));
+		return CanonicalEdit.applyEdits(src, edits(src));
 	}
 
 	/** `src` fixed and canonicalized with `reformat` FALSE, exactly as `apq lint --fix` does it. */
 	private function fixedCanonical(src: String): String {
-		switch RefactorSupport.canonicalize(src, edits(src), false, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits(src), false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				return text;
 			case Err(message):

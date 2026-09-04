@@ -1,8 +1,8 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.EncapsulateField;
-import anyparse.query.RefactorSupport.EditResult;
 import utest.Assert;
 import utest.Test;
 

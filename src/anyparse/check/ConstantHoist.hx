@@ -1,6 +1,8 @@
 package anyparse.check;
 
+import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.HoistedConstant;
@@ -9,8 +11,11 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -230,7 +235,7 @@ final class ConstantHoist {
 		return {
 			declFrom: span.from,
 			insertAt: brace + 1,
-			deleteSpan: RefactorSupport.lineExtendedSpan(ctx.source, trailing == null ? span : new Span(span.from, trailing.to)),
+			deleteSpan: ElementSpan.lineExtendedSpan(ctx.source, trailing == null ? span : new Span(span.from, trailing.to)),
 			memberText: trailing == null ? emitted.text : '${emitted.text} ${ctx.source.substring(trailing.from, trailing.to)}'
 		};
 	}
@@ -277,7 +282,7 @@ final class ConstantHoist {
 	 * somewhere.
 	 */
 	private static function conditionalBetween(node: QueryNode, declFrom: Int): Bool {
-		if (RefactorSupport.isConditionalKind(node.kind)) return true;
+		if (CondRegionScan.isConditionalKind(node.kind)) return true;
 		for (child in node.children) {
 			final s: Null<Span> = child.span;
 			if (s != null && declFrom >= s.from && declFrom < s.to) return conditionalBetween(child, declFrom);
@@ -326,7 +331,7 @@ final class ConstantHoist {
 	private static function occupiesNameAlone(name: String, declFrom: Int, ctx: HoistContext): Bool {
 		final spans: Null<Array<Span>> = ctx.occurrences(declFrom, name);
 		if (spans == null) return false;
-		final rest: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
+		final rest: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
 			ctx.source, name, ctx.plugin, 0, ctx.source.length, spans
 		);
 		return rest != null && rest.length == 0;
@@ -351,7 +356,7 @@ final class ConstantHoist {
 	private static function trailingCommentOf(source: String, span: Span, regions: Array<LexRegion>): Null<Span> {
 		var at: Int = span.to;
 		while (at < source.length && (source.fastCodeAt(at) == ' '.code || source.fastCodeAt(at) == '\t'.code)) at++;
-		final comment: Null<Span> = RefactorSupport.commentBlockAt(source, at, regions);
+		final comment: Null<Span> = SourceComments.commentBlockAt(source, at, regions);
 		if (comment == null) return null;
 		final block: Span = comment;
 		final newline: Int = source.indexOf('\n', block.from);
@@ -369,12 +374,12 @@ final class ConstantHoist {
 	private static function commentAbove(source: String, span: Span, regions: () -> Array<LexRegion>): Bool {
 		var at: Int = span.from;
 		var newlines: Int = 0;
-		while (at > 0 && RefactorSupport.isSpace(source.fastCodeAt(at - 1))) {
+		while (at > 0 && SourceText.isSpace(source.fastCodeAt(at - 1))) {
 			if (source.fastCodeAt(at - 1) == '\n'.code) newlines++;
 			if (newlines > 1) return false;
 			at--;
 		}
-		return at > 0 && newlines == 1 && RefactorSupport.commentBlockAt(source, at - 1, regions()) != null;
+		return at > 0 && newlines == 1 && SourceComments.commentBlockAt(source, at - 1, regions()) != null;
 	}
 
 	/**

@@ -2,11 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.IfExpressionChain.ShieldSeams;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -407,9 +409,7 @@ final class PreferLambdaExpressionBody implements Check {
 			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams, FormatConfigDiscovery.discover(file))) byKey['${m.span.from}:${m.span.to}'] = m;
-		return RefactorSupport.dropContainedEdits(
-			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text }))
-		);
+		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text })));
 	}
 
 	/** `lines[i]` without surrounding whitespace, or empty when the index is past the end. */
@@ -431,7 +431,7 @@ final class PreferLambdaExpressionBody implements Check {
 		final found: Array<Match> = [];
 		// The module root is shielded: nothing follows a top-level declaration but another
 		// one, so no `else` can reach a lambda that inherits its exposure from there.
-		walk(tree, source, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), s, found, true, false);
+		walk(tree, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), s, found, true, false);
 		if (found.length == 0) return found;
 		// No writer, or a writer that declines this file: fail closed. A grammar with no
 		// writer makes the check inert rather than leaving every collapse unmeasured.
@@ -894,7 +894,7 @@ final class PreferLambdaExpressionBody implements Check {
 	private static function emittedEnd(node: QueryNode, s: Seams): Null<Int> {
 		// A `#if` region closes on `#end` and the terminator to drop sits INSIDE it, ahead of
 		// that keyword — no structural end recovers it, so the site is refused.
-		if (RefactorSupport.isConditionalKind(node.kind)) return null;
+		if (CondRegionScan.isConditionalKind(node.kind)) return null;
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
 		final terminated: Bool = s.terminatedKinds.contains(node.kind);

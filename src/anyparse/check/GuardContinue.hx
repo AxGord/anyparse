@@ -3,11 +3,13 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.IfExpressionChain.ShieldSeams;
+import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -167,12 +169,12 @@ final class GuardContinue implements Check {
 			final edit: Null<{ span: Span, text: String }> = editFor(m, source, seams, types);
 			if (edit != null) edits.push(edit);
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
 	private static inline function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
-		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
+		return BinderScan.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -560,7 +562,7 @@ final class GuardContinue implements Check {
 	 */
 	private static function binderSpan(source: String, decl: QueryNode, name: String): Null<Span> {
 		final span: Null<Span> = decl.span;
-		return span == null ? null : RefactorSupport.binderTokenSpan(source, span.from, span.to, name);
+		return span == null ? null : OccurrenceScan.binderTokenSpan(source, span.from, span.to, name);
 	}
 
 	/** Append the span of every `name` read in `node`'s subtree — a plain identifier, or the identifier of a `$name` interpolation. */

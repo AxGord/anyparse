@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -231,7 +232,7 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 			final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
 			if (candidate != null) edits.push({ span: candidate.edit, text: candidate.text });
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	private static inline function numericLiteral(scan: Scan, node: QueryNode): Bool {

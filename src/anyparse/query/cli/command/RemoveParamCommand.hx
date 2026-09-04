@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RemoveParam;
+import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -109,7 +110,7 @@ final class RemoveParamCommand implements CliCommand {
 			printRemoveParamUsage();
 			return EXIT_USAGE;
 		}
-		final index: Null<Int> = RefactorSupport.parseStrictInt(indexSpec);
+		final index: Null<Int> = SourceText.parseStrictInt(indexSpec);
 		if (index == null) {
 			CliIo.stderr('apq remove-param: malformed index "$indexSpec" — expected a non-negative integer\n');
 			return EXIT_USAGE;

@@ -81,7 +81,7 @@ final class Matcher {
 			if (n == null) return false;
 			if (n == Metavar.WILDCARD_NAME) return true;
 			final prior: Null<QueryNode> = bindings[n];
-			if (prior != null) return RefactorSupport.structurallyEqual(prior, input);
+			if (prior != null) return MemberKinds.structurallyEqual(prior, input);
 			bindings[n] = input;
 			return true;
 		}

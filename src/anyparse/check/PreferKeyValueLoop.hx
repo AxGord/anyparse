@@ -3,10 +3,10 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -112,7 +112,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		fixWalk(tree, tree, source, types, s, wanted, edits);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Bundle this check's kinds on top of the shared loop seams, or null when one is unset (the check is then a no-op). */

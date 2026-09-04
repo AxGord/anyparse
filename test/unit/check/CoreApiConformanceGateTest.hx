@@ -9,8 +9,8 @@ import anyparse.check.PreferReadOnlyField;
 import anyparse.check.StaticConstant;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.MakeFinal;
-import anyparse.query.RefactorSupport.EditResult;
 import utest.Assert;
 import utest.Test;
 

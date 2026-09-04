@@ -1,7 +1,8 @@
 package anyparse.query.cli;
 
+import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.ReplaceNode;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -212,7 +213,7 @@ final class CliEdit {
 		return [
 			for (n in nodes) {
 				final raw: Null<Span> = n.span;
-				raw == null ? null : RefactorSupport.declEditSpan(source, tree, n, raw, regions);
+				raw == null ? null : ElementSpan.declEditSpan(source, tree, n, raw, regions);
 			}
 		];
 	}

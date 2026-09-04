@@ -7,11 +7,14 @@ import anyparse.check.AssignmentTreeHoist.UnitValue;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.PurityScan.PurityCtx;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -145,7 +148,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build(files, plugin);
 		final byKey: Map<String, Match> = [];
 		for (m in matches(source, plugin, seams, resolvedIndex)) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
 	}
@@ -180,7 +183,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, root, index);
 		if (purity == null) return [];
 		final out: Array<Match> = [];
-		collect(root, root, source, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), s, purity, out);
+		collect(root, root, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), s, purity, out);
 		return out;
 	}
 
@@ -210,7 +213,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
 		if (name == null || declSpan == null) return null;
-		if (RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // `var a, b;`
+		if (SourceText.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // `var a, b;`
 		final init: QueryNode = decl.children[0];
 		// The initializer moves from "evaluated always" to "evaluated on the innermost fallback only".
 		if (!pureValue(init, s, purity)) return null;
@@ -353,7 +356,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 	 */
 	private static function pureValue(node: QueryNode, s: Seams, purity: PurityCtx): Bool {
 		return node.kind == s.stringInterpIdentKind || (
-			node.kind == s.identKind || !RefactorSupport.isSafeKind(node.kind)
+			node.kind == s.identKind || !MemberKinds.isSafeKind(node.kind)
 				? PurityScan.isPure(node, purity)
 				: node.children.foreach(c -> pureValue(c, s, purity))
 		);

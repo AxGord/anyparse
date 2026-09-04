@@ -5,8 +5,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.MemberOrderReason.OrderKeys;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -544,7 +545,7 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Whether a comment in the member region is covered by no member's slot or absorbed lead-doc — an orphan note the reorder would strand. Directives are regenerated, so need no coverage. */
 	private static function hasOrphanComment(members: Array<OrderedMember>, source: String, regions: Array<LexRegion>): Bool {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final regionFrom: Int = members[0].regionFrom;
 		final regionTo: Int = members[members.length - 1].regionTo;
 		for (c in comments) if (!(c.to <= regionFrom || c.from >= regionTo)) {
@@ -599,7 +600,7 @@ final class MemberOrder implements Check implements ConfigAware {
 			if (s == null) continue;
 			for (g in members) if (
 				g.isField && !g.isInline && g.initNode != null && g.node != m.node && g.isStatic == m.isStatic && g.node.name != null
-				&& RefactorSupport.referencedInRange(source, (g.node.name: String), s.from, s.to, []) && orderFlips(m, g, sorted)
+				&& OccurrenceScan.referencedInRange(source, (g.node.name: String), s.from, s.to, []) && orderFlips(m, g, sorted)
 			)
 				return true;
 		}
@@ -784,7 +785,7 @@ final class MemberOrder implements Check implements ConfigAware {
 			final trimmed: String = StringTools.ltrim(line);
 			if (trimmed == '') continue;
 			if (!trimmed.startsWith('#')) return false;
-			if (RefactorSupport.textHasCommentMarker(trimmed)) return false;
+			if (SourceComments.textHasCommentMarker(trimmed)) return false;
 		}
 		return true;
 	}
@@ -960,7 +961,7 @@ final class MemberOrder implements Check implements ConfigAware {
 			final name: Null<String> = f.node.name;
 			if (
 				f.isField && f.isStatic == owner.isStatic && f.node != owner.node && name != null
-				&& RefactorSupport.referencedInRange(source, name, span.from, span.to, [])
+				&& OccurrenceScan.referencedInRange(source, name, span.from, span.to, [])
 			)
 				return true;
 		}

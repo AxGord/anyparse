@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
+import anyparse.query.BoolExprShape;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
@@ -273,7 +275,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			// `Cli.noteFixOutcome` returns on `editCount != 0` before it reads any `declineReason`. A
 			// sentence here would be unreachable by construction — the site is genuinely deferred to the
 			// next fixpoint pass, and the pass that reports it is the one where it gets no edit.
-			if (RefactorSupport.editsOverlapAny(pair, edits)) continue;
+			if (CanonicalEdit.editsOverlapAny(pair, edits)) continue;
 			for (edit in pair) edits.push(edit);
 			if (!rewritten.contains(candidate.module)) rewritten.push(candidate.module);
 		}
@@ -374,7 +376,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// The receiver is the argument WITHOUT its redundant parentheses: `Ext.deco((w), 1)` splices
 		// the same `w` an unparenthesized site would, and the peeled `(` / `)` fall inside the two
 		// deleted regions, where the comment gate already guards them.
-		final recv: QueryNode = RefactorSupport.unwrapParens(call.children[1], s.parenKind);
+		final recv: QueryNode = BoolExprShape.unwrapParens(call.children[1], s.parenKind);
 		if (callSpan == null || recv.span == null) return null;
 		if (UsingScan.conflictingUsing(usings, module, method, plugin, symbols, conflicts)) return null;
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
@@ -598,7 +600,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final span: Null<Span> = anchor;
 		if (span == null) return;
 		final edit: { span: Span, text: String } = { span: span, text: text };
-		if (!RefactorSupport.editsOverlapAny([edit], edits)) edits.push(edit);
+		if (!CanonicalEdit.editsOverlapAny([edit], edits)) edits.push(edit);
 	}
 
 	/** The whitespace-normalized `[from, to)` of `source`, truncated with an ellipsis beyond the excerpt cap. */

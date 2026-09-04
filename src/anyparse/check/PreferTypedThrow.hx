@@ -2,9 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -215,7 +217,7 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 	 */
 	private static function walkThrows(node: QueryNode, seams: Seams, insideConditional: Bool, found: (QueryNode, Bool) -> Void): Void {
 		if (seams.throwKinds.contains(node.kind) && node.children.length == 1) {
-			final operand: QueryNode = RefactorSupport.unwrapParens(node.children[0], seams.parenKind);
+			final operand: QueryNode = BoolExprShape.unwrapParens(node.children[0], seams.parenKind);
 			if (seams.stringKinds.contains(operand.kind)) found(operand, insideConditional);
 		}
 		final childCond: Bool = insideConditional || (seams.condKind != null && node.kind == seams.condKind);
@@ -270,8 +272,8 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 			final at: Int = source.indexOf(CATCH_KEYWORD, i);
 			if (at < 0) return false;
 			i = at + CATCH_KEYWORD.length;
-			if (at > 0 && RefactorSupport.isIdentChar(source.fastCodeAt(at - 1))) continue;
-			if (i < n && RefactorSupport.isIdentChar(source.fastCodeAt(i))) continue;
+			if (at > 0 && SourceText.isIdentChar(source.fastCodeAt(at - 1))) continue;
+			if (i < n && SourceText.isIdentChar(source.fastCodeAt(i))) continue;
 			var open: Int = i;
 			while (open < n && source.isSpace(open)) open++;
 			if (open >= n || source.fastCodeAt(open) != '('.code) continue;

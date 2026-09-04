@@ -1,10 +1,13 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -146,7 +149,7 @@ final class PreferFinal implements Check {
 			final writes: Null<Array<Span>> = writesByName[c.name];
 			if (writes != null && reassignedInScope(writes, c.scope)) continue;
 			final declType: Null<String> = (declaredTypes == null ? null : declaredTypes[c.span.from]) ?? c.constructed;
-			if (RefactorSupport.abstractMethodMayMutate(source, c.name, declType, c.span, index, abstractKinds)) continue;
+			if (CtorFieldWrite.abstractMethodMayMutate(source, c.name, declType, c.span, index, abstractKinds)) continue;
 			out.push({
 				file: file,
 				span: c.span,
@@ -188,11 +191,11 @@ final class PreferFinal implements Check {
 		final scope: Null<Span> = enclosingScope.span;
 		if (scope == null) return;
 		if (decl.children.length != 1) return;
-		if (RefactorSupport.isMultiDeclarator(decl, continuationKinds)) return;
+		if (SourceText.isMultiDeclarator(decl, continuationKinds)) return;
 		final name: String = declName;
 		final declSpan: Span = span;
 		final scopeSpan: Span = scope;
-		if (!RefactorSupport.referencedInRange(source, name, scopeSpan.from, scopeSpan.to, [declSpan])) return;
+		if (!OccurrenceScan.referencedInRange(source, name, scopeSpan.from, scopeSpan.to, [declSpan])) return;
 		out.push({
 			name: name,
 			span: declSpan,

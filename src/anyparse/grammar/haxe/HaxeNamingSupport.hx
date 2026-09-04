@@ -8,7 +8,7 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
 
@@ -1001,8 +1001,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * identifier. The constant rule's `normalizeAlt`: its format's other branch.
 	 */
 	private static function upperSnakeConstant(name: String): Null<String> {
-		final upper: String = RefactorSupport.upperSnake(name);
-		return upper != name && RefactorSupport.isIdentifier(upper) ? upper : null;
+		final upper: String = SourceText.upperSnake(name);
+		return upper != name && SourceText.isIdentifier(upper) ? upper : null;
 	}
 
 

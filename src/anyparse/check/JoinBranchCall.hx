@@ -3,9 +3,11 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.check.PurityScan.PurityCtx;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -184,7 +186,7 @@ final class JoinBranchCall implements Check {
 				final m: Null<Match> = match(node, resolved, pos);
 				return m == null ? null : { span: span, text: buildText(m, pos) };
 			});
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
@@ -272,7 +274,7 @@ final class JoinBranchCall implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		return tree == null
 			? null
-			: ctxOn(plugin, source, tree, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), seams, symbols);
+			: ctxOn(plugin, source, tree, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), seams, symbols);
 	}
 
 	/**

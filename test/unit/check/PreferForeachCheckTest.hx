@@ -4,7 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.PreferForeach;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -297,7 +297,7 @@ class PreferForeachCheckTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, vs, plugin, SymbolIndex.build([{ file: 'C.hx', source: src }], plugin)
 		);
-		switch RefactorSupport.canonicalize(src, edits, true, plugin) {
+		switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text):
 				return text;
 			case Err(message):

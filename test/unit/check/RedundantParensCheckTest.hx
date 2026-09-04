@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantParens;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -549,7 +549,7 @@ class RedundantParensCheckTest extends Test {
 		final check: RedundantParens = new RedundantParens();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return RefactorSupport.applyEdits(src, check.fix(src, vs, plugin));
+		return CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin));
 	}
 
 	/** `body` as the sole statement of a method — the shortest host for a statement-level fixture. */

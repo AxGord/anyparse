@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CtorFieldFold;
+import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
@@ -114,7 +116,7 @@ final class PreferFinalField implements Check {
 		final declaredTypesByFile: Map<String, Map<Int, String>> = [];
 		if (provider != null) for (entry in files) declaredTypesByFile[entry.file] = provider.declaredTypes(entry.source);
 		final violations: Array<Violation> = [];
-		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
+		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (!exported)
 				considerField(violations, file, source, field, owner, index, lazyIndex, plugin, declaredTypesByFile[file], abstractKinds);
 		});
@@ -133,7 +135,7 @@ final class PreferFinalField implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return RefactorSupport.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
+		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
 	}
 
 	/** Push a `prefer-final-field` violation for `name` at `span` with the reason phrase `reason`. */
@@ -198,23 +200,23 @@ final class PreferFinalField implements Check {
 		// write is one `if (p != null) x = p;` constructor statement folds to `final` plus
 		// `x = p ?? <default>`. It is disjoint from the initializer arm either way (that
 		// constructor write makes `writtenInFile` bail), but only this order lets it fire.
-		final folded: Bool = RefactorSupport.ctorConditionalDefaultFinalEdits(source, span, plugin) != null;
+		final folded: Bool = CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null;
 		if (folded) {
 			if (!writesConfined(owner, name, source, index, plugin)) return;
 			final foldDeclType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
-			if (RefactorSupport.abstractMethodMayMutate(source, name, foldDeclType, span, lazyIndex, abstractKinds)) return;
+			if (CtorFieldWrite.abstractMethodMayMutate(source, name, foldDeclType, span, lazyIndex, abstractKinds)) return;
 			flag(out, file, span, name, 'has a null-guarded constructor default');
 			return;
 		}
-		if (RefactorSupport.isInitializedNonPropertyField(source, field)) {
+		if (CtorFieldWrite.isInitializedNonPropertyField(source, field)) {
 			if (!writesConfined(owner, name, source, index, plugin)) return;
 			if (writtenInFile(source, name, span)) return;
 			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
-			if (RefactorSupport.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds)) return;
+			if (CtorFieldWrite.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds)) return;
 			flag(out, file, span, name, 'is assigned only at its declaration');
 			return;
 		}
-		if (!RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
+		if (!CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (!writesConfined(owner, name, source, index, plugin)) return;
 		flag(out, file, span, name, 'is assigned only in the constructor');
 	}

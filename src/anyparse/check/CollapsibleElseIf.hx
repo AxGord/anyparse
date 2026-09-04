@@ -1,10 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -138,7 +138,7 @@ final class CollapsibleElseIf implements Check {
 		final byKey: Map<String, Span> = [];
 		for (span in collectElseBlockSpans(tree, source, seams)) byKey['${span.from}:${span.to}'] = span;
 
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (block, _) -> ({ span: block, text: interiorText(source, block) }))
 		);
 	}

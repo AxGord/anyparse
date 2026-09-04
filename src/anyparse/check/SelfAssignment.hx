@@ -2,9 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -137,7 +138,7 @@ final class SelfAssignment implements Check {
 		final span: Null<Span> = node.span;
 		if (
 			span != null && node.kind == assignKind && node.children.length == 2 && node.children[0].kind == identKind
-			&& node.children[1].kind == identKind && RefactorSupport.sameSource(node.children[0], node.children[1], source)
+			&& node.children[1].kind == identKind && MemberKinds.sameSource(node.children[0], node.children[1], source)
 		) {
 			final c0: Null<Span> = node.children[0].span;
 			if (c0 != null) candidates.push({ span: span, name: source.substring(c0.from, c0.to) });
@@ -163,7 +164,7 @@ final class SelfAssignment implements Check {
 			final a: Null<Span> = stmt.children[0].span;
 			final s: Null<Span> = stmt.span;
 			if (a != null && s != null && flagged.contains('${a.from}:${a.to}'))
-				edits.push({ span: RefactorSupport.lineExtendedSpan(source, s), text: '' });
+				edits.push({ span: ElementSpan.lineExtendedSpan(source, s), text: '' });
 		}
 		for (c in node.children) collectDeletions(c, source, blockKinds, assignKind, flagged, edits);
 	}

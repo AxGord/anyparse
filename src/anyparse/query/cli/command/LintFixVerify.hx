@@ -11,6 +11,7 @@ import anyparse.check.Linter;
 import anyparse.check.OracleCache;
 import anyparse.check.OracleCoverage;
 import anyparse.core.EnvFlag;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.runtime.Span;
 import haxe.io.Path;
@@ -483,7 +484,7 @@ final class LintFixVerify {
 				continue;
 			}
 			editsPerFile[entry.file] = allEdits.length;
-			switch RefactorSupport.canonicalize(entry.source, allEdits, false, plugin, optsByFile[entry.file]) {
+			switch CanonicalEdit.canonicalize(entry.source, allEdits, false, plugin, optsByFile[entry.file]) {
 				case Ok(text) if (text != entry.source):
 					candidates.push({ file: entry.file, before: entry.source, after: text });
 				case _:

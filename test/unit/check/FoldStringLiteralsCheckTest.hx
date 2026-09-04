@@ -5,7 +5,7 @@ import anyparse.check.FoldStringLiterals;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 
@@ -91,7 +91,7 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.equals("class C {\n\tfunction f(name:String) {\n\t\tfinal a = 'a${name}b';\n\t}\n}\n", text);
 				Assert.equals(0, violations(text).length);

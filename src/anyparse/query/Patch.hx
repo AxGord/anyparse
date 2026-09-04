@@ -1,8 +1,8 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -70,7 +70,7 @@ final class Patch {
 
 		// The searchable region is the same modifier-folded slice `apq source
 		// --select` prints, so a fragment copied from that output matches as-is.
-		final groupSpan: Span = RefactorSupport.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
+		final groupSpan: Span = ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
 		final slice: String = source.substring(groupSpan.from, groupSpan.to);
 		final edits: Array<{ span: Span, text: String }> = [];
 		// The same edits in SLICE coordinates — what `sequencingRefusal` replays to see
@@ -106,7 +106,7 @@ final class Patch {
 			return Err(discarded('the matched fragments overlap — merge the overlapping pairs into one', multi));
 		final orphan: Null<String> = docOrphanRefusal(source, tree, sorted, plugin);
 		if (orphan != null) return Err(discarded(orphan, multi));
-		return switch RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson) {
+		return switch CanonicalEdit.canonicalize(source, edits, reformat, plugin, optsJson) {
 			case Ok(text, rewrites): verbatimSpliceIntact(source, synthesised, text, rewrites, plugin);
 			case failed: failed;
 		}
@@ -172,7 +172,7 @@ final class Patch {
 	): Null<String> {
 		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call, and
 		// asking it per edit cost ~19% on a 17 000-line file with 135 ranges under `--all`.
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final watched: Array<{ shifted: Int, owner: String, declared: Int }> = [];
 		var delta: Int = 0;
 		for (edit in sorted) {
@@ -187,10 +187,10 @@ final class Patch {
 		}
 		if (watched.length == 0) return null;
 
-		final spliced: String = RefactorSupport.applyEdits(source, sorted);
+		final spliced: String = CanonicalEdit.applyEdits(source, sorted);
 		final after: QueryNode = try plugin.parseFile(spliced) catch (exception: Exception) return null;
 		final splicedComments: Array<{ from: Int, to: Int, isLine: Bool }> =
-			RefactorSupport.collectCommentTokens(plugin.lexicalRegions(spliced));
+			SourceComments.collectCommentTokens(plugin.lexicalRegions(spliced));
 		for (w in watched) {
 			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, w.shifted);
 			if (ownerNode == null) continue;
@@ -234,7 +234,7 @@ final class Patch {
 	private static function skipTrivia(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Int {
 		var i: Int = at;
 		while (true) {
-			while (i < source.length && RefactorSupport.isSpace(source.fastCodeAt(i))) i++;
+			while (i < source.length && SourceText.isSpace(source.fastCodeAt(i))) i++;
 			var moved: Bool = false;
 			for (tok in comments) if (tok.from == i) {
 				i = tok.to;
@@ -275,7 +275,7 @@ final class Patch {
 	 */
 	private static function declGroupStart(source: String, tree: QueryNode, at: Int): Int {
 		var from: Int = at;
-		while (from < source.length && RefactorSupport.isSpace(source.fastCodeAt(from))) from++;
+		while (from < source.length && SourceText.isSpace(source.fastCodeAt(from))) from++;
 		final node: Null<QueryNode> = outermostAt(tree, from);
 		if (node == null) return from;
 		final span: Null<Span> = node.span;
@@ -283,7 +283,7 @@ final class Patch {
 		// off an annotation, so it answers an annotation's own offset — and this guard
 		// then looked for a `/**` directly above the SECOND annotation of a run, found
 		// the first one, and let a doc-stealing insert through at rc 0.
-		return span == null ? from : RefactorSupport.declRunStart(node, TreePath.parentOf(tree, node), span);
+		return span == null ? from : ElementSpan.declRunStart(node, TreePath.parentOf(tree, node), span);
 	}
 
 	/**
@@ -298,10 +298,10 @@ final class Patch {
 	 */
 	private static function docBlockEnd(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Int {
 		var i: Int = at - 1;
-		while (i >= 0 && RefactorSupport.isSpace(source.fastCodeAt(i))) i--;
+		while (i >= 0 && SourceText.isSpace(source.fastCodeAt(i))) i--;
 		if (i < 0) return -1;
 		for (tok in comments) if (
-			tok.to == i + 1 && !tok.isLine && RefactorSupport.startsItsLine(source, tok.from) && source.fastCodeAt(tok.from + 2) == '*'.code
+			tok.to == i + 1 && !tok.isLine && SourceText.startsItsLine(source, tok.from) && source.fastCodeAt(tok.from + 2) == '*'.code
 		)
 			return tok.to;
 		return -1;
@@ -329,7 +329,7 @@ final class Patch {
 		final siblings: Array<QueryNode> = parent.children;
 		var i: Int = siblings.indexOf(node);
 		if (i < 0) return node;
-		while (i < siblings.length && RefactorSupport.isDeclPrefixSibling(siblings[i])) i++;
+		while (i < siblings.length && ElementSpan.isDeclPrefixSibling(siblings[i])) i++;
 		return i < siblings.length ? siblings[i] : null;
 	}
 
@@ -367,7 +367,7 @@ final class Patch {
 	 */
 	private static function declSiblingCount(tree: QueryNode, node: QueryNode): Int {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		return parent == null ? -1 : parent.children.count(c -> !RefactorSupport.isDeclPrefixSibling(c));
+		return parent == null ? -1 : parent.children.count(c -> !ElementSpan.isDeclPrefixSibling(c));
 	}
 
 	/**
@@ -395,7 +395,7 @@ final class Patch {
 		label: String, failure: String, slice: String, placed: Array<{ span: Span, text: String }>, oldText: String, kind: String,
 		all: Bool
 	): String {
-		return placed.length == 0 || locate(RefactorSupport.applyEdits(slice, placed), oldText, kind, '', all).error != null
+		return placed.length == 0 || locate(CanonicalEdit.applyEdits(slice, placed), oldText, kind, '', all).error != null
 			? failure
 			: sequencedMessage(label, failure, slice, oldText, kind);
 	}

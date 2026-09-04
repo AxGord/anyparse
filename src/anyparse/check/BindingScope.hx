@@ -1,9 +1,10 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 
 /**
@@ -76,11 +77,11 @@ final class BindingScope {
 			final bindingSpan: Null<Span> = h.bindingSpan;
 			final boundFrom: Null<Int> = h.kind == RefKind.Decl ? h.span.from : (bindingSpan?.from);
 			if (boundFrom == null || boundFrom == declFrom) continue;
-			final off: Int = RefactorSupport.identTokenOffset(source, h.span, name);
+			final off: Int = SourceText.identTokenOffset(source, h.span, name);
 			if (off < 0) continue;
 			final container: Null<Span> = visibleRegion(tree, containerKinds, boundFrom, shape);
 			if (container == null || off < container.from || off >= container.to) continue;
-			RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
+			OccurrenceScan.pushUniqueSpan(out, seen, off, name.length);
 		}
 		return out;
 	}

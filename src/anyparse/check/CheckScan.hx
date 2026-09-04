@@ -1,9 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
@@ -12,6 +15,8 @@ import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
@@ -63,7 +68,7 @@ final class CheckScan {
 
 	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`); `RefactorSupport.lastSegment` under a name that says which question the check layer is asking. */
 	public static inline function simpleModuleName(path: String): String {
-		return RefactorSupport.lastSegment(path);
+		return SourceText.lastSegment(path);
 	}
 
 	/**
@@ -77,7 +82,7 @@ final class CheckScan {
 	 * instead — see the primitive's doc before changing anything here.
 	 */
 	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
-		return RefactorSupport.hasCommentMarker(source, from, to);
+		return SourceComments.hasCommentMarker(source, from, to);
 	}
 
 	/**
@@ -88,7 +93,7 @@ final class CheckScan {
 	 * non-whitespace, so a comment there would survive to document whatever follows.
 	 */
 	public static inline function lineDeletionSpan(source: String, span: Span): Span {
-		return RefactorSupport.lineDeletionSpan(source, span);
+		return ElementSpan.lineDeletionSpan(source, span);
 	}
 
 	/**
@@ -116,9 +121,9 @@ final class CheckScan {
 	public static inline function deletionEdit(
 		source: String, node: QueryNode, parent: QueryNode, span: Span, regions: Array<LexRegion>
 	): { span: Span, text: String } {
-		final group: Span = RefactorSupport.declGroupSpan(node, parent, span);
-		final lines: Span = RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, group, regions, true));
-		return { span: RefactorSupport.blankExtendedSpan(source, lines), text: '' };
+		final group: Span = ElementSpan.declGroupSpan(node, parent, span);
+		final lines: Span = ElementSpan.lineExtendedSpan(source, ElementSpan.docExtendedSpan(source, group, regions, true));
+		return { span: ElementSpan.blankExtendedSpan(source, lines), text: '' };
 	}
 
 	/** The `<file>#<from>:<to>` key one declaration is memoised under between a check's `run` and its `fix`. */
@@ -208,7 +213,7 @@ final class CheckScan {
 		if (tree == null) return [];
 		final textBySpan: Map<String, String> = [];
 		for (m in collect(tree, source)) textBySpan['${m.span.from}:${m.span.to}'] = m.text;
-		return RefactorSupport.dropContainedEdits(collectSpanEdits(violations, textBySpan, (text, span) -> ({ span: span, text: text })));
+		return CanonicalEdit.dropContainedEdits(collectSpanEdits(violations, textBySpan, (text, span) -> ({ span: span, text: text })));
 	}
 
 	/**
@@ -219,7 +224,7 @@ final class CheckScan {
 	public static function nodesByKind(plugin: GrammarPlugin, source: String, kinds: Array<String>): Map<String, QueryNode> {
 		final tree: Null<QueryNode> = parseOrNull(plugin, source);
 		final byKey: Map<String, QueryNode> = [];
-		if (tree != null) RefactorSupport.indexNodesByKind(tree, kinds, byKey);
+		if (tree != null) MemberKinds.indexNodesByKind(tree, kinds, byKey);
 		return byKey;
 	}
 
@@ -291,7 +296,7 @@ final class CheckScan {
 		fillParents(root, parents);
 		final frames: Map<QueryNode, Array<String>> = ScopeFrames.frameIndex(root, seams);
 		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(root, flaggedKinds, byKey);
+		MemberKinds.indexNodesByKind(root, flaggedKinds, byKey);
 		return nonOverlappingEdits(
 			collectSpanEdits(violations, byKey, (node, _) -> conditionEdit(node, alwaysTrueOf(node), parents, frames, source, seams))
 		);
@@ -422,7 +427,7 @@ final class CheckScan {
 	 */
 	public static function docBlockEnds(source: String, regions: Array<LexRegion>): Map<Int, Bool> {
 		return [
-			for (tok in RefactorSupport.collectCommentTokens(regions)) if (RefactorSupport.isDocBlock(source, tok)) tok.to => true
+			for (tok in SourceComments.collectCommentTokens(regions)) if (SourceComments.isDocBlock(source, tok)) tok.to => true
 		];
 	}
 
@@ -434,7 +439,7 @@ final class CheckScan {
 	 */
 	public static function hasDocBefore(source: String, docEnds: Map<Int, Bool>, pos: Int): Bool {
 		var i: Int = pos - 1;
-		while (i >= 0 && RefactorSupport.isSpace(source.fastCodeAt(i))) i--;
+		while (i >= 0 && SourceText.isSpace(source.fastCodeAt(i))) i--;
 		return i >= 0 && docEnds.exists(i + 1);
 	}
 
@@ -574,7 +579,7 @@ final class CheckScan {
 		if (tree == null) return [];
 		final edits: Array<{ span: Span, text: String }> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
-		for (cls in classBodies(tree)) RefactorSupport.eachMemberHost(cls, host -> {
+		for (cls in classBodies(tree)) MemberKinds.eachMemberHost(cls, host -> {
 			for (child in host.children) {
 				final span: Null<Span> = child.span;
 				if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
@@ -772,7 +777,7 @@ final class CheckScan {
 		// A collapsed-away `if` is a PURE deletion like a member removal, so it gives back its
 		// flanking blank line the same way; the `{}` arm replaces rather than deletes and must not.
 		return inBlock ? {
-			span: RefactorSupport.blankExtendedSpan(source, RefactorSupport.lineExtendedSpan(source, ns)),
+			span: ElementSpan.blankExtendedSpan(source, ElementSpan.lineExtendedSpan(source, ns)),
 			text: ''
 		} : { span: ns, text: '{}' };
 	}

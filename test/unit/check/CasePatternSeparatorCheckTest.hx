@@ -7,7 +7,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -230,7 +230,7 @@ class CasePatternSeparatorCheckTest extends Test {
 		final check: CasePatternSeparator = checkOf(configJson);
 		final found: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, found, plugin);
-		return switch RefactorSupport.canonicalize(src, edits, true, plugin) {
+		return switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

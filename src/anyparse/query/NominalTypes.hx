@@ -107,7 +107,7 @@ final class NominalTypes {
 		final head: String = StringTools.trim(lt < 0 ? typeSource : typeSource.substring(0, lt));
 		final dot: Int = head.lastIndexOf('.');
 		final name: String = dot < 0 ? head : head.substring(dot + 1);
-		return RefactorSupport.isIdentifier(name) ? name : null;
+		return SourceText.isIdentifier(name) ? name : null;
 	}
 
 	/**
@@ -169,11 +169,11 @@ final class NominalTypes {
 		var end: Int = 0;
 		while (end < text.length) {
 			final ch: Int = text.fastCodeAt(end);
-			if (ch == ':'.code || ch == '='.code || RefactorSupport.isSpace(ch)) break;
+			if (ch == ':'.code || ch == '='.code || SourceText.isSpace(ch)) break;
 			end++;
 		}
 		final name: String = text.substring(0, end);
-		return RefactorSupport.isIdentifier(name) ? name : null;
+		return SourceText.isIdentifier(name) ? name : null;
 	}
 
 	/**
@@ -550,7 +550,7 @@ final class NominalTypes {
 		final name: Null<String> = receiver.name;
 		final span: Null<Span> = receiver.span;
 		if (identKind == null || receiver.kind != identKind || name == null || span == null) return null;
-		if (!RefactorSupport.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
+		if (!SourceText.isUpperInitial(name) || TypeResolver.resolveBindingFrom(name, span, root, shape) != null) return null;
 		return index.declaringFiles(name).length == 0 ? null : index.returnNominalOf(name, method);
 	}
 

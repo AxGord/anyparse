@@ -5,13 +5,16 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberBranchScan;
+import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -373,7 +376,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		// preceding FIELD would otherwise carry onto the next method and answer for it — inventing a
 		// finding in one direction and hiding one in the other. A member written inside a
 		// member-position `#if` region is visited too, with the run of its own branch.
-		MemberBranchScan.eachMember(branch, cls, child -> RefactorSupport.isMemberDeclKind(child.kind), (child, run, certain) -> {
+		MemberBranchScan.eachMember(branch, cls, child -> MemberKinds.isMemberDeclKind(child.kind), (child, run, certain) -> {
 			// A modifier run only SOME builds see cannot answer `public`, which this rule reads as
 			// enabling — see `MemberBranchScan.joinRuns`. This is also what keeps the old
 			// conservatism for `#if js public #end function f()`: a method public in one build only
@@ -393,15 +396,15 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 				// and the annotations written inside surface as ordinary `Meta` siblings, while a
 				// region that merely CARRIES a modifier out makes the run uncertain and the member is
 				// skipped above. Both readings are stricter than the old wrapper count.
-				if (RefactorSupport.META_KINDS.contains(mod.kind)) annotated = true;
+				if (MemberKinds.META_KINDS.contains(mod.kind)) annotated = true;
 				if (mod.kind == OVERRIDE_MODIFIER) isOverride = true;
 			}
 			if (!isPublic || isOverride || annotated || !reportableName(name)) return;
 			// Re-bound: a null-safety narrowing does not reach inside an anonymous structure literal.
 			final memberName: String = name;
 			final memberSpan: Span = span;
-			final host: QueryNode = RefactorSupport.memberHostOf(cls, child);
-			final region: Span = RefactorSupport.docExtendedSpan(source, RefactorSupport.declGroupSpan(child, host, memberSpan), regions);
+			final host: QueryNode = MemberKinds.memberHostOf(cls, child);
+			final region: Span = ElementSpan.docExtendedSpan(source, ElementSpan.declGroupSpan(child, host, memberSpan), regions);
 			if (provablyUnreferenced(memberName, file, source, region, index, ctx)) out.push({
 				name: memberName,
 				span: memberSpan,
@@ -527,12 +530,12 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 		final stop: Int = to <= source.length ? to : source.length;
 		var i: Int = from;
 		while (i < stop) {
-			if (!RefactorSupport.isIdentStartChar(source.fastCodeAt(i))) {
+			if (!SourceText.isIdentStartChar(source.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			var end: Int = i + 1;
-			while (end < stop && RefactorSupport.isIdentChar(source.fastCodeAt(end))) end++;
+			while (end < stop && SourceText.isIdentChar(source.fastCodeAt(end))) end++;
 			final token: String = source.substring(i, end);
 			out[token] = (out[token] ?? 0) + 1;
 			i = end;
@@ -541,7 +544,7 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 
 	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
 	private static function isDeclKind(node: QueryNode): Bool {
-		return RefactorSupport.isMemberDeclKind(node.kind);
+		return MemberKinds.isMemberDeclKind(node.kind);
 	}
 
 }

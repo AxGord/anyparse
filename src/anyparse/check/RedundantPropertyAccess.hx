@@ -2,9 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.CtorFieldWrite;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -85,7 +86,7 @@ final class RedundantPropertyAccess implements Check implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
-		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
+		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			final name: Null<String> = field.name;
 			final clause: Null<Span> = redundantClause(source, field);
 			if (name != null && clause != null) violations.push({
@@ -133,9 +134,9 @@ final class RedundantPropertyAccess implements Check implements DefaultOff {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return null;
-		final nameOffset: Int = RefactorSupport.identTokenOffset(source, span, name);
+		final nameOffset: Int = SourceText.identTokenOffset(source, span, name);
 		if (nameOffset < 0) return null;
-		final open: Int = RefactorSupport.skipSpaces(source, nameOffset + name.length, span.to);
+		final open: Int = SourceText.skipSpaces(source, nameOffset + name.length, span.to);
 		final clause: Null<Span> = plainStoredClause(source, open, span.to);
 		return clause == null || CheckScan.hasCommentMarker(source, span.from, clause.to) ? null : clause;
 	}
@@ -148,27 +149,27 @@ final class RedundantPropertyAccess implements Check implements DefaultOff {
 	 */
 	private static function plainStoredClause(source: String, open: Int, limit: Int): Null<Span> {
 		if (open >= limit || source.fastCodeAt(open) != '('.code) return null;
-		final read: Int = plainAccessorEnd(source, RefactorSupport.skipSpaces(source, open + 1, limit), limit);
+		final read: Int = plainAccessorEnd(source, SourceText.skipSpaces(source, open + 1, limit), limit);
 		if (read < 0) return null;
-		final comma: Int = RefactorSupport.skipSpaces(source, read, limit);
+		final comma: Int = SourceText.skipSpaces(source, read, limit);
 		if (comma >= limit || source.fastCodeAt(comma) != ','.code) return null;
-		final write: Int = plainAccessorEnd(source, RefactorSupport.skipSpaces(source, comma + 1, limit), limit);
+		final write: Int = plainAccessorEnd(source, SourceText.skipSpaces(source, comma + 1, limit), limit);
 		if (write < 0) return null;
-		final close: Int = RefactorSupport.skipSpaces(source, write, limit);
+		final close: Int = SourceText.skipSpaces(source, write, limit);
 		return close < limit && source.fastCodeAt(close) == ')'.code ? new Span(open, close + 1) : null;
 	}
 
 	/** The offset just past a `default` identifier at `i`, or -1 when the token there is anything else. */
 	private static function plainAccessorEnd(source: String, i: Int, limit: Int): Int {
 		var j: Int = i;
-		while (j < limit && RefactorSupport.isIdentChar(source.fastCodeAt(j))) j++;
+		while (j < limit && SourceText.isIdentChar(source.fastCodeAt(j))) j++;
 		return j > i && source.substring(i, j) == PLAIN_ACCESSOR ? j : -1;
 	}
 
 	/** The offset where the field name ends — `clauseFrom` walked back over the whitespace before the clause. */
 	private static function nameEndBefore(source: String, clauseFrom: Int): Int {
 		var i: Int = clauseFrom;
-		while (i > 0 && RefactorSupport.isSpace(source.fastCodeAt(i - 1))) i--;
+		while (i > 0 && SourceText.isSpace(source.fastCodeAt(i - 1))) i--;
 		return i;
 	}
 

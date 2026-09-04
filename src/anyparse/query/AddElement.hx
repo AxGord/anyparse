@@ -1,10 +1,10 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -138,9 +138,9 @@ final class AddElement {
 		// insert lands outside the whole `[@:meta modifiers… decl]` group, not
 		// between a modifier and its decl (and a cursor on a modifier targets
 		// the decl it precedes). A non-decl element keeps its own span.
-		final span: Span = RefactorSupport.declGroupSpan(element, parent, elemSpan);
-		var isComma: Bool = RefactorSupport.adjacentToComma(source, span);
-		if (!isComma && parent != null) isComma = RefactorSupport.COMMA_CONTAINER_KINDS.contains(parent.kind);
+		final span: Span = ElementSpan.declGroupSpan(element, parent, elemSpan);
+		var isComma: Bool = ElementSpan.adjacentToComma(source, span);
+		if (!isComma && parent != null) isComma = MemberKinds.COMMA_CONTAINER_KINDS.contains(parent.kind);
 
 		// A `;`-terminated element can never belong to a comma-separated list —
 		// the cursor resolved to a call-argument / array / object slot while the
@@ -161,7 +161,7 @@ final class AddElement {
 				case After: '{\n$held\n$trimmed\n}';
 				case Before: '{\n$trimmed\n$held\n}';
 			};
-			return RefactorSupport.canonicalize(source, [{ span: span, text: block }], reformat, plugin, optsJson);
+			return CanonicalEdit.canonicalize(source, [{ span: span, text: block }], reformat, plugin, optsJson);
 		}
 
 		// BOTH offsets ask the same question, of the same helper: which doc comments
@@ -179,8 +179,8 @@ final class AddElement {
 		// element they trail. Trimming the whole span instead — the first shape this
 		// fix took — moved exactly those two onto the insertion, which is the same
 		// defect in the other direction.
-		final before: Int = RefactorSupport.docExtendedSpan(source, span, plugin.lexicalRegions(source), true).from;
-		final after: Int = RefactorSupport.docExtendedSpan(source, new Span(span.to, span.to), plugin.lexicalRegions(source), true).from;
+		final before: Int = ElementSpan.docExtendedSpan(source, span, plugin.lexicalRegions(source), true).from;
+		final after: Int = ElementSpan.docExtendedSpan(source, new Span(span.to, span.to), plugin.lexicalRegions(source), true).from;
 		final edit: { span: Span, text: String } = switch side {
 			case After:
 				{ span: new Span(after, after), text: isComma ? ', $trimmed' : '\n$trimmed' };
@@ -188,7 +188,7 @@ final class AddElement {
 				{ span: new Span(before, before), text: isComma ? '$trimmed, ' : '$trimmed\n' };
 		};
 
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/**
@@ -305,7 +305,7 @@ final class AddElement {
 
 	/** Whether `cursor` falls within the first token of a node starting at `from` (its start through the token's trailing boundary, inclusive). */
 	private static inline function cursorInFirstToken(source: String, from: Int, cursor: Int): Bool {
-		return cursor >= from && cursor <= RefactorSupport.firstTokenEnd(source, from);
+		return cursor >= from && cursor <= SourceText.firstTokenEnd(source, from);
 	}
 
 	private static function braceLessBodySlot(parent: Null<QueryNode>, element: QueryNode, plugin: GrammarPlugin): Bool {
@@ -372,7 +372,7 @@ final class AddElement {
 	private static function scanBackOverTrivia(
 		source: String, lo: Int, hi: Int, regions: Array<LexRegion>
 	): { lastContent: Int, afterComments: Int } {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		var at: Int = hi - 1;
 		var afterComments: Int = -1;
 		while (at >= lo) {
@@ -429,7 +429,7 @@ final class AddElement {
 		final lastCode: Int = lastContent >= containerSpan.from ? source.fastCodeAt(lastContent) : -1;
 		final empty: Bool = lastCode == '{'.code || lastCode == '['.code || lastCode == '('.code || lastContent < containerSpan.from;
 
-		final isComma: Bool = RefactorSupport.COMMA_CONTAINER_KINDS.contains(containerKind);
+		final isComma: Bool = MemberKinds.COMMA_CONTAINER_KINDS.contains(containerKind);
 		// Same statement-into-comma-list refusal as the sibling insert path: a
 		// `;`-terminated element never belongs in call arguments / array / object.
 		if (isComma && trimmed.endsWith(';'))
@@ -446,7 +446,7 @@ final class AddElement {
 			else
 				'\n$trimmed';
 			final edit: { span: Span, text: String } = { span: new Span(at, at), text: text };
-			return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+			return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 		}
 
 		// Trailing comments sit between the last element and the closing delimiter.
@@ -456,7 +456,7 @@ final class AddElement {
 		final edits: Array<{ span: Span, text: String }> = [];
 		if (!empty && isComma) edits.push({ span: new Span(at, at), text: ',' });
 		edits.push({ span: new Span(afterComments, afterComments), text: '\n$trimmed' });
-		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, edits, reformat, plugin, optsJson);
 	}
 
 }

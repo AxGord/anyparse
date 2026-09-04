@@ -5,8 +5,8 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.OracleCoverage;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -544,10 +544,10 @@ final class FixVerifier {
 		// Charging the check for the TREE's state would put a `risky-fix REVERTED` line
 		// and a +1 on the reverted count under every risky rule on every drifted file.
 		// Re-asking the gate costs one round trip on an error path that is rare.
-		final fullText: String = switch RefactorSupport.canonicalize(before, full, false, plugin, opts) {
+		final fullText: String = switch CanonicalEdit.canonicalize(before, full, false, plugin, opts) {
 			case Ok(text) if (text != before): text;
 			case Ok(_): return NoChange;
-			case Err(message): return RefactorSupport.isWriterCanonical(before, plugin, opts)
+			case Err(message): return CanonicalEdit.isWriterCanonical(before, plugin, opts)
 				? Reverted(NotCanonical(message))
 				: SourceNotCanonical;
 		};
@@ -605,7 +605,7 @@ final class FixVerifier {
 		var uncanonical: Null<String> = null;
 		function probe(indices: Array<Int>): Bool {
 			final subset: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, indices);
-			return switch RefactorSupport.canonicalize(before, subset, false, plugin, opts) {
+			return switch CanonicalEdit.canonicalize(before, subset, false, plugin, opts) {
 				case Ok(text):
 					write(entry.file, text);
 					spawns[0]++;
@@ -639,7 +639,7 @@ final class FixVerifier {
 		final keptUnits: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
 		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, keptUnits);
 		final invocations: Int = spawnsWithFullSet + 1;
-		return switch RefactorSupport.canonicalize(before, safe, false, plugin, opts) {
+		return switch CanonicalEdit.canonicalize(before, safe, false, plugin, opts) {
 			case Ok(safeText) if (safeText != before):
 				write(entry.file, safeText);
 				switch CompilerOracle.typecheck(oracleHxml, oracleDir) {

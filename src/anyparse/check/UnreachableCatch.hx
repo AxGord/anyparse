@@ -1,9 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -89,10 +90,9 @@ final class UnreachableCatch implements Check {
 		final catchClauseKind: Null<String> = plugin.refShape().catchClauseKind;
 		if (catchClauseKind == null) return [];
 		final edits: Array<{ span: Span, text: String }> = CheckScan.applyBySpan(
-			plugin, source, violations, [catchClauseKind],
-			(_, span) -> ({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' })
+			plugin, source, violations, [catchClauseKind], (_, span) -> ({ span: ElementSpan.lineExtendedSpan(source, span), text: '' })
 		);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**

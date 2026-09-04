@@ -1,6 +1,6 @@
 package anyparse.query;
 
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 
@@ -53,7 +53,7 @@ final class RemoveImport {
 		else if (matches.length > 1)
 			Err('ambiguous — "$modulePath" matches ${matches.length} import statements')
 		else
-			RefactorSupport.deleteNode(source, matches[0], tree, reformat, plugin, withDoc, optsJson);
+			ElementSpan.deleteNode(source, matches[0], tree, reformat, plugin, withDoc, optsJson);
 	}
 
 	/**

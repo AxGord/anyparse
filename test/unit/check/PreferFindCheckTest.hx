@@ -7,7 +7,7 @@ import anyparse.check.PreferFind;
 import anyparse.check.PreferSafeNav;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -417,7 +417,7 @@ class PreferFindCheckTest extends Test {
 			final text: String = out;
 			final edits: Array<{ span: Span, text: String }> = check.fix(text, check.run([{ file: 'C.hx', source: text }], plugin), plugin);
 			Assert.isTrue(edits.length > 0, 'stage ${check.id()} produced no edits');
-			switch RefactorSupport.canonicalize(text, edits, true, plugin) {
+			switch CanonicalEdit.canonicalize(text, edits, true, plugin) {
 				case Ok(next):
 					out = next;
 				case Err(message):
@@ -439,7 +439,7 @@ class PreferFindCheckTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			source, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin)
 		);
-		switch RefactorSupport.canonicalize(source, edits, true, plugin) {
+		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
 				return text;
 			case Err(message):
@@ -478,7 +478,7 @@ class PreferFindCheckTest extends Test {
 		final check: PreferFind = new PreferFind();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
-		switch RefactorSupport.canonicalize(src, edits, true, plugin) {
+		switch CanonicalEdit.canonicalize(src, edits, true, plugin) {
 			case Ok(text):
 				return text;
 			case Err(message):

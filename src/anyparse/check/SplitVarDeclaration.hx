@@ -1,12 +1,14 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -166,9 +168,7 @@ final class SplitVarDeclaration implements Check {
 		final byKey: Map<String, Match> = [];
 		for (m in matches) byKey['${m.span.from}:${m.span.to}'] = m;
 
-		return RefactorSupport.dropContainedEdits(
-			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text }))
-		);
+		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text })));
 	}
 
 	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */
@@ -194,7 +194,7 @@ final class SplitVarDeclaration implements Check {
 	 */
 	private static function blockedRegions(source: String, s: Seams, regions: Array<LexRegion>): Array<Span> {
 		final out: Array<Span> = [
-			for (tok in RefactorSupport.collectCommentTokens(regions)) new Span(tok.from, tok.to)
+			for (tok in SourceComments.collectCommentTokens(regions)) new Span(tok.from, tok.to)
 		];
 		for (directive in CondDirectives.scan(source, s.shape, () -> regions)) out.push(directive.span);
 		return out;
@@ -221,7 +221,7 @@ final class SplitVarDeclaration implements Check {
 	 */
 	private static function isMultiDeclaratorHead(stmt: QueryNode, s: Seams): Bool {
 		return s.localDeclKinds.contains(stmt.kind) && !s.continuationKinds.contains(stmt.kind)
-			&& RefactorSupport.isMultiDeclarator(stmt, s.continuationKinds);
+			&& SourceText.isMultiDeclarator(stmt, s.continuationKinds);
 	}
 
 	/**
@@ -239,7 +239,7 @@ final class SplitVarDeclaration implements Check {
 		final declarators: Null<Array<String>> = declaratorSlices(source, stmtSpan, chain);
 		if (declarators == null) return null;
 
-		final indent: String = RefactorSupport.lineIndentAt(source, stmtSpan.from);
+		final indent: String = SourceText.lineIndentAt(source, stmtSpan.from);
 		final statements: Array<String> = [
 			for (i in 0...declarators.length) i == 0 ? declarators[i] : '$keyword ${declarators[i]}'
 		];

@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -60,8 +60,8 @@ final class IdenticalOperands implements Check {
 		final span: Null<Span> = node.span;
 		if (
 			span != null && node.children.length == 2 && comparisonKinds.contains(node.kind)
-			&& RefactorSupport.sameSource(node.children[0], node.children[1], source)
-			&& !(callKind != null && RefactorSupport.subtreeContainsKind(node.children[0], callKind))
+			&& MemberKinds.sameSource(node.children[0], node.children[1], source)
+			&& !(callKind != null && MemberKinds.subtreeContainsKind(node.children[0], callKind))
 		) out.push({
 			file: file,
 			span: span,

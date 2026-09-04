@@ -191,7 +191,7 @@ final class InheritanceMove {
 		final bodyClose: Null<Int> = typeBodyClose(target.source, findTargetDecl(target, targetType));
 		if (bodyClose == null) return Err('"$targetType" has no brace body to receive the member');
 		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(target.source, wsStart - 1))) wsStart--;
+		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(target.source, wsStart - 1))) wsStart--;
 		// Preserve the body's padding style: a class whose closing `}` sits on
 		// its own blank-separated line (2+ newlines of trailing whitespace)
 		// keeps a blank before `}`; a tightly-closed body does not.
@@ -201,16 +201,16 @@ final class InheritanceMove {
 
 		final changes: Array<MoveChange> = [];
 		if (srcFile == target.file) {
-			final newSource: String = RefactorSupport.applyEdits(src.source, [
+			final newSource: String = CanonicalEdit.applyEdits(src.source, [
 				{ span: m.cut, text: '' },
 				{ span: new Span(wsStart, bodyClose), text: insertText }
 			]);
 			changes.push({ file: srcFile, newSource: newSource });
 		} else {
-			changes.push({ file: srcFile, newSource: RefactorSupport.applyEdits(src.source, [{ span: m.cut, text: '' }]) });
+			changes.push({ file: srcFile, newSource: CanonicalEdit.applyEdits(src.source, [{ span: m.cut, text: '' }]) });
 			changes.push({
 				file: target.file,
-				newSource: RefactorSupport.applyEdits(target.source, [{ span: new Span(wsStart, bodyClose), text: insertText }])
+				newSource: CanonicalEdit.applyEdits(target.source, [{ span: new Span(wsStart, bodyClose), text: insertText }])
 			});
 		}
 
@@ -277,7 +277,7 @@ final class InheritanceMove {
 		// still refused as a MOVE (`guarded`) — cutting it out of its branch would change which builds
 		// declare it — but the refusal now names the real reason.
 		MemberBranchScan.eachTypeMember(
-			decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
+			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind),
 			(child, run) -> {
 				final span: Null<Span> = child.span;
 				if (hit != null || child.name != name || span == null) return;
@@ -311,7 +311,7 @@ final class InheritanceMove {
 		// was absent from this set, so a member referencing it passed the gate and the move produced
 		// code that does not compile.
 		MemberBranchScan.eachTypeMember(
-			subDecl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
+			subDecl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind),
 			(child, _) -> {
 				final nm: Null<String> = child.name;
 				if (nm != null && nm != movingName) memberNames[nm] = true;
@@ -335,8 +335,8 @@ final class InheritanceMove {
 	 * is fenced by blanks on both sides. Mirrors `MoveMember.cutSpanOf`.
 	 */
 	private static function cutSpanOf(source: String, groupSpan: Span, regions: Array<LexRegion>): Span {
-		return RefactorSupport.blankExtendedSpan(
-			source, RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan, regions))
+		return ElementSpan.blankExtendedSpan(
+			source, ElementSpan.lineExtendedSpan(source, ElementSpan.docExtendedSpan(source, groupSpan, regions))
 		);
 	}
 
@@ -345,7 +345,7 @@ final class InheritanceMove {
 		final bodySpan: Span = decl.nameNode.span ?? decl.fullSpan;
 		var bodyClose: Int = bodySpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
+		while (bodyClose >= bodySpan.from && SourceText.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
 		return bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code ? null : bodyClose;
 	}
 

@@ -6,7 +6,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
@@ -59,7 +59,7 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	public function testFixOutputSurvivesTheWriter(): Void {
-		switch RefactorSupport.canonicalize(APPENDED, edits(APPENDED), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(APPENDED, edits(APPENDED), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('import app.base.Host;\nimport app.deep.Mod.Widget;\nimport pkg.mid.events.Alpha;') >= 0, text);
 			case Err(message):
@@ -166,7 +166,7 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	public function testWedgeFixOutputSurvivesTheWriter(): Void {
-		switch RefactorSupport.canonicalize(WEDGE, edits(WEDGE), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(WEDGE, edits(WEDGE), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.contains('import haxe.io.Path;\n\nusing tink.CoreApi;'), text);
 				Assert.isTrue(text.contains('import fs.FSUtil;\nimport fs.FolderWatcher;'), text);
@@ -360,7 +360,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src), plugin);
 		printer.print('app.deep.Mod.Widget');
-		final inserted: String = RefactorSupport.applyEdits(src, printer.pendingImportEdits());
+		final inserted: String = CanonicalEdit.applyEdits(src, printer.pendingImportEdits());
 		Assert.equals(0, violations(inserted).length, 'the insert seat and the rule agree:\n$inserted');
 	}
 
@@ -378,7 +378,7 @@ class ImportBlockOrderCheckTest extends Test {
 		Assert.equals(0, violations(src, KEEP_USING).length, 'the shape starts clean');
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src), plugin);
 		printer.print('a.Aaa');
-		final inserted: String = RefactorSupport.applyEdits(src, printer.pendingImportEdits());
+		final inserted: String = CanonicalEdit.applyEdits(src, printer.pendingImportEdits());
 		Assert.equals(0, violations(inserted, KEEP_USING).length, 'the insert seat and the rule agree:\n$inserted');
 	}
 
@@ -390,7 +390,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src), plugin);
 		printer.print('a.Aaa');
-		final inserted: String = RefactorSupport.applyEdits(src, printer.pendingImportEdits());
+		final inserted: String = CanonicalEdit.applyEdits(src, printer.pendingImportEdits());
 		final after: Array<Violation> = violations(inserted);
 		Assert.equals(1, after.length, 'no finding beyond the wedge the shape already carried:\n$inserted');
 		Assert.isTrue(after[0].message.contains('splits the import block'), after[0].message);
@@ -573,7 +573,7 @@ class ImportBlockOrderCheckTest extends Test {
 
 	/** `src` with the check's raw edits spliced in — the reorder verbatim, before any writer pass. */
 	private function fixed(src: String, ?config: String): String {
-		return RefactorSupport.applyEdits(src, edits(src, config));
+		return CanonicalEdit.applyEdits(src, edits(src, config));
 	}
 
 	/** A check carrying `config` (raw `apqlint.json` text) as its per-file resolver, or the default one. */

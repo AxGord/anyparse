@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -332,7 +333,7 @@ final class PreferArrowCallback implements Check {
 			if (es == null) return null;
 			kept.push(bodySpan);
 			final gap: String = ctx.source.substring(bodySpan.from, es.from) + ctx.source.substring(es.to, bodySpan.to);
-			return RefactorSupport.textHasCommentMarker(gap) ? null : ctx.source.substring(es.from, es.to);
+			return SourceComments.textHasCommentMarker(gap) ? null : ctx.source.substring(es.from, es.to);
 		}
 		kept.push(bodySpan);
 		final lone: Null<QueryNode> = body.children.length == 1 ? body.children[0] : null;
@@ -342,7 +343,7 @@ final class PreferArrowCallback implements Check {
 			final inner: Null<Span> = lone.children[0].span;
 			if (inner != null) {
 				final interior: String = ctx.source.substring(bodySpan.from, inner.from) + ctx.source.substring(inner.to, bodySpan.to);
-				if (!RefactorSupport.textHasCommentMarker(interior)) return ctx.source.substring(inner.from, inner.to);
+				if (!SourceComments.textHasCommentMarker(interior)) return ctx.source.substring(inner.from, inner.to);
 			}
 		}
 		return ctx.source.substring(bodySpan.from, bodySpan.to);
@@ -376,7 +377,7 @@ final class PreferArrowCallback implements Check {
 			if (s.to > cursor) cursor = s.to;
 		}
 		if (outer.to > cursor) gaps += ctx.source.substring(cursor, outer.to);
-		return RefactorSupport.textHasCommentMarker(gaps);
+		return SourceComments.textHasCommentMarker(gaps);
 	}
 
 	/**

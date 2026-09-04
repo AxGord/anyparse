@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantCondCompParens;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -170,7 +170,7 @@ class RedundantCondCompParensCheckTest extends Test {
 		final check: RedundantCondCompParens = new RedundantCondCompParens();
 		final all: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(2, all.length);
-		final edited: String = RefactorSupport.applyEdits(src, check.fix(src, [all[1]], new HaxeQueryPlugin()));
+		final edited: String = CanonicalEdit.applyEdits(src, check.fix(src, [all[1]], new HaxeQueryPlugin()));
 		Assert.equals('class C {\n\tfunction f():Void {\n\t\t#if (sys)\n\t\tg();\n\t\t#elseif js\n\t\th();\n\t\t#end\n\t}\n}', edited);
 	}
 
@@ -195,7 +195,7 @@ class RedundantCondCompParensCheckTest extends Test {
 
 	private function applyFix(src: String): String {
 		final check: RedundantCondCompParens = new RedundantCondCompParens();
-		return RefactorSupport.applyEdits(
+		return CanonicalEdit.applyEdits(
 			src, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin())
 		);
 	}

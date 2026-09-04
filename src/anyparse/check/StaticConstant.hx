@@ -9,6 +9,7 @@ import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -304,8 +305,8 @@ final class StaticConstant implements Check implements DefaultOff {
 			final idx: Int = source.indexOf(name, at);
 			if (idx < 0) return false;
 			at = idx + len;
-			final boundedBefore: Bool = idx == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(idx - 1));
-			final boundedAfter: Bool = at >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(at));
+			final boundedBefore: Bool = idx == 0 || !SourceText.isIdentChar(source.fastCodeAt(idx - 1));
+			final boundedAfter: Bool = at >= source.length || !SourceText.isIdentChar(source.fastCodeAt(at));
 			if (!boundedBefore || !boundedAfter || idx >= decl.from && idx < decl.to) continue;
 			if (precededByDot(source, idx)) return true;
 		}
@@ -314,7 +315,7 @@ final class StaticConstant implements Check implements DefaultOff {
 	/** Whether the nearest non-space character before `idx` is a `.` — the member-access form. */
 	private static function precededByDot(source: String, idx: Int): Bool {
 		var i: Int = idx - 1;
-		while (i >= 0 && RefactorSupport.isSpace(source.fastCodeAt(i))) i--;
+		while (i >= 0 && SourceText.isSpace(source.fastCodeAt(i))) i--;
 		return i >= 0 && source.fastCodeAt(i) == '.'.code;
 	}
 

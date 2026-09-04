@@ -5,10 +5,12 @@ import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.CarrySeat;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.check.IfExpressionChain.TernaryTail;
+import anyparse.query.BoolExprShape;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -148,7 +150,7 @@ final class PreferIfExpressionReturn implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
-				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
 			walkCascades(tree, violations, entry.file, entry.source, comments, seams, blockKinds);
 		}
@@ -160,7 +162,7 @@ final class PreferIfExpressionReturn implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
 				final m: Null<Match> = match(node, source, comments, seams, false);
@@ -177,7 +179,7 @@ final class PreferIfExpressionReturn implements Check {
 			if (span != null) flagged.push(IfExpressionChain.spanKey(span));
 		}
 		if (tree != null) collectCascadeFixes(tree, source, comments, seams, blockKinds, flagged, edits);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
@@ -469,8 +471,8 @@ final class PreferIfExpressionReturn implements Check {
 		final boolLitKind: Null<String> = s.shape.boolLitKind;
 		for (v in values) {
 			if (boolLitKind != null && v.kind == boolLitKind) return false;
-			if (RefactorSupport.statementLikeValue(v, s.shape)) return false;
-			if (RefactorSupport.pendingBooleanTernaryTail(v, s.shape)) return false;
+			if (BoolExprShape.statementLikeValue(v, s.shape)) return false;
+			if (BoolExprShape.pendingBooleanTernaryTail(v, s.shape)) return false;
 		}
 		return true;
 	}
@@ -508,7 +510,7 @@ final class PreferIfExpressionReturn implements Check {
 			if (v == null) return false;
 			values.push(v);
 			if (IfExpressionChain.holdsElseLessConditional(v, s.conditionalKinds)) return false;
-			final rawCond: Null<Span> = RefactorSupport.unwrapParens(b.cond, s.parenKind).span;
+			final rawCond: Null<Span> = BoolExprShape.unwrapParens(b.cond, s.parenKind).span;
 			final rawValue: Null<Span> = v.span;
 			if (rawCond == null || rawValue == null) return false;
 			pairs.push({

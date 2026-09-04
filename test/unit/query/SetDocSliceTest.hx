@@ -1,7 +1,7 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.SetDoc;
 import utest.Assert;
 import utest.Test;

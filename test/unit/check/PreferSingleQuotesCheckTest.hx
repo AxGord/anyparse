@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferSingleQuotes;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import sys.FileSystem;
 import sys.io.File;
@@ -102,7 +102,7 @@ class PreferSingleQuotesCheckTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.isTrue(text.contains("'hi'"));
 				Assert.isFalse(text.contains('"hi"'));

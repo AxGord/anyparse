@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.RedundantImport;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -43,7 +43,7 @@ class RedundantImportCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
 		Assert.equals('', es[0].text);
-		Assert.equals('package app;\n\nimport pkg.deep.Mod;\n\n\nclass C {\n\n\tvar s:Sub;\n\n}\n', RefactorSupport.applyEdits(src, es));
+		Assert.equals('package app;\n\nimport pkg.deep.Mod;\n\n\nclass C {\n\n\tvar s:Sub;\n\n}\n', CanonicalEdit.applyEdits(src, es));
 	}
 
 	/** `using pkg.Mod;` IS `import pkg.Mod;` plus static extension, so it binds the module's types too. */
@@ -223,7 +223,7 @@ class RedundantImportCheckTest extends Test {
 		final check: RedundantImport = new RedundantImport();
 		final vs: Array<Violation> = check.run(files, plugin);
 		Assert.equals(2, vs.length);
-		final fixed: String = RefactorSupport.applyEdits(src, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)));
+		final fixed: String = CanonicalEdit.applyEdits(src, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)));
 		Assert.isFalse(fixed.contains('import fs.FileSystemInterface.FileSystemCloudAction;'));
 		Assert.isFalse(fixed.contains('import fs.cloud.CloudDatabase.CloudDatabaseFilePath;'));
 		Assert.isTrue(fixed.contains('import fs.FileSystemInterface;'));

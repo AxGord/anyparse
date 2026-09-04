@@ -1,10 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -80,7 +82,7 @@ final class JoinDeclarationAssignment implements Check {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
-				RefactorSupport.collectCommentTokens(plugin.lexicalRegions(entry.source));
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			final matches: Array<Match> = [];
 			collectMatches(tree, entry.source, comments, seams, matches);
 			for (m in matches) violations.push({
@@ -101,13 +103,13 @@ final class JoinDeclarationAssignment implements Check {
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final matches: Array<Match> = [];
 		collectMatches(tree, source, comments, seams, matches);
 		final byKey: Map<String, Match> = [];
 		for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: '${m.declText} = ${m.rhsSource};' }))
 		);
 	}
@@ -162,7 +164,7 @@ final class JoinDeclarationAssignment implements Check {
 		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
 		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
 		final declText: String = source.substring(declSpan.from, declSpan.to - 1).rtrim();
-		if (RefactorSupport.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // never joined
+		if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // never joined
 
 		if (assign.kind != s.exprStmtKind || assign.children.length != 1) return null;
 		final binary: QueryNode = assign.children[0];

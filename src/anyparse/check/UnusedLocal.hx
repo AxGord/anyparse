@@ -2,10 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.ModuleScan;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -222,7 +225,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 			final deletable: Bool = init == null || (
 				index != null
 					? TypeResolver.isDeletionPure(init, treeRoot, shape, declaredTypes, index)
-					: RefactorSupport.isSideEffectFree(init)
+					: MemberKinds.isSideEffectFree(init)
 			);
 			if (!deletable) continue;
 			// A binding that SHARES its line with another one is reported but never cut: the deletion
@@ -233,7 +236,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 			// right-recursive), and a head needs its first continuation promoted into its place — so it
 			// is refused rather than approximated.
 			if (continuationKinds.contains(decl.kind) || decl.children.exists(k -> continuationKinds.contains(k.kind))) continue;
-			edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });
+			edits.push({ span: ElementSpan.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;
 	}
@@ -295,7 +298,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 		if (scopeSpan == null) return;
 		final excluded: Array<Span> = [declSpan];
 		var note: String = '';
-		if (RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) {
+		if (OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) {
 			final shadowed: Array<Span> = shadowedRegions(ctx, enclosingScope, name, declSpan);
 			// An INITIALIZER-LESS declaration carries no value of its own, so "its value is never
 			// read" is not what makes it dead — a WRITE does, and a build macro that rewrites the
@@ -311,7 +314,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 			if (redecl != null && appendRedeclaredRegion(ctx, redecl, name, scopeSpan, shadowed)) claimed = redecl;
 			if (shadowed.length == 0) return;
 			for (region in shadowed) excluded.push(region);
-			if (RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) return;
+			if (OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) return;
 			if (claimed != null) note = redeclarationNote(ctx, claimed);
 		}
 		ctx.out.push({
@@ -405,7 +408,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	private static function appendRedeclaredRegion(ctx: ScanCtx, redecl: QueryNode, name: String, scopeSpan: Span, out: Array<Span>): Bool {
 		final span: Null<Span> = redecl.span;
 		if (span == null) return false;
-		final binder: Null<Span> = RefactorSupport.binderTokenSpan(ctx.source, span.from, span.to, name);
+		final binder: Null<Span> = OccurrenceScan.binderTokenSpan(ctx.source, span.from, span.to, name);
 		if (binder == null) return false;
 		out.push(binder);
 		out.push(new Span(span.to, scopeSpan.to));
@@ -460,7 +463,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	private static function onlyTrivia(source: String, from: Int, to: Int): Bool {
 		var at: Int = from;
 		while (at < to) {
-			final next: Int = RefactorSupport.skipForwardTrivia(source, at);
+			final next: Int = SourceComments.skipForwardTrivia(source, at);
 			if (next > at) {
 				at = next;
 				continue;
@@ -491,7 +494,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 		if (span == null || children.length == 0) return;
 		final body: Null<Span> = children[children.length - 1].span;
 		if (body == null || body.to > span.to || body.from <= span.from || !onlyTrivia(ctx.source, body.to, span.to)) return;
-		final binder: Null<Span> = RefactorSupport.binderTokenSpan(ctx.source, span.from, body.from, name);
+		final binder: Null<Span> = OccurrenceScan.binderTokenSpan(ctx.source, span.from, body.from, name);
 		if (binder == null) return;
 		out.push(binder);
 		out.push(body);

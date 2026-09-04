@@ -3,10 +3,14 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.CallSites;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveParam;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -217,7 +221,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 			final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 			if (functionKinds.length > 0) collectRenameEdits(tree, null, source, functionKinds, opaqueKinds, renameFlagged, index, edits);
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
@@ -309,7 +313,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 			final pspan: Null<Span> = p.span;
 			if (name == null || pspan == null) continue;
 			if (StringTools.startsWith(name, '_')) continue;
-			if (RefactorSupport.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan])) continue;
+			if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan])) continue;
 			final autofixable: Bool = eligible && fnName != null
 				&& RemoveParam.paramSlotEdits(source, tree, fn, pi, fnName, fnSpan.from, shape).error == null;
 			if (!autofixable && capturedAsValue) continue;
@@ -430,7 +434,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 		node: QueryNode, root: QueryNode, source: String, shape: RefShape, flagged: Array<String>, handled: Array<Int>,
 		edits: Array<{ span: Span, text: String }>
 	): Void {
-		if (RefactorSupport.FN_DECL_KINDS.contains(node.kind)) {
+		if (MemberKinds.FN_DECL_KINDS.contains(node.kind)) {
 			final fnSpan: Null<Span> = node.span;
 			final fnName: Null<String> = node.name;
 			if (fnSpan != null && fnName != null && !handled.contains(fnSpan.from)) {
@@ -512,9 +516,9 @@ final class UnusedParameter implements Check implements ConfigAware {
 			-1
 		else if (StringTools.startsWith(name, '_'))
 			-1
-		else if (RefactorSupport.referencedInRange(source, '_$name', fnSpan.from, fnSpan.to, []))
+		else if (OccurrenceScan.referencedInRange(source, '_$name', fnSpan.from, fnSpan.to, []))
 			-1
-		else if (RefactorSupport.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan]))
+		else if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan]))
 			-1
 		else
 			firstIdentOccurrence(source, name, pspan.from, pspan.to);
@@ -535,9 +539,9 @@ final class UnusedParameter implements Check implements ConfigAware {
 		while (i + len <= stop) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + len > stop) return -1;
-			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(source.fastCodeAt(at - 1));
+			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1));
 			final afterIdx: Int = at + len;
-			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(source.fastCodeAt(afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
 			if (beforeOk && afterOk) return at;
 			i = at + 1;
 		}

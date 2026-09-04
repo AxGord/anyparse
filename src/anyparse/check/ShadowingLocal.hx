@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -353,14 +353,14 @@ final class ShadowingLocal implements Check {
 			localDeclKinds: localDeclKinds,
 			declHostKinds: shape.declHostKinds,
 			positionScopedKinds: (shape.positionScopedKinds ?? []).concat(shape.branchScopeKinds ?? []),
-			classLikeKinds: RefactorSupport.classLikeContainerKinds(shape),
+			classLikeKinds: MemberKinds.classLikeContainerKinds(shape),
 			paramKinds: shape.paramKinds ?? [],
 			selfScopeKinds: shape.selfScopeDeclKinds,
 			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
 			catchKind: shape.catchClauseKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			conditionalKind: shape.conditionalMemberKind,
-			nestedFnKinds: (shape.functionKinds ?? []).concat(RefactorSupport.nestedFunctionKinds(shape))
+			nestedFnKinds: (shape.functionKinds ?? []).concat(MemberKinds.nestedFunctionKinds(shape))
 		};
 	}
 

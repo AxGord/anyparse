@@ -6,7 +6,7 @@ import anyparse.check.NoUnderscorePrefix;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import sys.FileSystem;
@@ -702,7 +702,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 	private function assertFixed(src: String, present: Array<String>, absent: Array<String>, ?config: String): Void {
 		final applied: Array<{ span: Span, text: String }> = edits(src, config);
 		Assert.isTrue(applied.length > 0);
-		switch RefactorSupport.canonicalize(src, applied, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, applied, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				for (fragment in present) Assert.isTrue(text.indexOf(fragment) >= 0, 'missing "$fragment" in:\n$text');
 				for (fragment in absent) Assert.isTrue(text.indexOf(fragment) == -1, 'still present "$fragment" in:\n$text');

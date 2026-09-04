@@ -5,8 +5,8 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -164,7 +164,7 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, [seams.scan.caseBranchKind], byKey);
+		MemberKinds.indexNodesByKind(tree, [seams.scan.caseBranchKind], byKey);
 		final pipe: Bool = pipeStyle(LintConfig.resolveWith(_resolveConfig, violations[0].file));
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (violation in violations) {

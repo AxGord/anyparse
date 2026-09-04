@@ -7,7 +7,7 @@ import anyparse.check.MemberOrder;
 import anyparse.check.MemberSpacing;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -1152,7 +1152,7 @@ class MemberOrderCheckTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(resolve ?? emptyConfigResolver());
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
-		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
+		return switch CanonicalEdit.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
 			case Ok(text): text;
 			case Err(message):
 				Assert.fail(message);

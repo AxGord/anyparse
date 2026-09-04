@@ -6,11 +6,15 @@ import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
@@ -289,7 +293,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final tree: Null<QueryNode> = locals.length == 0 ? null : CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return decline(violations, DECLINE_NO_TREE);
 		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, locals, byKey);
+		MemberKinds.indexNodesByKind(tree, locals, byKey);
 		// A cast target lookup costs a second full parse (`castTargetSources`), so compute
 		// it lazily and cache it — a run whose locals are never casts never pays for it.
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
@@ -373,7 +377,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final tree: Null<QueryNode> = locals.length == 0 ? null : CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, locals, byKey);
+		MemberKinds.indexNodesByKind(tree, locals, byKey);
 		final printer: TypeRefPrinter = printerFor(source, tree, plugin);
 		final maxAnon: Int = maxAnonLen(violations);
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
@@ -540,7 +544,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = printed.fastCodeAt(i);
-			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
+			if (!SourceText.isIdentChar(c) && c != '.'.code) {
 				buf.addChar(c);
 				i++;
 				continue;
@@ -548,7 +552,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			final start: Int = i;
 			while (i < n) {
 				final cc: Int = printed.fastCodeAt(i);
-				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
+				if (!SourceText.isIdentChar(cc) && cc != '.'.code) break;
 				i++;
 			}
 			buf.add(f(printed.substring(start, i)));
@@ -562,7 +566,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		if (parts.length < 2) return run;
 		final last: String = parts[parts.length - 1];
 		for (i in 0...parts.length - 1) {
-			if (RefactorSupport.isUpperInitial(parts[i])) return last;
+			if (SourceText.isUpperInitial(parts[i])) return last;
 			if (isOwnPrivateModule(parts.slice(0, i + 1), site.file)) return last;
 		}
 		return site.methodName != null && parts[parts.length - 2] == site.methodName ? last : run;
@@ -662,10 +666,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		if (!printer.hasResolutionIndex()) return printed;
 		var placed: Bool = true;
 		mapTypeRuns(printed, run -> {
-			if (
-				run.indexOf('.') != -1 && RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(run))
-				&& printer.resolvePath(run) == null
-			)
+			if (run.indexOf('.') != -1 && SourceText.isUpperInitial(SourceText.lastSegment(run)) && printer.resolvePath(run) == null)
 				placed = false;
 			return run;
 		});
@@ -689,7 +690,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (span != null && (offset < span.from || offset > span.to)) return;
 			final name: Null<String> = node.name;
 			if (span != null && functions.contains(node.kind) && name != null) {
-				final at: Int = RefactorSupport.activeCodeIdentTokenOffset(source, span, name, regions);
+				final at: Int = OccurrenceScan.activeCodeIdentTokenOffset(source, span, name, regions);
 				if (at >= 0 && source.fastCodeAt(at + name.length) == '<'.code) best = name;
 			}
 			for (c in node.children) walk(c);
@@ -753,7 +754,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		rawInit: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
 		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, maxAnonLen: Int
 	): Null<String> {
-		final init: QueryNode = RefactorSupport.unwrapParens(rawInit, shape.parenKind);
+		final init: QueryNode = BoolExprShape.unwrapParens(rawInit, shape.parenKind);
 		return
 			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index, resolution) ?? arrayType(
 				init, shape
@@ -915,7 +916,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// fact into a later `||` operand only from the chain's FIRST operand, so a
 		// `typeName`-consuming call in the tail would see it nullable again.
 		if (recv.kind != identKind || typeName == null || span == null) return null;
-		if (!RefactorSupport.isUpperInitial(typeName)) return null;
+		if (!SourceText.isUpperInitial(typeName)) return null;
 		// A receiver that resolves to a local / parameter / field binding is a value — an
 		// INSTANCE field access, a distinct (cross-type instance) case not handled here.
 		// A genuine type reference resolves to no value binding.
@@ -937,12 +938,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final n: Int = typeSrc.length;
 		var i: Int = 0;
 		while (i < n) {
-			if (!RefactorSupport.isIdentStartChar(typeSrc.fastCodeAt(i))) {
+			if (!SourceText.isIdentStartChar(typeSrc.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
-			while (i < n && RefactorSupport.isIdentChar(typeSrc.fastCodeAt(i))) i++;
+			while (i < n && SourceText.isIdentChar(typeSrc.fastCodeAt(i))) i++;
 			if (!COPYABLE_BUILTINS.contains(typeSrc.substring(start, i))) return false;
 		}
 		return true;
@@ -1089,12 +1090,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final n: Int = t.length;
 		var i: Int = 0;
 		while (i < n) {
-			if (!RefactorSupport.isIdentChar(t.fastCodeAt(i))) {
+			if (!SourceText.isIdentChar(t.fastCodeAt(i))) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
-			while (i < n && RefactorSupport.isIdentChar(t.fastCodeAt(i))) i++;
+			while (i < n && SourceText.isIdentChar(t.fastCodeAt(i))) i++;
 			if (t.substring(start, i) == '_') return true;
 		}
 		return false;

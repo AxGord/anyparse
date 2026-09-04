@@ -85,7 +85,7 @@ final class AddParam {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
+		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> MemberKinds.FN_DECL_KINDS.contains(node.kind));
 		if (fn == null) return Err('position $line:$col is not on a function');
 		final fnNode: QueryNode = fn;
 		final fnSpan: Null<Span> = fnNode.span;
@@ -124,7 +124,7 @@ final class AddParam {
 			text: insertText
 		};
 
-		final rewritten: String = RefactorSupport.applyEdits(source, [edit]);
+		final rewritten: String = CanonicalEdit.applyEdits(source, [edit]);
 		if (rewritten == source) return Err('adding "$newName" is a no-op');
 
 		try
@@ -145,13 +145,13 @@ final class AddParam {
 	 */
 	private static function parseParamName(paramText: String): Null<String> {
 		var i: Int = 0;
-		while (i < paramText.length && RefactorSupport.isSpace(paramText.fastCodeAt(i))) i++;
+		while (i < paramText.length && SourceText.isSpace(paramText.fastCodeAt(i))) i++;
 		if (i < paramText.length && paramText.fastCodeAt(i) == '?'.code) i++;
-		while (i < paramText.length && RefactorSupport.isSpace(paramText.fastCodeAt(i))) i++;
+		while (i < paramText.length && SourceText.isSpace(paramText.fastCodeAt(i))) i++;
 		final start: Int = i;
-		if (i >= paramText.length || !RefactorSupport.isIdentStartChar(paramText.fastCodeAt(i))) return null;
+		if (i >= paramText.length || !SourceText.isIdentStartChar(paramText.fastCodeAt(i))) return null;
 		i++;
-		while (i < paramText.length && RefactorSupport.isIdentChar(paramText.fastCodeAt(i))) i++;
+		while (i < paramText.length && SourceText.isIdentChar(paramText.fastCodeAt(i))) i++;
 		return paramText.substring(start, i);
 	}
 
@@ -174,10 +174,10 @@ final class AddParam {
 		// trailing comma. Anything else means the resolved node is not the
 		// final parameter and the insertion would be unsafe.
 		var j: Int = spanTo;
-		while (j < source.length && RefactorSupport.isSpace(source.fastCodeAt(j))) j++;
+		while (j < source.length && SourceText.isSpace(source.fastCodeAt(j))) j++;
 		if (j < source.length && source.fastCodeAt(j) == ','.code) {
 			j++;
-			while (j < source.length && RefactorSupport.isSpace(source.fastCodeAt(j))) j++;
+			while (j < source.length && SourceText.isSpace(source.fastCodeAt(j))) j++;
 		}
 		if (j >= source.length || source.fastCodeAt(j) != ')'.code) return -1;
 
@@ -185,7 +185,7 @@ final class AddParam {
 		// whitespace included in the span (multi-line parameter lists carry
 		// the newline / indentation up to the next token in the span).
 		var k: Int = spanTo;
-		while (k > span.from && RefactorSupport.isSpace(source.fastCodeAt(k - 1))) k--;
+		while (k > span.from && SourceText.isSpace(source.fastCodeAt(k - 1))) k--;
 		return k;
 	}
 

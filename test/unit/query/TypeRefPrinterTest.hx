@@ -1,8 +1,8 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
@@ -869,7 +869,7 @@ class TypeRefPrinterTest extends Test {
 
 	/** `source` with the pending import edits spliced in — through the SAME batching path a fixer's edits take. */
 	private function applyImports(p: TypeRefPrinter, source: String): String {
-		return RefactorSupport.applyEdits(source, p.pendingImportEdits());
+		return CanonicalEdit.applyEdits(source, p.pendingImportEdits());
 	}
 
 }

@@ -3,6 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
+import anyparse.query.SourceComments;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
@@ -216,8 +217,8 @@ final class LitCommand implements CliCommand {
 	private static function appendCommentHits(
 		target: String, source: String, exact: Bool, out: Array<LitHit>, regions: Array<LexRegion>
 	): Void {
-		for (tok in RefactorSupport.collectCommentTokens(regions)) {
-			final bodySpan: Span = RefactorSupport.commentBody(source, tok);
+		for (tok in SourceComments.collectCommentTokens(regions)) {
+			final bodySpan: Span = SourceComments.commentBody(source, tok);
 			final body: String = source.substring(bodySpan.from, bodySpan.to);
 			final match: Bool = exact ? body == target : body.indexOf(target) >= 0;
 			if (match) out.push(new LitHit('Comment', body, new Span(tok.from, tok.to)));

@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferIfExpressionAssignment;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import utest.Assert;
@@ -420,7 +420,7 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
-		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
+		return switch CanonicalEdit.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

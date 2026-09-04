@@ -1,8 +1,8 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.runtime.Span;
 
@@ -47,7 +47,7 @@ final class ConstantFieldScan {
 		final finalFieldKinds: Array<String> = [for (k in fieldKinds) if (!mutable.contains(k)) k];
 		return finalFieldKinds.length == 0 ? null : {
 			containers: containers,
-			classLikeContainers: RefactorSupport.classLikeContainerKinds(shape),
+			classLikeContainers: MemberKinds.classLikeContainerKinds(shape),
 			members: members,
 			finalFieldKinds: finalFieldKinds,
 			mutableFieldKinds: mutable,

@@ -1,8 +1,8 @@
 package anyparse.check;
 
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -47,7 +47,7 @@ final class LiteralInfer {
 	public static function inferType(
 		rawInit: QueryNode, source: String, shape: RefShape, castTargets: () -> Map<Int, String>
 	): Null<String> {
-		final init: QueryNode = RefactorSupport.unwrapParens(rawInit, shape.parenKind);
+		final init: QueryNode = BoolExprShape.unwrapParens(rawInit, shape.parenKind);
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
 		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
 		final negKind: Null<String> = shape.negationKind;

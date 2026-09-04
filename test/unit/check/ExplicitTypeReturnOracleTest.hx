@@ -8,8 +8,8 @@ import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.ExplicitType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
-import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -107,7 +107,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 		}
 		final edits: Array<{ span: Span, text: String }> = check.fixWithOracle(SRC, returns, plugin, display);
 		display.stop();
-		switch RefactorSupport.canonicalize(SRC, edits, true, plugin) {
+		switch CanonicalEdit.canonicalize(SRC, edits, true, plugin) {
 			case Ok(text):
 				final packed: String = StringTools.replace(text, ' ', '');
 				Assert.isTrue(packed.indexOf('label(n:Int):String') != -1, 'the value-returning method is annotated String');

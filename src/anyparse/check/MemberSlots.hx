@@ -4,10 +4,12 @@ import anyparse.check.MemberOrder.BranchInfo;
 import anyparse.check.MemberOrder.MemberRank;
 import anyparse.check.MemberOrder.OrderedMember;
 import anyparse.query.CondDirectives;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -52,7 +54,7 @@ final class MemberSlots {
 	public static function collectMembers(
 		container: QueryNode, source: String, shape: RefShape, accessors: Map<Int, Bool>, regions: Array<LexRegion>
 	): Array<OrderedMember> {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(regions);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final out: Array<OrderedMember> = [];
 		collectInto(out, container, source, shape, comments, [], null, accessors);
 		return out;
@@ -150,7 +152,7 @@ final class MemberSlots {
 			} else {
 				if (staticKind != null && child.kind == staticKind) isStatic = true;
 				if (inlineKind != null && child.kind == inlineKind) isInline = true;
-				if (RefactorSupport.META_KINDS.contains(child.kind)) hasMeta = true;
+				if (MemberKinds.META_KINDS.contains(child.kind)) hasMeta = true;
 				if (visibility.contains(child.kind)) {
 					final s: Null<Span> = child.span;
 					if (s != null && source.substring(s.from, s.to).trim() != defaultVis) isPublic = true;
@@ -234,7 +236,7 @@ final class MemberSlots {
 	): Void {
 		final nl: Int = source.lastIndexOf('\n', ifPos);
 		final ifLineStart: Int = nl < 0 ? 0 : nl + 1;
-		final leadFrom: Int = RefactorSupport.leadingCommentBlockStart(source, comments, ifPos);
+		final leadFrom: Int = SourceComments.leadingCommentBlockStart(source, comments, ifPos);
 		if (leadFrom >= ifLineStart) return;
 		out[firstIdx].leadTrivia = source.substring(leadFrom, ifLineStart);
 		out[firstIdx].leadFrom = leadFrom;
@@ -253,9 +255,9 @@ final class MemberSlots {
 	): Void {
 		final span: Null<Span> = child.span;
 		if (span == null) return;
-		final group: Span = RefactorSupport.declGroupSpan(child, parent, span);
+		final group: Span = ElementSpan.declGroupSpan(child, parent, span);
 		final own: Span = new Span(group.from, ownSourceEnd(source, comments, group.from, group.to));
-		final full: Span = RefactorSupport.memberTriviaSpan(source, own, comments);
+		final full: Span = SourceComments.memberTriviaSpan(source, own, comments);
 		final isField: Bool = (shape.fieldDeclKinds ?? []).contains(child.kind);
 		final region: Span = outerCond ?? full;
 		out.push({

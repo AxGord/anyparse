@@ -1,10 +1,10 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -93,7 +93,7 @@ final class ExtractInterface {
 		srcFile: String, srcTypeName: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String,
 		plugin: GrammarPlugin, ?optsJson: String, ?srcOptsJson: String
 	): MoveResult {
-		if (!RefactorSupport.isIdentifier(ifaceName)) return Err('interface name "$ifaceName" is not a valid identifier');
+		if (!SourceText.isIdentifier(ifaceName)) return Err('interface name "$ifaceName" is not a valid identifier');
 		if (ifaceName == srcTypeName) return Err('interface name must differ from the source type "$srcTypeName"');
 
 		final tree: QueryNode = try plugin.parseFile(srcSource) catch (exception: ParseError) return Err(
@@ -145,7 +145,7 @@ final class ExtractInterface {
 		// canonical one second earlier is drifted — the very defect this op's CREATED file
 		// was taught to avoid, one file over.
 		var srcRewrites: Null<Int> = null;
-		final newSrc: String = switch RefactorSupport.editKeepingCanonical(srcSource, [edit], plugin, srcOptsJson) {
+		final newSrc: String = switch CanonicalEdit.editKeepingCanonical(srcSource, [edit], plugin, srcOptsJson) {
 			case Err(message): return Err('the rewritten $srcFile: $message');
 			case Ok(text, rewrites):
 				srcRewrites = rewrites;
@@ -324,7 +324,7 @@ final class ExtractInterface {
 
 	/** Does `word` occur in `hay` on identifier boundaries? */
 	private static function referencedWord(hay: String, word: String): Bool {
-		return RefactorSupport.identTokenOffset(hay, new Span(0, hay.length), word) >= 0;
+		return SourceText.identTokenOffset(hay, new Span(0, hay.length), word) >= 0;
 	}
 
 	/**

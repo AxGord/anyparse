@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -113,7 +113,7 @@ final class RedundantBypassAccessor implements Check {
 	private static function collect(node: QueryNode, file: String, ctx: Ctx, info: FileInfo, out: Array<Violation>): Void {
 		final meta: Null<QueryNode> = bypassMeta(node);
 		if (meta != null) {
-			final wrapped: Null<QueryNode> = node.children.find(c -> !RefactorSupport.META_KINDS.contains(c.kind));
+			final wrapped: Null<QueryNode> = node.children.find(c -> !MemberKinds.META_KINDS.contains(c.kind));
 			final assign: Null<QueryNode> = wrapped == null ? null : unwrapToAssign(wrapped, ctx.assignKind);
 			final metaSpan: Null<Span> = meta.span;
 			if (assign != null && metaSpan != null) {
@@ -135,7 +135,7 @@ final class RedundantBypassAccessor implements Check {
 		final meta: Null<QueryNode> = bypassMeta(node);
 		if (meta != null) {
 			final metaSpan: Null<Span> = meta.span;
-			final wrapped: Null<QueryNode> = node.children.find(c -> !RefactorSupport.META_KINDS.contains(c.kind));
+			final wrapped: Null<QueryNode> = node.children.find(c -> !MemberKinds.META_KINDS.contains(c.kind));
 			final wrapSpan: Null<Span> = wrapped?.span;
 			if (metaSpan != null && wrapSpan != null && flagged.contains('${metaSpan.from}:${metaSpan.to}'))
 				edits.push({ span: new Span(metaSpan.from, wrapSpan.from), text: '' });
@@ -145,14 +145,14 @@ final class RedundantBypassAccessor implements Check {
 
 	/** The `@:bypassAccessor` META child of `node`, or null. */
 	private static function bypassMeta(node: QueryNode): Null<QueryNode> {
-		return node.children.find(c -> RefactorSupport.META_KINDS.contains(c.kind) && c.name == BYPASS_META);
+		return node.children.find(c -> MemberKinds.META_KINDS.contains(c.kind) && c.name == BYPASS_META);
 	}
 
 	/** Descend `node` through nested metadata wrappers to the plain assignment it wraps, or null. */
 	private static function unwrapToAssign(node: QueryNode, assignKind: String): Null<QueryNode> {
 		if (node.kind == assignKind) return node;
-		if (!node.children.exists(c -> RefactorSupport.META_KINDS.contains(c.kind))) return null;
-		final inner: Null<QueryNode> = node.children.find(c -> !RefactorSupport.META_KINDS.contains(c.kind));
+		if (!node.children.exists(c -> MemberKinds.META_KINDS.contains(c.kind))) return null;
+		final inner: Null<QueryNode> = node.children.find(c -> !MemberKinds.META_KINDS.contains(c.kind));
 		return inner == null ? null : unwrapToAssign(inner, assignKind);
 	}
 

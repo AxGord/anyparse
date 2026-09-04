@@ -3,7 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -83,7 +83,7 @@ final class EnglishComments implements Check {
 
 	/** Scan every comment token in `source`, flagging the first non-Latin letter in each. */
 	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
-		for (tok in RefactorSupport.collectCommentTokens(regions)) {
+		for (tok in SourceComments.collectCommentTokens(regions)) {
 			final at: Int = firstNonLatinLetter(source, tok.from, tok.to);
 			if (at >= 0) out.push({
 				file: file,

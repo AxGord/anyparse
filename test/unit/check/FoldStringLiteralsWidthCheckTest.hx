@@ -4,8 +4,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxStringEscape;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
-import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import utest.Assert;
 
@@ -382,7 +382,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		Assert.equals(1, vs.length);
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				// Pin the EDIT, not just its stability: the head must split into the
 				// two seam segments (the `[\n'`-terminated literal + the `for` line) —
@@ -684,7 +684,7 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		switch RefactorSupport.canonicalize(src, edits, true, plugin, FormatConfigDiscovery.discover('C.hx')) {
+		switch CanonicalEdit.canonicalize(src, edits, true, plugin, FormatConfigDiscovery.discover('C.hx')) {
 			case Ok(text):
 				return text;
 			case Err(message):

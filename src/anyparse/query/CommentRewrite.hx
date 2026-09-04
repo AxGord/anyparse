@@ -1,9 +1,9 @@
 package anyparse.query;
 
 import anyparse.check.CheckScan;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -80,28 +80,28 @@ final class CommentRewrite {
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		try {
-			for (tok in RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source))) {
-				final bodySpan: Span = RefactorSupport.commentBody(source, tok);
+			for (tok in SourceComments.collectCommentTokens(plugin.lexicalRegions(source))) {
+				final bodySpan: Span = SourceComments.commentBody(source, tok);
 				final body: String = source.substring(bodySpan.from, bodySpan.to);
 				// The splice is RAW and the writer re-emits a comment interior byte for byte, so a
 				// replacement carrying a real newline would start a line with no continuation prefix
 				// — the corruption `doc-comment-continuation` exists to see. Give every new line the
 				// prefix THIS comment already uses instead.
-				final continuation: String = RefactorSupport.commentContinuation(source, tok);
+				final continuation: String = SourceComments.commentContinuation(source, tok);
 				final next: String = compiled != null
-					? compiled.map(body, m -> RefactorSupport.reflowIntoComment(expandGroups(replace, m), continuation))
-					: literalReplace(body, find, RefactorSupport.reflowIntoComment(replace, continuation));
+					? compiled.map(body, m -> SourceComments.reflowIntoComment(expandGroups(replace, m), continuation))
+					: literalReplace(body, find, SourceComments.reflowIntoComment(replace, continuation));
 				if (next == body) continue;
 				// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the last
 				// content line and the writer eats the space before that line's star (`\t* text */`).
 				final grown: Bool = next.indexOf('\n') >= 0 && isOneLineDocBlock(source, tok);
-				edits.push({ span: bodySpan, text: grown ? RefactorSupport.openGrownDocBlock(next, continuation) : next });
+				edits.push({ span: bodySpan, text: grown ? SourceComments.openGrownDocBlock(next, continuation) : next });
 			}
 		} catch (exception: Exception)
 			return Err(exception.message);
 
 		if (edits.length == 0) return Ok(source);
-		final result: EditResult = RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
+		final result: EditResult = CanonicalEdit.canonicalize(source, edits, reformat, plugin, optsJson);
 		if (allowWide == true) return result;
 		return switch result {
 			case Ok(text, _):
@@ -164,7 +164,7 @@ final class CommentRewrite {
 		// re-indents everything, so a comment the command never mentioned can cross the width on its
 		// own, and against the raw source that reads as this edit's doing. Measured: a 135-column
 		// `//` at column 0 that the writer moves to three tabs refused an edit to a different line.
-		final base: String = switch RefactorSupport.canonicalize(source, [], reformat, plugin, optsJson) {
+		final base: String = switch CanonicalEdit.canonicalize(source, [], reformat, plugin, optsJson) {
 			case Ok(text, _): text;
 			case Err(_): source;
 		};
@@ -228,7 +228,7 @@ final class CommentRewrite {
 	private static function wideCommentLines(text: String, width: Int, tab: Int, regions: Array<LexRegion>): Array<WideLine> {
 		final seen: Array<Int> = [];
 		final lines: Array<WideLine> = [];
-		for (tok in RefactorSupport.collectCommentTokens(regions)) {
+		for (tok in SourceComments.collectCommentTokens(regions)) {
 			var from: Int = text.lastIndexOf('\n', tok.from) + 1;
 			while (from < tok.to) {
 				var to: Int = text.indexOf('\n', from);
@@ -340,10 +340,10 @@ final class CommentRewrite {
 	 * says so in as many words.
 	 */
 	private static function literalReplace(body: String, find: String, replace: String): String {
-		final normalized: { text: String, map: Array<Int> } = RefactorSupport.normalizeCommentBody(body);
+		final normalized: { text: String, map: Array<Int> } = SourceComments.normalizeCommentBody(body);
 		final norm: String = normalized.text;
 		final map: Array<Int> = normalized.map;
-		final needle: String = RefactorSupport.normalizeCommentBody(find).text;
+		final needle: String = SourceComments.normalizeCommentBody(find).text;
 		if (needle.length == 0) return body;
 		final buf: StringBuf = new StringBuf();
 		var cursor: Int = 0;

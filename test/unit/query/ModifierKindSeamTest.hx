@@ -5,6 +5,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxCondModPrefix;
 import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxModifier;
+import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -81,7 +83,7 @@ class ModifierKindSeamTest extends Test {
 		Assert.isTrue(kinds.length > 1, 'the seams exposed no kinds - the guard would pass vacuously');
 		for (kind in kinds)
 			Assert.isTrue(
-				RefactorSupport.isDeclPrefixSibling(new QueryNode(kind, null, [])),
+				ElementSpan.isDeclPrefixSibling(new QueryNode(kind, null, [])),
 				'$kind is a declared prefix seam but RefactorSupport does not fold it into the decl group'
 			);
 	}
@@ -98,7 +100,7 @@ class ModifierKindSeamTest extends Test {
 		final regionKind: String = region ?? '';
 		for (kind in CheckScan.modifierKinds(shape))
 			Assert.isTrue(
-				RefactorSupport.isDeclPrefixSibling(new QueryNode(regionKind, null, [new QueryNode(kind, null, [])])),
+				ElementSpan.isDeclPrefixSibling(new QueryNode(regionKind, null, [new QueryNode(kind, null, [])])),
 				'a conditional region holding only $kind is not folded into the decl group'
 			);
 	}
@@ -119,7 +121,7 @@ class ModifierKindSeamTest extends Test {
 		final regionKind: String = region ?? '';
 		for (kind in keywords)
 			Assert.isTrue(
-				RefactorSupport.isDeclPrefixSibling(new QueryNode(regionKind, null, [new QueryNode(kind, null, [])])),
+				ElementSpan.isDeclPrefixSibling(new QueryNode(regionKind, null, [new QueryNode(kind, null, [])])),
 				'a conditional region contributing only $kind is not folded into the decl group'
 			);
 	}

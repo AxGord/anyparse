@@ -131,7 +131,7 @@ final class ExtractVar {
 	public static function extractVar(
 		source: String, line: Int, col: Int, name: String, plugin: GrammarPlugin, ?exactTo: Int
 	): ExtractResult {
-		if (!RefactorSupport.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
+		if (!SourceText.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
@@ -180,7 +180,7 @@ final class ExtractVar {
 			text: name
 		};
 
-		final rewritten: String = RefactorSupport.applyEdits(source, [insertEdit, replaceEdit]);
+		final rewritten: String = CanonicalEdit.applyEdits(source, [insertEdit, replaceEdit]);
 		if (rewritten == source) return Err('extract of "$name" is a no-op');
 
 		try
@@ -215,7 +215,7 @@ final class ExtractVar {
 	private static function nameDeclaredInEnclosingFunction(tree: QueryNode, cursor: Int, name: String): Bool {
 		// Deepest function declaration whose span contains the cursor (a
 		// function name always passes `innermostWhere`'s renameable filter).
-		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
+		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> MemberKinds.FN_DECL_KINDS.contains(node.kind));
 		if (fn == null) return false;
 		var found: Bool = false;
 		function scan(node: QueryNode): Void {

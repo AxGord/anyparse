@@ -6,7 +6,7 @@ import anyparse.check.PreferArrowCallback;
 import anyparse.check.PreferLambdaExpressionBody;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -154,7 +154,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
 		Assert.equals('w -> { return w; }', es[0].text);
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg(v -> w -> { return w; });\n\t}\n}', RefactorSupport.applyEdits(src, es));
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg(v -> w -> { return w; });\n\t}\n}', CanonicalEdit.applyEdits(src, es));
 	}
 
 	/**
@@ -167,7 +167,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
 		Assert.equals(src.indexOf('} /* tail */') + 1, es[0].span.to);
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg(v -> v /* tail */);\n\t}\n}', RefactorSupport.applyEdits(src, es));
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg(v -> v /* tail */);\n\t}\n}', CanonicalEdit.applyEdits(src, es));
 	}
 
 	/**
@@ -260,7 +260,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tm(() -> { if (c) f(); }, 2);\n\t}\n}';
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\tm(() -> if (c) f(), 2);\n\t}\n}', RefactorSupport.applyEdits(src, es));
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tm(() -> if (c) f(), 2);\n\t}\n}', CanonicalEdit.applyEdits(src, es));
 	}
 
 	/** An `else if` chain is ONE `if` statement, so it collapses whole — every link rides along in the verbatim slice. */

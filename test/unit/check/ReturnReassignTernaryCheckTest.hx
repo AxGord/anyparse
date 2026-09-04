@@ -6,7 +6,7 @@ import anyparse.check.PreferFinal;
 import anyparse.check.ReturnReassignTernary;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -341,7 +341,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
 		return es.length == 0
 			? source
-			: switch RefactorSupport.canonicalize(source, es, false, plugin) {
+			: switch CanonicalEdit.canonicalize(source, es, false, plugin) {
 				case Ok(text): text;
 				case Err(message): throw message;
 			};
@@ -353,14 +353,14 @@ class ReturnReassignTernaryCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
 		return es.length == 0
 			? source
-			: switch RefactorSupport.canonicalize(source, es, false, plugin) {
+			: switch CanonicalEdit.canonicalize(source, es, false, plugin) {
 				case Ok(text): text;
 				case Err(message): throw message;
 			};
 	}
 
 	private function canon(source: String): String {
-		return switch RefactorSupport.canonicalize(source, [], true, new HaxeQueryPlugin()) {
+		return switch CanonicalEdit.canonicalize(source, [], true, new HaxeQueryPlugin()) {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};

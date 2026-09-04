@@ -149,7 +149,7 @@ final class Inline {
 			if (boundSpan == null) return '"$name" initializer reads non-local "$nm" — cannot inline (may be a property)';
 
 			final boundDecl: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, boundSpan.from);
-			if (boundDecl == null || RefactorSupport.isFieldMemberKind(boundDecl.kind))
+			if (boundDecl == null || MemberKinds.isFieldMemberKind(boundDecl.kind))
 				return '"$name" initializer reads non-local "$nm" — cannot inline (may be a property)';
 		}
 		return null;
@@ -246,7 +246,7 @@ final class Inline {
 		if (reads.length == 0) return PErr('"$name" has no reads to inline');
 
 		// The initializer subtree must be entirely inline-safe.
-		if (!RefactorSupport.isSideEffectFree(initializer))
+		if (!MemberKinds.isSideEffectFree(initializer))
 			return PErr('"$name" initializer is not inline-safe (contains calls/field-access/collection/lambda)');
 
 		// Every free identifier the initializer reads must be a stable
@@ -286,11 +286,11 @@ final class Inline {
 	 * expression. The other is an unparsed conditional-compilation region, blind by construction.
 	 */
 	private static function scopeBlindSpot(source: String, tree: QueryNode, binding: Int, name: String, shape: RefShape): Null<String> {
-		final scope: QueryNode = RefactorSupport.enclosingFunctionSubtree(tree, binding, shape);
-		final opaque: Null<String> = RefactorSupport.opaqueCondRegionDiagnostic(source, scope, name, shape, 'inline of "$name"');
+		final scope: QueryNode = BinderScan.enclosingFunctionSubtree(tree, binding, shape);
+		final opaque: Null<String> = CondRegionScan.opaqueCondRegionDiagnostic(source, scope, name, shape, 'inline of "$name"');
 		if (opaque != null) return opaque;
 		final blockKind: Null<String> = shape.stringInterpBlockKind;
-		return blockKind != null && RefactorSupport.unreadableInterpBlock(scope, blockKind) != null
+		return blockKind != null && OccurrenceScan.unreadableInterpBlock(scope, blockKind) != null
 			? '"$name" shares its scope with an escape-spelled string interpolation carrying no parsed expression -'
 				+ ' a read of the name inside it cannot be seen; respell that interpolation first'
 			: null;
@@ -316,7 +316,7 @@ final class Inline {
 
 		// Each read's identifier token is replaced with the substitution.
 		for (read in target.reads) {
-			final identFrom: Int = RefactorSupport.identTokenOffset(source, read.span, name);
+			final identFrom: Int = SourceText.identTokenOffset(source, read.span, name);
 			if (identFrom >= 0) edits.push({ span: new Span(identFrom, identFrom + name.length), text: substitution });
 		}
 
@@ -328,7 +328,7 @@ final class Inline {
 		if (deleteSpan == null) return Err('"$name" declaration shares its line — cannot inline cleanly');
 		edits.push({ span: deleteSpan, text: '' });
 
-		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		if (rewritten == source) return Err('inline of "$name" is a no-op');
 
 		try

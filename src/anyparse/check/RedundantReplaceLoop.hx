@@ -2,10 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
@@ -237,7 +237,7 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		fixWalk(tree, tree, source, declaredTypes, s, wanted, edits);
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/** Bundle the required `RefShape` kinds + `StringFoldSupport`, or null when any is unset (the check is then a no-op). */

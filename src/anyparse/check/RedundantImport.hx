@@ -4,6 +4,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -85,7 +86,7 @@ final class RedundantImport implements Check implements RiskyFix {
 				rule: 'redundant-import',
 				severity: Severity.Warning,
 				message: 'redundant import \'${imp.raw}\': \'$module\' is imported here and already binds \''
-				+ '${RefactorSupport.lastSegment(imp.raw)}\''
+				+ '${SourceText.lastSegment(imp.raw)}\''
 			});
 		}
 		return violations;
@@ -128,9 +129,9 @@ final class RedundantImport implements Check implements RiskyFix {
 		final simple: String = imp.raw.substring(dot + 1);
 		// A lower-initial leaf is a static field / enum-constructor import, and a lower-initial
 		// parent segment is a package — neither shape is a module's sub-type.
-		if (!RefactorSupport.isUpperInitial(simple)) return null;
+		if (!SourceText.isUpperInitial(simple)) return null;
 		final module: String = imp.raw.substring(0, dot);
-		return if (!RefactorSupport.isUpperInitial(RefactorSupport.lastSegment(module)))
+		return if (!SourceText.isUpperInitial(SourceText.lastSegment(module)))
 			null
 		else if (!info.imports.exists(o -> providesModule(o, module)))
 			null
@@ -169,7 +170,7 @@ final class RedundantImport implements Check implements RiskyFix {
 				if ((o.alias ?? o.raw) == name) return true;
 			case ImportKind.Wild:
 			case _:
-				if (RefactorSupport.lastSegment(o.raw) == name) return true;
+				if (SourceText.lastSegment(o.raw) == name) return true;
 				if (o.raw != module && moduleDeclaresType(index, o.raw, name)) return true;
 		}
 		return false;

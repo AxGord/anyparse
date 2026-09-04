@@ -1,9 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -139,7 +141,7 @@ final class PreferTernaryExpression implements Check {
 		final resolveIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: '', source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams, resolveIndex)) byKey['${m.span.from}:${m.span.to}'] = m;
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
 	}
@@ -156,7 +158,7 @@ final class PreferTernaryExpression implements Check {
 		walk(root, {
 			root: root,
 			source: source,
-			comments: RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)),
+			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
 			seams: s,
 			plugin: plugin,
 			resolveIndex: resolveIndex

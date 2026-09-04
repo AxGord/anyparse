@@ -1,7 +1,7 @@
 package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.OccurrenceScan;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -89,7 +89,7 @@ class ClassifyOccurrencesTest extends Test {
 		final src: String = 's\n\t// reset value\n\t.value = 1;';
 		Assert.equals(
 			src.lastIndexOf('value'),
-			RefactorSupport.activeCodeIdentTokenOffset(
+			OccurrenceScan.activeCodeIdentTokenOffset(
 				src, new Span(1, src.indexOf(' =')), 'value', new HaxeQueryPlugin().lexicalRegions(src)
 			)
 		);
@@ -100,7 +100,7 @@ class ClassifyOccurrencesTest extends Test {
 		final src: String = 's /* value */ .value;';
 		Assert.equals(
 			src.lastIndexOf('value'),
-			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(1, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+			OccurrenceScan.activeCodeIdentTokenOffset(src, new Span(1, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
 		);
 	}
 
@@ -109,7 +109,7 @@ class ClassifyOccurrencesTest extends Test {
 		final src: String = "trace('${s.value}');";
 		Assert.equals(
 			src.indexOf('value'),
-			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+			OccurrenceScan.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
 		);
 	}
 
@@ -118,7 +118,7 @@ class ClassifyOccurrencesTest extends Test {
 		final src: String = '#if debug\ntrace(s.value);\n#end';
 		Assert.equals(
 			src.indexOf('value'),
-			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+			OccurrenceScan.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
 		);
 	}
 
@@ -126,8 +126,7 @@ class ClassifyOccurrencesTest extends Test {
 	public function testActiveCodeOffsetCommentOnlyIsNotFound(): Void {
 		final src: String = 's\n\t// reset value\n\t.other;';
 		Assert.equals(
-			-1,
-			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+			-1, OccurrenceScan.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
 		);
 	}
 
@@ -157,7 +156,7 @@ class ClassifyOccurrencesTest extends Test {
 		final src: String = 'var re = ~/[\\/*]/;\ns.value = 1;';
 		Assert.equals(
 			src.indexOf('value'),
-			RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
+			OccurrenceScan.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value', new HaxeQueryPlugin().lexicalRegions(src))
 		);
 	}
 
@@ -232,7 +231,7 @@ class ClassifyOccurrencesTest extends Test {
 	}
 
 	private function classify(src: String, name: String, ?excluded: Array<Span>): Null<Array<ClassifiedOccurrence>> {
-		return RefactorSupport.classifyOccurrences(src, name, new HaxeQueryPlugin(), 0, src.length, excluded ?? []);
+		return OccurrenceScan.classifyOccurrences(src, name, new HaxeQueryPlugin(), 0, src.length, excluded ?? []);
 	}
 
 	private function soleClass(src: String, name: String): OccurrenceClass {
@@ -246,7 +245,7 @@ class ClassifyOccurrencesTest extends Test {
 	}
 
 	private function nameBound(src: String, name: String): Bool {
-		return RefactorSupport.nameBoundInRange(src, name, 0, src.length, [], new HaxeQueryPlugin());
+		return OccurrenceScan.nameBoundInRange(src, name, 0, src.length, [], new HaxeQueryPlugin());
 	}
 
 }

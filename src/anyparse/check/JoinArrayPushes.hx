@@ -2,10 +2,15 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.PurityScan.PurityCtx;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.CtorFieldFold;
+import anyparse.query.CtorFieldWrite;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -269,7 +274,7 @@ final class JoinArrayPushes implements Check {
 			final m: Null<Match> = byKey['${span.from}:${span.to}'];
 			if (m != null) for (edit in m.edits) edits.push(edit);
 		}
-		return RefactorSupport.dropContainedEdits(edits);
+		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
 	/**
@@ -315,7 +320,7 @@ final class JoinArrayPushes implements Check {
 			blockBodyKind: shape.blockBodyKind,
 			fieldDeclKinds: shape.fieldDeclKinds ?? [],
 			memberDeclKinds: shape.memberDeclKinds ?? [],
-			classLikeKinds: RefactorSupport.classLikeContainerKinds(shape),
+			classLikeKinds: MemberKinds.classLikeContainerKinds(shape),
 			opaqueKinds: opaqueKinds,
 			interpIdentKind: interpIdentKind,
 			newExprKind: shape.newExprKind,
@@ -427,7 +432,7 @@ final class JoinArrayPushes implements Check {
 	 * (`Null<Array<Int>>`) names the wrapper and is refused too, the conservative direction.
 	 */
 	private static function annotationNamesArray(declSpan: Span, literal: Span, name: String, ctx: Ctx): Bool {
-		return switch RefactorSupport.declaredType(ctx.source, declSpan, literal, name) {
+		return switch CtorFieldFold.declaredType(ctx.source, declSpan, literal, name) {
 			case Absent: true;
 			case Written(text):
 				final root: Null<String> = NominalTypes.outerNominalOf(text);
@@ -490,7 +495,7 @@ final class JoinArrayPushes implements Check {
 		final end: Int = run[run.length - 1].stmt.to;
 		if (CheckScan.hasCommentMarker(source, decl.span.from, endOfLine(source, end))) return null;
 		for (push in run) if (referencesName(push.arg, decl.name, ctx.seams)) return null;
-		return RefactorSupport.referencedInRange(source, decl.name, end, scope.to, []) ? {
+		return OccurrenceScan.referencedInRange(source, decl.name, end, scope.to, []) ? {
 			span: decl.span,
 			edits: foldEdits(decl.literal, run, ctx)
 		} : null;
@@ -508,13 +513,13 @@ final class JoinArrayPushes implements Check {
 		final bodyKind: Null<String> = s.blockBodyKind;
 		final containerSpan: Null<Span> = container.span;
 		if (bodyKind == null || containerSpan == null || s.fieldDeclKinds.length == 0) return;
-		final ctor: Null<QueryNode> = RefactorSupport.soleConstructor(container, s.shape);
+		final ctor: Null<QueryNode> = CtorFieldWrite.soleConstructor(container, s.shape);
 		if (ctor == null) return;
 		final resolved: QueryNode = ctor;
 		final body: Null<QueryNode> = resolved.children.find(c -> c.kind == bodyKind);
 		if (body == null) return;
 		final kids: Array<QueryNode> = body.children;
-		final statics: Array<Int> = RefactorSupport.staticMemberFroms(container, s.shape);
+		final statics: Array<Int> = MemberKinds.staticMemberFroms(container, s.shape);
 		var i: Int = 0;
 		while (i < kids.length) {
 			final push: Null<Push> = pushStatement(kids[i], ctx);
@@ -557,11 +562,11 @@ final class JoinArrayPushes implements Check {
 		if (!receiversDenoteField(run, container, decl.span.from, ctx)) return null;
 		if (CheckScan.hasCommentMarker(source, decl.span.from, decl.span.to)) return null;
 		if (CheckScan.hasCommentMarker(source, from, endOfLine(source, end))) return null;
-		if (RefactorSupport.referencedInRange(source, name, ctorSpan.from, from, [])) return null;
+		if (OccurrenceScan.referencedInRange(source, name, ctorSpan.from, from, [])) return null;
 		// The field's OWN declaration is excluded: a field declared BELOW the constructor lies in
 		// this range and would satisfy the read-after gate with nothing but itself.
-		if (!RefactorSupport.referencedInRange(source, name, end, containerSpan.to, [decl.span])) return null;
-		if (!RefactorSupport.ctorPrefixUnconditional(ctor, from, s.shape)) return null;
+		if (!OccurrenceScan.referencedInRange(source, name, end, containerSpan.to, [decl.span])) return null;
+		if (!CtorFieldWrite.ctorPrefixUnconditional(ctor, from, s.shape)) return null;
 		if (!prologueRunsNoCode(body, from, s)) return null;
 		final writes: FieldWriteIndex = ctx.writes();
 		if (writes.hasUnresolvedWrite(name) || writes.writeCount(owner, name) != NO_WRITES) return null;
@@ -650,7 +655,7 @@ final class JoinArrayPushes implements Check {
 		for (push in run) {
 			if (referencesName(push.arg, push.name, s)) return false;
 			if (!constantElement(push.arg, scan, s)) return false;
-			if (!RefactorSupport.contextFreeRhs(push.arg, container, statics, s.shape, true, _ -> true)) return false;
+			if (!CtorFieldWrite.contextFreeRhs(push.arg, container, statics, s.shape, true, _ -> true)) return false;
 		}
 		return true;
 	}
@@ -666,7 +671,7 @@ final class JoinArrayPushes implements Check {
 	private static function emptyArrayField(container: QueryNode, name: String, statics: Array<Int>, ctx: Ctx): Null<FieldDecl> {
 		final s: Seams = ctx.seams;
 		final declared: Array<QueryNode> = [];
-		RefactorSupport.eachMemberHost(container, host -> for (member in host.children) if (
+		MemberKinds.eachMemberHost(container, host -> for (member in host.children) if (
 			s.memberDeclKinds.contains(member.kind) && member.name == name
 		)
 			declared.push(member));
@@ -691,7 +696,7 @@ final class JoinArrayPushes implements Check {
 		final superText: Null<String> = s.superText;
 		if (superText == null) return true;
 		final calls: Array<QueryNode> = [];
-		RefactorSupport.collectSuperCalls(ctor, superText, s.callKind, s.identKind, calls);
+		CtorFieldWrite.collectSuperCalls(ctor, superText, s.callKind, s.identKind, calls);
 		return calls.length > 0;
 	}
 
@@ -710,14 +715,14 @@ final class JoinArrayPushes implements Check {
 		final overrideKind: Null<String> = s.overrideKind;
 		if (overrideKind == null) return true;
 		var reads: Bool = false;
-		RefactorSupport.eachMemberHost(container, host -> {
+		MemberKinds.eachMemberHost(container, host -> {
 			final kids: Array<QueryNode> = host.children;
 			for (i in 0...kids.length) {
 				if (reads) return;
 				final span: Null<Span> = kids[i].span;
 				if (span == null || !s.memberDeclKinds.contains(kids[i].kind)) continue;
-				if (!RefactorSupport.macroModifierPrecedes(kids, i, overrideKind, sib -> s.memberDeclKinds.contains(sib.kind))) continue;
-				if (RefactorSupport.referencedInRange(ctx.source, name, span.from, span.to, [])) reads = true;
+				if (!MemberKinds.macroModifierPrecedes(kids, i, overrideKind, sib -> s.memberDeclKinds.contains(sib.kind))) continue;
+				if (OccurrenceScan.referencedInRange(ctx.source, name, span.from, span.to, [])) reads = true;
 			}
 		});
 		return reads;

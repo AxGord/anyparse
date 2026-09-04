@@ -7,6 +7,7 @@ import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.LintFixSafePass;
@@ -279,7 +280,7 @@ final class LintFixDriver {
 				continue;
 			}
 			var settled: Null<{ text: String, rewrites: Null<Int> }> = null;
-			switch RefactorSupport.canonicalize(entry.source, contributedEdits(groups), false, cached, optsByFile[entry.file]) {
+			switch CanonicalEdit.canonicalize(entry.source, contributedEdits(groups), false, cached, optsByFile[entry.file]) {
 				case Ok(text, rewrites):
 					settled = { text: text, rewrites: rewrites };
 				case Err(message):
@@ -341,9 +342,9 @@ final class LintFixDriver {
 				}
 				for (e in slice.edits) edits.push(e);
 			}
-			final staged: Null<Array<{ file: String, source: String }>> = RefactorSupport.stageCrossFileRename(
+			final staged: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileRename(
 				slices, file -> fileSourceOf(files, file),
-				(file, source, edits) -> RefactorSupport.canonicalize(source, edits, false, cached, optsByFile[file])
+				(file, source, edits) -> CanonicalEdit.canonicalize(source, edits, false, cached, optsByFile[file])
 			);
 			if (staged == null) continue;
 			for (s in staged) for (entry in files) if (entry.file == s.file) {
@@ -461,7 +462,7 @@ final class LintFixDriver {
 			// `canonicalize` refuses the same shape for the whole file; that stays the backstop
 			// for a slot two checks empty between them, which no per-check look can see —
 			// and `salvageFileLintEdits` now asks it per check when it fires.
-			final overlapped: Bool = checkEdits.length > 0 && refused == null && RefactorSupport.editsOverlapAny(checkEdits, edits);
+			final overlapped: Bool = checkEdits.length > 0 && refused == null && CanonicalEdit.editsOverlapAny(checkEdits, edits);
 			final group: RuleEdits = {
 				rule: check.id(),
 				findings: own,
@@ -506,7 +507,7 @@ final class LintFixDriver {
 
 	/** The disjoint edit set `groups` currently contribute, in check order — recomputed, so a refusal recorded later shrinks it. */
 	public static function contributedEdits(groups: Array<RuleEdits>): Array<{ span: Span, text: String }> {
-		return RefactorSupport.dropContainedEdits([for (group in groups) if (contributes(group)) for (e in group.edits) e]);
+		return CanonicalEdit.dropContainedEdits([for (group in groups) if (contributes(group)) for (e in group.edits) e]);
 	}
 
 	/**
@@ -532,7 +533,7 @@ final class LintFixDriver {
 	public static function salvageFileLintEdits(
 		source: String, groups: Array<RuleEdits>, message: String, cached: GrammarPlugin, optsJson: Null<String>, blamed: Array<String>
 	): Null<{ text: String, rewrites: Null<Int> }> {
-		switch RefactorSupport.canonicalize(source, [], false, cached, optsJson) {
+		switch CanonicalEdit.canonicalize(source, [], false, cached, optsJson) {
 			case Ok(_, _):
 			case Err(_):
 				// The loop's OWN predicate, never `contributes` — that one excludes an OVERLAPPED
@@ -554,13 +555,13 @@ final class LintFixDriver {
 		final keptEdits: Array<{ span: Span, text: String }> = [];
 		var settled: Null<{ text: String, rewrites: Null<Int> }> = null;
 		for (group in groups) if (group.edits.length > 0 && group.refusal == null) {
-			if (RefactorSupport.editsOverlapAny(group.edits, keptEdits)) {
+			if (CanonicalEdit.editsOverlapAny(group.edits, keptEdits)) {
 				group.overlapped = true;
 				continue;
 			}
 			group.overlapped = false;
 			kept.push(group);
-			switch RefactorSupport.canonicalize(source, contributedEdits(kept), false, cached, optsJson) {
+			switch CanonicalEdit.canonicalize(source, contributedEdits(kept), false, cached, optsJson) {
 				case Ok(text, rewrites):
 					settled = { text: text, rewrites: rewrites };
 					for (e in group.edits) keptEdits.push(e);

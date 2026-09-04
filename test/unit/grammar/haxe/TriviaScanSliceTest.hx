@@ -3,6 +3,7 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import utest.Assert;
 import utest.Test;
 
@@ -22,15 +23,15 @@ class TriviaScanSliceTest extends Test {
 
 	/** Off a comment opener the scan reports absence, so the caller reads the byte as code. */
 	public function testCommentRegionEndReportsNoCommentOffAnOpener(): Void {
-		Assert.equals(-1, RefactorSupport.commentRegionEnd('ab', 0));
-		Assert.equals(-1, RefactorSupport.commentRegionEnd('a/b', 1));
-		Assert.equals(-1, RefactorSupport.commentRegionEnd('a/', 1));
+		Assert.equals(-1, SourceComments.commentRegionEnd('ab', 0));
+		Assert.equals(-1, SourceComments.commentRegionEnd('a/b', 1));
+		Assert.equals(-1, SourceComments.commentRegionEnd('a/', 1));
 	}
 
 	/** A closed comment of either kind ends just past its own terminator. */
 	public function testCommentRegionEndSpansAClosedComment(): Void {
-		Assert.equals(7, RefactorSupport.commentRegionEnd('/* a */rest', 0));
-		Assert.equals(5, RefactorSupport.commentRegionEnd('// a\nrest', 0));
+		Assert.equals(7, SourceComments.commentRegionEnd('/* a */rest', 0));
+		Assert.equals(5, SourceComments.commentRegionEnd('// a\nrest', 0));
 	}
 
 	/**
@@ -40,32 +41,32 @@ class TriviaScanSliceTest extends Test {
 	 */
 	public function testCommentRegionEndPutsAnUnterminatedCommentPastEveryOffset(): Void {
 		final block: String = '/* a';
-		Assert.isTrue(RefactorSupport.commentRegionEnd(block, 0) > block.length);
+		Assert.isTrue(SourceComments.commentRegionEnd(block, 0) > block.length);
 		final line: String = '// a';
-		Assert.isTrue(RefactorSupport.commentRegionEnd(line, 0) > line.length);
+		Assert.isTrue(SourceComments.commentRegionEnd(line, 0) > line.length);
 	}
 
 	public function testSkipForwardTriviaCrossesEveryTriviaKind(): Void {
 		final src: String = '\t/* a */ // b\n  x';
-		Assert.equals(src.indexOf('x'), RefactorSupport.skipForwardTrivia(src, 0));
+		Assert.equals(src.indexOf('x'), SourceComments.skipForwardTrivia(src, 0));
 	}
 
 	/** A `/` that opens neither comment kind is CODE — the scan stops on it. */
 	public function testSkipForwardTriviaStopsAtALoneSlash(): Void {
 		final src: String = '  /x';
-		Assert.equals(src.indexOf('/'), RefactorSupport.skipForwardTrivia(src, 0));
+		Assert.equals(src.indexOf('/'), SourceComments.skipForwardTrivia(src, 0));
 	}
 
 	/** A block comment nothing closes swallows the rest: no code byte is reachable. */
 	public function testSkipForwardTriviaFindsNoCodePastAnUnterminatedComment(): Void {
 		final src: String = '  /* a';
-		Assert.isTrue(RefactorSupport.skipForwardTrivia(src, 0) >= src.length);
+		Assert.isTrue(SourceComments.skipForwardTrivia(src, 0) >= src.length);
 	}
 
 	/** A line comment closed only by the end of the source is the same answer. */
 	public function testSkipForwardTriviaFindsNoCodePastATrailingLineComment(): Void {
 		final src: String = '  // a';
-		Assert.isTrue(RefactorSupport.skipForwardTrivia(src, 0) >= src.length);
+		Assert.isTrue(SourceComments.skipForwardTrivia(src, 0) >= src.length);
 	}
 
 	public function testIsReturnTypeSlotSeesPastBothCommentKinds(): Void {

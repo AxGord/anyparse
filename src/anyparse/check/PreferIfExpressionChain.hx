@@ -5,10 +5,12 @@ import anyparse.check.CheckScan.NegationSeams;
 import anyparse.check.IfExpressionChain.Carried;
 import anyparse.check.IfExpressionChain.CarrySeat;
 import anyparse.check.SwitchChain.ChainScope;
+import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -278,7 +280,7 @@ final class PreferIfExpressionChain implements Check {
 		final resolveIndex: () -> Null<SymbolIndex> = SwitchChain.lazyIndexOf([{ file: file, source: source }], plugin, index);
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, file, source, seams, resolveIndex, index)) byKey['${m.span.from}:${m.span.to}'] = m;
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
 	}
@@ -309,7 +311,7 @@ final class PreferIfExpressionChain implements Check {
 		if (tree == null) return [];
 		final out: Array<Match> = [];
 		walk(
-			tree, source, RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source)), s, plugin,
+			tree, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), s, plugin,
 			lazyOf(plugin, file, source, tree, resolveIndex, index), out, null, false
 		);
 		return out;
@@ -507,7 +509,7 @@ final class PreferIfExpressionChain implements Check {
 			// The emitted `if (` … `)` supplies its own delimiters, so a copied paren pair would
 			// only draw a `redundant-parens` finding on the result; nothing inside a condition
 			// slot can be load-bearing, the construct bounding it on both sides.
-			rungs.push({ cond: RefactorSupport.unwrapParens(cur.children[0], s.parenKind), value: cur.children[1], invert: false });
+			rungs.push({ cond: BoolExprShape.unwrapParens(cur.children[0], s.parenKind), value: cur.children[1], invert: false });
 			cur = cur.children[ELSE_SLOT_INDEX];
 		}
 		return {

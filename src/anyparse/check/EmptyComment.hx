@@ -1,9 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -105,7 +106,7 @@ final class EmptyComment implements Check {
 
 	/** Scan every comment token in `source`, flagging each content-free one that is not a paragraph separator. */
 	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
-		final toks: Array<CommentToken> = RefactorSupport.collectCommentTokens(regions);
+		final toks: Array<CommentToken> = SourceComments.collectCommentTokens(regions);
 		for (i => tok in toks) if (isEmpty(source, tok) && !isParagraphSeparator(source, toks, i)) out.push({
 			file: file,
 			span: new Span(tok.from, tok.to),
@@ -176,7 +177,7 @@ final class EmptyComment implements Check {
 	 * is never treated as empty.
 	 */
 	private static function isEmpty(source: String, tok: CommentToken): Bool {
-		if (!tok.isLine) return RefactorSupport.blockCommentIsBlank(source, tok);
+		if (!tok.isLine) return SourceComments.blockCommentIsBlank(source, tok);
 		for (i in tok.from + 2...tok.to) if (!isWs(source.fastCodeAt(i))) return false;
 		return true;
 	}
@@ -195,7 +196,7 @@ final class EmptyComment implements Check {
 		while (lineEnd < source.length && source.fastCodeAt(lineEnd) != '\n'.code) lineEnd++;
 		final codeBefore: Bool = source.substring(lineStart, span.from).trim() != '';
 		final codeAfter: Bool = source.substring(span.to, lineEnd).trim() != '';
-		if (!codeBefore && !codeAfter) return RefactorSupport.lineExtendedSpan(source, span);
+		if (!codeBefore && !codeAfter) return ElementSpan.lineExtendedSpan(source, span);
 		if (codeAfter) return span;
 		var from: Int = span.from;
 		while (from > lineStart) {

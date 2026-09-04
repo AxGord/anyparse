@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.OperatorSelection.OperatorVerdict;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.ConcatSegment;
@@ -464,7 +465,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			// only at a MEMBER left `@:enum abstract E {…}` marking every LATER declaration in
 			// the module as an enum abstract, since a type declaration is not a member kind.
 			final fn: Bool = seams.functionKinds.contains(c.kind);
-			final value: Bool = constantMembers && !fn && RefactorSupport.isMemberDeclKind(c.kind);
+			final value: Bool = constantMembers && !fn && MemberKinds.isMemberDeclKind(c.kind);
 			// `runInline` is not asked whether the declaration is a MEMBER: a module-level
 			// `inline final S = …` projects as a top-level declaration, and its value is the
 			// same compile-time constant a `case` pattern reads the shape of.

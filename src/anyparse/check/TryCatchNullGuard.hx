@@ -4,11 +4,13 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.TryExpressionShape.TryParts;
 import anyparse.check.TryExpressionShape.TrySeams;
+import anyparse.query.BoolExprShape;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -167,7 +169,7 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 		if (seams == null) return [];
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams)) byKey['${m.keySpan.from}:${m.keySpan.to}'] = m;
-		return RefactorSupport.dropContainedEdits(
+		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
 	}
@@ -176,7 +178,7 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 	private static function collect(plugin: GrammarPlugin, source: String, s: Seams): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final out: Array<Match> = [];
 		collectMatches(tree, source, comments, s, out);
 		return out;
@@ -273,11 +275,11 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 		if (name == null || declSpan == null || guardSpan == null) return null;
 
 		final init: QueryNode = decl.children[0];
-		if (!s.tryKinds.contains(RefactorSupport.unwrapParens(init, s.parenKind).kind)) return null;
+		if (!s.tryKinds.contains(BoolExprShape.unwrapParens(init, s.parenKind).kind)) return null;
 		final bound: Array<String> = [];
-		final parts: Null<TryParts> = decomposeNullDefaulting(RefactorSupport.unwrapParens(init, s.parenKind), source, comments, s, bound);
+		final parts: Null<TryParts> = decomposeNullDefaulting(BoolExprShape.unwrapParens(init, s.parenKind), source, comments, s, bound);
 		if (parts == null) return null;
-		if (!s.nonNullKinds.contains(RefactorSupport.unwrapParens(parts.value, s.parenKind).kind)) return null;
+		if (!s.nonNullKinds.contains(BoolExprShape.unwrapParens(parts.value, s.parenKind).kind)) return null;
 
 		final term: Null<QueryNode> = terminator(guard, name, s);
 		if (term == null) return null;
@@ -372,7 +374,7 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 	 */
 	private static function terminator(guard: QueryNode, name: String, s: Seams): Null<QueryNode> {
 		if (!s.ifKinds.contains(guard.kind) || guard.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final cond: QueryNode = RefactorSupport.unwrapParens(guard.children[0], s.parenKind);
+		final cond: QueryNode = BoolExprShape.unwrapParens(guard.children[0], s.parenKind);
 		if (cond.kind != s.eqKind || cond.children.length != COMPARISON_CHILD_COUNT) return null;
 		if (!comparesToNull(cond, name, s)) return null;
 		final body: Null<QueryNode> = TryExpressionShape.singleBody(guard.children[1], s.blockStmtKind);
@@ -381,8 +383,8 @@ final class TryCatchNullGuard implements Check implements DefaultOff {
 
 	/** Whether `cond`'s two operands are the `null` literal and a plain `name` reference, in either order. */
 	private static function comparesToNull(cond: QueryNode, name: String, s: Seams): Bool {
-		final left: QueryNode = RefactorSupport.unwrapParens(cond.children[0], s.parenKind);
-		final right: QueryNode = RefactorSupport.unwrapParens(cond.children[1], s.parenKind);
+		final left: QueryNode = BoolExprShape.unwrapParens(cond.children[0], s.parenKind);
+		final right: QueryNode = BoolExprShape.unwrapParens(cond.children[1], s.parenKind);
 		final subject: QueryNode = left.kind == s.nullKind ? right : left;
 		final literal: QueryNode = left.kind == s.nullKind ? left : right;
 		return literal.kind == s.nullKind && subject.kind == s.identKind && subject.name == name;

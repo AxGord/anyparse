@@ -1,9 +1,9 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.Matcher.Match;
 import anyparse.query.ParenGuard.GuardedEdit;
 import anyparse.query.Pattern.PatternStar;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -79,7 +79,7 @@ final class Rewrite {
 		// as the nodes they were — none at all when the raw splice was already
 		// faithful, which is the common case and byte-identical to before.
 		final guarded: Array<{ span: Span, text: String }> = ParenGuard.guard(source, edits, plugin);
-		return RefactorSupport.canonicalize(source, guarded, reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, guarded, reformat, plugin, optsJson);
 	}
 
 	private static inline function isIdentChar(c: Int): Bool {

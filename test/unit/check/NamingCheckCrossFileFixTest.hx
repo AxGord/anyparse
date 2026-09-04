@@ -5,7 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Naming;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -174,7 +174,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'B.hx', edits: [{ span: new Span(0, 1), text: 'Y' }] }
 		];
 		final sources: Map<String, String> = ['A.hx' => 'a', 'B.hx' => 'b'];
-		final staged: Null<Array<{ file: String, source: String }>> = RefactorSupport.stageCrossFileRename(
+		final staged: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileRename(
 			slices, file -> sources[file], (file, source, edits) -> file == 'B.hx' ? EditResult.Err('boom') : EditResult.Ok('X')
 		);
 		Assert.isNull(staged);
@@ -187,7 +187,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'B.hx', edits: [{ span: new Span(0, 1), text: 'Y' }] }
 		];
 		final sources: Map<String, String> = ['A.hx' => 'a', 'B.hx' => 'b'];
-		final staged: Null<Array<{ file: String, source: String }>> = RefactorSupport.stageCrossFileRename(
+		final staged: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileRename(
 			slices, file -> sources[file], (file, source, edits) -> EditResult.Ok(file == 'A.hx' ? 'X' : 'Y')
 		);
 		Assert.notNull(staged);
@@ -748,7 +748,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		// defers rather than risk the duplicate. That deferral is what the second pass has to undo.
 		Assert.equals(1, first.length);
 		assertRenameSlice(first[0], 'pkg/A.hx', CLAIM_BASE_SRC, '_caps', 'CAPS');
-		files[0].source = RefactorSupport.applyEdits(CLAIM_BASE_SRC, first[0][0].edits);
+		files[0].source = CanonicalEdit.applyEdits(CLAIM_BASE_SRC, first[0][0].edits);
 		final second: Array<Array<CrossFileEdits>> = check.crossFileFix(
 			files, check.run(files, new HaxeQueryPlugin()), new HaxeQueryPlugin(), SymbolIndex.build(files, new HaxeQueryPlugin())
 		);
@@ -998,7 +998,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		for (s in rename) if (s.file == file) slice = s;
 		Assert.notNull(slice);
 		if (slice == null) return;
-		final applied: String = RefactorSupport.applyEdits(source, slice.edits);
+		final applied: String = CanonicalEdit.applyEdits(source, slice.edits);
 		Assert.isTrue(applied.indexOf(present) >= 0, 'expected "$present" in: $applied');
 		Assert.isTrue(applied.indexOf(absent) == -1, 'unexpected "$absent" in: $applied');
 	}

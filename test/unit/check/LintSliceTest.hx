@@ -9,7 +9,7 @@ import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.check.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
@@ -228,7 +228,7 @@ class LintSliceTest extends Test {
 		final check: UnusedImport = new UnusedImport();
 		final vs: Array<Violation> = check.run([{ file: 'f.hx', source: src }].concat(declaringStubs()), plugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
-		switch RefactorSupport.canonicalize(src, edits, true, plugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, plugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('Gone') == -1);
 				Assert.isTrue(text.indexOf('a.b.Used') >= 0);
@@ -305,7 +305,7 @@ class LintSliceTest extends Test {
 		final check: UnusedLocal = new UnusedLocal();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
-		switch RefactorSupport.canonicalize(src, edits, true, plugin()) {
+		switch CanonicalEdit.canonicalize(src, edits, true, plugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('final x') == -1);
 				Assert.isTrue(text.indexOf('trace(1)') >= 0);
@@ -569,7 +569,7 @@ class LintSliceTest extends Test {
 		final inner: { span: Span, text: String } = { span: new Span(20, 30), text: '' };
 		final outer: { span: Span, text: String } = { span: new Span(10, 50), text: '' };
 		final disjoint: { span: Span, text: String } = { span: new Span(60, 70), text: '' };
-		final kept: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits([inner, outer, disjoint]);
+		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([inner, outer, disjoint]);
 		final froms: Array<Int> = [for (e in kept) e.span.from];
 		Assert.equals(2, kept.length);
 		Assert.isTrue(froms.contains(10));
@@ -594,18 +594,18 @@ class LintSliceTest extends Test {
 		final boundary: { span: Span, text: String } = { span: new Span(50, 50), text: 'using Lambda;\n' };
 		final interior: { span: Span, text: String } = { span: new Span(30, 30), text: 'x' };
 		final atFrom: { span: Span, text: String } = { span: new Span(10, 10), text: 'y' };
-		final kept: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits([delete, boundary, interior, atFrom]);
+		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([delete, boundary, interior, atFrom]);
 		Assert.equals(2, kept.length);
 		Assert.isTrue(kept.contains(delete));
 		Assert.isTrue(kept.contains(boundary));
 		// The surviving pair splices correctly: the deleted range is gone, the insert
 		// lands right after it, no deleted byte leaks back.
-		Assert.equals('0123456789using Lambda;\n01234567890', RefactorSupport.applyEdits(source, kept));
+		Assert.equals('0123456789using Lambda;\n01234567890', CanonicalEdit.applyEdits(source, kept));
 		// A same-point tie keeps the EARLIER insert only (splice order between ties is
 		// sort-stability-dependent — one survivor makes it deterministic).
 		final a: { span: Span, text: String } = { span: new Span(5, 5), text: 'a' };
 		final b: { span: Span, text: String } = { span: new Span(5, 5), text: 'b' };
-		final ties: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits([a, b]);
+		final ties: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([a, b]);
 		Assert.equals(1, ties.length);
 		Assert.isTrue(ties.contains(a));
 	}
@@ -618,7 +618,7 @@ class LintSliceTest extends Test {
 		final files: Array<{ source: String, file: String }> = [{ file: 'C.hx', source: src }];
 		final edits: Array<{ span: Span, text: String }> = new DeadCode().fix(src, new DeadCode().run(files, plugin()), plugin());
 		for (e in new SelfAssignment().fix(src, new SelfAssignment().run(files, plugin()), plugin())) edits.push(e);
-		switch RefactorSupport.canonicalize(src, RefactorSupport.dropContainedEdits(edits), true, plugin()) {
+		switch CanonicalEdit.canonicalize(src, CanonicalEdit.dropContainedEdits(edits), true, plugin()) {
 			case Ok(text):
 				Assert.isTrue(text.indexOf('x = x') == -1);
 				Assert.isTrue(text.indexOf('var x') == -1);

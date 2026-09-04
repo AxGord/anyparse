@@ -5,7 +5,8 @@ import anyparse.check.Check.Violation;
 import anyparse.check.FragmentedDocComment.CommentTok;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
+import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -196,12 +197,12 @@ final class PreferDocComment implements Check implements DefaultOff {
 
 	/** The whitespace between `at`'s line start and `at`. */
 	private static inline function indentOf(source: String, at: Int): String {
-		return source.substring(RefactorSupport.startOfLine(source, at), at);
+		return source.substring(SourceText.startOfLine(source, at), at);
 	}
 
 	/** Every convertible run in `source`, in source order. */
 	private static function rewrites(source: String, plugin: GrammarPlugin, seams: Seams): Array<DocCommentRewrite> {
-		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		if (comments.length == 0) return [];
 		final owned: Array<CommentTok> = [for (tok in comments) if (ownsItsLine(source, tok)) tok];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
@@ -211,7 +212,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 		final docEnds: Map<Int, Bool> = CheckScan.docBlockEnds(source, plugin.lexicalRegions(source));
 		// What ends a section: the next label, or the next separately-documented sibling.
 		final stops: Array<CommentTok> = [
-			for (tok in comments) if (ownsItsLine(source, tok) || RefactorSupport.isDocBlock(source, tok)) tok
+			for (tok in comments) if (ownsItsLine(source, tok) || SourceComments.isDocBlock(source, tok)) tok
 		];
 		final headings: Array<Int> = headingConventionOwners(source, anchors, owned, stops);
 		final out: Array<DocCommentRewrite> = [];
@@ -254,7 +255,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	private static function trailingRewriteOf(
 		source: String, tok: CommentTok, byDeclLine: Map<Int, Anchor>, docEnds: Map<Int, Bool>, owned: Array<CommentTok>
 	): Null<DocCommentRewrite> {
-		final lineStart: Int = RefactorSupport.startOfLine(source, tok.from);
+		final lineStart: Int = SourceText.startOfLine(source, tok.from);
 		final anchor: Null<Anchor> = byDeclLine[lineStart];
 		if (anchor == null || anchor.count > 1) return null;
 		final codeEnd: Int = trimmedEnd(source, lineStart, tok.from);
@@ -333,7 +334,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 		final runs: Array<Array<CommentTok>> = [];
 		var current: Array<CommentTok> = [];
 		for (tok in toks) {
-			if (current.length > 0 && RefactorSupport.startOfLine(source, tok.from) != current[current.length - 1].to + 1) {
+			if (current.length > 0 && SourceText.startOfLine(source, tok.from) != current[current.length - 1].to + 1) {
 				runs.push(current);
 				current = [];
 			}
@@ -464,7 +465,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	private static function groupStart(source: String, lineStart: Int): Int {
 		var at: Int = lineStart;
 		while (at > 0) {
-			final previous: Int = RefactorSupport.startOfLine(source, at - 1);
+			final previous: Int = SourceText.startOfLine(source, at - 1);
 			if (source.substring(previous, at - 1).trim() == '') break;
 			at = previous;
 		}
@@ -551,7 +552,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	private static function record(
 		source: String, from: Int, declFrom: Int, to: Int, kind: String, owner: Span, out: Map<Int, Anchor>
 	): Void {
-		final line: Int = RefactorSupport.startOfLine(source, from);
+		final line: Int = SourceText.startOfLine(source, from);
 		final known: Null<Anchor> = out[line];
 		if (known == null) {
 			out[line] = {
@@ -583,7 +584,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	private static function declLineIndex(source: String, anchors: Map<Int, Anchor>): Map<Int, Anchor> {
 		final out: Map<Int, Anchor> = [];
 		for (anchor in anchors) {
-			final line: Int = RefactorSupport.startOfLine(source, anchor.declFrom);
+			final line: Int = SourceText.startOfLine(source, anchor.declFrom);
 			final known: Null<Anchor> = out[line];
 			if (known == null || known.declFrom > anchor.declFrom) out[line] = anchor;
 		}

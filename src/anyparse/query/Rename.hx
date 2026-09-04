@@ -100,7 +100,7 @@ final class Rename {
 		source: String, line: Int, col: Int, newName: String, plugin: GrammarPlugin, shape: RefShape, qualifyShadowed: Bool = false,
 		?file: String
 	): RenameResult {
-		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
+		if (!SourceText.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
@@ -295,10 +295,10 @@ final class Rename {
 		final cursorNode: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
 		final hits: Array<RefHit> = cursorNode == null ? [] : Refs.find(oldName, tree, shape);
 		final binding: Null<Int> = cursorNode == null ? null : RefactorSupport.resolveBindingFrom(cursorNode, hits);
-		final scope: QueryNode = RefactorSupport.bindingHostSubtree(tree, cursor, binding, shape);
+		final scope: QueryNode = BinderScan.bindingHostSubtree(tree, cursor, binding, shape);
 
 		if (binding != null) {
-			final stray: Null<Span> = RefactorSupport.unrewrittenInterpRead(hits, binding, occurrences);
+			final stray: Null<Span> = OccurrenceScan.unrewrittenInterpRead(hits, binding, occurrences);
 			if (stray != null) {
 				final at: Position = stray.lineCol(source);
 				return 'rename of "$oldName" is unsafe: the string-interpolation read at ${at.line}:${at.col} has no locatable'
@@ -308,14 +308,14 @@ final class Rename {
 		}
 		final blockKind: Null<String> = shape.stringInterpBlockKind;
 		if (blockKind != null) {
-			final opaque: Null<Span> = RefactorSupport.unreadableInterpBlock(scope, blockKind);
+			final opaque: Null<Span> = OccurrenceScan.unreadableInterpBlock(scope, blockKind);
 			if (opaque != null) {
 				final at: Position = opaque.lineCol(source);
 				return 'rename of "$oldName" is unsafe: the escape-spelled string interpolation at ${at.line}:${at.col} carries'
 					+ ' no parsed expression, so a read of the name inside it is invisible - respell that interpolation first';
 			}
 		}
-		final dup: Null<Span> = RefactorSupport.exclusiveBranchRedeclaration(scope, source, oldName, plugin, shape);
+		final dup: Null<Span> = CondRegionScan.exclusiveBranchRedeclaration(scope, source, oldName, plugin, shape);
 		if (dup != null) {
 			final at: Position = dup.lineCol(source);
 			return 'rename of "$oldName" is unsafe: the declaration at ${at.line}:${at.col} sits on a conditional-compilation'
@@ -327,7 +327,7 @@ final class Rename {
 		// the file says nothing about it. A MEMBER can be read from any method, and `scope` for one
 		// is only the CURSOR's function - the whole tree is the honest reach there.
 		final regionScope: QueryNode = binding != null && nodeAtFromIsFieldMember(tree, binding) ? tree : scope;
-		return RefactorSupport.opaqueCondRegionDiagnostic(source, regionScope, oldName, shape, 'rename of "$oldName"');
+		return CondRegionScan.opaqueCondRegionDiagnostic(source, regionScope, oldName, shape, 'rename of "$oldName"');
 	}
 
 	/**
@@ -339,7 +339,7 @@ final class Rename {
 		var found: Null<QueryNode> = null;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
-			if (span != null && span.from == from && RefactorSupport.isFieldMemberKind(node.kind)) found = node;
+			if (span != null && span.from == from && MemberKinds.isFieldMemberKind(node.kind)) found = node;
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
@@ -363,7 +363,7 @@ final class Rename {
 	): Array<Span> {
 		final out: Array<Span> = [];
 		final seen: Array<Int> = [];
-		inline function add(identFrom: Int): Void RefactorSupport.pushUniqueSpan(out, seen, identFrom, targetName.length);
+		inline function add(identFrom: Int): Void OccurrenceScan.pushUniqueSpan(out, seen, identFrom, targetName.length);
 
 		for (h in hits) {
 			final boundFrom: Null<Int> = switch h.kind {
@@ -372,11 +372,11 @@ final class Rename {
 					final b: Null<Span> = h.bindingSpan;
 					b?.from;
 			};
-			if (boundFrom == binding) add(RefactorSupport.identTokenOffset(source, h.span, targetName));
+			if (boundFrom == binding) add(SourceText.identTokenOffset(source, h.span, targetName));
 		}
 
 		if (isFieldBinding) {
-			for (access in collectThisFieldAccesses(targetName, tree)) add(RefactorSupport.identTokenOffset(source, access, targetName));
+			for (access in collectThisFieldAccesses(targetName, tree)) add(SourceText.identTokenOffset(source, access, targetName));
 		}
 		return out;
 	}
@@ -410,7 +410,7 @@ final class Rename {
 	 */
 	private static function spliceRename(source: String, occurrences: Array<Span>, newName: String): String {
 		final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
-		return RefactorSupport.applyEdits(source, edits);
+		return CanonicalEdit.applyEdits(source, edits);
 	}
 
 	/** The `captureDiagnostic` message for the occurrence at `offset`, with its 1-based position. */
@@ -463,7 +463,7 @@ final class Rename {
 		if (edits.length == 0) return null;
 		final offsets: Array<Int> = [for (edit in edits) edit.span.from];
 		offsets.sort((a, b) -> a - b);
-		return { source: RefactorSupport.applyEdits(rewritten, edits), insertions: offsets, prefixLength: '$self.'.length };
+		return { source: CanonicalEdit.applyEdits(rewritten, edits), insertions: offsets, prefixLength: '$self.'.length };
 	}
 
 	/**
@@ -511,9 +511,7 @@ final class Rename {
 	 * repair.
 	 */
 	private static function occurrenceBinding(source: String, tree: QueryNode, offset: Int, name: String, shape: RefShape): Null<Int> {
-		for (h in Refs.find(name, tree, shape)) if (
-			h.kind != RefKind.Decl && RefactorSupport.identTokenOffset(source, h.span, name) == offset
-		)
+		for (h in Refs.find(name, tree, shape)) if (h.kind != RefKind.Decl && SourceText.identTokenOffset(source, h.span, name) == offset)
 			return h.bindingSpan?.from;
 		return null;
 	}
@@ -603,7 +601,7 @@ final class Rename {
 		var instance: Bool = false;
 		var isStatic: Bool = false;
 		function scan(parent: QueryNode): Void {
-			for (child in parent.children) if (RefactorSupport.isConditionalKind(child.kind))
+			for (child in parent.children) if (CondRegionScan.isConditionalKind(child.kind))
 				scan(child);
 			else {
 				final span: Null<Span> = child.span;

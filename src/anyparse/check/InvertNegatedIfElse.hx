@@ -1,9 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -85,7 +86,7 @@ final class InvertNegatedIfElse implements Check {
 		if (tree == null) return [];
 		final root: QueryNode = tree;
 		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(root, seams.ifKinds, byKey);
+		MemberKinds.indexNodesByKind(root, seams.ifKinds, byKey);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final vspan: Null<Span> = v.span;
@@ -130,7 +131,7 @@ final class InvertNegatedIfElse implements Check {
 	 */
 	private static function isInvertible(ifNode: QueryNode, file: String, root: QueryNode, source: String, seams: Seams): Bool {
 		final cond: QueryNode = ifNode.children[0];
-		final not: QueryNode = RefactorSupport.unwrapParens(cond, seams.parenKind);
+		final not: QueryNode = BoolExprShape.unwrapParens(cond, seams.parenKind);
 		if (not.kind != seams.notKind) return false;
 		if (seams.ifKinds.contains(ifNode.children[2].kind)) return false;
 		final condSpan: Null<Span> = cond.span;
@@ -169,7 +170,7 @@ final class InvertNegatedIfElse implements Check {
 		final cond: QueryNode = ifNode.children[0];
 		final thenBranch: QueryNode = ifNode.children[1];
 		final elseBranch: QueryNode = ifNode.children[2];
-		final notNode: QueryNode = RefactorSupport.unwrapParens(cond, seams.parenKind);
+		final notNode: QueryNode = BoolExprShape.unwrapParens(cond, seams.parenKind);
 		if (notNode.children.length != 1) return;
 		final condSpan: Null<Span> = cond.span;
 		final thenSpan: Null<Span> = thenBranch.span;

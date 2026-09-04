@@ -5,7 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferSafeNav;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.RefactorSupport;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -478,7 +478,7 @@ class PreferSafeNavCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferSafeNav = new PreferSafeNav();
 		final edits: Array<{ span: Span, text: String }> = check.fix(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
-		switch RefactorSupport.canonicalize(source, edits, true, plugin) {
+		switch CanonicalEdit.canonicalize(source, edits, true, plugin) {
 			case Ok(text):
 				return text;
 			case Err(message):

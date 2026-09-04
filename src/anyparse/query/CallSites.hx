@@ -104,7 +104,7 @@ final class CallSites {
 	 * Returns null when nothing resolves.
 	 */
 	public static function resolveFnDecl(cursorNode: QueryNode, tree: QueryNode, name: String, shape: RefShape): Null<QueryNode> {
-		if (RefactorSupport.FN_DECL_KINDS.contains(cursorNode.kind)) return cursorNode;
+		if (MemberKinds.FN_DECL_KINDS.contains(cursorNode.kind)) return cursorNode;
 
 		final hits: Array<RefHit> = Refs.find(name, tree, shape);
 		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(cursorNode, hits);
@@ -142,7 +142,7 @@ final class CallSites {
 		// conditional-compilation region defeats it by construction: a call written inside one
 		// projects no node, so both collectors report a set that is complete only for the builds
 		// that strip the region. Refused before either runs - the shape neither can see.
-		final opaque: Null<String> = RefactorSupport.opaqueCondRegionDiagnostic(source, tree, name, shape, 'rewriting calls of "$name"');
+		final opaque: Null<String> = CondRegionScan.opaqueCondRegionDiagnostic(source, tree, name, shape, 'rewriting calls of "$name"');
 		if (opaque != null) return CErr(opaque);
 		final isMethod: Bool = decl.kind != 'LocalFnStmt';
 		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name);

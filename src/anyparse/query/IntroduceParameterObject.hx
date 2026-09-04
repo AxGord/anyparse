@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.query.CallSites.CollectResult;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -84,7 +84,7 @@ final class IntroduceParameterObject {
 		source: String, line: Int, col: Int, paramNames: Array<String>, typeName: String, objName: Null<String>, plugin: GrammarPlugin,
 		shape: RefShape, ?optsJson: String
 	): EditResult {
-		if (!RefactorSupport.isIdentifier(typeName)) return Err('type name "$typeName" is not a valid identifier');
+		if (!SourceText.isIdentifier(typeName)) return Err('type name "$typeName" is not a valid identifier');
 		if (paramNames.length == 0) return Err('no parameters named — nothing to fold');
 
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
@@ -113,7 +113,7 @@ final class IntroduceParameterObject {
 		// literal or a block comment anywhere in the file — measured, folding two
 		// parameters of one method took an untouched sibling's `"one\n\n\nfour"` down
 		// to `"one\n\nfour"` at rc 0, under this project's own `hxformat.json`.
-		final rewritten: String = switch RefactorSupport.editKeepingCanonical(source, edits, plugin, optsJson) {
+		final rewritten: String = switch CanonicalEdit.editKeepingCanonical(source, edits, plugin, optsJson) {
 			case Err(message): return Err(message);
 			case Ok(text, _): text;
 		};
@@ -142,7 +142,7 @@ final class IntroduceParameterObject {
 		if (name == null) return Refused('position $line:$col is not on a function or a call');
 		final nameNN: String = name;
 		final decl: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, nameNN, shape);
-		if (decl == null || !RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
+		if (decl == null || !MemberKinds.FN_DECL_KINDS.contains(decl.kind))
 			return Refused('could not resolve a function "$nameNN" at $line:$col');
 		final declNN: QueryNode = decl;
 		final declSpan: Null<Span> = declNN.span;
@@ -159,7 +159,7 @@ final class IntroduceParameterObject {
 		if (typeErr != null) return Refused(typeErr);
 
 		final obj: String = objName ?? lowerCamel(typeName);
-		if (!RefactorSupport.isIdentifier(obj)) return Refused('object parameter name "$obj" is not a valid identifier');
+		if (!SourceText.isIdentifier(obj)) return Refused('object parameter name "$obj" is not a valid identifier');
 		for (p in params) if (p.name == obj && !paramNames.contains(p.name))
 			return Refused('object name "$obj" collides with an existing parameter — pass --name');
 
@@ -261,7 +261,7 @@ final class IntroduceParameterObject {
 			for (hit in Refs.find(f.name, tree, shape)) if (hit.kind != RefKind.Decl) {
 				final b: Null<Span> = hit.bindingSpan;
 				if (b == null || b.from != binding) continue;
-				final at: Int = RefactorSupport.identTokenOffset(source, hit.span, f.name);
+				final at: Int = SourceText.identTokenOffset(source, hit.span, f.name);
 				if (at >= 0) edits.push({ span: new Span(at, at), text: '$obj.' });
 			}
 		}

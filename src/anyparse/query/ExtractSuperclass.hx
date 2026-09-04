@@ -1,10 +1,10 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -84,7 +84,7 @@ final class ExtractSuperclass {
 		srcFile: String, srcTypeName: String, superName: String, superFile: String, memberNames: Array<String>, srcSource: String,
 		plugin: GrammarPlugin, ?optsJson: String, ?srcOptsJson: String
 	): MoveResult {
-		if (!RefactorSupport.isIdentifier(superName)) return Err('superclass name "$superName" is not a valid identifier');
+		if (!SourceText.isIdentifier(superName)) return Err('superclass name "$superName" is not a valid identifier');
 		if (superName == srcTypeName) return Err('superclass name must differ from the source type "$srcTypeName"');
 		if (memberNames.length == 0) return Err('no members named — nothing to pull up');
 
@@ -135,7 +135,7 @@ final class ExtractSuperclass {
 		// multi-line literal by one newline, and every gate stayed green because the result
 		// still parsed and was still canonical.
 		var srcRewrites: Null<Int> = null;
-		final newSrc: String = switch RefactorSupport.editKeepingCanonical(srcSource, edits, plugin, srcOptsJson) {
+		final newSrc: String = switch CanonicalEdit.editKeepingCanonical(srcSource, edits, plugin, srcOptsJson) {
 			case Err(message): return Err('the rewritten $srcFile: $message');
 			case Ok(text, rewrites):
 				srcRewrites = rewrites;
@@ -195,7 +195,7 @@ final class ExtractSuperclass {
 		// scan that missed it answered "class has no instance member" on one that plainly exists.
 		final found: Map<String, { node: QueryNode, run: Array<QueryNode>, span: Span }> = [];
 		MemberBranchScan.eachTypeMember(
-			decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
+			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind),
 			(child, run) -> {
 				final nm: Null<String> = child.name;
 				final span: Null<Span> = child.span;
@@ -227,7 +227,7 @@ final class ExtractSuperclass {
 					'"$name" is declared inside a conditional-compilation region — pulling it out of its branch would change which '
 					+ 'builds declare it'
 				);
-			final groupSpan: Span = RefactorSupport.declGroupSpan(hitNN.node, decl.nameNode, hitNN.span);
+			final groupSpan: Span = ElementSpan.declGroupSpan(hitNN.node, decl.nameNode, hitNN.span);
 			out.push({ name: name, node: hitNN.node, cut: cutSpanOf(source, groupSpan, regions()) });
 		}
 		out.sort((a, b) -> a.cut.from - b.cut.from);
@@ -249,8 +249,7 @@ final class ExtractSuperclass {
 		// region was absent from this set, so a pulled-up method reading it passed the stranded-reference
 		// gate and the generated superclass did not compile.
 		MemberBranchScan.eachTypeMember(
-			decl, shape, source, n -> RefactorSupport.isFieldMemberKind(n.kind) || RefactorSupport.FN_DECL_KINDS.contains(n.kind),
-			(child, _) -> {
+			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind), (child, _) -> {
 				final nm: Null<String> = child.name;
 				if (nm != null && !movingNames.exists(nm) && nm != 'new') memberNames[nm] = true;
 			},
@@ -277,7 +276,7 @@ final class ExtractSuperclass {
 				if (raw != null) {
 					final dot: Int = raw.lastIndexOf('.');
 					final exposed: String = dot < 0 ? raw : raw.substr(dot + 1);
-					if (RefactorSupport.identTokenOffset(blob, new Span(0, blob.length), exposed) >= 0 && !out.contains(raw)) out.push(raw);
+					if (SourceText.identTokenOffset(blob, new Span(0, blob.length), exposed) >= 0 && !out.contains(raw)) out.push(raw);
 				}
 			}
 			for (c in node.children) walk(c);
@@ -344,8 +343,8 @@ final class ExtractSuperclass {
 
 	/** The cut span of a member group: decl + leading doc + whole line(s). */
 	private static function cutSpanOf(source: String, groupSpan: Span, regions: Array<LexRegion>): Span {
-		return RefactorSupport.blankExtendedSpan(
-			source, RefactorSupport.lineExtendedSpan(source, RefactorSupport.docExtendedSpan(source, groupSpan, regions))
+		return ElementSpan.blankExtendedSpan(
+			source, ElementSpan.lineExtendedSpan(source, ElementSpan.docExtendedSpan(source, groupSpan, regions))
 		);
 	}
 

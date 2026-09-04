@@ -80,7 +80,7 @@ final class CondDirectives {
 		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
 		if (ifKeyword == null || ifKeyword == '' || source.indexOf(ifKeyword) == -1) return [];
 		final keywords: DirectiveKeywords = declaredKeywords(ifKeyword, shape);
-		final regions: Array<Span> = RefactorSupport.collectNonCodeRegions(regions());
+		final regions: Array<Span> = SourceComments.collectNonCodeRegions(regions());
 		final out: Array<CondDirective> = [];
 		var region: Int = 0;
 		var i: Int = 0;
@@ -149,7 +149,7 @@ final class CondDirectives {
 						closeFrom: directive.span.from,
 						singleBranch: single,
 						flat: flat,
-						linewise: endsItsLine(source, open.span.to) && RefactorSupport.startsItsLine(source, directive.span.from)
+						linewise: endsItsLine(source, open.span.to) && SourceText.startsItsLine(source, directive.span.from)
 					});
 					openAt = -1;
 				}
@@ -170,7 +170,7 @@ final class CondDirectives {
 	 * behind with nothing between it and its `#end`.
 	 */
 	public static function ownsItsLine(source: String, span: Span): Bool {
-		if (!RefactorSupport.startsItsLine(source, span.from)) return false;
+		if (!SourceText.startsItsLine(source, span.from)) return false;
 		var at: Int = span.to;
 		if (at < source.length && source.fastCodeAt(at) == ';'.code) at++;
 		return endsItsLine(source, at);

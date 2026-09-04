@@ -9,9 +9,11 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Rename;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -342,7 +344,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		while (i < name.length && name.fastCodeAt(i) == '_'.code) i++;
 		if (i == 0) return null;
 		final stripped: String = name.substr(i);
-		if (!RefactorSupport.isIdentifier(stripped)) return null;
+		if (!SourceText.isIdentifier(stripped)) return null;
 		// Reserved words are a GRAMMAR fact, checked unconditionally: a policy cannot stand in
 		// for it. One adapted from a project config carries no `normalize`, and every camelCase
 		// format matches `dynamic` / `macro` / `new` exactly as it matches `event` - so gating the
@@ -396,7 +398,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	 */
 	private static function isUnreferenced(source: String, tree: QueryNode, name: String, declSpan: Span, shape: RefShape): Bool {
 		final fn: Null<Span> = BindingScope.enclosingScopeSpan(tree, functionScopeKinds(shape), declSpan.from, shape);
-		return fn != null && !RefactorSupport.referencedInRange(source, name, fn.from, fn.to, [declSpan]);
+		return fn != null && !OccurrenceScan.referencedInRange(source, name, fn.from, fn.to, [declSpan]);
 	}
 
 	/** Every node kind that bounds a binding's visibility to one body: a function declaration, a local (or local inline) function, a lambda. */

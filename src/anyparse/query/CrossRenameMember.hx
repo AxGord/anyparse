@@ -206,7 +206,7 @@ final class CrossRenameMember {
 		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
 		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, refShape: RefShape
 	): CrossRenameResult {
-		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
+		if (!SourceText.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
 		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return Err(
 			'$cursorFile does not parse: $exception'
@@ -229,7 +229,7 @@ final class CrossRenameMember {
 		// `MemberBranchScan.declaresMemberNamed` for why that is not relaxed.
 		if (MemberBranchScan.declaresMemberNamed(t.srcDecl, refShape, cursorSource, newName, plugin.lexicalRegions.bind(cursorSource)))
 			return Err('type "${t.typeName}" already declares a member "$newName"');
-		if (RefactorSupport.casePatternCaptures(cursorTree, refShape).contains(t.memberName))
+		if (BinderScan.casePatternCaptures(cursorTree, refShape).contains(t.memberName))
 			return Err('cannot rename "${t.memberName}": a case-pattern capture in $cursorFile shares its name (would be mis-rewritten)');
 
 		final parse: ScopeParse = parseScopeFiles(scopeFiles, plugin);
@@ -272,7 +272,7 @@ final class CrossRenameMember {
 		// A member is reachable from any method in any file of the scope, so an unparsed
 		// conditional-compilation region ANYWHERE in the scope can hide a qualified access `apply`
 		// would then leave on the old name.
-		final opaque: Null<String> = RefactorSupport.opaqueCondRegionInAny(
+		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(
 			parse.parsed, t.memberName, refShape, 'rename of "${t.memberName}"'
 		);
 		return opaque != null
@@ -309,20 +309,20 @@ final class CrossRenameMember {
 				// branch's members with their own modifier siblings. Scanning the type's direct children
 				// alone left every guarded member unresolvable here, and the CLI then fell back to the
 				// value namespace — which rewrites the declaration and leaves `obj.member` behind.
-				RefactorSupport.eachMemberHost(decl.nameNode, host -> {
+				MemberKinds.eachMemberHost(decl.nameNode, host -> {
 					final siblings: Array<QueryNode> = host.children;
 					for (i => child in siblings) {
 						final span: Null<Span> = child.span;
 						if (span == null) continue;
 						final kind: String = child.kind;
-						if (!RefactorSupport.isFieldMemberKind(kind) && !RefactorSupport.FN_DECL_KINDS.contains(kind)) continue;
+						if (!MemberKinds.isFieldMemberKind(kind) && !MemberKinds.FN_DECL_KINDS.contains(kind)) continue;
 						final name: Null<String> = child.name;
 						if (name == null) continue;
 						final childNN: QueryNode = child;
 						final spanNN: Span = span;
 						if (!RefactorSupport.identTokenContains(childNN, cursor, source) && spanNN.from != cursor) continue;
-						final groupSpan: Span = RefactorSupport.declGroupSpan(childNN, host, spanNN);
-						var isStatic: Bool = RefactorSupport.implicitlyStaticMember(decl.kind, kind, refShape);
+						final groupSpan: Span = ElementSpan.declGroupSpan(childNN, host, spanNN);
+						var isStatic: Bool = MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape);
 						var isOverride: Bool = false;
 						var saysStatic: Bool = false;
 						for (j in 0...i) {
@@ -348,7 +348,7 @@ final class CrossRenameMember {
 							// kind over: `public static final PX: Colour = RED;` is `Identifier 'PX' is not
 							// part of Colour`. A value is the member that says no modifier at all.
 							isEnumValue: decl.kind == refShape.enumAbstractDeclKind && !saysStatic
-							&& RefactorSupport.implicitlyStaticMember(decl.kind, kind, refShape),
+							&& MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape),
 							srcDecl: decl
 						};
 					}
@@ -462,7 +462,7 @@ final class CrossRenameMember {
 			final edits: Array<{ span: Span, text: String }> = [
 				for (off in offsets) { span: new Span(off, off + target.memberName.length), text: newName }
 			];
-			final newSource: String = RefactorSupport.applyEdits(entry.source, edits);
+			final newSource: String = CanonicalEdit.applyEdits(entry.source, edits);
 
 			final newTree: QueryNode = try plugin.parseFile(newSource) catch (exception: ParseError) return Err(
 				'rewritten ${entry.file} does not parse: $exception'
@@ -526,7 +526,7 @@ final class CrossRenameMember {
 				if (
 					recvSpan != null && faSpan != null && RefactorSupport.receiverIsTypeNamespace(recv, typeName, qualified, valueResolved)
 				) {
-					final off: Int = RefactorSupport.activeCodeIdentTokenOffset(
+					final off: Int = OccurrenceScan.activeCodeIdentTokenOffset(
 						source, new Span(recvSpan.to, faSpan.to), memberName, regions
 					);
 					if (off < 0)
@@ -572,7 +572,7 @@ final class CrossRenameMember {
 			final recvSpan: Null<Span> = cand.recv.span;
 			final faSpan: Null<Span> = cand.fa.span;
 			if (recvSpan == null || faSpan == null || !receiverIsSourceType(cand.recv, proof)) continue;
-			final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName, regions);
+			final off: Int = OccurrenceScan.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName, regions);
 			if (off < 0) return { offsets: [], error: unlocatableAccess(source, faSpan, memberName) };
 			if (!out.contains(off)) out.push(off);
 		}
@@ -844,7 +844,7 @@ final class CrossRenameMember {
 		if (!target.isEnumValue) return [];
 		// A WHOLE-WORD probe, not a substring one: `RED` occurs inside `COLORED` and inside every
 		// comment that mentions it, and the scan below is not free.
-		if (RefactorSupport.identTokenOffset(source, new Span(0, source.length), target.memberName) < 0) return [];
+		if (SourceText.identTokenOffset(source, new Span(0, source.length), target.memberName) < 0) return [];
 		// A MODULE-level VALUE binding of the name shadows the expected type — measured on 4.3.7, a
 		// module-level `var same: Colour` (and a `final` one) wins over
 		// `function pick(): Colour return same;`, from a module function AND from a class method in

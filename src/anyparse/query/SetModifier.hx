@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.check.CheckScan;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -136,7 +136,7 @@ final class SetModifier {
 		// `remove-element` / `replace-node` cut: a keyword one of them crosses and the other stops
 		// at is how a second visibility keyword got emitted in front of the first.
 		var declIndex: Int = cursorIndex;
-		while (declIndex < siblings.length && RefactorSupport.isDeclPrefixSibling(siblings[declIndex])) declIndex++;
+		while (declIndex < siblings.length && ElementSpan.isDeclPrefixSibling(siblings[declIndex])) declIndex++;
 		if (declIndex >= siblings.length) return Err('no declaration follows the modifiers at $line:$col');
 		final coreSpan: Null<Span> = siblings[declIndex].span;
 		if (coreSpan == null) return Err('the ${siblings[declIndex].kind} declaration has no source span');
@@ -170,7 +170,7 @@ final class SetModifier {
 			span: new Span(run.from, run.to),
 			text: run.names.length == 0 ? rendered : rendered.rtrim()
 		};
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/**
@@ -244,7 +244,7 @@ final class SetModifier {
 		source: String, siblings: Array<QueryNode>, declIndex: Int, shape: RefShape, modifierKinds: Array<String>, declFrom: Int
 	): ModifierRun {
 		var startIndex: Int = declIndex;
-		while (startIndex > 0 && RefactorSupport.isDeclPrefixSibling(siblings[startIndex - 1])) startIndex--;
+		while (startIndex > 0 && ElementSpan.isDeclPrefixSibling(siblings[startIndex - 1])) startIndex--;
 		final regionKind: Null<String> = shape.conditionalMemberKind;
 		final headKinds: Array<String> = shape.condDeclPrefixKeywordKinds ?? [];
 		final names: Array<String> = [];

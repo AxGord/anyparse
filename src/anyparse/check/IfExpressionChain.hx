@@ -1,8 +1,10 @@
 package anyparse.check;
 
+import anyparse.query.BoolExprShape;
+import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
-import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -259,7 +261,7 @@ final class IfExpressionChain {
 		final pairs: Array<{ cond: QueryNode, value: QueryNode }> = [];
 		var cur: QueryNode = value;
 		while (ternaryKind != null && cur.kind == ternaryKind && cur.children.length == IF_ELSE_CHILD_COUNT) {
-			pairs.push({ cond: RefactorSupport.unwrapParens(cur.children[0], parenKind), value: cur.children[THEN_BRANCH_INDEX] });
+			pairs.push({ cond: BoolExprShape.unwrapParens(cur.children[0], parenKind), value: cur.children[THEN_BRANCH_INDEX] });
 			cur = cur.children[ELSE_SLOT_INDEX];
 		}
 		return { pairs: pairs, terminal: cur };
@@ -285,7 +287,7 @@ final class IfExpressionChain {
 		// compares literal content, so requiring both leaves exactly token identity.
 		// Same pairing as `tail-merge`'s `sameStatement` and `redundant-case-body`'s
 		// `sameBody`, for the same reason `CheckScan.normalizeSpan`'s doc gives.
-		return aSpan != null && bSpan != null && RefactorSupport.structurallyEqual(a, b)
+		return aSpan != null && bSpan != null && MemberKinds.structurallyEqual(a, b)
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
 	}
 
@@ -522,7 +524,7 @@ final class IfExpressionChain {
 		// A `#if` region projects EVERY branch's nodes as FLAT siblings, so a following sibling
 		// may belong to a different branch and separate nothing at all: under the defines that
 		// select this child's branch, whatever follows the region follows the child. Inherit.
-		return if (RefactorSupport.isConditionalKind(parent.kind))
+		return if (CondRegionScan.isConditionalKind(parent.kind))
 			shielded
 		else if (index < parent.children.length - 1)
 			!(index == THEN_BRANCH_INDEX && seams.conditionalKinds.contains(parent.kind))

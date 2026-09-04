@@ -75,7 +75,7 @@ final class CondBranchProjection {
 			condKind: kind,
 			elseKeywords: keywords,
 			blockKinds: blockKinds,
-			comments: RefactorSupport.collectCommentTokens(regions())
+			comments: SourceComments.collectCommentTokens(regions())
 		});
 	}
 
