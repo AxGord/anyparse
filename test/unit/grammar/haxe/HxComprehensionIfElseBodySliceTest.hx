@@ -26,10 +26,11 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxComprehensionIfElseBodySliceTest extends Test {
 
-	/** Project-shaped config with the knob ON and `comprehensionFor: fitLine` (padded comprehension brackets). */
+	/** Project-shaped config with the knob ON and padded comprehension brackets (`whitespace.bracketConfig`). */
 	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** Same, with `comprehensionFor: same` — tight brackets, generic `arrayWrap` cascade. The gate must answer identically. */
 	private static final TIGHT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'

@@ -55,21 +55,24 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 
-	/** Project-shaped config: tab indent, maxLineLength 140, `ifBody`/`comprehensionFor` fitLine, `expressionIf` next, cuddled-open on. */
+	/** Project-shaped config: tab indent, maxLineLength 140, `ifBody` fitLine, `expressionIf` next, padded comprehension brackets, cuddled-open on. */
 	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** Same, plus the project's `callParameter` cascade — needed by the call-host fixtures, whose hug depends on its `totalItemLength <= 100` rule. */
 	private static final CFG_CALL: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},{"conditions": ['
 		+ '{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** `CFG` without `wrapping.comprehensionCuddledOpen` — the gate-1 disarm is config-independent and must hold here too. */
 	private static final CFG_NO_CUDDLE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	public function new(): Void {
 		super();

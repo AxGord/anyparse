@@ -235,6 +235,36 @@ whose whitespace holds a newline are all left exactly as authored. ⚠️ The `#
 `@:fmt(sharpCondParensInside(…))`, whose handler emits the condition text itself — so a
 normalisation wired only on the terminal reaches `#elseif` alone.
 
+## `sameLine.comprehensionFor` — a body policy, plus one bracket side effect
+
+**`sameLine.comprehensionFor: "same" | "next" | "fitLine" | "keep"`** places the BODY of an
+expression-position `for` — the array-comprehension generator (`[for (x in xs) <body>]`) and any
+value-position `for`. It reaches `HxForExpr.body` / `HxForReif.body` through the same
+`@:fmt(bodyPolicy('expressionForBody'))` knob `sameLine.expressionIf` fans out into, and is read
+AFTER that fanout, so the specific key outranks the general one: `expressionIf: "same"` with
+`comprehensionFor: "next"` breaks the comprehension body and nothing else.
+
+The four values are the engine's own `BodyPolicy`, so they mean here exactly what they mean on
+`forBody` / `ifBody`: `same` on the head's line, `next` on its own line one level in, `keep`
+reproduces the source break, and `fitLine` glues a body whose first line fits the head line and
+breaks one whose does not.
+
+Two traps:
+
+1. **An absent key is `keep`, not the fork's `same`.** Every fork corpus fixture omits the key, and
+   defaulting to `Same` would re-lay every comprehension body those fixtures wrote on their own
+   line. So a config that says nothing keeps whatever the source wrote.
+2. **`fitLine` also pads the comprehension brackets** (`[ for … ]`), overriding
+   `whitespace.bracketConfig.comprehensionBrackets`. That is fork parity, not a shorthand:
+   `MarkSameLine.markArrayComprehension`'s FitLine arm forces the same spacing whenever the bracket
+   config has not already asked for it. If you want padding WITHOUT `fitLine`'s body policy, set
+   `whitespace.bracketConfig.comprehensionBrackets` to `{"openingPolicy": "onlyAfter",
+   "closingPolicy": "before"}` and pick the body policy you actually want — that is what this
+   repository's own fixtures do.
+
+Until 2026-09-04 the key did nothing BUT the padding: `same` / `next` / `fitLine` / `keep` produced
+byte-identical output for every input, so no config value could move a comprehension body.
+
 ## Where to look when a key still does nothing
 
 1. Check the spelling here. An unknown value is silently ignored.

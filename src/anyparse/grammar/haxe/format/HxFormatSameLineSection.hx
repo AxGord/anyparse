@@ -249,5 +249,29 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var elseIfCommentReflow: Bool;
 
+	/**
+	 * Body placement for an expression-position `for` — the array-comprehension
+	 * generator (`[for (x in xs) <body>]`) and any value-position `for`. Reaches
+	 * `HxForExpr.body` / `HxForReif.body` through
+	 * `@:fmt(bodyPolicy('expressionForBody'))`, the knob `expressionIf` also fans
+	 * out into; this key is read AFTER that fanout, so the specific value wins.
+	 *
+	 * `same` puts the body on the head's line, `next` on its own line one level
+	 * in, `keep` reproduces the source break, `fitLine` glues a body whose first
+	 * line fits the head line and breaks one whose does not — the engine's own
+	 * `BodyPolicy` semantics, identical to `forBody` / `ifBody`.
+	 *
+	 * An ABSENT key leaves `expressionForBody` at its `Keep` default rather than
+	 * the fork's declared `Same`: every corpus fixture omits the key, and a
+	 * `Same` default would re-lay every comprehension body the corpus wrote on
+	 * its own line.
+	 *
+	 * `fitLine` ALSO pads the comprehension brackets (`[ for … ]`) through
+	 * `HaxeFormatConfigLoader.applyComprehensionForPadding`, mirroring the fork's
+	 * `MarkSameLine.markArrayComprehension` FitLine arm, which forces that
+	 * spacing whenever `whitespace.bracketConfig.comprehensionBrackets` has not
+	 * already asked for it. State the padding through that key when the body
+	 * policy you want is not `fitLine`.
+	 */
 	@:optional var comprehensionFor: HxFormatBodyPolicy;
 };

@@ -620,10 +620,32 @@ branch_fmt() {
     # other two are untouched, and all 41 members of the new module are
     # VERBATIM substrings of the pre-slice `Lowering.hx` — so this is a rename
     # of the entry, not a file joining the tail.
+    #
+    # S77 added the fourth. This config sets `sameLine.comprehensionFor: same`,
+    # a key that did NOTHING before that slice, so the construct below could not
+    # reach this shape at all: a comprehension whose body is an object literal
+    # the SOURCE wrote flat and the writer must break by width. `Same` glues the
+    # literal to the `for` head on the first rewrite; the resulting body now
+    # carries hardlines, so on the SECOND rewrite `HxForExpr.body`'s
+    # `@:fmt(bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral'))` gate
+    # (`flatLength(body) == -1`) fires and puts `{` back on its own line, after
+    # which the shape is stable. The gate reads a property the WRITER produces,
+    # not one the source states — the same family as the two entries above.
+    # Minimal repro (`tools/xconfig-hxformat.json` beside it, two single round
+    # trips through `apq ast <f> --writer-output`):
+    #
+    #   final binders: Array<Expr> = [
+    #       for (i in 0...n)
+    #           { expr: EConst(CIdent(veryLongCallChainProducingAName())), pos: pos }
+    #   ];
+    #
+    # Under this repository's OWN config the tree is unaffected:
+    # `fmt --list --one-pass src test tools` is 0 of 1614.
     cat > "$work/fmt-xconfig.base" <<'XCFG'
 src/anyparse/check/DuplicateCase.hx
 src/anyparse/check/UnnecessarySwitch.hx
 src/anyparse/macro/ParseDispatchLowering.hx
+src/anyparse/macro/TriviaTypeSynth.hx
 XCFG
     # The exit code is non-zero on drift alone, so it says nothing here; the
     # `--one-pass` verdict is read off stderr, which is why the two streams are
