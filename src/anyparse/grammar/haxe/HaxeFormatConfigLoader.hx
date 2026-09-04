@@ -1013,6 +1013,13 @@ final class HaxeFormatConfigLoader {
 		if (section.doWhile != null) opt.sameLineDoWhile = HaxeFormatValues.sameLineToRuntime(section.doWhile);
 		applySameLineBodies(section, opt);
 		applyExpressionIfFanout(section, opt);
+		// omega-comprehension-for-body: `sameLine.comprehensionFor` is the SPECIFIC
+		// body policy for an expression-position `for` (the array-comprehension
+		// generator, `HxForExpr.body` / `HxForReif.body` through
+		// `@:fmt(bodyPolicy('expressionForBody'))`), so it is read AFTER the
+		// `expressionIf` fanout, which sets the same knob as a general default and
+		// must not clobber the specific key.
+		if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);
 		if (section.elseIf != null) opt.elseIf = HaxeFormatValues.keywordPlacementToRuntime(section.elseIf);
 		// omega-else-switch: the `elseIf` twin for a `switch` else-body. Read through the
 		// KEEP-honouring converter, so an absent key and an explicit `"keep"` agree on

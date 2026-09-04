@@ -38,7 +38,7 @@ class TestDiscoveryParityTest extends Test {
 	 * maintenance cost of this layer, and what it replaced was a missing
 	 * `addCase` line that nothing reports.
 	 */
-	private static inline final REGISTERED_CLASSES: Int = 771;
+	private static inline final REGISTERED_CLASSES: Int = 772;
 
 	/**
 	 * `utest.Test` subclasses carrying no fixture of their own or inherited.
@@ -115,12 +115,21 @@ class TestDiscoveryParityTest extends Test {
 	 * its own — this is the runtime half, and it is what keeps the metas from
 	 * being dropped in a refactor without anything noticing.
 	 *
-	 * Two entries, one class, on purpose: the tree is NOT converted.
+	 * Two classes on purpose: the tree is NOT converted.
 	 */
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		Assert.same([
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineKeepsTheBodyOnAFittingHeadLine :: control :: M-NO-WIRE',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLinePullsUpABodyThatFits :: control :: M-NO-WIRE',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testKeepReadsTheSourceBreak :: control :: M-ALWAYS-SAME',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testNextLayoutIsIdempotent :: control :: M-ALWAYS-SAME',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testNextPutsTheBodyOnItsOwnLine :: control :: M-NO-WIRE',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testSameKeepsAFlatBodyOnTheHeadLine :: control :: M-ALWAYS-NEXT',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testSamePullsTheBodyUpOntoTheHeadLine :: control :: M-NO-WIRE',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testTheSpecificKeyOutranksTheExpressionIfFanout :: control '
+			+ ':: M-FANOUT-FIRST',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testFilterIfWithoutElseStillCuddles :: control :: M-CUDDLE-OFF',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyDeclinesTheCuddle :: control :: M-ELSE-GATE',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyDeclinesTheCuddleWithTightBrackets :: control '

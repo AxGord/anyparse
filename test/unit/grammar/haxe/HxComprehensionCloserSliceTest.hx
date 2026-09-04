@@ -41,16 +41,18 @@ final class HxComprehensionCloserSliceTest extends Test {
 	/** TM-shaped config with `wrapping.comprehensionCuddledOpen` ON — the regime TM formats under. */
 	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** Same config with the cuddled-open knob absent — the pre-knob leading-break regime. */
 	private static final OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
-	/** Knob ON but TIGHT (unpadded) comprehension brackets — `comprehensionFor: same`, where `shapeComprehensionBlockHug` declines. */
+	/** Knob ON but TIGHT (unpadded) comprehension brackets — no `comprehensionBrackets` padding, where `shapeComprehensionBlockHug` declines. */
 	private static final TIGHT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "same"}}';
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** The reported shape (anonymised from a macro-generating build macro): reified body, curly tail, `];` glued to the body line. */
 	private static final REIFIED_GLUED: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (fieldEntry in '

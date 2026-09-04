@@ -21,14 +21,16 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxSoleItemCuddledBracketsTest extends Test {
 
-	/** project-shaped config (tab indent, maxLineLength 140, ifBody/comprehensionFor fitLine, expressionIf next) with the knob OFF. */
+	/** project-shaped config (tab indent, maxLineLength 140, ifBody fitLine, expressionIf next, padded comprehension brackets) with the knob OFF. */
 	private static final OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** Same config with `wrapping.soleItemCuddledBrackets` turned on. */
 	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "soleItemCuddledBrackets": true},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** A sole `for` comprehension whose body is a call with an object-literal argument, in the exploded leading-break layout. */
 	private static final COMPREHENSION_EXPLODED: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n'
@@ -36,7 +38,7 @@ final class HxSoleItemCuddledBracketsTest extends Test {
 		+ '\t\t\t\tcaptionValue: indexValue.captionValue,\n\t\t\t\tdetailValue: '
 		+ 'indexValue.detailValue,\n\t\t\t\torderValue: indexValue.orderValue\n\t\t\t})\n\t\t];\n\t}\n}';
 
-	/** The same comprehension cuddled — padded brackets, since `comprehensionFor: fitLine` pads them. */
+	/** The same comprehension cuddled — padded brackets, since `whitespace.bracketConfig.comprehensionBrackets` pads them. */
 	private static final COMPREHENSION_CUDDLED: String = 'class C {\n\tfunction test() {\n'
 		+ '\t\tfinal r = [ for (indexValue in sourceCollectionValue) makeEntryRecord({\n'
 		+ '\t\t\tcaptionValue: indexValue.captionValue,\n\t\t\tdetailValue: '

@@ -29,7 +29,8 @@ final class HxExprParenObjectLitGlueTest extends Test {
 		+ '[{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
 		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "expressionWrapping": {"defaultWrap": '
 		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** Same config with `wrapping.expressionWrapping` absent - the universal default (`NoWrap`) cascade. */
 	private static final DEFAULT_WRAP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
@@ -37,7 +38,8 @@ final class HxExprParenObjectLitGlueTest extends Test {
 		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": '
 		+ '1}], "type": "packedOrOnePerLine"}]}, "arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": '
 		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], '
-		+ '"type": "packedOrOnePerLine"}]}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+		+ '"type": "packedOrOnePerLine"}]}}, "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", '
+		+ '"closingPolicy": "before"}}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
 	/** Exploded `(\n\t{...}\n)` parens in the three positions a paren-wrapped literal reaches: decl init, call arg, `return`. */
 	private static final POSITIONS_EXPLODED: String = 'class C {\n\tfunction test() {\n\t\tfinal declValue = (\n\t\t\t{\n'

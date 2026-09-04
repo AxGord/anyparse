@@ -169,18 +169,18 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 
 	/** project-shaped config parameterised on the one key under test. */
 	private static function config(glue: Bool): String {
-		return '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-			+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "ignore", "rules": ['
-			+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
-			+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "callParameter": {'
+		return '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true, '
+			+ '"objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": '
+			+ '"noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "callParameter": '
+			+ '{"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], '
+			+ '"type": "noWrap"}]}, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": '
+			+ '3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", '
+			+ '"value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+			+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "expressionWrapping": {'
 			+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": '
-			+ '"noWrap"}]}, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {'
-			+ '"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": '
-			+ '120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", '
-			+ '"value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "expressionWrapping": {"defaultWrap": '
-			+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
-			+ ' "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}},'
-			+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine", "fitLineBodyGlue": $glue}}';
+			+ '"noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}},'
+			+ ' "bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}}, "sameLine": {'
+			+ '"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep", "fitLineBodyGlue": $glue}}';
 	}
 
 }
