@@ -262,7 +262,9 @@ final class MoveSymbol {
 		// `p.Mod.Sub` to `p.Dest.Sub`, and of a main type from `p.Mod` to `p.Dest.Mod` — so the guard
 		// that was only asked cross-package let `pony.net.rpc.IRPC.RPCBuilder` stand over a move inside
 		// `pony.net.rpc` and wrote two files at rc 0 for a tree that no longer compiles.
-		final fqnErr: Null<String> = qualifiedPathRefusal(index, sourceOf, oldImportPath, typeName, cursorInfo.pkg == destInfo.pkg);
+		final fqnErr: Null<String> = qualifiedPathRefusal(
+			index, sourceOf, oldImportPath, typeName, cursorInfo.pkg == destInfo.pkg, plugin.lexicalRegions
+		);
 		if (fqnErr != null) return Err(fqnErr);
 		final carried: Array<String> = switch dependencyImportLinesToCarry(
 			cursorSource, declSpan, cursorInfo, destInfo, destSource, index, plugin, typeRefShape, typeName
@@ -456,19 +458,11 @@ final class MoveSymbol {
 				if (refusal != null) return CarryErr(refusal);
 				continue;
 			}
-			// The destination's own PACKAGE CHAIN already provides `dep` under exactly the module the
-			// moved code means, and Haxe grants that without a statement — so the carried line binds
-			// nothing new. 281 of the 767 modules one campaign sweep moved received one of these, every
-			// one of them removed again by the `redundant-import` pass.
-			//
-			// The chain, not just the file's own package: compile-run on 4.3.7, a `package p.q;` module
-			// reads a bare `Dep` declared `package p;` and a bare `Root` declared at the top level, both
-			// with no import — so an ancestor package IS visibility and does license the skip. Only a
-			// plain `import` is skipped, though: a `using` grants extension methods no package
-			// visibility grants, and an alias introduces a NAME the destination does not have. A
-			// SUB-MODULE type keeps its import for the reason it needs one inside its own package —
-			// `packageOrTopLevelBinding` answers main types only, so it never licenses that skip.
-			if (provider.kind == ImportKind.Import && wanted != null && packageOrTopLevelBinding(dep, destInfo, files) == wanted) continue;
+			// The destination already sees `dep` as `wanted` with no statement of its own, so the
+			// carried line would bind nothing new — see `destinationSeesWithoutStatement`. Only a plain
+			// `import` is skipped: a `using` grants extension methods no visibility rung grants, and an
+			// alias introduces a NAME the destination has no other way to spell.
+			if (provider.kind == ImportKind.Import && destinationSeesWithoutStatement(dep, wanted, destInfo, files)) continue;
 			// Already present in the destination → no carry. The PATH is part of the identity: two
 			// alias statements binding one name to different modules share a `raw`, and reading
 			// them as the same statement would silently leave the moved decl on the DESTINATION's
@@ -1772,25 +1766,30 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * Does `source` name any of `names` by its bare name, outside `excluded` spans?
+	 * Does `source` name any of `names` by its bare name, outside `excluded` spans and outside its comments?
 	 *
 	 * The question a MODULE statement's fate turns on: repointing or removing one takes away every type
 	 * the module declares, so what decides is whether the file still names ANY of them. Since 2026-08-31
 	 * it is also the question the statementless repair walk and the source file's own re-import ask, so
-	 * the three answer alike.
+	 * the three answer alike. Every one of the six call sites WRITES, KEEPS or DROPS an import statement;
+	 * none of them refuses a move, which is what makes one shared answer legitimate here.
 	 *
-	 * Comments are NOT excluded, and the doc here claimed they were until that date. `collectCommentRegions`
-	 * is passed for ONE job — deciding whether a `.` in front of an occurrence is a real qualifier or
-	 * comment text — and `scanReference` never tests the occurrence itself against those spans; the
-	 * contract `referencedInDest` states ("it counts a mention in a comment or a string literal as a use")
-	 * is the true one for the whole family, and the direction is deliberate: keeping an import a file no
-	 * longer needs costs a lint advisory, dropping one it does need costs the build. Measured over the
-	 * 285-case Pony census, 4 of the 89 statements this slice newly writes are for a mention that appears
-	 * ONLY in a comment.
+	 * Comment interiors are excluded and STRING literals are not, and the split is the whole point. A
+	 * comment is never compiled, so an occurrence inside one can never be the reference an import exists
+	 * for — counting it wrote `import b.Holder.Thing;` into a file whose only `Thing` was a doc line, at
+	 * rc 0 with nothing said (T512). A string CAN be read back by `Reflect` / a macro, so it still counts,
+	 * which is the conservative direction where the answer writes rather than refuses.
+	 *
+	 * The regions are passed on to `scanReference` as well, for a SECOND and unrelated job: deciding
+	 * whether a `.` in front of an occurrence is a real qualifier or a comment's own full stop. Dropping
+	 * them there uncounts a real code reference on the line BELOW a comment ending in a period — pinned by
+	 * `testACommentsTrailingPeriodDoesNotHideTheReferenceOwedARepairImport`, which is what separates a
+	 * comment-ADJACENT reference (counted) from a comment-INTERIOR mention (not).
 	 */
 	private static function namesAnyOf(source: String, names: Array<String>, excluded: Array<Span>, regions: Array<LexRegion>): Bool {
 		final comments: Array<Span> = SourceComments.collectCommentRegions(regions);
-		return names.exists(n -> OccurrenceScan.referencedUnqualifiedInRange(source, n, 0, source.length, excluded, comments));
+		final outside: Array<Span> = excluded.concat(comments);
+		return names.exists(n -> OccurrenceScan.referencedUnqualifiedInRange(source, n, 0, source.length, outside, comments));
 	}
 
 	/**
@@ -2370,9 +2369,18 @@ final class MoveSymbol {
 	 * statement itself is excluded. Returns a refusal listing the first
 	 * offending file, or null. Word-bounded so `a.b.Talon` / `xa.b.T` never
 	 * match; import / using statements of the same path are skipped.
+	 *
+	 * COMMENT interiors are skipped as well, and this is the ONE scan in the file where the comment
+	 * question is a REFUSAL rather than an import-writing one. A doc line spelling `a.b.T` is not a
+	 * code reference, so refusing on it blocks a legitimate move and hands its author advice
+	 * ("convert it to a bare T with an import") that means nothing for prose — T511, reproduced at
+	 * rc 1 on a three-file scope whose only mention was a doc block. A STRING literal is deliberately
+	 * NOT skipped: `Type.resolveClass("a.b.T")` is a real reference the move breaks and nothing in
+	 * the repair walk rewrites, so the refusal is the correct answer there.
 	 */
 	private static function qualifiedPathRefusal(
-		index: SymbolIndex, sourceOf: Map<String, String>, oldImportPath: Null<String>, typeName: String, samePackage: Bool
+		index: SymbolIndex, sourceOf: Map<String, String>, oldImportPath: Null<String>, typeName: String, samePackage: Bool,
+		lexicalRegions: (String) -> Array<LexRegion>
 	): Null<String> {
 		if (oldImportPath == null) return null;
 		final path: String = oldImportPath;
@@ -2388,6 +2396,9 @@ final class MoveSymbol {
 			final info: Null<FileInfo> = index.fileInfo(file);
 			if (info == null) continue;
 			final infoNN: FileInfo = info;
+			// The lexical scan is per file and only for the files that spell the path at all — an
+			// early `indexOf` keeps every other file at the cost it had.
+			var comments: Null<Array<Span>> = null;
 			var from: Int = 0;
 			while (true) {
 				final at: Int = source.indexOf(path, from);
@@ -2397,6 +2408,14 @@ final class MoveSymbol {
 				final afterIdx: Int = at + path.length;
 				final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
 				if (!beforeOk || !afterOk) continue;
+				// A COMMENT is never compiled, so an occurrence inside one is not the code reference
+				// this gate refuses for — and refusing on it blocked a legitimate move with advice
+				// ("convert it to a bare X with an import") that means nothing to a doc line (T511).
+				// A STRING literal is NOT excluded: `Type.resolveClass("p.Thing")` is a real reference
+				// the move breaks and nothing rewrites, so the refusal is the right answer there.
+				final regions: Array<Span> = comments ?? SourceComments.collectCommentRegions(lexicalRegions(source));
+				comments = regions;
+				if (OccurrenceScan.offsetWithinAny(at, regions)) continue;
 				// An ALIAS statement's `raw` is the alias, so the path it spells is `aliasTarget` —
 				// read `raw` here and the statement's own `p.Thing` reads as a fully-qualified CODE
 				// reference, refusing a move over a file that only ever names the type through the
@@ -2450,6 +2469,30 @@ final class MoveSymbol {
 			if (at < region.to) return region.from;
 		}
 		return -1;
+	}
+
+	/**
+	 * Does the destination reach `dep`, meaning exactly `wanted`, with NO statement of its own?
+	 *
+	 * Two visibility rungs Haxe grants for free, and a carried import would bind nothing either one
+	 * already binds. The PACKAGE CHAIN — compile-run on 4.3.7, a `package p.q;` module reads a bare
+	 * `Dep` declared `package p;` and a bare `Root` declared at the top level with no import — which
+	 * 281 of the 767 modules one campaign sweep moved received a redundant line for, every one of
+	 * them removed again by the `redundant-import` pass. And the destination's OWN module, which
+	 * `packageOrTopLevelBinding` structurally cannot answer: it skips `info.file` itself and reports
+	 * MAIN types only. That gap wrote `import b.Dest;` and `import b.Dest.Payload;` into `b/Dest.hx`
+	 * itself over a `move-member` into it (T518).
+	 *
+	 * `wanted == null` is never a yes: an unnameable source binding is exactly the case the carry
+	 * must not skip on, and the collision gate above has already had its say about it.
+	 */
+	private static function destinationSeesWithoutStatement(
+		dep: String, wanted: Null<String>, destInfo: FileInfo, files: Array<FileInfo>
+	): Bool {
+		if (wanted == null) return false;
+		final own: Null<NameBinding> = bindingOf(dep, destInfo, files);
+		if (own != null && own.ownModule && own.path == wanted) return true;
+		return packageOrTopLevelBinding(dep, destInfo, files) == wanted;
 	}
 
 }

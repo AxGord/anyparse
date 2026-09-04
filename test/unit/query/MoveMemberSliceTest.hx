@@ -1205,6 +1205,43 @@ class MoveMemberSliceTest extends Test {
 		Assert.isTrue(changeFor(changes, 'p/Dest.hx').newSource.contains('import q.Dep;'), 'the uncontested carry still happens');
 	}
 
+	/**
+	 * The destination never receives an import of its OWN module.
+	 *
+	 * Both spellings were written by the base engine (T518): `import b.Dest;` for the module's main
+	 * type and `import b.Dest.Payload;` for a typedef declared beside it, straight into `b/Dest.hx`.
+	 * The carry priced each dependency against `packageOrTopLevelBinding`, which skips `info.file`
+	 * itself and answers MAIN types only, so neither rung ever covered the destination's own module —
+	 * and a source import naming exactly what the destination already declares came through as a
+	 * dependency to carry.
+	 *
+	 * Severity, measured rather than assumed: the ticket recorded this as
+	 * `Importing private declarations from a module is not allowed`, a hard error one step later.
+	 * It is not. On Haxe 4.3.7 a module importing its own sub-module type compiles at rc 0 even when
+	 * that type is `private`; the error fires only for a FOREIGN module importing a private one. So
+	 * the defect is a wrong, coupling-creating statement rather than a broken build — which is why
+	 * this pin asserts the destination's WHOLE text and not just the absence of one line.
+	 */
+	public function testTheDestinationIsNeverGivenAnImportOfItsOwnModule(): Void {
+		final changes: Array<MoveChange> = okChanges('a/Src.hx', 'Src', 'label', 'Dest', [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nimport b.Dest;\nimport b.Dest.Payload;\n\nclass Src {\n\tpublic static function label(p:'
+				+ 'Payload):Int {\n\t\treturn Dest.existing() + p.n;\n\t}\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\tpublic static function existing():Int {\n\t\treturn 1;\n\t}\n}\n\ntypedef '
+				+ 'Payload = {\n\tvar n:Int;\n}\n'
+			}
+		]);
+		Assert.equals(
+			'package b;\n\nclass Dest {\n\tpublic static function existing():Int {\n\t\treturn 1;\n\t}\n\n\tpublic static funct'
+			+ 'ion label(p:Payload):Int {\n\t\treturn Dest.existing() + p.n;\n\t}\n\n}\n\ntypedef Payload = {\n\tvar n:Int;\n}\n',
+			changeFor(changes, 'b/Dest.hx').newSource
+		);
+	}
+
 	private function move(
 		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
 		?via: String, ?closure: Bool, ?scaffold: Bool
