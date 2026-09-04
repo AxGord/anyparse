@@ -1039,10 +1039,43 @@ class MemberOrderCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The reorder is a PERMUTATION of the whole member list, so one misplaced member rewrites
+	 * every member between it and its slot. On `Cli.hx` that turned ONE `info` finding into an
+	 * 812-line diff, which S11 and S49 each reverted by hand. Past `MAX_RELOCATED_LINES` the fix
+	 * now emits the spacing part only and leaves the order alone; the finding is still reported,
+	 * so nothing is hidden — only the 800-line rewrite is declined.
+	 */
+	public function testAnOversizedRelocationIsDeclined(): Void {
+		final src: String = swapWithBody(300);
+		Assert.equals(1, violations(src).length, 'the finding is still reported');
+		Assert.equals(src, fixedSource(src), 'and the order is left exactly as it was');
+	}
+
+	/**
+	 * CONTROL: the SAME shape under the budget still reorders. Without this arm the one above
+	 * would pass on a fix that had simply stopped working.
+	 */
+	public function testARelocationUnderTheBudgetStillApplies(): Void {
+		final src: String = swapWithBody(3);
+		Assert.equals(1, violations(src).length);
+		Assert.notEquals(src, fixedSource(src), 'a small reorder is still applied');
+	}
+
 	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
 	private inline function contentRankedBlockSource(): String {
 		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
 			+ '\n\t#if (mobile || APPSTORE)\n\tpublic var iap:I;\n\t#end\n}';
+	}
+
+	/**
+	 * A class whose FIRST member is a private static method with `body` filler lines and whose
+	 * second is a public instance method — canonical order wants them swapped, so the relocated
+	 * extent is the big method plus the small one.
+	 */
+	private function swapWithBody(body: Int): String {
+		final filler: String = [for (i in 0...body) '\t\tvar v$i:Int = $i;'].join('\n');
+		return 'class C {\n\tprivate static function big():Void {\n$filler\n\t}\n\n\tpublic function small():Void {}\n}\n';
 	}
 
 	private function violations(src: String): Array<Violation> {

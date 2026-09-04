@@ -783,6 +783,72 @@ tools/battery.sh --allow-blast      # accept the blast movement it printed last 
 silence, and a battery that cannot tell "corpus clean" from "corpus not run"
 is worse than no corpus gate, so the script refuses rather than warns.
 
+### The shard plan's own producer is cross-checked against a hand-maintained count
+
+`tools/suite-shard.sh` derives everything — the plan, the filters, the class total —
+from ONE list, `node bin/test.js --list-classes`. That makes its closing
+`class parity OK` note a statement about placement (every listed class is dealt onto
+exactly one shard, no name is a substring of another, no shard is empty) and NOT about
+completeness: a producer that silently dropped a class hands over a shorter list and
+every downstream check agrees with it. Only `--verify`, which pays for a monolith run,
+could see that — and `tools/battery.sh` does pass `--verify` on every non-`--quick`
+run, so the battery is covered.
+
+A plain `tools/suite-shard.sh -n 4` is not, and that is the form used mid-slice. It now
+compares the produced count against `REGISTERED_CLASSES` in
+`unit.TestDiscoveryParityTest` — a literal a human bumps when a test class is added or
+removed, and therefore not derived from the generator under test — BEFORE any shard
+runs, and refuses on a mismatch naming both numbers. It is advisory only if the literal
+cannot be read (a rename in that file must not fail a green suite), and the pin's own
+assertion inside the run stays the authority.
+
+### The JS build is not reproducible — a binary `cmp` needs the base built TWICE
+
+`haxe bin/apq-js.hxml` on an UNCHANGED tree does not always emit the same bytes.
+Measured over three builds of one base revision, `bin/apq.js` came out
+`a4bf82eb`, `bcda1b01`, `bcda1b01`, and `bin/test.js` drifted the same way: a
+switch-arm pair floats in the generated output. Nothing about the program
+changes, and no gate in this project reads a binary hash — but the moment one
+does, the naive form of that gate is wrong.
+
+So a check of the shape "the change is codegen-neutral, `cmp` proves it" is not a
+check: a single before/after pair says nothing, because the two builds could
+differ on an EMPTY change. Build the BASE arm at least twice, collect the set of
+hashes it produces, and require the patched build's hash to fall inside that set.
+A patched hash outside it is evidence; one inside it is the strongest statement
+this build can make.
+
+The same applies to `-D dump=pretty` output and to any "is the generated code
+unchanged" argument in a slice report. Say which arm produced which hash and how
+many times each arm was built, or do not quote hashes at all.
+
+### A file the oracle's hxml never compiles is permanently un-autofixable
+
+Sibling of the section above, on the WRITE side. `lint --fix` splits its rules
+into a safe set and a RISKY set, and the risky ones are applied only when a
+compiler oracle can typecheck the result. A file outside the oracle hxml's
+compile set — `test/_ReconSkipParse.hx` is the standing example, a fixture whose
+whole purpose is to not compile — can therefore never receive a risky fix. It is
+reported every run and fixed by none.
+
+`--no-oracle` is NOT the escape, and reaching for it is the natural mistake: it
+does not relax the requirement, it removes the thing that satisfies it, so every
+risky rule goes report-only for the whole run ("risky fixes stay report-only (no
+compiler oracle for this run)"). The two real escapes:
+
+- Apply the edit with the op the rule's fixer would have used — `remove-import`
+  for `redundant-import` / `unused-import`, `remove-member` for a dead member,
+  `patch` for anything smaller. The op re-parses and canonicalises, so the file
+  ends in the same state the fixer would have left it in; what is missing is only
+  the compiler's confirmation, which for this file does not exist anyway.
+- Or bring the file into the oracle's compile set, when it is a file that SHOULD
+  compile and its absence is the accident.
+
+Both are deliberate acts, which is the point: a fix nothing can verify should not
+land silently. What was wrong was only that the state had no name — the finding
+came back every run with no way to reach a fixed point, and reading the summary
+gave no hint that this file could never leave it.
+
 ### The move family: the one op family with its own byte capture
 
 `lint --all`, a `--fix` tree, `fmt --list` and the refs / rename / safe-delete

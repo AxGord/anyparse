@@ -11,7 +11,7 @@ package anyparse.query.format.json;
  * tighter than `{ line:Int, col:Int }` and produces compact JSON the
  * spec lays out verbatim.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef AstSearchSpan = {
 	var start: Array<Int>;
 	var end: Array<Int>;

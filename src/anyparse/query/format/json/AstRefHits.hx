@@ -8,7 +8,7 @@ package anyparse.query.format.json;
  * writer has a typedef root to dispatch on. Consumers reading the
  * spec form unwrap the envelope — forward-compatible.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef AstRefHits = {
 	var hits: Array<AstRefHit>;
 };

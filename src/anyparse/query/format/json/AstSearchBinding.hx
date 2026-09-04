@@ -10,7 +10,7 @@ package anyparse.query.format.json;
  * dynamic-key form; the array form is forward-compatible (consumers
  * can read both via a single normalization pass).
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef AstSearchBinding = {
 	var name: String;
 	var text: String;

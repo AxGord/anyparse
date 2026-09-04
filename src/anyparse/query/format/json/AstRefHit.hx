@@ -20,7 +20,7 @@ package anyparse.query.format.json;
  * `@:optional` — the writer omits the key when the runtime value is
  * null, so default `apq refs --json` output stays byte-identical.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef AstRefHit = {
 	var file: String;
 	var kind: String;

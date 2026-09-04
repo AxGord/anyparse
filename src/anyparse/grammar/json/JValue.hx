@@ -16,7 +16,7 @@ package anyparse.grammar.json;
  * Metadata layer:
  *  - `@:peg` marks this as a grammar entry point.
  *  - `@:schema(JsonFormat)` binds the grammar to the literal vocabulary
- *    of `anyparse.format.text.JsonFormat`.
+ *    of `anyparse.grammar.json.JsonFormat`.
  *  - `@:ws` turns on cross-cutting whitespace consumption before every
  *    terminal in this grammar.
  *  - Per-constructor `@:lit` / `@:lead` / `@:trail` / `@:sep` metadata
@@ -25,7 +25,7 @@ package anyparse.grammar.json;
  *    tailRelax)`) marking trailing-sep tolerance as explicit intent.
  */
 @:peg
-@:schema(anyparse.format.text.JsonFormat)
+@:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 enum JValue {
 

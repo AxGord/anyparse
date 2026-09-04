@@ -218,6 +218,38 @@ plan_or_die filters "$work/filters.txt"
 
 total_classes=$(wc -l < "$work/assigned.txt" | tr -d '[:space:]')
 
+# --- producer-side count check ------------------------------------------
+#
+# Everything above derives from the ONE list `--list-classes` printed, so the
+# "class parity OK: N/N" note at the end compares that list with itself and is
+# blind to a producer that DROPPED a class — the list simply arrives shorter and
+# every downstream check agrees with it. The independent number is the literal
+# `REGISTERED_CLASSES` in `unit.TestDiscoveryParityTest`: hand-maintained, bumped
+# deliberately when a test class is added or removed, and therefore not derived
+# from the generator under test. Compared here, BEFORE any shard runs, so a drop
+# names itself in one line instead of arriving minutes later as a red shard —
+# and it is caught even when the pin's own class would have landed in a shard
+# this invocation is not running.
+#
+# Advisory when the literal cannot be read: this is a cross-check, and a rename
+# in that file must not fail an otherwise green suite. The pin's own assertion
+# inside the run stays the authority either way.
+registered_pin=$(
+    sed -n 's/.*REGISTERED_CLASSES[^=]*= *\([0-9][0-9]*\).*/\1/p' \
+        test/unit/TestDiscoveryParityTest.hx 2> /dev/null | sed -n 1p
+)
+producer_note="producer count not cross-checked (REGISTERED_CLASSES unreadable)"
+if [ -n "$registered_pin" ]; then
+    if [ "$total_classes" -ne "$registered_pin" ]; then
+        echo "suite-shard.sh: the class-list producer printed $total_classes classes, but" >&2
+        echo "  unit.TestDiscoveryParityTest pins REGISTERED_CLASSES = $registered_pin." >&2
+        echo "  Either discovery dropped a class, or the pin needs bumping — see $work/classes.txt" >&2
+        rc=1
+        exit 1
+    fi
+    producer_note="producer count == REGISTERED_CLASSES ($registered_pin)"
+fi
+
 # Line s+1 of the filters output IS shard s's APQ_TEST value; the class list
 # is that line split back on commas, kept only for the counts this script
 # reports. An empty shard cannot reach here — `shard-plan` refuses one,
@@ -382,7 +414,7 @@ fi
 # a lie within a day. The cross-check is opt-in instead: --verify pays for
 # a monolith run and compares, --expect takes the caller's last known-good
 # pair. With neither, the aggregate is reported as un-cross-checked.
-parity_note="counts not cross-checked (class parity OK: $total_classes/$total_classes)"
+parity_note="counts not cross-checked (class parity OK: $total_classes placed; $producer_note)"
 
 if [ "$verify" -eq 1 ]; then
     # `APQ_TEST=` neutralises an exported filter in the caller's shell:

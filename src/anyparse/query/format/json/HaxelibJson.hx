@@ -12,7 +12,7 @@ package anyparse.query.format.json;
  * all dropped by the `UnknownPolicy.Skip` inherited from `JsonFormat`,
  * since `sourceDirFrom` needs only the source directory.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef HaxelibJson = {
 
 	@:optional var classPath: String;

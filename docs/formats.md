@@ -127,7 +127,7 @@ Planned, not yet in Phase 1. For CSV, TSV, fixed-width. One record per line, no 
 High-level procedure for a new text format:
 
 1. **Decide which family it belongs to.** Most config-like formats are `TextFormat`. Binary protocols are `BinaryFormat`. Markup is `TagTreeFormat`. Etc.
-2. **Create a class in the appropriate package.** Convention: `anyparse.format.{family}.{Name}Format`. Example: `anyparse.format.text.JsonFormat`, `anyparse.format.text.Json5Format`.
+2. **Create a class in the appropriate package.** A format that describes a grammar this repository ships lives *beside that grammar*: `anyparse.grammar.{family}.{Name}Format` — `anyparse.grammar.haxe.HaxeFormat`, `anyparse.grammar.json.JsonFormat`, and a `Json5Format` deriving from it. The reason is invariant 4: such a format names its own grammar's terminal types in `intType` / `floatType` / `boolType` / `stringType` / `anyType`, and a grammar-agnostic package may not name one grammar (`unit.query.LexicalRegionsSeamTest.testNoGrammarAgnosticModuleNamesOneGrammar` is the ratchet). `anyparse.format.{family}` keeps the family DESCRIPTORS — the `TextFormat` / `BinaryFormat` interfaces and the policy enums every format reads — plus a format that names no grammar of its own, as `anyparse.format.text.SExprFormat` and `anyparse.format.binary.ArFormat` do.
 3. **Implement the interface fields** as `(default, null)` properties with initializers at the declaration site. Concrete values here become the format's literal vocabulary.
 4. **Expose a `public static final instance` singleton** constructed via a private constructor — one shared object is enough since format classes hold pure configuration.
 5. **Implement `escapeChar` and `unescapeChar`** if the format has string escapes. Binary formats skip both.
@@ -137,7 +137,7 @@ High-level procedure for a new text format:
 ### Example: JSON5 extending JSON
 
 ```haxe
-package anyparse.format.text;
+package anyparse.grammar.json;
 
 final class Json5Format extends JsonFormat {
   public static final instance:Json5Format = new Json5Format();

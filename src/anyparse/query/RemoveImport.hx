@@ -49,11 +49,46 @@ final class RemoveImport {
 
 		final matches: Array<QueryNode> = tree.children.filter(n -> IMPORT_KINDS.contains(n.kind) && n.name == modulePath);
 		return if (matches.length == 0)
-			Err('no import of "$modulePath" found')
+			Err(absentMessage(tree, modulePath))
 		else if (matches.length > 1)
 			Err('ambiguous — "$modulePath" matches ${matches.length} import statements')
 		else
 			RefactorSupport.deleteNode(source, matches[0], tree, reformat, plugin, withDoc, optsJson);
+	}
+
+	/**
+	 * The refusal for a path this op found no TOP-LEVEL statement for — split by whether the
+	 * file holds one further down.
+	 *
+	 * A `#if`-guarded import is a child of the `Conditional` node, not of the module, so the
+	 * top-level filter above cannot see it and the plain "no import found" was a true sentence
+	 * that described the wrong world: the import is right there, one line below an `#if`. It
+	 * sent the reader looking for a typo in the path.
+	 *
+	 * The op still declines to remove it, and that is a decision rather than a gap: deleting the
+	 * only statement in a region leaves `#if sys` / `#end` standing around nothing, and whether
+	 * the empty region should go with it depends on what else the condition is for. `remove-element`
+	 * has no such opinion because the caller addressed one node deliberately, so the message hands
+	 * the work to it by name.
+	 */
+	private static function absentMessage(tree: QueryNode, modulePath: String): String {
+		final guarded: Int = guardedCount(tree, modulePath);
+		return guarded == 0
+			? 'no import of "$modulePath" found'
+			: 'no TOP-LEVEL import of "$modulePath" found, but $guarded inside a conditional-compilation region — this op removes an '
+				+ 'unguarded statement only, because deleting the last one out of an `#if` leaves the region empty with its condition '
+				+ 'standing and only the caller can say whether that region should go too. Remove it with `apq remove-element <file> '
+				+ '--match \'import $modulePath;\' --write` (or `--match \'using $modulePath;\'`), then read the region back';
+	}
+
+	/** Imports of `modulePath` anywhere BELOW the module's own children — that is, inside a conditional region. */
+	private static function guardedCount(node: QueryNode, modulePath: String): Int {
+		var found: Int = 0;
+		for (child in node.children) {
+			if (IMPORT_KINDS.contains(child.kind) && child.name == modulePath) found++;
+			found += guardedCount(child, modulePath);
+		}
+		return found;
 	}
 
 }

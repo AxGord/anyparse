@@ -5,7 +5,6 @@ import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.IndentChar;
 import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.WriteOptions;
-import anyparse.format.text.JsonFormat;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
@@ -15,6 +14,7 @@ import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueWriteOptions;
 import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import utest.Assert;
 import utest.Test;
 

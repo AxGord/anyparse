@@ -9,7 +9,7 @@ package anyparse.query.format.json;
  * to dispatch on. Consumers reading the spec form unwrap the
  * envelope — forward-compatible.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef AstMetaHits = {
 	var hits: Array<AstMetaHit>;
 };

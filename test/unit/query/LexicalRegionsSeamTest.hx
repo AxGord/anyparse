@@ -35,7 +35,10 @@ class LexicalRegionsSeamTest extends Test {
 	private static final SOURCE: String = "// note\nvar s = '${c ? '// inner' : x}';\nvar r = ~/[\\/*]/;\n";
 
 	/** The package prefix no grammar-agnostic module may name outside the allow-list. */
-	private static final GRAMMAR_PATH: String = 'anyparse.grammar.haxe.';
+	private static final GRAMMAR_PATH: String = 'anyparse.grammar.';
+
+	/** The one binding that is ALLOWED to name a grammar package: `@:schema(...)` selects a format. */
+	private static final SCHEMA_BINDING: String = '@:schema(';
 
 	/** The two packages that ARE the engine — the five-pass build macro and the IR it walks. */
 	private static final ENGINE_DIRS: Array<String> = ['src/anyparse/core', 'src/anyparse/macro'];
@@ -98,38 +101,55 @@ class LexicalRegionsSeamTest extends Test {
 		return [for (region in regions) '[${region.from},${region.to})'].join(' ');
 	}
 
+	#if (sys || nodejs)
 	/**
 	 * THE ACCEPTANCE PIN, in the "shrinkage IS the test" shape: the grammar-agnostic packages
-	 * `anyparse.query`, `anyparse.check` and `anyparse.format` may name `anyparse.grammar.haxe.*`
-	 * in EXACTLY two modules, and this asserts the list rather than a count.
+	 * `anyparse.query`, `anyparse.check` and `anyparse.format` may name ANY `anyparse.grammar.*`
+	 * package in EXACTLY six modules, and this asserts the list rather than a count.
 	 *
+	 *  - `check/LintConfig.hx` and `check/config/ApqLintConfig.hx` — `apqlint.json` IS a JSON
+	 *    document, so the config reader consumes `anyparse.grammar.json.JValue` as its value type.
+	 *    A shipped grammar used as the serialization of the tool's own data, not as a language.
 	 *  - `query/Cli.hx` — `pickPlugin` maps `--lang haxe` to `HaxeQueryPlugin`. Something has to
 	 *    know one concrete grammar for the CLI to have a default, and this is the one place that
 	 *    does; every other module receives the plugin it was handed.
 	 *  - `query/FormatConfigDiscovery.hx` — `HaxeFormatConfigDiagnostics` names the `hxformat.json`
 	 *    keys this engine does not implement, which is a fact about the HAXE formatter's config
 	 *    schema and cannot be derived from a grammar-agnostic seam.
+	 *  - `query/format/Json.hx` and `query/format/Text.hx` — the CLI's own OUTPUT renderers, which
+	 *    hand `JsonFormat.instance` and `anyparse.grammar.sexpr.SValue` / `SValueWriter` to the
+	 *    generated writers. Same relation as the two config readers, in the other direction.
 	 *
 	 * Everything else must reach a grammar through `GrammarPlugin`. Before S60 the exception was
 	 * `LexicalRegions.scan` / `skipStringLiteral`, a deprecated forwarder that hardcoded the Haxe
 	 * lexer for 65 `collectCommentTokens` call sites — the path that gates every DELETE in the
 	 * tool. Both are gone; this test is what stops the next one being added quietly.
 	 *
-	 * `anyparse.format` contributes NO entry, and that is a measured fact rather than an empty
-	 * slot: its debt was never an import but a Haxe state machine written out INLINE — the
-	 * `'…'` interpolation / `$$` / `~/…/` lexer `CommentInventory` carried for the writer's
-	 * comment-loss guard, now `HaxeLexicalRegions.scanComments` behind the `CommentScan` seam.
-	 * A name-based scan could not have seen that, so this arm is a RATCHET on the shape the
-	 * fix left behind, and `unit.format.CommentInventoryTest.testTheAuditFollowsTheScanItIsHanded` is
-	 * the arm that would catch the lexer coming back.
+	 * WIDENED BY S68, and the widening is what caught the last one. Until then the prefix was
+	 * `anyparse.grammar.haxe.` alone, so the pin could not see `format/text/JsonFormat.hx` naming
+	 * `anyparse.grammar.json.JIntLit` and four siblings — a format class for ONE grammar sitting in
+	 * the grammar-agnostic `format` package. The class moved to `anyparse.grammar.json` (T476, and
+	 * `HaxeFormat` was already there); the prefix is now every grammar, and `namesAGrammar` states
+	 * the two exemptions.
 	 *
-	 * Occurrences inside a COMMENT or a STRING do not count, and the masking is done with the very
-	 * seam under test (`plugin.lexicalRegions` + `LexicalRegions.regionAt`) — this file's own class
-	 * doc names `anyparse.grammar.haxe` in prose, and so does `LexicalRegions`'s.
+	 * The old form of this arm also recorded that `anyparse.format` contributed NO entry — measured,
+	 * and no longer true in that spelling: what it really recorded is that no format module reaches a
+	 * grammar's LEXER, since `format`'s debt was never an import but a Haxe state machine written out
+	 * INLINE (the `'…'` interpolation / `$$` / `~/…/` lexer `CommentInventory` carried for the
+	 * writer's comment-loss guard, now `HaxeLexicalRegions.scanComments` behind the `CommentScan`
+	 * seam). A name-based scan could not have seen that, so
+	 * `unit.format.CommentInventoryTest.testTheAuditFollowsTheScanItIsHanded` is the arm that would
+	 * catch the lexer coming back.
 	 */
-	#if (sys || nodejs)
-	public function testNoGrammarAgnosticModuleReachesTheHaxeGrammar(): Void {
-		final allowed: Array<String> = ['src/anyparse/query/Cli.hx', 'src/anyparse/query/FormatConfigDiscovery.hx'];
+	public function testNoGrammarAgnosticModuleNamesOneGrammar(): Void {
+		final allowed: Array<String> = [
+			'src/anyparse/check/LintConfig.hx',
+			'src/anyparse/check/config/ApqLintConfig.hx',
+			'src/anyparse/query/Cli.hx',
+			'src/anyparse/query/FormatConfigDiscovery.hx',
+			'src/anyparse/query/format/Json.hx',
+			'src/anyparse/query/format/Text.hx'
+		];
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final found: Array<String> = [];
 		for (dir in ['src/anyparse/check', 'src/anyparse/format', 'src/anyparse/query']) for (path in hxFilesUnder(dir)) {
@@ -137,7 +157,7 @@ class LexicalRegionsSeamTest extends Test {
 			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 			var at: Int = source.indexOf(GRAMMAR_PATH);
 			while (at >= 0) {
-				if (LexicalRegions.regionAt(at, regions) == null) {
+				if (namesAGrammar(source, at, regions)) {
 					found.push(path);
 					break;
 				}
@@ -194,6 +214,27 @@ class LexicalRegionsSeamTest extends Test {
 		}
 		found.sort(Reflect.compare);
 		Assert.equals('', found.join('\n'), 'the engine must ASK the grammar (a `@:fmt` arg, an `AstPreds` predicate), never name it');
+	}
+
+	/**
+	 * Whether the grammar path at `at` is a naming this pin forbids.
+	 *
+	 * Two exemptions, and only two. A COMMENT may name any grammar — this file's own
+	 * class doc does. And `@:schema(anyparse.grammar.json.JsonFormat)` is invariant 5
+	 * working as designed: a schema selecting the FORMAT that gives it its literal
+	 * vocabulary. Sixteen typed-JSON models under `query/format/json` carry exactly that
+	 * one binding and nothing else, so counting it would put sixteen entries on the
+	 * allow-list and say nothing about any of them.
+	 *
+	 * A STRING literal is NOT exempt, unlike the pre-S68 form of this arm: the debt that
+	 * moved `JsonFormat` into `anyparse.grammar.json` was five string literals
+	 * (`'anyparse.grammar.json.JIntLit'` and its four siblings) naming terminal types, and
+	 * a pin that masked strings could not see the thing it exists for.
+	 */
+	private function namesAGrammar(source: String, at: Int, regions: Array<LexRegion>): Bool {
+		final region: Null<LexRegion> = LexicalRegions.regionAt(at, regions);
+		if (region != null && (region.kind == LexRegionKind.LineComment || region.kind == LexRegionKind.BlockComment)) return false;
+		return source.substring(at - SCHEMA_BINDING.length, at) != SCHEMA_BINDING;
 	}
 
 	/** Every `.hx` under `dir`, recursively, in a stable order. */

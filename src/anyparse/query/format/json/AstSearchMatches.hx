@@ -8,7 +8,7 @@ package anyparse.query.format.json;
  * to dispatch on. Consumers reading the spec form unwrap the envelope
  * — the change is forward-compatible.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef AstSearchMatches = {
 	var matches: Array<AstSearchMatch>;
 };

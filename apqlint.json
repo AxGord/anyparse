@@ -55,6 +55,13 @@
 		"orphan-accessor": {
 			"enabled": true
 		},
+		"oversized-type": {
+			"grants": [
+				"Renderer: the Doc layout engine is ONE algorithm — 47 of its 48 non-hub members land in a single `hxq clusters` component (98%), because every fit probe, push and flush reads the same render state. S11 measured the only real seam, a 22-member width layer, and cutting it leaves 2383 lines behind.",
+				"WrapList: one wrapping decision table, 80 of 94 non-hub members in one component (85%). The members are arms of a single policy keyed by construct, not collaborating objects; splitting them by call edges would move the arms and leave the dispatch.",
+				"NullFlow: one MaybeNull lattice plus its transfer functions — 50 of 52 non-hub members in one component (96%). A flow-sensitive dataflow analysis has no seam that is not the lattice itself."
+			]
+		},
 		"prefer-doc-comment": {
 			"enabled": true
 		},

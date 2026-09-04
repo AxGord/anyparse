@@ -6,7 +6,7 @@ package unit.query;
  * `optionsComplexType` path resolution does not hit the sub-module
  * gotcha.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef ApqProbeNode = {
 	var kind: String;
 	@:optional var name: String;

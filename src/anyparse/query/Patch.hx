@@ -438,12 +438,20 @@ final class Patch {
 		if (exact.length > 0) return !all && exact.length > 1 ? fail(repeated(label, exact.length, kind)) : { ranges: exact, error: null };
 		final dedented: Array<Located> = findDedented(slice, oldText);
 		final anchor: Null<String> = dedented.length == 0 ? midLineAnchor(slice, oldText) : null;
+		final tail: Null<String> = dedented.length == 0 && anchor == null ? midLineTail(slice, oldText) : null;
 		return if (anchor != null)
 			fail(
 				'${label}the old fragment does not occur in the resolved $kind node — its first line matches only the TAIL of '
 				+ '"$anchor", and the whitespace-insensitive fallback anchors on WHOLE lines, so a fragment starting mid-line has '
 				+ 'to match byte for byte. Widen it to whole lines (the replacement is then re-based onto that line\'s own '
 				+ 'indentation) or reproduce the whitespace exactly'
+			)
+		else if (tail != null)
+			fail(
+				'${label}the old fragment does not occur in the resolved $kind node — its last line matches only the HEAD of '
+				+ '"$tail", and the whitespace-insensitive fallback anchors on WHOLE lines, so a fragment ending mid-line has to '
+				+ 'match byte for byte. Extend it to the end of that line (the replacement is then re-based onto the first '
+				+ 'matched line\'s own indentation) or reproduce the whitespace exactly'
 			)
 		else if (dedented.length == 0)
 			fail('${label}the old fragment does not occur in the resolved $kind node — copy it verbatim from `apq source --select`')
@@ -645,10 +653,10 @@ final class Patch {
 	 * to widen the fragment to whole lines, which this probe exists to name; it only
 	 * reports, and never produces a range to splice.
 	 *
-	 * Deliberately ONE-SIDED for now: the mirror shape, a fragment truncating mid-line
-	 * on its LAST line, is invisible to both arms for the same reason and still gets
-	 * the generic message. Widening the probe to either boundary is a separate change
-	 * with its own fixtures.
+	 * `midLineTail` below is the mirror, added by S68 with its own fixtures: the two
+	 * probes are asked in that order and only one can answer, since an occurrence
+	 * truncated at BOTH ends matches the first arm on its first line and never reaches
+	 * the second.
 	 */
 	private static function midLineAnchor(slice: String, oldText: String): Null<String> {
 		final wanted: Array<String> = [for (l in oldText.split('\n')) l.trim()];
@@ -664,6 +672,45 @@ final class Patch {
 				break;
 			}
 			if (ok) return first.trim();
+		}
+		return null;
+	}
+
+	/**
+	 * The mirror probe: a fragment whose LAST line stops mid-line, so it matches only
+	 * the HEAD of a source line while every line above it matches whole.
+	 *
+	 * The shape the campaign actually hit: a fragment copied down to
+	 * `private static function rootMemoValue` — the signature's first words, cut before
+	 * the parameter list — is refused by both arms for the same reason `midLineAnchor`
+	 * exists, and the standing message ("copy it verbatim from `apq source --select`")
+	 * describes a fragment that WAS copied verbatim, just not far enough. Nothing in it
+	 * says the fallback anchors on whole lines, which is the one fact that resolves it.
+	 *
+	 * Reports only, like its sibling: it never produces a range to splice, because a
+	 * partial-line match is exactly the ambiguity the whole-line rule exists to refuse.
+	 *
+	 * Measured limit, and it is why the two probes are separate rather than one: each allows a
+	 * partial line at ONE end and requires every other line to match whole, so a fragment
+	 * truncated at BOTH ends reaches neither and keeps the generic remedy
+	 * (`testFragmentTruncatedAtBothEndsReachesNeitherProbe`). Widening either to both ends at
+	 * once would have to guess which end the caller meant.
+	 */
+	private static function midLineTail(slice: String, oldText: String): Null<String> {
+		final wanted: Array<String> = [for (l in oldText.split('\n')) l.trim()];
+		final last: Int = wanted.length - 1;
+		if (wanted.length < 2 || wanted[last] == '') return null;
+		final lines: Array<String> = slice.split('\n');
+		for (start in 0...lines.length - wanted.length + 1) {
+			var ok: Bool = true;
+			for (j in 0...last) if (lines[start + j].trim() != wanted[j]) {
+				ok = false;
+				break;
+			}
+			if (!ok) continue;
+			final tail: String = lines[start + last].trim();
+			// A PROPER head: an equal-length match is a whole line, which `findDedented` already tried.
+			if (tail.length > wanted[last].length && tail.substring(0, wanted[last].length) == wanted[last]) return tail;
 		}
 		return null;
 	}

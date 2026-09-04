@@ -37,7 +37,7 @@ import anyparse.grammar.json.JValue;
  * `FrameworkContract` the naming layer speaks, and a per-entry typo must degrade that one entry
  * rather than the document.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef ApqLintConfig = {
 
 	@:optional var inherit: Bool;

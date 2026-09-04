@@ -203,7 +203,12 @@ final class ShardPlan {
 					.join('\n')
 			)
 		else if (registered.length == 0)
-			Refused('${TAG}found no $REGISTER_CALL(new X()) registrations in ${request.runner}')
+			Refused(
+				'${TAG}found no $REGISTER_CALL(new X()) registrations in ${request.runner} — since the registry became GENERATED '
+				+ '(`testkit.TestDiscovery` walks the packages under `test/` at build time), a runner file no longer lists the '
+				+ 'classes it runs, so reading one is vacuous rather than empty. Ask the RUN what it registers: '
+				+ '`node bin/test.js --list-classes` into `apq shard-plan --classes <file>`'
+			)
 		else
 			planClasses(registered, request.shards, request.runner);
 	}
