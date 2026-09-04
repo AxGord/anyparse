@@ -274,6 +274,27 @@ final class HaxeFormatValues {
 		};
 	}
 
+	/**
+	 * The `keep`-honouring sibling of `keywordPlacementToRuntime`, for a
+	 * keyword-placement knob whose default is "no opinion" rather than `Same`.
+	 *
+	 * The two differ on exactly one spelling: `"keep"` maps to
+	 * `KeywordPlacement.Keep` here and degrades to `Same` there. `sameLine.elseIf`
+	 * keeps the degrading reader (its documented default is `Same`, and a config
+	 * that spells `keep` for it has always got `Same`); `sameLine.elseSwitch` uses
+	 * this one, so an absent key and an explicit `"keep"` agree.
+	 *
+	 * `"fitLine"` still degrades to `Same` in both: the writer has no shape-aware
+	 * fit mode for a lone keyword.
+	 */
+	private static function keywordPlacementKeepToRuntime(policy: HxFormatKeywordPlacement): KeywordPlacement {
+		return switch policy {
+			case HxFormatKeywordPlacement.Next: KeywordPlacement.Next;
+			case HxFormatKeywordPlacement.Keep: KeywordPlacement.Keep;
+			case _: KeywordPlacement.Same;
+		};
+	}
+
 	private static function commentEmptyLinesToRuntime(policy: HxFormatCommentEmptyLinesPolicy): CommentEmptyLinesPolicy {
 		return switch policy {
 			case HxFormatCommentEmptyLinesPolicy.None: CommentEmptyLinesPolicy.None;

@@ -195,6 +195,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var elseIf: HxFormatKeywordPlacement;
 
+	@:optional var elseSwitch: HxFormatKeywordPlacement;
+
 	@:optional var fitLineIfWithElse: Bool;
 
 	@:optional var fitLineBodyGlue: Bool;

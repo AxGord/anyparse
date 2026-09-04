@@ -48,7 +48,7 @@ class BuiltinFixClassCensusTest extends Test {
 	public function testTheBuiltinSetIsThisBig(): Void {
 		// Shrinkage IS the acceptance test: a new builtin changes this number, and the author
 		// then has to say which side of the verified/unverified split it joins.
-		Assert.equals(178, Linter.builtins().length);
+		Assert.equals(179, Linter.builtins().length);
 	}
 
 	public function testTheseAreTheRiskyFixRules(): Void {
@@ -76,7 +76,13 @@ class BuiltinFixClassCensusTest extends Test {
 	}
 
 	public function testTheseRulesDeclareNoAutofixAtAll(): Void {
-		Assert.same(['complexity', 'doc-coverage', 'duplicate-code', 'magic-number'], idsImplementing(c -> c is NoAutofix));
+		Assert.same([
+			'asymmetric-branch-braces',
+			'complexity',
+			'doc-coverage',
+			'duplicate-code',
+			'magic-number'
+		], idsImplementing(c -> c is NoAutofix));
 	}
 
 	public function testDeadStoreIsOnTheUNVERIFIEDSide(): Void {

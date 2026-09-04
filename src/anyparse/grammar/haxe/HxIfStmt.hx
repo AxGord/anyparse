@@ -128,6 +128,6 @@ typedef HxIfStmt = {
 		'ifBody', 'expressionIfBody'
 	), fitLineIfWithElse, clearElseIfBranch, dropSingleStmtBraces) var thenBody: HxStatement;
 	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, semicolonNextLineElse,
-		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, elseIfCommentReflow, fitLineIfWithElse, propagateElseIfBranch,
-		dropSingleStmtBraces) var elseBody: Null<HxStatement>;
+		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'),
+		elseIfCommentReflow, fitLineIfWithElse, propagateElseIfBranch, dropSingleStmtBraces) var elseBody: Null<HxStatement>;
 };
