@@ -151,6 +151,78 @@ class OversizedTypeCheckTest extends Test {
 		Assert.equals(check.messageIdentity(fiftyOne), check.messageIdentity(fiftyTwo));
 	}
 
+	/**
+	 * The message the finding ENDS with is the T478 half of this rule: when connected
+	 * components find no seam, saying "see hxq clusters" costs the reader a run of a tool that
+	 * will answer "the whole type is one component". `blob(51)` is that shape by construction —
+	 * every member calls the next two, wrapping, so no cut of the 10 % of members auto mode is
+	 * allowed to extract as hubs disconnects it. Measured on this exact fixture: 51 members,
+	 * 6 hubs, components 37 + 8, so the largest holds 37 of 45 = 82 % and clears `BLOB_SHARE`.
+	 */
+	public function testOneComponentTypeIsToldThereIsNoMemberSeam(): Void {
+		final vs: Array<Violation> = violations(blob(51));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('51 members (max 50)'), vs[0].message);
+		Assert.isTrue(
+			vs[0].message.endsWith(
+				'— a decomposition candidate; no member-reference seam — look for an architectural one '
+				+ '(a command / handler / responsibility per module)'
+			),
+			vs[0].message
+		);
+		Assert.isFalse(vs[0].message.contains('hxq clusters'), 'and it no longer points at the tool that has nothing to show');
+	}
+
+	/**
+	 * The other arm, and the one that keeps the first honest: the SAME member count split into
+	 * two halves that never call across still gets the old wording, because `hxq clusters` has
+	 * a real answer for it. Measured: 51 members, 1 hub, components 25 + 25 — the largest holds
+	 * 25 of 50 = 50 %, under `BLOB_SHARE`.
+	 */
+	public function testATypeWithTwoComponentsStillPointsAtClusters(): Void {
+		final vs: Array<Violation> = violations(halves(51));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.endsWith('— a decomposition candidate (see hxq clusters)'), vs[0].message);
+	}
+
+	/**
+	 * A type of FIELDS with no methods has no call graph, so `Clusters.analyze` answers
+	 * nothing — and the finding then keeps the old wording rather than claiming "no seam".
+	 * This is the arm that would go red if the null report were read as a blob.
+	 */
+	public function testAFieldOnlyTypeKeepsTheClustersWording(): Void {
+		final vs: Array<Violation> = violations(classWithMembers(51));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.endsWith('— a decomposition candidate (see hxq clusters)'), vs[0].message);
+	}
+
+	/**
+	 * The per-type grant, end to end through a discovered `apqlint.json`: a `grants` entry
+	 * naming the type AND a reason clears its finding. The reason is not decoration — the arm
+	 * below shows a bare name does nothing.
+	 */
+	public function testGrantWithAReasonClearsTheFinding(): Void {
+		Assert.equals(
+			0, withConfig('{"rules": {"oversized-type": {"grants": ["C: one algorithm, no seam to cut"]}}}', classWithMembers(51)).length
+		);
+	}
+
+	/**
+	 * A grant with no reason after the `:` — or none at all — is DROPPED, so the type keeps its
+	 * finding. Without this the grant list would be `// noqa` one file further away, and the
+	 * whole reason to prefer a config key over a header-line suppression is that a project
+	 * decision has to be arguable by the next reader.
+	 */
+	public function testGrantWithoutAReasonDoesNotClearIt(): Void {
+		Assert.equals(1, withConfig('{"rules": {"oversized-type": {"grants": ["C"]}}}', classWithMembers(51)).length);
+		Assert.equals(1, withConfig('{"rules": {"oversized-type": {"grants": ["C:   "]}}}', classWithMembers(51)).length);
+	}
+
+	/** A grant naming a DIFFERENT type leaves this one alone — the list is keyed by name, not a global off switch. */
+	public function testGrantIsKeyedByTypeName(): Void {
+		Assert.equals(1, withConfig('{"rules": {"oversized-type": {"grants": ["Other: not this type"]}}}', classWithMembers(51)).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new OversizedType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -160,9 +232,50 @@ class OversizedTypeCheckTest extends Test {
 		return Linter.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin(), [new OversizedType()]);
 	}
 
+	/**
+	 * Run the check on `src` under an `apqlint.json` written next to it in a fresh temp
+	 * directory — the on-disk path, because a grant is a project decision and the point is that
+	 * the discovered document carries it.
+	 */
+	private function withConfig(config: String, src: String): Array<Violation> {
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final base: String = tmp != null && tmp.length > 0 ? tmp : '/tmp';
+		final dir: String = '$base/anyparse_ot_grant_${Sys.time()}_${Std.random(1 << 24)}';
+		FileSystem.createDirectory(dir);
+		File.saveContent('$dir/apqlint.json', config);
+		final path: String = '$dir/C.hx';
+		File.saveContent(path, src);
+		final out: Array<Violation> = new OversizedType().run([{ file: path, source: src }], new HaxeQueryPlugin());
+		FileSystem.deleteFile(path);
+		FileSystem.deleteFile('$dir/apqlint.json');
+		FileSystem.deleteDirectory(dir);
+		return out;
+	}
+
 	/** A parseable class named `C` with exactly `n` field members, one per line. */
 	private static function classWithMembers(n: Int): String {
 		return 'class C {\n' + [for (i in 0...n) '\tvar v$i:Int;'].join('\n') + '\n}';
+	}
+
+	/** `n` methods in ONE blob: each calls the next two, wrapping, so hub extraction cannot cut it. */
+	private static function blob(n: Int): String {
+		return 'class C {\n'
+			+ [
+				for (i in 0...n) '\tfunction m$i():Int { return m${(i + 1) % n}() + m${(i + 2) % n}(); }'
+			].join('\n') + '\n}';
+	}
+
+	/** `n` methods in TWO rings that never call across — a real member-reference seam. */
+	private static function halves(n: Int): String {
+		final cut: Int = Std.int(n / 2);
+		return 'class C {\n'
+			+ [
+				for (i in 0...n) {
+					final low: Int = i < cut ? 0 : cut;
+					final high: Int = i < cut ? cut : n;
+					'\tfunction m$i():Int { return m${low + (i - low + 1) % (high - low)}(); }';
+				}
+			].join('\n') + '\n}';
 	}
 
 }

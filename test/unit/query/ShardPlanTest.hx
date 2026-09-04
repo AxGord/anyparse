@@ -93,6 +93,20 @@ class ShardPlanTest extends Test {
 		Assert.stringContains('found no addCase(new X()) registrations', message);
 	}
 
+	/**
+	 * The refusal must name `--classes`, because since the registry became GENERATED that IS
+	 * the shape of every real runner: `test/RunTests.hx` carries no `addCase` line at all, so
+	 * `--runner` on it is VACUOUS rather than a mistake, and "found no registrations" alone
+	 * reads as "your runner is broken" instead of "this door no longer applies". The other
+	 * door — `node bin/test.js --list-classes` into `--classes` — asks the RUN what it
+	 * registers rather than re-deriving it from source text.
+	 */
+	public function testTheNoRegistrationsRefusalNamesTheOtherDoor(): Void {
+		final message: String = refusal('class RunTests {\n\tstatic function main(): Void {}\n}\n', 2);
+		Assert.stringContains('--list-classes', message);
+		Assert.stringContains('--classes', message);
+	}
+
 	public function testEmptyShardIsRefused(): Void {
 		// Every pinned class is dealt onto shard 0 as one block, so a runner
 		// holding nothing else leaves shard 1 with no filter to run.

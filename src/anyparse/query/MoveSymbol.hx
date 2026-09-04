@@ -201,9 +201,10 @@ final class MoveSymbol {
 		+ 'when the source module still declares types that file names. The SOURCE file keeps every import it had, including one the '
 		+ 'departed declaration was the last user of: whether an import is now unused is a whole-file question (a module import binds the '
 		+ 'sibling types of its module, a wildcard binds no single name, and a `using` grants extension methods no name scan sees). Run '
-		+ '`apq lint <file> --rule unused-import --fix`, which answers it with the resolution index — for the UNGUARDED statements only: '
-		+ 'measured, that check reports nothing about a `#if`-guarded import no branch uses, so a carried region leaves its source copy '
-		+ 'standing.';
+		+ '`apq lint <file> --rule unused-import --fix`, which answers it with the resolution index — and AUTOFIXES the unguarded '
+		+ 'statements only. A `#if`-guarded import no branch uses IS reported, at `info` severity with "advisory only: delete it by '
+		+ 'hand", so it is hidden unless the run passes --all; re-measured on `#if sys import sys.io.File; #end` with no `File` in the '
+		+ 'file, which is the shape a carried region leaves behind. Read it with --all and delete that copy yourself.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into

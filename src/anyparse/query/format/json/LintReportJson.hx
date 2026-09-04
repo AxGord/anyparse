@@ -18,7 +18,7 @@ package anyparse.query.format.json;
  * call, so an absent one means the wrap itself broke, not that the file was
  * missing data.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef LintReportJson = {
 
 	var findings: Array<LintFindingJson>;

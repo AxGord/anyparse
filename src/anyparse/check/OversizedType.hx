@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.query.CallGraph;
+import anyparse.query.Clusters;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -65,6 +67,42 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	 */
 	private static inline final MEMBERS_UNIT: String = ' members (max ';
 
+	/**
+	 * Share of the members that SURVIVE hub extraction which one `hxq clusters` component
+	 * must hold for the finding to stop pointing at that tool. Chosen from the measured
+	 * distribution over this project's own 19 findings, which is bimodal rather than smooth:
+	 * eleven types sit at 81–100 % (`TriviaTypeSynth` and `MoveMember` at 100, `Lowering`
+	 * and `WriterCodegen` at 99, `Cli` and `Renderer` at 98, `MoveSymbol` 97, `NullFlow` 96,
+	 * `WrapList` 85, `MemberOrder` 84, `WriterLowering` 81) and eight at 30–65 %
+	 * (`TrivialGetter` 65, `RefactorSupport` 50, `SymbolIndex` 45, `HaxeQueryPlugin` 43,
+	 * `HaxeNamingSupport` 41, the two oversized test classes 33/34, `CachingGrammarPlugin` 30).
+	 * Anywhere in 0.66–0.80 splits that gap identically.
+	 */
+	private static inline final BLOB_SHARE: Float = 0.7;
+
+	/**
+	 * The message tail when `hxq clusters` still has something to show — the finding names
+	 * the tool that answers "along which lines does this split?".
+	 */
+	private static inline final SEAM_TAIL: String = ' — a decomposition candidate (see hxq clusters)';
+
+	/**
+	 * The message tail when it does not, and the reason this rule stopped being a heuristic
+	 * false positive on one shape. A single-algorithm type — a layout engine, a dataflow
+	 * lattice, a wrapping decision table — has every member reachable from every other, so
+	 * connected components return the whole type and the tool the old wording pointed at
+	 * answers "no seam here" after a run the reader pays for. Naming that up front turns a
+	 * finding nobody could act on into one that says WHICH KIND of decomposition is left.
+	 */
+	private static inline final NO_SEAM_TAIL: String =
+		' — a decomposition candidate; no member-reference seam — look for an architectural one (a command / handler / responsibility per module)';
+
+	/** Separator between the granted type NAME and the reason it is granted, in an `apqlint.json` entry. */
+	private static inline final GRANT_SEP: String = ':';
+
+	/** This rule's id — the key its `apqlint.json` options sit under, and the `rule` field of its findings. */
+	private static inline final RULE_ID: String = 'oversized-type';
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -75,7 +113,7 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	}
 
 	public function id(): String {
-		return 'oversized-type';
+		return RULE_ID;
 	}
 
 	public function description(): String {
@@ -92,12 +130,19 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
+			var graph: Null<CallGraph> = null;
 			final cfg: OversizedCfg = {
 				containerKinds: containerKinds,
 				memberKinds: memberKinds,
 				conditionalKind: shape.conditionalMemberKind,
-				maxMembers: config.intOption('oversized-type', 'maxMembers') ?? DEFAULT_MAX_MEMBERS,
-				maxLines: config.intOption('oversized-type', 'maxLines') ?? DEFAULT_MAX_LINES
+				maxMembers: config.intOption(RULE_ID, 'maxMembers') ?? DEFAULT_MAX_MEMBERS,
+				maxLines: config.intOption(RULE_ID, 'maxLines') ?? DEFAULT_MAX_LINES,
+				granted: grantedTypes(config),
+				noSeam: typeName -> {
+					final built: CallGraph = graph ?? CallGraph.build([entry], plugin);
+					graph = built;
+					noMemberSeam(built, typeName);
+				}
 			};
 			walk(violations, entry.file, entry.source, tree, cfg);
 		}
@@ -159,21 +204,78 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	private static function checkType(out: Array<Violation>, file: String, source: String, type: QueryNode, cfg: OversizedCfg): Void {
 		final span: Null<Span> = type.span;
 		if (span == null) return;
+		final name: String = type.name ?? '<anonymous>';
+		if (cfg.granted.contains(name)) return;
 		final members: Int = countMembers(type, cfg);
 		final lines: Int = lineExtent(source, span);
 		final over: Array<String> = [];
 		if (members > cfg.maxMembers) over.push('$members$MEMBERS_UNIT${cfg.maxMembers})');
 		if (lines > cfg.maxLines) over.push('$lines$LINES_UNIT${cfg.maxLines})');
 		if (over.length == 0) return;
-		final name: String = type.name ?? '<anonymous>';
 		final headerEnd: Int = source.indexOf('\n', span.from);
 		out.push({
 			file: file,
 			span: new Span(span.from, headerEnd == -1 ? span.to : headerEnd),
-			rule: 'oversized-type',
+			rule: RULE_ID,
 			severity: Severity.Warning,
-			message: 'type \'$name\' has ${over.join(' and ')} — a decomposition candidate (see hxq clusters)'
+			message: 'type \'$name\' has ${over.join(' and ')}${cfg.noSeam(name) ? NO_SEAM_TAIL : SEAM_TAIL}'
 		});
+	}
+
+	/**
+	 * The type names this project has GRANTED, read from `apqlint.json`
+	 * (`"oversized-type": { "grants": ["Renderer: <reason>", …] }`).
+	 *
+	 * The loader needed no change for this: `rules` carries an arbitrary option bag per rule id
+	 * and `LintConfig.stringListOption` already reads a list of strings out of it, so the grant
+	 * is a config key rather than a second mechanism. The alternative in the brief — a grant
+	 * META on the type — would have put the exemption in the file it exempts, where it reads as
+	 * a property of the code rather than as a project decision, and would have needed a new
+	 * reader per grammar.
+	 *
+	 * An entry with NO reason after the `:` is DROPPED, so the type keeps its finding. That is
+	 * the whole point of the shape: `// noqa: oversized-type` already suppresses this rule
+	 * silently and anonymously on the header line, and a grant list that accepted a bare name
+	 * would be the same thing one file further away. The reason is what a later reader
+	 * disagrees with.
+	 */
+	private static function grantedTypes(config: LintConfig): Array<String> {
+		final out: Array<String> = [];
+		for (entry in config.stringListOption(RULE_ID, 'grants') ?? []) {
+			final at: Int = entry.indexOf(GRANT_SEP);
+			if (at <= 0 || entry.substr(at + 1).trim().length == 0) continue;
+			out.push(entry.substring(0, at).trim());
+		}
+		return out;
+	}
+
+	/**
+	 * Whether `hxq clusters` would find NO member-reference seam in `typeName`: one connected
+	 * component holds at least `BLOB_SHARE` of the members that survive hub extraction.
+	 *
+	 * This ASKS the tool the message names rather than re-deriving its answer — `Clusters` owns
+	 * the definition of a component, and two answers to one question is the defect this project
+	 * keeps finding in itself. The graph is built over the ONE file the type is declared in,
+	 * which is what `apq clusters <Type> <file>` does and what every number in `BLOB_SHARE`'s
+	 * doc was measured with; a whole-project scope is ~25x slower and only adds unresolved-call
+	 * noise. It is also LAZY — built on the first type in a file that is actually over a
+	 * threshold, so a tree where nothing trips this rule pays nothing. Measured over this
+	 * project's 19 findings, the added cost is ~2.5 s of a ~90 s `lint src test --all`.
+	 *
+	 * FALSE when the graph holds no members for the type — a type of fields with no methods has
+	 * no call graph at all, and `clusters` will say so; pointing the reader at it is honest
+	 * there in a way that claiming "no seam" would not be.
+	 */
+	private static function noMemberSeam(graph: CallGraph, typeName: String): Bool {
+		final report: Null<ClusterReport> = Clusters.analyze(graph, typeName, null, null);
+		if (report == null) return false;
+		var nonHub: Int = 0;
+		var largest: Int = 0;
+		for (component in report.components) {
+			nonHub += component.length;
+			if (component.length > largest) largest = component.length;
+		}
+		return nonHub > 0 && largest >= nonHub * BLOB_SHARE;
 	}
 
 	/**
@@ -211,4 +313,6 @@ private typedef OversizedCfg = {
 	final conditionalKind: Null<String>;
 	final maxMembers: Int;
 	final maxLines: Int;
+	final granted: Array<String>;
+	final noSeam: (String) -> Bool;
 };

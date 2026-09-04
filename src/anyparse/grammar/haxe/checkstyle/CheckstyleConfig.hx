@@ -13,7 +13,7 @@ package anyparse.grammar.haxe.checkstyle;
  * config with no checks — the loader then produces an empty policy / no
  * overrides.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef CheckstyleConfig = {
 
 	@:optional var checks: Array<CheckstyleCheck>;

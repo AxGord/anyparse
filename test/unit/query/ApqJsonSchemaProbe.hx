@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.format.text.JsonFormat;
+import anyparse.grammar.json.JsonFormat;
 import utest.Assert;
 import utest.Test;
 

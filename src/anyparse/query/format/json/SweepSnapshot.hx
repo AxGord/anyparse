@@ -17,7 +17,7 @@ package anyparse.query.format.json;
  * contract, checked post-parse); the other three ints default to 0 when
  * absent, matching the pre-schema Reflect-based reader.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef SweepSnapshot = {
 
 	@:optional var pass: Int;

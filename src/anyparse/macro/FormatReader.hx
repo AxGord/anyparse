@@ -20,7 +20,7 @@ typedef FormatInfo = {
 	/** Characters to consume when `@:ws` is active on the schema. */
 	whitespace: String,
 
-	/** Fully qualified type path of the `@:schema` class (e.g. `anyparse.format.text.JsonFormat`). */
+	/** Fully qualified type path of the `@:schema` class (e.g. `anyparse.grammar.json.JsonFormat`). */
 	schemaTypePath: String,
 
 	/** True when the schema class has `encoding = Binary`. */

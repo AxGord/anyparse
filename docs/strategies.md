@@ -97,6 +97,92 @@ violations it removed were a `switch` on `'HxFnBody'` / `'HxFnExprBody'` in
 What it does not see is a bare constructor name in a `macro switch`; reaching those
 needs the constructor inventory rather than the module list.
 
+## `@:fmt(...)` — the writer-lowering handler vocabulary
+
+`@:fmt` is the grammar's channel into the WRITER half of the build macro. It carries no
+built-in meaning of its own (invariant 6): a grammar declares a flag on a rule type or a
+field, and `WriterLowering` — with `TriviaTypeSynth` and `Lowering` for the trivia and
+span twins — decides what layout the flag lowers to. A flag nothing reads is silently
+inert, which is why this section is an INVENTORY rather than a specification: the list
+below is what the macro answers to today, extracted from the declarations themselves.
+
+**How a flag is read.** `MetaInspect.fmtHasFlag(node, name)` walks the node's `:fmt`
+metadata and matches either `EConst(CIdent(name))` — the bare form — or
+`ECall({expr: EConst(CIdent(name))}, args)` — the argument form. So `@:fmt(padLeading)`
+and `@:fmt(bodyPolicy('functionBody'))` are the same mechanism, and a flag may appear in
+both forms in different places. Arguments are opaque strings the lowering forwards
+(a `hxformat.json` key, a rule-constructor name it hands to `ruleCtorPath`, a field
+name); the lowering never interprets one as a grammar type of its own — see "The engine
+never spells a grammar's own type or constructor" above.
+
+**The measurement, on this tree.** 335 `@:fmt(...)` annotations across the shipped
+grammars declare **211 distinct flags**: 141 bare-only, 65 argument-only, and 5 that
+appear both ways (`beginEndType`, `blockBodyKeepsInline`, `emptyCurlyBreak`, `leftCurly`,
+`rightCurly`). The distribution is long-tailed — `padLeading` 51 sites, `padTrailing` 48,
+`propagateExprPosition` 30, `wrapRules` 26, `groupRestProbe` 21, `conditionalBodyIndent`
+18, `captureRhsTrail` 16, `bodyPolicy` 15, `leftCurly` 14, `typeParamClose` 13 — and 102 of
+the 211 appear exactly once, each for one construct's one problem.
+
+**The inventory.** `(…)` marks a flag that takes arguments, `[(…)]` one seen in both
+forms; everything else is bare.
+
+```
+accessBrackets, afterFieldsWithDocComments, afterFileHeaderCommentBlanks, allmanIndentForCtor(…),
+anonFuncParens, anonTypeBracesClose, anonTypeBracesOpen, arrayMatrixWrap, arrowBodyLineWrap,
+arrowBodyOpenPadSuppress, arrowFunctions, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
+atomOperand, bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
+beforeNewlineSlotFirst, beginEndType[(…)], betweenMultilineCommentsBlanks, blankAroundMultilineMembers(…),
+blankBeforeFinalDocCommentInLeading, blankBeforeLineCommentLed, blankBeforeOrphanLineCommentTrail,
+blankLinesAfterCtor(…), blankLinesAfterCtorIf(…), blankLinesAfterCtorIfTailLeafNull(…),
+blankLinesAtHeadIfCtor(…), blankLinesBeforeCtorIfPrevNot(…), blankLinesBetweenSameCtorByLevel(…),
+blankLinesBetweenSameCtorHeadTransparent(…), blankLinesBetweenSameCtorIfNot(…),
+blankLinesBetweenSameCtorTailTransparent(…), blankLinesOnTransitionAcross(…), blockBodyKeepsInline[(…)],
+blockShape, bodyAllmanIndentForCtor(…), bodyAwareCompactIndent, bodyBreak(…), bodyPolicy(…),
+bodyPolicyForCtor(…), bodyPolicyOverride(…), bodyPolicySingleLine(…), bracketKindPad,
+breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, captureChainNewline,
+captureCondOpenNewline, captureKwNewline, capturePostfixOpSpace, captureRhsTrail, captureSource(…),
+captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
+caseSiblingSymmetry(…), catchParensGap, catchParensInsideClose, catchParensInsideOpen, chainNestSuppress,
+clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, complexItems, condExprFitBreak,
+condExprFitGroup, conditionalBodyIndent, conditionalMarkerDedent, condParensInside(…),
+condSpliceCaseMarkerDedent, condSwitchOpenCasesNest, condWrap(…), condWrapEnd, constructFitBody,
+constructFitGroup(…), constructFitSep, cuddle, deferKwSpace, dropSingleStmtBraces, elemSelfTrailsNewline,
+elseIf, elseIfCommentReflow, elseSwitch(…), emptyBlockBreak, emptyCurlyBreak[(…)], existingBetweenFields,
+expressionParenHardFlatten, fillItems, fillParts, fillSeam, fitLineIfWithElse, flatChildOpt(…), forceInlineSep,
+forceMultiInTypedef, forPolicy, forwardNewlineForBody, funcParamParens, functionTypeHaxe3, functionTypeHaxe4,
+groupRestProbe, heritageWrap, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
+inlineBlockBodyIfFlag(…), inlineSep, interMemberBlankLines(…), interMemberCondLookThrough(…), intervalPolicy,
+keepBlankAfterStarCtor(…), keepCurlyBlanks, keepInnerWhenEmpty(…), kwPolicy(…), leftCurly[(…)],
+leftCurlyAnonFnOverride(…), lineLengthAwareSeps, loopBodyIfElseNext(…), mapWrapRules(…),
+measuredMultilineDecls, metaBlockGlue(…), metaLineEndPolicy(…), methodChain(…), multilineCtor,
+multilineWhenFieldCtorAndOpt(…), multilineWhenFieldNonEmpty(…), multilineWhenFieldShape(…),
+multilineWhenLeadingTriviaSpansLines(…), multilineWhenStarFieldWrapsCascade(…), multiVarWrap(…), nestBody,
+nestBodyOnSourceNewline, noSiblingFallback(…), objectFieldColon, objectLiteralBracesClose,
+objectLiteralBracesOpen, operandBreakAfterMultilineBrace, optionalSemicolon(…), padLeading, padTrailing,
+preWrite(…), propagateAnonFnContext, propagateArrowLambdaBody, propagateElseIfBranch,
+propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, propagateTypedefContext,
+propagateValueIfBranch, reflowInExprPosition, reflowSourceMultiline, refuseFlatOnComplexExpr,
+refuseGlueOnControlFlowRoot, rightCurly[(…)], rightCurlyAnonFnOverride(…), sameLine(…),
+semicolonBeforeSibling(…), semicolonNextLineElse, sepBeforeOpt, setBoolFlagFromStarCtor(…), shapeAware,
+sharpCondParensGap, sharpCondParensInside(…), softFill, spaceAfterLead, spaceBeforeLead, spaceBeforeTrail,
+staticVarSubdivision, suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe,
+switchCondParensInsideClose, switchCondParensInsideOpen, switchPolicy, switchSubjectNoWrap,
+switchSubjectParensStrip, switchWrapSpace, tight, tightKw, tightLead, tightOnParenOperand(…), trailingComma(…),
+trailingCommaRemovable, trailOptParseGate(…), trailOptShapeGate(…), tryBraceSymmetry(…),
+tryCatchBraceSymmetry(…), tryDeBrace, tryPolicy, typeCheckColon, typedefAssign, typedefBodyBlanks,
+typedefIntersection, typedefIntersectionBreak, typeHintColon, typeParamClose, typeParamDefaultEquals,
+typeParamOpen, uniformBetween(…), uniformStmtBlanks, valueBraceSymmetry(…), whileCondParensInsideClose,
+whileCondParensInsideOpen, whilePolicy, widthAware, wrapRules(…)
+```
+
+Regenerate it with `apq meta '@:fmt' src/anyparse/grammar --limit 500 --flat` and collect
+the identifiers out of each argument list — that command IS the source of the list above,
+so a flag added to a grammar shows up without anyone maintaining a second copy. What it
+cannot tell you is whether the macro still READS a given flag: a declaration whose handler
+was removed keeps parsing and does nothing. `apq mentions fmtHasFlag src/anyparse/macro`
+names the three modules that answer them — `WriterLowering`, `TriviaTypeSynth`,
+`Lowering` — and is the other half of any audit.
+
 ## Planned strategies
 
 ### BaseShape

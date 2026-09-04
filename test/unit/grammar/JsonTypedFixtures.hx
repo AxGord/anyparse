@@ -31,7 +31,7 @@ enum abstract TestPolicy(String) from String to String {
  * `ratio`, `enabled`), a required enum-abstract string (`policy`),
  * and a required nested struct (`nested`).
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef TestConfig = {
 	var name: String;
 	var count: Int;

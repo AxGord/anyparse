@@ -100,6 +100,24 @@ typedef SortPlan = {
 @:nullSafety(Strict)
 final class MemberOrder implements Check implements ConfigAware {
 
+	/**
+	 * The source lines a single reorder may MOVE before `fix` declines it and emits only the
+	 * spacing part, leaving the finding reported and the order alone.
+	 *
+	 * The reorder is a PERMUTATION of a container's member list, so one member sitting in the
+	 * wrong rank rewrites every member between it and its slot. On this project's own tree the
+	 * cost of that is bimodal, measured over all five pre-existing `member-order` findings:
+	 * `Cli.hx` moves 405 lines for ONE misplaced `inline` marker, and the next largest is
+	 * `OracleCoverage.hx` at 48, then 12, then 10, then a no-op. A budget anywhere in 60..390
+	 * separates them identically; 200 is the middle of that gap.
+	 *
+	 * The 405-line one is why this exists rather than being hypothetical: S11 and S49 each ran
+	 * `--fix`, each got an 812-line diff out of one `info` finding, and each reverted it by
+	 * hand. A fix a reviewer reverts twice is not a fix, and the third answer is not a third
+	 * revert. Splitting such a type is `apq move-member` territory anyway.
+	 */
+	private static inline final MAX_RELOCATED_LINES: Int = 200;
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`) - read for the `movableArglessNew` option in `fix`. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -220,6 +238,21 @@ final class MemberOrder implements Check implements ConfigAware {
 		return MemberSlots.branchIndexOf(a) - MemberSlots.branchIndexOf(b);
 	}
 
+	/**
+	 * Total source lines the reorder would MOVE: the extent of every member whose
+	 * position in the sorted list differs from its position now. Members that stay
+	 * put cost nothing to review, so they do not count.
+	 */
+	private static function relocatedLines(members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String): Int {
+		var lines: Int = 0;
+		for (i in 0...members.length) if (members[i].node != sorted[i].node) {
+			final span: Span = members[i].span;
+			lines++;
+			for (at in span.from ... span.to) if (source.fastCodeAt(at) == '\n'.code) lines++;
+		}
+		return lines;
+	}
+
 	/** Whether the grammar supplies the kind-sets the check needs. */
 	private static function applicable(shape: RefShape): Bool {
 		return (shape.visibilityContainerKinds ?? []).length > 0 && (shape.memberDeclKinds ?? []).length > 0
@@ -284,6 +317,10 @@ final class MemberOrder implements Check implements ConfigAware {
 			!reorderSafe(members, sorted, source, shape, movableArglessNew, regions)
 			|| !macroBuiltMetaOrderKept(members, sorted, container, index, file)
 		) {
+			MemberSpacing.emitSpacingOnly(edits, members, source);
+			return;
+		}
+		if (relocatedLines(members, sorted, source) > MAX_RELOCATED_LINES) {
 			MemberSpacing.emitSpacingOnly(edits, members, source);
 			return;
 		}

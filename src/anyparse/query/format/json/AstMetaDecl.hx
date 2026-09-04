@@ -16,7 +16,7 @@ package anyparse.query.format.json;
  * `optionsComplexType` path resolution does not hit the sub-module
  * gotcha (see `AstNodeJson` for the same rationale).
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef AstMetaDecl = {
 	var kind: String;
 	@:optional var name: String;

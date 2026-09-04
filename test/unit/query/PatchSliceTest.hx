@@ -595,6 +595,35 @@ class PatchSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * The MIRROR shape, and the one the campaign actually tripped over: a fragment whose
+	 * LAST line stops mid-line. Both arms miss it for the same reason as its sibling above,
+	 * but until S68 only the START had a probe, so this one fell through to "copy it
+	 * verbatim from `apq source --select`" — advice describing a fragment that WAS copied
+	 * verbatim, merely not to the end of its line. The refusal now names the line the
+	 * fragment stops inside.
+	 */
+	public function testFragmentEndingMidLineRefusalNamesTheHeadLine(): Void {
+		final message: String = refusalMessage(MID_LINE_SOURCE, [{ oldText: 'return \'alpha\nbet', newText: 'return \'ALPHA\nBET' }]);
+		Assert.isTrue(
+			message.indexOf('HEAD of "beta"') != -1 && message.indexOf('WHOLE lines') != -1,
+			'the refusal must name the line the fragment stops inside and the whole-line rule, got: $message'
+		);
+	}
+
+	/**
+	 * The measured LIMIT of both probes, written down because reasoning got it wrong: a fragment
+	 * truncated at BOTH ends reaches NEITHER. Each probe allows a partial line at ONE end and
+	 * requires every other line to match whole, so `alpha\nbet` fails the anchor arm on its last
+	 * line and the tail arm on its first, and the generic remedy is what is left. Widening either
+	 * probe to both ends at once would have to guess which end the caller meant.
+	 */
+	public function testFragmentTruncatedAtBothEndsReachesNeitherProbe(): Void {
+		final message: String = refusalMessage(MID_LINE_SOURCE, [{ oldText: 'alpha\nbet', newText: 'ALPHA\nBET' }]);
+		Assert.isTrue(message.indexOf('copy it verbatim') != -1, message);
+		Assert.isTrue(message.indexOf('TAIL of') == -1 && message.indexOf('HEAD of') == -1, message);
+	}
+
 	/** CONTROL, green at base BY CONSTRUCTION: the byte-exact arm still reaches a mid-line fragment. */
 	public function testMidLineFragmentByteExactStillApplies(): Void {
 		assertPatch(

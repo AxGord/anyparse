@@ -30,7 +30,7 @@ package anyparse.grammar.haxe.format;
  * block, so unlike its siblings this section is an additive extension
  * rather than a modelled subset of the fork's schema.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef HxFormatConfig = {
 
 	@:optional var indentation: HxFormatIndentationSection;

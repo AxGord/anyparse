@@ -1,6 +1,6 @@
 package anyparse.query.format;
 
-import anyparse.format.text.JsonFormat;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;

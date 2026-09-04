@@ -13,7 +13,7 @@ package anyparse.query.format.json;
  * none). `decl` carries the declaration the annotation is attached
  * to — see `AstMetaDecl`.
  */
-@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef AstMetaHit = {
 	var file: String;
 	var annotation: String;
