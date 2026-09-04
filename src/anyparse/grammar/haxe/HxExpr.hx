@@ -436,10 +436,10 @@ enum HxExpr {
 	@:kw('macro') @:lead(':') @:fmt(spaceBeforeLead)
 	MacroTypeExpr(t: HxType);
 
-	@:kw('macro')
+	@:kw('macro') @:fmt(clearBracePolicy)
 	MacroClassExpr(v: HxMacroClass);
 
-	@:kw('macro') @:fmt(clearExprPosition)
+	@:kw('macro') @:fmt(clearExprPosition, clearBracePolicy)
 	MacroExpr(operand: HxExpr);
 
 	@:kw('var')

@@ -2524,6 +2524,11 @@ class WriterCodegen {
 		// chain-suppress flag consumed by `SingleStmtBraces.chainForcesBraces`
 		// propagation. Gated on `_ssbChainSuppress:Bool` field presence.
 		if (optionsHasField(optionsTypePath, '_ssbChainSuppress')) fields.push(setSsbChainSuppressField(optionsCT));
+		// omega-macro-reification-braces: disarm-both-knobs shim for a reification
+		// scope (`@:fmt(clearBracePolicy)` — `HxExpr.MacroExpr` / `MacroClassExpr`).
+		// Gated on BOTH brace knobs being present on the opt typedef.
+		if (optionsHasField(optionsTypePath, 'dropSingleStmtBraces') && optionsHasField(optionsTypePath, 'singleStmtBraceSymmetry'))
+			fields.push(clearBracePolicyField(optionsCT));
 		// ω-chain-fillline-in-condwrap: opt-fanout helper for
 		// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
 		// cascade to a single mode by swapping `opBoolChainWrap` /
@@ -2682,6 +2687,45 @@ class WriterCodegen {
 					if (o._ssbSuppress) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._ssbSuppress = true;
+					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * omega-macro-reification-braces — opt-fanout shim that DISARMS both halves of the
+	 * single-statement brace policy for a whole subtree. Applied by
+	 * `WriterLowering.kwRefCtorOptArg` to the operand of a `macro …` reification
+	 * (`@:fmt(clearBracePolicy)`).
+	 *
+	 * Inside a reification the code is DATA: `{ … }` is an `EBlock` node of the value the
+	 * macro returns, not layout. Adding a brace level there turns `EBlock(exprs)` into
+	 * `EBlock([EBlock(exprs)])` — an extra scope in the code the macro emits — and removing
+	 * one is the same change in reverse. Both directions of the policy read these two
+	 * fields first (`SingleStmtBraces.unwrapStmt` / `symmetryNeedsValueWrap` /
+	 * `tryBraceVerdict` all short-circuit on `!drop && !symmetry`), so clearing the pair is
+	 * the whole carve-out — there is no per-gate argument to keep in sync.
+	 *
+	 * Idempotent and allocation-free on the default path: with neither knob set (the
+	 * default, and every config that is not `"remove"` / `"symmetric"`) it returns `o`
+	 * unchanged, so the whole mechanism is byte- AND allocation-inert. Gated on both
+	 * `dropSingleStmtBraces:Bool` and `singleStmtBraceSymmetry:Bool` being present on the
+	 * opt typedef.
+	 */
+	private static function clearBracePolicyField(optionsCT: ComplexType): Field {
+		return {
+			name: '_clearBracePolicy',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
+				ret: optionsCT,
+				expr: macro {
+					if (!o.dropSingleStmtBraces && !o.singleStmtBraceSymmetry) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c.dropSingleStmtBraces = false;
+					_c.singleStmtBraceSymmetry = false;
 					return _c;
 				}
 			}),
