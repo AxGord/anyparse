@@ -43,4 +43,21 @@ enum abstract KeywordPlacement(Int) from Int to Int {
 
 	final Next = 1;
 
+	/**
+	 * No keyword-placement opinion - the field's own `@:fmt(bodyPolicy(...))`
+	 * decides, exactly as it does for a body ctor the flag does not name.
+	 *
+	 * This is the value a keyword-placement knob defaults to when its whole
+	 * point is to be opt-in: with `Keep` the generated override arm never
+	 * fires and the emission is byte-identical to a build without the flag.
+	 * `sameLine.elseSwitch` is the first such knob. It is NOT a source-shape
+	 * mode of its own - when the deferred-to bodyPolicy is itself `Keep`, the
+	 * source shape is what comes out, which is where the name comes from.
+	 *
+	 * `sameLine.elseIf` never maps here: its documented default is `Same` and
+	 * `HaxeFormatValues.keywordPlacementToRuntime` degrades the config
+	 * spelling `"keep"` to `Same` for it, as it always has.
+	 */
+	final Keep = 2;
+
 }

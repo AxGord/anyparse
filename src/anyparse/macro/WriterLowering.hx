@@ -3199,15 +3199,22 @@ class WriterLowering {
 		// for future numeric-shape canonicalisations; the registry is
 		// the switch below, keep it small.
 		final normalize: Null<String> = node.readMetaString(':writeNormalize');
-		if (normalize == 'reindentBlock') return reindentBlockEmit();
-		return normalize == 'stripSuffixUnderscore'
-			? macro {
+		// omega-cond-directive-binop: the SECOND config-driven normalisation - unlike its
+		// two siblings this one reads a knob (`opt.condDirectiveOpSpacing`), so its default
+		// value is what keeps the terminal byte-identical rather than the absence of the meta.
+		return switch (normalize) {
+			case 'reindentBlock': reindentBlockEmit();
+			case 'condOperatorSpacing': macro return _dt(
+				anyparse.format.DirectiveCondition.spaceOperators((cast value: String), opt.condDirectiveOpSpacing)
+			);
+			case 'stripSuffixUnderscore': macro {
 				var _s: String = (cast value: String);
 				final _re = ~/_([iuf](?:8|16|32|64))$/;
 				if (_re.match(_s)) _s = _s.substr(0, _re.matchedPos().pos) + _re.matched(1);
 				return _dt(_s);
-			}
-			: macro return _dt(value);
+			};
+			case _: macro return _dt(value);
+		};
 	}
 
 	// -------- helpers --------
@@ -7199,9 +7206,23 @@ class WriterLowering {
 		}
 		else
 			nextLayoutExpr;
-		final keepBaseExpr: Expr = bodyOnSameLineExpr != null
-			? macro ($bodyOnSameLineExpr ? $sameLayoutExpr : $keepNextLayoutExpr)
-			: sameLayoutExpr;
+		// omega-else-switch: the `Keep` body policy is the path Pony's config takes
+		// (`sameLine.elseBody` unset), so the knob has to be honoured HERE as well as
+		// in `buildBodyCoreWrap` - otherwise `elseSwitch: "same"` would move nothing
+		// on the very tree it was asked for. It is folded into the layout CHOICE rather
+		// than added as two more switch arms: an arm carries a whole layout expression,
+		// and four extra copies of these two overflowed a JVM class file (see
+		// `buildElseSwitchTests`). `same` wins over the source's own line, `next` loses
+		// to nothing - together they read as "the knob overrides `bodyOnSameLine`".
+		final tests: { same: Null<Expr>, next: Null<Expr> } = buildElseSwitchTests(opts);
+		final esSame: Null<Expr> = tests.same;
+		final esNext: Null<Expr> = tests.next;
+		final keepBaseExpr: Expr = if (bodyOnSameLineExpr == null)
+			sameLayoutExpr;
+		else if (esSame == null)
+			macro ($bodyOnSameLineExpr ? $sameLayoutExpr : $keepNextLayoutExpr);
+		else
+			macro ($esSame || (!$esNext && $bodyOnSameLineExpr) ? $sameLayoutExpr : $keepNextLayoutExpr);
 		if (ifStmtPattern == null) return keepBaseExpr;
 		final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 		final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
@@ -7238,7 +7259,19 @@ class WriterLowering {
 			{ values: [nextPat], expr: nextLayoutExpr, guard: null },
 			{ values: [fitPat], expr: layouts.fitExpr, guard: null }
 		];
-		final policySwitch: Expr = { expr: ESwitch(optFlag, policyCases, sameLayoutExpr), pos: Context.currentPos() };
+		// omega-else-switch: folded into the policy SELECTOR rather than added as two more
+		// outer arms. An arm carries a whole layout expression, and `writeHxIfStmtT` is the
+		// largest method the writer emits: two arms here plus two in `buildBodyKeepLayout`
+		// pushed it past the JVM's 16-bit branch offsets, and `jvm-portability` refused the
+		// class with `Expecting a stackmap frame at branch target -1728`. As a substitution
+		// on the policy value the same decision costs one ternary over two enum constants.
+		// A `switch` body matches neither the block-ctor arms nor the `IfStmt` one, so it
+		// still reaches this switch exactly as the prepended arms intended.
+		final tests: { same: Null<Expr>, next: Null<Expr> } = buildElseSwitchTests(opts);
+		final esSame: Null<Expr> = tests.same;
+		final esNext: Null<Expr> = tests.next;
+		final effPolicy: Expr = esSame == null ? optFlag : macro ($esSame ? $samePat : ($esNext ? $nextPat : $optFlag));
+		final policySwitch: Expr = { expr: ESwitch(effPolicy, policyCases, sameLayoutExpr), pos: Context.currentPos() };
 		final outerCases: Array<Case> = [];
 		if (ifStmtPattern != null) {
 			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
@@ -9884,7 +9917,8 @@ class WriterLowering {
 			constructFitBody: child.fmtHasFlag('constructFitBody'),
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
 			arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
-			loopBodyIfElseArgs: loopBodyIfElseArgs
+			loopBodyIfElseArgs: loopBodyIfElseArgs,
+			elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
 		}));
 		return { access: fieldAccess, typePath: refName };
 	}
@@ -9981,7 +10015,12 @@ class WriterLowering {
 		final wpBoth: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Both']);
 		final wpBefore: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Before']);
 		return macro {
-			final _condStr: String = ($fieldAccess: String);
+			// omega-cond-directive-binop: this arm emits the condition text ITSELF, so the
+			// terminal's `@:writeNormalize('condOperatorSpacing')` never runs for it - the
+			// `#if` head took this path while `#elseif`, which has no `@:fmt` on its cond
+			// field, took the normalising one, and the two spelled the same condition
+			// differently. Normalise here too, before the paren pad reads the text.
+			final _condStr: String = anyparse.format.DirectiveCondition.spaceOperators(($fieldAccess: String), opt.condDirectiveOpSpacing);
 			if (
 				_condStr.length >= 2 && StringTools.fastCodeAt(_condStr, 0) == '('.code
 				&& StringTools.fastCodeAt(_condStr, _condStr.length - 1) == ')'.code
@@ -10669,7 +10708,8 @@ class WriterLowering {
 				indentObjArgs: indentObjArgs,
 				inlineBlockBodyArgs: inlineBlockBodyArgs,
 				arrowValueIfSite: child.fmtHasFlag(ARROW_VALUE_IF_SITE),
-				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow')
+				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow'),
+				elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
 			// ω-cond-comp-expr-body-nest: optional-kw-Ref body
@@ -10724,7 +10764,8 @@ class WriterLowering {
 			afterTrailExpr: afterTrailExpr,
 			indentObjArgs: indentObjArgs,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
-			constructFitBody: child.fmtHasFlag('constructFitBody')
+			constructFitBody: child.fmtHasFlag('constructFitBody'),
+			elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
 		}));
 	}
 
@@ -11125,12 +11166,12 @@ class WriterLowering {
 		// hazard at the root instead of defending against it with a keep-braces
 		// gate, and matches what the optional `elseBody` path has always done.
 		if (
-			hasStructFieldTrailOptSlot && !isOptional && !hasCondWrap && !hasCondWrapEnd && trailOptText != null
-			&& !child.fmtHasFlag('dropSingleStmtBraces')
-		) {
-			final sourcePresent: Expr = macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText});
-			parts.push(semicolonBeforeSiblingWrap(child, trailOptText, fieldAccess, sourcePresent) ?? sourcePresent);
-		}
+			!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null
+			|| child.fmtHasFlag('dropSingleStmtBraces')
+		)
+			return;
+		final sourcePresent: Expr = macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText});
+		parts.push(semicolonBeforeSiblingWrap(child, trailOptText, fieldAccess, sourcePresent) ?? sourcePresent);
 	}
 
 	/**
@@ -11164,18 +11205,19 @@ class WriterLowering {
 			case EField(base, _): { expr: EField(base, args[0]), pos: fieldAccess.pos };
 			case _: null;
 		};
-		if (siblingAccess == null) return null;
-		return macro {
-			final _sbeSibling: Bool = $siblingAccess != null;
-			switch opt.semicolonBeforeElse {
-				case anyparse.format.OptionalSemicolon.Never:
-					_sbeSibling ? _de() : $sourcePresent;
-				case anyparse.format.OptionalSemicolon.Always:
-					_sbeSibling ? _dt($v{trailOptText}) : $sourcePresent;
-				case _:
-					$sourcePresent;
-			}
-		};
+		return siblingAccess == null
+			? null
+			: macro {
+				final _sbeSibling: Bool = $siblingAccess != null;
+				switch opt.semicolonBeforeElse {
+					case anyparse.format.OptionalSemicolon.Never:
+						_sbeSibling ? _de() : $sourcePresent;
+					case anyparse.format.OptionalSemicolon.Always:
+						_sbeSibling ? _dt($v{trailOptText}) : $sourcePresent;
+					case _:
+						$sourcePresent;
+				}
+			};
 	}
 
 	/**
@@ -11462,8 +11504,8 @@ class WriterLowering {
 				var _sv = $fieldAccess;
 				if (_sv != null)
 					_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
-						_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false, $thenSiblingKeepsExpr || $elseChainSuppressExpr,
-						false
+						_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, false, false,
+						$thenSiblingKeepsExpr || $elseChainSuppressExpr, false
 					);
 				_sv;
 			}
@@ -11517,7 +11559,7 @@ class WriterLowering {
 		// The probed sibling IS an if-then-body, so the omega-ssb-wrap arm applies
 		// (a bare `if` there renders braced) - pass `isIfThenBody=true`.
 		return macro anyparse.format.SingleStmtBraces.keepsBraces(
-			$thenAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, true, $thenTrail, true
+			$thenAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $thenTrail, true
 		);
 	}
 
@@ -11538,7 +11580,9 @@ class WriterLowering {
 		if (found == null) return macro opt._ssbChainSuppress;
 		final thenAccess: Expr = found.access;
 		return macro (opt._ssbChainSuppress
-			|| anyparse.format.SingleStmtBraces.chainForcesBraces($thenAccess, $fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress));
+			|| anyparse.format.SingleStmtBraces.chainForcesBraces(
+				$thenAccess, $fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
+			));
 	}
 
 	/**
@@ -11819,7 +11863,7 @@ class WriterLowering {
 			? macro false
 			: macro ($elseAccess != null
 				&& anyparse.format.SingleStmtBraces.keepsBraces(
-					$elseAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false, false
+					$elseAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, false, false, false
 				));
 		// ω-single-stmt-braces CHAIN symmetry: force this then-body to keep its
 		// braces when we are mid-chain (`opt._ssbChainSuppress`, propagated from
@@ -11829,7 +11873,9 @@ class WriterLowering {
 		final thenChainSuppressExpr: Expr = elseAccess == null
 			? macro false
 			: macro (opt._ssbChainSuppress
-				|| anyparse.format.SingleStmtBraces.chainForcesBraces($fieldAccess, $elseAccess, opt.dropSingleStmtBraces, opt._ssbSuppress));
+				|| anyparse.format.SingleStmtBraces.chainForcesBraces(
+					$fieldAccess, $elseAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
+				));
 		// omega-ssb-wrap: `isIfThenBody` is a MACRO-time discriminator - `elseFieldName`
 		// is non-null only for `HxIfStmt.thenBody` (the fitLineIfWithElse
 		// optionalBodyFieldName channel), so for / while / do bodies pass `false` and
@@ -11839,7 +11885,7 @@ class WriterLowering {
 			? macro {
 				var _sv = $fieldAccess;
 				_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
-					_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
+					_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
 					$elseSiblingKeepsExpr || $thenChainSuppressExpr, $isThenBodyExpr
 				);
 				_sv;
@@ -11865,7 +11911,7 @@ class WriterLowering {
 			? null
 			: macro ($elseAccess != null && opt.dropSingleStmtBraces
 				&& !anyparse.format.SingleStmtBraces.keepsBraces(
-					$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, true, $trailSemiExpr, true
+					$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true
 				));
 		// ω-single-stmt-braces trailing-comment hoist: when the de-brace fires AND the
 		// single statement carries a same-line trailing comment, `hoistTrailingComment`
@@ -12199,7 +12245,7 @@ class WriterLowering {
 				+ ', stmtCtor, [skipCtor…]), got ${args.length}',
 				Context.currentPos()
 			);
-		final valuePath: Null<String> = child.annotations.get(AnnotationKeys.BASE_REF);
+		final valuePath: Null<String> = child.annotations[AnnotationKeys.BASE_REF];
 		if (valuePath == null) return fieldAccess;
 		final stmtPath: Null<String> = starElementTypePath(valuePath, args[1]);
 		if (stmtPath == null) return fieldAccess;
@@ -12215,7 +12261,7 @@ class WriterLowering {
 		return macro {
 			final _vbsVal = $fieldAccess;
 			anyparse.format.SingleStmtBraces.symmetryNeedsValueWrap(
-				_vbsVal, $siblingAccess, opt.dropSingleStmtBraces, $v{blockCtor}, $skipArray
+				_vbsVal, $siblingAccess, opt.dropSingleStmtBraces || opt.singleStmtBraceSymmetry, $v{blockCtor}, $skipArray
 			)
 				? cast anyparse.format.SingleStmtBraces.wrapInBlock(
 					cast _vbsVal, $v{blockCtor}, _vbsInner -> $stmtRef(cast _vbsInner, true)
@@ -12236,8 +12282,7 @@ class WriterLowering {
 		if (rule == null || rule.kind != Alt) return null;
 		for (branch in rule.children) if (branch.annotations.get(AnnotationKeys.BASE_CTOR) == ctor) {
 			final star: Null<ShapeNode> = branch.children.length == 1 && branch.children[0].kind == Star ? branch.children[0] : null;
-			if (star == null || star.children.length == 0) return null;
-			return star.children[0].annotations.get(AnnotationKeys.BASE_REF);
+			return star == null || star.children.length == 0 ? null : star.children[0].annotations.get(AnnotationKeys.BASE_REF);
 		}
 		return null;
 	}
@@ -12296,12 +12341,13 @@ class WriterLowering {
 			);
 		final catchesAccess: Expr = { expr: EField(macro value, args[0]), pos: Context.currentPos() };
 		final blockCtor: String = args[1];
-		final liftExpr: Expr = blockElemLift(child.annotations.get(AnnotationKeys.BASE_REF), blockCtor, args[2]);
+		final liftExpr: Expr = blockElemLift(child.annotations[AnnotationKeys.BASE_REF], blockCtor, args[2]);
 		final deBrace: Bool = child.fmtHasFlag('tryDeBrace');
 		return macro {
 			var _tbs = $fieldAccess;
 			_tbs = cast anyparse.format.SingleStmtBraces.trySymmetryBody(
-				_tbs, $catchesAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, $v{blockCtor}, $v{deBrace}, $liftExpr
+				_tbs, $catchesAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $v{blockCtor}, $v{deBrace},
+				$liftExpr
 			);
 			_tbs;
 		};
@@ -12332,10 +12378,99 @@ class WriterLowering {
 		return macro {
 			var _tcs = $fieldAccess;
 			_tcs = cast anyparse.format.SingleStmtBraces.trySymmetryCatches(
-				_tcs, $bodyAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, $v{blockCtor}, $v{deBrace}, $liftExpr
+				_tcs, $bodyAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $v{blockCtor}, $v{deBrace},
+				$liftExpr
 			);
 			_tcs;
 		};
+	}
+
+	/**
+	 * The same decision as `buildElseSwitchCases`, but as a pair of BOOL tests instead of a pair
+	 * of switch arms — `(same, next)`, each `null` when the field declares no `@:fmt(elseSwitch)`.
+	 *
+	 * Why it exists: an arm carries a whole LAYOUT expression, and the layouts of the `if`
+	 * writer are large. Two arms in `buildBodyKeepLayout` plus two in `buildBodyCoreWrap` added
+	 * four more copies of them to ONE generated function, and `HaxeModuleTriviaWriter` — a
+	 * single generated class already 1.22 MB of JS — grew 161 712 bytes and stopped fitting a
+	 * JVM class file: `tools/jvm-portability.hxml` failed with `IO.Overflow("write_ui16")`, the
+	 * 16-bit constant-pool counter. Reverting this ONE field's meta made it pass again, which is
+	 * how the cause was pinned. As a condition folded into the layout choice, the same decision
+	 * adds no layout copy at all.
+	 */
+	private function buildElseSwitchTests(opts: WrapBodyOpts): { same: Null<Expr>, next: Null<Expr> } {
+		final cases: Array<Case> = buildElseSwitchCases(opts, macro true, macro false);
+		if (cases.length == 0) return { same: null, next: null };
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		return {
+			same: {
+				expr: ESwitch(bodyValueExpr, [{ values: cases[0].values, expr: macro true, guard: cases[0].guard }], macro false),
+				pos: Context.currentPos()
+			},
+			next: {
+				expr: ESwitch(bodyValueExpr, [{ values: cases[1].values, expr: macro true, guard: cases[1].guard }], macro false),
+				pos: Context.currentPos()
+			}
+		};
+	}
+
+	/**
+	 * omega-else-switch: the two GUARDED outer-switch arms a
+	 * `@:fmt(elseSwitch('<knobField>', '<ctor>'…))` field contributes - one for
+	 * `KeywordPlacement.Same` (the `switch` glues to the `else` line) and one for
+	 * `Next` (it moves to the next line at the outer indent).
+	 *
+	 * Guards rather than a nested switch on the knob, because the third value
+	 * `Keep` must mean "no opinion": a failed guard continues matching with the
+	 * arms that follow, so `Keep` reaches exactly the block-ctor / elseIf / policy
+	 * arms that answered before this flag existed. That is what makes the default
+	 * byte-inert without a second copy of those arms.
+	 *
+	 * Unlike the `elseIf` flag beside it, the ctor names come from the GRAMMAR: the
+	 * meta's tail lists them (`'SwitchStmt', 'SwitchStmtBare'` in statement
+	 * position, `'SwitchExpr', 'SwitchExprBare'` in value position), so the core
+	 * macro spells none. A named ctor the body type does not declare is a compile
+	 * error - a typo cannot degrade into a silently dead arm.
+	 *
+	 * Empty array for every field without the meta.
+	 */
+	private function buildElseSwitchCases(opts: WrapBodyOpts, sameLayoutExpr: Expr, nextLayoutExpr: Expr): Array<Case> {
+		final args: Null<Array<String>> = opts.elseSwitchArgs;
+		if (args == null) return [];
+		if (args.length < 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(elseSwitch) expects a knob field name and at least one ctor name, got ${args.length} arg(s)',
+				Context.currentPos()
+			);
+		final patterns: Array<Expr> = [];
+		for (i in 1...args.length) {
+			final pat: Null<Expr> = findCtorPattern(opts.bodyTypePath, args[i]);
+			if (pat == null)
+				Context.fatalError(
+					'WriterLowering: @:fmt(elseSwitch) names ctor "${args[i]}", which "${opts.bodyTypePath}" does not declare',
+					Context.currentPos()
+				);
+			else
+				patterns.push(pat);
+		}
+		final knob: Expr = { expr: EField(macro opt, args[0]), pos: Context.currentPos() };
+		final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
+		final samePat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Same']));
+		final nextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
+		// A comment the source wrote between `else` and the `switch` DECLINES the glue: the
+		// `Same` layout has no channel for it and emitted the body without it, which is comment
+		// LOSS, the one thing this writer fails closed on. Declining lets the arms below answer,
+		// so the source's own two-line shape - comment included - is what survives. The `elseIf`
+		// twin reaches the same end by a different road: its Same layout goes through
+		// `buildElseIfCommentReflowLayout`, which either relocates the comment or restates the
+		// layout with it. Generalising that machinery to a keyword-headed body is worth doing and
+		// is NOT done here; refusing to glue is the fail-closed half of it.
+		final lead: Null<Expr> = opts.kwLeadingExpr;
+		final sameGuard: Expr = lead == null ? macro $knob == $samePat : macro $knob == $samePat && ($lead).length == 0;
+		return [
+			{ values: patterns, expr: sameLayoutExpr, guard: sameGuard },
+			{ values: patterns.copy(), expr: nextLayoutExpr, guard: macro $knob == $nextPat }
+		];
 	}
 
 	/**
@@ -15406,7 +15541,16 @@ typedef WrapBodyOpts = {
 	// policy (`forBody: next` moves that one too). Sibling of the
 	// `fitLineIfWithElse` escape one storey down, which asks about the placed
 	// node's own `else` field rather than about the CHILD's shape. Null → byte-inert.
-	?loopBodyIfElseArgs: Null<Array<String>>
+	?loopBodyIfElseArgs: Null<Array<String>>,
+	// omega-else-switch: the declarative names from
+	// `@:fmt(elseSwitch('<optField>', '<ctor>'…))` on an else-body field - the
+	// `KeywordPlacement` knob field first, then one or more body ctors that
+	// spell a keyword-headed `switch` else-body (`HxIfStmt.elseBody` names both
+	// the parenthesised and the bare `switch` statement ctor). The core macro
+	// therefore spells no grammar ctor of its own here, unlike the older
+	// `elseIf` flag beside it, which still hardcodes `IfStmt`/`IfExpr`.
+	// Null → byte-inert.
+	?elseSwitchArgs: Null<Array<String>>
 };
 
 /**

@@ -38,7 +38,7 @@ class TestDiscoveryParityTest extends Test {
 	 * maintenance cost of this layer, and what it replaced was a missing
 	 * `addCase` line that nothing reports.
 	 */
-	private static inline final REGISTERED_CLASSES: Int = 764;
+	private static inline final REGISTERED_CLASSES: Int = 768;
 
 	/**
 	 * `utest.Test` subclasses carrying no fixture of their own or inherited.

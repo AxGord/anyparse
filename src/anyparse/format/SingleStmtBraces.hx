@@ -116,10 +116,28 @@ class SingleStmtBraces {
 	/** Value ctors a symmetry wrap must leave alone: a brace-LED value re-opens `{` in statement position. */
 	private static final TRY_WRAP_SKIP_CTORS: Array<String> = ['ObjectLit'];
 
+	/**
+	 * Statement ctors the gate-7 WRAP direction leaves alone - the keyword-headed
+	 * else bodies. `} else if (c) {` and `} else switch s {` are idioms the writer
+	 * glues to the `else` line on purpose (`opt.elseIf` / `opt.elseSwitch`), and
+	 * each already closes on a `}` of its own, so the pair reads symmetric without
+	 * a second brace layer. Wrapping the `if` one would also rebuild the exact
+	 * `else { if … }` shape the `collapsible-else-if` rule exists to remove.
+	 *
+	 * A loop or a `try` in the same position is deliberately NOT here: neither is
+	 * an `else <keyword>` idiom the writer glues, and a bare loop body leaves the
+	 * pair genuinely asymmetric.
+	 *
+	 * More Haxe ctor names in a grammar-agnostic package - see this class's own
+	 * invariant-4 note above; these three are 3 of ~115 and share its seam.
+	 */
+	private static final SYMMETRY_WRAP_SKIP_CTORS: Array<String> = ['IfStmt', 'SwitchStmt', 'SwitchStmtBare'];
+
 	public static function unwrapStmt(
-		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool, isIfThenBody: Bool
+		body: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool,
+		isIfThenBody: Bool
 	): Dynamic {
-		if (!drop || body == null) return body;
+		if ((!drop && !symmetry) || body == null) return body;
 		if (!Reflect.isEnumValue(body)) return body;
 		final block: EnumValue = cast body;
 		// Gate 8 repair direction (omega-ssb-wrap): a BARE `if` in then-position gains a
@@ -127,9 +145,15 @@ class SingleStmtBraces {
 		// puzzle, so braces are REQUIRED there and fmt self-heals previously unwrapped
 		// sources. Runs even under `suppress` (adding braces is always semantics-safe:
 		// the parse tree already fixed the else binding).
-		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block, 'BlockStmt');
+		if (drop && isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block, 'BlockStmt');
 		// Gate 7 repair direction (omega-ssb-symmetry-wrap) - see `needsSymmetryWrap`.
+		// This is the ONE direction `symmetry` alone arms.
 		if (needsSymmetryWrap(block, siblingKeepsBraces)) return wrapInBlock(block, 'BlockStmt');
+		// omega-brace-symmetry: `singleStatementBraces: "symmetric"` asks for the repair
+		// direction WITHOUT the removal one, so everything below - the whole de-brace
+		// decision - is skipped. Gate 8 above is skipped with it: it exists to repair a
+		// shape the REMOVE direction can produce, and under symmetry-only nothing can.
+		if (!drop) return body;
 		// The do-body is the ONE brace-droppable field a suppress frame cannot reach: its
 		// rendering is always followed by the `while (...)` keyword+paren, so no de-braced
 		// do-body can ever sit on the trailing spine of an enclosing then-body. Gate 5's
@@ -176,9 +200,13 @@ class SingleStmtBraces {
 	 * unconditional and handled by the `IfStmt` arm below.
 	 */
 	public static function keepsBraces(
-		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, isIfThenBody: Bool
+		body: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, isIfThenBody: Bool
 	): Bool {
 		if (body == null || !Reflect.isEnumValue(body)) return false;
+		// omega-brace-symmetry: under symmetry-only nothing is ever de-braced, so the
+		// question collapses to the source shape - a block renders with its braces and
+		// everything else renders bare. `drop == false, symmetry == false` is the
+		// knob-off path and answers `false` for everything, as it always did.
 		// omega-ssb-wrap: a bare `if` in then-position RENDERS braced (the wrap
 		// direction synthesizes its block), so sibling-symmetry probes must see it
 		// as brace-keeping.
@@ -186,10 +214,13 @@ class SingleStmtBraces {
 		// de-brace it on its own merits (gates 1-6, 8) - i.e. the block renders WITH its braces.
 		// Gate 4's trailing-spine test is reached through that call, so this probe and the real
 		// splice can never disagree about a dangling `else`.
-		return isIfThenBody && Type.enumConstructor(cast body) == 'IfStmt'
-			? drop
-			: Type.enumConstructor(cast body) == 'BlockStmt'
-				&& unwrapStmt(body, drop, suppress, elseFollows, hasTrailingSemi, false, isIfThenBody) == body;
+		return if (!drop)
+			symmetry && Type.enumConstructor(cast body) == 'BlockStmt'
+		else if (isIfThenBody && Type.enumConstructor(cast body) == 'IfStmt')
+			drop
+		else
+			Type.enumConstructor(cast body) == 'BlockStmt'
+				&& unwrapStmt(body, drop, symmetry, suppress, elseFollows, hasTrailingSemi, false, isIfThenBody) == body;
 	}
 
 	/**
@@ -216,9 +247,9 @@ class SingleStmtBraces {
 	 * the chain gate exists to prevent. Suppress can only ever ADD braces here: it
 	 * is a keep-arm of `deBracedElem`, never a de-brace one.
 	 */
-	public static function chainForcesBraces(thenBody: Dynamic, elseBody: Dynamic, drop: Bool, suppress: Bool): Bool {
-		if (!drop) return false;
-		if (keepsBraces(thenBody, drop, suppress, elseBody != null, false, true)) return true;
+	public static function chainForcesBraces(thenBody: Dynamic, elseBody: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool): Bool {
+		if (!drop && !symmetry) return false;
+		if (keepsBraces(thenBody, drop, symmetry, suppress, elseBody != null, false, true)) return true;
 		var cur: Dynamic = elseBody;
 		while (cur != null && Reflect.isEnumValue(cur) && Type.enumConstructor(cast cur) == 'IfStmt') {
 			final ps: Array<Dynamic> = Type.enumParameters(cast cur);
@@ -231,10 +262,10 @@ class SingleStmtBraces {
 			// no longer re-emits that slot, so gate 6 cannot fire at the real splice -
 			// and a scan that still read the slot would hold the whole chain braced over
 			// a `;` that never reaches the output.
-			if (keepsBraces(innerThen, drop, suppress, innerElse != null, false, true)) return true;
+			if (keepsBraces(innerThen, drop, symmetry, suppress, innerElse != null, false, true)) return true;
 			cur = innerElse;
 		}
-		return cur != null && keepsBraces(cur, drop, suppress, false, false, false);
+		return cur != null && keepsBraces(cur, drop, symmetry, suppress, false, false, false);
 	}
 
 	/**
@@ -296,9 +327,9 @@ class SingleStmtBraces {
 	 * statement position where `{` reads as a block.
 	 */
 	public static function symmetryNeedsValueWrap(
-		value: Dynamic, sibling: Dynamic, drop: Bool, blockCtor: String, skipCtors: Array<String>
+		value: Dynamic, sibling: Dynamic, armed: Bool, blockCtor: String, skipCtors: Array<String>
 	): Bool {
-		if (!drop || value == null || sibling == null) return false;
+		if (!armed || value == null || sibling == null) return false;
 		if (!Reflect.isEnumValue(value) || !Reflect.isEnumValue(sibling)) return false;
 		if (Type.enumConstructor(cast sibling) != blockCtor) return false;
 		final own: String = Type.enumConstructor(cast value);
@@ -326,9 +357,9 @@ class SingleStmtBraces {
 	 * refuses whatever it cannot strip.
 	 */
 	public static function tryBraceVerdict(
-		body: Dynamic, catches: Null<Array<Dynamic>>, drop: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool
+		body: Dynamic, catches: Null<Array<Dynamic>>, drop: Bool, symmetry: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool
 	): Int {
-		if (!drop) return 0;
+		if (!drop && !symmetry) return 0;
 		final bodies: Array<Dynamic> = tryGroupBodies(body, catches);
 		var anyBraced: Bool = false;
 		var allDeBrace: Bool = deBraceable;
@@ -342,7 +373,15 @@ class SingleStmtBraces {
 			// settle what one can decide.
 			if (allDeBrace && (braced ? tryDeBraced(b, last, suppress) == null : !bareLegalAt(b, last))) allDeBrace = false;
 		}
-		return allDeBrace ? 2 : (anyBraced ? 1 : 0);
+		// omega-brace-symmetry: verdict 2 IS the de-brace direction, so symmetry-only
+		// can never reach it - a group with a braced member is repaired upward (1) and
+		// one with none is left alone (0).
+		return if (drop && allDeBrace)
+			2
+		else if (anyBraced)
+			1
+		else
+			0;
 	}
 
 	/**
@@ -354,11 +393,13 @@ class SingleStmtBraces {
 	 * all but certain — `keepTrail` is true only for the degenerate catch-less parse.
 	 */
 	public static function trySymmetryBody(
-		body: Dynamic, catches: Null<Array<Dynamic>>, drop: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool,
+		body: Dynamic, catches: Null<Array<Dynamic>>, drop: Bool, symmetry: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool,
 		?lift: (EnumValue) -> Dynamic
 	): Dynamic {
 		final last: Bool = catches == null || catches.length == 0;
-		return trySubstBody(body, tryBraceVerdict(body, catches, drop, suppress, blockCtor, deBraceable), blockCtor, last, suppress, lift);
+		return trySubstBody(
+			body, tryBraceVerdict(body, catches, drop, symmetry, suppress, blockCtor, deBraceable), blockCtor, last, suppress, lift
+		);
 	}
 
 	/**
@@ -373,11 +414,11 @@ class SingleStmtBraces {
 	 * mutated under the writer.
 	 */
 	public static function trySymmetryCatches(
-		catches: Null<Array<Dynamic>>, body: Dynamic, drop: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool,
+		catches: Null<Array<Dynamic>>, body: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool,
 		?lift: (EnumValue) -> Dynamic
 	): Dynamic {
 		if (catches == null || catches.length == 0) return catches;
-		final verdict: Int = tryBraceVerdict(body, catches, drop, suppress, blockCtor, deBraceable);
+		final verdict: Int = tryBraceVerdict(body, catches, drop, symmetry, suppress, blockCtor, deBraceable);
 		if (verdict == 0) return catches;
 		var changed: Bool = false;
 		final out: Array<Dynamic> = [];
@@ -417,7 +458,7 @@ class SingleStmtBraces {
 	 * `BlockBody` is already braced - wrapping it again would nest a redundant level.
 	 */
 	private static inline function needsSymmetryWrap(block: EnumValue, siblingKeepsBraces: Bool): Bool {
-		return siblingKeepsBraces && Type.enumConstructor(block) != 'IfStmt' && innerSelfTerminates(block);
+		return siblingKeepsBraces && !SYMMETRY_WRAP_SKIP_CTORS.contains(Type.enumConstructor(block)) && innerSelfTerminates(block);
 	}
 
 	/** Is `o` a trivia typedef struct that declares `name`? Enum values and `null` are not. */
@@ -628,11 +669,9 @@ class SingleStmtBraces {
 			for (p in Type.enumParameters(e)) if (containsIf(p)) return true;
 			return false;
 		}
-		if (Std.isOfType(v, Array)) {
-			final arr: Array<Dynamic> = v;
-			return arr.exists(x -> containsIf(x));
-		}
-		return Reflect.isObject(v) && Reflect.fields(v).exists(f -> containsIf(Reflect.field(v, f)));
+		if (!Std.isOfType(v, Array)) return Reflect.isObject(v) && Reflect.fields(v).exists(f -> containsIf(Reflect.field(v, f)));
+		final arr: Array<Dynamic> = v;
+		return arr.exists(containsIf);
 	}
 
 	/**
@@ -773,14 +812,19 @@ class SingleStmtBraces {
 		final elem: Null<Dynamic> = singleCleanElem(Type.enumParameters(cast block), false);
 		if (elem == null) return null;
 		final inner: Dynamic = elem.node;
-		if (inner == null || !Reflect.isEnumValue(inner) || !innerSelfTerminates(cast inner)) return null;
 		// Gates 4/5 reach the try/catch through its TAIL only. Every body but the last is followed by
 		// a `catch` keyword, which seals it; the last one ends the whole construct, so a de-braced tail
 		// ending on an else-less `if` would capture an `else` written after the try/catch - which is
 		// exactly what those braces were holding shut. `suppress` (`opt._ssbSuppress`) is the frame the
 		// enclosing `if` arms on a then-body that renders without braces.
-		if (keepTrail && suppress && tailDanglingIf(inner)) return null;
-		return keepTrail ? inner : withoutExprTrail(cast inner);
+		return if (inner == null || !Reflect.isEnumValue(inner) || !innerSelfTerminates(cast inner))
+			null
+		else if (keepTrail && suppress && tailDanglingIf(inner))
+			null
+		else if (keepTrail)
+			inner
+		else
+			withoutExprTrail(cast inner);
 	}
 
 	/**
@@ -810,8 +854,12 @@ class SingleStmtBraces {
 	): Dynamic {
 		if (verdict == 0 || body == null || !Reflect.isEnumValue(body)) return body;
 		final ctor: String = Type.enumConstructor(cast body);
-		if (verdict == 1) return ctor == blockCtor || TRY_WRAP_SKIP_CTORS.contains(ctor) ? body : wrapInBlock(cast body, blockCtor, lift);
-		return ctor != blockCtor ? body : tryDeBraced(body, keepTrail, suppress) ?? body;
+		return if (verdict == 1)
+			ctor == blockCtor || TRY_WRAP_SKIP_CTORS.contains(ctor) ? body : wrapInBlock(cast body, blockCtor, lift)
+		else if (ctor != blockCtor)
+			body
+		else
+			tryDeBraced(body, keepTrail, suppress) ?? body;
 	}
 
 	/**

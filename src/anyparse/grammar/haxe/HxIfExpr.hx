@@ -199,9 +199,13 @@ typedef HxIfExpr = {
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
 		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite,
-		semicolonBeforeSibling('elseBranch'), valueBraceSymmetry('elseBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'ObjectLit'))
+		semicolonBeforeSibling('elseBranch'),
+		valueBraceSymmetry('elseBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'))
 	var thenBranch: HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
-		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch, arrowValueIfReflowSite,
-		valueBraceSymmetry('thenBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'ObjectLit')) var elseBranch: Null<HxExpr>;
+		elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'), inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch,
+		arrowValueIfReflowSite,
+		valueBraceSymmetry(
+			'thenBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'
+		)) var elseBranch: Null<HxExpr>;
 };

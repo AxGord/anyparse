@@ -11,6 +11,7 @@ import anyparse.format.Encoding;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
+import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
@@ -685,6 +686,8 @@ final class HaxeFormat implements TextFormat {
 		expressionForBody: BodyPolicy.Keep,
 		expressionIfWithBlocks: false,
 		dropSingleStmtBraces: false,
+		singleStmtBraceSymmetry: false,
+		condDirectiveOpSpacing: OperatorSpacing.Keep,
 		dropSwitchSubjectParens: false,
 		optionalSemicolon: OptionalSemicolon.Preserve,
 		semicolonBeforeElse: OptionalSemicolon.Preserve,
@@ -714,6 +717,7 @@ final class HaxeFormat implements TextFormat {
 		switchKwLeadingSpace: false,
 		tryPolicy: WhitespacePolicy.After,
 		elseIf: KeywordPlacement.Same,
+		elseSwitch: KeywordPlacement.Keep,
 		fitLineIfWithElse: false,
 		expressionIfArrowBodyReflow: false,
 		expressionIfFit: false,

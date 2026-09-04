@@ -70,6 +70,11 @@ final class Linter {
 			new ComparisonToBoolean(),
 			new CollapsibleIf(),
 			new CollapsibleElseIf(),
+			// Beside `collapsible-else-if` because both read an `if`'s else branch and
+			// exempt the same keyword-headed bodies; they never overlap, since that rule
+			// wants an else block wrapping ONE if and this one wants exactly one of the
+			// two branches braced at all.
+			new AsymmetricBranchBraces(),
 			new DoubleNegation(),
 			new InvertNegatedIfElse(),
 			new PreferNullCoalescing(),

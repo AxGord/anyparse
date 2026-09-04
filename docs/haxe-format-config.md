@@ -201,6 +201,40 @@ position (`opt._inExprPosition`), NOT an OR — setting only `caseBody` and test
 `return switch` reads as "the key does nothing". `Same` / `FitLine` OVERRIDE a source
 break; only `Keep` reads it. Full detail in `HxFormatSameLineSection`'s own doc.
 
+## The three keys S67 added, and the position trap each of them has
+
+**`sameLine.elseSwitch: "same" | "next" | "keep"`** — keyword placement for a `switch`
+else-body, the twin of `sameLine.elseIf` for the other keyword-headed statement an `else`
+idiomatically carries. `"same"` glues it (`} else switch s { … }`), `"next"` puts it on its
+own line, `"keep"` (the DEFAULT) has no opinion and lets the field's `elseBody` /
+`expressionElseBody` policy decide. The default differs from `elseIf`'s (`Same`) on purpose:
+this key is new and must leave every existing config's bytes alone. It reaches BOTH the
+statement `if` and the value `if`. One refusal: a comment written between `else` and the
+`switch` declines the glue and the source layout is kept byte for byte — the glued layout has
+no channel for that comment.
+
+**`whitespace.bracesConfig.singleStatementBraces: "symmetric"`** — the ADD direction of a
+policy that until now only removed. An if/else (or try/catch group, or value-`if`) with
+EXACTLY ONE braced branch gets the other braced; a bare branch with NO braced sibling is left
+alone, so this is not "brace everything". `"remove"` arms both directions (the repair has been
+part of it since it shipped), `"symmetric"` only the repair, `"keep"` neither. `else if` and
+`else switch` are exempt in both directions — bracing them would rebuild the `else { if … }`
+shape `collapsible-else-if` exists to remove. ⚠️ The statement path and the VALUE path keep
+two separate skip lists (`SingleStmtBraces.SYMMETRY_WRAP_SKIP_CTORS` and the tail of
+`@:fmt(valueBraceSymmetry(…))` in `HxIfExpr`); teaching one about a ctor does not teach the
+other, which is how a value `switch` in else position was still being braced after the
+statement one was exempt.
+
+**`whitespace.conditionalCompilationBinop: true`** — respace the `&&` / `||` inside a `#if` /
+`#elseif` CONDITION, which the grammar carries as one verbatim text terminal rather than as an
+expression tree, so `whitespace.binopPolicy` (which acts on operator NODES) has never reached
+it. A BOOL, not a policy of its own: the direction is read from `binopPolicy` so the two
+cannot drift. Default off. An operator inside a string literal, a unary `!`, and an operator
+whose whitespace holds a newline are all left exactly as authored. ⚠️ The `#if` head and the
+`#elseif` head reach the writer by DIFFERENT paths — the `#if` cond field carries
+`@:fmt(sharpCondParensInside(…))`, whose handler emits the condition text itself — so a
+normalisation wired only on the terminal reaches `#elseif` alone.
+
 ## Where to look when a key still does nothing
 
 1. Check the spelling here. An unknown value is silently ignored.

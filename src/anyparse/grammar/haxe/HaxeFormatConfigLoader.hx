@@ -7,6 +7,7 @@ import anyparse.format.CommentStyle;
 import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.EmptyCurly;
 import anyparse.format.KeepEmptyLinesPolicy;
+import anyparse.format.OperatorSpacing;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
@@ -588,6 +589,8 @@ final class HaxeFormatConfigLoader {
 			expressionForBody: base.expressionForBody,
 			expressionIfWithBlocks: base.expressionIfWithBlocks,
 			dropSingleStmtBraces: base.dropSingleStmtBraces,
+			singleStmtBraceSymmetry: base.singleStmtBraceSymmetry,
+			condDirectiveOpSpacing: base.condDirectiveOpSpacing,
 			dropSwitchSubjectParens: base.dropSwitchSubjectParens,
 			optionalSemicolon: base.optionalSemicolon,
 			semicolonBeforeElse: base.semicolonBeforeElse,
@@ -617,6 +620,7 @@ final class HaxeFormatConfigLoader {
 			switchKwLeadingSpace: base.switchKwLeadingSpace,
 			tryPolicy: base.tryPolicy,
 			elseIf: base.elseIf,
+			elseSwitch: base.elseSwitch,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			expressionIfArrowBodyReflow: base.expressionIfArrowBodyReflow,
 			expressionIfFit: base.expressionIfFit,
@@ -1010,6 +1014,11 @@ final class HaxeFormatConfigLoader {
 		applySameLineBodies(section, opt);
 		applyExpressionIfFanout(section, opt);
 		if (section.elseIf != null) opt.elseIf = HaxeFormatValues.keywordPlacementToRuntime(section.elseIf);
+		// omega-else-switch: the `elseIf` twin for a `switch` else-body. Read through the
+		// KEEP-honouring converter, so an absent key and an explicit `"keep"` agree on
+		// `KeywordPlacement.Keep` - the value under which the generated override arm never
+		// fires and every existing config keeps its bytes.
+		if (section.elseSwitch != null) opt.elseSwitch = HaxeFormatValues.keywordPlacementKeepToRuntime(section.elseSwitch);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
 		// omega-arrow-value-if-reflow: independent Bool knob, read here rather
 		// than in `applyExpressionIfFanout` because it does not fan out into the
@@ -1676,8 +1685,14 @@ final class HaxeFormatConfigLoader {
 		// braces around single-statement if / else / for / while bodies.
 		// Any other value (incl. the default "keep") leaves the knob at its
 		// `false` default — byte-inert.
+		// omega-brace-symmetry: `"symmetric"` arms the repair direction alone. `"remove"`
+		// arms both, because the gate-7 repair has been part of it since the knob shipped -
+		// splitting the field does not split the behaviour of the value that already existed.
 		final singleStmt: Null<HxFormatSingleStatementBracesPolicy> = braces.singleStatementBraces;
-		if (singleStmt != null) opt.dropSingleStmtBraces = singleStmt == HxFormatSingleStatementBracesPolicy.Remove;
+		if (singleStmt == null) return;
+		opt.dropSingleStmtBraces = singleStmt == HxFormatSingleStatementBracesPolicy.Remove;
+		opt.singleStmtBraceSymmetry = singleStmt == HxFormatSingleStatementBracesPolicy.Remove
+			|| singleStmt == HxFormatSingleStatementBracesPolicy.Symmetric;
 	}
 
 	private static function applyBracketConfig(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
@@ -1752,6 +1767,15 @@ final class HaxeFormatConfigLoader {
 		if (section.typeParamOpenPolicy != null) opt.typeParamOpen = HaxeFormatValues.whitespaceToRuntime(section.typeParamOpenPolicy);
 		if (section.typeParamClosePolicy != null) opt.typeParamClose = HaxeFormatValues.whitespaceToRuntime(section.typeParamClosePolicy);
 		if (section.binopPolicy != null) opt.typeParamDefaultEquals = HaxeFormatValues.whitespaceToRuntime(section.binopPolicy);
+		// omega-cond-directive-binop: an opt-in BOOL rather than a policy of its own, so the
+		// `#if` condition's `&&` / `||` cannot drift from the code's. The direction is read
+		// from `binopPolicy` right here; an absent `binopPolicy` means the fork's own default,
+		// which is spaced.
+		if (section.conditionalCompilationBinop == true)
+			opt.condDirectiveOpSpacing = section.binopPolicy != null
+				&& HaxeFormatValues.whitespaceToRuntime(section.binopPolicy) == WhitespacePolicy.None
+				? OperatorSpacing.None
+				: OperatorSpacing.Around;
 		if (section.intervalPolicy != null) opt.intervalPolicy = HaxeFormatValues.whitespaceToRuntime(section.intervalPolicy);
 		if (section.functionTypeHaxe4Policy != null)
 			opt.functionTypeHaxe4 = HaxeFormatValues.whitespaceToRuntime(section.functionTypeHaxe4Policy);

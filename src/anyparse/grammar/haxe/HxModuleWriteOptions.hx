@@ -7,6 +7,7 @@ import anyparse.format.EmptyCurly;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
+import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
@@ -843,6 +844,20 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	switchKwLeadingSpace: Bool,
 	tryPolicy: WhitespacePolicy,
 	elseIf: KeywordPlacement,
+
+	/**
+	 * omega-else-switch: keyword placement for a `switch` else-body, the twin of
+	 * `elseIf` for the other keyword-headed statement an `else` idiomatically
+	 * carries. `Same` glues it to the `else` line (`} else switch s {`), `Next`
+	 * puts it on the next line, `Keep` (the default) has no opinion and lets the
+	 * field's own `elseBody` / `expressionElseBody` policy decide - which is what
+	 * makes the knob byte-inert for every config that does not set it.
+	 *
+	 * Fed by `sameLine.elseSwitch`; read at `HxIfStmt.elseBody` and
+	 * `HxIfExpr.elseBranch` through `@:fmt(elseSwitch(...))`, which names the
+	 * `switch` ctors itself so the core macro spells no grammar ctor.
+	 */
+	elseSwitch: KeywordPlacement,
 	fitLineIfWithElse: Bool,
 
 	/**
@@ -1101,6 +1116,28 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// ignores the knob. Default `false` (keep braces — byte-inert). Fed by
 	// `whitespace.bracesConfig.singleStatementBraces` (`"remove"` → true).
 	dropSingleStmtBraces: Bool,
+	// omega-brace-symmetry: the OTHER direction of the same policy - when `true`, a
+	// branch that arrives BARE opposite a brace-keeping sibling GAINS braces
+	// (`if (a) { p(); q(); } else r();` -> a fully braced if/else). It is what
+	// `singleStatementBraces: "remove"` has always done as gate 7's repair arm, split
+	// out so a config can ask for the repair WITHOUT the removal:
+	// `"remove"` sets both, `"symmetric"` sets only this one, `"keep"` neither.
+	// The three surfaces it arms are the three gate 7 / gate 8 repairs already
+	// written: the statement if/else pair, the value-`if` pair
+	// (`@:fmt(valueBraceSymmetry)`) and the try/catch group
+	// (`@:fmt(tryBraceSymmetry)`). Trivia-mode writer only. Default `false` -
+	// byte-inert. Fed by `whitespace.bracesConfig.singleStatementBraces`.
+	singleStmtBraceSymmetry: Bool,
+	// omega-cond-directive-binop: spacing for the `&&` / `||` inside a `#if` /
+	// `#elseif` CONDITION, which the grammar captures as one verbatim text terminal
+	// rather than as an expression tree - so `whitespace.binopPolicy`, which acts on
+	// operator nodes, never reaches it and the authored spelling has always survived
+	// verbatim. `Keep` (the default) is that behaviour; `None` / `Around` normalise
+	// it. Fed by `whitespace.conditionalCompilationBinop: true`, which takes the
+	// direction from the config's own `binopPolicy` so the two cannot drift.
+	// Applied in `anyparse.format.DirectiveCondition.spaceOperators` through the
+	// `@:writeNormalize('condOperatorSpacing')` terminal transform.
+	condDirectiveOpSpacing: OperatorSpacing,
 	// ω-switch-subject-parens: `true` drops the redundant parens around a
 	// `switch (subject) { … }` subject (`switch v { … }`); the leading-brace
 	// subject carve-out (object literal / block) still keeps them. Covers both
