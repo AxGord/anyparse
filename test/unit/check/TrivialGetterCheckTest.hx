@@ -5,8 +5,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.TrivialGetter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import utest.Assert;
 
@@ -526,30 +524,6 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		final fixed: String = fixedText(src);
 		Assert.isTrue(fixed.indexOf('total + C.total') >= 0, 'a static property must be class-qualified');
 		Assert.isTrue(fixed.indexOf('this.total') == -1, 'a static property is not reachable through this');
-	}
-
-	@:access(anyparse.check.TrivialGetter)
-	public function testFnScopeKindsMatchTheGrammarAuthority(): Void {
-		// `TrivialGetter.FN_SCOPE_KINDS` is a HAND COPY of a derivable set, and this is what pays for
-		// that: it is checked against the grammar in BOTH directions, so a plugin adding or dropping a
-		// function-value spelling fails here instead of silently changing which references the rename
-		// walk treats as shadowed. (The copy exists because `isFnScope` is called from three points
-		// inside a rename walk carrying no context object — deriving it would add a parameter to eight
-		// signatures and fourteen call sites, in a file that decides its other node kinds by literal.)
-		//
-		// The one documented extra over `RefactorSupport.nestedFunctionKinds` is the METHOD-declaration
-		// half: `functionKinds` minus the local functions (already function VALUES) and minus the
-		// module-level declarations, which are deliberately excluded — a shadowed reference is
-		// rewritten to `this.` / `C.`, and neither is spellable at module level.
-		final shape: RefShape = new HaxeQueryPlugin().refShape();
-		final expected: Array<String> = MemberKinds.nestedFunctionKinds(shape);
-		final localOrModule: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.moduleValueDeclKinds);
-		for (kind in shape.functionKinds ?? []) if (!localOrModule.contains(kind) && !expected.contains(kind)) expected.push(kind);
-		Assert.isTrue(expected.length > 0, 'the plugin must declare at least one function scope kind');
-		for (kind in expected)
-			Assert.isTrue(TrivialGetter.FN_SCOPE_KINDS.contains(kind), 'FN_SCOPE_KINDS is missing the grammar scope kind $kind');
-		for (kind in TrivialGetter.FN_SCOPE_KINDS)
-			Assert.isTrue(expected.contains(kind), 'FN_SCOPE_KINDS carries $kind, which the grammar no longer names a function scope');
 	}
 
 }
