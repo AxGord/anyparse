@@ -38,7 +38,7 @@ class TestDiscoveryParityTest extends Test {
 	 * maintenance cost of this layer, and what it replaced was a missing
 	 * `addCase` line that nothing reports.
 	 */
-	private static inline final REGISTERED_CLASSES: Int = 770;
+	private static inline final REGISTERED_CLASSES: Int = 771;
 
 	/**
 	 * `utest.Test` subclasses carrying no fixture of their own or inherited.
@@ -120,7 +120,12 @@ class TestDiscoveryParityTest extends Test {
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		Assert.same([
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
-			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: '
+			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testFilterIfWithoutElseStillCuddles :: control :: M-CUDDLE-OFF',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyDeclinesTheCuddle :: control :: M-ELSE-GATE',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyDeclinesTheCuddleWithTightBrackets :: control '
+			+ ':: M-ELSE-GATE',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE'
 		], TestRegistry.pins(), 'the pilot annotations, with their roles and killing arms');
 	}
 

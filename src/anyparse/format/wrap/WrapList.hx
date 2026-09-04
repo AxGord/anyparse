@@ -4389,8 +4389,7 @@ class WrapList {
 	 * (`testWhileComprehensionNotCuddled`). Wire a body policy on `HxWhileExpr`
 	 * first if `while` comprehensions ever need this.
 	 *
-	 * Three gates, all cheap left-spine / flat walks already used by the
-	 * sibling predicates:
+	 * Four gates, all cheap left-spine / flat walks already used by the sibling predicates:
 	 *  - first visible Text is the reserved `for` keyword (exact match —
 	 *    unambiguous, as in `isBlockBodyComprehensionItem`);
 	 *  - the body is NOT a head-glued `{ … }`
@@ -4411,7 +4410,18 @@ class WrapList {
 	 *    `anyItemLength > 30`), and cuddling such an item would leave the
 	 *    whole body flat on the head line with a lone `]` below — the fit
 	 *    probe cannot catch that, since the item genuinely fits
-	 *    (`testInlineBodyComprehensionNotCuddled`).
+	 *    (`testInlineBodyComprehensionNotCuddled`);
+	 *  - the item has no TOP-LEVEL `else` (`hasTopLevelElse` at the item's own
+	 *    Nest depth). An `expressionIf: next` if/else body carries a break of
+	 *    its own, and cuddling then glues `[`, the `for` head and the `if`
+	 *    condition into ONE line while the `else` keeps the CONTAINER line's
+	 *    indent — so the `else` reads as belonging to whatever opened that
+	 *    line, not to its own `if`. This is the SAME question the arrow path
+	 *    asks through `arrowBodyIsBrokenIfElse`; routing the comprehension
+	 *    through it is what makes the two constructs agree, and what makes a
+	 *    comprehension nested inside another lay out like its parent
+	 *    (`HxComprehensionIfElseBodySliceTest`). A FILTER `if` (no `else`) is
+	 *    untouched — that is the knob's own canonical shape.
 	 *
 	 * NESTED generators are excluded on purpose: a second `for` / `while`
 	 * keyword anywhere inside the item means the body is itself a generator
@@ -4422,7 +4432,7 @@ class WrapList {
 	 */
 	private static function isCuddleableComprehensionItem(item: Doc): Bool {
 		return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0
-			&& countGeneratorKeywords(item) == 1;
+			&& countGeneratorKeywords(item) == 1 && !hasTopLevelElse(item, 0);
 	}
 
 	/**
