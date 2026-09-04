@@ -2298,20 +2298,39 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
-	 * A mention that appears ONLY in a COMMENT counts as a reference, and this pins that rather than
-	 * leaving it to a doc claim: `namesAnyOf` passes the comment spans to decide whether a leading `.`
-	 * is a real qualifier, and never tests the occurrence itself against them. The direction is the
-	 * family's deliberate one — keeping an import a file no longer needs costs a lint advisory, dropping
-	 * one it does need costs the build — and it is now the source file's answer too, where the
-	 * type-position walk it replaced could not see a comment at all. Measured: 4 of the 89 statements
-	 * this slice newly writes over the Pony census are for a comment-only mention.
+	 * A mention that appears ONLY in a COMMENT is NOT the reference an import exists for.
+	 *
+	 * S62 pinned the opposite here, deliberately: `namesAnyOf` passed the comment spans on to the
+	 * qualification test and never tested the occurrence itself against them, on the reasoning that
+	 * keeping an import a file no longer needs costs a lint advisory while dropping one it does need
+	 * costs the build. The second half is true and the first half is not the whole cost: a comment is
+	 * never compiled, so an occurrence inside one cannot be the reference the import repairs, and
+	 * writing it created the very coupling the move was removing — measured as T512, where a scope
+	 * file whose only `Thing` was a doc line came back carrying `import b.Holder.Thing;` at rc 0 with
+	 * nothing said about it.
+	 *
+	 * The second arm is the control and it is what makes this a statement about the SCAN rather than
+	 * about the fixture: the same file, the same doc block, plus one real `Moved.tag()` — the import
+	 * is written. STRING literals keep counting
+	 * (`testAStringOnlyMentionBuysTheImportAndDoesNotRefuseThePrivateMove`), and so does a real code
+	 * reference on the line below a comment ending in a period
+	 * (`testACommentsTrailingPeriodDoesNotHideTheReferenceOwedARepairImport`) — comment-ADJACENT is
+	 * counted, comment-INTERIOR is not.
 	 */
-	public function testACommentOnlyMentionStillCountsAsAReference(): Void {
-		final changes: Array<MoveChange> = okChanges('p/Src.hx', 8, 7, 'p/Dest.hx', [
-			{ file: 'p/Src.hx', source: 'package p;\n\n/**\n * Companion of Moved.\n */\nclass Src {}\n\nclass Moved {}' },
-			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
-		]);
-		Assert.isTrue(changeFor(changes, 'p/Src.hx').newSource.contains('import p.Dest.Moved;'));
+	public function testACommentOnlyMentionIsNotAReference(): Void {
+		inline function repaired(body: String): String {
+			return changeFor(okChanges('p/Src.hx', 8, 7, 'p/Dest.hx', [
+				{ file: 'p/Src.hx', source: 'package p;\n\n/**\n * Companion of Moved.\n */\nclass Src {$body}\n\nclass Moved {}' },
+				{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
+			]), 'p/Src.hx').newSource;
+		}
+		Assert.isFalse(repaired('').contains('import p.Dest.Moved;'), 'a doc block is not the reference an import exists for');
+		// The control's member is written on ONE line so both arms have identical line numbering and
+		// the shared cursor position keeps addressing `class Moved`.
+		Assert.isTrue(
+			repaired(' public static function t():Int return Moved.tag(); ').contains('import p.Dest.Moved;'),
+			'the control arm: the SAME doc block plus one real code reference still buys the import'
+		);
 	}
 
 	/**
@@ -2706,6 +2725,42 @@ class MoveSymbolSliceTest extends Test {
 		Assert.isTrue(dest.contains(doc), 'the whole doc block should have travelled, got:\n$dest');
 		final source: String = changeFor(changes, 'p/Mover.hx').newSource;
 		Assert.isFalse(source.contains('**/'), 'no half of the doc block should be left behind, got:\n$source');
+	}
+
+	/**
+	 * A fully-qualified `a.Thing` that appears ONLY inside a COMMENT does not refuse the move.
+	 *
+	 * `qualifiedPathRefusal` is a raw `indexOf` over each scope file with only the import statements
+	 * excluded, so a doc line naming the path read as a code reference and blocked a legitimate move
+	 * at rc 1 — with advice ("convert it to a bare Thing, with an import") that means nothing for
+	 * prose. Reproduced as T511 on the base engine over exactly this three-file scope.
+	 *
+	 * Two controls, because a refusal gate that stops refusing is worth nothing on its own. A REAL
+	 * `a.Thing.go()` in the same slot still refuses — that is the reference the gate exists for. And
+	 * a STRING literal spelling the path still refuses too, deliberately: `Type.resolveClass("a.Thing")`
+	 * is a reference the move breaks and nothing in the repair walk rewrites, which is the whole
+	 * reason the comment mask is comments-only and not `lexicalRegions` wholesale.
+	 */
+	public function testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove(): Void {
+		inline function moveWith(readerBody: String): MoveResult {
+			return MoveSymbol.moveType('a/Thing.hx', 3, 7, 'b/Holder.hx', [
+				{ file: 'a/Thing.hx', source: 'package a;\n\nclass Thing {\n\tpublic static function go():Int return 1;\n}\n' },
+				{ file: 'b/Holder.hx', source: 'package b;\n\nclass Holder {\n\tpublic static function run():Int return 1;\n}\n' },
+				{ file: 'b/Reader.hx', source: 'package b;\n\nclass Reader {\n$readerBody}\n' }
+			], plugin(), typeRefShape());
+		}
+		switch moveWith('\t// The registry key is a.Thing here.\n\tpublic static function read():Int return 2;\n') {
+			case Ok(changes, _):
+				// The whole changed set, not just the absence of one file: an assertion that only says
+				// "Reader is missing" also passes for a move that stopped writing anything at all.
+				final touched: Array<String> = [for (c in changes) c.file];
+				touched.sort(Reflect.compare);
+				Assert.equals('a/Thing.hx,b/Holder.hx', touched.join(','), 'the file whose only mention is a comment is untouched');
+			case Err(message):
+				Assert.fail('a comment-only fully-qualified mention must not refuse the move: $message');
+		}
+		assertErrContains(moveWith('\tpublic static function read():Int return a.Thing.go();\n'), 'by its fully-qualified path');
+		assertErrContains(moveWith('\tpublic static function read():String return "a.Thing";\n'), 'by its fully-qualified path');
 	}
 
 	private function assertUnchanged(changes: Array<MoveChange>, file: String): Void {

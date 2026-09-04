@@ -19,14 +19,18 @@ using Lambda;
  * comment regions while it was scanning the DESTINATION's text, ship it across 109 files, and leave
  * the whole suite green — the defect was caught by the worker's own forwarding audit, not by a gate.
  *
- * So this class is the gate that was missing: five fixtures driven through the four ops, with the
+ * So this class is the gate that was missing: nine fixtures driven through the four ops, with the
  * FULL resulting bytes of every changed file pinned. It is deliberately not a set of `contains`
  * assertions — the regression it exists for changed a decision, not a token, and the only assertion
  * that catches "a decision moved" without knowing which decision is the whole file.
  *
  * The fixtures carry, between them, what the family's span arithmetic actually reads: a doc block on
  * the moved declaration, a `using` line to carry, an importer to repoint, a `#if`-guarded member, a
- * cross-package static move, and comments and string literals that spell the moved names.
+ * cross-package static move, and comments and string literals that spell the moved names. The last
+ * three are the S80 defects, and their discriminator is the CHANGED-FILE COUNT rather than any
+ * byte: a file whose only mention of the moved type sits inside a comment must not appear in the
+ * list at all, in either direction (T511 refused the move over one, T512 wrote a real import into
+ * one), and a destination must never be handed an import of its own module (T518).
  *
  * Pure and in-memory: each op is driven through its own `Array<{file, source}>` entry point, so
  * there is no temp directory, no ordering between tests and no cost worth measuring. Run it alone
@@ -235,6 +239,94 @@ final class MoveFamilyCaptureTest extends Test {
 				file: 'p/Other.hx',
 				source: 'package p;\n\nimport q.Host.Src;\n\nclass Other {\n\n\tpublic static function go(): String return Src.read'
 				+ '(\'x\');\n\n}\n'
+			}
+		]);
+	}
+
+	/**
+	 * `move` over a scope file whose ONLY mention of the moved type is a fully-qualified path inside a
+	 * COMMENT — T511, which the base engine refused at rc 1 with advice ("convert it to a bare Mover,
+	 * with an import") that means nothing for prose.
+	 *
+	 * Captured in full rather than as an `Ok` assertion because the interesting half is what does NOT
+	 * appear: `r/Doc.hx` is absent from the change list, and only the count assertion in `capture`
+	 * catches a version that starts writing it.
+	 */
+	public function testACommentOnlyFullyQualifiedMentionLeavesTheMoveByteIdentical(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{ file: 'p/Mover.hx', source: 'package p;\n\nclass Mover {\n\n\tpublic static function tag(): Int return 3;\n\n}\n' },
+			{ file: 'q/Host.hx', source: 'package q;\n\nclass Host {\n\n\tpublic function new() {}\n\n}\n' },
+			{
+				file: 'r/Doc.hx',
+				source: 'package r;\n\n/**\n * Once produced by p.Mover, and by nothing since.\n */\nclass Doc {\n\n\tpublic '
+					+ 'function new() {}\n\n}\n'
+			}
+		];
+		capture(MoveSymbol.moveType('p/Mover.hx', 3, 7, 'q/Host.hx', scope, plugin(), typeRefShape()), [
+			{
+				file: 'q/Host.hx',
+				source: 'package q;\n\nclass Host {\n\n\tpublic function new() {}\n\n}\n\nclass Mover {\n\n\tpublic static funct'
+				+ 'ion tag(): Int return 3;\n\n}\n'
+			},
+			{ file: 'p/Mover.hx', source: 'package p;\n' }
+		]);
+	}
+
+	/**
+	 * `move` over a same-package sibling whose ONLY mention of the moved type is a bare name inside a
+	 * COMMENT — T512, the silent half: the base engine wrote a real `import b.Holder.Thing;` into that
+	 * file at rc 0 and said nothing, creating the coupling the move was removing.
+	 *
+	 * The discriminator is again the change COUNT: two files here, three on the base engine.
+	 */
+	public function testACommentOnlyBareMentionBuysNoImportByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{ file: 'a/Thing.hx', source: 'package a;\n\nclass Thing {\n\n\tpublic static function go(): Int return 1;\n\n}\n' },
+			{ file: 'b/Holder.hx', source: 'package b;\n\nclass Holder {\n\n\tpublic function new() {}\n\n}\n' },
+			{
+				file: 'a/Reader.hx',
+				source: 'package a;\n\n/**\n * Does not use Thing at all; only mentions it in this doc.\n */\nclass Reader {'
+					+ '\n\n\tpublic function new() {}\n\n}\n'
+			}
+		];
+		capture(MoveSymbol.moveType('a/Thing.hx', 3, 7, 'b/Holder.hx', scope, plugin(), typeRefShape()), [
+			{
+				file: 'b/Holder.hx',
+				source: 'package b;\n\nclass Holder {\n\n\tpublic function new() {}\n\n}\n\nclass Thing {\n\n\tpublic static fun'
+				+ 'ction go(): Int return 1;\n\n}\n'
+			},
+			{ file: 'a/Thing.hx', source: 'package a;\n' }
+		]);
+	}
+
+	/**
+	 * `move-member` into a destination whose OWN module declares both dependencies the moved body
+	 * reaches — its main type and a typedef beside it. The base engine carried the source's statements
+	 * verbatim and wrote `import b.Dest;` and `import b.Dest.Payload;` into `b/Dest.hx` itself (T518).
+	 *
+	 * The whole destination is pinned because the absence of two lines is not the only thing at stake:
+	 * an import edit and a member insertion share the same file, and a guard that skips the wrong one
+	 * moves the member too.
+	 */
+	public function testTheDestinationGetsNoImportOfItsOwnModuleByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nimport b.Dest;\nimport b.Dest.Payload;\n\nclass Src {\n\n\tpublic static function label('
+					+ 'p: Payload): Int return Dest.existing() + p.n;\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic static function existing(): Int return 1;\n\n}\n\ntypedef Payloa'
+					+ 'd = {\n\tvar n: Int;\n}\n'
+			}
+		];
+		capture(MoveMember.move('a/Src.hx', 'Src', ['label'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
+			{ file: 'a/Src.hx', source: 'package a;\n\nimport b.Dest;\nimport b.Dest.Payload;\n\nclass Src {\n\n}\n' },
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic static function existing(): Int return 1;\n\n\tpublic static fun'
+				+ 'ction label(p: Payload): Int return Dest.existing() + p.n;\n\n}\n\ntypedef Payload = {\n\tvar n: Int;\n}\n'
 			}
 		]);
 	}

@@ -161,7 +161,8 @@ final class MoveCommand implements CliCommand {
 		CliIo.sysPrint('op can name — widen --scope to cover the dependency roots. <line>:<col>\n');
 		CliIo.sysPrint('uses the same column convention `apq refs` prints.\n');
 		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Refuses a scope file that names the type by its fully-qualified path, an\n');
+		CliIo.sysPrint('Refuses a scope file that names the type by its fully-qualified path in\n');
+		CliIo.sysPrint('CODE or in a string literal — a mention inside a COMMENT is not one — an\n');
 		CliIo.sysPrint('ambiguous / missing type, a decl that shares a source line with other code,\n');
 		CliIo.sysPrint('any scope file that does not parse, or any rewritten file that fails to\n');
 		CliIo.sysPrint('re-parse — naming that file and the line and column the parse stopped at.\n');
