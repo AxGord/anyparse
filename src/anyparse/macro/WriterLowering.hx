@@ -6,6 +6,7 @@ import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
+import anyparse.macro.PrattMeta.*;
 import anyparse.macro.WriterBlankLowering.*;
 import anyparse.macro.WriterCascadeLowering.*;
 import anyparse.macro.WriterPolicyLowering.*;

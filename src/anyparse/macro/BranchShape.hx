@@ -5,7 +5,7 @@ package anyparse.macro;
  * Structural shape of one Alt enum branch, carrying the dispatch data
  * that branch's lowering needs — the SINGLE SOURCE that both
  * `Lowering.lowerEnumBranch` (which picks what to EMIT) and
- * `Lowering.branchFirstToken` (which picks what to GUARD on) switch
+ * `ParseDispatchLowering.branchFirstToken` (which picks what to GUARD on) switch
  * on.
  *
  * The two used to hold independent copies of the same predicate
@@ -15,12 +15,12 @@ package anyparse.macro;
  * would have MATCHED, and it does so only on grammars or inputs the
  * corpus never exercises — a byte-identical corpus dump, a green
  * suite and an A/B over real files all stay quiet. Routing both
- * through `Lowering.branchShape` turns that drift into a
+ * through `ParseDispatchLowering.branchShape` turns that drift into a
  * non-exhaustive-switch COMPILE ERROR: add a constructor here and
  * neither side builds again until both have an arm for it.
  *
  * Constructor order mirrors the historical "Case N" numbering the
- * lowering comments use. `Lowering.branchShape` must test the shapes
+ * lowering comments use. `ParseDispatchLowering.branchShape` must test the shapes
  * in the SAME order the original chain did — the order is part of the
  * grammar contract, not an implementation detail (see `Prefix` and
  * `StarList` below, both of which must be decided before `KwRef`).

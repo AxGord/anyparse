@@ -213,10 +213,6 @@ final class WriterLoweringSupport {
 		};
 	}
 
-	private static function getOperatorText(branch: ShapeNode): String {
-		return (branch.annotations[AnnotationKeys.PRATT_OP]: Null<String>) ?? branch.annotations[AnnotationKeys.TERNARY_OP];
-	}
-
 	/**
 	 * Return the first flag name from `flagNames` that is present on
 	 * `node` as an `@:fmt(...)` argument, or `null` if none match.
@@ -339,16 +335,6 @@ final class WriterLoweringSupport {
 		if (args.length < 1 || args.length > 2)
 			Context.fatalError('WriterLowering: @:fmt(bodyPolicy(...)) takes 1 or 2 args, got ${args.length}', Context.currentPos());
 		return { stmt: args[0], expr: args.length == 2 ? args[1] : null };
-	}
-
-	private static function hasPrattBranch(node: ShapeNode): Bool {
-		return node.children.exists(
-			branch -> branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null
-		);
-	}
-
-	private static function hasPostfixBranch(node: ShapeNode): Bool {
-		return node.children.exists(branch -> branch.annotations.get(AnnotationKeys.POSTFIX_OP) != null);
 	}
 
 	/**

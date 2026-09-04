@@ -33,6 +33,84 @@ using anyparse.macro.MetaInspect;
 final class WriterPolicyLowering {
 
 	/**
+	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
+	 * `prevPadTrailing` runtime drop. When the immediately preceding
+	 * field fired `@:fmt(padTrailing)`, drop THIS sep at runtime so
+	 * the pad's emission owns the boundary alone.
+	 *
+	 * No-op (returns `result` unchanged) when `prevPadTrailing` is
+	 * null — preserves byte-identical behaviour for callers without
+	 * an upstream pad signal.
+	 *
+	 * Two consumer sites: `sameLineSeparator` (kw-Ref / opt-Ref /
+	 * opt-lead struct-field sep) and the inter-Star sep at the
+	 * struct-field bare-tryparse-Star branch (sub-slice 7). Both
+	 * read the same macro-time `prevPadTrailing` set by
+	 * `composePadTrailing` at the end of each iteration.
+	 */
+	private static inline function withPadTrailingDrop(prevPadTrailing: Null<Expr>, result: Expr): Expr {
+		return prevPadTrailing != null ? macro ($prevPadTrailing ? _de() : $result) : result;
+	}
+
+	/**
+	 * ω-cond-comp-expr-body-nest — wrap a body Ref's writer call so the
+	 * leading separator + body emit either as inline `' ' + body`
+	 * (source on same line) or as `Nest(_cols, [hardline, body])`
+	 * (source had a newline at the boundary). Pure source-shape decision —
+	 * no user-config policy involvement, distinct from the heavier
+	 * `bodyPolicyWrap` (Same/Next/Keep + bodyOnSameLine slot) and the
+	 * shape-aware `bareBodyBreakWrap` (block-ctor switch). Sister to the
+	 * issue_48-v2 inline `nlAccess ? _dhl() : _dt(' ')` sep but with the
+	 * `_dn(_cols, ...)` wrap so the body picks up `+1` indent step on
+	 * break — required for expression-scope cond-comp where the fork
+	 * convention places the body one level deeper than `#if`/`#elseif`/
+	 * `#else` (issue_429), unlike stmt/decl scope where body sits at
+	 * the same indent as the keyword.
+	 *
+	 * `sourceNewlineExpr` is a runtime `Bool` Expr the caller assembles
+	 * from the appropriate per-kind slot:
+	 *   - Bare-Ref non-first → `value.<f>BeforeNewline` directly (true
+	 *     means the source had a newline before this field's first
+	 *     token, so break + nest).
+	 *   - Optional-kw-Ref → `!value.<f>BodyOnSameLine` (the captured
+	 *     slot stores `true` when body sat on the same line as the kw,
+	 *     so we negate to get the break decision).
+	 *
+	 * The wrapper itself is signal-agnostic — kind dispatch lives at
+	 * the call site so each path can read its own slot and gate on
+	 * `ctx.trivia` / `isTriviaBearing(typePath)` before opting in.
+	 *
+	 * Plain mode and non-trivia-bearing types must NOT call this helper
+	 * — there's no captured slot to read; the call site falls back to
+	 * the existing `_dt(' ') + writeCall` default sep instead.
+	 *
+	 * Used by `@:fmt(nestBodyOnSourceNewline)` on body Ref fields of
+	 * `HxConditionalExpr.expr`, `HxConditionalExpr.elseExpr`, and
+	 * `HxElseifExpr.expr`. All current consumers have a non-Star
+	 * prior sibling (`cond:HxPpCondLit` for the bare-Ref expr fields;
+	 * the prior sibling is irrelevant for the optional-kw-Ref path
+	 * which owns its own kw separator). Future consumers placing
+	 * the flag on a bare-Ref whose prior sibling is an optional Star
+	 * would need to compose with `prevAnyStarNonEmpty` at the call
+	 * site — the wrapper itself is intentionally signal-only, mirroring
+	 * the simplicity of `bareBodyBreakWrap`.
+	 */
+	private static inline function nestBodyOnSourceNewlineWrap(writeCall: Expr, sourceNewlineExpr: Expr): Expr {
+		// omega-cond-expr-fit: with `sameLine.conditionalExprFit` on, the flat
+		// arm becomes a soft `Nest(cols, [Line(' '), body])` - a space while the
+		// ctor-level `condExprFitGroup` group fits, the nested next-line shape
+		// when it breaks. Every consumer of this helper is a field of the
+		// expression-scope cond-comp family, so no per-field opt-in is needed;
+		// with the knob off the emitted Doc is byte-identical to the old shape.
+		final sameLayoutExpr: Expr = macro opt.conditionalExprFit ? _dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $writeCall]);
+		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		return macro {
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			$sourceNewlineExpr ? $nextLayoutExpr : $sameLayoutExpr;
+		};
+	}
+
+	/**
 	 * Build a runtime `ESwitch` over a `WhitespacePolicy` / `SameLinePolicy`
 	 * opt field. `policyModule` is the enum's module path (e.g.
 	 * `['anyparse', 'format', 'WhitespacePolicy']`); each spec names the policy
@@ -574,84 +652,6 @@ final class WriterPolicyLowering {
 			macro $fires || ($transparent && $prev)
 		else
 			fires;
-	}
-
-	/**
-	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
-	 * `prevPadTrailing` runtime drop. When the immediately preceding
-	 * field fired `@:fmt(padTrailing)`, drop THIS sep at runtime so
-	 * the pad's emission owns the boundary alone.
-	 *
-	 * No-op (returns `result` unchanged) when `prevPadTrailing` is
-	 * null — preserves byte-identical behaviour for callers without
-	 * an upstream pad signal.
-	 *
-	 * Two consumer sites: `sameLineSeparator` (kw-Ref / opt-Ref /
-	 * opt-lead struct-field sep) and the inter-Star sep at the
-	 * struct-field bare-tryparse-Star branch (sub-slice 7). Both
-	 * read the same macro-time `prevPadTrailing` set by
-	 * `composePadTrailing` at the end of each iteration.
-	 */
-	private static inline function withPadTrailingDrop(prevPadTrailing: Null<Expr>, result: Expr): Expr {
-		return prevPadTrailing != null ? macro ($prevPadTrailing ? _de() : $result) : result;
-	}
-
-	/**
-	 * ω-cond-comp-expr-body-nest — wrap a body Ref's writer call so the
-	 * leading separator + body emit either as inline `' ' + body`
-	 * (source on same line) or as `Nest(_cols, [hardline, body])`
-	 * (source had a newline at the boundary). Pure source-shape decision —
-	 * no user-config policy involvement, distinct from the heavier
-	 * `bodyPolicyWrap` (Same/Next/Keep + bodyOnSameLine slot) and the
-	 * shape-aware `bareBodyBreakWrap` (block-ctor switch). Sister to the
-	 * issue_48-v2 inline `nlAccess ? _dhl() : _dt(' ')` sep but with the
-	 * `_dn(_cols, ...)` wrap so the body picks up `+1` indent step on
-	 * break — required for expression-scope cond-comp where the fork
-	 * convention places the body one level deeper than `#if`/`#elseif`/
-	 * `#else` (issue_429), unlike stmt/decl scope where body sits at
-	 * the same indent as the keyword.
-	 *
-	 * `sourceNewlineExpr` is a runtime `Bool` Expr the caller assembles
-	 * from the appropriate per-kind slot:
-	 *   - Bare-Ref non-first → `value.<f>BeforeNewline` directly (true
-	 *     means the source had a newline before this field's first
-	 *     token, so break + nest).
-	 *   - Optional-kw-Ref → `!value.<f>BodyOnSameLine` (the captured
-	 *     slot stores `true` when body sat on the same line as the kw,
-	 *     so we negate to get the break decision).
-	 *
-	 * The wrapper itself is signal-agnostic — kind dispatch lives at
-	 * the call site so each path can read its own slot and gate on
-	 * `ctx.trivia` / `isTriviaBearing(typePath)` before opting in.
-	 *
-	 * Plain mode and non-trivia-bearing types must NOT call this helper
-	 * — there's no captured slot to read; the call site falls back to
-	 * the existing `_dt(' ') + writeCall` default sep instead.
-	 *
-	 * Used by `@:fmt(nestBodyOnSourceNewline)` on body Ref fields of
-	 * `HxConditionalExpr.expr`, `HxConditionalExpr.elseExpr`, and
-	 * `HxElseifExpr.expr`. All current consumers have a non-Star
-	 * prior sibling (`cond:HxPpCondLit` for the bare-Ref expr fields;
-	 * the prior sibling is irrelevant for the optional-kw-Ref path
-	 * which owns its own kw separator). Future consumers placing
-	 * the flag on a bare-Ref whose prior sibling is an optional Star
-	 * would need to compose with `prevAnyStarNonEmpty` at the call
-	 * site — the wrapper itself is intentionally signal-only, mirroring
-	 * the simplicity of `bareBodyBreakWrap`.
-	 */
-	private static inline function nestBodyOnSourceNewlineWrap(writeCall: Expr, sourceNewlineExpr: Expr): Expr {
-		// omega-cond-expr-fit: with `sameLine.conditionalExprFit` on, the flat
-		// arm becomes a soft `Nest(cols, [Line(' '), body])` - a space while the
-		// ctor-level `condExprFitGroup` group fits, the nested next-line shape
-		// when it breaks. Every consumer of this helper is a field of the
-		// expression-scope cond-comp family, so no per-field opt-in is needed;
-		// with the knob off the emitted Doc is byte-identical to the old shape.
-		final sameLayoutExpr: Expr = macro opt.conditionalExprFit ? _dn(_cols, _dc([_dl(), $writeCall])) : _dc([_dt(' '), $writeCall]);
-		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
-		return macro {
-			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$sourceNewlineExpr ? $nextLayoutExpr : $sameLayoutExpr;
-		};
 	}
 
 	/**

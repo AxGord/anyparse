@@ -3,7 +3,7 @@ package anyparse.macro;
 #if macro
 /**
  * First-token classification of one Alt branch — produced by
- * `Lowering.branchFirstToken`, consumed by the dispatch guards
+ * `ParseDispatchLowering.branchFirstToken`, consumed by the dispatch guards
  * `Lowering.lowerEnum` wraps each guardable `tryBranch` block in.
  *
  * THE SOUNDNESS INVARIANT every non-`Unknown` classification must
@@ -28,7 +28,7 @@ enum BranchFirstToken {
 	 * What guarantees the "consumed by a word-boundary-checking"
 	 * half — the part that makes the equality exact instead of
 	 * over-strict — is the `isWordShaped` implies `endsWithWordChar`
-	 * argument spelled out on `Lowering.wordOrByteFirst`, the only
+	 * argument spelled out on `ParseDispatchLowering.wordOrByteFirst`, the only
 	 * producer of this constructor. Read that before changing either
 	 * predicate.
 	 */

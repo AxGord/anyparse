@@ -311,7 +311,7 @@ package anyparse.grammar.haxe;
  *    chained with an adjacent operator in the corpus, so the
  *    left-assoc / prec-0 placement is the Haxe-faithful choice for the
  *    isolated form. Word-boundary dispatch (`matchKw`, auto-selected
- *    by `Lowering.endsWithWordChar`) keeps `index` / `internal` from
+ *    by `ParseDispatchLowering.endsWithWordChar`) keeps `index` / `internal` from
  *    being mis-read as `in` (same mechanism as the `is` operator).
  *
  * Declaration order inside each precedence level puts longer literals

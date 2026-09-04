@@ -12,7 +12,6 @@ import anyparse.macro.WriterLowering.CascadeEmit;
 import anyparse.macro.WriterLowering.HeadCtorBlankInfo;
 import anyparse.macro.WriterLowering.InterMemberCasesCtx;
 import anyparse.macro.WriterLowering.TransitionAcrossInfo;
-import anyparse.macro.WriterLowering.TransitionAcrossPattern;
 import anyparse.macro.WriterLowering.TransitionAcrossSplit;
 import haxe.macro.Context;
 import haxe.macro.Expr;

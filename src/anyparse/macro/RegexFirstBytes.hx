@@ -4,7 +4,7 @@ using StringTools;
 
 /**
  * The exhaustive set of byte codes a match of a `@:re` terminal's pattern can
- * BEGIN with — the fact `Lowering.terminalFirstToken` turns into a
+ * BEGIN with — the fact `ParseDispatchLowering.terminalFirstToken` turns into a
  * `BranchFirstToken.FirstLit`, and through that into both the Alt dispatch
  * guards and the terminal's own first-byte reject.
  *
@@ -51,7 +51,7 @@ final class RegexFirstBytes {
 	 * UTF-8 lead byte, which is the too-narrow direction.
 	 *
 	 * It is also the ONLY size bound this needs. Capping the code value at
-	 * 0x7F caps any answer at 128 distinct codes, which `Lowering.byteRuns`
+	 * 0x7F caps any answer at 128 distinct codes, which `ParseDispatchLowering.byteRuns`
 	 * collapses to at most 64 guard terms — cheaper than the one thrown
 	 * backtrack the guard replaces, even at that absurd worst case. The
 	 * widest the shipped grammars actually ask for is `HxPpCondLit`'s 65

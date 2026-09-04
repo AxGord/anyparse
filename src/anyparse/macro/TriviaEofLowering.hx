@@ -4,7 +4,6 @@ package anyparse.macro;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import anyparse.macro.WriterCascadeLowering.*;
-import anyparse.macro.WriterBlankLowering.*;
 
 /**
  * Pass 3W helpers — the EOF-mode trivia Star emit family.
