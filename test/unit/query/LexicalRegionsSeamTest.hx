@@ -145,8 +145,8 @@ class LexicalRegionsSeamTest extends Test {
 		final allowed: Array<String> = [
 			'src/anyparse/check/LintConfig.hx',
 			'src/anyparse/check/config/ApqLintConfig.hx',
-			'src/anyparse/query/Cli.hx',
 			'src/anyparse/query/FormatConfigDiscovery.hx',
+			'src/anyparse/query/cli/CliArgs.hx',
 			'src/anyparse/query/format/Json.hx',
 			'src/anyparse/query/format/Text.hx'
 		];

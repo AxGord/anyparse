@@ -4,6 +4,7 @@ package unit.query;
 import sys.FileSystem;
 #end
 import anyparse.query.Cli;
+import anyparse.query.cli.CliWalk;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -104,7 +105,7 @@ class ApqDottedAccessNudgeTest extends Test {
 
 	/** With nothing resolved the omission is the dangerous kind, so the warning says so outright. */
 	public function testMemberAccessNudgeWarnsHardWhenNothingResolved(): Void {
-		final text: String = Cli.memberAccessNudge('refs', 'parse', 4, 0);
+		final text: String = CliWalk.memberAccessNudge('refs', 'parse', 4, 0);
 
 		Assert.isTrue(text.indexOf('4 member-access') >= 0, text);
 		Assert.isTrue(text.indexOf('NOT proof') >= 0, text);
@@ -117,7 +118,7 @@ class ApqDottedAccessNudgeTest extends Test {
 	 * does not swing with `--decls` / `--writes`.
 	 */
 	public function testMemberAccessNudgeSoftensWhenBindingsResolved(): Void {
-		final text: String = Cli.memberAccessNudge('refs', 'parse', 4, 2);
+		final text: String = CliWalk.memberAccessNudge('refs', 'parse', 4, 2);
 
 		Assert.isTrue(text.indexOf('are not shown') >= 0, text);
 		Assert.equals(-1, text.indexOf('NOT proof'), text);
@@ -125,7 +126,7 @@ class ApqDottedAccessNudgeTest extends Test {
 
 	/** Trailing newline is the CALL SITE's job here, as for every sibling nudge. */
 	public function testMemberAccessNudgeHasNoTrailingNewline(): Void {
-		final text: String = Cli.memberAccessNudge('refs', 'parse', 1, 0);
+		final text: String = CliWalk.memberAccessNudge('refs', 'parse', 1, 0);
 		Assert.equals(-1, text.indexOf('\n'), text);
 	}
 

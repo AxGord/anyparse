@@ -326,6 +326,45 @@ Writer philosophy (load-bearing decision): **parsing is lossy, writing is `forma
 
 See `testing.md` for why this is the right trade-off and what use cases are preserved.
 
+## The CLI layer
+
+`apq` / `hxq` is the platform's own first consumer: a query, refactor and lint CLI written entirely against the public parser, writer and check layers. It is where the architecture is dogfooded, so its own shape is part of the architecture rather than an accident of one binary.
+
+```
+anyparse.query/
+├── Cli.hx                  — the process entry point: argv -> exit status
+└── cli/
+    ├── CliIo.hx            — process IO: the two streams, file reads, the staged
+    │                         (crash-safe) file write, stdin, the progress line
+    ├── CliArgs.hx          — argv -> values: one flag's value, --limit, <line>:<col>,
+    │                         the plugin --lang names, the hxformat.json a file is
+    │                         governed by, a glob or directory -> the file list
+    ├── CliWalk.hx          — the shared multi-file walk: parse-or-record-a-skip,
+    │                         hit capping, the nudge a 0-hit walk prints
+    ├── CliEdit.hx          — the edit pipeline: resolve an address, then turn an
+    │                         EditResult into a written file, a stdout preview or a
+    │                         diagnostic — so --write means one thing everywhere
+    ├── WriteFailure.hx     — a write that did not happen, carrying its file
+    ├── CliCommand.hx       — one subcommand: name, summary, usage, run
+    ├── CliContext.hx       — what ONE invocation knows about itself
+    ├── CliRegistry.hx      — the inventory the dispatcher and --help both read
+    └── command/            — one module per migrated command
+```
+
+### A command is a thing, not a `case` arm
+
+Each of the CLI's 69 commands is the same four parts — a name, the line it contributes to `apq --help`, its own `--help` page, and the run. Written as a `case` arm plus a `printXUsage` plus a `runX` plus a literal in the top-level usage text, nothing holds the four together: a command can be dispatched and never listed, or listed and never dispatched, and only a reader notices.
+
+`CliCommand` makes the four parts one type and `CliRegistry` makes the inventory explicit — the same answer the test suite got when its hand-written runner became a generated registry. A command that is not in the registry does not exist; one that is gets its `--help` line from its own `summary()`.
+
+This is a **migration in progress**. The registry owns three commands — one read-only walk, one single-file edit, one `--scope` edit, chosen so the seam is proved against three different shapes — and `Cli.dispatch` still carries a `case` arm for the other 66. The dispatcher consults the registry first and falls through to the switch, so each later batch is a mechanical move: the members go to a command module, the arm goes away, the usage literal becomes a `CliRegistry.helpLine` call. When the switch is empty, `dispatch` is the lookup.
+
+### Invariant 1 at this layer
+
+The support modules hold no state — every member is a pure function of its arguments plus the process — and `CliRegistry.commands()` allocates a fresh command per call rather than memoising a shared array, because a shared registry is the process-scoped shape invariant 1 exists to keep out, however stateless today's implementations happen to be.
+
+What a run legitimately needs to remember goes on `CliContext`, an instance created per invocation and handed to the command. `--exit-on-empty` is the live example: parsed once by the dispatcher, consumed much later by whichever find-walker the run ended in. `Cli` carried it across that gap in a `private static var` — the one piece of process-scoped mutable state in the CLI, and the shape a second run in the same process can observe. A field on a per-run instance is the same value with none of that; the static survives only for the commands the registry does not own yet, and goes with the last `case` arm.
+
 ## Cross-family IR
 
 Not in scope for initial implementation. When it appears:

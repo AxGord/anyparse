@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.query.Cli;
+import anyparse.query.cli.CliArgs;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -102,15 +103,15 @@ class LintReportChannelSliceTest extends Test {
 		final dir: String = CliFixture.writeDir('lintchan', [{ name: 'C.hx', source: 'package pkg;\n\nclass C {}\n' }]);
 		final missing: String = '$dir/NoSuchFile.hx';
 
-		final mixed: ExpandedInputs = Cli.expandInputs([dir, missing], '.hx');
+		final mixed: ExpandedInputs = CliArgs.expandInputs([dir, missing], '.hx');
 		Assert.equals(1, mixed.paths.length, 'the spec that DID match still resolves');
 		Assert.equals(1, mixed.unmatched.length, 'and the one that did not is named rather than dropped');
 		Assert.equals(missing, mixed.unmatched[0]);
 
-		final allGood: ExpandedInputs = Cli.expandInputs([dir], '.hx');
+		final allGood: ExpandedInputs = CliArgs.expandInputs([dir], '.hx');
 		Assert.equals(0, allGood.unmatched.length, 'a scope where every argument matched names nothing');
 
-		final noneGood: ExpandedInputs = Cli.expandInputs([missing, '$dir/AlsoMissing.hx'], '.hx');
+		final noneGood: ExpandedInputs = CliArgs.expandInputs([missing, '$dir/AlsoMissing.hx'], '.hx');
 		Assert.equals(0, noneGood.paths.length);
 		Assert.equals(2, noneGood.unmatched.length, 'the wholly-empty case names each argument, not the joined list');
 
@@ -180,10 +181,10 @@ class LintReportChannelSliceTest extends Test {
 	 * exactly what a correct invocation would have shown.
 	 */
 	public function testASpecIsQuotedSoItsBoundariesAreVisible(): Void {
-		Assert.equals('"a.hx", "b.hx"', Cli.quotedSpecs(['a.hx', 'b.hx']));
-		Assert.equals('"a.hx\nb.hx"', Cli.quotedSpecs(['a.hx\nb.hx']), 'one argument holding a newline reads as ONE argument');
+		Assert.equals('"a.hx", "b.hx"', CliArgs.quotedSpecs(['a.hx', 'b.hx']));
+		Assert.equals('"a.hx\nb.hx"', CliArgs.quotedSpecs(['a.hx\nb.hx']), 'one argument holding a newline reads as ONE argument');
 		Assert.equals(
-			'"a\\"b.hx"', Cli.quotedSpecs(['a"b.hx']),
+			'"a\\"b.hx"', CliArgs.quotedSpecs(['a"b.hx']),
 			'and a quote INSIDE an argument is escaped — unescaped it would read as two arguments, the very misreading the quotes add'
 		);
 	}
