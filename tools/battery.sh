@@ -613,10 +613,17 @@ branch_fmt() {
     ln -s "$repo/tools" "$xroot/tools"
     # The known non-converging set under that config. Update it — with the
     # measurement — whenever it legitimately moves.
+    #
+    # S71 moved the third entry without changing it: the LL(1) dispatch
+    # analysis left `Lowering` for `ParseDispatchLowering`, and the
+    # non-converging construct went with it. The set is still three files, the
+    # other two are untouched, and all 41 members of the new module are
+    # VERBATIM substrings of the pre-slice `Lowering.hx` — so this is a rename
+    # of the entry, not a file joining the tail.
     cat > "$work/fmt-xconfig.base" <<'XCFG'
 src/anyparse/check/DuplicateCase.hx
 src/anyparse/check/UnnecessarySwitch.hx
-src/anyparse/macro/Lowering.hx
+src/anyparse/macro/ParseDispatchLowering.hx
 XCFG
     # The exit code is non-zero on drift alone, so it says nothing here; the
     # `--one-pass` verdict is read off stderr, which is why the two streams are

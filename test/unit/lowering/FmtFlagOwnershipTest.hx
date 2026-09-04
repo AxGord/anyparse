@@ -41,6 +41,15 @@ using StringTools;
  */
 class FmtFlagOwnershipTest extends Test {
 
+	/** `MetaInspect` declares the readers themselves, so its parameter names are not flag reads. */
+	private static inline final READER_MODULE: String = 'MetaInspect';
+
+	private static inline final MACRO_DIR: String = 'src/anyparse/macro';
+	private static inline final STRATEGIES_DOC: String = 'docs/strategies.md';
+
+	/** Below this the inventory block was emptied or mis-parsed, and every set comparison would pass vacuously. */
+	private static inline final MIN_INVENTORY_FLAGS: Int = 200;
+
 	/** The `@:fmt` reader modules, and how many inventory flags each one names. */
 	private static final EXPECTED_OWNERSHIP: Map<String, Int> = [
 		'WriterLowering' => 199,
@@ -66,16 +75,6 @@ class FmtFlagOwnershipTest extends Test {
 		'fill',
 		'fillDoubleIndent'
 	];
-
-	/** `MetaInspect` declares the readers themselves, so its parameter names are not flag reads. */
-	private static inline final READER_MODULE: String = 'MetaInspect';
-
-	private static inline final MACRO_DIR: String = 'src/anyparse/macro';
-
-	private static inline final STRATEGIES_DOC: String = 'docs/strategies.md';
-
-	/** Below this the inventory block was emptied or mis-parsed, and every set comparison would pass vacuously. */
-	private static inline final MIN_INVENTORY_FLAGS: Int = 200;
 
 	/**
 	 * Every flag the shipped grammars declare is named by at least one macro module.
@@ -122,8 +121,7 @@ class FmtFlagOwnershipTest extends Test {
 		for (module => count in EXPECTED_OWNERSHIP) {
 			final flags: Null<Array<String>> = named[module];
 			Assert.notNull(
-				flags,
-				'the ownership table lists $module, which names no @:fmt flag any more - ' + 'drop the row here and in $STRATEGIES_DOC'
+				flags, 'the ownership table lists $module, which names no @:fmt flag any more - drop the row here and in $STRATEGIES_DOC'
 			);
 			if (flags != null)
 				Assert.equals(
@@ -155,7 +153,7 @@ class FmtFlagOwnershipTest extends Test {
 			);
 			Assert.isFalse(
 				inventory.contains(flag),
-				'$flag is now in the declared inventory - move it out of the handler-only list here ' + 'and in $STRATEGIES_DOC'
+				'$flag is now in the declared inventory - move it out of the handler-only list here and in $STRATEGIES_DOC'
 			);
 		}
 	}
@@ -206,8 +204,7 @@ class FmtFlagOwnershipTest extends Test {
 		final out: Map<String, Array<String>> = [];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final kinds: Array<String> = plugin.refShape().stringLiteralKinds ?? [];
-		for (entry in FileSystem.readDirectory('$root/$MACRO_DIR')) {
-			if (!entry.endsWith('.hx')) continue;
+		for (entry in FileSystem.readDirectory('$root/$MACRO_DIR')) if (entry.endsWith('.hx')) {
 			final module: String = entry.substring(0, entry.length - '.hx'.length);
 			if (module == READER_MODULE) continue;
 			final raw: String = File.getContent('$root/$MACRO_DIR/$entry');
