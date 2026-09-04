@@ -4,6 +4,7 @@ package anyparse.macro;
 import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using anyparse.macro.MetaInspect;
@@ -675,17 +676,17 @@ class QueryWalkerLowering extends PairedShapeLowering {
 
 	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.HxExpr` to `_walkHxExprS`). */
 	public static inline function walkFnName(typePath: String): String {
-		return '_walk${PairedShapeLowering.simpleName(typePath)}S';
+		return '_walk${simpleName(typePath)}S';
 	}
 
 	/** Generated name-resolution function name for a rule type path. */
 	public static inline function nameFnName(typePath: String): String {
-		return '_nameOf${PairedShapeLowering.simpleName(typePath)}S';
+		return '_nameOf${simpleName(typePath)}S';
 	}
 
 	/** Generated type-ref projection function name for a rule type path. */
 	public static inline function typeRefsFnName(typePath: String): String {
-		return '_typeRefs${PairedShapeLowering.simpleName(typePath)}S';
+		return '_typeRefs${simpleName(typePath)}S';
 	}
 
 }

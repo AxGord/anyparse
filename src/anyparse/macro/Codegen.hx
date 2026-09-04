@@ -3,6 +3,7 @@ package anyparse.macro;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.MacroNames.*;
 
 /**
  * Pass 4 of the macro pipeline — codegen.
@@ -1241,11 +1242,6 @@ class Codegen {
 			ctx.pos = _savedPos;
 			return (null: Null<String>);
 		}
-	}
-
-	private static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
 	}
 
 }

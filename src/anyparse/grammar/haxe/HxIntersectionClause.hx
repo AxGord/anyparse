@@ -25,7 +25,7 @@ package anyparse.grammar.haxe;
  * Around-spacing (`A & B`) is split exactly like the `extends`/`from`
  * heritage clauses: the post-`&` space comes from
  * `@:fmt(typedefIntersection)` on the `type` field (routes the
- * `@:lead('&')` through `WriterLowering.whitespacePolicyLead`; option
+ * `@:lead('&')` through `WriterPolicyLowering.whitespacePolicyLead`; option
  * defaults to `After` → `& B`), while the pre-`&` space is structural,
  * supplied by the consuming Star's `@:fmt(padLeading)` (first clause)
  * and the bare-Star inter-element separator (subsequent clauses). A

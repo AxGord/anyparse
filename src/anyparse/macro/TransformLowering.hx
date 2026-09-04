@@ -5,6 +5,7 @@ import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
+import anyparse.macro.MacroNames.*;
 
 using Lambda;
 
@@ -311,11 +312,6 @@ class TransformLowering {
 	public static function hookFieldName(typePath: String): String {
 		final simple: String = simpleName(typePath);
 		return simple.length == 0 ? simple : simple.charAt(0).toLowerCase() + simple.substring(1);
-	}
-
-	private static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
 	}
 
 	private static function pathToComplexType(typePath: String): ComplexType {

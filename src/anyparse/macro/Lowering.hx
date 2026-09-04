@@ -7,6 +7,7 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
 import haxe.macro.MacroStringTools;
+import anyparse.macro.MacroNames.*;
 
 using Lambda;
 using StringTools;
@@ -7597,16 +7598,6 @@ class Lowering {
 			chain = macro $chain || $term;
 		}
 		return chain;
-	}
-
-	private static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
-	}
-
-	private static function packOf(typePath: String): Array<String> {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
 
 	/**

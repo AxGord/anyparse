@@ -17,6 +17,7 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
 import haxe.macro.Type;
+import anyparse.macro.MacroNames.*;
 
 /**
  * `@:build` entry point. Applied to a marker class like
@@ -376,16 +377,6 @@ class Build {
 		}
 		Context.fatalError('@:peg grammar $targetTypePath is missing @:schema(Format)', Context.currentPos());
 		throw 'unreachable';
-	}
-
-	private static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
-	}
-
-	private static function packOf(typePath: String): Array<String> {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
 
 	private static function buildShapeWithTrivia(

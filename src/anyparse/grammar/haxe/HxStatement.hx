@@ -243,7 +243,7 @@ package anyparse.grammar.haxe;
  *    "the prev body ends with `}`" treat it as block-equivalent. Used
  *    by `bareBodyBreaks` on `HxTryCatchStmt.catches` to keep the
  *    `} catch (...)` cuddle for `try untyped { … } catch (...)`. The
- *    flag is consumed by `WriterLowering.isBlockShapeEquivalentBranch`,
+ *    flag is consumed by `WriterLoweringSupport.isBlockShapeEquivalentBranch`,
  *    a sister of `isBlockCtorBranch` that respects `blockShape` —
  *    `bodyPolicyWrap`'s strict block-ctor override path keeps using
  *    `isBlockCtorBranch` so per-ctor overrides

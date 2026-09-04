@@ -5,6 +5,7 @@ import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
+import anyparse.macro.MacroNames.*;
 
 using Lambda;
 
@@ -271,16 +272,6 @@ class AstPredLowering {
 
 	private function field(target: Expr, name: String): Expr {
 		return { expr: EField(target, name), pos: Context.currentPos() };
-	}
-
-	/** Simple (unqualified) name of a type path. */
-	public static inline function simpleName(typePath: String): String {
-		return PairedShapeLowering.simpleName(typePath);
-	}
-
-	/** Package parts of a type path, empty for a root-package type. */
-	public static inline function packOf(typePath: String): Array<String> {
-		return PairedShapeLowering.packOf(typePath);
 	}
 
 	/**

@@ -3,6 +3,10 @@ package anyparse.macro;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.WriterPolicyLowering.*;
+import anyparse.macro.WriterLoweringSupport.*;
+import anyparse.macro.WriterCascadeLowering.*;
+import anyparse.macro.WriterBlankLowering.*;
 
 /**
  * Pass 3W helpers — the `@:trivia` + `@:tryparse` Star emit family.
@@ -42,6 +46,8 @@ import haxe.macro.Expr;
  * `trailingCommentDoc*`). Rename one of those on either side and the
  * failure surfaces in the generated writer, not here.
  */
+@:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterCascadeLowering, anyparse.macro.WriterLoweringSupport,
+	anyparse.macro.WriterPolicyLowering)
 final class TriviaTryparseLowering {
 
 	/**
@@ -187,7 +193,7 @@ final class TriviaTryparseLowering {
 		final transitionInfos: Array<WriterLowering.TransitionAcrossInfo> = transitionAcrossInfos ?? [];
 		final headInfos: Array<WriterLowering.HeadCtorBlankInfo> = headCtorInfos ?? [];
 		final betweenIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo> = betweenSameCtorIfNotInfos ?? [];
-		final cascadeEmit: WriterLowering.CascadeEmit = WriterLowering.buildCascadeEmit(
+		final cascadeEmit: WriterLowering.CascadeEmit = buildCascadeEmit(
 			afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos, betweenIfNotInfos
 		);
 		final cascadeInitPrev: Expr = cascadeEmit.initPrev;
@@ -246,7 +252,7 @@ final class TriviaTryparseLowering {
 		final lastTrailTerminatorEmit: Expr = macro {};
 		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` from
 		// `opt.<metaLineEndOptField>` (0 = None default, byte-identical).
-		final metaPolicyExpr: Expr = metaLineEndOptField != null ? WriterLowering.optFieldAccess(metaLineEndOptField) : macro 0;
+		final metaPolicyExpr: Expr = metaLineEndOptField != null ? optFieldAccess(metaLineEndOptField) : macro 0;
 		final shapeRefusalExpr: Expr = triviaTryparseShapeRefusalExpr(refuseFlatOnComplex);
 		final glueRefusalExpr: Expr = triviaTryparseGlueRefusalExpr(refuseGlueOnControlFlow);
 		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded, sepFaithful, elemCondFnExpr);
@@ -880,7 +886,7 @@ final class TriviaTryparseLowering {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaTryparseLeadCommentSepExpr(): Expr {
-		final blankExtras: Expr = WriterLowering.blankBefore2ExtrasExpr(macro _docs.push(_dhl()));
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _docs.push(_dhl()));
 		return macro {
 			// ω-D16-padleading-first-comment-no-dup: padLeading
 			// already emitted `_dhl()` for the first element when
@@ -1161,7 +1167,7 @@ final class TriviaTryparseLowering {
 			final block: Array<Expr> = [macro final _wo = _copyOpt(opt)];
 			for (pair in flatChildOptPairs) {
 				final fromAccess: Expr = { expr: EField(macro _wo, pair[0]), pos: Context.currentPos() };
-				final toAccess: Expr = WriterLowering.optFieldAccess(pair[1]);
+				final toAccess: Expr = optFieldAccess(pair[1]);
 				block.push(macro $fromAccess = $toAccess);
 			}
 			block.push(macro _wo);
@@ -1179,7 +1185,7 @@ final class TriviaTryparseLowering {
 				final flatOnlyParts: Array<Expr> = [
 					for (pair in flatChildOptPairs) {
 						final fromAccess: Expr = { expr: EField(macro _wo, pair[0]), pos: Context.currentPos() };
-						final toAccess: Expr = WriterLowering.optFieldAccess(pair[1]);
+						final toAccess: Expr = optFieldAccess(pair[1]);
 						macro $fromAccess = $toAccess;
 					}
 				];
@@ -1205,7 +1211,7 @@ final class TriviaTryparseLowering {
 				Context.currentPos()
 			);
 		inline function pred(flagName: String): Expr
-			return fit ? WriterLowering.buildCaseBodyFitPredicate(flagName) : WriterLowering.buildCaseBodyFlagPredicate(flagName);
+			return fit ? buildCaseBodyFitPredicate(flagName) : buildCaseBodyFlagPredicate(flagName);
 		return if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
 			macro false;
 		else if (caseBodyFlagNames.length == 1)

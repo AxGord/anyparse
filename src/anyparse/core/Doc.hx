@@ -609,7 +609,7 @@ enum Doc {
 	 * shape carrying hardlines and answers `-1` — "cannot be laid out on one
 	 * line" — even though the call's glued form is perfectly flat. Two behaviours
 	 * currently rest on that answer, so do not "correct" it without reading both:
-	 *  - `WriterLowering.caseSiblingWidthProbeExpr` (ω-case-sibling-symmetry)
+	 *  - `WriterBlankLowering.caseSiblingWidthProbeExpr` (ω-case-sibling-symmetry)
 	 *    consumes its bodies only through `flatLength`, so a case body holding
 	 *    such a call never raises the widest-sibling maximum and the group falls
 	 *    back to `BodyFit.SIBLING_NONE` — sibling coordination cannot be

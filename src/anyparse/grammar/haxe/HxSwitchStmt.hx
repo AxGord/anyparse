@@ -58,7 +58,7 @@ package anyparse.grammar.haxe;
  * The two names are the statement- and expression-position body policies
  * whose `FitLine` value arms both; under every other policy the Star
  * behaves exactly as before. See
- * `WriterLowering.caseSiblingWidthProbeExpr` for what does and does not
+ * `WriterBlankLowering.caseSiblingWidthProbeExpr` for what does and does not
  * count as a trigger.
  *
  * `#if` NOW LEADS AS WELL AS FOLLOWS (ω-if-leader-case-symmetry). A

@@ -4,6 +4,7 @@ package anyparse.macro;
 import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.MacroNames.*;
 
 using anyparse.macro.MetaInspect;
 
@@ -198,11 +199,6 @@ class SpanTypeSynth {
 			if (node != null) return node.kind != Terminal;
 		}
 		return false;
-	}
-
-	private static function packOf(qualifiedName: String): Array<String> {
-		final idx: Int = qualifiedName.lastIndexOf('.');
-		return idx == -1 ? [] : qualifiedName.substring(0, idx).split('.');
 	}
 
 	private static function leafOf(qualifiedName: String): String {

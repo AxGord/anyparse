@@ -4,6 +4,7 @@ package anyparse.grammar.haxe;
 import anyparse.macro.AstPredLowering;
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import anyparse.macro.MacroNames.*;
 
 /**
  * Haxe-grammar AST-predicate tables — the domain knowledge behind the
@@ -423,7 +424,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private function elementIsConditionalEnumField(rule: String, argName: String): Field {
 		final body: Expr = nullSwitch(ident(argName), macro false, [caseOf(rule, ['Conditional'], macro true)], macro false);
 		return predField(
-			'elementIsConditional_${AstPredLowering.simpleName(rule)}',
+			'elementIsConditional_${simpleName(rule)}',
 			[valueArg(argName, rule)],
 			macro :Bool, body, 'True iff a cond-comp body Star element is itself a nested `Conditional`.'
 		);
@@ -448,11 +449,7 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	/** Constant-false member of the `elementIsConditional_*` family — see `doc` for why the shape can never match. */
 	private function elementIsConditionalFalseField(rule: String, argName: String, doc: String): Field {
-		return predField(
-			'elementIsConditional_${AstPredLowering.simpleName(rule)}',
-			[valueArg(argName, rule)],
-			macro :Bool, macro false, doc
-		);
+		return predField('elementIsConditional_${simpleName(rule)}', [valueArg(argName, rule)], macro :Bool, macro false, doc);
 	}
 
 	/**
