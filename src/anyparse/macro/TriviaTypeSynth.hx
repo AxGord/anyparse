@@ -4,11 +4,9 @@ package anyparse.macro;
 import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import haxe.macro.MacroStringTools;
 import anyparse.macro.MacroNames.*;
 
 using Lambda;
-using anyparse.macro.MetaInspect;
 
 /**
  * ω₄c — Atomic synthesis of paired `*T` typedefs / enums for
@@ -56,6 +54,24 @@ using anyparse.macro.MetaInspect;
  * the same `ShapeResult` are idempotent — the per-name `defined` map
  * short-circuits already-synthesised types. A future second trivia
  * grammar would get its own synth module under its own root pack.
+ *
+ * Three sibling `#if macro` modules carry one question each out of this
+ * pass. `TriviaPairAltCtor` — what one synthesized Alt constructor looks
+ * like, and which extra positional argument each branch shape earns (15
+ * members). `TriviaPairSlots` — which synthesized trivia slot a struct
+ * field earns, and what its declaration is (23). `TriviaPairConverters`
+ * — how a paired `*T` value converts to and from its raw sibling (13).
+ * What stayed is the slot-name vocabulary all three and the writer side
+ * share, the atomic `defineModule` arm, and `buildTypeDefinition`, which
+ * calls the first two.
+ *
+ * The seam is NOT a state boundary: this class declares no instance
+ * field and every one of its 95 members was static, so a purity census
+ * returns 100 % and decides nothing. What binds is the qualified call
+ * site — `TriviaTypeSynth.<member>` is spelled 133 times outside this
+ * file, 59 of those the ALL-CAPS slot-name constants. Those constants
+ * stay: they are the vocabulary every consumer already knows the address
+ * of, and moving them would buy no cap and cost 59 receiver rewrites.
  */
 class TriviaTypeSynth {
 
@@ -459,7 +475,6 @@ class TriviaTypeSynth {
 	private static inline final PAIRED_SUFFIX: String = 'T';
 	private static inline final SYNTH_SUBPACK: String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
-	private static inline final CONVERTERS_CLASS_NAME: String = 'Converters';
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
 	private static final defined: Map<String, Bool> = [];
 
@@ -492,832 +507,12 @@ class TriviaTypeSynth {
 		// `convertersAdded` flag guards repeat invocations.
 		if (!convertersAdded) {
 			convertersAdded = true;
-			paired.push(buildConvertersClass(convertedNames, synthPack));
+			paired.push(TriviaPairConverters.buildConvertersClass(convertedNames, synthPack));
 		}
 		Context.defineModule(modulePath, paired);
 		#if anyparse_trivia_dump
 		for (td in paired) Sys.println('// trivia.synth: defined ${td.pack.join('.')}.${td.name} in module $modulePath');
 		#end
-	}
-
-	/**
-	 * True when the branch is a postfix Star-suffix ctor (e.g.
-	 * `Call(operand:T, args:Array<T>)` from `@:postfix('(', ')') @:sep(',')`)
-	 * whose Star child carries `trivia.starCollects=true` (set by
-	 * `TriviaAnalysis.markPostfixStarSuffix`). Such branches grow a
-	 * positional `closeTrailing:Null<String>` arg holding the trailing
-	 * comment captured by the parser right after the postfix close literal,
-	 * before the next postfix step's `skipWs` would eat it.
-	 *
-	 * Single-Ref-suffix postfix (e.g. `FieldAccess(operand, field)` from
-	 * `@:postfix('.')`) doesn't qualify — child[1] is Ref, not Star, so
-	 * `TriviaAnalysis.markPostfixStarSuffix` never sets `trivia.starCollects`
-	 * on it. Pair-lit postfix (1 child + close lit) likewise misses. Both
-	 * shapes can grow their own slot in a follow-up if a fixture demands
-	 * it; today the only failing fixture is the Star-suffix Call form
-	 * (`indentation/method_chain_with_line_comment`).
-	 *
-	 * Discriminator is `trivia.starCollects` on a 2nd Star child — the
-	 * marker function only sets that for the postfix Star-suffix shape it
-	 * detects via `:postfix(open, close)` + `[Ref, Star]`. We can't read
-	 * `postfix.op`/`postfix.close` from `branch.annotations` here because
-	 * the Postfix strategy runs LATER (see `Build.run`: TriviaAnalysis →
-	 * TriviaTypeSynth.arm → registry.runAnnotate); only the marker's
-	 * `trivia.starCollects` flag is reliably present at arm-time.
-	 */
-	public static function isPostfixCloseTrailingBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 2) return false;
-		if (branch.children[0].kind != Ref) return false;
-		final star: ShapeNode = branch.children[1];
-		if (star.kind != Star) return false;
-		if (star.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] != true) return false;
-		// Tighten: `trivia.starCollects` is also set by `markStarsWithTrivia`
-		// for `:trivia` Seq branches with a single Star child. Those are NOT
-		// postfix and must not grow a `closeTrailing` slot — Lowering's
-		// `lowerPostfixLoop` is the only producer for the slot. Read
-		// `:postfix` from raw `base.meta` (Postfix strategy hasn't run yet)
-		// to ensure the branch is a postfix ctor.
-		final meta: Null<Metadata> = branch.annotations[AnnotationKeys.BASE_META];
-		return meta != null && meta.exists(entry -> entry.name == ':postfix' && entry.params.length == 2);
-	}
-
-	/**
-	 * True when the branch is a close-peek `@:trivia` Alt-ctor wrapping
-	 * a single Star child — structurally equivalent to the Seq Case 4
-	 * shape that grows a `TrailingClose` slot in `buildStarTrailingSlots`.
-	 * Reads `@:trail` from `base.meta` directly since `arm()` runs
-	 * before the Lit strategy populates `lit.trailText`.
-	 */
-	public static function isAltCloseTrailingBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 1) return false;
-		final star: ShapeNode = branch.children[0];
-		return star.kind == Star
-			&& (star.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true && branch.readMetaString(':trail') != null);
-	}
-
-	/**
-	 * True when the branch is a single-Ref Alt-ctor carrying `@:trailOpt(...)`.
-	 * Such ctors grow a positional `trailPresent:Bool` arg in the synth
-	 * pair so the writer can preserve source presence of the optional
-	 * trail literal. Reads `@:trailOpt` from `base.meta` directly since
-	 * `arm()` runs before the Lit strategy populates `lit.trailOptional`.
-	 *
-	 * Disjoint from `isAltCloseTrailingBranch`: that function requires a
-	 * single Star child with `@:trail`, this requires a single Ref child
-	 * with `@:trailOpt`. The two never coexist on the same branch.
-	 */
-	public static function isAltTrailOptBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1 && (branch.children[0].kind == Ref && branch.readMetaString(':trailOpt') != null);
-	}
-
-	/**
-	 * True when a struct typedef field carries `@:trailOpt(...)`. The
-	 * struct-field analog of `isAltTrailOptBranch`. Gates the
-	 * `buildTypeDefinition` Seq arm where every matching field grows an
-	 * `@:optional Null<Bool>` `<field>TrailPresent` slot (via
-	 * `buildStructFieldTrailPresentSlot`); the parser captures the
-	 * `matchLit` result into it. The writer does not yet read the slot —
-	 * struct-field `@:trailOpt` stays writer-canonical (always re-emits
-	 * the trail literal), so source presence of the optional trail (e.g.
-	 * the nested `;` in `wrapping/issue_366_nested_array_comprehension`)
-	 * is not yet preserved; wiring the writer-side gate is the remaining
-	 * step.
-	 *
-	 * Disjoint from `isAltTrailOptBranch` (struct typedef field vs
-	 * enum Alt branch — orthogonal contexts; same `@:trailOpt` meta
-	 * but different host kind).
-	 *
-	 */
-	public static function isStructFieldTrailOpt(field: ShapeNode): Bool {
-		return field.readMetaString(':trailOpt') != null;
-	}
-
-	/**
-	 * True when the branch opts into source-byte capture via
-	 * `@:fmt(captureSource('<optionFieldName>'))`. The synth-pair ctor
-	 * grows a positional `sourceText:String` arg; the parser fills it
-	 * with the input slice between the ctor's `@:lead` and `@:trail`
-	 * literals (inclusive of any whitespace inside) so the writer can
-	 * emit verbatim when the named runtime `Bool` option is `false`.
-	 *
-	 * Requires single Ref child + `@:lead` + `@:trail` (the parser has
-	 * an unambiguous slice to capture). Disjoint from
-	 * `isAltTrailOptBranch` since `@:trailOpt` and unconditional
-	 * `@:trail` are mutually exclusive on the same ctor.
-	 */
-	public static function isCaptureSourceBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref
-				&& (branch.readMetaString(':lead') != null
-					&& (branch.readMetaString(':trail') != null && branch.fmtReadString('captureSource') != null)));
-	}
-
-	/**
-	 * True when the branch is a single-Ref kw-led Alt-ctor carrying
-	 * `@:fmt(bodyPolicy(...))`. Such ctors grow a positional
-	 * `bodyOnSameLine:Bool` arg in the synth pair so `bodyPolicyWrap`'s
-	 * `Keep` branch can dispatch source-shape-aware between
-	 * `sameLayoutExpr` and `nextLayoutExpr` at writer time. Reads
-	 * `@:fmt(bodyPolicy(...))` via `fmtReadString`, which works at arm-time
-	 * because `base.meta` is populated by `ShapeBuilder` before
-	 * `TriviaTypeSynth.arm()` runs (see `Build.run` ordering — same path
-	 * `isCaptureSourceBranch` relies on).
-	 *
-	 * Requires `@:kw(...)` for the parser's commit point — bodyPolicy
-	 * without a kw has no anchor for the post-kw newline probe.
-	 * Co-occurs with `isAltTrailOptBranch` on the first consumer
-	 * `HxStatement.ReturnStmt` (`@:kw('return') @:trailOpt(';')`); the
-	 * `buildEnumCtor` push order (trailPresent → sourceText →
-	 * bodyOnSameLine) keeps the layout deterministic. Disjoint from the
-	 * close-trailing predicates (single Ref child, no Star child). First
-	 * consumer: `HxStatement.ReturnStmt`.
-	 */
-	public static function isAltBodyPolicyKwBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref && (branch.readMetaString(':kw') != null && branch.fmtReadString('bodyPolicy') != null));
-	}
-
-	/**
-	 * ω-paren-wrap-source-newline: True when the branch is a single-Ref
-	 * `@:wrap(open, close)` Alt-ctor (no `@:kw`, has both `@:lead` and
-	 * `@:trail`) opting in via parameterless `@:fmt(captureWrapOpenNewline)`.
-	 * Such ctors grow a positional `wrapOpenNewline:Bool` arg in the synth
-	 * pair so the writer can route between two break shapes at write time:
-	 *   - source had `\n` after open delim (`paramOpenedNewline=true`)  -->
-	 *     break shape `(\n<inner>\n)` (open delim followed by hardline,
-	 *     close on its own line); matches author intent for chains where
-	 *     the source already broke after `(`.
-	 *   - source had no `\n` after open delim (`paramOpenedNewline=false`)
-	 *     --> existing glue shape `(<inner>\n)` from the chain emit's
-	 *     `OptHardlineSkipAtOpenDelim`. Items[0] glued to enclosing `(`.
-	 *
-	 * Disjoint from `isAltBodyPolicyKwBranch` (kw absent vs required) and
-	 * from the close/postfix-trailing predicates (Ref vs Star child).
-	 * Plain mode keeps the original ctor arity and the writer falls back
-	 * to the unconditional glue shape. First consumer: `HxExpr.ParenExpr`.
-	 */
-	public static function isAltWrapOpenNewlineBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 1) return false;
-		if (branch.children[0].kind != Ref) return false;
-		if (branch.hasMeta(':kw')) return false;
-		// `@:wrap(o,c)` is the canonical shorthand for `@:lead(o) + @:trail(c)`
-		// at this opt-in's first consumer. `Lit.annotate` populates
-		// `lit.leadText`/`lit.trailText` from either form, but that runs AFTER
-		// `arm()` (see `Build.run` ordering -- same constraint motivating
-		// raw-meta probes elsewhere in this file). Use `hasMeta` rather than
-		// `readMetaString` because `@:wrap` carries TWO params (open + close)
-		// and `readMetaString` requires exactly one. Both authoring forms
-		// grow the same lit pair downstream.
-		final hasWrap: Bool = branch.hasMeta(':wrap');
-		final hasLeadTrail: Bool = branch.hasMeta(':lead') && branch.hasMeta(':trail');
-		return (hasWrap || hasLeadTrail) && branch.fmtHasFlag('captureWrapOpenNewline');
-	}
-
-	/**
-	 * ω-keep-kw-newline (increment 1b) — true when the branch is a single-Ref
-	 * mandatory-`@:kw` Alt ctor carrying `@:fmt(captureKwNewline)` (the
-	 * VarStmt-family: `VarStmt` / `FinalStmt` / `StaticVarStmt` /
-	 * `StaticFinalStmt`). Such ctors grow a positional `kwNewline:Bool` arg in
-	 * the synth pair so the `HxVarDecl` multiVar fold can reproduce the
-	 * source-author `var`→head newline under `WrapMode.Keep`. Requires the
-	 * mandatory `@:kw` for the parser commit point. Disjoint from
-	 * `isAltWrapOpenNewlineBranch` (those are kw-less @:wrap ctors). Reads the
-	 * flag via `fmtHasFlag`, which works at arm-time (`base.meta` populated by
-	 * `ShapeBuilder` before `arm()` runs — same path the sister predicates
-	 * rely on). First consumers: `HxStatement.{VarStmt, FinalStmt,
-	 * StaticVarStmt, StaticFinalStmt}`.
-	 */
-	public static function isAltKwNewlineBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref && (branch.hasMeta(':kw') && branch.fmtHasFlag('captureKwNewline')));
-	}
-
-	/**
-	 * ω-keep-chain — true when the branch is a binary chain enum ctor
-	 * carrying `@:fmt(captureChainNewline)`. Two consumer families:
-	 *  - `@:infix` Pratt chain ctors `HxExpr.Add` / `Sub` / `And` / `Or`
-	 *    (increment 2 — the `lowerPrattLoop` operator-match site captures the
-	 *    gap newline before the ctor's RIGHT operand);
-	 *  - `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess` (increment 9
-	 *    — the `lowerPostfixLoop` gap before the `.` dispatch captures the
-	 *    source newline before the `.field` segment).
-	 * Such ctors grow a positional `chainNewline:Bool` arg in the synth pair
-	 * so the chain emit (`BinaryChainEmit` / `MethodChainEmit`) can reproduce
-	 * the source per-boundary line breaks under `WrapMode.Keep`. Requires
-	 * exactly two operand children (`left,right` infix / `operand,field`
-	 * postfix). Disjoint from every sister predicate (chain ctors carry no
-	 * `@:kw` / `@:lead` / `@:trail` / `@:wrap` / bodyPolicy, and the
-	 * `@:postfix('.')` FieldAccess carries no close delimiter so it is NOT a
-	 * postfix-close-trailing branch). Consumers: `HxExpr.{Add, Sub, And, Or,
-	 * FieldAccess}`.
-	 */
-	public static function isAltChainNewlineBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 2
-			&& ((branch.hasMeta(':infix') || branch.hasMeta(':postfix')) && branch.fmtHasFlag('captureChainNewline'));
-	}
-
-	/**
-	 * ω-keep-infix-postop-comment — true for an `@:infix` chain ctor
-	 * (Add/Sub/And/Or) carrying `@:fmt(captureChainNewline)`. Such ctors grow a
-	 * positional `opAfterComment:Null<String>` slot (after `chainLeadComment`)
-	 * holding the verbatim same-line comment trailing the OPERATOR (before the
-	 * right operand). Excludes the postfix FieldAccess ctor (no such operator
-	 * gap), so its arity is unchanged.
-	 */
-	public static function isInfixChainBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 2 && branch.hasMeta(':infix') && branch.fmtHasFlag('captureChainNewline');
-	}
-
-	/**
-	 * ω-keep-infix-rhs-comment — true for any `@:infix` binop ctor carrying
-	 * `@:fmt(captureRhsTrail)`. Grows an `opRhsTrailComment:Null<String>` slot
-	 * (the LAST chain-family slot) holding the verbatim same-line comment
-	 * trailing the RIGHT operand (position #3). Independent of
-	 * `captureChainNewline`, so a chain ctor may carry both.
-	 */
-	public static function isRhsTrailBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 2 && branch.hasMeta(':infix') && branch.fmtHasFlag('captureRhsTrail');
-	}
-
-	/**
-	 * ω-keep-ternary-operand-comment — true for a `@:ternary(op, sep, prec)`
-	 * mixfix ctor carrying `@:fmt(captureTernaryTrail)` (`HxExpr.Ternary`).
-	 * Such a branch grows TWO positional `Null<String>` slots holding the
-	 * verbatim same-line comments trailing its first two operands: the
-	 * condition (before `?`) and the then-branch (before `:`). Three operand
-	 * children by construction, so it is disjoint from every two-child chain
-	 * predicate above — the slots append after the whole chain family.
-	 *
-	 * The else-branch needs no slot: its trailing comment sits at the end of
-	 * the enclosing construct and is already captured by that construct's own
-	 * trailing slot (statement `;`, call-arg sep, …).
-	 */
-	public static function isTernaryTrailBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 3 && branch.hasMeta(':ternary') && branch.fmtHasFlag('captureTernaryTrail');
-	}
-
-	/**
-	 * ω-postfix-op-space — true when the branch is a word-op postfix ctor
-	 * opting into source-faithful operator spacing via
-	 * `@:fmt(capturePostfixOpSpace)` (`HxExpr.CondSpliceTail`). Such a
-	 * branch grows a positional `opSpaceBefore:Bool` slot capturing
-	 * whether whitespace separated the operand from the operator; the
-	 * writer's word-postfix pad reads it instead of hardcoding `' op '`.
-	 */
-	public static function isPostfixOpSpaceBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 2 && branch.hasMeta(':postfix') && branch.fmtHasFlag('capturePostfixOpSpace');
-	}
-
-	/**
-	 * Number of positional synth args `buildEnumCtor` appends to a paired
-	 * Alt ctor beyond its declared children — the single source of truth
-	 * for the trivia-mode ctor arity every pattern-building consumer
-	 * (`WriterLowering.branchExtraArgs`, `AstPredLowering`) must agree
-	 * on with the synth side. See the per-slot ω-comments in
-	 * `buildEnumCtor` for what each slot captures. The term↔push-block
-	 * mapping is NOT one-to-one:
-	 *
-	 *  - the `(hasCloseTrailing || hasTrailOptFlag || hasCaptureSource)`
-	 *    OR-collapse counts THREE push blocks as at most one slot. That
-	 *    rests on an exclusivity ASSUMPTION: close-trailing is
-	 *    structurally disjoint from the other two (Star vs single-Ref
-	 *    child), but trailOpt and captureSource are both single-Ref
-	 *    predicates excluded only by convention — no current ctor
-	 *    carries both metas. A ctor combining them would push two slots
-	 *    while being counted as one, leaving every pattern one wildcard
-	 *    short.
-	 *  - the `hasOpenTrailing` / postfix-close groups reserve multiple
-	 *    slots at once (open-trailing brings THREE — `openTrailing` +
-	 *    `trailingBlankBefore` + `trailingLeading`; postfix-close the
-	 *    five call-trivia positionals).
-	 *  - `isInfixChainBranch` / `isRhsTrailBranch` / `isTernaryTrailBranch`
-	 *    have push blocks with no dedicated `has*` local — they contribute
-	 *    directly in the return expression. `isTernaryTrailBranch` reserves
-	 *    TWO (`condTrailComment` + `thenTrailComment`).
-	 */
-	public static function extraAltArgs(branch: ShapeNode): Int {
-		final hasCloseTrailing: Bool = isAltCloseTrailingBranch(branch);
-		final hasTrailOptFlag: Bool = isAltTrailOptBranch(branch);
-		final hasCaptureSource: Bool = isCaptureSourceBranch(branch);
-		final hasBodyPolicyKw: Bool = isAltBodyPolicyKwBranch(branch);
-		final hasWrapOpenNewline: Bool = isAltWrapOpenNewlineBranch(branch);
-		final hasKwNewline: Bool = isAltKwNewlineBranch(branch);
-		final hasChainNewline: Bool = isAltChainNewlineBranch(branch);
-		// Deliberately the SAME predicate as `hasChainNewline`, not a
-		// copy-paste bug: `buildEnumCtor` pushes the `chainLeadComment`
-		// slot under the same gate as `chainNewline`, so the arity
-		// reserves both (the writer's FieldAccess pattern destructures
-		// them separately).
-		final hasChainLeadComment: Bool = isAltChainNewlineBranch(branch);
-		final hasPostfixOpSpace: Bool = isPostfixOpSpaceBranch(branch);
-		final hasOpenTrailing: Bool = hasCloseTrailing && branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
-		final hasPostfixCloseTrailing: Bool = isPostfixCloseTrailingBranch(branch);
-		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
-		// CHECKSTYLE:OFF
-		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
-			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
-			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 5 : 0)
-			+ (isInfixChainBranch(branch) ? 1 : 0) + (isRhsTrailBranch(branch) ? 1 : 0) + (isTernaryTrailBranch(branch) ? 2 : 0);
-		// CHECKSTYLE:ON
-	}
-
-	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
-		return node.annotations[AnnotationKeys.BASE_OPTIONAL] == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
-	}
-
-	/** The `<field>BeforeTrail:Null<String>` slot — twin of `buildAfterTrailSlot`, on the other side of the trail literal. */
-	private static inline function buildBeforeTrailSlot(child: ShapeNode, pos: Position): Field {
-		return buildNullStringSlot(child, pos, BEFORE_TRAIL_SUFFIX);
-	}
-
-	private static inline function buildAfterTrailSlot(child: ShapeNode, pos: Position): Field {
-		return buildNullStringSlot(child, pos, AFTER_TRAIL_SUFFIX);
-	}
-
-	/**
-	 * ω-paired-converters (Phase A1) — emit a `Converters` class with
-	 * `pairedToRaw_<T>` static helpers for every paired type in the
-	 * batch. Phase A2 appends `rawToPaired_<T>` siblings.
-	 *
-	 * Routed at runtime by `WriterLowering.wrapWithPreWrite` to unwrap
-	 * a paired-T `value` into raw form, hand it to the plugin's raw
-	 * preWrite signature, and (when the plugin rewrites) re-wrap via
-	 * `rawToPaired_<T>` with empty default trivia. Plugin authors never
-	 * see paired types regardless of trivia propagation up the chain.
-	 *
-	 * Each helper is recursive across the paired-type graph: a Ref to
-	 * another paired type calls that type's `pairedToRaw_`, terminals
-	 * / non-paired refs pass through, `Trivial<X>`-wrapped Star elements
-	 * unwrap via `.node`. Cyclic graphs (HxStatementT ↔ HxIfStmtT) work
-	 * because all helpers land in one `Context.defineModule` batch
-	 * alongside the paired types.
-	 */
-	private static function buildConvertersClass(convertedNames: Array<String>, synthPack: Array<String>): TypeDefinition {
-		final pos: Position = Context.currentPos();
-		convertedNames.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
-		final shape: ShapeBuilder.ShapeResult = shapes[shapes.length - 1];
-		final fns: Array<Field> = [];
-		for (origName in convertedNames) {
-			final node: Null<ShapeNode> = shape.rules[origName];
-			if (node == null) continue;
-			fns.push(buildPairedToRawFn(origName, node, synthPack));
-			fns.push(buildRawToPairedFn(origName, node, synthPack));
-		}
-		return {
-			pos: pos,
-			pack: synthPack,
-			name: CONVERTERS_CLASS_NAME,
-			kind: TDClass(null, [], false, true, false),
-			fields: fns,
-			meta: [{ name: ':nullSafety', params: [macro Strict], pos: pos }]
-		};
-	}
-
-	/**
-	 * Build the `pairedToRaw_<Leaf>` static method for a single paired
-	 * type. Signature: `(value:<Leaf>T):<RawLeaf>` — raw return type
-	 * lives at the original module path, paired arg type lives in the
-	 * synth module.
-	 *
-	 * Body shape:
-	 *  - Seq paired type → object literal `{ fieldA: unwrap(value.fieldA), ... }`.
-	 *  - Alt paired type → `switch value { case Ctor(args, _extras): RawType.Ctor(unwrap(args)); ... }`.
-	 *  - Terminal → unreachable (terminals never gain `trivia.bearing`).
-	 */
-	private static function buildPairedToRawFn(origName: String, origNode: ShapeNode, synthPack: Array<String>): Field {
-		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
-		final rawSimple: String = leafOf(origName);
-		final rawCT: ComplexType = TPath({ pack: packOf(origName), name: rawSimple, params: [] });
-		final pairedCT: ComplexType = TPath({ pack: synthPack, name: pairedSimple, params: [] });
-		final pos: Position = Context.currentPos();
-		final body: Expr = switch origNode.kind {
-			case Seq: buildPairedToRawSeqBody(origNode, pos);
-			case Alt: buildPairedToRawAltBody(origName, origNode, pos);
-			case _:
-				Context.fatalError('TriviaTypeSynth: pairedToRaw unsupported kind ${origNode.kind} for $origName', pos);
-				throw 'unreachable';
-		};
-		return {
-			name: 'pairedToRaw_$rawSimple',
-			access: [APublic, AStatic],
-			pos: pos,
-			kind: FFun({ args: [{ name: 'value', type: pairedCT }], ret: rawCT, expr: body })
-		};
-	}
-
-	private static function buildPairedToRawSeqBody(origNode: ShapeNode, pos: Position): Expr {
-		final entries: Array<{ field: String, expr: Expr }> = [];
-		for (child in origNode.children) {
-			final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
-			final access: Expr = { expr: EField(macro value, fieldName), pos: pos };
-			entries.push({ field: fieldName, expr: shapePairedToRawUnwrap(access, child, pos) });
-		}
-		final structLit: Expr = { expr: EObjectDecl([for (e in entries) { field: e.field, expr: e.expr }]), pos: pos };
-		return macro return $structLit;
-	}
-
-	private static function buildPairedToRawAltBody(origName: String, origNode: ShapeNode, pos: Position): Expr {
-		final rawSimple: String = leafOf(origName);
-		final rawPack: Array<String> = packOf(origName);
-		final cases: Array<Case> = [];
-		for (branch in origNode.children) {
-			final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
-			final origArgCount: Int = branch.children.length;
-			final extraCount: Int = countAltExtras(branch);
-			if (origArgCount == 0 && extraCount == 0) {
-				// Bare ctor `case CtorName: RawType.CtorName;`
-				final pattern: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-				final raw: Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
-				cases.push({ values: [pattern], guard: null, expr: raw });
-				continue;
-			}
-			// Pattern: CtorName(arg0, arg1, _, _, ...)
-			final binders: Array<Expr> = [
-				for (i in 0...origArgCount)
-					{
-						expr: EConst(CIdent((branch.children[i].annotations.get(AnnotationKeys.BASE_FIELD_NAME): String))),
-						pos: pos
-					}
-			];
-			for (_ in 0...extraCount) binders.push({ expr: EConst(CIdent('_')), pos: pos });
-			final pattern: Expr = { expr: ECall({ expr: EConst(CIdent(ctorName)), pos: pos }, binders), pos: pos };
-			// Body: RawType.CtorName(unwrap(arg0), unwrap(arg1), ...)
-			final unwrapArgs: Array<Expr> = [];
-			for (i in 0...origArgCount) {
-				final argNode: ShapeNode = branch.children[i];
-				final argName: String = argNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
-				final argAccess: Expr = { expr: EConst(CIdent(argName)), pos: pos };
-				unwrapArgs.push(shapePairedToRawUnwrap(argAccess, argNode, pos));
-			}
-			final rawCtorFn: Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
-			final body: Expr = { expr: ECall(rawCtorFn, unwrapArgs), pos: pos };
-			cases.push({ values: [pattern], guard: null, expr: body });
-		}
-		final switchExpr: Expr = { expr: ESwitch(macro value, cases, null), pos: pos };
-		return macro return $switchExpr;
-	}
-
-	/**
-	 * Build the unwrap expression for one paired-type access. Handles
-	 * the four shape kinds — Ref / Star / Terminal / Null-wrap — and
-	 * recurses into element types via the same helper.
-	 */
-	private static function shapePairedToRawUnwrap(access: Expr, node: ShapeNode, pos: Position): Expr {
-		switch node.kind {
-			case Ref:
-				final refName: String = node.annotations[AnnotationKeys.BASE_REF];
-				final optional: Bool = node.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
-				if (!refIsBearing(refName)) return access; // raw type already
-				final fnName: String = 'pairedToRaw_${leafOf(refName)}';
-				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
-				return optional ? macro ($access == null ? null : $call) : call;
-			case Star:
-				final elem: ShapeNode = node.children[0];
-				final triviaWrap: Bool = node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
-				final optional: Bool = node.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
-				final innerAccess: Expr = triviaWrap ? (macro t.node) : (macro e);
-				final iterVar: String = triviaWrap ? 't' : 'e';
-				final inner: Expr = shapePairedToRawUnwrap(innerAccess, elem, pos);
-				// Wadler trick — `[for (x in arr) expr]` is the comprehension; produce it via EFor inside EArrayDecl
-				// Actually Haxe accepts EMeta? Simpler: build via parser-friendly Expr
-				final compr: Expr = {
-					expr: EArrayDecl([
-						{
-							expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, inner),
-							pos: pos
-						}
-					]),
-					pos: pos
-				};
-				return optional ? macro ($access == null ? null : $compr) : compr;
-			case Terminal:
-				return access;
-			case _:
-				Context.fatalError('TriviaTypeSynth: shapePairedToRawUnwrap unexpected kind ${node.kind}', pos);
-				throw 'unreachable';
-		}
-	}
-
-	/**
-	 * Count the trivia-only positional args appended to an Alt branch
-	 * AFTER the original ctor children. Must mirror exactly the gates
-	 * applied in `buildEnumCtor`'s second half — every predicate there
-	 * adds a positional arg; this function adds the same arg counts.
-	 */
-	private static function countAltExtras(branch: ShapeNode): Int {
-		var n: Int = 0;
-		if (isAltCloseTrailingBranch(branch)) {
-			n++; // closeTrailing
-			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
-				// openTrailing + trailingBlankBefore + trailingLeading
-				n += 3; // noqa: magic-number
-				// ω-arraylit-source-trail-comma: + trailPresent when @:sep is
-				// present (mirrors `buildEnumCtor` gate).
-				// ω-blockended-trivia-meta-arity: hasMeta over
-				// readMetaString — must match `buildEnumCtor` L1093 gate so the
-				// paired-to-raw switch pattern's `_` placeholder count stays
-				// in sync with the Alt ctor's extra-arg count. Latent today
-				// (no `:trivia + :lead + :trail + :sep(>1-arg)` Alt branch
-				// in the live grammar) but blocks the next BlockStmt /
-				// BlockExpr migration.
-				if (branch.hasMeta(':sep')) n++;
-			}
-		}
-		if (isAltTrailOptBranch(branch)) n++; // trailPresent
-		if (isCaptureSourceBranch(branch)) n++; // sourceText
-		if (isAltBodyPolicyKwBranch(branch)) n++; // bodyOnSameLine
-		if (isAltWrapOpenNewlineBranch(branch)) n++; // wrapOpenNewline
-		if (isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
-		if (isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
-		if (isAltChainNewlineBranch(branch)) n++; // chainLeadComment (chain receiver/operand comment)
-		if (isInfixChainBranch(branch)) n++; // opAfterComment (infix post-operator comment)
-		if (isRhsTrailBranch(branch)) n++; // opRhsTrailComment (infix right-operand trailing comment)
-		if (isTernaryTrailBranch(branch)) n += 2; // condTrailComment + thenTrailComment (ω-keep-ternary-operand-comment)
-		if (isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
-		// ω-D9A-keep-callargs-v2 + siblings: the postfix close-trailing gate adds
-		// FIVE slots in `buildEnumCtor` — closeTrailing, argsOpenNewline,
-		// argsCloseNewline, argsInnerComment, callLeadingComment. Keep the count in
-		// sync so the `pairedToRaw` switch pattern's `_` placeholder count matches
-		// the paired ctor's arity.
-		if (isPostfixCloseTrailingBranch(branch)) n += 5; // noqa: magic-number
-		return n;
-	}
-
-	/**
-	 * Build the `rawToPaired_<Leaf>` static method for a single paired
-	 * type. Signature: `(value:<RawLeaf>):<Leaf>T`. Wraps a raw value
-	 * into paired form with empty default trivia.
-	 *
-	 * Called by `WriterLowering.wrapWithPreWrite` after a preWrite
-	 * plugin rewrite — the plugin returns raw, engine must hand the
-	 * writer a paired-T. The rewrite typically produces a different
-	 * ctor shape (e.g. `ArrowFn → Arrow(Parens, ...)`); original trivia
-	 * doesn't fit the new ctor and is correctly lost.
-	 */
-	private static function buildRawToPairedFn(origName: String, origNode: ShapeNode, synthPack: Array<String>): Field {
-		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
-		final rawSimple: String = leafOf(origName);
-		final rawCT: ComplexType = TPath({ pack: packOf(origName), name: rawSimple, params: [] });
-		final pairedCT: ComplexType = TPath({ pack: synthPack, name: pairedSimple, params: [] });
-		final pos: Position = Context.currentPos();
-		final body: Expr = switch origNode.kind {
-			case Seq: buildRawToPairedSeqBody(origNode, pos);
-			case Alt: buildRawToPairedAltBody(origName, origNode, synthPack, pos);
-			case _:
-				Context.fatalError('TriviaTypeSynth: rawToPaired unsupported kind ${origNode.kind} for $origName', pos);
-				throw 'unreachable';
-		};
-		return {
-			name: 'rawToPaired_$rawSimple',
-			access: [APublic, AStatic],
-			pos: pos,
-			kind: FFun({ args: [{ name: 'value', type: rawCT }], ret: pairedCT, expr: body })
-		};
-	}
-
-	private static function buildRawToPairedSeqBody(origNode: ShapeNode, pos: Position): Expr {
-		final entries: Array<{ field: String, expr: Expr }> = [];
-		for (child in origNode.children) {
-			final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
-			final access: Expr = { expr: EField(macro value, fieldName), pos: pos };
-			entries.push({ field: fieldName, expr: shapeRawToPairedWrap(access, child, pos) });
-			// Append trivia-only sibling fields with default empty values —
-			// mirror the gates applied in `buildTypeDefinition`'s Seq path.
-			if (isOptionalKw(child)) {
-				entries.push({ field: fieldName + AFTER_KW_SUFFIX, expr: macro (null: Null<String>) });
-				entries.push({ field: fieldName + KW_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
-				entries.push({ field: fieldName + BEFORE_KW_NEWLINE_SUFFIX, expr: macro false });
-				entries.push({ field: fieldName + BODY_ON_SAME_LINE_SUFFIX, expr: macro false });
-				entries.push({ field: fieldName + BEFORE_KW_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
-				entries.push({ field: fieldName + BEFORE_KW_TRAILING_SUFFIX, expr: macro (null: Null<String>) });
-			}
-			if (isTriviaStarField(child)) pushRawToPairedStarSlots(entries, fieldName, child);
-			// ω-condcomp-body-leading-sep: trivia-independent SepBefore
-			// default for raw→paired upcasts. Sibling of the
-			// gate in `buildTypeDefinition`.
-			if (isSepBeforeOptStarField(child)) entries.push({ field: fieldName + SEP_BEFORE_SUFFIX, expr: macro false });
-			if (isBareNonFirstRef(child, origNode) || isBareFirstStarNlOptIn(child, origNode))
-				entries.push({ field: fieldName + BEFORE_NEWLINE_SUFFIX, expr: macro false });
-			// ω-598-member-leading-comment: raw→paired upcast default — preWrite
-			// plugin rewrites carry no source comments, so the slot defaults to
-			// the empty array (byte-inert emit). Mirrors the BeforeNewline
-			// sibling above, gated on the same bare-Ref host.
-			if (isBareNonFirstRef(child, origNode))
-				entries.push({ field: fieldName + BEFORE_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
-			// ω-region-prefix-blank: raw→paired upcast default — a preWrite plugin
-			// rewrite carries no source blank, so the slot defaults to `false`
-			// (byte-inert emit). Same host gate as the synth.
-			if (isBeforeBlankRef(child, origNode)) entries.push({ field: fieldName + BEFORE_BLANK_SUFFIX, expr: macro false });
-			if (isTrailRef(child)) entries.push({ field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
-			if (isBeforeTrailRef(child)) entries.push({ field: fieldName + BEFORE_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
-			if (isPadTrailingTerminalRef(child)) entries.push({ field: fieldName + NEWLINE_AFTER_SUFFIX, expr: macro false });
-			// ω-condition-wrap-keep: raw→paired upcast default for the
-			// `<field>CondOpenNewline:Bool` slot. preWrite plugin rewrites
-			// don't preserve the source's post-`(` break, so the upcast
-			// defaults to `false` → the writer falls back to the width-
-			// driven glue. Mirrors the `isPadTrailingTerminalRef` sibling.
-			if (isCondOpenNewlineRef(child)) entries.push({ field: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro false });
-			// ω-struct-trailopt-source-track: struct
-			// typedef fields carrying `@:trailOpt(LIT)` grow a
-			// `<field>TrailPresent:Null<Bool>` slot on the paired-T struct
-			// (synthesised by `buildStructFieldTrailPresentSlot`). Default
-			// to `null` on raw→paired upcasts — preWrite plugin rewrites
-			// don't preserve source presence, so the writer falls back to
-			// canonical re-emission. The slot is `@:optional` so omission
-			// would also compile, but explicit `null` push mirrors the
-			// `isTrailRef` / `isPadTrailingTerminalRef` sibling pattern and
-			// keeps the raw→paired struct literal shape stable.
-			if (isStructFieldTrailOpt(child)) entries.push({ field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro (null: Null<Bool>) });
-		}
-		final structLit: Expr = { expr: EObjectDecl([for (e in entries) { field: e.field, expr: e.expr }]), pos: pos };
-		return macro return $structLit;
-	}
-
-	/**
-	 * The raw→paired upcast defaults for ONE trivia Star field's trailing slots.
-	 * Extracted from `buildRawToPairedSeqBody` so that function stays under the
-	 * complexity gate; the gates here must keep matching `buildStarTrailingSlots`.
-	 */
-	private static function pushRawToPairedStarSlots(
-		entries: Array<{ field: String, expr: Expr }>, fieldName: String, child: ShapeNode
-	): Void {
-		entries.push({ field: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, expr: macro false });
-		// ω-keep-fnsig-newline: sibling default for the close-newline
-		// slot (raw→paired upcast). Mirrors TRAILING_BLANK_BEFORE_SUFFIX.
-		entries.push({ field: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro false });
-		entries.push({ field: fieldName + TRAILING_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
-		if (child.readMetaString(':trail') != null)
-			entries.push({ field: fieldName + TRAILING_CLOSE_SUFFIX, expr: macro (null: Null<String>) });
-		if (child.readMetaString(':lead') != null && !child.hasMeta(':tryparse'))
-			entries.push({ field: fieldName + TRAILING_OPEN_SUFFIX, expr: macro (null: Null<String>) });
-		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody'))
-			entries.push({ field: fieldName + TRAILING_BLANK_AFTER_SUFFIX, expr: macro false });
-		// ω-blockended-trivia-meta-arity: hasMeta over
-		// readMetaString — gate must match `buildStarTrailingSlots`
-		// at L1002. Multi-arg `@:sep('text', tailRelax, blockEnded)`
-		// (3-arg form) lands on the same code path as 1-arg `@:sep(',')`.
-		if (child.hasMeta(':sep') && child.hasMeta(':trail')) entries.push({ field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false });
-	}
-
-	private static function buildRawToPairedAltBody(origName: String, origNode: ShapeNode, synthPack: Array<String>, pos: Position): Expr {
-		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
-		final pairedPath: Array<String> = synthPack.concat([SYNTH_MODULE_LEAF, pairedSimple]);
-		final cases: Array<Case> = [];
-		for (branch in origNode.children) {
-			final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
-			final origArgCount: Int = branch.children.length;
-			if (origArgCount == 0) {
-				final pattern: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-				final pairedCtor: Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
-				cases.push({ values: [pattern], guard: null, expr: pairedCtor });
-				continue;
-			}
-			// Pattern: CtorName(arg0, arg1, ...) — raw ctors have no extras.
-			final binders: Array<Expr> = [
-				for (i in 0...origArgCount)
-					{ expr: EConst(CIdent(branch.children[i].annotations.get(AnnotationKeys.BASE_FIELD_NAME))), pos: pos }
-			];
-			final pattern: Expr = { expr: ECall({ expr: EConst(CIdent(ctorName)), pos: pos }, binders), pos: pos };
-			// Body: PairedType.CtorName(wrap(arg0), wrap(arg1), ...defaults).
-			final pairedArgs: Array<Expr> = [
-				for (i in 0...origArgCount) {
-					final argNode: ShapeNode = branch.children[i];
-					final argName: String = argNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
-					final argAccess: Expr = { expr: EConst(CIdent(argName)), pos: pos };
-					shapeRawToPairedWrap(argAccess, argNode, pos);
-				}
-			];
-			for (extra in buildAltExtraDefaults(branch)) pairedArgs.push(extra);
-			final pairedCtorFn: Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
-			final body: Expr = { expr: ECall(pairedCtorFn, pairedArgs), pos: pos };
-			cases.push({ values: [pattern], guard: null, expr: body });
-		}
-		final switchExpr: Expr = { expr: ESwitch(macro value, cases, null), pos: pos };
-		return macro return $switchExpr;
-	}
-
-	/**
-	 * Default-value expressions for Alt branch trivia-only positional
-	 * extras. Order MUST mirror `buildEnumCtor`'s push order so the
-	 * paired ctor's positional arg list is satisfied position-by-position.
-	 */
-	private static function buildAltExtraDefaults(branch: ShapeNode): Array<Expr> {
-		final defaults: Array<Expr> = [];
-		if (isAltCloseTrailingBranch(branch)) {
-			defaults.push(macro (null: Null<String>)); // closeTrailing
-			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
-				defaults.push(macro (null: Null<String>)); // openTrailing
-				defaults.push(macro false); // trailingBlankBefore
-				defaults.push(macro ([]: Array<String>)); // trailingLeading
-				// ω-arraylit-source-trail-comma: trailPresent default for
-				// raw-to-paired wraps. `false` matches the parser's initial
-				// state — preWrite plugin rewrites don't preserve source
-				// trailing-sep presence, so the writer falls back to the
-				// knob-only path (`appendTrailingCommaExpr = knob`).
-				// ω-blockended-trivia-meta-arity: hasMeta over
-				// readMetaString — must match `buildEnumCtor` L1076 gate so
-				// raw-to-paired ctor arg count matches the paired ctor's arity.
-				if (branch.hasMeta(':sep')) defaults.push(macro false);
-			}
-		}
-		if (isAltTrailOptBranch(branch)) defaults.push(macro false); // trailPresent
-		if (isCaptureSourceBranch(branch)) defaults.push(macro ''); // sourceText
-		if (isAltBodyPolicyKwBranch(branch)) defaults.push(macro false); // bodyOnSameLine
-		if (isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
-		if (isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
-		if (isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
-		if (isAltChainNewlineBranch(branch)) defaults.push(macro (null: Null<String>)); // chainLeadComment (chain receiver/operand comment)
-		if (isInfixChainBranch(branch)) defaults.push(macro (null: Null<String>)); // opAfterComment (infix post-operator comment)
-		if (isRhsTrailBranch(branch)) defaults.push(macro (null: Null<String>)); // opRhsTrailComment (infix right-operand trailing comment)
-		if (isTernaryTrailBranch(branch)) {
-			defaults.push(macro (null: Null<String>)); // condTrailComment (ω-keep-ternary-operand-comment)
-			defaults.push(macro (null: Null<String>)); // thenTrailComment
-		}
-		if (isPostfixOpSpaceBranch(branch)) defaults.push(macro true); // opSpaceBefore (spaced fallback)
-		if (isPostfixCloseTrailingBranch(branch)) {
-			defaults.push(macro (null: Null<String>)); // closeTrailing
-			// ω-D9A-keep-callargs-v2: argsOpenNewline default for raw→paired
-			// wraps. `false` matches the parser's initial state for source
-			// without a leading-newline after the postfix open. preWrite
-			// plugin rewrites don't preserve open-paren source shape, so the
-			// writer falls back to default (glued first arg) — consistent
-			// with the existing closeTrailing=null fallback.
-			defaults.push(macro false); // argsOpenNewline
-			// ω-keep-callclose-newline: argsCloseNewline default for raw→paired
-			// wraps. `false` matches the parser's initial state for source whose
-			// close glued (no newline before the postfix close). preWrite plugin
-			// rewrites don't preserve close-paren source shape, so the writer
-			// falls back to the glued close — consistent with the sibling
-			// argsOpenNewline=false / closeTrailing=null fallbacks.
-			defaults.push(macro false); // argsCloseNewline
-			// ω-callarg-empty-inner-comment: argsInnerComment default for
-			// raw→paired wraps. `null` matches the parser's initial state for a
-			// call with no empty-parens inner comment.
-			defaults.push(macro (null: Null<String>)); // argsInnerComment
-			// ω-keep-call-leading-comment: callLeadingComment default for raw→paired
-			// wraps. `null` matches the parser's initial state for a call with no
-			// pre-callee leading comment.
-			defaults.push(macro (null: Null<String>)); // callLeadingComment
-		}
-		return defaults;
-	}
-
-	/**
-	 * Build the wrap expression for one raw-value access. Mirror of
-	 * `shapePairedToRawUnwrap` — same shape kinds, opposite direction.
-	 * Star elements gain a fresh `Trivial<T>` envelope with empty
-	 * trivia siblings; inner refs that are themselves paired recurse
-	 * through `rawToPaired_<Inner>`.
-	 */
-	private static function shapeRawToPairedWrap(access: Expr, node: ShapeNode, pos: Position): Expr {
-		switch node.kind {
-			case Ref:
-				final refName: String = node.annotations[AnnotationKeys.BASE_REF];
-				final optional: Bool = node.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
-				if (!refIsBearing(refName)) return access;
-				final fnName: String = 'rawToPaired_${leafOf(refName)}';
-				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
-				return optional ? macro ($access == null ? null : $call) : call;
-			case Star:
-				final elem: ShapeNode = node.children[0];
-				final triviaWrap: Bool = node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
-				final optional: Bool = node.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
-				final iterVar: String = 'e';
-				final iterExpr: Expr = { expr: EConst(CIdent(iterVar)), pos: pos };
-				final innerWrap: Expr = shapeRawToPairedWrap(iterExpr, elem, pos);
-				final perElem: Expr = triviaWrap
-					? macro ({
-						blankBefore: false,
-						blankAfterLeadingComments: false,
-						newlineBefore: false,
-						leadingComments: ([]: Array<String>),
-						trailingComment: (null: Null<String>),
-						trailingBeforeSep: false,
-						sepAfter: true,
-						node: $innerWrap,
-					})
-					: innerWrap;
-				final compr: Expr = {
-					expr: EArrayDecl([
-						{
-							expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, perElem),
-							pos: pos
-						}
-					]),
-					pos: pos
-				};
-				return optional ? macro ($access == null ? null : $compr) : compr;
-			case Terminal:
-				return access;
-			case _:
-				Context.fatalError('TriviaTypeSynth: shapeRawToPairedWrap unexpected kind ${node.kind}', pos);
-				throw 'unreachable';
-		}
 	}
 
 	private static function buildTypeDefinition(origName: String, origNode: ShapeNode, synthPack: Array<String>): TypeDefinition {
@@ -1327,26 +522,28 @@ class TriviaTypeSynth {
 			case Seq:
 				final fields: Array<Field> = [];
 				for (child in origNode.children) {
-					fields.push(buildStructField(child, pos, synthPack));
+					fields.push(TriviaPairSlots.buildStructField(child, pos, synthPack));
 					// ω-issue-316: `@:optional @:kw(...)` Ref fields grow two
 					// sibling trivia slots — a same-line trailing comment
 					// captured right after the kw (`AfterKw`), and own-line
 					// comments captured between kw and body (`KwLeading`).
 					// Writer consumes these to preserve source layout; absent
 					// consumers read `null` / `[]` with no harm.
-					if (isOptionalKw(child)) for (extra in buildKwTriviaSlots(child, pos)) fields.push(extra);
+					if (TriviaPairSlots.isOptionalKw(child)) for (extra in TriviaPairSlots.buildKwTriviaSlots(child, pos))
+						fields.push(extra);
 					// ω-orphan-trivia: `@:trivia` Star fields grow two
 					// sibling slots capturing trailing trivia (own-line
 					// comments between the last element and the close /
 					// EOF). Without them a class body like `{ /* orphan */ }`
 					// would lose its comment at parse time.
-					if (isTriviaStarField(child)) for (extra in buildStarTrailingSlots(child, pos)) fields.push(extra);
+					if (TriviaPairSlots.isTriviaStarField(child)) for (extra in TriviaPairSlots.buildStarTrailingSlots(child, pos))
+						fields.push(extra);
 					// ω-condcomp-body-leading-sep: independent of @:trivia.
 					// Add a `<field>SepBefore:Bool` slot for Stars opting into
 					// `@:fmt(sepBeforeOpt)`. First consumer is
 					// `HxConditionalParam.body`, which is a NON-trivia Star —
 					// the slot synthesis must not be gated on `isTriviaStarField`.
-					if (isSepBeforeOptStarField(child)) {
+					if (TriviaPairSlots.isSepBeforeOptStarField(child)) {
 						final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 						final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 						fields.push({
@@ -1361,14 +558,14 @@ class TriviaTypeSynth {
 					// had a newline in the gap between the preceding content
 					// and the sub-rule's first token. Consumed by the
 					// writer's inter-field separator.
-					if (isBareNonFirstRef(child, origNode) || isBareFirstStarNlOptIn(child, origNode))
-						fields.push(buildBeforeNewlineSlot(child, pos));
+					if (TriviaPairSlots.isBareNonFirstRef(child, origNode) || TriviaPairSlots.isBareFirstStarNlOptIn(child, origNode))
+						fields.push(TriviaPairSlots.buildBeforeNewlineSlot(child, pos));
 					// ω-598-member-leading-comment: only the bare non-first Ref
 					// host (e.g. `HxMemberDecl.member`) grows the leading-comment
 					// companion — its `BeforeNewline` `collectTrivia` scan owns
 					// the pre-field gap. The Star-opt-in host reads a different
 					// parser local, so it keeps `BeforeNewline` only.
-					if (isBareNonFirstRef(child, origNode)) fields.push(buildBeforeLeadingSlot(child, pos));
+					if (TriviaPairSlots.isBareNonFirstRef(child, origNode)) fields.push(TriviaPairSlots.buildBeforeLeadingSlot(child, pos));
 					// ω-region-prefix-blank: the third slot of the same gap — whether the
 					// source put a BLANK line there, not merely a newline. Opt-in
 					// (`@:fmt(keepBlankAfterStarCtor(...))`), because for the ordinary
@@ -1376,7 +573,7 @@ class TriviaTypeSynth {
 					// (`emptylines/issue_384_macro_classes_with_metadata`: `@Test\n\n\tfunction
 					// foobar()` → `@Test\n\tfunction foobar()`), and only a `#if … #end`
 					// region in that position keeps it.
-					if (isBeforeBlankRef(child, origNode)) fields.push(buildBeforeBlankSlot(child, pos));
+					if (TriviaPairSlots.isBeforeBlankRef(child, origNode)) fields.push(TriviaPairSlots.buildBeforeBlankSlot(child, pos));
 					// ω-trivia-after-trail: any mandatory Ref field with
 					// `@:trail` grows a `<field>AfterTrail:Null<String>` slot
 					// holding a same-line `// comment` captured right after
@@ -1385,11 +582,11 @@ class TriviaTypeSynth {
 					// `thenBody`); other Ref+trail fields without a
 					// bodyPolicy sibling synthesise the slot harmlessly and
 					// can opt in later.
-					if (isTrailRef(child)) fields.push(buildAfterTrailSlot(child, pos));
+					if (TriviaPairSlots.isTrailRef(child)) fields.push(TriviaPairSlots.buildAfterTrailSlot(child, pos));
 					// ω-before-trail: the twin slot on the OTHER side of the same
 					// literal — a block comment sitting between the field's last
 					// token and its `@:trail` close. See BEFORE_TRAIL_SUFFIX.
-					if (isBeforeTrailRef(child)) fields.push(buildBeforeTrailSlot(child, pos));
+					if (TriviaPairSlots.isBeforeTrailRef(child)) fields.push(TriviaPairSlots.buildBeforeTrailSlot(child, pos));
 					// ω-cond-comp-expr-multiline: bare Ref fields opted in via
 					// `@:fmt(captureSourceNewlineAfter)` grow a `NewlineAfter:Bool`
 					// slot capturing whether the source had a newline AFTER
@@ -1398,7 +595,7 @@ class TriviaTypeSynth {
 					// downstream sibling carries a slot (e.g.
 					// `HxConditionalExpr.expr → '#end'` when both `elseifs`
 					// and `elseExpr` are absent).
-					if (isPadTrailingTerminalRef(child)) fields.push(buildNewlineAfterSlot(child, pos));
+					if (TriviaPairSlots.isPadTrailingTerminalRef(child)) fields.push(TriviaPairSlots.buildNewlineAfterSlot(child, pos));
 					// ω-condition-wrap-keep: the mandatory-Ref condition field
 					// of a `@:fmt(condWrap)` struct opted in via
 					// `@:fmt(captureCondOpenNewline)` grows a `CondOpenNewline:Bool`
@@ -1406,7 +603,7 @@ class TriviaTypeSynth {
 					// condition's open paren (`if (\n\tcond`). Read by the
 					// single-Ref condWrap emit so a `WrapMode.Keep` condition
 					// reproduces the author's post-`(` break.
-					if (isCondOpenNewlineRef(child)) fields.push(buildCondOpenNewlineSlot(child, pos));
+					if (TriviaPairSlots.isCondOpenNewlineRef(child)) fields.push(TriviaPairSlots.buildCondOpenNewlineSlot(child, pos));
 					// ω-struct-trailopt-source-track:
 					// struct typedef fields carrying `@:trailOpt(LIT)` grow an
 					// `@:optional` `<field>TrailPresent:Null<Bool>` slot. The
@@ -1427,7 +624,8 @@ class TriviaTypeSynth {
 					// issue_366_nested_array_comprehension` (nested `;` preserved),
 					// `whitespace/issue_195`/`221` (do-while bare-body
 					// form).
-					if (isStructFieldTrailOpt(child)) fields.push(buildStructFieldTrailPresentSlot(child, pos));
+					if (TriviaPairAltCtor.isStructFieldTrailOpt(child))
+						fields.push(TriviaPairSlots.buildStructFieldTrailPresentSlot(child, pos));
 				}
 				final anon: ComplexType = TAnonymous(fields);
 				{
@@ -1438,7 +636,9 @@ class TriviaTypeSynth {
 					fields: []
 				};
 			case Alt:
-				final fields: Array<Field> = [for (branch in origNode.children) buildEnumCtor(branch, pos, synthPack)];
+				final fields: Array<Field> = [
+					for (branch in origNode.children) TriviaPairAltCtor.buildEnumCtor(branch, pos, synthPack)
+				];
 				{
 					pos: pos,
 					pack: synthPack,
@@ -1452,723 +652,6 @@ class TriviaTypeSynth {
 		};
 	}
 
-	private static function buildStructField(child: ShapeNode, pos: Position, synthPack: Array<String>): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final ct: ComplexType = shapeToComplexType(child, synthPack);
-		final optional: Bool = child.annotations[AnnotationKeys.BASE_OPTIONAL] == true;
-		final meta: Metadata = optional ? [{ name: ':optional', params: [], pos: pos }] : [];
-		return {
-			name: fieldName,
-			kind: FVar(ct),
-			pos: pos,
-			access: [],
-			meta: meta
-		};
-	}
-
-	private static function isOptionalKw(child: ShapeNode): Bool {
-		// Generalised over kind=Ref|Star — both shapes need the kw-trivia
-		// sibling slots (`<f>BeforeKwLeading` / `<f>BeforeKwTrailing` /
-		// `<f>AfterKw` / `<f>KwLeading` / `<f>BeforeKwNewline` /
-		// `<f>BodyOnSameLine`) so the writer can round-trip the kw→body
-		// gap regardless of whether the body is a single Ref or a Star
-		// of decls/statements.
-		//
-		// Ref consumer: `HxIfStmt.elseBody` (`@:optional @:kw('else')`
-		// Ref to HxStatement). Star consumer: `HxConditionalDecl.elseBody`
-		// (`@:optional @:kw('#else')` Star of HxTopLevelDecl, slice
-		// ω-cond-comp-engine). Lowering's `isOptionalKwStar` mirrors this
-		// predicate's Star branch on the parser side.
-		return (child.kind == Ref || child.kind == Star)
-			&& (child.annotations[AnnotationKeys.BASE_OPTIONAL] == true && child.readMetaString(':kw') != null);
-	}
-
-	private static function isBareNonFirstRef(child: ShapeNode, parent: ShapeNode): Bool {
-		// ω-orphan-prefix-member: `@:fmt(bareRefSepWhenPresent)` puts an
-		// `@:optional @:absentOn` Ref back on the bare-Ref footing — when
-		// PRESENT it needs the same `<field>BeforeNewline` /
-		// `<field>BeforeLeading` signals the mandatory field had, or the
-		// writer has nothing to reproduce the gap from. Spelled the same way as
-		// `Lowering.computeBeforeSlots` and `WriterLowering`'s `optBareSep` gate on
-		// purpose — three places decide synthesise / capture / consume for one slot,
-		// and only an identical spelling makes the agreement checkable by eye.
-		return child.kind == Ref && ((
-			child.annotations[AnnotationKeys.BASE_OPTIONAL] != true || child.fmtHasFlag('bareRefSepWhenPresent')
-		) && (child.readMetaString(':kw') == null && (
-			child.readMetaString(':lead') == null && (child != parent.children[0] || child.fmtHasFlag('beforeNewlineSlotFirst'))
-		)));
-	}
-
-	/**
-	 * ω-casepattern-keep — true for a bare (lead-less, kw-less,
-	 * non-optional) trivia Star that is the FIRST field of its struct and
-	 * opts into the source-newline-before channel via
-	 * `@:fmt(beforeNewlineSlotFirst)`. Sister of `isBareNonFirstRef`'s
-	 * first-field allowance, but for a Star value (`HxCaseBranch.patterns`,
-	 * `@:sep(',') @:trail(':')`) rather than a bare Ref. Such a field grows
-	 * a `<field>BeforeNewline:Bool` slot recording whether the source broke
-	 * right after the parent's `case` keyword (whose post-kw `skipWs` the
-	 * parent ctor omits via `@:fmt(forwardNewlineForBody)`). Read by the
-	 * writer's struct-Star emit under `opt.leftCurly == Next`.
-	 */
-	private static function isBareFirstStarNlOptIn(child: ShapeNode, parent: ShapeNode): Bool {
-		return child.kind == Star && (child.annotations[AnnotationKeys.BASE_OPTIONAL] != true && (child.readMetaString(':kw') == null && (
-			child.readMetaString(':lead') == null && (child == parent.children[0] && child.fmtHasFlag('beforeNewlineSlotFirst'))
-		)));
-	}
-
-	private static function buildBeforeNewlineSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		return {
-			name: fieldName + BEFORE_NEWLINE_SUFFIX,
-			kind: FVar(boolCT),
-			pos: pos,
-			access: []
-		};
-	}
-
-	/**
-	 * ω-598-member-leading-comment — `<field>BeforeLeading:Array<String>`
-	 * companion to `buildBeforeNewlineSlot`, gated on the same
-	 * `isBareNonFirstRef` host. Holds the verbatim comments the
-	 * `BeforeNewline` `collectTrivia` scan captured in the pre-field gap.
-	 */
-	private static function buildBeforeLeadingSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final arrayStrCT: ComplexType = TPath({
-			pack: [],
-			name: 'Array',
-			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-		});
-		return {
-			name: fieldName + BEFORE_LEADING_SUFFIX,
-			kind: FVar(arrayStrCT),
-			pos: pos,
-			access: []
-		};
-	}
-
-	/**
-	 * ω-region-prefix-blank — hosts of `<field>BeforeBlank`: a bare non-first Ref
-	 * that opts in with `@:fmt(keepBlankAfterStarCtor(starField, ctorName))`.
-	 * Spelled as `isBareNonFirstRef` PLUS the opt-in on purpose, so the slot can
-	 * never be synthesised for a field whose writer seat would not read it —
-	 * the same synthesise / capture / consume agreement `BeforeNewline` keeps
-	 * across `Lowering.computeBeforeSlots` and `WriterLowering`.
-	 */
-	private static function isBeforeBlankRef(child: ShapeNode, parent: ShapeNode): Bool {
-		return isBareNonFirstRef(child, parent) && child.fmtReadStringArgs('keepBlankAfterStarCtor') != null;
-	}
-
-	/**
-	 * ω-region-prefix-blank — `<field>BeforeBlank:Bool` companion to
-	 * `buildBeforeNewlineSlot`. Records whether the `collectTrivia` scan that
-	 * filled `BeforeNewline` saw a BLANK line, which `newlineBefore` alone
-	 * cannot distinguish from a single break.
-	 */
-	private static function buildBeforeBlankSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		return {
-			name: fieldName + BEFORE_BLANK_SUFFIX,
-			kind: FVar(boolCT),
-			pos: pos,
-			access: []
-		};
-	}
-
-	/**
-	 * True for mandatory Ref fields carrying `@:trail(LIT)`. Reads
-	 * `@:trail` from `base.meta` directly (TriviaTypeSynth.arm runs
-	 * BEFORE the Lit strategy populates `lit.trailText`, same ordering
-	 * constraint as `isOptionalKw` / star-trailing predicates).
-	 * Optional Refs with `@:lead` + `@:trail` ARE included:
-	 * the lead-led commit branch in `Lowering` consumes the trail and
-	 * captures a same-line `// comment` into `<field>AfterTrail`, same as
-	 * the mandatory path. The absent branch leaves the slot null.
-	 */
-	private static function isTrailRef(child: ShapeNode): Bool {
-		// Mandatory Ref with @:trail, OR a @:fmt(captureTrailComment)-opted Star
-		// (case-pattern list) — both grow a `<field>AfterTrail:Null<String>` slot.
-		return child.readMetaString(':trail') != null && (child.kind == Ref || child.fmtHasFlag('captureTrailComment'));
-	}
-
-	/**
-	 * Hosts of `<field>BeforeTrail`: a MANDATORY Ref carrying `@:trail`. The
-	 * optional-Ref path emits its trail from a different writer seat
-	 * (`emitOptionalRefLead`) and is left alone — the slot would be synthesised
-	 * with nothing to fill or read it.
-	 */
-	private static function isBeforeTrailRef(child: ShapeNode): Bool {
-		return child.kind == Ref && child.annotations[AnnotationKeys.BASE_OPTIONAL] != true && isTrailRef(child);
-	}
-
-	/** A `<field><suffix>:Null<String>` sidecar slot on the paired-T struct. */
-	private static function buildNullStringSlot(child: ShapeNode, pos: Position, suffix: String): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
-		return {
-			name: fieldName + suffix,
-			kind: FVar(nullStrCT),
-			pos: pos,
-			access: []
-		};
-	}
-
-	/**
-	 * Build the `<field>TrailPresent` slot for struct typedef fields gated
-	 * by `isStructFieldTrailOpt`. Slot is `@:optional Null<Bool>` so
-	 * paired-struct construction in `Lowering` may omit it (`null` = "no
-	 * source info", e.g. a synthesised paired-T from a writer-only path;
-	 * `true`/`false` = source had / lacked the trail literal). The writer
-	 * does not yet consume the slot (see `isStructFieldTrailOpt`). Suffix
-	 * shared with `buildStarTrailingSlots`'s `@:sep+@:trail` Star case
-	 * (disjoint host — Ref vs Star within one Seq cannot collide on field
-	 * name).
-	 *
-	 */
-	private static function buildStructFieldTrailPresentSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		final nullBoolCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(boolCT)] });
-		final meta: Metadata = [{ name: ':optional', params: [], pos: pos }];
-		return {
-			name: fieldName + TRAIL_PRESENT_SUFFIX,
-			kind: FVar(nullBoolCT),
-			pos: pos,
-			access: [],
-			meta: meta
-		};
-	}
-
-	/**
-	 * True for any Ref field opted in via `@:fmt(captureSourceNewlineAfter)`.
-	 * The slot records whether the source had a newline AFTER this
-	 * field's parse position — used by the writer's `padTrailingDoc`
-	 * walker as a per-field source-shape signal for the boundary
-	 * between this field and the parent ctor's trail literal (or
-	 * the next non-signal-bearing sibling).
-	 *
-	 * Bare Ref, optional Ref, and optional-kw Ref are all eligible —
-	 * the capture position is "wherever ctx.pos lands after this
-	 * field's parse case branch settles", which is well-defined for
-	 * all three kinds (post-parse for present case, post-rewind for
-	 * absent case).
-	 *
-	 * Currently consumed by:
-	 *   - `HxConditionalExpr.expr` (mandatory bare Ref) — captures the
-	 *     `expr → '#end'` boundary newline when both `elseifs` is empty
-	 *     and `elseExpr` is absent.
-	 *   - `HxConditionalExpr.elseExpr` (optional kw Ref) — captures the
-	 *     `elseExpr → '#end'` boundary newline.
-	 */
-	private static function isPadTrailingTerminalRef(child: ShapeNode): Bool {
-		return child.kind == Ref && child.fmtHasFlag('captureSourceNewlineAfter');
-	}
-
-	private static function buildNewlineAfterSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		return {
-			name: fieldName + NEWLINE_AFTER_SUFFIX,
-			kind: FVar(boolCT),
-			pos: pos,
-			access: []
-		};
-	}
-
-	/**
-	 * ω-condition-wrap-keep — true for the mandatory-Ref condition field of a
-	 * `@:fmt(condWrap)` struct (`HxIfStmt.cond` / `HxWhileStmt.cond`) that opts
-	 * into source-shape capture via `@:fmt(captureCondOpenNewline)`. Such a
-	 * field grows a `<field>CondOpenNewline:Bool` slot recording whether the
-	 * source broke right after the open paren. Requires `condWrap` (the field
-	 * carries the `@:lead('(')` open delimiter whose post-`(` gap is probed)
-	 * and a bare mandatory Ref (the condWrap contract). Disjoint from
-	 * `isPadTrailingTerminalRef` (which keys on `captureSourceNewlineAfter`).
-	 * Reads the flags via `fmtHasFlag`, which works at arm-time (`base.meta`
-	 * populated by `ShapeBuilder` before `arm()` runs — same path the sister
-	 * predicates rely on).
-	 */
-	private static function isCondOpenNewlineRef(child: ShapeNode): Bool {
-		return child.kind == Ref
-			&& (child.annotations[AnnotationKeys.BASE_OPTIONAL] != true
-				&& (child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline')));
-	}
-
-	private static function buildCondOpenNewlineSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		return {
-			name: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX,
-			kind: FVar(boolCT),
-			pos: pos,
-			access: []
-		};
-	}
-
-	private static function buildKwTriviaSlots(child: ShapeNode, pos: Position): Array<Field> {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
-		final arrayStrCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(strCT)] });
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		// Slots are mandatory (no `@:optional`). The parser always
-		// populates them — `AfterKw` gets a captured same-line trailing
-		// or `null`; `KwLeading` gets a list of own-line comments
-		// (possibly empty); `BeforeKwNewline` / `BodyOnSameLine` carry
-		// source-shape booleans for the `Keep` policy branches.
-		// Mandatory typing keeps Null-Safety strict happy in the
-		// writer's `kwGapDoc` / `bodyPolicyWrap` call sites.
-		return [
-			{
-				name: fieldName + AFTER_KW_SUFFIX,
-				kind: FVar(nullStrCT),
-				pos: pos,
-				access: []
-			},
-			{
-				name: fieldName + KW_LEADING_SUFFIX,
-				kind: FVar(arrayStrCT),
-				pos: pos,
-				access: []
-			},
-			{
-				name: fieldName + BEFORE_KW_NEWLINE_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			},
-			{
-				name: fieldName + BODY_ON_SAME_LINE_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			},
-			{
-				name: fieldName + BEFORE_KW_LEADING_SUFFIX,
-				kind: FVar(arrayStrCT),
-				pos: pos,
-				access: []
-			},
-			{
-				name: fieldName + BEFORE_KW_TRAILING_SUFFIX,
-				kind: FVar(nullStrCT),
-				pos: pos,
-				access: []
-			}
-		];
-	}
-
-	private static function isTriviaStarField(child: ShapeNode): Bool {
-		return child.kind == Star && child.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
-	}
-
-	/**
-	 * Opt-in: non-trivia `@:sep + @:tryparse` no-`@:trail` Star
-	 * field with `@:fmt(sepBeforeOpt)` requesting a `<field>SepBefore:Bool`
-	 * synth slot. The slot captures whether the source had a leading
-	 * separator inside the body (`#if cond, body` shape) for byte-roundtrip
-	 * re-emission by the writer.
-	 *
-	 * Independent of `@:trivia` (the gate fires for both trivia and plain
-	 * Stars) but coupled to the @:sep+@:tryparse no-trail shape — those
-	 * are the only Lowering / WriterLowering paths that interpret the
-	 * slot. Macro shape validation lives in `Lowering.emitStarFieldSteps`
-	 * (fatalError on missing `:sep` / `:tryparse` / present `:trail`) and
-	 * `WriterLowering.emitWriterStarField` (fatalError on missing
-	 * `padLeading`).
-	 */
-	private static function isSepBeforeOptStarField(child: ShapeNode): Bool {
-		return child.kind == Star && child.fmtHasFlag('sepBeforeOpt');
-	}
-
-	private static function buildStarTrailingSlots(child: ShapeNode, pos: Position): Array<Field> {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-		final arrayStrCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(strCT)] });
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		final fields: Array<Field> = [
-			{
-				name: fieldName + TRAILING_BLANK_BEFORE_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			},
-			// ω-keep-fnsig-newline: sibling slot recording a single newline (not
-			// a blank line) before the close. Defined unconditionally alongside
-			// TrailingBlankBefore so the arity stays locked.
-			{
-				name: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			},
-			{
-				name: fieldName + TRAILING_LEADING_SUFFIX,
-				kind: FVar(arrayStrCT),
-				pos: pos,
-				access: []
-			}
-		];
-		// ω-close-trailing: close-peek Stars (those with `@:trail`)
-		// additionally carry a same-line trailing comment captured right
-		// after the close literal. EOF-mode Stars omit this slot —
-		// there's no close to trail. `@:trivia + @:tryparse` already
-		// rejects `@:trail`, so tryparse cannot reach this branch.
-		//
-		// Reads `@:trail` directly from `base.meta` rather than the
-		// Lit-strategy-derived `lit.trailText` annotation: `TriviaTypeSynth.arm`
-		// runs BEFORE `registry.runAnnotate` in `Build.buildParser` /
-		// `buildWriter` (the paired type must exist before Lowering /
-		// WriterLowering reference it), so at this point the Lit pass has
-		// not yet populated `lit.trailText`. Mirrors `isOptionalKw`'s
-		// direct-meta read pattern.
-		if (child.readMetaString(':trail') != null) {
-			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
-			fields.push({
-				name: fieldName + TRAILING_CLOSE_SUFFIX,
-				kind: FVar(nullStrCT),
-				pos: pos,
-				access: []
-			});
-		}
-		// ω-open-trailing: same-line `// comment` after the open literal
-		// is captured here for Stars that carry `@:lead`. Read directly
-		// from `base.meta` for the same TriviaTypeSynth/Lit-pass ordering
-		// reason as `:trail` above.
-		//
-		// Skipped for `@:tryparse` Stars: their writer helper
-		// (`triviaTryparseStarExpr`) does not consume an open-trail slot,
-		// so capturing one would silently drop the comment at write time.
-		// `HxDefaultBranch.stmts` (`@:lead(':') @:trivia @:tryparse`) is
-		// the lone current consumer of this gate.
-		if (child.readMetaString(':lead') != null && !child.hasMeta(':tryparse')) {
-			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
-			fields.push({
-				name: fieldName + TRAILING_OPEN_SUFFIX,
-				kind: FVar(nullStrCT),
-				pos: pos,
-				access: []
-			});
-		}
-		// ω-trail-blank-after: tryparse + nestBody Stars need a Bool slot
-		// to carry the source's blank-line-between-trail-and-next-sibling
-		// signal (`_lead.blankAfterLeadingComments` from the failed-element
-		// trivia run). Other tryparse shapes either rewind on failure (no
-		// stash) or have no nestBody indent wrap. Reads `:fmt` directly from
-		// `base.meta` for the same TriviaTypeSynth/Lit-pass ordering reason
-		// as `:trail` / `:lead` above.
-		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) {
-			fields.push({
-				name: fieldName + TRAILING_BLANK_AFTER_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			});
-		}
-		// ω-objectlit-source-trail-comma: sep-Stars with a close literal
-		// grow a `Bool` slot capturing whether the source had a trailing
-		// separator after the last element. The writer reads it via
-		// `<field>TrailPresent` to force the wrap-rules cascade into
-		// break-mode when the source committed to a multi-line list.
-		// Reads `:sep` / `:trail` directly from `base.meta` for the same
-		// pre-Lit-pass ordering reason as the gates above.
-		//
-		// ω-blockended-trivia-meta-arity: `hasMeta` instead of
-		// `readMetaString` so multi-arg `@:sep('text', tailRelax, blockEnded)`
-		// counts the same as 1-arg `@:sep(',')`. Parser-side gate reads
-		// `lit.sepText` (set by Lit strategy after both 1- and 3-arg forms)
-		// — synth must match the parser to keep ctor / struct arity in sync.
-		if (child.hasMeta(':sep') && child.hasMeta(':trail')) {
-			fields.push({
-				name: fieldName + TRAIL_PRESENT_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			});
-		}
-		return fields;
-	}
-
-	private static function buildEnumCtor(branch: ShapeNode, pos: Position, synthPack: Array<String>): Field {
-		final ctorName: String = branch.annotations[AnnotationKeys.BASE_CTOR];
-		if (branch.children.length == 0) return {
-			name: ctorName,
-			kind: FVar(null),
-			pos: pos,
-			access: []
-		};
-		final args: Array<FunctionArg> = [
-			for (arg in branch.children)
-				{
-					name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
-					type: shapeToComplexType(arg, synthPack)
-				}
-		];
-		// ω-close-trailing-alt: close-peek `@:trivia` Alt-branch Stars
-		// (only `HxStatement.BlockStmt` in the current grammar) grow a
-		// positional `closeTrailing:Null<String>` arg alongside the
-		// existing Trivial-wrapped Star array. Mirrors the Seq-struct
-		// close-trailing slot synthesised by `buildStarTrailingSlots`,
-		// but the arg has no field-name prefix — Alt ctors are
-		// positional so the writer reads it via `argNames[1]`.
-		//
-		// ω-open-trailing-alt: when the branch ALSO carries `@:lead`
-		// (which all three current consumers — BlockStmt, ArrayExpr,
-		// BlockExpr — do), append a parallel positional `openTrailing:
-		// Null<String>` arg captured via `collectTrailingFull` right
-		// after the open literal. Mirrors the Seq-struct open-trailing
-		// slot. Writer reads it via `argNames[2]`. Without this, an
-		// inline same-line comment between open and first element
-		// (or, when the Star is empty, between open and close) is lost
-		// at parse — the synth ctor had no slot for it.
-		if (isAltCloseTrailingBranch(branch)) {
-			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
-			args.push({ name: 'closeTrailing', type: nullStrCT });
-			// `:tryparse` excluded for parity with `buildStarTrailingSlots` —
-			// the writer's tryparse helper does not consume an open-trail
-			// slot, so capturing one would silently drop the comment at
-			// write time. Today no Alt branch combines `:trivia + :tryparse`
-			// + `:lead` so the guard is dormant; kept for forward parity.
-			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
-				args.push({ name: 'openTrailing', type: nullStrCT });
-				// ω-orphan-trivia-alt: orphan trivia between the last Star
-				// element and the close literal (e.g. trailing line comment
-				// inside `try { p(); /* dropped */ }`). Mirror of the Seq-
-				// struct `<field>TrailingBlankBefore` / `<field>TrailingLeading`
-				// slots from `buildStarTrailingSlots` — the Lowering Case 4
-				// trivia loop captures `_lead.blankBefore` and `_lead.leadingComments`
-				// on close-peek break and pushes them as the next two
-				// positional args. Writer reads via `argNames[3]` /
-				// `argNames[4]`. Gated on `@:lead`-present for predictable arg
-				// position; today's `isAltCloseTrailingBranch` consumers all
-				// carry `@:lead`.
-				final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-				final arrayStrCT: ComplexType = TPath({
-					pack: [],
-					name: 'Array',
-					params: [TPType(strCT)]
-				});
-				args.push({ name: 'trailingBlankBefore', type: boolCT });
-				args.push({ name: 'trailingLeading', type: arrayStrCT });
-				// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia
-				// branches (HxExpr.ArrayExpr, HxType.Anon) grow an additional
-				// `trailPresent:Bool` arg recording whether the source had a
-				// trailing separator before the close literal. Parser captures
-				// the last-iteration `matchLit(sepText)` result; writer reads
-				// via `argNames[5]` (position 5 inside this block, after
-				// closeTrailing/openTrailing/trailingBlankBefore/trailingLeading)
-				// and threads as `trailPresentAccess` to the trivia-sep helper
-				// so `appendTrailingCommaExpr = trailPresent || knob` preserves
-				// the source `,` on multi-line shapes. Disjoint from the lower
-				// `isAltTrailOptBranch`'s `trailPresent` arg (Star vs Ref child
-				// shape — comment at line 1009 already calls out the disjoint
-				// invariant). Reuses `TRAIL_PRESENT_ARG_NAME` so the writer's
-				// runtime field-name probe stays consistent. Gated on `@:sep`
-				// so block-style trivia ctors (`BlockStmt`, `BlockExpr`) keep
-				// their 5-arg shape.
-				// ω-blockended-trivia-meta-arity: `hasMeta` over
-				// `readMetaString` so `@:sep('text', tailRelax, blockEnded)`
-				// (3-arg form) gates the same as 1-arg `@:sep(',')`. Sister
-				// fix in `buildStarTrailingSlots`.
-				if (branch.hasMeta(':sep')) {
-					args.push({ name: TRAIL_PRESENT_ARG_NAME, type: boolCT });
-				}
-			}
-		}
-		// ω-trailopt-source-track: `@:trailOpt(...)` Alt branches with a
-		// single Ref child grow a positional `trailPresent:Bool` arg
-		// holding the parser's `matchLit` result. Disjoint from
-		// `isAltCloseTrailingBranch` (Star vs Ref child shapes), so the
-		// two cannot collide on the same ctor. Read `@:trailOpt` from
-		// `base.meta` directly since `arm()` runs BEFORE the Lit pass
-		// populates `lit.trailOptional` on the branch.
-		if (isAltTrailOptBranch(branch)) {
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: TRAIL_PRESENT_ARG_NAME, type: boolCT });
-		}
-		// ω-string-interp-noformat: ctors carrying `@:fmt(captureSource)`
-		// grow a positional `sourceText:String` arg holding the parser-
-		// captured byte slice between the ctor's `@:lead` and `@:trail`
-		// literals. Disjoint from `isAltCloseTrailingBranch` (Star vs Ref
-		// child) and from `isAltTrailOptBranch` (the `@:trailOpt` predicate
-		// requires a trail literal that can be matched optionally; the
-		// captureSource ctors have unconditional `@:lead`/`@:trail`). When
-		// all three were ever to coexist on a single ctor, the arg order
-		// would be: closeTrailing → trailPresent → sourceText.
-		if (isCaptureSourceBranch(branch)) {
-			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-			args.push({ name: SOURCE_TEXT_ARG_NAME, type: strCT });
-		}
-		// ω-issue-257-firstline: single-Ref kw-led Alt branches carrying
-		// `@:fmt(bodyPolicy(...))` grow a positional `bodyOnSameLine:Bool`
-		// arg holding the parser's source-shape capture (post-kw whitespace
-		// crossed a newline → false; same-line → true). Co-occurs with
-		// `isAltTrailOptBranch` on the first consumer `HxStatement.ReturnStmt`
-		// (`@:kw('return') @:trailOpt(';')`); the arg order in this block
-		// (trailPresent → sourceText → bodyOnSameLine) handles the overlap.
-		// Disjoint from the close-trailing predicates (single Ref child
-		// shape, no Star child).
-		if (isAltBodyPolicyKwBranch(branch)) {
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: BODY_ON_SAME_LINE_ARG_NAME, type: boolCT });
-		}
-		// ω-paren-wrap-source-newline: single-Ref @:wrap(open, close) Alt
-		// branches opting into source-shape capture via
-		// @:fmt(captureWrapOpenNewline) grow a positional `wrapOpenNewline:Bool`
-		// arg holding hasNewlineIn(_leadEndPos, ctx.pos) over the gap between
-		// the open lead literal and the inner sub-rule's first token.
-		// Disjoint from isAltBodyPolicyKwBranch (which requires @:kw; wrap
-		// ctors have no kw) and from the close/postfix trailing predicates
-		// (single Ref child shape, no Star). The arg follows bodyOnSameLine
-		// and precedes the postfix closeTrailing in buildEnumCtor's ordering
-		// so indices in WriterLowering stay deterministic. First consumer:
-		// HxExpr.ParenExpr.
-		if (isAltWrapOpenNewlineBranch(branch)) {
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: WRAP_OPEN_NEWLINE_ARG_NAME, type: boolCT });
-		}
-		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family Alt
-		// branches opting into source-shape capture via `@:fmt(captureKwNewline)`
-		// grow a positional `kwNewline:Bool` arg holding `hasNewlineIn` over the
-		// gap between the last keyword / lead literal (`var` / `final`) and the
-		// inner `decl` Ref's first token. Disjoint from isAltWrapOpenNewlineBranch
-		// (those are kw-less @:wrap ctors) and isAltBodyPolicyKwBranch (VarStmt
-		// carries no @:fmt(bodyPolicy(...))) — composes additively. The arg
-		// follows wrapOpenNewline and precedes the postfix closeTrailing in this
-		// ordering so indices in WriterLowering stay deterministic. First
-		// consumers: HxStatement.{VarStmt, FinalStmt, StaticVarStmt, StaticFinalStmt}.
-		if (isAltKwNewlineBranch(branch)) {
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: KW_NEWLINE_ARG_NAME, type: boolCT });
-		}
-		// ω-keep-chain (increment 2): Pratt/infix enum ctors opting into
-		// per-operand source-newline capture via `@:fmt(captureChainNewline)`
-		// (`HxExpr.Add` / `Sub` / `And` / `Or`) grow a positional
-		// `chainNewline:Bool` arg holding `hasNewlineIn` over the gap before
-		// this ctor's RIGHT operand. Disjoint from every predicate above
-		// (these ctors carry no @:trivia / @:lead / @:kw / @:wrap / bodyPolicy),
-		// so it composes additively as the LAST appended slot. Follows
-		// kwNewline in the ordering so WriterLowering's `altSlotAccess` walker
-		// reaches it as the terminal `ChainNewline` slot. First consumers:
-		// HxExpr.{Add, Sub, And, Or}.
-		if (isAltChainNewlineBranch(branch)) {
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: CHAIN_NEWLINE_ARG_NAME, type: boolCT });
-		}
-		// ω-keep-chain-receiver-comment + ω-keep-infix-operand-comment: every chain
-		// ctor — the `@:postfix('.')` FieldAccess AND the `@:infix` Add/Sub/And/Or —
-		// grows a `chainLeadComment:Null<String>` slot immediately after its
-		// `chainNewline:Bool` slot, holding the verbatim trailing comment of its left
-		// operand captured before the operator (the dot gap for FieldAccess, the
-		// operator gap for the infix chain ctors). Gated by isAltChainNewlineBranch so
-		// it appends after chainNewline and stays disjoint from the closeTrailing
-		// family below (chain ctors carry no close delimiter).
-		if (isAltChainNewlineBranch(branch)) {
-			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
-			args.push({ name: CHAIN_LEAD_COMMENT_ARG_NAME, type: nullStrCT });
-		}
-		// ω-keep-infix-postop-comment: infix chain ctors also grow an
-		// `opAfterComment:Null<String>` slot (after chainLeadComment) holding the
-		// comment trailing the operator. Infix-only (FieldAccess excluded).
-		if (isInfixChainBranch(branch)) {
-			final strCT2: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-			final nullStrCT2: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT2)] });
-			args.push({ name: OP_AFTER_COMMENT_ARG_NAME, type: nullStrCT2 });
-		}
-		// ω-keep-infix-rhs-comment: `opRhsTrailComment` slot on any @:infix ctor
-		// carrying @:fmt(captureRhsTrail) (position #3, right-operand trailing).
-		if (isRhsTrailBranch(branch)) {
-			final strCT3: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-			final nullStrCT3: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT3)] });
-			args.push({ name: OP_RHS_TRAIL_COMMENT_ARG_NAME, type: nullStrCT3 });
-		}
-		// ω-keep-ternary-operand-comment: the `@:ternary` mixfix ctor grows TWO
-		// operand-trailing slots (cond before `?`, then-branch before `:`).
-		// Three operand children, so this gate is disjoint from every two-child
-		// chain gate above and the pair appends after the whole chain family.
-		if (isTernaryTrailBranch(branch)) {
-			final strCT4: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-			final nullStrCT4: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT4)] });
-			args.push({ name: TERNARY_COND_TRAIL_ARG_NAME, type: nullStrCT4 });
-			args.push({ name: TERNARY_THEN_TRAIL_ARG_NAME, type: nullStrCT4 });
-		}
-		// ω-postfix-op-space: word-op postfix ctors opting into source-faithful
-		// operator spacing grow `opSpaceBefore:Bool` as the LAST appended slot
-		// (mirrors the AltSlot declaration order the writer's walker relies on).
-		if (isPostfixOpSpaceBranch(branch)) {
-			final opSpaceBoolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: POSTFIX_OP_SPACE_ARG_NAME, type: opSpaceBoolCT });
-		}
-		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
-		// branches whose Star already auto-collects per-arg trivia
-		// (`trivia.starCollects=true`, set by `TriviaAnalysis.markPostfixStarSuffix`)
-		// grow a positional `closeTrailing:Null<String>` arg holding the
-		// trailing comment captured by the parser AFTER the close literal,
-		// before the next postfix step or Pratt iteration. Without this
-		// slot, `lowerPostfixLoop`'s per-iteration `skipWs(ctx)` eats
-		// inter-segment line/block comments — losing them silently for the
-		// writer (e.g. `.alt(x) // c\n.height(y)` chain segments lose `// c`).
-		// Disjoint from the four predicates above (different shape predicates),
-		// so at most one of these adds applies to any given branch.
-		if (isPostfixCloseTrailingBranch(branch)) {
-			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
-			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
-			args.push({ name: 'closeTrailing', type: nullStrCT });
-			// ω-D9A-keep-callargs-v2: parallel positional `argsOpenNewline:Bool`
-			// slot capturing whether source had `\n` between the postfix open
-			// literal (e.g. `(`) and the first arg's leading non-whitespace.
-			// Drives `WriterLowering.lowerPostfixStar`'s Keep-mode args[0]
-			// hardline + trailing-before-close hardline. The per-element
-			// `Trivial.newlineBefore` for args[0] is polluted by upstream
-			// `ctx.pendingTrivia` drained from kw-Ref rules
-			// ahead of the per-iter trivia collection,
-			// so the open-newline signal needs its own slot captured by
-			// `Lowering` BEFORE the per-iter `skipWs(ctx)` / `collectTrivia(ctx)`
-			// can lose it. Co-occurs with `closeTrailing` so the writer
-			// reads via `argNames[3]` (closeTrailing stays at argNames[2]).
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: 'argsOpenNewline', type: boolCT });
-			// ω-keep-callclose-newline: sibling positional `argsCloseNewline:Bool`
-			// recording whether source had `\n` between the last arg (or the open
-			// lit for an empty list) and the postfix close literal (e.g. `arg\n)`
-			// vs `arg)`). Sibling of `argsOpenNewline` — captured by `Lowering`'s
-			// close-peek `skipWs(ctx)` window right before `expectLit(close)`.
-			// Consumed ONLY by `WriterLowering.lowerPostfixStar`'s Keep-mode
-			// method-chain close placement: when the Call's `methodChain` rules are
-			// `Keep` and this is false (source glued the close), the outer call's
-			// close `)` stays glued to the chain's last token (`})));`) instead of
-			// the `shapeFillLine` `isChainOPLBreak` own-line break. Reads via
-			// `argNames[4]` (argsOpenNewline stays at argNames[3]).
-			args.push({ name: 'argsCloseNewline', type: boolCT });
-			// ω-callarg-empty-inner-comment: empty-parens inner comment slot
-			// (`f(/* c */)`). Holds a comment captured between the postfix open
-			// and close when no argument consumed it; null otherwise. Sibling of
-			// closeTrailing (reuses `nullStrCT`), read by the writer via
-			// `argNames[5]`.
-			args.push({ name: 'argsInnerComment', type: nullStrCT });
-			// ω-keep-call-leading-comment: an inline block comment that precedes
-			// the callee of a call (`/* c */ f()` / `a * /* c */ f()`) — captured
-			// by the parser from `ctx.pendingTrivia` BEFORE the args loop can
-			// drain it into an argument's leading slot. Holds the pre-callee
-			// comment so the writer emits it before the operand instead of
-			// relocating it inside the argument list; null otherwise. Read by the
-			// writer via `argNames[6]`.
-			args.push({ name: 'callLeadingComment', type: nullStrCT });
-		}
-		return {
-			name: ctorName,
-			kind: FFun({ args: args, ret: null, expr: null }),
-			pos: pos,
-			access: []
-		};
-	}
-
 	private static function shapeToComplexType(node: ShapeNode, synthPack: Array<String>): ComplexType {
 		return switch node.kind {
 			case Ref:
@@ -2176,18 +659,18 @@ class TriviaTypeSynth {
 				final base: ComplexType = refIsBearing(refName)
 					? TPath({ pack: synthPack, name: leafOf(refName) + PAIRED_SUFFIX, params: [] })
 					: TPath({ pack: packOf(refName), name: leafOf(refName), params: [] });
-				return wrapOptional(node, base);
+				return TriviaPairSlots.wrapOptional(node, base);
 			case Star:
 				final elementCT: ComplexType = shapeToComplexType(node.children[0], synthPack);
 				final wrapped: ComplexType = node.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true
 					? TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elementCT)] })
 					: elementCT;
-				return wrapOptional(node, TPath({ pack: [], name: 'Array', params: [TPType(wrapped)] }));
+				return TriviaPairSlots.wrapOptional(node, TPath({ pack: [], name: 'Array', params: [TPType(wrapped)] }));
 			case Terminal:
 				final tp: Null<String> = node.annotations[AnnotationKeys.BASE_TYPE_PATH];
-				if (tp != null) return wrapOptional(node, TPath({ pack: packOf(tp), name: leafOf(tp), params: [] }));
+				if (tp != null) return TriviaPairSlots.wrapOptional(node, TPath({ pack: packOf(tp), name: leafOf(tp), params: [] }));
 				final under: String = node.annotations['base.underlying'];
-				return wrapOptional(node, TPath({ pack: [], name: under, params: [] }));
+				return TriviaPairSlots.wrapOptional(node, TPath({ pack: [], name: under, params: [] }));
 			case _:
 				Context.fatalError('TriviaTypeSynth: unexpected node kind ${node.kind} in field-shape', Context.currentPos());
 				throw 'unreachable';

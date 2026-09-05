@@ -641,11 +641,20 @@ branch_fmt() {
     #
     # Under this repository's OWN config the tree is unaffected:
     # `fmt --list --one-pass src test tools` is 0 of 1614.
+    #
+    # S87 moved the fourth entry the way S71 moved the third: `TriviaTypeSynth`
+    # split three question-shaped families out, and the S77 construct — the
+    # `final binders: Array<Expr> = [for (i in 0...origArgCount) {…}]`
+    # comprehension — went with the converters. Measured both ways: the
+    # pass1→pass2 diff under this config is the SAME two lines in
+    # `TriviaPairConverters.hx` that it was in `TriviaTypeSynth.hx`, and
+    # `TriviaTypeSynth.hx` now reaches its fixed point in one rewrite. The set
+    # is still four files and the other three are untouched.
     cat > "$work/fmt-xconfig.base" <<'XCFG'
 src/anyparse/check/DuplicateCase.hx
 src/anyparse/check/UnnecessarySwitch.hx
 src/anyparse/macro/ParseDispatchLowering.hx
-src/anyparse/macro/TriviaTypeSynth.hx
+src/anyparse/macro/TriviaPairConverters.hx
 XCFG
     # The exit code is non-zero on drift alone, so it says nothing here; the
     # `--one-pass` verdict is read off stderr, which is why the two streams are
