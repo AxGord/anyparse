@@ -622,7 +622,16 @@ final class Rename {
 			null;
 	}
 
-	/** The innermost node of one of `kinds` whose span contains `offset`, or null. */
+	/**
+	 * The innermost node of one of `kinds` containing `offset`, or null when none does — the raw walk
+	 * behind the four lookups above and behind `innermostSpanOfKinds`.
+	 *
+	 * Declared a second time as `anyparse.check.BindingScope.innermostSpanOfKinds`, which adds an
+	 * `exclude` span and keeps the OUTER of two co-starting matches where this keeps the inner.
+	 * `unit.query.InnermostScopeSpanParityTest` pins both halves: the tie-break is observable only on
+	 * kinds that co-start, which the grammar's `scopeKinds` never does, so `exclude` is the whole
+	 * difference.
+	 */
 	private static function innermostOfKinds(tree: QueryNode, offset: Int, kinds: Array<String>): Null<QueryNode> {
 		// No pruning on a non-containing node: an ancestor's span can be narrower
 		// than its subtree's (a decl whose span covers only its header), so cutting
