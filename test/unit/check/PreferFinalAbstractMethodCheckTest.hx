@@ -171,6 +171,7 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 			declared: true,
 			sources: () -> {
 				report: report,
+				projectRoots: [],
 				library: new LibrarySources([
 					{ file: 'Window.hx', source: 'class Window { public function move(x:Int, y:Int):Void {} }' }
 				])

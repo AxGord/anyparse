@@ -573,7 +573,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/SBase.hx', source: baseSrc }];
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/SSub.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
 		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(report, scoped);

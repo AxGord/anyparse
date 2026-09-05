@@ -50,10 +50,10 @@ import anyparse.runtime.Span;
  *    would miss them; the gate scans each subtype's body and asks the index about the
  *    subtype. Merely HAVING a subtype no longer bails. The two arms have DIFFERENT reach:
  *    the body scan runs over the resolution scope, so a subtype declared in a configured
- *    library root counts, while the `writtenAnywhere(subtype, …)` arm reads the
- *    PROJECT-scoped `FieldWriteIndex` (report UNION the declared `resolutionRoots`) — a
- *    library-side write through a library subtype is the residual blind spot, and a deliberate
- *    one. The same gate also bails when a SUPERtype declares
+ *    library root counts, and since S97 the `writtenAnywhere(subtype, …)` arm reads a write index
+ *    over that same scope — so a write through a THIRD-PARTY subtype, made in a third
+ *    third-party file and therefore absent from the subtype's own body, is seen. That was the
+ *    residual blind spot both these rules documented; it is closed. The same gate also bails when a SUPERtype declares
  *    the same field (`MemberLookup.supertypeDeclaresMember`): its property access is
  *    then fixed by that interface / superclass var, which final would violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface (which supertypeDeclaresMember treats as absent): out of scope it may still declare a mutable member, so the rewrite is skipped conservatively.
  * 3. No unresolved write can target the field
@@ -75,9 +75,8 @@ import anyparse.runtime.Span;
  *    it. The gate is conservative by construction: it answers CONFORMANCE — does the type
  *    declare the whole member set some structure naming this field requires? — not use.
  *
- * Together these prove the single assignment is the sole one. Residual blind spots —
- * the library-side subtype write in item 2, a `@:build` macro injecting a writer,
- * and the two shapes item 5 cannot see — an anonymous structure written INLINE in an
+ * Together these prove the single assignment is the sole one. Residual blind spots — a
+ * `@:build` macro injecting a writer, and the two shapes item 5 cannot see — an anonymous structure written INLINE in an
  * annotation, and a structural type declared in a configured library root — surface as loud
  * compile errors, never silent corruption.
  *
@@ -93,10 +92,20 @@ import anyparse.runtime.Span;
  *
  * A project declaring no `resolutionRoots` still answers from the report scope alone — the
  * limitation `unused-private` / `prefer-final-field` carry, and there the sound usage is still
- * linting the whole project (`lint src/`). What does NOT join either index is the LIBRARY half of
- * the resolution scope (`resolutionLibs`, the std): a haxelib cannot assign into the project, and
- * admitting it to a scan keyed on a member NAME only suppresses — measured over the Pony fork, 16
- * of 109 findings lost and none gained.
+ * linting the whole project (`lint src/`). The LIBRARY half of the resolution scope (`resolutionLibs`, the std) joins the WRITE index and
+ * nothing else. S97 measured admitting it to everything: over the Pony fork that lost 18 of 112
+ * findings and gained none, and the census says none of the 18 came from the write index — 10 came
+ * from `SymbolIndex.text.skippedMayReference` (a skip-parsing library file that merely SPELLS the
+ * member name), 3 from structural conformance against a library anonymous structure, 5 from
+ * `declarationSiteOf` going ambiguous once a library declares a type of the same SIMPLE name
+ * (`Helper`, `Input`). So the name-keyed scans keep the project-scoped `SymbolIndex`, while the
+ * write index spans the resolution scope with the library half tagged third-party: every question
+ * a rule asks about ITS OWN candidate carries that candidate's file and is narrowed back out
+ * (`FieldWriteIndex.admits`), since a haxelib cannot name a project type and so cannot hold a
+ * statically-typed write into one. Net over Pony: 2 findings lost, 11 gained (112 -> 121). Both
+ * losses were `Rotor.speed` / `Wards.speed`, freed at base by a proof that `Single` is a project
+ * class no builtin converts into — true only because the report scope hid the std's
+ * `abstract Single to Float from Float`, which any `Int` reaches.
  */
 @:nullSafety(Strict)
 final class PreferFinalPublicField implements Check {
@@ -113,12 +122,14 @@ final class PreferFinalPublicField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		// The write proof's scope is the PROJECT, not the lint scope: a field's writer can be any
-		// project file, so a narrow run answers over the declared `resolutionRoots` too. Report-only
-		// when the project declares none — then the lint scope IS all this run can see.
+		// The name-keyed scans' scope is the PROJECT, not the lint scope: a field's writer can be
+		// any project file, so a narrow run answers over the declared `resolutionRoots` too.
+		// Report-only when the project declares none — then the lint scope IS all this run can see.
+		// The WRITE index is wider (the whole resolution scope, third-party half tagged) and rides
+		// the host memoised; the scope note below says why the two differ.
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
-		final index: SymbolIndex = SymbolIndex.build(scope, plugin);
-		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(scope, plugin, index);
+		final index: SymbolIndex = RefactorSupport.projectIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
+		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
@@ -191,15 +202,19 @@ final class PreferFinalPublicField implements Check {
 		// type in the compiler's std path that no scope here holds, and `var` -> `final` is
 		// "Field <name> has different property access than core type".
 		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
+		// Every write question about THIS candidate carries its file, so the write index can drop
+		// what a third-party source recorded: a haxelib cannot name a project type. The subtype
+		// question below deliberately does not — there the subject may itself be third-party, and
+		// its writes are the whole point of the library being in this index.
 		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
 		if (initialized && !folded) {
-			if (writeIndex.writtenAnywhere(owner, name)) return;
+			if (writeIndex.writtenAnywhere(owner, name, file)) return;
 		} else {
 			// The constructor assignment IS a write, so `writtenAnywhere` cannot gate this
 			// arm; instead every RESOLVED write must lie inside the declaring file's decl
 			// range — the in-file text scan inside the predicate already proved the
 			// constructor statement is the only write there. Same for the folded arm.
-			if (writeIndex.writtenOutsideDeclaration(owner, name)) return;
+			if (writeIndex.writtenOutsideDeclaration(owner, name, file)) return;
 		}
 		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
 		out.push({

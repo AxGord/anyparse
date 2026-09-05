@@ -37,6 +37,15 @@ typedef FieldWrite = {
 typedef UnresolvedWrite = {
 	var field: String;
 	var rhsType: Null<String>;
+
+	/**
+	 * Which HALF of the scope the write came from — a `resolutionLibs` / std source, or the
+	 * project's own files. The bail is keyed on the field NAME alone and therefore has no owner;
+	 * this flag is the one owner-side discrimination a nameless write admits, since a third-party
+	 * module cannot NAME a project type and so cannot hold a statically-typed write into one.
+	 * Deduplicated per half, so the list stays at most two entries per (field, rhsType) pair.
+	 */
+	var thirdParty: Bool;
 }
 
 /** A parsed nominal type source: the simple `name` plus the raw text between its type-parameter brackets, if any. */
@@ -97,6 +106,7 @@ typedef ScanCtx = {
 	var abstractThisKinds: Array<String>;
 	var typeParams: Map<String, Array<String>>;
 	var patternNames: Null<Array<String>>;
+	var thirdParty: Bool;
 }
 
 /**
@@ -160,8 +170,16 @@ typedef ScanCtx = {
  * `untyped` subtree (`RefShape.untypedKinds`) is treated the same way — with the
  * type system off, neither its receivers nor its RHS literals can be trusted.
  *
- * The unresolved entry additionally carries the RHS literal type of a plain `=`
- * write when it is statically certain (`UnresolvedWrite.rhsType`).
+ * An unresolved entry carries two discriminators. `UnresolvedWrite.thirdParty` says which HALF of
+ * the scope recorded it — the project's own files, or a `resolutionLibs` / std source. The bail is
+ * keyed on the field NAME and therefore has no owner, and that is what made admitting the library
+ * to this index pure loss; a third-party module cannot NAME a project type, so it can hold no
+ * statically-typed write into one, and `admits` drops it for a project candidate (the candidate
+ * file arrives as `ownerFile`). What that deliberately does not cover is a third-party function
+ * writing a member of a `Dynamic` it was handed — unresolved in every scope, and invisible to the
+ * project scope too, so the narrowing removes no proof the narrower run had. The other
+ * discriminator is the RHS literal type of a plain `=` write when it is statically certain
+ * (`UnresolvedWrite.rhsType`).
  * `hasUnresolvedWriteTargeting` uses it for a NARROWER bail: an unresolved write
  * whose RHS is provably a builtin value cannot target a field whose declared type
  * is a plain project class (no implicit conversion accepts a builtin), so such a
@@ -182,10 +200,12 @@ final class FieldWriteIndex {
 	private final _unwrapNames: Array<String>;
 	private final _rejectNames: Array<String>;
 	private final _typeParams: Map<String, Array<String>>;
+	private final _thirdParty: Map<String, Bool>;
 
 	private function new(
 		writes: Array<FieldWrite>, unresolved: Array<UnresolvedWrite>, index: SymbolIndex, classKinds: Array<String>,
-		builtinNames: Array<String>, unwrapNames: Array<String>, rejectNames: Array<String>, typeParams: Map<String, Array<String>>
+		builtinNames: Array<String>, unwrapNames: Array<String>, rejectNames: Array<String>, typeParams: Map<String, Array<String>>,
+		thirdParty: Map<String, Bool>
 	) {
 		_writes = writes;
 		_unresolved = unresolved;
@@ -195,12 +215,20 @@ final class FieldWriteIndex {
 		_unwrapNames = unwrapNames;
 		_rejectNames = rejectNames;
 		_typeParams = typeParams;
+		_thirdParty = thirdParty;
 	}
 
-	/** Whether any resolved write targets `type`.`field` anywhere in the file set. */
-	public function writtenAnywhere(type: String, field: String): Bool {
-		return _writes.exists(w -> w.owner == type && w.field == field);
+	/**
+	 * Whether any resolved write targets `type`.`field` anywhere in the file set. `ownerFile` —
+	 * the file declaring the candidate — narrows the answer per OWNER: a write recorded in a
+	 * THIRD-PARTY source cannot target a type the project declares (see `admits`). Omit it to ask
+	 * the unnarrowed question, which is what `MemberWriteScan.subtypeWriteReaches` wants: there
+	 * the subject IS a possibly-third-party subtype.
+	 */
+	public function writtenAnywhere(type: String, field: String, ?ownerFile: String): Bool {
+		return _writes.exists(w -> w.owner == type && w.field == field && admits(_thirdParty.exists(w.file), ownerFile));
 	}
+
 
 	/**
 	 * How many resolved writes target `type`.`field` across the file set — the
@@ -219,8 +247,8 @@ final class FieldWriteIndex {
 	 * own source range `(declFile, declSpan)` — an external write that forbids making
 	 * the field externally read-only.
 	 */
-	public function writtenExternally(type: String, field: String, declFile: String, declSpan: Span): Bool {
-		for (w in _writes) if (w.owner == type && w.field == field) {
+	public function writtenExternally(type: String, field: String, declFile: String, declSpan: Span, ?ownerFile: String): Bool {
+		for (w in _writes) if (w.owner == type && w.field == field && admits(_thirdParty.exists(w.file), ownerFile)) {
 			final internal: Bool = w.file == declFile && declSpan.from <= w.span.from && w.span.to <= declSpan.to;
 			if (!internal) return true;
 		}
@@ -235,18 +263,19 @@ final class FieldWriteIndex {
 	 * gate of `prefer-read-only-field` and of `prefer-final-public-field`'s
 	 * constructor arm; both bail when it is true.
 	 */
-	public function writtenOutsideDeclaration(type: String, field: String): Bool {
-		final site: Null<{ file: String, span: Span }> = _index.declarationSiteOf(type);
-		return site == null || writtenExternally(type, field, site.file, site.span);
+	public function writtenOutsideDeclaration(type: String, field: String, ?ownerFile: String): Bool {
+		final site: Null<{ file: String, span: Span }> = declarationSite(type, ownerFile);
+		return site == null || writtenExternally(type, field, site.file, site.span, ownerFile);
 	}
+
 
 	/**
 	 * Whether any write to a field named `field` could not be attributed to a concrete
 	 * receiver type — the soundness bail: such a write might be a hidden write to the
 	 * candidate, so a consumer must not rewrite a field whose name appears here.
 	 */
-	public function hasUnresolvedWrite(field: String): Bool {
-		return _unresolved.exists(u -> u.field == field);
+	public function hasUnresolvedWrite(field: String, ?ownerFile: String): Bool {
+		return _unresolved.exists(u -> u.field == field && admits(u.thirdParty, ownerFile));
 	}
 
 	/**
@@ -268,7 +297,7 @@ final class FieldWriteIndex {
 	public function hasUnresolvedWriteTargeting(field: String, owner: String, ownerFile: String): Bool {
 		var any: Bool = false;
 		var allTyped: Bool = true;
-		for (u in _unresolved) if (u.field == field) {
+		for (u in _unresolved) if (u.field == field && admits(u.thirdParty, ownerFile)) {
 			any = true;
 			if (u.rhsType == null) allTyped = false;
 		}
@@ -281,6 +310,45 @@ final class FieldWriteIndex {
 		final ownerParams: Null<Array<String>> = _typeParams[owner];
 		if (ownerParams != null && ownerParams.contains(cand)) return true;
 		return !uniquePlainClass(cand) || importShadowed(cand, ownerFile);
+	}
+
+	/**
+	 * Whether a write recorded in a source of the given half can reach a candidate declared in
+	 * `ownerFile`. A project source can write anything it can name; a THIRD-PARTY source (a
+	 * `resolutionLibs` / std file) cannot name a project type at all, so it can hold no
+	 * statically-typed write into one — the dependency direction is one-way. `ownerFile` null
+	 * means the caller is not asking about a specific candidate and every write is admitted.
+	 *
+	 * What this deliberately does NOT cover, because no name-keyed index can: a third-party
+	 * function taking `Dynamic` and writing a member of whatever it was handed. That write is
+	 * unresolved in ANY scope, and the project scope never saw it either, so narrowing here
+	 * removes no proof the base run had. A third-party SUBTYPE of a project type — the shape that
+	 * genuinely writes a project field from a third-party file — is not narrowed away: its writes
+	 * are attributed to the SUBTYPE, and `MemberWriteScan.subtypeWriteReaches` asks about that
+	 * subtype with no `ownerFile`, plus scans its declaration slice textually.
+	 */
+	private inline function admits(writeIsThirdParty: Bool, ownerFile: Null<String>): Bool {
+		return ownerFile == null || !writeIsThirdParty || _thirdParty.exists(ownerFile);
+	}
+
+	/**
+	 * The declaration range of `type`, pinned to `ownerFile` when the caller knows which file
+	 * declares its candidate. `SymbolIndex.declarationSiteOf` answers only for a simple name the
+	 * scope declares EXACTLY ONCE, so widening the scope past the project turns a common project
+	 * type name — `Helper`, `Input`, `Config` — ambiguous and the site nulls out, which every
+	 * caller must read as "possibly written externally". The caller does hold the owner's file;
+	 * reading the declaration THERE is the per-owner answer the simple name cannot give. Falls
+	 * back to the scope-wide lookup when the file is unindexed or declares no such type.
+	 */
+	private function declarationSite(type: String, ownerFile: Null<String>): Null<{ file: String, span: Span }> {
+		if (ownerFile != null) {
+			final fi: Null<FileInfo> = _index.fileInfo(ownerFile);
+			if (fi != null) {
+				final t: Null<TypeDeclInfo> = fi.types.find(td -> td.name == type);
+				if (t != null) return { file: ownerFile, span: t.span };
+			}
+		}
+		return _index.declarationSiteOf(type);
 	}
 
 	/**
@@ -325,8 +393,9 @@ final class FieldWriteIndex {
 	 * receiver is unresolved — every candidate then bails, which is sound.
 	 */
 	public static function build(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex, ?thirdPartyFiles: Array<String>
 	): FieldWriteIndex {
+		final thirdParty: Map<String, Bool> = pathSet(thirdPartyFiles);
 		final shape: RefShape = plugin.refShape();
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final symbols: SymbolIndex = index ?? SymbolIndex.build(files, plugin);
@@ -370,12 +439,13 @@ final class FieldWriteIndex {
 				aliasKinds: shape.aliasingDeclKinds ?? [],
 				abstractThisKinds: shape.underlyingThisTypeKinds ?? [],
 				typeParams: typeParams,
-				patternNames: null
+				patternNames: null,
+				thirdParty: thirdParty.exists(entry.file)
 			};
 			scan(tree, null, false, ctx);
 		}
 		return new FieldWriteIndex(
-			writes, unresolved, symbols, shape.classDeclKinds ?? [], builtinNames, unwrapNames, rejectNames, typeParams
+			writes, unresolved, symbols, shape.classDeclKinds ?? [], builtinNames, unwrapNames, rejectNames, typeParams, thirdParty
 		);
 	}
 
@@ -509,10 +579,15 @@ final class FieldWriteIndex {
 		return out;
 	}
 
-	/** Add an unresolved write of `field` with RHS type `rhsType` (null = unknown), deduplicated by the pair. */
+	/**
+	 * Add an unresolved write of `field` with RHS type `rhsType` (null = unknown), tagged with the
+	 * scope half the scanned file belongs to and deduplicated by the TRIPLE — a third-party write and
+	 * a project write of the same name are different facts, and collapsing them erases exactly the
+	 * discrimination `hasUnresolvedWrite` needs.
+	 */
 	private static function markUnresolved(c: ScanCtx, field: String, rhsType: Null<String>): Void {
-		for (u in c.unresolved) if (u.field == field && u.rhsType == rhsType) return;
-		c.unresolved.push({ field: field, rhsType: rhsType });
+		for (u in c.unresolved) if (u.field == field && u.rhsType == rhsType && u.thirdParty == c.thirdParty) return;
+		c.unresolved.push({ field: field, rhsType: rhsType, thirdParty: c.thirdParty });
 	}
 
 	/**
@@ -794,6 +869,13 @@ final class FieldWriteIndex {
 			map[owner] = params;
 		else
 			for (p in params) if (!cur.contains(p)) cur.push(p);
+	}
+
+	/** `paths` as a membership set — null (no partition supplied) is the empty set, where nothing is third-party. */
+	private static function pathSet(paths: Null<Array<String>>): Map<String, Bool> {
+		final out: Map<String, Bool> = [];
+		if (paths != null) for (p in paths) out[p] = true;
+		return out;
 	}
 
 }

@@ -89,7 +89,9 @@ class ExplicitLocalTypeCheckTestBase extends Test {
 		final check: ExplicitLocalType = new ExplicitLocalType();
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: fixSrc }].concat(otherReportFiles ?? []);
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(libFiles) } });
+		scoped.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(libFiles) } }
+		);
 		final index: SymbolIndex = SymbolIndex.build(report, scoped);
 		final vs: Array<Violation> = check.run(report, scoped);
 		Assert.isTrue(vs.length >= 1, 'the fixture must produce a finding to fix');

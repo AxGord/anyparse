@@ -56,4 +56,25 @@ interface SymbolIndexHost {
 	 */
 	function resolutionProjectFiles(): Null<Array<{ file: String, source: String }>>;
 
+	/**
+	 * The memoised PROJECT-scoped `SymbolIndex` — built once over `resolutionProjectFiles`, or
+	 * null when the project declared no `resolutionRoots` and the caller's own report scope IS
+	 * the answer. The project-scope twin of `resolutionIndex`, and for the same reason: the two
+	 * field-immutability checks both demand it, and without a memo each rebuilt the whole project
+	 * index per `--fix` pass.
+	 */
+	function projectIndex(): Null<SymbolIndex>;
+
+	/**
+	 * The memoised `FieldWriteIndex` over the RESOLUTION scope — report UNION the library — with
+	 * the library half tagged THIRD-PARTY so a name-keyed bail can be narrowed per owner
+	 * (`FieldWriteIndex.admits`). Null when no scope reached the run.
+	 *
+	 * The write proof is the one question that WANTS the library in scope: a third-party subtype
+	 * of a project type writes an inherited field from a file the project scope does not hold, and
+	 * `MemberWriteScan.subtypeWriteReaches` can only see it here. Everything a check asks about
+	 * its OWN candidate passes that candidate's file and is narrowed back to the project half.
+	 */
+	function fieldWriteIndex(): Null<FieldWriteIndex>;
+
 }

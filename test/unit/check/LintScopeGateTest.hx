@@ -198,7 +198,9 @@ class LintScopeGateTest extends Test {
 		library: Array<{ file: String, source: String }>
 	): ReflectionSurface {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({ declared: true, sources: () -> {report: scopeReport, library: new LibrarySources(library) } });
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: scopeReport, projectRoots: [], library: new LibrarySources(library) } }
+		);
 		return ReflectionScan.reflectionSurface(report, plugin);
 	}
 
