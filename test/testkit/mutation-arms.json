@@ -127,6 +127,14 @@
 			"note": "restores the S76 veto S78 removed — a comprehension whose body is an if/else refuses to cuddle its `[` again"
 		},
 		{
+			"name": "M-EMPTY-B-ANY-NONEMPTY",
+			"type": "anyparse.check.RedundantReplaceLoop",
+			"method": "emptyReplacementMessage",
+			"find": "loop is redundant only for a SINGLE-CHARACTER $search — '",
+			"replace": "loop is redundant for any non-empty $search — '",
+			"note": "the empty-B message claims the single call does the same work for every non-empty S again, which 'aabb'.replace('ab', '') == 'ab' refutes"
+		},
+		{
 			"name": "M-FANOUT-FIRST",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applySameLine",
@@ -231,6 +239,13 @@
 			"method": "transitivelyCarriesRtti",
 			"force": "false",
 			"note": "no type carries @:rtti, so prefer-enum-abstract's rtti refusal never fires"
+		},
+		{
+			"name": "M-SEAM-BLIND",
+			"type": "anyparse.check.RedundantReplaceLoop",
+			"method": "replacementCanReformSearch",
+			"force": "false",
+			"note": "no join can ever re-form S, so arm A claims the two-space squeeze is redundant and the autofix deletes a required loop again"
 		},
 		{
 			"name": "M-SHADOWEXT-TRUE",

@@ -14,14 +14,18 @@ import utest.Test;
  * The `redundant-replace-loop` check: `while (x.indexOf(S) != -1) x = x.replace(S, B);`
  * (plus its reversed-comparison and `.contains()` spellings) is redundant BY
  * CONSTRUCTION — `StringTools.replace` already replaces every occurrence of `S` in one
- * call. Three arms. Arm A (two literals, `B` does not contain `S`): `Info`, autofix
- * collapses the loop to the single unconditional assignment. Arm B (two literals, `B`
+ * call. Three arms. Arm A (two literals, `B` does not
+ * contain `S`, and no fresh `S` can form at a JOIN): `Info`, autofix collapses the loop to
+ * the single unconditional assignment. A pair that CAN re-form `S` at a join — the two-space
+ * squeeze `'  '` -> `' '` above all — is neither redundant nor infinite but REQUIRED, and is
+ * not reported at all. Arm B (two literals, `B`
  * contains `S`): `Warning`, report-only — the loop is infinite for any input containing
  * `S`. Arm C (either operand a PARAMETER): `Info`, report-only — the outcome is the
  * caller's to decide, and only a containment guard that DOMINATES the loop suppresses it.
  * A PARAMETER `S` with a LITERAL `B` splits out of arm C, since the literal decides the
- * verdict without the caller: an EMPTY `B` makes the loop merely REDUNDANT (report-only —
- * a collapse would change the degenerate empty-`S` hang into a return), a NON-EMPTY one
+ * verdict without the caller: an EMPTY `B` makes the loop REDUNDANT for a
+ * ONE-CHARACTER `S` (report-only — a longer `S` can re-form across the closed gap, and a
+ * collapse would also change the degenerate empty-`S` hang into a return), a NON-EMPTY one
  * loops forever for exactly those `S` that occur in it. `DefaultOff`.
  */
 class RedundantReplaceLoopCheckTest extends Test {
@@ -80,6 +84,76 @@ class RedundantReplaceLoopCheckTest extends Test {
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');
 		}
+	}
+
+	// --- arm A's soundness gate: a fresh `S` at a JOIN means the loop is REQUIRED ---
+
+	/**
+	 * The two-space squeeze. `' '` does not contain `'  '`, so the old arm-A condition held and
+	 * the autofix collapsed the loop — but `replace` is `split(S).join(B)`, and two adjacent
+	 * joins spell a fresh `'  '`: measured on Haxe 4.3.7 `--interp`,
+	 * `'a    b'.replace('  ', ' ')` is `'a  b'`, while the loop returns `'a b'`.
+	 */
+	@:pin('control') @:killer('M-SEAM-BLIND')
+	public function testSeamReformingLiteralPairNotFlagged(): Void {
+		Assert.equals(0, violations(wrapFn('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');')).length);
+	}
+
+	/**
+	 * The same pair through the FIX path — the half that did the damage. One assertion covering
+	 * the guard AND the body, so a partially applied collapse cannot satisfy it.
+	 */
+	@:pin('control') @:killer('M-SEAM-BLIND')
+	public function testSeamReformingLiteralPairSurvivesTheFix(): Void {
+		final src: String = wrapFn('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');');
+		final check: RedundantReplaceLoop = new RedundantReplaceLoop();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		switch CanonicalEdit.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');') >= 0);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	/**
+	 * `B` sitting STRICTLY INSIDE `S`, the join shape neither boundary test reaches:
+	 * `'aaxbb'.replace('axb', 'x')` is `'axb'`, since the pieces `'a'` and `'b'` close around
+	 * the inserted `'x'`.
+	 */
+	@:pin('control') @:killer('M-SEAM-BLIND')
+	public function testReplacementInsideSearchNotFlagged(): Void {
+		Assert.equals(0, violations(wrapFn('while (now.indexOf(\'axb\') != -1) now = now.replace(\'axb\', \'x\');')).length);
+	}
+
+	/**
+	 * The other boundary direction: a nonempty PREFIX of `B` ending `S`. Nothing about `'bx'`
+	 * starts `'ab'`, so only the `endsWith` half decides this one —
+	 * `'aab'.replace('ab', 'bx')` is `'abx'`.
+	 */
+	@:pin('control') @:killer('M-SEAM-BLIND')
+	public function testSearchEndingWithTheReplacementHeadNotFlagged(): Void {
+		Assert.equals(0, violations(wrapFn('while (now.indexOf(\'ab\') != -1) now = now.replace(\'ab\', \'bx\');')).length);
+	}
+
+	/**
+	 * An EMPTY `B` joins the pieces with nothing, so a two-character `S` re-forms across a bare
+	 * piece boundary: `'aabb'.replace('ab', '')` is `'ab'`, and the loop runs twice.
+	 */
+	@:pin('control') @:killer('M-SEAM-BLIND')
+	public function testMultiCharSearchWithEmptyReplacementNotFlagged(): Void {
+		Assert.equals(0, violations(wrapFn('while (now.indexOf(\'ab\') != -1) now = now.replace(\'ab\', \'\');')).length);
+	}
+
+	/**
+	 * The discriminator against a blanket refusal, and it guards behaviour the check ALREADY
+	 * had: a ONE-character `S` cannot span a piece boundary, so `replace(S, '')` really does
+	 * remove every occurrence and arm A still fires and still collapses the loop.
+	 */
+	public function testSingleCharSearchWithEmptyReplacementStillFixed(): Void {
+		assertFixCanonical(
+			wrapFn('while (now.indexOf(\'a\') != -1) now = now.replace(\'a\', \'\');'), 'now = now.replace(\'a\', \'\');', 'while ('
+		);
 	}
 
 	// --- arm B: flagged, report-only, no fix ---
@@ -454,10 +528,24 @@ class RedundantReplaceLoopCheckTest extends Test {
 		final vs: Array<Violation> = violations(stripWordSource());
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
-		Assert.isTrue(
-			StringTools.startsWith(vs[0].message, 'this while (line.indexOf(word) != -1) loop is redundant for any non-empty word')
-		);
 		Assert.isTrue(vs[0].message.indexOf('so one line = line.replace(word, \'\'); does the same work') >= 0);
+	}
+
+	/**
+	 * The redundancy verdict is bounded at ONE character, not at "non-empty". An empty `B` joins
+	 * the pieces with nothing, so deleting an occurrence closes the gap between its neighbours
+	 * and a longer `word` can re-form there — `'aabb'.replace('ab', '')` is `'ab'`, so the single
+	 * call the message names does NOT do the same work for every non-empty `word`.
+	 */
+	@:pin('control') @:killer('M-EMPTY-B-ANY-NONEMPTY')
+	public function testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter(): Void {
+		final vs: Array<Violation> = violations(stripWordSource());
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(StringTools.startsWith(
+			vs[0].message, 'this while (line.indexOf(word) != -1) loop is redundant only for a SINGLE-CHARACTER word'
+		));
+		Assert.isTrue(vs[0].message.indexOf('a LONGER word can re-form where the removal closes the gap') >= 0);
 	}
 
 	public function testEmptyLiteralReplacementNotesTheDegenerateEmptySearch(): Void {
@@ -481,9 +569,9 @@ class RedundantReplaceLoopCheckTest extends Test {
 		);
 		Assert.equals(1, vs.length);
 		if (vs.length != 1) return;
-		Assert.isTrue(
-			StringTools.startsWith(vs[0].message, 'this while (line.indexOf(word) != -1) loop is redundant for any non-empty word')
-		);
+		Assert.isTrue(StringTools.startsWith(
+			vs[0].message, 'this while (line.indexOf(word) != -1) loop is redundant only for a SINGLE-CHARACTER word'
+		));
 	}
 
 	public function testNonEmptyLiteralReplacementNamesTheLiteralCondition(): Void {

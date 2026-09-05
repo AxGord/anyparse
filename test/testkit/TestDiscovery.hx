@@ -409,12 +409,12 @@ class TestDiscovery {
 	 * leaves the recipe pointing at nothing, and until somebody RUNS the arm
 	 * nothing says so — four of the `trivial-getter` lines S94's arm depends on had
 	 * already been moved into another file by S74, before the pin naming that arm
-	 * was ever read back. Asking the compiler costs nothing here: every module an arm names is in the
-	 * test build already — but it can only be asked about a module this build
-	 * TYPES. A module whose types are all behind `#if macro` contributes none, and
-	 * that is a third answer, not a failure: the arm goes on `deferred`, and
-	 * `unit.MutationArmAddressTest` asks the parser the same question of the file
-	 * the runner patches.
+	 * was ever read back. Asking the compiler costs nothing here: every module an
+	 * arm names is in the test build already — but it can only be asked about a
+	 * module this build TYPES. A module whose types are all behind `#if macro`
+	 * contributes none, and that is a third answer, not a failure: the arm goes
+	 * on `deferred`, and `unit.MutationArmAddressTest` asks the parser the same
+	 * question of the file the runner patches.
 	 */
 	private static function checkArms(arms: Array<MutationArm>, killers: Array<String>, deferred: Array<String>): Void {
 		for (arm in arms) {
