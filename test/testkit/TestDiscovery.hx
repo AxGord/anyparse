@@ -1,10 +1,14 @@
 package testkit;
 
+import haxe.Exception;
 import haxe.io.Path;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.Type;
 import sys.FileSystem;
+import sys.io.File;
+import testkit.MutationArms.ArmTable;
+import testkit.MutationArms.MutationArm;
 
 using Lambda;
 using StringTools;
@@ -27,7 +31,10 @@ typedef TestCensus = {
 	bases: Array<String>,
 
 	/** Every `@:pin`ned fixture, rendered for `TestRegistry.pins()`. */
-	pins: Array<String>
+	pins: Array<String>,
+
+	/** Every distinct `@:killer` arm name the tree spells, for the registry cross-check. */
+	killers: Array<String>
 };
 
 /**
@@ -69,6 +76,14 @@ typedef TestCensus = {
  * there is loud rather than invisible. A test class lives in a package;
  * `unit`, like every existing one.
  *
+ * **The arm registry is checked BOTH ways at build time.**
+ * `mutation-arms.json` beside this file declares one record per mutation arm —
+ * the layer, the member and the cut — so a `@:killer` naming no declared arm
+ * stops the build the way a control naming no arm already did, a declared arm
+ * nobody names stops it too, and an arm whose member has been renamed or moved
+ * out from under it stops it before anyone runs a sweep. Running one is
+ * `tools/mutation-arm.sh <NAME>`.
+ *
  * **No state.** Everything the macro emits is a fresh literal built per call
  * (`classNames()` returns a new array each time), so the generated
  * registration holds no `static var` — invariant 1.
@@ -90,6 +105,9 @@ class TestDiscovery {
 
 	/** The one `@:pin` role that requires at least one `@:killer`. */
 	private static inline final CONTROL_ROLE: String = 'control';
+
+	/** The arm registry, beside this file — every `@:killer` name has to resolve into it. */
+	private static inline final ARMS_FILE: String = 'mutation-arms.json';
 
 	/** Method-name prefixes utest treats as fixtures — `TestBuilder.isTestName`. */
 	private static final FIXTURE_PREFIXES: Array<String> = ['test', 'spec'];
@@ -119,7 +137,17 @@ class TestDiscovery {
 	 */
 	public static macro function build(): Array<Field> {
 		final self: ClassType = Context.getLocalClass().get();
-		final root: String = Path.directory(Path.directory(Context.getPosInfos(self.pos).file));
+		final here: String = Path.directory(Context.getPosInfos(self.pos).file);
+		final root: String = Path.directory(here);
+		final armsPath: String = Path.join([here, ARMS_FILE]);
+		if (!FileSystem.exists(armsPath))
+			Context.error(
+				'$armsPath is missing, and every @$KILLER_META in the test tree resolves through it'
+				+ ' — restore it, or drop the pins it answers for',
+				Context.currentPos()
+			);
+		final table: ArmTable = MutationArms.parse(File.getContent(armsPath));
+		for (error in table.errors) Context.error('$ARMS_FILE: $error', Context.currentPos());
 		final modules: Array<String> = [];
 		collectModules(root, [], modules);
 		modules.sort(compareStrings);
@@ -127,13 +155,15 @@ class TestDiscovery {
 			registered: [],
 			dead: [],
 			bases: [],
-			pins: []
+			pins: [],
+			killers: []
 		};
 		for (module in modules) if (!SELF_MODULES.contains(module)) for (moduleType in Context.getModule(module)) switch moduleType {
 			case TInst(ref, _):
-				consider(ref.get(), census);
+				consider(ref.get(), census, table.arms);
 			case _:
 		}
+		checkArms(table.arms, census.killers);
 		census.registered.sort((a, b) -> compareStrings(qualified(a), qualified(b)));
 		census.dead.sort(compareStrings);
 		census.bases.sort(compareStrings);
@@ -143,6 +173,7 @@ class TestDiscovery {
 		final dead: Array<String> = census.dead;
 		final bases: Array<String> = census.bases;
 		final pins: Array<String> = census.pins;
+		final arms: Array<String> = table.arms.map(MutationArms.render);
 		final generated: Array<Field> = (macro class Generated {
 			/** Hand every discovered case to `add`, in generation order. */
 			public static function addAll(add: (utest.Test) -> Void): Void $b{adds}
@@ -158,6 +189,9 @@ class TestDiscovery {
 
 			/** Every `@:pin`ned fixture as `<class>#<method> :: <role> :: <killers>`. */
 			public static function pins(): Array<String> return $v{pins};
+
+			/** Every declared mutation arm as `<name> :: <type>#<method> :: <cut> :: <note>`. */
+			public static function arms(): Array<String> return $v{arms};
 		}).fields;
 		return Context.getBuildFields().concat(generated);
 	}
@@ -188,7 +222,7 @@ class TestDiscovery {
 	}
 
 	/** Classify one class: register it, refuse it by name, or record why it is not a case. */
-	private static function consider(c: ClassType, census: TestCensus): Void {
+	private static function consider(c: ClassType, census: TestCensus, arms: Array<MutationArm>): Void {
 		if (c.isExtern || c.isInterface) return;
 		final fq: String = qualified(c);
 		final statics: Array<String> = [for (f in c.statics.get()) if (isFixtureMethod(f)) f.name];
@@ -198,7 +232,7 @@ class TestDiscovery {
 			return;
 		}
 		for (name in statics) census.dead.push('$fq#$name :: static, and utest discovers instance methods only');
-		collectPins(c, census.pins);
+		collectPins(c, census, arms);
 		if (fixtureNames(c).length == 0) {
 			census.bases.push(fq);
 			return;
@@ -260,10 +294,7 @@ class TestDiscovery {
 
 	/** `TestBuilder.isTestName` applied to a method field — a prefix test, not an exact one. */
 	private static function isFixtureMethod(f: ClassField): Bool {
-		return switch f.kind {
-			case FMethod(_): FIXTURE_PREFIXES.exists(prefix -> f.name.startsWith(prefix));
-			case _: false;
-		};
+		return isMethod(f) && FIXTURE_PREFIXES.exists(prefix -> f.name.startsWith(prefix));
 	}
 
 	/** Can `new C()` be written — the nearest constructor in the chain takes no required argument. */
@@ -283,11 +314,14 @@ class TestDiscovery {
 	/**
 	 * Validate and record the `@:pin` / `@:killer` pair on each fixture of `c`.
 	 *
-	 * A `@:pin('control')` with no `@:killer` is a build error: a control
-	 * whose killing arm nobody names is a claim the reviewer has to take on
-	 * trust, which is the state this metadata exists to end.
+	 * A `@:pin('control')` with no `@:killer` is a build error: a control whose
+	 * killing arm nobody names is a claim the reviewer has to take on trust, which
+	 * is the state this metadata exists to end. A `@:killer` naming an arm
+	 * `mutation-arms.json` does not declare is the same error one level down — the
+	 * name was free text until the registry existed, so nothing said the arm could
+	 * be found, let alone run.
 	 */
-	private static function collectPins(c: ClassType, pins: Array<String>): Void {
+	private static function collectPins(c: ClassType, census: TestCensus, arms: Array<MutationArm>): Void {
 		final fq: String = qualified(c);
 		for (f in c.fields.get()) if (isFixtureMethod(f)) {
 			final roles: Array<MetadataEntry> = f.meta.extract(PIN_META);
@@ -313,8 +347,81 @@ class TestDiscovery {
 					+ ' — a control no arm kills proves nothing; name the arm or drop the pin',
 					f.pos
 				);
-			pins.push('$fq#${f.name} :: $role :: ${killers.join(',')}');
+			for (killer in killers) {
+				if (MutationArms.find(arms, killer) == null)
+					Context.error(
+						'$fq#${f.name} names @$KILLER_META(\'$killer\'), which $ARMS_FILE declares no arm for'
+						+ ' — declare the arm (layer, member, cut) or fix the name; an arm nobody can run is prose retyped as metadata',
+						f.pos
+					);
+				if (!census.killers.contains(killer)) census.killers.push(killer);
+			}
+			census.pins.push('$fq#${f.name} :: $role :: ${killers.join(',')}');
 		}
+	}
+
+	/**
+	 * Cross-check the registry against the tree in the direction `collectPins`
+	 * cannot: every declared arm must still be NAMED by a `@:killer`, and must
+	 * still ADDRESS a member that exists.
+	 *
+	 * The second half is what makes the registry more than a name list. An arm is
+	 * a recipe against one member; a slice that renames or moves that member
+	 * leaves the recipe pointing at nothing, and until somebody RUNS the arm
+	 * nothing says so — four of the `trivial-getter` lines S94's arm depends on had
+	 * already been moved into another file by S74, before the pin naming that arm
+	 * was ever read back. Asking the
+	 * compiler costs nothing here: every module an arm names is in the test build
+	 * already.
+	 */
+	private static function checkArms(arms: Array<MutationArm>, killers: Array<String>): Void {
+		for (arm in arms) {
+			if (!killers.contains(arm.name))
+				Context.error(
+					'$ARMS_FILE declares "${arm.name}", which no @$KILLER_META in the test tree names'
+					+ ' — an arm exists to kill a pin, so give it one or drop it',
+					Context.currentPos()
+				);
+			final owner: Null<ClassType> = classNamed(arm.type);
+			if (owner == null)
+				Context.error('$ARMS_FILE: "${arm.name}" names the type ${arm.type}, which resolves to no class', Context.currentPos());
+			else if (!declaresMethod(owner, arm.method))
+				Context.error(
+					'$ARMS_FILE: "${arm.name}" cuts ${arm.type}#${arm.method}, and ${arm.type} declares no such method'
+					+ ' — a rename or a move left the arm behind; re-point it at the member the cut belongs to now',
+					Context.currentPos()
+				);
+		}
+	}
+
+	/** The class a dotted module path names, or null when nothing of that name resolves. */
+	private static function classNamed(path: String): Null<ClassType> {
+		final parts: Array<String> = path.split('.');
+		var moduleTypes: Array<Type> = [];
+		try
+			moduleTypes = Context.getModule(path)
+		catch (exception: Exception)
+			return null;
+		for (moduleType in moduleTypes) switch moduleType {
+			case TInst(ref, _):
+				final c: ClassType = ref.get();
+				if (c.name == parts[parts.length - 1]) return c;
+			case _:
+		}
+		return null;
+	}
+
+	/** Does `c` declare a method called `name` — static or instance, private or public. */
+	private static function declaresMethod(c: ClassType, name: String): Bool {
+		return c.fields.get().exists(f -> f.name == name && isMethod(f)) || c.statics.get().exists(f -> f.name == name && isMethod(f));
+	}
+
+	/** Is this field a method rather than a variable or a property. */
+	private static function isMethod(f: ClassField): Bool {
+		return switch f.kind {
+			case FMethod(_): true;
+			case _: false;
+		};
 	}
 
 	/** The string arguments of one metadata entry; anything else is a build error. */
