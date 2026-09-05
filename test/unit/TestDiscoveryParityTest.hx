@@ -982,6 +982,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesSubtypedContainer :: control :: M-HASSUBTYPE-FALSE',
+			'unit.check.PreferStaticExtensionCheckTest#testMessageKeepsATwoSpaceLiteral :: control :: M-RENDER-SPAN-TOKENS',
+			'unit.check.PreferStaticExtensionCheckTest#testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt'
+			+ ' :: control :: M-RENDER-SPAN-TOKENS',
 			'unit.check.RedundantImportCheckTest#testSubTypeImportBesideItsModuleImportIsRedundant :: control :: M-DECLARINGFILES-EMPTY',
 			'unit.check.RedundantReplaceLoopCheckTest#testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter'
 			+ ' :: control :: M-EMPTY-B-ANY-NONEMPTY',
@@ -1245,7 +1248,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-PEB-WS-REWIND-OFF',
 			'M-BRACKET-GLUE-NONE',
 			'M-ELSE-SWITCH-COMMENT-GLUE',
-			'M-ELSE-SWITCH-TESTS-NONE'
+			'M-ELSE-SWITCH-TESTS-NONE',
+			'M-RENDER-SPAN-TOKENS'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

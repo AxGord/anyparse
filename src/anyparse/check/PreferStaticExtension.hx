@@ -508,15 +508,21 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		return written == null ? null : NominalTypes.outerNominalOf(written);
 	}
 
-	/** The `recv.method(rest)` form the message shows, excerpt-normalized, or null when a span is unavailable. */
+	/**
+	 * The `recv.method(rest)` form the message shows — the exact bytes the rewrite would splice,
+	 * flattened onto one line — or null when a span is unavailable.
+	 *
+	 * `call` is passed down to `excerpt` as the token map: rendering has to know where a literal's
+	 * content begins, because that content is the one whitespace the message may not touch.
+	 */
 	private static function suggestionOf(call: QueryNode, recv: QueryNode, method: String, source: String): Null<String> {
 		final recvSpan: Null<Span> = recv.span;
 		if (recvSpan == null) return null;
-		final receiver: String = excerpt(source, recvSpan.from, recvSpan.to);
+		final receiver: String = excerpt(source, recvSpan.from, recvSpan.to, call);
 		if (call.children.length <= REST_INDEX) return '$receiver.$method()';
 		final firstRest: Null<Span> = call.children[REST_INDEX].span;
 		final lastRest: Null<Span> = call.children[call.children.length - 1].span;
-		return firstRest == null || lastRest == null ? null : '$receiver.$method(${excerpt(source, firstRest.from, lastRest.to)})';
+		return firstRest == null || lastRest == null ? null : '$receiver.$method(${excerpt(source, firstRest.from, lastRest.to, call)})';
 	}
 
 	/**
@@ -603,9 +609,17 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		if (!CanonicalEdit.editsOverlapAny([edit], edits)) edits.push(edit);
 	}
 
-	/** The whitespace-normalized `[from, to)` of `source`, truncated with an ellipsis beyond the excerpt cap. */
-	private static function excerpt(source: String, from: Int, to: Int): String {
-		final flat: String = CheckScan.normalizeSpan(source, from, to).norm;
+	/**
+	 * `[from, to)` of `source` rendered for a MESSAGE — one line, literal content intact —
+	 * truncated with an ellipsis beyond the excerpt cap.
+	 *
+	 * `SpanRender.renderSpan`, not `CheckScan.normalizeSpan`: this text is the code the fix would
+	 * write, quoted back to a reader who is expected to find it in the file. `normalizeSpan`
+	 * collapses whitespace INSIDE a string literal too — sound as an equality key, a lie here,
+	 * and a lie about the rewrite as well, since the rewrite splices the receiver's bytes verbatim.
+	 */
+	private static function excerpt(source: String, from: Int, to: Int, root: QueryNode): String {
+		final flat: String = SpanRender.renderSpan(source, from, to, root);
 		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
 	}
 

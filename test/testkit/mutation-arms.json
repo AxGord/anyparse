@@ -710,6 +710,14 @@
 			"find": "final cases: Array<Case> = buildElseSwitchCases(bp, opts, macro true, macro false);",
 			"replace": "final cases: Array<Case> = [];",
 			"note": "the `elseSwitch` knob contributes no case, so the policy selector never substitutes and `same` leaves the `switch` on its own line whatever the config asked for"
+		},
+		{
+			"name": "M-RENDER-SPAN-TOKENS",
+			"type": "anyparse.check.SpanRender",
+			"method": "renderSpan",
+			"find": "final inToken: Bool = next < tokens.length && tokens[next].from <= i;",
+			"replace": "final inToken: Bool = false;",
+			"note": "no byte is ever inside a token, so the display renderer collapses whitespace INSIDE a string literal again and a finding advertises a call the fix would not write"
 		}
 	]
 }

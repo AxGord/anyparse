@@ -28,7 +28,7 @@ class PreferStaticExtensionCheckTest extends Test {
 
 	/** The project-local static-utility fixture the receiver / arity gates resolve through. */
 	private static inline final EXT_SOURCE: String =
-		'class Ext {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n\n\tpublic static function pad(w: Widget, a: Int, b: Int): Widget return w;\n\n\tpublic static function now(): Int return 0;\n}\n';
+		'class Ext {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n\n\tpublic static function pad(w: Widget, a: Int, b: Int): Widget return w;\n\n\tpublic static function tag(w: Widget, s: String): Widget return w;\n\n\tpublic static function now(): Int return 0;\n}\n';
 
 	/** A `Widget` with no members of its own — every extension name is provably absent from it. */
 	private static inline final WIDGET_SOURCE: String = 'class Widget {}\n';
@@ -735,6 +735,51 @@ class PreferStaticExtensionCheckTest extends Test {
 		// Deliberately narrow: inside a class `this` is the enclosing instance, which no configured
 		// module's receiver can be — the site stays report-only instead of widening the rewrite.
 		assertUnresolvedReceiver(selfFiles('class C'));
+	}
+
+	/**
+	 * The message quotes the receiver and the arguments as the rewrite would SPLICE them, so a
+	 * string literal keeps its own whitespace: `'  a\tb  '` may not be shown as `' a b '`.
+	 *
+	 * Both halves are asserted against one string each — the suggested call and the written call —
+	 * because a message that renders a literal differently from the fix is exactly the defect, and
+	 * only a fixture holding both can see it. `CheckScan.normalizeSpan`, which this used to route
+	 * the message through, collapses whitespace INSIDE a literal.
+	 */
+	@:pin('control') @:killer('M-RENDER-SPAN-TOKENS')
+	public function testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt(): Void {
+		final body: String = 'Ext.tag(w, \'  a\tb  \');';
+		final vs: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', body)));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('w.tag(\'  a\tb  \')') != -1, vs[0].message);
+		Assert.equals(-1, vs[0].message.indexOf('\' a b \''), vs[0].message);
+		final out: String = fixResultOf(fileSet(user('using Ext;\n\n', body)));
+		Assert.isTrue(out.indexOf('w.tag(\'  a\tb  \');') != -1, out);
+	}
+
+	/**
+	 * A two-space literal is the smallest form the old normalizer destroyed, and the one a reader
+	 * has no way to recover: `' '` and `'  '` are both plausible source. The fix writes two.
+	 */
+	@:pin('control') @:killer('M-RENDER-SPAN-TOKENS')
+	public function testMessageKeepsATwoSpaceLiteral(): Void {
+		final body: String = 'Ext.tag(w, \'  \');';
+		final vs: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', body)));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('w.tag(\'  \')') != -1, vs[0].message);
+		final out: String = fixResultOf(fileSet(user('using Ext;\n\n', body)));
+		Assert.isTrue(out.indexOf('w.tag(\'  \');') != -1, out);
+	}
+
+	/**
+	 * The other half of the split: whitespace BETWEEN tokens still collapses, so a call spread over
+	 * three lines is quoted on one. Without this the honest reading of the fix above would be "stop
+	 * normalizing", which puts a line break in a lint message.
+	 */
+	public function testMessageStillCollapsesWhitespaceBetweenTokens(): Void {
+		final vs: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', 'Ext.pad(w,\n\t\t\t1,\n\t\t\t2);')));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('w.pad(1, 2)') != -1, vs[0].message);
 	}
 
 	/** A `C.hx` source with `head` before the class and `body` as the sole statement of `f(w: Widget)`. */

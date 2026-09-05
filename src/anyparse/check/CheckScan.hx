@@ -399,7 +399,8 @@ final class CheckScan {
 	 * size), `extract-repeated-expression` (which buckets equal expressions) and
 	 * `tail-merge` (which compares a branch tail against the shared fall-through run). Deliberately NOT string-literal-aware: whitespace INSIDE a literal collapses
 	 * too, so `f("a  b")` and `f("a b")` normalize equal — a consumer needing exact token
-	 * identity pairs this with a structural comparison rather than relying on it alone.
+	 * identity pairs this with a structural comparison rather than relying on it alone. Text
+	 * headed for a MESSAGE wants `SpanRender.renderSpan`, whose collapsing stops at a token boundary.
 	 */
 	public static function normalizeSpan(source: String, from: Int, to: Int): NormalizedSpan {
 		final buf: StringBuf = new StringBuf();
