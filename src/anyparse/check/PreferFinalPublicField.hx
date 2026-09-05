@@ -142,21 +142,18 @@ final class PreferFinalPublicField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		// Two indexes, split per QUESTION rather than per rule — the scope note above says what
-		// each half costs. `projectScoped` is report files UNION the declared `resolutionRoots`
-		// (the lint scope alone when a project declares none); `index` is the whole resolution
-		// scope with the library half tagged third-party, and every per-candidate question it
-		// answers carries the candidate's file so the tag can narrow it back out. The STRUCTURAL
-		// scan is the one gate that keeps `projectScoped`: it is keyed on a member NAME and
-		// matches an anonymous structure by member set alone, so the library's structures veto
-		// far past what they can unify with.
+		// ONE index — the whole resolution scope with the library half tagged third-party, every
+		// per-candidate question it answers carrying the candidate's file so the tag can narrow it
+		// back out. The STRUCTURAL scan was the last gate held back to a project-scoped index,
+		// because it matched an anonymous structure by member NAME SET alone and the library's
+		// structures then vetoed far past what they can unify with. It now proves the conformance
+		// instead (`StructuralTypes.memberCouldUnify`), so the split has nothing left to protect.
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
-		final projectScoped: SymbolIndex = RefactorSupport.projectIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
-		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? projectScoped;
+		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
 		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported) considerField(violations, file, source, field, owner, index, projectScoped, writeIndex, plugin);
+			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
 		});
 		return violations;
 	}
@@ -188,7 +185,7 @@ final class PreferFinalPublicField implements Check {
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
-		projectScoped: SymbolIndex, writeIndex: FieldWriteIndex, plugin: GrammarPlugin
+		writeIndex: FieldWriteIndex, plugin: GrammarPlugin
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -222,7 +219,7 @@ final class PreferFinalPublicField implements Check {
 		// declaring `name` mutably is expected — a READ position, so every write gate below is
 		// blind to it — and a `final` field satisfies neither a structural `var` nor a
 		// structural method.
-		if (projectScoped.structural.structuralConformanceForbidsFinal(owner, name)) return;
+		if (index.structural.structuralConformanceForbidsFinal(owner, name)) return;
 		// Core-API gate: a `@:coreApi` type's members are pinned to the property access of a core
 		// type in the compiler's std path that no scope here holds, and `var` -> `final` is
 		// "Field <name> has different property access than core type".

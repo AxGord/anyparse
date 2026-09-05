@@ -104,18 +104,16 @@ final class PreferReadOnlyField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		// Two indexes, split per QUESTION — see `PreferFinalPublicField`'s scope note, which owns
-		// the census. `projectScoped` is report files UNION the declared `resolutionRoots` and is
-		// read by the STRUCTURAL gate alone; `index` is the whole resolution scope with the
-		// library half tagged third-party, and every per-candidate question carries the
-		// candidate's file so the tag narrows it back out.
+		// ONE index — see `PreferFinalPublicField`'s scope note, which owns the census: the whole
+		// resolution scope with the library half tagged third-party, every per-candidate question
+		// carrying the candidate's file so the tag narrows it back out. The STRUCTURAL gate was the
+		// last question held back to a project-scoped index and no longer is.
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
-		final projectScoped: SymbolIndex = RefactorSupport.projectIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
-		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? projectScoped;
+		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
 		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported) considerField(violations, file, source, field, owner, index, projectScoped, writeIndex, plugin);
+			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
 		});
 		return violations;
 	}
@@ -145,7 +143,7 @@ final class PreferReadOnlyField implements Check {
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
-		projectScoped: SymbolIndex, writeIndex: FieldWriteIndex, plugin: GrammarPlugin
+		writeIndex: FieldWriteIndex, plugin: GrammarPlugin
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -168,7 +166,7 @@ final class PreferReadOnlyField implements Check {
 		// Structural-conformance gate: a `(default, null)` field does not satisfy a structural
 		// `var name:T` the type may be unified with. A structural METHOD member is fine here —
 		// that is the one kind this gate is narrower than `prefer-final-public-field`'s.
-		if (projectScoped.structural.structuralConformanceForbidsWriteRestriction(owner, name)) return;
+		if (index.structural.structuralConformanceForbidsWriteRestriction(owner, name)) return;
 		// Core-API gate: `(default, null)` is a property-access change, and a `@:coreApi` type's
 		// members are pinned to the access of a core type in the compiler's std path that no scope
 		// here holds — measured as "Field <name> has different property access than core type" for
@@ -194,7 +192,7 @@ final class PreferReadOnlyField implements Check {
 		// unconditional cession there drops the finding on the floor — neither rule reports it.
 		// That is exactly the `Iterator`-shaped field this gate was added for, whose correct
 		// answer is this rule's `(default, null)`, not silence.
-		final finalizable: Bool = !projectScoped.structural.structuralConformanceForbidsFinal(owner, name);
+		final finalizable: Bool = !index.structural.structuralConformanceForbidsFinal(owner, name);
 		if (finalizable && CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (finalizable && CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
 		out.push({

@@ -140,17 +140,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * The memoised PROJECT-scoped index behind `resolutionProjectSourcesOf`, or null on the same
-	 * terms (no declared roots, or a plugin that hosts no scope) — the caller then builds its own
-	 * over the report files it holds. Gated on the DECLARED predicate for the same reason the
-	 * sources accessor is.
-	 */
-	public static inline function projectIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		return host != null && host.hasDeclaredResolutionScope() ? host.projectIndex() : null;
-	}
-
-	/**
 	 * The memoised write index over the RESOLUTION scope (report UNION the library, the library
 	 * half tagged third-party), or null when the plugin hosts no scope at all. Gated on the ANY
 	 * predicate, not the declared one: the library half is exactly what this index is for, and an

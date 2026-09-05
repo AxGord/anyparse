@@ -59,6 +59,16 @@ final class StructuralTypes {
 	];
 
 	/**
+	 * The language's nullability WRAPPER. Transparent for a structure-field unification —
+	 * measured on Haxe 4.3.7 that `{var x:Null<Int>}` accepts a class declaring `var x:Int` AND
+	 * that `{var x:Int}` accepts `var x:Null<Int>` — so `comparableNominalOf` answers on its
+	 * ARGUMENT rather than on the wrapper. Spelled here rather than read off the grammar shape
+	 * for the reason `MemberLookup.dynamicSupertypeRef` spells `Dynamic`: this layer holds the
+	 * index, not the plugin.
+	 */
+	private static final NULLABLE_WRAPPER_TYPE_NAME: String = 'Null';
+
+	/**
 	 * The anon-structure member kinds that declare a MUTABLE field: the explicit `var x:T;` and
 	 * the two shorthand forms `x:T` / `?x:T`. A value whose own member is `final` — or whose
 	 * write access is restricted to `(default, null)` — cannot unify with one of these.
@@ -340,13 +350,22 @@ final class StructuralTypes {
 	private function structuralConformancePins(typeName: String, field: String, methodMemberPins: Bool): Bool {
 		if (methodMemberPins)
 			for (members in BUILTIN_STRUCTURAL_MEMBER_SETS)
-				if (members.contains(field) && familyDeclaresEveryMember(typeName, members, [])) return true;
+				if (
+					members.contains(field)
+					&& familyDeclaresEveryMember(typeName, [for (n in members) { name: n, typeSource: null, host: null }], [])
+				)
+					return true;
 		for (fi in _files) for (t in fi.types) if (t.isAnonStruct) {
 			final declared: Null<MemberInfo> = t.members.find(m -> m.name == field);
 			if (declared == null) continue;
 			final pins: Bool = MUTABLE_ANON_FIELD_KINDS.contains(declared.kind)
 				|| (methodMemberPins && declared.kind == METHOD_ANON_FIELD_KIND);
-			if (pins && familyDeclaresEveryMember(typeName, [for (m in t.members) m.name], [])) return true;
+			final host: ResolvedType = { file: fi, type: t };
+			if (
+				pins
+				&& familyDeclaresEveryMember(typeName, [for (m in t.members) { name: m.name, typeSource: m.typeSource, host: host }], [])
+			)
+				return true;
 		}
 		return false;
 	}
@@ -359,7 +378,7 @@ final class StructuralTypes {
 	 * unification site, where the same field as a `var` unifies (measured). `seen` stops a cycle
 	 * in the adjacency, which is built from simple names and can therefore hold one.
 	 */
-	private function familyDeclaresEveryMember(typeName: String, members: Array<String>, seen: Array<String>): Bool {
+	private function familyDeclaresEveryMember(typeName: String, members: Array<StructureMember>, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return false;
 		seen.push(typeName);
 		return declaresEveryMember(typeName, members)
@@ -377,8 +396,101 @@ final class StructuralTypes {
 	 * by simple name too, so they cannot tell which declaration their candidate belongs to either,
 	 * and the union is the only reading that cannot under-fire.
 	 */
-	private function declaresEveryMember(typeName: String, members: Array<String>): Bool {
-		return _refs.resolvedDeclsNamed(typeName).exists(r -> members.foreach(m -> !_members.lacksMemberClosure(r, m, [])));
+	private function declaresEveryMember(typeName: String, members: Array<StructureMember>): Bool {
+		return _refs.resolvedDeclsNamed(typeName).exists(r -> members.foreach(m -> memberCouldUnify(r, m)));
+	}
+
+	/**
+	 * Whether `owner` could carry the structure member `want` — the two halves of a conformance
+	 * PROOF, in place of the name test this used to be.
+	 *
+	 * First a POSITIVE proof that the member is declared at all (`declaredMemberClosure`, not
+	 * `!lacksMemberClosure`): the absence walk fails closed toward "cannot prove absent", so its
+	 * negation reads an unresolvable supertype as declaring EVERY member and any subclass of a
+	 * type outside the resolution scope conformed to any structure naming the field.
+	 *
+	 * Then a refutation on the two WRITTEN types, because a member set is not a unification. A
+	 * structure's MUTABLE field is INVARIANT — measured against the compiler on Haxe 4.3.7:
+	 * `{var x:Float}` rejects a class declaring `var x:Int`, `{var x:Base}` rejects `var x:Sub`
+	 * (a subtype is not enough), and `{var x:C}` for an abstract `C` with a `@:from Int` rejects
+	 * `var x:Int` (an implicit cast does not bridge a mutable field either). So two nominals that
+	 * differ REFUTE the unification, and no consumer of this predicate may pin on them.
+	 *
+	 * Both halves only ever REMOVE a pin, and both fail toward keeping it: a member whose type
+	 * either side leaves unwritten, or whose spelling `comparableNominalOf` cannot close, still
+	 * conforms.
+	 */
+	private function memberCouldUnify(owner: ResolvedType, want: StructureMember): Bool {
+		final found: Null<{ member: MemberInfo, host: ResolvedType }> = _members.declaredMemberClosure(owner, want.name, []);
+		if (found == null) return false;
+		final wantHost: Null<ResolvedType> = want.host;
+		final wantSource: Null<String> = want.typeSource;
+		final haveSource: Null<String> = found.member.typeSource;
+		if (wantHost == null || wantSource == null || haveSource == null) return true;
+		final wantNominal: Null<String> = comparableNominalOf(wantSource, wantHost, []);
+		final haveNominal: Null<String> = comparableNominalOf(haveSource, found.host, []);
+		return wantNominal == null || haveNominal == null || wantNominal == haveNominal;
+	}
+
+	/**
+	 * The nominal two WRITTEN types may be compared on for a unification refutation, or null when
+	 * this spelling cannot carry one — every null is a REFUSAL to refute, so the pin survives.
+	 *
+	 * Four spellings are open by construction. A type PARAMETER of the declaring type binds to
+	 * whatever the unification site supplies. `Dynamic` unifies with everything. `Null<T>` is
+	 * transparent for this question (measured: `{var x:Null<Int>}` accepts `var x:Int` and the
+	 * reverse), so the wrapper is stripped and its argument answered instead. And a nominal
+	 * naming an ANONYMOUS-STRUCTURE typedef is a structure rather than a name — a class can unify
+	 * with one — so it is open too.
+	 *
+	 * A plain `typedef A = C` alias is FOLLOWED, not refused: measured, `{var x:MyInt}` with
+	 * `typedef MyInt = Int` DOES accept `var x:Int`, so comparing the written spellings would
+	 * refute a unification the compiler performs. An alias whose target does not resolve, or one
+	 * that re-enters itself, is open.
+	 *
+	 * RESIDUAL, deliberately: a nominal that resolves NOWHERE in the index is treated as CLOSED
+	 * and compared by its written simple name. That is what lets the refutation fire at all — the
+	 * types a project field and a structure field disagree on are usually a target's own
+	 * (`EventDispatcher` vs `Float`) — and it is wrong for exactly one shape: an out-of-scope
+	 * `typedef` aliasing the other side's nominal, which would be followed if it resolved. Since
+	 * S103 the configured library half IS in the index, so the residual is the std path and
+	 * whatever no configured root reaches.
+	 */
+	private function comparableNominalOf(typeSource: String, host: ResolvedType, seen: Array<String>): Null<String> {
+		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource);
+		if (nominal == null || MemberLookup.dynamicSupertypeRef(nominal)) return null;
+		if (host.type.typeParamNames.contains(nominal)) return null;
+		if (nominal == NULLABLE_WRAPPER_TYPE_NAME) {
+			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(typeSource);
+			return args == null || args.length != 1 ? null : comparableNominalOf(args[0], host, seen);
+		}
+		final decl: Null<ResolvedType> = _refs.resolveTypeRef(nominal, host.file);
+		if (decl == null) return nominal;
+		if (decl.type.kind != SymbolIndex.TYPEDEF_DECL_KIND) return nominal;
+		if (decl.type.isAnonStruct) return null;
+		final target: Null<String> = decl.type.aliasTargetRaw;
+		return target == null || !_refs.markSeen(decl, seen) ? null : comparableNominalOf(target, decl, seen);
 	}
 
 }
+
+/**
+ * One member of the anonymous structure a conformance question is asked about — its name, the
+ * WRITTEN type source it declares when it has one, and the declaration that spelled that source.
+ *
+ * The HOST is what makes the type source ANSWERABLE rather than merely comparable as text: a
+ * simple name resolves through its own declaring file's import scope, and a name matching one of
+ * that declaration's type PARAMETERS is not a nominal at all. Null on both for the language's
+ * BUILTIN structural sets, which are member names with no types — the refutation half of
+ * `memberCouldUnify` then does not apply and only the positive proof runs.
+ */
+typedef StructureMember = {
+	/** The member's name — the only half the old name-set test used. */
+	var name: String;
+
+	/** The member's VERBATIM declared type source, or null when the structure spells none. */
+	var typeSource: Null<String>;
+
+	/** The declaration `typeSource` was written in — its import scope and type parameters. */
+	var host: Null<ResolvedType>;
+};

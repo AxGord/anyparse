@@ -358,16 +358,16 @@
 			"name": "M-CHECKINDEX-PROJECT-FINAL",
 			"type": "anyparse.check.PreferFinalPublicField",
 			"method": "run",
-			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? projectScoped;",
-			"replace": "final index: SymbolIndex = projectScoped;",
+			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);",
+			"replace": "final index: SymbolIndex = SymbolIndex.build(scope, plugin);",
 			"note": "prefer-final-public-field goes back to a project-scoped name/type index, so a library supertype, interface or build macro is unresolvable again"
 		},
 		{
 			"name": "M-CHECKINDEX-PROJECT-READONLY",
 			"type": "anyparse.check.PreferReadOnlyField",
 			"method": "run",
-			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? projectScoped;",
-			"replace": "final index: SymbolIndex = projectScoped;",
+			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);",
+			"replace": "final index: SymbolIndex = SymbolIndex.build(scope, plugin);",
 			"note": "prefer-read-only-field goes back to a project-scoped name/type index, so a library supertype, interface or build macro is unresolvable again"
 		},
 		{
@@ -505,6 +505,61 @@
 			"find": "final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow && $afterKwExpr == null && _eicrLead.length == 1",
 			"replace": "final _eicrDoc: Null<anyparse.core.Doc> = $afterKwExpr == null && _eicrLead.length == 1",
 			"note": "the runtime gate stops reading `opt.elseIfCommentReflow`, so the reflow fires with the knob off and every pre-knob layout moves"
+		},
+		{
+			"name": "M-STRUCT-DECLARES-LOOSE",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "memberCouldUnify",
+			"find": "if (found == null) return false;",
+			"replace": "if (found == null) return !_members.lacksMemberClosure(owner, want.name, []);",
+			"note": "structural conformance reads the absence walk's negation again, so an unresolvable supertype declares EVERY member and any subclass of an out-of-scope type conforms by member name"
+		},
+		{
+			"name": "M-STRUCT-NOMINAL-OPEN",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "comparableNominalOf",
+			"force": "null",
+			"note": "no written type is comparable, so the unification refutation never fires and a member SET match pins again whatever the two types are"
+		},
+		{
+			"name": "M-STRUCT-ALIAS-OPAQUE",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "comparableNominalOf",
+			"find": "final target: Null<String> = decl.type.aliasTargetRaw;\n\t\treturn target == null || !_refs.markSeen(decl, seen) ? null : comparableNominalOf(target, decl, seen);",
+			"replace": "return nominal;",
+			"note": "a plain `typedef A = C` alias is compared as its own written name instead of being followed, so `{x:MyInt}` stops pinning a `var x:Int` the compiler does unify with it"
+		},
+		{
+			"name": "M-STRUCT-NULL-OPAQUE",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "comparableNominalOf",
+			"find": "if (nominal == NULLABLE_WRAPPER_TYPE_NAME) {",
+			"replace": "if (nominal == NULLABLE_WRAPPER_TYPE_NAME) return nominal;\n\t\tif (nominal == NULLABLE_WRAPPER_TYPE_NAME) {",
+			"note": "the nullability wrapper is compared as the nominal `Null`, so `{var x:Null<Int>}` stops pinning a `var x:Int` it accepts in both directions"
+		},
+		{
+			"name": "M-STRUCT-TYPEPARAM-CLOSED",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "comparableNominalOf",
+			"find": "if (host.type.typeParamNames.contains(nominal)) return null;",
+			"replace": "if (host.type.typeParamNames.contains(nominal)) return nominal;",
+			"note": "a structure member typed as its declaration's own type PARAMETER is compared as an ordinary nominal, so it refutes every argument it could have bound to"
+		},
+		{
+			"name": "M-STRUCT-DYNAMIC-CLOSED",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "comparableNominalOf",
+			"find": "if (nominal == null || MemberLookup.dynamicSupertypeRef(nominal)) return null;",
+			"replace": "if (nominal == null) return null;",
+			"note": "`Dynamic` is compared as an ordinary nominal, so a structure member declared `Dynamic` refutes every type it unifies with"
+		},
+		{
+			"name": "M-STRUCT-ANON-CLOSED",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "comparableNominalOf",
+			"find": "if (decl.type.isAnonStruct) return null;",
+			"replace": "if (decl.type.isAnonStruct) return nominal;",
+			"note": "a nominal naming an ANONYMOUS-STRUCTURE typedef is compared as a name, so a structure member typed by one refutes every class that could unify with it"
 		}
 	]
 }
