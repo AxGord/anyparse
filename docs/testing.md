@@ -1534,6 +1534,107 @@ DROPS each check's `tokens` (`MemberName` is configured twice on Pony, once for
 `CLASS/PUBLIC/PRIVATE/TYPEDEF` and once for `ENUM`, and only the first rule can
 ever apply) — the same widening has to decide what `tokens` means first.
 
+### The `--fix` run says which rules it EXERCISED, and the answer is 48 of 179
+
+Every slice of the `hxq-bugs` campaign closes on one proof: `hxq lint --all
+--fix --no-oracle` over the whole Pony fork, run by the base engine and by the
+slice engine into two `cp -R` copies, byte-compared across the six roots. The
+figure — **702 edits / 209 files / 8 passes** — has been reproduced on both arms
+by ten consecutive slices. Nobody asked which of the registered rules that run
+actually touches.
+
+It touches 48. Measured on `845b0809`, whole-repo copy, six roots:
+
+```
+apq lint --fix: rule census — of the 175 rule(s) this run was given, 48 produced an edit, 31 reported and got none, 10 were never asked, 86 reported nothing at all. Comparing what this run wrote against another engine is evidence about the first group and about none of the other three.
+  exercised: collapsible-else-if, collapsible-if, cond-assign-merge, dead-code, …
+```
+
+175 rather than the 179 `--list-rules` prints, because the denominator is
+`activeChecks` — the rules enabled for at least one file of the scope. The four
+Pony leaves out are `unused-public-member` (its `apqlint.json` disables it) and
+three `DefaultOff` checks its config never turns on (`asymmetric-branch-braces`,
+`default-repeated-argument`, `shadowing-parameter`). The four buckets partition
+that set by construction, so the counts sum to it and a reader can check the
+arithmetic on the line itself.
+
+What each bucket is worth as evidence:
+
+| bucket | Pony | what byte-identity across two engines proves |
+|---|---|---|
+| produced an edit | 48 | the rule's whole report → fix → gate → write path, on real code |
+| reported, got no edit | 31 | that the DECLINE reproduced — real, but nothing about the fix |
+| never asked | 10 | nothing: `RiskyFix` rules stay report-only with no oracle |
+| reported nothing at all | 86 | nothing: the rule ran over 872 files and matched none |
+
+`trivial-getter` is in the last bucket, and S74 measured why: **zero occurrences
+in every corpus this project owns** — anyparse `src test` (1711 files), the Pony
+working tree and its `git HEAD` (872 and 871), the haxe-formatter fork. Its
+`--fix` path has no real-tree arm at all. It is not alone; the bucket holds 86.
+
+#### The cheap census is wrong in both directions — 10 of 48 rules
+
+The obvious way to get this number without touching the tool is to lint the tree
+before and after the fix pass with `--format json` and call a rule exercised when
+its finding count dropped. Measured against the ledger's own per-rule `edits`
+tally, that method gets **10 of 48 wrong**, and the two totals (46 vs 48) nearly
+cancel so the error is invisible:
+
+- **4 false positives.** `avoid-dynamic` (470 → 469) and `shorten-type-ref`
+  (83 → 54) are `RiskyFix` rules the netless run never asks to fix at all;
+  `redundant-map-exists` (5 → 4) and `string-literal-dup` (88 → 86) declined
+  every finding. All four fell because ANOTHER rule's edit deleted the shape
+  they were reporting on. Confirmed by isolated runs — `--rule <id> --fix` over
+  the same six roots writes **0 edits in 0 files** for each of the four.
+- **6 false negatives.** `dead-code`, `duplicate-case`, `inline-constant`,
+  `join-declaration-assignment`, `join-single-use-local` and `unused-case-binder`
+  report NOTHING on the pre-fix tree and fix real sites on a later pass, once
+  another rule's edit exposed the shape. `--rule duplicate-case --fix` in
+  isolation reports zero findings; in the full run it produces edits.
+
+A before/after count diff is a statement about the tree, and the question is
+about the rule. Only the driver knows which check answered with which edits, and
+it already recorded it — `RuleFixOutcome.edits` has been filled since the ledger
+was built, and was never printed.
+
+#### The policy: the arm names what it proved, and no fixture corpus is checked in
+
+S74 left the choice open — check in a fixture corpus for the rules the real trees
+have exhausted, or stop demanding a corpus arm from them. Neither. A fixture
+corpus for 86 rules is a second codebase to maintain whose only reader is a gate,
+and S74's own 11-file one bought 10 findings for ONE rule; and simply excusing
+those rules leaves the vacuous quote available to the next slice. The census is
+the third option and it costs two lines of stderr per `--fix` run, computed from
+numbers already in hand.
+
+The NAMES printed are the exercised ones, not the silent ones. That is the short
+list on a real tree (48 of 175) and the only short answer there is on a one-file
+run, where the silent list would be 170-odd ids of noise; and it is the positive
+form of the claim, so a slice author looking for their own rule gets an answer
+rather than an absence to interpret. It prints on `--fix` only — a report run
+writes nothing and so proves nothing to qualify.
+
+#### How many past proofs this affects: 2 slices, 14 rules
+
+Of the 16 slices merged after `56a7f2a8` (S72, where the arm became the standard
+close), exactly two edited a check whose rule the arm does not exercise:
+
+- **S73** (`14e6a85f`, the `SymbolIndex` split) touched 47 check files, 14 of
+  them rules the arm never reaches — 10 silent (`comparison-to-boolean`,
+  `dead-binder-counter-loop`, `field-init-in-constructor`, `impossible-cast`,
+  `impossible-is-check`, `redundant-this`, `redundant-upcast`, `static-constant`,
+  `trivial-getter`, `unreachable-catch`) and 4 never asked or never enabled
+  (`prefer-case-guard`, `prefer-enum-abstract`, `redundant-import`,
+  `unused-public-member`). Its byte-identity result said nothing about any of
+  them; what covered them was the unit suite, which is a weaker net than the one
+  the slice reported.
+- **S74** (`2f3eff38`, the `TrivialGetter` split) touched exactly one, and knew
+  it — that is where the measurement came from.
+
+Fourteen rules over sixteen slices is a small number, and it is small because the
+campaign has mostly been decomposing oversized types rather than changing check
+behaviour. The census is cheap insurance against the slice where it is not.
+
 ### The oracle answers for what it COMPILED, not for what you linted
 
 `haxe <compilerOracle> --no-output` exiting 0 is the strongest gate this project
