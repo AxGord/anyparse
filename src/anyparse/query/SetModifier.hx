@@ -35,13 +35,19 @@ using StringTools;
  * `@:meta`, a conditional region and a keyword such a region merely
  * contributes sit inside the run and survive verbatim.
  *
- * Three shapes are REFUSED rather than guessed at. A run with anything but whitespace BETWEEN two
- * of its keywords — a `#if cpp inline #end` region, or a COMMENT, which is trivia and so no
- * sibling at all — because the first-to-last splice covers it and would delete it: a silent
- * semantic change, where the duplicate visibility base emitted at least failed to compile. And a
- * change naming a modifier the declaration carries INSIDE a region, in either direction, because
- * this op rewrites only the unguarded run: `+static` beside a guarded `static` emits a second one
- * that only that branch sees, and `-static` reports success while it still stands.
+ * Four shapes are REFUSED rather than guessed at. A bare `public` on a MODULE-LEVEL declaration,
+ * because there is no such spelling: measured on 4.3.7, Haxe rejects it on all seven module-level
+ * shapes — the five type kinds and a module-level function or var — while `private` is legal on all
+ * seven and is the only visibility one can carry. The op wrote it anyway, at rc 0, and the refusal
+ * names the edit that expresses the same intent (`-private`, which has always worked).
+ *
+ * A run with anything but whitespace BETWEEN two of its keywords — a `#if cpp inline #end`
+ * region, or a COMMENT, which is trivia and so no sibling at all — because the first-to-last
+ * splice covers it and would delete it: a silent semantic change, where the duplicate visibility
+ * base emitted at least failed to compile. And a change naming a modifier the declaration carries
+ * INSIDE a region, in either direction, because this op rewrites only the unguarded run: `+static`
+ * beside a guarded `static` emits a second one that only that branch sees, and `-static` reports
+ * success while it still stands.
  *
  * A region BEFORE the run, or between the run and the declaration, lies outside the splice and is
  * served normally — the shape every one of Pony's ten conditional modifier regions actually has.
@@ -165,6 +171,11 @@ final class SetModifier {
 				'the modifier run at $line:$col has something other than whitespace between two of its keywords — a conditional region, '
 				+ 'or a comment. Rewriting the run in one splice would delete it; move the modifiers together, or edit them by hand'
 			);
+		// A MODULE-LEVEL declaration has no visibility container, so the public keyword has no
+		// spelling there at all — and this op wrote it anyway, at rc 0, leaving a file anyparse
+		// re-parses and Haxe refuses.
+		final unspellable: Null<String> = modulePublicRefusal(tree, siblings[declIndex], changes, shape, run.names);
+		if (unspellable != null) return Err('the declaration at $line:$col $unspellable');
 		final rendered: String = applyChanges(run.names, changes, visibility);
 		final edit: { span: Span, text: String } = {
 			span: new Span(run.from, run.to),
@@ -308,6 +319,59 @@ final class SetModifier {
 					+ '\" here would leave the guarded branch carrying both; edit the modifiers by hand';
 		}
 		return null;
+	}
+
+	/**
+	 * The tail of a refusal when `changes` would ADD the public-visibility keyword to a declaration
+	 * that sits at the MODULE level, or null when they would not.
+	 *
+	 * Measured on Haxe 4.3.7: `public` is rejected on EVERY module-level shape the language has —
+	 * the five type kinds (`public modifier is not supported for classes / enums / abstracts`) and
+	 * a module-level function or var (`... for module-level fields`). Seven of seven, so the
+	 * refusal is the whole module level and needs no per-kind carve-out. `private` is legal on all
+	 * seven, and is the ONLY visibility a module-level declaration can spell.
+	 *
+	 * That is why the message names this op's own `-private` rather than another op: a module-level
+	 * declaration is public unless it says `private`, so "make it public" IS the removal, and
+	 * `set-modifier <file> --select '<decl>' -private` has always done it.
+	 *
+	 * Only an ADD is refused. `-public` removes a keyword that cannot be there, and is harmless.
+	 */
+	private static function modulePublicRefusal(
+		tree: QueryNode, decl: QueryNode, changes: Array<String>, shape: RefShape, current: Array<String>
+	): Null<String> {
+		final publicName: Null<String> = shape.publicModifierKind?.toLowerCase();
+		if (publicName == null) return null;
+		final adds: Bool = changes.exists(
+			change -> !change.startsWith('-') && (change.startsWith('+') ? change.substr(1) : change) == publicName
+		);
+		if (!adds || !isModuleLevel(tree, decl, shape)) return null;
+		final visibility: Array<String> = [for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase()];
+		final held: Null<String> = current.find(name -> name != publicName && visibility.contains(name));
+		return 'is at MODULE level, where "$publicName" has no spelling at all — Haxe rejects it on every module-level kind. ' + (
+			held == null
+				? 'A module-level declaration is "$publicName" unless it says otherwise, and this one says nothing: it already is'
+				: 'A module-level declaration is "$publicName" unless it says "$held", so drop that instead: -$held'
+		);
+	}
+
+	/**
+	 * Whether `decl` sits at the MODULE level — every node between the parsed root and it is a
+	 * conditional region, so nothing encloses it that could give a member its visibility.
+	 *
+	 * Asked structurally rather than off a kind list, because both lists that look like the answer
+	 * are answering something else: `RefShape.typeDeclKinds` omits `EnumAbstractDecl`, whose members
+	 * DO take a visibility, and `visibilityContainerKinds` names the containers whose members must
+	 * SPELL one, which excludes an interface. A module-level `#if … #end` wraps its declarations in
+	 * a region node without making them members of anything, and that is the one ancestor kind this
+	 * has to see through.
+	 */
+	private static function isModuleLevel(tree: QueryNode, decl: QueryNode, shape: RefShape): Bool {
+		final path: Null<Array<QueryNode>> = TreePath.pathTo(tree, decl);
+		if (path == null) return false;
+		final regionKind: Null<String> = shape.conditionalMemberKind;
+		for (i in 1...path.length - 1) if (path[i].kind != regionKind) return false;
+		return true;
 	}
 
 }

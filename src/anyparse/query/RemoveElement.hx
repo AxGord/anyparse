@@ -23,6 +23,14 @@ import haxe.Exception;
  * for comma lists) and the writer finalize live in
  * `RefactorSupport.deleteNode`, shared with the by-name remove wrappers
  * (`RemoveImport` / `RemoveMember`).
+ *
+ * A bare MODIFIER keyword named by an explicit `--select` / `--match` is REFUSED rather than
+ * served (`CliEdit.namedModifierKeyword`, in the command layer, where the address MODE is still
+ * known). It resolves to the same offset a POSITION on that keyword does, and the cursor
+ * convention reads that as the declaration's first token, so `--select 'Private'` deleted the
+ * whole `private typedef Helper` declaration at rc 0. The position form keeps that reading, which
+ * is why the guard is on the mode and not on the resolved kind; an annotation is unaffected,
+ * being an element in its own right.
  */
 @:nullSafety(Strict)
 final class RemoveElement {

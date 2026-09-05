@@ -106,6 +106,20 @@ final class RemoveElementCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		// A selector naming a bare modifier keyword is NOT an element address. It resolves to the
+		// same offset a position on that keyword does, and the cursor convention then reads it as
+		// the declaration's first token — so `--select 'Private'` deleted the whole declaration at
+		// rc 0. `replace-node` and `remove-member` already refuse their own version of this; this
+		// was the one member of the family with no guard.
+		final modifier: Null<String> = CliEdit.namedModifierKeyword(source, plugin, selectExpr, matchExpr, nth);
+		if (modifier != null) {
+			CliIo.stderr(
+				'apq remove-element: the address names the "$modifier" MODIFIER, and a modifier is not an element — removing it '
+				+ 'would delete the whole declaration it precedes. Drop the keyword with `apq set-modifier <file> --select '
+				+ '\'<decl>\' -$modifier`, or address the declaration itself to remove that\n'
+			);
+			return EXIT_RUNTIME;
+		}
 		final pos: Null<Position> = CliEdit.resolveAddressPos('remove-element', source, plugin, posSpec, selectExpr, matchExpr, nth);
 		if (pos == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
