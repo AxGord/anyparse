@@ -64,6 +64,7 @@ class FmtFlagOwnershipTest extends Test {
 		'WriterCodegen' => 3,
 		'WriterBlankLowering' => 2,
 		'WriterLoweringSupport' => 2,
+		'StructFieldTrailLowering' => 1,
 		'WriterArrowValueIfLowering' => 1,
 		'TriviaSlotNames' => 1,
 		'WriterChainLowering' => 1

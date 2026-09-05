@@ -210,6 +210,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterCodegen` | 3 |
 | `WriterBlankLowering` | 2 |
 | `WriterLoweringSupport` | 2 |
+| `StructFieldTrailLowering` | 1 |
 | `WriterArrowValueIfLowering` | 1 |
 | `TriviaSlotNames` | 1 |
 | `WriterChainLowering` | 1 |
