@@ -719,5 +719,22 @@
 			"replace": "final inToken: Bool = false;",
 			"note": "no byte is ever inside a token, so the display renderer collapses whitespace INSIDE a string literal again and a finding advertises a call the fix would not write"
 		}
+,
+		{
+			"name": "M-PEB-WS-REWIND-TRYPARSE-OFF",
+			"type": "anyparse.macro.StarLoopLowering",
+			"method": "buildTryparseSepLoop",
+			"find": "_bc == ' '.code || _bc == '\\t'.code || _bc == '\\n'.code || _bc == '\\r'.code",
+			"replace": "false",
+			"note": "the tryparse Star's own copy of the block-ended byte check reads _prevEndPos - 1 raw, so a `#if` region's statement whose terminator was swallowed hides its `;`, the loop breaks at the missing sep and the enclosing @:trail('#end') no longer matches - the file stops parsing"
+		},
+		{
+			"name": "M-PEB-WS-REWIND-SEPSTARTS-OFF",
+			"type": "anyparse.macro.Lowering",
+			"method": "lowerStarBlockEndedSepStarts",
+			"find": "_bc == ' '.code || _bc == '\\t'.code || _bc == '\\n'.code || _bc == '\\r'.code",
+			"replace": "false",
+			"note": "the enum-branch lead/trail Star's own copy of the byte check reads _prevEndPos - 1 raw, so a nested `{ … }` block whose statement swallowed its own terminator refuses the following statement and the file stops parsing"
+		}
 	]
 }
