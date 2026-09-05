@@ -611,6 +611,30 @@
 			"note": "a nominal naming an ANONYMOUS-STRUCTURE typedef is compared as a name, so a structure member typed by one refutes every class that could unify with it"
 		},
 		{
+			"name": "M-NULLABLE-FLOW-REPORT-INDEX",
+			"type": "anyparse.check.UnguardedNullableDeref",
+			"method": "run",
+			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);",
+			"replace": "final index: SymbolIndex = SymbolIndex.build(files, plugin);",
+			"note": "the flow seed asks the REPORT index again, so a nullable-returning member declared outside the reported files stops seeding anything"
+		},
+		{
+			"name": "M-NULLABLE-INDEX-EXCLUSION",
+			"type": "anyparse.check.NullableSource",
+			"method": "crossFileReturnCallSource",
+			"find": "if (cfg.excludedCalls.contains('${lookupType}.${parts.method}')) return null;",
+			"replace": "if (cfg.excludedCalls.contains('${lookupType}.${parts.method}.')) return null;",
+			"note": "the exclusion key can never match, so `Array.pop` comes back through the index lookup the build-time filter never sees and the length-guarded accessors seed the flow again"
+		},
+		{
+			"name": "M-NULLABLE-REPORT-INDEX",
+			"type": "anyparse.check.PossibleNullDereference",
+			"method": "run",
+			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);",
+			"replace": "final index: SymbolIndex = SymbolIndex.build(files, plugin);",
+			"note": "the cross-file return arc asks the REPORT index again, so every member declared outside the reported files is unknown and the arc is dead where it matters"
+		},
+		{
 			"name": "M-NULLABLE-NO-CHAIN",
 			"type": "anyparse.check.NullableSource",
 			"method": "receiverTypeName",
@@ -625,6 +649,13 @@
 			"find": "final lossy: Bool = declared == null || (cfg.shape.memberTransparentWrapperTypeNames ?? []).contains(declared);",
 			"replace": "final lossy: Bool = declared == null;",
 			"note": "the lossy `Null` that `declaredTypes` records for a `Null<Map<K, V>>` counts as an answer again, so a wrapped receiver goes back to being a safe miss"
+		},
+		{
+			"name": "M-SAFENAV-NO-NARROW",
+			"type": "anyparse.check.NullFlow",
+			"method": "safeNavChainRoot",
+			"force": "null",
+			"note": "a `?.` guard narrows nothing, so `if (u?.b != null) u.b.c()` reports its own guarded dereference again"
 		},
 		{
 			"name": "M-OPAQUE-REGION-NONE",

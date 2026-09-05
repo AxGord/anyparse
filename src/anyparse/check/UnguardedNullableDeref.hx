@@ -5,6 +5,7 @@ import anyparse.check.NullFlow.NullFacts;
 import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
@@ -27,6 +28,11 @@ import anyparse.runtime.Span;
  * `if (u != null)` arm, an early `if (u == null) return;`, an `&&` right side, a
  * non-null reassignment, a `??=`, a `switch` branch after a `case null:`, a `case _ if (u != null):` guard, and a `nullAssertionCalls` helper (`Assert.notNull(u)`) — so a guarded deref is a safe miss. Only a function
  * unit's own names (parameters / locals) are tracked, so a field / static / `this` receiver is never reported. Residual false positives remain where the non-null guarantee lives in a value / relational invariant the name-keyed flow cannot see — an `m.exists(k)` guard before `m[k]`, a key just written (`m[k] = v; var u = m[k];`), a key drawn from `m.keys()`, or an alias (`var v = u; if (v != null) u.f;`); these are report-only Warning residuals, suppressible via `// noqa` or `apqlint.json`.
+ *
+ * A `?.` guard on the receiver narrows it too: `u?.f != null` cannot be true with a null `u`,
+ * because `?.` short-circuits the whole remaining chain. The `== null` direction proves nothing —
+ * the member may be null on a perfectly non-null receiver — and neither does a chain whose FIRST
+ * step off the root is unsafe (`u.a?.b`), which throws rather than yielding null.
  *
  * Four receiver forms are covered, exactly as `null-dereference`: a field / method
  * access (`u.f` / `u.m()`, `fieldAccessKind`), a force-unwrap (`u!.f`,
@@ -75,7 +81,9 @@ final class UnguardedNullableDeref implements Check {
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final cfgValue: NullableSourceCfg = cfg;
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		// The RESOLUTION index, not the report one — `NullableSource`'s class doc says why, and why
+		// the exclusion list has to be re-applied inside the arc once it is this wide.
+		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
 		final ctx: Ctx = { ident: ident, soleChildKinds: soleChildKinds, firstChildKinds: firstChildKinds };
 		final violations: Array<Violation> = [];
 		for (entry in files) {
