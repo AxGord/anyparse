@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.Check;
 import anyparse.check.Severity;
+import anyparse.query.CanonicalEdit.CarriedEdit;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliIo;
@@ -152,6 +153,7 @@ typedef RuleEdits = {
 	final rule: String;
 	final findings: Array<Violation>;
 	final edits: Array<{ span: Span, text: String }>;
+	final carried: Array<CarriedEdit>;
 	var overlapped: Bool;
 	var refusal: Null<String>;
 };

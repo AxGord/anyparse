@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.Check.CarryingEdit;
+import anyparse.check.Check.CarryingFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
@@ -71,7 +73,7 @@ using StringTools;
  * positions are enumerable, so it can carry them instead of bailing.
  */
 @:nullSafety(Strict)
-final class PreferTernaryReturn implements Check {
+final class PreferTernaryReturn implements Check implements CarryingFix {
 
 	public function new() {}
 
@@ -101,6 +103,26 @@ final class PreferTernaryReturn implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		return [
+			for (edit in fixCarrying(source, violations, plugin, index)) { span: edit.span, text: edit.text }
+		];
+	}
+
+	/**
+	 * The `CarryingFix` half, and the one that does the work — `fix` is its pure projection, per
+	 * that interface's contract.
+	 *
+	 * What this rule carries is the whole reason the declaration exists. Every replacement it
+	 * emits is `return <condition> ? <then> : <else>;` built out of three ranges copied byte for
+	 * byte, with everything else that stood in the region — the comments — stacked in front. That
+	 * stacking is invisible to a gate reading the two texts, because the bytes it changes are the
+	 * bytes any in-place rewrite changes; declaring the three ranges is what lets
+	 * `CommentOwnerGuard.hoistedComment` see that a comment which stood BETWEEN two of them now
+	 * stands above both.
+	 */
+	public function fixCarrying(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<CarryingEdit> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
@@ -111,10 +133,17 @@ final class PreferTernaryReturn implements Check {
 			final span: Null<Span> = v.span;
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
-		final edits: Array<{ span: Span, text: String }> = [];
+		final edits: Array<CarryingEdit> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions);
-		return CanonicalEdit.dropContainedEdits(edits);
+		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([
+			for (edit in edits)
+				{
+					span: edit.span,
+					text: edit.text
+				}
+		]);
+		return edits.filter(edit -> kept.exists(alive -> alive.span.from == edit.span.from && alive.span.to == edit.span.to));
 	}
 
 	/** `TypeResolver.childReturnTypeSource` with this check's seams unpacked from `Seams`. */
@@ -153,8 +182,8 @@ final class PreferTernaryReturn implements Check {
 
 	/** Mirror `walk` — including its `retType` rebinding: collect one replacement edit per flagged `if`/`return` pair. */
 	private static function collectFixes(
-		node: QueryNode, source: String, s: Seams, retType: Null<String>, flagged: Array<String>,
-		edits: Array<{ span: Span, text: String }>, comments: Array<{ from: Int, to: Int, isLine: Bool }>, regions: Array<LexRegion>
+		node: QueryNode, source: String, s: Seams, retType: Null<String>, flagged: Array<String>, edits: Array<CarryingEdit>,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, regions: Array<LexRegion>
 	): Void {
 		final childRetType: Null<String> = childReturnType(node, source, s, retType);
 		if (s.support.blockKinds().contains(node.kind)) {
@@ -164,7 +193,7 @@ final class PreferTernaryReturn implements Check {
 				if (match == null) continue;
 				final ifSpan: Null<Span> = match.ifNode.span;
 				if (!(ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}'))) continue;
-				final edit: Null<{ span: Span, text: String }> = buildEdit(match, source, s.shape, regions);
+				final edit: Null<CarryingEdit> = buildEdit(match, source, s.shape, regions);
 				if (edit != null) edits.push(edit);
 			}
 		}
@@ -273,9 +302,7 @@ final class PreferTernaryReturn implements Check {
 	}
 
 	/** Build the `return cond ? a : b;` edit spanning the `if` through the trailing `return`. */
-	private static function buildEdit(
-		match: TernaryMatch, source: String, shape: RefShape, regions: Array<LexRegion>
-	): Null<{ span: Span, text: String }> {
+	private static function buildEdit(match: TernaryMatch, source: String, shape: RefShape, regions: Array<LexRegion>): Null<CarryingEdit> {
 		final ifSpan: Null<Span> = match.ifNode.span;
 		final condSpan: Null<Span> = match.condition.span;
 		final thenSpan: Null<Span> = match.thenValue.span;
@@ -295,7 +322,12 @@ final class PreferTernaryReturn implements Check {
 		final text: String = split.branchTrailing == null
 			? '${split.hoisted}return $condition ? $thenSource : $elseSource;'
 			: '${split.hoisted}return $condition\n? $thenSource ${split.branchTrailing}\n: $elseSource;';
-		return { span: new Span(ifSpan.from, nextSpan.to), text: text };
+		// The three ranges the replacement quotes byte for byte, in the order it puts them in —
+		// the same three `preservedComments` is handed to decide which comments it may leave
+		// alone, so the declaration is a list this function had already built. `wrapCondition` can
+		// put parentheses AROUND the condition; the source text is still inside the result, which
+		// is the whole of what a verbatim carry claims.
+		return { span: new Span(ifSpan.from, nextSpan.to), text: text, carried: [condSpan, thenSpan, elseSpan] };
 	}
 
 	/**

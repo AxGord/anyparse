@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CanonicalEdit.CarriedEdit;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
@@ -40,20 +41,28 @@ using StringTools;
  * code under a single block.
  *
  * It is a positive criterion, not a proof of attachment, and the gap was MEASURED rather than
- * guessed. With `prefer-ternary-return`'s own cascade gate disabled and only this guard
- * standing, the T546 run goes from 10 edits over 7 passes to 7 over 4 and refuses by name — but
- * three folds have landed by then, and one comment has already been hoisted past a gate it did
- * not document. A weld is the shape a comparison of the two texts can decide on its own; "moved
- * across code that survived" is not, because an ordinary in-place rewrite changes the same
- * bytes. Deciding that one needs an edit to declare which source spans it carried verbatim,
- * which no edit currently does — backlog, not a claim this class makes.
+ * guessed. With `prefer-ternary-return`'s own cascade gate disabled and only this criterion
+ * standing, the T546 cascade lands three folds and hoists one comment past a gate it does not
+ * document before the weld is reached (measured S86, on the reduced fixture: 3 edits over 4
+ * passes).
+ *
+ * ## The second criterion, and why it needs the caller
+ *
+ * A weld is the shape a comparison of the two texts can decide on its own; "moved across code
+ * that survived" is not, because an ordinary in-place rewrite changes the same bytes. S86 closed
+ * that half by giving edits a way to SAY what they quote verbatim (`CanonicalEdit.CarriedEdit`,
+ * `Check.CarryingFix`) and asking `hoistedComment` below. It is opt-in by construction: an edit
+ * set that declares nothing is judged exactly as it was, and the same cascade with the
+ * declaration in place stops after ONE fold with no comment detached.
  *
  * ## Cost
  *
  * A block merge needs code between two blocks to be REMOVED, so the pre-filter is exact and
  * free: some edit must both cover text (`span.from < span.to`) and intersect the gap between two
- * comment blocks. Only then is the spliced result lexed. Source-side regions come from the
- * caller, which already scanned them for `docSplittingEdit`.
+ * comment blocks. Only then is the spliced result lexed. Source-side regions come
+ * from the caller, which already scanned them for `docSplittingEdit`. The carry criterion is
+ * cheaper still: it reads one edit's own span and text, so it needs neither the splice nor a lex,
+ * and an undeclared edit set pays one length test.
  */
 @:nullSafety(Strict)
 final class CommentOwnerGuard {
@@ -116,6 +125,133 @@ final class CommentOwnerGuard {
 	}
 
 	/**
+	 * The refusal for the first DECLARED edit whose replacement moves a comment across source
+	 * code the same edit quotes VERBATIM, or null when none does — the half of the clause
+	 * `detachedComment` says above it cannot decide.
+	 *
+	 * `detachedComment` asks about the whole edit SET and needs no cooperation: two comment
+	 * blocks welded into one is a fact about two texts. This asks about ONE edit and cannot be
+	 * derived, because an in-place rewrite and a hoist change the same bytes. What makes it
+	 * decidable is the `CarriedEdit` declaration: the edit NAMES the source ranges its
+	 * replacement quotes verbatim, so "the code survived" stops being a guess. A comment that
+	 * stood before one of those ranges in the source and stands after it in the replacement
+	 * crossed it, and no longer leads what it documented.
+	 *
+	 * Everything it reads lives inside the one edit — that edit's span, its replacement text, and
+	 * the source comment tokens the caller already scanned — so it needs neither the splice nor a
+	 * lex of the result, and an edit set that declares nothing costs one length test.
+	 *
+	 * FAIL-OPEN on a declaration that does not hold: a fragment the replacement does not contain,
+	 * a comment text the replacement repeats, an empty declaration. That is the only direction
+	 * that cannot invent a refusal out of a producer's bookkeeping mistake, and a producer that
+	 * under-declares gets exactly the weaker guarantee it asked for.
+	 */
+	public static function hoistedComment(
+		source: String, edits: Array<{ span: Span, text: String }>, carried: Array<CarriedEdit>, regions: Array<LexRegion>
+	): Null<String> {
+		if (carried.length == 0) return null;
+		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
+		if (tokens.length == 0) return null;
+		for (entry in carried) if (entry.spans.length != 0) {
+			final edit: Null<{ span: Span, text: String }> = edits.find(candidate ->
+				candidate.span.from == entry.edit.from && candidate.span.to == entry.edit.to
+			);
+			if (edit == null) continue;
+			final hits: Array<PlacedComment> = placeableComments(source, edit.text, tokens, entry);
+			if (hits.length == 0) continue;
+			final placed: Null<Array<Span>> = placedCarry(source, entry.spans, edit.text);
+			if (placed == null) continue;
+			for (hit in hits) {
+				final moved: Null<{ code: Span, hoisted: Bool }> = crossedCarry(entry.spans, placed, hit);
+				if (moved == null) continue;
+				final comment: String = SourceText.regionExcerpt(source, new Span(hit.token.from, hit.token.to));
+				return 'the edit would move the comment "$comment" ${moved.hoisted ? 'above' : 'below'} '
+					+ '"${SourceText.regionExcerpt(source, moved.code)}", which the same edit carries verbatim, so the comment '
+					+ 'no longer leads what it documented — keep it beside the code it explains.';
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The comments of `source` that stand inside this edit's region, are not part of what it
+	 * carries, and can be LOCATED in its replacement — each paired with where it landed there.
+	 *
+	 * A comment the replacement DROPS is not this guard's business (the writer's own
+	 * `CommentLossException` owns that), and one it repeats cannot be placed at all. Both are left
+	 * out, which is the same fail-open direction the rest of the criterion takes.
+	 */
+	private static function placeableComments(
+		source: String, text: String, tokens: Array<CommentToken>, entry: CarriedEdit
+	): Array<PlacedComment> {
+		final out: Array<PlacedComment> = [];
+		for (token in tokens) {
+			if (token.from < entry.edit.from || token.to > entry.edit.to) continue;
+			if (entry.spans.exists(span -> token.from >= span.from && token.to <= span.to)) continue;
+			final quoted: String = source.substring(token.from, token.to);
+			final at: Int = text.indexOf(quoted);
+			if (at >= 0 && at == text.lastIndexOf(quoted)) out.push({ token: token, at: at });
+		}
+		return out;
+	}
+
+	/**
+	 * The carried code `hit` changed sides with, plus which way the comment went — or null when it
+	 * kept its place relative to every one of them.
+	 *
+	 * Quoted as ONE range spanning every carry that flipped rather than as the first of them: a
+	 * condition or a returned value can be a single character, and `above "a"` names nothing a
+	 * reader can find in the file.
+	 */
+	private static function crossedCarry(spans: Array<Span>, placed: Array<Span>, hit: PlacedComment): Null<{
+		code: Span,
+		hoisted: Bool
+	}> {
+		var code: Null<Span> = null;
+		var hoisted: Bool = false;
+		for (k in 0...spans.length) {
+			final codeFirstInSource: Bool = spans[k].to <= hit.token.from;
+			if (codeFirstInSource == (placed[k].to <= hit.at)) continue;
+			final was: Null<Span> = code;
+			if (was == null) {
+				code = spans[k];
+				hoisted = codeFirstInSource;
+			} else
+				code = new Span(was.from < spans[k].from ? was.from : spans[k].from, was.to > spans[k].to ? was.to : spans[k].to);
+		}
+		final crossed: Null<Span> = code;
+		return crossed == null ? null : { code: crossed, hoisted: hoisted };
+	}
+
+	/**
+	 * Where each declared carry lands inside `code`, or null when the declaration does not hold.
+	 * Scanned left to right in the DECLARED order, which is the order the fragments appear in the
+	 * replacement, so a fragment the replacement repeats resolves to the occurrence following the
+	 * previous one rather than to the first in the text.
+	 *
+	 * A short fragment (`a`, `1`) can match inside a COMMENT the replacement carries rather than at
+	 * the code the producer meant, and that cannot change a verdict: a placement inside a comment
+	 * ends after that comment starts, so the fragment reads as "not before it" — which is what it
+	 * would have read anyway had the comment moved above it. An earlier revision blanked every
+	 * comment out of `code` first; arm F5 (that blanking made a no-op) left all 13 980 tests green
+	 * AND every refusal message byte-identical, so it was work with no verdict attached and went.
+	 */
+	private static function placedCarry(source: String, spans: Array<Span>, code: String): Null<Array<Span>> {
+		final placed: Array<Span> = [];
+		var at: Int = 0;
+		for (span in spans) {
+			final fragment: String = source.substring(span.from, span.to);
+			if (fragment.length == 0) return null;
+			final found: Int = code.indexOf(fragment, at);
+			if (found < 0) return null;
+			placed.push(new Span(found, found + fragment.length));
+			at = found + fragment.length;
+		}
+		return placed;
+	}
+
+
+	/**
 	 * The comment BLOCKS of `source`: maximal runs of `tokens` with only whitespace between
 	 * consecutive members, in source order. A trailing comment and the own-line comment on the
 	 * next line form one block, which is the conservative grouping — it can only merge blocks the
@@ -151,4 +287,21 @@ final class CommentOwnerGuard {
 		return false;
 	}
 
+}
+
+/**
+ * One comment token as `SourceComments.collectCommentTokens` yields it: its span, and whether it
+ * is a `//` line comment rather than a `/* … *\/` block. Named here because the carry criterion
+ * threads it through three signatures and the structural spelling drowned them.
+ */
+typedef CommentToken = {
+	final from: Int;
+	final to: Int;
+	final isLine: Bool;
+}
+
+/** One `CommentToken` of the source together with the offset it landed at inside a replacement. */
+typedef PlacedComment = {
+	final token: CommentToken;
+	final at: Int;
 }

@@ -33,6 +33,32 @@ final class SeamEdit {
 	}
 
 	/**
+	 * Replace the first occurrence of `find` with `text`, DECLARING which source ranges `text`
+	 * quotes verbatim — the `CarriedEdit` seam. Each entry of `carries` is a literal that must
+	 * occur exactly once in `source`, listed in the order it appears in `text`; the helper turns
+	 * it into the span so a fixture states the carry in the terms it is written in.
+	 *
+	 * `reformat` is true here as it is everywhere else in this class, which matters more than it
+	 * looks: the guard reads the SPLICE, not the settled text, so a fixture that is not
+	 * writer-canonical still exercises the same question a real op puts.
+	 */
+	public static function replaceCarrying(source: String, find: String, text: String, carries: Array<String>): EditResult {
+		final at: Int = source.indexOf(find);
+		if (at < 0) throw new Exception('the fixture does not contain "$find"');
+		final spans: Array<Span> = [];
+		for (carry in carries) {
+			final from: Int = source.indexOf(carry);
+			if (from < 0) throw new Exception('the fixture does not contain the carried "$carry"');
+			if (source.indexOf(carry, from + 1) >= 0) throw new Exception('the carried "$carry" is not unique in the fixture');
+			spans.push(new Span(from, from + carry.length));
+		}
+		final span: Span = new Span(at, at + find.length);
+		return CanonicalEdit.canonicalize(
+			source, [{ span: span, text: text }], true, new HaxeQueryPlugin(), null, [{ edit: span, spans: spans }]
+		);
+	}
+
+	/**
 	 * SEVERAL edits at once — the shape a `patch` multi-pair payload and one
 	 * `lint --fix` check's edit set both produce, and the only one where a
 	 * construct's end can land in an edit OTHER than the one that touched its body.

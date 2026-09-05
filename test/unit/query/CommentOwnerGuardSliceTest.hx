@@ -40,6 +40,24 @@ class CommentOwnerGuardSliceTest extends Test {
 	private static final TWO_BLOCKS: String =
 		'class C {\n\tfunction f(): Void {\n\t\ta();\n\t\t// why b\n\t\tb();\n\t\t// why c\n\t\tc();\n\t}\n}\n';
 
+	/**
+	 * The run-of-ONE fold, with the comment BETWEEN the guard and the return — one comment block,
+	 * so the weld criterion is structurally unable to speak about it. Every token the carry tests
+	 * declare (`gate()`, `11`, `22`) occurs exactly once, which is what lets a fixture state a
+	 * span as the text it is written as.
+	 */
+	private static final CARRY_SOURCE: String =
+		'class C {\n\tfunction f(): Int {\n\t\tif (gate()) return 11;\n\t\t// why zero\n\t\treturn 22;\n\t}\n}\n';
+
+	/** The region `prefer-ternary-return` replaces for `CARRY_SOURCE`. */
+	private static final FOLDED_REGION: String = 'if (gate()) return 11;\n\t\t// why zero\n\t\treturn 22;';
+
+	/** What that rule writes there: the comment stacked in front of the three ranges it quotes. */
+	private static final HOISTED: String = '// why zero\n\t\treturn gate() ? 11 : 22;';
+
+	/** The same region rewritten AROUND the comment, which must stay accepted. */
+	private static final REWRITTEN_IN_PLACE: String = 'if (gate()) return 11;\n\t\t// why zero\n\t\treturn 22 + 1;';
+
 	/** One comment leading a pair the ternary fold rewrites in place. */
 	private static final ONE_BLOCK: String =
 		'class C {\n\tfunction f(a: Bool): Int {\n\t\t// why the guard\n\t\tif (a) return 1;\n\t\treturn 0;\n\t}\n}\n';
@@ -107,6 +125,73 @@ class CommentOwnerGuardSliceTest extends Test {
 	public function testDeletingTheLastCommentedStatementIsAccepted(): Void {
 		final text: String = assertOk(SeamEdit.replace(TWO_BLOCKS, 'c();', ''));
 		Assert.isTrue(text.indexOf('// why c') >= 0, 'the comment was not kept:\n$text');
+	}
+
+	/**
+	 * The CARRY criterion, on the shape the block criterion above provably cannot see: ONE comment
+	 * block, so `detachedComment` has nothing to weld and returns before it looks at anything.
+	 *
+	 * This is the closure S84 wrote down as a backlog item and could not reach: "moved across code
+	 * that survived" is undecidable from the two texts, because an in-place rewrite changes the
+	 * same bytes a hoist does. The edit DECLARES the ranges it quotes verbatim, and the question
+	 * becomes arithmetic — `// why zero` stood after `gate()` and `11` in the source and stands
+	 * before both in the replacement.
+	 *
+	 * The message assertion is the discriminating half: it must be the carry sentence ("carries
+	 * verbatim"), never the weld sentence, or the test would be passing on the older criterion.
+	 * Killed by arm `F1` (`CommentOwnerGuard.hoistedComment` returning null on entry).
+	 */
+	public function testHoistingAcrossADeclaredCarryIsRefused(): Void {
+		switch SeamEdit.replaceCarrying(CARRY_SOURCE, FOLDED_REGION, HOISTED, ['gate()', '11', '22']) {
+			case Ok(text):
+				Assert.fail('expected a refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('carries verbatim') >= 0, 'this is not the carry refusal: $message');
+				Assert.isTrue(message.indexOf('why zero') >= 0, 'the refusal does not name the comment: $message');
+				Assert.isTrue(message.indexOf('gate()') >= 0, 'the refusal does not name the code it crossed: $message');
+		}
+	}
+
+	/**
+	 * The OPT-IN contract, and the reason every other caller of this seam is byte-inert: the SAME
+	 * edit with no declaration is accepted, because nothing told the guard which bytes survived.
+	 *
+	 * NOT killed by any arm in this slice, and that is what it is here to say. It is not a tested
+	 * invariant of the algorithm — it is the statement that the algorithm is never entered without
+	 * a declaration, which is what let this land without re-judging the seventeen addressed ops,
+	 * `FixVerifier`, and every check that does not implement `CarryingFix`.
+	 */
+	public function testTheSameEditWithNoCarryDeclaredIsAccepted(): Void {
+		final text: String = assertOk(SeamEdit.replace(CARRY_SOURCE, FOLDED_REGION, HOISTED));
+		Assert.isTrue(text.indexOf('// why zero\n\t\treturn gate() ? 11 : 22;') >= 0, 'the undeclared fold did not land:\n$text');
+	}
+
+	/**
+	 * CONTROL, the carry-side twin of `testInPlaceRewriteUnderOneCommentIsAccepted`: the comment
+	 * sits INSIDE the edited region and the region is rewritten around it, but it keeps its place
+	 * between the same two carried ranges. A criterion that fired on "the edit covered the
+	 * comment" rather than on "the comment changed sides" would refuse this, and with it every
+	 * fixer that edits a commented region at all.
+	 */
+	public function testACommentThatKeepsItsPlaceUnderACarryIsAccepted(): Void {
+		final text: String = assertOk(SeamEdit.replaceCarrying(CARRY_SOURCE, FOLDED_REGION, REWRITTEN_IN_PLACE, ['gate()', '11', '22']));
+		Assert.isTrue(text.indexOf('return 11;\n\t\t// why zero\n\t\treturn 22 + 1;') >= 0, 'the comment did not keep its place:\n$text');
+	}
+
+	/**
+	 * FAIL-OPEN, the direction a guard built on a producer's bookkeeping has to fail in: a
+	 * declaration the replacement does not bear out yields NO verdict, not a refusal. Here the
+	 * ranges are declared in the wrong order, so the left-to-right scan runs off the end of the
+	 * replacement looking for `gate()` after `22`.
+	 *
+	 * The fixture is the HOISTING edit, so this is the one cell of the matrix where a
+	 * mis-declaration turns a refusal into an acceptance — the price of the direction, stated
+	 * rather than hidden. Killed by arm `F2` (`placedCarry` returning a refusal instead of being
+	 * skipped when the declaration does not hold).
+	 */
+	public function testACarryDeclarationThatDoesNotHoldIsNotARefusal(): Void {
+		final text: String = assertOk(SeamEdit.replaceCarrying(CARRY_SOURCE, FOLDED_REGION, HOISTED, ['22', 'gate()']));
+		Assert.isTrue(text.indexOf('// why zero\n\t\treturn gate() ? 11 : 22;') >= 0, 'the fold did not land:\n$text');
 	}
 
 	/** The `Ok` text, proved to re-parse; an `Err` fails the test with its own message. */

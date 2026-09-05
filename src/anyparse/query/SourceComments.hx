@@ -25,14 +25,6 @@ import anyparse.runtime.Span;
 final class SourceComments {
 
 	/**
-	 * Class-member declaration kinds (fields / methods). A binding whose
-	 * decl node carries one of these kinds is a class member, not a local
-	 * — used to gate `this.<name>` augmentation in `Rename` and to refuse
-	 * inlining a free identifier that may be a property getter in
-	 * `Inline`. `FinalModifiedMember` is the `final` METHOD form
-	 * (`final function f()`); the query projection surfaces its name off
-	 * the inner `HxFinalModifierMember.fn`, so it is a member like
-	 * `FnMember` for `this.<name>` purposes.
 	 * The doc-comment opener — what distinguishes documentation from a plain `/* … *\/` banner.
 	 */
 	private static final DOC_OPEN: String = '/**';
