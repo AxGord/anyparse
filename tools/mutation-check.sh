@@ -18,6 +18,12 @@
 #
 # Usage: tools/mutation-check.sh <manifest> [--jobs N]
 #
+# For a mutation that a `@:killer` in the test tree NAMES, do not write a
+# manifest by hand: `tools/mutation-arm.sh <ARM>` renders the arm's record out
+# of `test/testkit/mutation-arms.json`, derives the expectation set from the
+# arm's own pins, and calls this script. A hand-written manifest is for a
+# one-off probe, where the patch is the whole point and no pin refers to it.
+#
 # Manifest format — line-oriented, `|`-separated, 4 fields, surrounding
 # whitespace trimmed. Blank lines and lines whose first non-blank
 # character is `#` are ignored.

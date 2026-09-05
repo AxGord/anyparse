@@ -355,6 +355,72 @@ MISMATCH   foo                  filter=Bar            2 tests failed / 9 asserti
 
 The two figures on a row are in different units on purpose: the count of failing *test methods* against the total *assertions* utest reported, since that total is the only run-size figure the header carries — once a run goes red utest stops listing the passing tests, so there is no test-level total to divide by. The name list is capped at the first ten, with `…+N more`; the full set is in the track's transcript, which the workroot path points at.
 
+### Declared arms — the pin metadata's other half
+
+`@:pin('control')` names what a fixture is FOR and `@:killer('<arm>')` names the mutation that must break it, and `testkit.TestDiscovery` refuses to build a control that names no arm. That checks the SHAPE. The name itself was free text: nothing said the arm existed, still addressed live code, or still killed anything — which is the "proof that proves nothing" the metadata was introduced to end, one level down.
+
+`test/testkit/mutation-arms.json` is the registry. One record per arm, naming the type, the member and the cut:
+
+```json
+{ "name": "M-ISSUBTYPE-FALSE", "type": "anyparse.query.SubtypeGraph", "method": "isSubtype",
+  "force": "false",
+  "note": "the subtype relation is empty, so redundant-upcast and unreachable-catch stop seeing the relation they report on" }
+```
+
+A cut is one of two shapes, and a record must declare exactly one:
+
+- **`force`** — `return <force>;` spliced directly after the member's signature, leaving the rest of the body as dead code. This is the shape S94 ran twenty-two of, and thirteen of the arms below are it.
+- **`find`** / **`replace`** — a text fragment replaced inside the member, for a cut a constant cannot express: restoring a removed veto, flipping a precedence, collapsing one classifier code into another. `replace` may be empty, which deletes the fragment.
+
+Both are `hxq patch --select 'FnMember:<method>'` payloads, which is the point: an arm survives every edit that does not rename its member. A stored line number, or a checked-in git patch, does not.
+
+**Three build errors, all free.** `TestDiscovery` cross-checks the registry against the tree while it is already walking it:
+
+- a `@:killer` naming no declared arm, reported at the fixture's own position;
+- a declared arm no `@:killer` names — an arm exists to kill a pin;
+- a declared arm whose `type` no longer declares that `method`, asked of the COMPILER (`Context.getModule` plus a field lookup), not of the file's text;
+- the registry file itself gone, which every `@:killer` in the tree resolves through.
+
+The third is the one nothing could catch before, because it needs no test run and no sweep — and it is the one that had already happened: S94 recorded that four of the `trivial-getter` lines its arm depends on had already been moved into `check/BackingFieldRefs.hx` by S74, so the dependency stood while the file it named did not.
+
+**Running one is one command.**
+
+```sh
+tools/mutation-arm.sh <ARM> [<ARM>...]   # each over the whole suite
+tools/mutation-arm.sh --all              # every declared arm
+tools/mutation-arm.sh --all --fast       # only the classes that pin each arm
+tools/mutation-arm.sh --list             # the registry, one line per arm
+node bin/test.js --list-arms             # the same list, out of the generated registry
+```
+
+It renders each record into a patch inside a scratch worktree at `HEAD`, derives the expectation set from the arm's OWN pins in the generated registry — the pin metadata is where that pairing is declared, and one copy of a fact is enough — writes a manifest, and hands it to `tools/mutation-check.sh`. Nothing new classifies a transcript.
+
+**The contract is "kills its own pin", not "kills exactly one test", and the existing verdicts already say which.** An arm cuts shared engine code, so collateral is inherent rather than a defect: measured on `18fc8e90`, `M-DECLARINGFILES-EMPTY` takes 326 fixtures down and `M-BUILDMACRO-TRUE` 280, while `M-KINDS` takes 3 and `M-ARM-ROW-OK` exactly its own 2.
+
+| Row | Reading |
+|---|---|
+| `KILLED`, no `+extra` | Every fixture naming the arm went red and nothing else did. The narrowest reading — and a property some arms cannot have. |
+| `KILLED … +extra: …` | Its own pins went red AND other fixtures did. The EXPECTED reading for an arm on shared code. |
+| `MISMATCH` | Red, but at least one of the arm's own pins survived, and the row names which. The arm killed something ELSE. |
+| `SURVIVED` | Green. The fixture that claims this arm breaks it does not notice. |
+
+A `SURVIVED` or `MISMATCH` row is evidence about the FIXTURE, not noise to retry past: S86 deleted a helper because an arm survived the full suite, and S92 had two arms survive and rewrote the fixtures until they discriminated rather than hiding it. This slice's own first sweep produced one of each, and both were defects in the arm records rather than in the fixtures — `M-FANOUT-FIRST` SURVIVED because its cut ADDED a second read of the specific key while leaving the original in place, so the original still won; `M-PATHWALK-NULL` came back `BUILD-FAIL` because the member is `inline` and a forced return ahead of the body is a non-final return the compiler refuses (which is why S94 had hand-special-cased that one). Both are now `find`/`replace` cuts, and the second failure mode is why the registry has that shape at all.
+
+**Cost, measured on `18fc8e90` with 23 arms, 16 cores, `--jobs 4`:**
+
+| Run | Wall | Verdicts |
+|---|---|---|
+| one arm, whole suite | 48 s | |
+| one arm, `--fast` | 17 s | |
+| `--all`, whole suite | 335 s | 23 killed |
+| `--all --fast` | 130 s | 23 killed |
+
+**Cadence: `--all --fast` per WAVE, one arm on demand.** Two minutes is cheap enough to run at the end of a wave and far too expensive to run per slice — and the build-time checks already catch the failure a sweep would otherwise be needed for (an arm pointing at a member that no longer exists), for free, on every build. Run a single arm when you add or edit a pin, which is the moment its claim is actually being made. Reach for `--all` (whole suite) when the collateral census is the point — before a release, or when a refactor is supposed to have preserved a coupling.
+
+**One caveat on the whole-suite mode, measured.** Twenty-three concurrent full-suite runs at `--jobs 4` put the oracle-driven CLI end-to-end fixtures under load, and they flake there: across two `--all` sweeps of the same tree, 11 failure names appeared in one run and not the other — `unit.check.*OracleE2ETest`, `unit.check.OracleCacheTest`, `unit.cli.LintPerFileConfigCliTest`, `unit.check.NamingCheckMemberFixTest`, `unit.check.MagicNumberCheckTest.testRespectsIgnoreFromDisk`. That they are flakes rather than coupling is not a guess: `M-ARM-ROW-OK` cuts `test/testkit/MutationArms.hx`, a file no check reads, and five of its eleven "extras" in the first sweep were `unit.check.*`. Every VERDICT was stable across both sweeps; it is the `+extra` column that should be read as approximate. `--fast` has neither problem.
+
+`ANYPARSE_HXFORMAT_FORK` is unset for the run on purpose: the corpus harness is not what an arm measures, and a verdict must not depend on whether a fork path happens to be exported in the caller's shell.
+
 Every worktree the runner created is removed on exit, including on `INT`/`TERM`/`HUP`. A `worktree remove` that itself fails is swallowed so one bad entry cannot strand the rest — which does mean a stuck worktree can survive as a registered entry, so `git worktree list` is worth a glance after a crashed run. The workroot itself is never deleted: its transcripts, build logs and verdict files are the post-mortem. They accumulate in `TMPDIR` across a long campaign, so a campaign that runs for days is worth sweeping by hand.
 
 ## Macro-specific tests
@@ -444,6 +510,7 @@ node bin/test.js --list-classes   # every registered class, one per line
 node bin/test.js --list-dead      # fixture-named methods utest will never run
 node bin/test.js --list-bases     # utest.Test subclasses carrying no fixture
 node bin/test.js --list-pins      # @:pin annotations with roles and killers
+node bin/test.js --list-arms      # the declared mutation arms every @:killer resolves into
 ```
 
 `--list-classes` is what `tools/suite-shard.sh` feeds to `apq shard-plan
@@ -470,16 +537,26 @@ is the other half: a real test class that no hand-written line names, and none
 may ever name — a registration written for it would delete the only standing
 evidence that discovery, not a list, is what runs it.
 
-**Machine-checkable test metadata (pilot).** This campaign writes rich claims in
+**Machine-checkable test metadata.** This campaign writes rich claims in
 test doc comments — "green at base by construction" (41 occurrences in
 `test/unit`), "vacuous" (54), "by construction" (53), "killed by" (9) — and
 nothing checks any of them. `@:pin('<role>')` names what a fixture is FOR and
 `@:killer('<arm>')` names the mutation arm that must break it; `TestDiscovery`
 refuses to build a `@:pin('control')` that names no arm, so the reviewer's
-catch becomes a compile error. Piloted on ONE class
-(`unit.grammar.haxe.ComplexItemKindsSeamTest`) and deliberately not rolled out: the roles are
-only worth what the arms behind them are, and an arm nobody ran is prose retyped
-as metadata.
+catch becomes a compile error.
+
+It was piloted on ONE class (`unit.grammar.haxe.ComplexItemKindsSeamTest`, S49)
+and is no longer a pilot: S76, S77 and S78 pinned the comprehension slices as
+they landed, and S94 pinned one fixture per rule for the fourteen it audited.
+At `4626138c` that was **32 pins across 18 classes naming 21 arms**; the
+registry slice brought it to **39 pins across 19 classes naming 23 arms**
+(`node bin/test.js --list-pins`). The reservation the pilot text carried —
+"the roles are only worth what the arms behind them are, and an arm nobody ran
+is prose retyped as metadata" — is what the arm registry answers: every arm
+name now resolves to a declared record the build checks and one command runs
+(see "Declared arms" above). What is still NOT rolled out is the metadata on
+the rest of the tree: 39 pins against ~14 000 fixtures, and the doc-comment
+conventions those counts above measure remain unchecked prose everywhere else.
 
 **The staging arm is gone.** `test/RunTestsLegacy.hx` — the runner as it was,
 758 hand-written lines unmodified except for the class rename, built by

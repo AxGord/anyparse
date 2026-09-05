@@ -121,8 +121,9 @@ class RunTests {
 	}
 
 	/**
-	 * `--list-classes` / `--list-dead` / `--list-bases` / `--list-pins` print one
-	 * view of the generated registry and exit before a single fixture runs.
+	 * `--list-classes` / `--list-dead` / `--list-bases` / `--list-pins` /
+	 * `--list-arms` print one view of the generated registry and exit before a
+	 * single fixture runs.
 	 *
 	 * `tools/suite-shard.sh` deals its shard plan off the first of them, so the
 	 * class list a shard is filtered by is the one the runner will actually
@@ -139,6 +140,8 @@ class RunTests {
 			TestRegistry.baseClasses();
 		else if (args.contains('--list-pins'))
 			TestRegistry.pins();
+		else if (args.contains('--list-arms'))
+			TestRegistry.arms();
 		else
 			null;
 		if (lines == null) return false;

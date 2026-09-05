@@ -1,0 +1,187 @@
+{
+	"$comment": [
+		"The mutation-arm registry. Every `@:killer('<name>')` in the test tree",
+		"resolves to a `name` below or the build stops; every arm below is named by",
+		"at least one `@:killer` or the build stops; and every `type`/`method` below",
+		"has to still exist or the build stops. Run one with",
+		"`tools/mutation-arm.sh <NAME>`, all of them with `--all`.",
+		"",
+		"An arm cuts exactly one way. `force` inserts `return <force>;` directly",
+		"after the member's signature, leaving the rest of the body behind as dead",
+		"code — the shape S94 measured 22 of. `find`/`replace` splices text inside",
+		"the member instead, for a cut a constant cannot express; both are",
+		"`hxq patch --select 'FnMember:<method>'` payloads, so an arm survives every",
+		"edit that does not rename its member, which a stored line number does not."
+	],
+	"arms": [
+		{
+			"name": "M-ALWAYS-NEXT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
+			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Next);",
+			"note": "every value of sameLine.comprehensionFor becomes `next`, so a body the key asked to keep on the head line leaves it"
+		},
+		{
+			"name": "M-ALWAYS-SAME",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
+			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Same);",
+			"note": "every value of sameLine.comprehensionFor becomes `same`, so `keep` stops reproducing the source break"
+		},
+		{
+			"name": "M-ARM-ANYNAME",
+			"type": "testkit.MutationArms",
+			"method": "find",
+			"force": "arms[0]",
+			"note": "arm lookup answers the first declared arm for every name, so an undeclared @:killer resolves and the build-time refusal is gone"
+		},
+		{
+			"name": "M-ARM-ROW-OK",
+			"type": "testkit.MutationArms",
+			"method": "rowErrors",
+			"force": "[]",
+			"note": "per-row validation reports nothing, so an arm declaring neither cut — or both — is accepted"
+		},
+		{
+			"name": "M-BUILDMACRO-TRUE",
+			"type": "anyparse.query.TypeTraits",
+			"method": "transitivelyCarriesBuildMacro",
+			"force": "true",
+			"note": "every type reads as carrying a build macro, so static-constant stops promoting a field a macro cannot have written"
+		},
+		{
+			"name": "M-CUDDLE-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"force": "null",
+			"note": "the comprehension cuddled-open shape never fires, so `[ for (…)` goes back to its own bracket line"
+		},
+		{
+			"name": "M-DECLARINGFILES-EMPTY",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "declaringFiles",
+			"force": "[]",
+			"note": "no type is declared anywhere, so a check that resolves a simple name to its declaring file stops seeing it"
+		},
+		{
+			"name": "M-ELSE-GATE",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "isCuddleableComprehensionItem",
+			"find": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0;",
+			"replace": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0 && !hasTopLevelElse(item, 0);",
+			"note": "restores the S76 veto S78 removed — a comprehension whose body is an if/else refuses to cuddle its `[` again"
+		},
+		{
+			"name": "M-FANOUT-FIRST",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
+			"replace": "if (section.comprehensionFor != null && section.expressionIf == null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
+			"note": "the general expressionIf fanout outranks the specific comprehensionFor key, which is the precedence S77 chose, reversed"
+		},
+		{
+			"name": "M-FIRST-LINE-FIT",
+			"type": "anyparse.format.BodyFit",
+			"method": "fitLineLayout",
+			"find": "else if (refuseGlue)",
+			"replace": "else if (false)",
+			"note": "FitLine goes back to placing a body by its FIRST line, so a body that cannot render flat glues to the head line again"
+		},
+		{
+			"name": "M-HASSUBTYPE-FALSE",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "hasSubtype",
+			"force": "false",
+			"note": "no type has a subtype, so prefer-enum-abstract stops refusing a container something extends"
+		},
+		{
+			"name": "M-INHERITS-FALSE",
+			"type": "anyparse.query.MemberLookup",
+			"method": "inheritsMemberUnambiguously",
+			"force": "false",
+			"note": "no member reads as inherited, so redundant-this stops flagging a `this.` on a base-declared member"
+		},
+		{
+			"name": "M-ISSUBTYPE-FALSE",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "isSubtype",
+			"force": "false",
+			"note": "the subtype relation is empty, so redundant-upcast and unreachable-catch stop seeing the relation they report on"
+		},
+		{
+			"name": "M-KINDS",
+			"type": "anyparse.grammar.haxe.HxComplexItems",
+			"method": "kinds",
+			"find": "subtreeHasCallOrNew(node, 0) ? CONTAINER : CONTAINER_PLAIN;",
+			"replace": "subtreeHasCallOrNew(node, 0) ? CONTAINER : NONE;",
+			"note": "CONTAINER_PLAIN collapses into NONE, so the generated forwarder and the classifier stop agreeing on the four codes"
+		},
+		{
+			"name": "M-LACKSMEMBER-FALSE",
+			"type": "anyparse.query.MemberLookup",
+			"method": "typeProvablyLacksMember",
+			"force": "false",
+			"note": "no absence is ever provable, so field-init-in-constructor stops ranking a constant it could prove nothing about"
+		},
+		{
+			"name": "M-NAMEOUTSIDE-TRUE",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "nameOccursOutside",
+			"force": "true",
+			"note": "every name reads as occurring outside its own file, so unused-public-member keeps every member it should have flagged"
+		},
+		{
+			"name": "M-NO-WIRE",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
+			"replace": "",
+			"note": "the one read that wires sameLine.comprehensionFor is gone, so the key goes back to the inert state S77 found it in"
+		},
+		{
+			"name": "M-PATHWALK-NULL",
+			"type": "anyparse.query.MemberPathWalk",
+			"method": "resolvePathFinalMemberTypeSource",
+			"find": "return pathFinalMemberWalk(fromFile, startTypeName, memberPath, false, []);",
+			"replace": "return null;",
+			"note": "a member path resolves to nothing, so comparison-to-boolean stops learning the type of a field-access operand. A fragment rather than a force: the member is inline, and a forced return ahead of the body is a non-final return the compiler refuses"
+		},
+		{
+			"name": "M-RTTI-FALSE",
+			"type": "anyparse.query.TypeTraits",
+			"method": "transitivelyCarriesRtti",
+			"force": "false",
+			"note": "no type carries @:rtti, so prefer-enum-abstract's rtti refusal never fires"
+		},
+		{
+			"name": "M-SHADOWEXT-TRUE",
+			"type": "anyparse.query.MemberLookup",
+			"method": "memberShadowsExtension",
+			"force": "true",
+			"note": "every member reads as shadowing a `using` extension, so dead-binder-counter-loop stops writing the extension call"
+		},
+		{
+			"name": "M-SUBOVERRIDE-TRUE",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "subtypeOverridesProperty",
+			"force": "true",
+			"note": "every property reads as overridden below, so trivial-getter refuses every collapse it should make"
+		},
+		{
+			"name": "M-SUPERDECLARES-FALSE",
+			"type": "anyparse.query.MemberLookup",
+			"method": "supertypeDeclaresMember",
+			"force": "false",
+			"note": "no supertype declares anything, so a backing-field owner binding stops being classified through its foreign supertype"
+		},
+		{
+			"name": "M-UNRELATED-FALSE",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "unrelatedClasses",
+			"force": "false",
+			"note": "no two classes are provably unrelated, so impossible-cast and impossible-is-check stop reporting"
+		}
+	]
+}
