@@ -198,18 +198,22 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 
 | module | inventory flags it names |
 |---|---|
-| `WriterLowering` | 138 |
+| `WriterLowering` | 121 |
 | `WriterTriviaStarDispatch` | 43 |
 | `WriterKwRefLowering` | 31 |
 | `TriviaTypeSynth` | 17 |
 | `WriterCtorBlankLowering` | 17 |
+| `WriterRefLeadLowering` | 17 |
 | `Lowering` | 16 |
 | `WriterPrattLowering` | 14 |
 | `WriterPolicyLowering` | 10 |
 | `WriterBodyPolicyLowering` | 3 |
 | `WriterCodegen` | 3 |
 | `WriterBlankLowering` | 2 |
+| `WriterBraceSymmetryLowering` | 2 |
+| `WriterCondWrapLowering` | 2 |
 | `WriterLoweringSupport` | 2 |
+| `WriterTriviaSlotLowering` | 2 |
 | `StructFieldTrailLowering` | 1 |
 | `WriterArrowValueIfLowering` | 1 |
 | `TriviaSlotNames` | 1 |
@@ -218,7 +222,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 Read the shape of it, not just the numbers. The counts sum to far more than 212 because a
 flag is named wherever it is asked, and several are asked in two emitters.
 
-`WriterLowering` still answers 138 of 212, and that number is not a per-flag split waiting
+`WriterLowering` still answers 121 of 212, and that number is not a per-flag split waiting
 to finish. The writer lowering is organised by grammar SHAPE — Star, Ref, Terminal, Alt
 branch, Pratt — and a flag is a branch INSIDE one of those emitters, not a unit of its own,
 so splitting by flag would mean rewriting the emitters. What the six `Writer*Lowering`
@@ -226,6 +230,19 @@ modules below `WriterLowering` in the table are is a split by SHAPE FAMILY, whic
 motion: each is one region of that module's call graph moved whole, with the flags its
 emitters happened to ask travelling along. Reading a family's row therefore tells you how
 `@:fmt`-dense that shape is, not that the flag belongs to it.
+
+The four newest rows — `WriterRefLeadLowering`, `WriterCondWrapLowering`,
+`WriterTriviaSlotLowering`, `WriterBraceSymmetryLowering`, plus a fifth,
+`WriterStarPadLowering`, that names no inventory flag at all and therefore has no row —
+are a split along a DIFFERENT axis: not "which shape family is this member in" but "what
+state does this member read". A census of `WriterLowering`'s 127 members found 25 that
+touch none of `_shape` / `_formatInfo` / `_ctx` / the six ctx bundles, directly or through
+a callee — pure functions of their arguments, for which `private function` →
+`private static function` in a sibling module costs no call-site change at all (the
+wildcard import plus the class-level `@:access` reaches them unqualified). 24 of the 25
+moved. That axis is orthogonal to the shape families and stops much sooner: the remaining
+102 members read build state, and moving one of those is a signature change at every call
+site.
 
 **Four flags are handler-only** — a macro module names them, no shipped grammar declares
 them, so they are absent from the inventory above: `blankLinesBeforeCtor` and

@@ -496,5 +496,60 @@ final class WriterBlankLowering {
 		return branch.fmtHasFlag('propagateArrowLambdaBody') ? macro _setArrowLambdaBody(${rightOptBase ?? macro opt}, opt) : rightOptBase;
 	}
 
+	/**
+	 * `@:writeNormalize('reindentBlock')` on a `@:rawString` terminal: emit the captured bytes as
+	 * a run of LINES at the writer's own indent instead of one `_dt` whose embedded newlines
+	 * splice the SOURCE indentation verbatim.
+	 *
+	 * A raw multi-line capture is byte-exact only while it stays where it was written. The one
+	 * construct that needs it — a self-terminating `#if … ; #end` region that is the value of a
+	 * `return` (`HxCondSpliceClosedRaw`) — MOVES: the writer glues the `#if` onto the `return`,
+	 * which shifts every following line of the region one level left. Verbatim re-emission then
+	 * leaves the body indented as if the `#if` were still on its own line, which is how admitting
+	 * the shape turned the fork's `sameline/issue_54_return_sharp_multiple_passes` fixture from
+	 * SKIP_PARSE into a round-trip FAIL.
+	 *
+	 * The transform keeps the first line verbatim (it follows the `#if` keyword on the same line)
+	 * and re-emits each later line at the CURRENT indent plus its own indentation RELATIVE to the
+	 * region: the longest common leading-whitespace prefix of those lines is the region's own base
+	 * and is stripped, so `#elseif` / `#else` / `#end` land at the writer's indent and a branch
+	 * body one deeper — exactly the fork's layout. Tab / space mixes are safe because the base is
+	 * a common PREFIX, never a computed width. A blank line contributes no indentation evidence and
+	 * is emitted empty, so it cannot leave trailing whitespace behind.
+	 *
+	 * A single-line capture is returned unchanged, which is every other site of this terminal.
+	 */
+	private static function reindentBlockEmit(): Expr {
+		return macro {
+			final _s: String = (cast value: String);
+			if (_s.indexOf('\n') < 0) return _dt(_s);
+			final _lines: Array<String> = _s.split('\n');
+			var _base: Null<String> = null;
+			for (_li in 1..._lines.length) {
+				final _line: String = _lines[_li];
+				var _w: Int = 0;
+				while (_w < _line.length && (_line.charCodeAt(_w) == ' '.code || _line.charCodeAt(_w) == '\t'.code)) _w++;
+				if (_w == _line.length) continue;
+				final _ws: String = _line.substr(0, _w);
+				final _seen: Null<String> = _base;
+				if (_seen == null)
+					_base = _ws
+				else {
+					var _k: Int = 0;
+					while (_k < _seen.length && _k < _ws.length && _seen.charCodeAt(_k) == _ws.charCodeAt(_k)) _k++;
+					_base = _seen.substr(0, _k);
+				}
+			}
+			final _prefix: String = _base == null ? '' : _base;
+			final _docs: Array<anyparse.core.Doc> = [_dt(_lines[0])];
+			for (_li in 1..._lines.length) {
+				final _line: String = _lines[_li];
+				_docs.push(_dhl());
+				_docs.push(_dt(StringTools.startsWith(_line, _prefix) ? _line.substr(_prefix.length) : StringTools.ltrim(_line)));
+			}
+			return _dc(_docs);
+		};
+	}
+
 }
 #end
