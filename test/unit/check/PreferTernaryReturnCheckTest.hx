@@ -418,6 +418,58 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * T546 — the CASCADE narrowing, as a one-variable matrix over ONE cascade: only WHERE the
+	 * comment sits changes between the arms.
+	 *
+	 * A cascade tail is not a local edit. Folding it makes the rung above eligible on the next
+	 * pass — its follower is now a plain `return` — so the fixed-point loop marches the whole
+	 * chain into a ternary pyramid, and every step hoists whatever comment stands between two
+	 * rungs to the front of the replacement (`preservedComments`). Measured on this repo's own
+	 * `MemberOrder.reorderRefusal`: one reported finding, after which `--fix` wrote 10 edits over
+	 * 7 passes and stacked two per-gate explanations above a seven-level pyramid — one of them
+	 * the note that warned against exactly that transformation.
+	 *
+	 * `prefer-if-expression-return` declines BOTH cascades here — its `carrier` accepts a comment
+	 * after a rung's value only when it sits on that value's own line — so neither arm has a
+	 * replacement coming from anywhere else and the discrimination is entirely this rule's. That
+	 * decline is also how the defect happened: the sibling refused the comments it could not
+	 * carry, and handed the same cascade to this rule, which hoisted them.
+	 *
+	 * The first two assertions PASS at base, so a failure here is this pin's own claim rather
+	 * than a fixture that never reached the code. What kills each, MEASURED by reverting one
+	 * thing at a time:
+	 *
+	 *  - the TRAILING arm is killed by neutralising `ridesItsBranch` (`F..`). It is not
+	 *    decoration: `buildEdit` splices a guard-line comment after the `?` value instead of
+	 *    hoisting it, and every later step of the march finds it inside the else value it copies
+	 *    whole.
+	 *  - the OWN-LINE arm is killed by neutralising `strandsCascadeComment` itself (`..F`) — the
+	 *    claim.
+	 *  - the SINGLE arm is killed by NOTHING in this slice, and saying so is the honest reading:
+	 *    its comment LEADS the `if`, and a statement span starts at the `if` keyword, so that
+	 *    comment lies outside the region whether or not the `head == i` exception is there. It
+	 *    guards pre-existing behaviour and stands as the third cell of the matrix. What
+	 *    `head == i` really protects is a comment INSIDE a one-pair region, and the tests that
+	 *    hold it are the older `testOwnLineCommentBetweenStatementsStillHoists` and
+	 *    `testBothPositionsSplitCorrectly`: both drop to 0 edits with the exception removed.
+	 *
+	 * S45 measured what refusing cascade tails on SHAPE alone would cost — 14 findings of 69
+	 * with no replacement anywhere — which is why the narrowing is the conjunction of shape and
+	 * comment rather than either one.
+	 */
+	public function testOwnLineCommentInACascadeDefersTheTail(): Void {
+		final trailing: String = 'class C {\n\tfunction f(a:Bool, b:Bool):Bool {\n\t\tif (a) return true; // a wins outright\n'
+			+ '\t\tif (b) return false;\n\t\treturn true;\n\t}\n}';
+		final single: String =
+			'class C {\n\tfunction f(b:Bool):Bool {\n\t\t// b is the only gate left\n\t\tif (b) return false;\n\t\treturn true;\n\t}\n}';
+		final ownLine: String = 'class C {\n\tfunction f(a:Bool, b:Bool):Bool {\n\t\tif (a) return true;\n'
+			+ '\t\t// b is asked second on purpose\n\t\tif (b) return false;\n\t\treturn true;\n\t}\n}';
+		Assert.equals(1, violations(trailing).length, 'a guard-line trailing comment rides its branch through the march');
+		Assert.equals(1, violations(single).length, 'a run of one is folded in place, so its leading comment keeps its subject');
+		Assert.equals(0, violations(ownLine).length, 'an own-line comment between two rungs would be hoisted off the gate it explains');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

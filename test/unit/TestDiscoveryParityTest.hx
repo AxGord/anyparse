@@ -784,6 +784,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.ClassifyOccurrencesTest',
 		'unit.query.CliAtomicWriteSliceTest',
 		'unit.query.ClustersTest',
+		'unit.query.CommentOwnerGuardSliceTest',
 		'unit.query.CommentRewriteSliceTest',
 		'unit.query.CondBranchSplitTest',
 		'unit.query.CrossRenameMemberSliceTest',
