@@ -68,9 +68,10 @@ typedef LexRegion = {
  *    text. `Suppression.apply`, `Json.renderRefs`, `Cli.blastRefsSection` / `emitMentionsRefs`,
  *    `MoveSymbol.buildImporterEdits` / `destinationImportEdits` and the `MoveMember` member-group
  *    family take it. That is not decoration: the one real defect this migration introduced was a
- *    single-array hop reaching `MoveSymbol.referencedInDest`, where the CURSOR file's regions
- *    masked the DESTINATION file's text — invisible to every byte-identity gate, because no lint or
- *    `--fix` path runs `move`.
+ *    single-array hop reaching the destination collision scan
+ *    (`MoveSymbol.referencedInDest` then, `NameMentionScan.destinationNamesType` since S81), where
+ *    the CURSOR file's regions masked the DESTINATION file's text — invisible to every
+ *    byte-identity gate, because no lint or `--fix` path runs `move`.
  *
  * The consumers that hold a plugin and ask it directly: `BodySlotGuard`, `Patch`,
  * `RefactorSupport.classifyOccurrences`, `RefactorSupport.nameBoundInRange` and — since S55 —

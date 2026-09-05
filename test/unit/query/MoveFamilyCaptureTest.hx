@@ -15,11 +15,13 @@ using Lambda;
  *
  * Every other campaign-wide capture (`lint --all`, a `--fix` tree, `fmt --list`, the refs / rename /
  * safe-delete fixtures) runs a check or a fixer; none of them ever calls a move op. That is why a
- * refactor of the shared lexical seam could hand `MoveSymbol.referencedInDest` the CURSOR file's
- * comment regions while it was scanning the DESTINATION's text, ship it across 109 files, and leave
- * the whole suite green — the defect was caught by the worker's own forwarding audit, not by a gate.
+ * refactor of the shared lexical seam could hand the destination collision scan
+ * (`MoveSymbol.referencedInDest` then, `NameMentionScan.destinationNamesType` since S81) the CURSOR
+ * file's comment regions while it was scanning the DESTINATION's text, ship it across 109 files, and
+ * leave the whole suite green — the defect was caught by the worker's own forwarding audit, not by a
+ * gate.
  *
- * So this class is the gate that was missing: nine fixtures driven through the four ops, with the
+ * So this class is the gate that was missing: ten fixtures driven through the four ops, with the
  * FULL resulting bytes of every changed file pinned. It is deliberately not a set of `contains`
  * assertions — the regression it exists for changed a decision, not a token, and the only assertion
  * that catches "a decision moved" without knowing which decision is the whole file.
@@ -27,10 +29,11 @@ using Lambda;
  * The fixtures carry, between them, what the family's span arithmetic actually reads: a doc block on
  * the moved declaration, a `using` line to carry, an importer to repoint, a `#if`-guarded member, a
  * cross-package static move, and comments and string literals that spell the moved names. The last
- * three are the S80 defects, and their discriminator is the CHANGED-FILE COUNT rather than any
- * byte: a file whose only mention of the moved type sits inside a comment must not appear in the
+ * four are the comment-policy defects, and their discriminator is the CHANGED-FILE COUNT rather than
+ * any byte: a file whose only mention of the moved type sits inside a comment must not appear in the
  * list at all, in either direction (T511 refused the move over one, T512 wrote a real import into
- * one), and a destination must never be handed an import of its own module (T518).
+ * one), a destination must never be handed an import of its own module (T518), and a destination
+ * whose only mention of a CARRIED dependency is a comment must not veto the carry (T535).
  *
  * Pure and in-memory: each op is driven through its own `Array<{file, source}>` entry point, so
  * there is no temp directory, no ordering between tests and no cost worth measuring. Run it alone
@@ -48,8 +51,8 @@ final class MoveFamilyCaptureTest extends Test {
 	 * one fixture: a doc block on the moved declaration, a `using` line the destination lacks (carried),
 	 * an importer whose statement is repointed, a destination whose own leading comment must survive the
 	 * paste, and — in the source file — a comment ending in a period directly above a real reference plus
-	 * a STRING that spells the moved name. Both of the last two feed `namesAnyOf`, which is what decides
-	 * whether the source file gets its repair import.
+	 * a STRING that spells the moved name. Both of the last two feed `NameMentionScan.sourceNamesAny`,
+	 * which is what decides whether the source file gets its repair import.
 	 */
 	public function testMoveOfATypeAcrossPackagesIsByteIdentical(): Void {
 		final scope: Array<{ file: String, source: String }> = [
@@ -328,6 +331,46 @@ final class MoveFamilyCaptureTest extends Test {
 				source: 'package b;\n\nclass Dest {\n\n\tpublic static function existing(): Int return 1;\n\n\tpublic static fun'
 				+ 'ction label(p: Payload): Int return Dest.existing() + p.n;\n\n}\n\ntypedef Payload = {\n\tvar n: Int;\n}\n'
 			}
+		]);
+	}
+
+	/**
+	 * `move` into a destination whose ONLY mention of the carried dependency sits inside a COMMENT —
+	 * T535, the third and last of the family's drifted comment policies and the one S80 left standing
+	 * because flipping it turns a REFUSAL into a WRITE.
+	 *
+	 * The base engine exits 1 here with "references \"Dep\" while nothing in the indexed scope binds it
+	 * there", advice about aliasing an import that names nothing in the file. Compile-proved on 4.3.7
+	 * that there is nothing to protect: carrying `import c.Dep;` past a destination whose only `Dep` is
+	 * a doc line left every observable value unchanged, while the same carry past a destination that
+	 * really calls an ambient `Dep.x()` changed its answer from 2 to 1 at rc 0 — which is the refusal
+	 * this gate keeps, pinned beside this one in `NameMentionScanTest`.
+	 *
+	 * Captured in full because the carry writes TWO things into the destination — the import line and
+	 * the declaration — at two offsets a shared anchor computes, and a count assertion alone would miss
+	 * either drifting.
+	 */
+	public function testACommentOnlyDestinationMentionCarriesTheImportByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{ file: 'q/Dep.hx', source: 'package q;\n\nclass Dep {\n\n\tpublic static function tag(): Int return 1;\n\n}\n' },
+			{
+				file: 'p/Mover.hx',
+				source: 'package p;\n\nimport q.Dep;\n\nclass Mover {\n\n\tpublic static function m(): Int return Dep.tag();\n\n}\n'
+			},
+			{
+				file: 'p/Host.hx',
+				source: 'package p;\n\nclass Host {\n\n\tpublic function new() {}\n\n\tpublic function h(): Int {\n\t\t// Nothing '
+					+ 'here reaches Dep any more.\n\t\treturn 1;\n\t}\n\n}\n'
+			}
+		];
+		capture(MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', scope, plugin(), typeRefShape()), [
+			{
+				file: 'p/Host.hx',
+				source: 'package p;\n\nimport q.Dep;\n\nclass Host {\n\n\tpublic function new() {}\n\n\tpublic function h(): Int {'
+				+ '\n\t\t// Nothing here reaches Dep any more.\n\t\treturn 1;\n\t}\n\n}\n\nclass Mover {\n\n\tpublic static fun'
+				+ 'ction m(): Int return Dep.tag();\n\n}\n'
+			},
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Dep;\n' }
 		]);
 	}
 
