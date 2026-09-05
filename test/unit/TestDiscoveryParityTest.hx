@@ -921,7 +921,7 @@ class TestDiscoveryParityTest extends Test {
 	 * its own — this is the runtime half, and it is what keeps the metas from
 	 * being dropped in a refactor without anything noticing.
 	 *
-	 * Thirty-two entries over eighteen classes, and still not a conversion of the tree: sixteen
+	 * Forty-six entries over twenty-one classes, and still not a conversion of the tree: sixteen
 	 * are the seam coverage for the fourteen rules S73 touched that its deciding arm cannot
 	 * reach (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
 	 * where the arm name is the whole point — it is the only record that the fixture reaches the
@@ -939,6 +939,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
+			'unit.check.FieldWriteResolutionScopeTest#testProjectRootUnresolvedWriteVetoes :: control :: M-ROOTS-THIRDPARTY',
+			'unit.check.FieldWriteResolutionScopeTest#testSameSimpleNameThirdPartyTypeDoesNotVeto :: control :: M-DECLSITE-SCOPEWIDE',
+			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
+			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly'
+			+ ' :: control :: M-WRITEINDEX-PROJECT-READONLY',
+			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
 			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
@@ -972,7 +978,9 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase'
-			+ ' :: control :: M-FIRST-LINE-FIT'
+			+ ' :: control :: M-FIRST-LINE-FIT',
+			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
+			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE'
 		], TestRegistry.pins(), 'the pin annotations, with their roles and killing arms');
 	}
 
@@ -988,6 +996,7 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testTheArmRegistryReachesTheGeneratedRegistry(): Void {
 		Assert.same([
+			'M-ADMITS-TRUE',
 			'M-ALWAYS-NEXT',
 			'M-ALWAYS-SAME',
 			'M-ARM-ANYNAME',
@@ -995,6 +1004,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-BUILDMACRO-TRUE',
 			'M-CUDDLE-OFF',
 			'M-DECLARINGFILES-EMPTY',
+			'M-DECLSITE-SCOPEWIDE',
 			'M-ELSE-GATE',
 			'M-FANOUT-FIRST',
 			'M-FIRST-LINE-FIT',
@@ -1003,14 +1013,19 @@ class TestDiscoveryParityTest extends Test {
 			'M-ISSUBTYPE-FALSE',
 			'M-KINDS',
 			'M-LACKSMEMBER-FALSE',
+			'M-MEMO-OFF',
 			'M-NAMEOUTSIDE-TRUE',
+			'M-NO-INVALIDATE',
 			'M-NO-WIRE',
 			'M-PATHWALK-NULL',
+			'M-ROOTS-THIRDPARTY',
 			'M-RTTI-FALSE',
 			'M-SHADOWEXT-TRUE',
 			'M-SUBOVERRIDE-TRUE',
 			'M-SUPERDECLARES-FALSE',
-			'M-UNRELATED-FALSE'
+			'M-UNRELATED-FALSE',
+			'M-WRITEINDEX-PROJECT-FINAL',
+			'M-WRITEINDEX-PROJECT-READONLY'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
