@@ -48,6 +48,22 @@ class UnguardedNullableDerefTest extends Test {
 		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m.get(k); u.bar(); } }').length);
 	}
 
+	/**
+	 * The seed through the chain resolver: the bound expression's receiver is a field PATH, which
+	 * carries no annotation, so `declaredTypes` cannot name it and only
+	 * `CheckScan.typeNominalResolver` reaches the `Map`. Real shape — `pony`'s
+	 * `ReusableBitmapData.getPowTwo` binds `_instance._cache[width]` exactly this way.
+	 */
+	@:pin('control')
+	@:killer('M-NULLABLE-NO-CHAIN')
+	public function testFieldPathMapSeedFlagged(): Void {
+		Assert.equals(
+			1,
+			violations('class C { var cache:Map<String,Int>; function f(o:C) { final v = o.cache[k]; g(); v.foo(); } function g() {} }')
+				.length
+		);
+	}
+
 	public function testCrossFileInstanceReturnFlagged(): Void {
 		Assert.equals(
 			1, violationsFiles([

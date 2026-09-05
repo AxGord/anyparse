@@ -10,10 +10,12 @@ import utest.Test;
 
 /**
  * The `possible-null-dereference` check: a dereference of a `map[key]` result
- * (a `Null<V>`) is flagged `Info`. An `Array` / `String` index (non-null `T`),
- * an unannotated or `Null<Map<…>>` receiver, and a bare `map[key]` with no
- * dereference are not. Type-aware — the receiver's declared type is what tells
- * a `Map` index from an `Array` index. Report-only — `fix` yields no edits.
+ * (a `Null<V>`) is flagged `Info`. An `Array` / `String` index (non-null `T`), an
+ * unannotated and unresolvable receiver, and a bare `map[key]` with no dereference
+ * are not. Type-aware — the receiver type is what tells a `Map` index from an
+ * `Array` index, read from its written annotation and, past that, from the chain
+ * resolver, which also peels the `Null<…>` wrapper the annotation map degrades to a
+ * bare `Null`. Report-only — `fix` yields no edits.
  */
 class PossibleNullDereferenceTest extends Test {
 
@@ -43,8 +45,49 @@ class PossibleNullDereferenceTest extends Test {
 		Assert.equals(0, violations('class C { function f(arr:Array<Int>) { arr[i].qux(); } }').length);
 	}
 
-	public function testNullWrappedMapNotFlagged(): Void {
-		Assert.equals(0, violations('class C { function f(m:Null<Map<String,Int>>) { var a = m[k].foo; } }').length);
+	/**
+	 * `declaredTypes` records `Null<Map<String, Int>>` as its bare outer name `Null`, which names
+	 * no member set of its own — a LOSS the check used to read as "not a `Map`, safe miss". The
+	 * discriminating real site is `pony/src/pony/ui/gui/RubberLayoutCore.hx:76`, where the author
+	 * put `@:nullSafety(Off)` on the very expression this now reports.
+	 */
+	@:pin('control')
+	@:killer('M-NULLABLE-WRAPPER-OPAQUE')
+	public function testNullWrappedMapFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { function f(m:Null<Map<String,Int>>) { var a = m[k].foo; } }');
+		Assert.equals(1, vs.length);
+		Assert.equals('map access Map[key] can be null; this dereference has no null check', vs[0].message);
+	}
+
+	/**
+	 * The chain resolver's index arc: the receiver is a field PATH, which carries no annotation of
+	 * its own, so the `declaredTypes` lookup has nothing to answer with and only
+	 * `CheckScan.typeNominalResolver` can name the type.
+	 */
+	@:pin('control')
+	@:killer('M-NULLABLE-NO-CHAIN')
+	public function testFieldPathMapReceiverFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { var cache:Map<String,Int>; function f(o:C) { var a = o.cache[k].foo; } }');
+		Assert.equals(1, vs.length);
+		Assert.equals('map access Map[key] can be null; this dereference has no null check', vs[0].message);
+	}
+
+	/**
+	 * The chain resolver's instance-call arc: the receiver of `.pop()` is itself a CALL, so its
+	 * type comes from the callee's written return type and from nowhere else.
+	 */
+	@:pin('control')
+	@:killer('M-NULLABLE-NO-CHAIN')
+	public function testCallReturnPopFlagged(): Void {
+		final vs: Array<Violation> =
+			violations('class C { function g():Array<Int> { return []; } function f() { var a = g().pop().foo; } }');
+		Assert.equals(1, vs.length);
+		Assert.equals('Array.pop() can be null; this dereference has no null check', vs[0].message);
+	}
+
+	/** The same field path over an `Array` stays a miss — the resolver names a type, it does not assume one. */
+	public function testFieldPathArrayReceiverNotFlagged(): Void {
+		Assert.equals(0, violations('class C { var items:Array<Int>; function f(o:C) { var a = o.items[i].foo; } }').length);
 	}
 
 	public function testUnannotatedMapNotFlagged(): Void {
