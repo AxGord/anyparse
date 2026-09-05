@@ -87,6 +87,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.DiscoveryOnlyProbeTest',
 		'unit.ExtensionMethodsExtractionTest',
 		'unit.LexicalRegionAgreementTest',
+		'unit.MutationArmAddressTest',
 		'unit.MutationArmsTest',
 		'unit.ProseClaimCensusTest',
 		'unit.SpanModeProbe',
@@ -931,7 +932,10 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		Assert.same([
+			'unit.MutationArmAddressTest#testEveryDeclaredArmAddressesALiveMember :: control :: M-ARM-PATH-FLAT',
+			'unit.MutationArmAddressTest#testTheDeferredArmsAreTheOnesTheWalkAnswersFor :: control :: M-ARM-PATH-FLAT',
 			'unit.MutationArmsTest#testADuplicateArmNameIsRefused :: guard :: ',
+			'unit.MutationArmsTest#testAModulePathBecomesTheTwoCandidateFiles :: control :: M-ARM-PATH-FLAT',
 			'unit.MutationArmsTest#testANonJsonTableIsOneComplaint :: guard :: ',
 			'unit.MutationArmsTest#testARowDeclaringBothCutsIsRefused :: control :: M-ARM-ROW-OK',
 			'unit.MutationArmsTest#testARowDeclaringNeitherCutIsRefused :: control :: M-ARM-ROW-OK,M-ARM-ANYNAME',
@@ -996,10 +1000,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase'
 			+ ' :: control :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak :: control :: M-EXPR-ELSE-PLAIN-SAME',
-			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnElseLessValueIfKeepsItsTerminator :: guard :: ',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnElseLessValueIfKeepsItsTerminator :: control :: M-SBE-UNGATED',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnObjectLiteralBranchKeepsItsOwnLine :: control :: M-ELSE-BODY-SAME',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testKeepStillPreservesTheSourceBreak :: control :: M-KEEP-JOINS',
-			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheJoinedLayoutIsIdempotent :: guard :: ',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheJoinedLayoutIsIdempotent :: control :: M-CURLY-CTORS-NONE',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheReportedValueIfJoinsItsElseToTheCurlyClose'
 			+ ' :: control :: M-EXPR-ELSE-KEEP',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheSemicolonBeforeElseGoesWithTheJoin'
@@ -1062,8 +1066,29 @@ class TestDiscoveryParityTest extends Test {
 			'M-EXPR-ELSE-KEEP',
 			'M-EXPR-ELSE-PLAIN-SAME',
 			'M-KEEP-JOINS',
-			'M-ELSE-BODY-SAME'
+			'M-ELSE-BODY-SAME',
+			'M-ARM-PATH-FLAT',
+			'M-CURLY-CTORS-NONE',
+			'M-SBE-UNGATED'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
+	}
+
+	/**
+	 * The arms whose type the typer could not see, and the reason the registry can
+	 * declare them at all.
+	 *
+	 * `anyparse/macro/*` is behind `#if macro`, so a non-macro build types none of it and
+	 * `Context.getModule` answers `ok, 0 type(s)` rather than throwing. Until S102 that
+	 * answer was collapsed with a module the classpath does not carry, and the whole
+	 * macro-time half of the engine was unaddressable by an arm. This census is the build
+	 * macro naming what it handed on; `unit.MutationArmAddressTest` is what answers it,
+	 * out of the parser rather than the typer.
+	 */
+	public function testTheDeferredArmCensusNamesTheMacroModuleArms(): Void {
+		Assert.same([
+			'M-CURLY-CTORS-NONE :: anyparse.macro.WriterLowering#collectCurlyBlockCtorPatterns',
+			'M-SBE-UNGATED :: anyparse.macro.WriterLowering#semicolonBeforeSiblingWrap'
+		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
 	public function testFixturelessSubclassesAreReportedRatherThanRegistered(): Void {

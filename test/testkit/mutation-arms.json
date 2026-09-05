@@ -322,6 +322,29 @@
 			"find": "else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {\n\t\topt.expressionIfBody = p;\n\t\topt.expressionElseBody = p;\n\t}",
 			"replace": "else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {\n\t\topt.expressionIfBody = p;\n\t\topt.expressionElseBody = BodyPolicy.Same;\n\t}",
 			"note": "the else BODY stops following `expressionIf: next`, so the shape-aware forced break is suppressed and `SameOnBlock` joins an `else` onto an object-literal close"
+		},
+		{
+			"name": "M-ARM-PATH-FLAT",
+			"type": "testkit.MutationArms",
+			"method": "candidateFiles",
+			"find": "final relative: String = '${type.split('.').join('/')}.hx';",
+			"replace": "final relative: String = '$type.hx';",
+			"note": "a dotted type path stops becoming a directory path, so every arm resolves to a file that does not exist and the addressability gate can check nothing"
+		},
+		{
+			"name": "M-CURLY-CTORS-NONE",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "collectCurlyBlockCtorPatterns",
+			"force": "[]",
+			"note": "no branch ctor reads as a CURLY block, so the shape-aware separator sends every value-`if` branch to the hardline arm and the `} else` join stops firing"
+		},
+		{
+			"name": "M-SBE-UNGATED",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "semicolonBeforeSiblingWrap",
+			"find": "final emit: Expr = dropTest == null ? policyDispatch : macro (_sbeSibling && $dropTest ? _de() : $policyDispatch);",
+			"replace": "final emit: Expr = dropTest == null ? policyDispatch : macro ($dropTest ? _de() : $policyDispatch);",
+			"note": "the optional `;` drop stops being gated on a following sibling, so an else-less value-`if` loses the terminator its enclosing statement needs"
 		}
 	]
 }

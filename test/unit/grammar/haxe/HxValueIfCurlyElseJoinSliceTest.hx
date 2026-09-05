@@ -107,11 +107,18 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 	}
 
 	/**
-	 * The joined layout is a fixed point. A COST filter, declared: it is green on the base
-	 * too (`Keep` reproduces an already-cuddled source), so no arm can kill it — it is here
-	 * because a layout slice that is not idempotent corrupts a corpus on the second sweep.
+	 * The joined layout is a fixed point — a layout slice that is not idempotent corrupts
+	 * a corpus on the second sweep.
+	 *
+	 * It was declared a COST filter when this class was written, because it is green on
+	 * `f8ba0a46` too (`Keep` reproduces an already-cuddled source) and the arm registry
+	 * could not then address the macro-time code that decides the join. It can now:
+	 * `M-CURLY-CTORS-NONE` empties the curly branch-ctor set the shape-aware separator
+	 * switches on, every value-`if` branch falls to the hardline arm, and the fixed point
+	 * is gone. Its evidence is that arm rather than base-redness.
 	 */
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-CURLY-CTORS-NONE')
 	public function testTheJoinedLayoutIsIdempotent(): Void {
 		Assert.equals(JOINED, HxWriteFixture.triviaWrite(JOINED, CFG_NEXT));
 	}
@@ -153,15 +160,17 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 	 * With no `else` the same slot holds the enclosing statement's terminator, and dropping it there
 	 * emits code that does not compile — so the drop is gated on a following sibling.
 	 *
-	 * A COST filter, declared with its reason: the gate is MACRO-time, and the arm registry cannot
-	 * address macro-time code. `TestDiscovery.checkArms` resolves an arm's `type` with
-	 * `Context.getModule` in the test build, where every `anyparse/macro/*` module is behind
-	 * `#if macro` and resolves to nothing — measured: a row naming `anyparse.macro.WriterLowering`
-	 * fails the build with `resolves to no class`. Every arm this slice declares therefore cuts the
-	 * LOADER, and no loader cut can reach the `_sbeSibling` gate, because an else-less `if` has no
-	 * sibling to read a policy for. Backlog, not a vacuum.
+	 * This was S100's declared COST filter, and the reason it gave has been removed rather than
+	 * restated: the gate is MACRO-time, in `WriterLowering.semicolonBeforeSiblingWrap`, and
+	 * `TestDiscovery.checkArms` used to resolve an arm's `type` with `Context.getModule` in the
+	 * test build, where every `anyparse/macro/*` module sits behind `#if macro` and answers with
+	 * no types at all — so a row naming `anyparse.macro.WriterLowering` failed the build with
+	 * `resolves to no class`. S102 separated that answer from a module the classpath does not
+	 * carry, and `M-SBE-UNGATED` now cuts the `_sbeSibling &&` out of the gate itself. Measured:
+	 * it is the only fixture in this class the cut takes down.
 	 */
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-SBE-UNGATED')
 	public function testAnElseLessValueIfKeepsItsTerminator(): Void {
 		Assert.equals(ELSE_LESS, HxWriteFixture.triviaWrite(ELSE_LESS, CFG_NEXT));
 	}
