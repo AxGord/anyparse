@@ -242,7 +242,7 @@ final class LintFixDriver {
 		// `SymbolIndexHost.resolutionIndex()`. Both rebuild per pass over this pass's sources.
 		final index: SymbolIndex = SymbolIndex.build(files, cached);
 		final resolutionFiles: Null<Array<{ file: String, source: String }>> = cached.resolutionFiles();
-		if (resolutionFiles != null) cached.setResolutionIndex(SymbolIndex.build(resolutionFiles, cached));
+		if (resolutionFiles != null) cached.setResolutionIndex(SymbolIndex.build(resolutionFiles, cached, cached.thirdPartyFiles()));
 		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement);
 		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
 		// The FIRST pass's report is the one a reader compares `fixed N` against: later passes see

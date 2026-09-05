@@ -228,7 +228,7 @@
 		{
 			"name": "M-ROOTS-THIRDPARTY",
 			"type": "anyparse.query.CachingGrammarPlugin",
-			"method": "fieldWriteIndex",
+			"method": "thirdPartyFiles",
 			"find": "for (entry in sources.library.entries()) if (!roots.exists(entry.file)) entry.file",
 			"replace": "for (entry in sources.library.entries()) entry.file",
 			"note": "the declared resolutionRoots are tagged third-party along with the library, so a write from a project module outside the lint scope stops vetoing"
@@ -345,6 +345,38 @@
 			"find": "final emit: Expr = dropTest == null ? policyDispatch : macro (_sbeSibling && $dropTest ? _de() : $policyDispatch);",
 			"replace": "final emit: Expr = dropTest == null ? policyDispatch : macro ($dropTest ? _de() : $policyDispatch);",
 			"note": "the optional `;` drop stops being gated on a following sibling, so an else-less value-`if` loses the terminator its enclosing statement needs"
+		},
+		{
+			"name": "M-SKIPSCAN-SCOPEWIDE",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "admits",
+			"find": "return ownerFile == null || !_thirdParty.exists(file) || _thirdParty.exists(ownerFile);",
+			"replace": "return true;",
+			"note": "the skip-parse scan spans the whole resolution scope again, so a skip-parsing library source that merely SPELLS a project member name vetoes the candidate"
+		},
+		{
+			"name": "M-CHECKINDEX-PROJECT-FINAL",
+			"type": "anyparse.check.PreferFinalPublicField",
+			"method": "run",
+			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? projectScoped;",
+			"replace": "final index: SymbolIndex = projectScoped;",
+			"note": "prefer-final-public-field goes back to a project-scoped name/type index, so a library supertype, interface or build macro is unresolvable again"
+		},
+		{
+			"name": "M-CHECKINDEX-PROJECT-READONLY",
+			"type": "anyparse.check.PreferReadOnlyField",
+			"method": "run",
+			"find": "final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? projectScoped;",
+			"replace": "final index: SymbolIndex = projectScoped;",
+			"note": "prefer-read-only-field goes back to a project-scoped name/type index, so a library supertype, interface or build macro is unresolvable again"
+		},
+		{
+			"name": "M-PLAINCLASS-SCOPEBLIND",
+			"type": "anyparse.query.FieldWriteIndex",
+			"method": "plainClassInScope",
+			"find": "final resolved: Null<ResolvedType> = _index.refs.resolveTypeRef(path, fi);",
+			"replace": "final named: Array<ResolvedType> = _index.refs.resolvedDeclsNamed(SourceText.lastSegment(path));\n\t\tfinal resolved: Null<ResolvedType> = named.length == 1 ? named[0] : null;",
+			"note": "the plain-class proof goes back to a scope-blind global uniqueness count, so a type the candidate file can neither import nor reach by package frees the candidate"
 		},
 		{
 			"name": "M-TRY-BODY-SYM-OFF",

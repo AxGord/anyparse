@@ -247,24 +247,39 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * The library belongs in THIS index and in no other the field checks use: a third-party
 	 * subtype of a project type writes an inherited field from a file the project scope does not
 	 * hold, and that write is attributed to the subtype, so only a library-wide write index can
-	 * answer `MemberWriteScan.subtypeWriteReaches`. The name-keyed scans stay project-scoped —
-	 * see `PreferFinalPublicField`'s scope note for what admitting the library costs them.
+	 * answer `MemberWriteScan.subtypeWriteReaches`. The STRUCTURAL scan stays project-scoped — see
+	 * `PreferFinalPublicField`'s scope note for what admitting the library costs it.
 	 */
 	public function fieldWriteIndex(): Null<FieldWriteIndex> {
 		if (_fieldWriteIndexBuilt) return _fieldWriteIndex;
-		final sources: Null<ResolutionSources> = scopeSources();
-		if (sources == null) return null;
 		final files: Null<Array<{ file: String, source: String }>> = resolutionFiles();
+		if (files == null) return null;
 		_fieldWriteIndexBuilt = true;
-		// THIRD-PARTY is the library half MINUS the declared `resolutionRoots`: the library array
-		// carries the project roots too (one memoised instance is what the parse tier keys on), and
-		// tagging those third-party would drop the very writes `resolutionRoots` exists to reveal — a
-		// project module outside the lint scope assigning the field.
-		final roots: Map<String, Bool> = [for (entry in sources.projectRoots) entry.file => true];
-		if (files != null) _fieldWriteIndex = FieldWriteIndex.build(files, this, resolutionIndex(), [
-			for (entry in sources.library.entries()) if (!roots.exists(entry.file)) entry.file
-		]);
+		_fieldWriteIndex = FieldWriteIndex.build(files, this, resolutionIndex(), thirdPartyFiles());
 		return _fieldWriteIndex;
+	}
+
+	/**
+	 * The scope's THIRD-PARTY half: the library array MINUS the declared `resolutionRoots`. The
+	 * roots have to be subtracted explicitly — the library array carries them too, because one
+	 * memoised instance is what the parse tier keys on — and tagging them third-party would drop
+	 * the very writes `resolutionRoots` exists to reveal: a project module outside the lint scope
+	 * assigning the field.
+	 *
+	 * One partition, three consumers: the write index, the resolution index, and the `--fix`
+	 * loop's per-pass rebuild of that index. A consumer deriving its own would silently answer the
+	 * unnarrowed question for a whole `--fix` run.
+	 *
+	 * Empty when no scope reached the run, which is also the right answer for an index nothing may
+	 * narrow.
+	 */
+	public function thirdPartyFiles(): Array<String> {
+		final sources: Null<ResolutionSources> = scopeSources();
+		if (sources == null) return [];
+		final roots: Map<String, Bool> = [for (entry in sources.projectRoots) entry.file => true];
+		return [
+			for (entry in sources.library.entries()) if (!roots.exists(entry.file)) entry.file
+		];
 	}
 
 	/**
@@ -279,7 +294,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final files: Null<Array<{ file: String, source: String }>> = resolutionFiles();
 		if (files == null) return null;
 		_resolutionIndexBuilt = true;
-		_resolutionIndex = SymbolIndex.build(files, this);
+		_resolutionIndex = SymbolIndex.build(files, this, thirdPartyFiles());
 		return _resolutionIndex;
 	}
 
