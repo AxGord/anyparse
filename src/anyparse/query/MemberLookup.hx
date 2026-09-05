@@ -411,6 +411,57 @@ final class MemberLookup {
 		return true;
 	}
 
+	/**
+	 * The DECLARATION of `member` on `cur`'s type or anywhere in its resolvable supertype closure,
+	 * or null when nothing in that closure declares it. The POSITIVE-PROOF counterpart of
+	 * `lacksMemberClosure` — deliberately NOT its negation, and the reason this exists as its own
+	 * walk rather than as a flag on that one.
+	 *
+	 * `lacksMemberClosure` answers ABSENCE and fails closed toward "cannot prove absent": an
+	 * unresolvable supertype ends the proof with `false`. Every consumer reached through
+	 * `typeProvablyLacksMember` acts on a `true` and reads that `false` as "unknown, do nothing" —
+	 * the safe direction for all nine of them. Read as `!lacksMemberClosure`, the same `false`
+	 * becomes the POSITIVE claim "this type declares `member`", which is the direction that must
+	 * never be guessed: an unresolvable supertype then reads as declaring EVERY member, and a type
+	 * extending one conforms to any structure by member NAME alone.
+	 *
+	 * So this walk fails closed the other way: an unresolvable supertype, an unreadable alias and a
+	 * `@:forward` abstract (whose underlying's members reach it through a link `supertypes` does not
+	 * carry) each end their branch with null, and only a declaration actually found in the index is
+	 * a proof. Resolution is identical to the absence walk's — each supertype reference resolved
+	 * from its VERBATIM written form against the referring type's own file, a plain `typedef A = C`
+	 * followed by its raw target, `implements Dynamic` skipped (it names no member), `markSeen`
+	 * terminating a cycle.
+	 *
+	 * The DECLARATION plus its HOST rather than a Bool, because the caller that needs the positive
+	 * proof needs both: `StructuralTypes.declaresEveryMember` compares the found member's WRITTEN
+	 * type against the structure field's, and a written type resolves only in the file and
+	 * type-parameter scope that spelled it — the HOST's, which a supertype hop moves away from the
+	 * receiver's.
+	 */
+	private function declaredMemberClosure(
+		cur: ResolvedType, member: String, seen: Array<String>
+	): Null<{ member: MemberInfo, host: ResolvedType }> {
+		if (!_refs.markSeen(cur, seen)) return null;
+		final t: TypeDeclInfo = cur.type;
+		final own: Null<MemberInfo> = t.members.find(m -> m.name == member);
+		if (own != null) return { member: own, host: cur };
+		if (t.kind == SymbolIndex.TYPEDEF_DECL_KIND && !t.isAnonStruct) {
+			final target: Null<String> = t.aliasTargetRaw;
+			if (target == null) return null;
+			final next: Null<ResolvedType> = _refs.resolveTypeRef(target, cur.file);
+			return next == null || seen.contains(_refs.seenKey(next)) ? null : declaredMemberClosure(next, member, seen);
+		}
+		if (t.abstractForwardUnderlying != null) return null;
+		for (raw in t.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			if (anc == null) continue;
+			final up: Null<{ member: MemberInfo, host: ResolvedType }> = declaredMemberClosure(anc, member, seen);
+			if (up != null) return up;
+		}
+		return null;
+	}
+
 	/** Recursive supertype walk for `supertypeDeclaresMember`, cycle-guarded by `seen`. */
 	private function supertypeDeclares(typeName: String, field: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return false;

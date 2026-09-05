@@ -322,6 +322,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.SplitVarDeclarationCheckTest',
 		'unit.check.StaticConstantCheckTest',
 		'unit.check.StringLiteralDupCheckTest',
+		'unit.check.StructuralConformanceProofTest',
 		'unit.check.SuppressionSliceTest',
 		'unit.check.SwallowedExceptionCheckTest',
 		'unit.check.TailMergeCheckTest',
@@ -952,6 +953,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
+			'unit.check.FieldWriteResolutionScopeTest#testLibraryStructureVetoesOnceStructuralJoins'
+			+ ' :: control :: M-CHECKINDEX-PROJECT-FINAL',
 			'unit.check.FieldWriteResolutionScopeTest#testOutOfScopePlainClassKeepsTheUnresolvedWritePoison'
 			+ ' :: control :: M-PLAINCLASS-SCOPEBLIND',
 			'unit.check.FieldWriteResolutionScopeTest#testProjectRootUnresolvedWriteVetoes :: control :: M-ROOTS-THIRDPARTY',
@@ -980,6 +983,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.RedundantThisCheckTest#testInheritedFromOtherFileBaseFlagged :: control :: M-INHERITS-FALSE',
 			'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
+			'unit.check.StructuralConformanceProofTest#testAliasedStructureMemberTypeStillPins :: control :: M-STRUCT-ALIAS-OPAQUE',
+			'unit.check.StructuralConformanceProofTest#testAnonStructureNominalStillPins :: control :: M-STRUCT-ANON-CLOSED',
+			'unit.check.StructuralConformanceProofTest#testDifferentDeclaredTypeDoesNotPin :: control :: M-STRUCT-NOMINAL-OPEN',
+			'unit.check.StructuralConformanceProofTest#testDynamicStructureMemberStillPins :: control :: M-STRUCT-DYNAMIC-CLOSED',
+			'unit.check.StructuralConformanceProofTest#testNullWrappedStructureMemberTypeStillPins :: control :: M-STRUCT-NULL-OPAQUE',
+			'unit.check.StructuralConformanceProofTest#testTypeParameterStructureMemberStillPins :: control :: M-STRUCT-TYPEPARAM-CLOSED',
+			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor'
 			+ ' :: control :: M-SUPERDECLARES-FALSE',
@@ -1179,7 +1189,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-SSB-TRY-SUBST-OFF',
 			'M-SSB-TRY-DEBRACE-NONE',
 			'M-SSB-BARE-ILLEGAL',
-			'M-SSB-VALUE-WRAP-OFF'
+			'M-SSB-VALUE-WRAP-OFF',
+			'M-STRUCT-DECLARES-LOOSE',
+			'M-STRUCT-NOMINAL-OPEN',
+			'M-STRUCT-ALIAS-OPAQUE',
+			'M-STRUCT-NULL-OPAQUE',
+			'M-STRUCT-TYPEPARAM-CLOSED',
+			'M-STRUCT-DYNAMIC-CLOSED',
+			'M-STRUCT-ANON-CLOSED'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

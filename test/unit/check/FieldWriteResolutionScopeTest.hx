@@ -76,6 +76,9 @@ class FieldWriteResolutionScopeTest extends Test {
 	/** That interface, declaring nothing at all — so it pins no member of anything implementing it. */
 	private static final MARKER: String = 'package ext;\n\ninterface Marker {}\n';
 
+	/** A third-party anonymous structure `Ctx` genuinely conforms to — same member NAME and same declared type. */
+	private static final SHAPE: String = 'package ext;\n\ntypedef Shape = { mode: Int }\n';
+
 	/** The same shape for the write-restriction rule: the field is written, but only inside its own type. */
 	private static final IMPL_RO: String = 'package proj;\n\nimport ext.Marker;\n\nclass ImplRo implements Marker {\n\n'
 		+ '\tpublic var slot: Int = 0;\n\n\tpublic function new() {}\n\n\tpublic function bump(): Void {\n\t\tthis.slot = 1;\n\t}\n\n}\n';
@@ -105,6 +108,7 @@ class FieldWriteResolutionScopeTest extends Test {
 	private static final MARKER_FILE: SourceFile = { file: 'ext/Marker.hx', source: MARKER };
 	private static final TOKEN_FILE: SourceFile = { file: 'other/Token.hx', source: TOKEN };
 	private static final PROJ_DYN_WRITER_FILE: SourceFile = { file: 'proj/ProjDynWriter.hx', source: PROJ_DYN_WRITER };
+	private static final SHAPE_FILE: SourceFile = { file: 'ext/Shape.hx', source: SHAPE };
 
 	/**
 	 * The blind spot both rules' docs described until this slice: the subtype is third-party, it
@@ -227,6 +231,23 @@ class FieldWriteResolutionScopeTest extends Test {
 		// Leading assertion — WITH the import the type really is the candidate's, and it frees it.
 		Assert.equals(1, finalPublicHolder(HOLDER_IMPORTING), 'an in-scope plain class frees the candidate');
 		Assert.equals(0, finalPublicHolder(HOLDER), 'a plain class the candidate file cannot name proves nothing');
+	}
+
+	/**
+	 * What admitting the library buys on the STRUCTURAL half, which was the last question held
+	 * back to a project-scoped index. A library anonymous structure the project candidate really
+	 * does conform to — same member, same declared type — vetoes the rewrite once the gate reads
+	 * the resolution index; before this slice the structure was invisible to it and the finding
+	 * stood. The gate can only be joined now that it proves the conformance instead of matching a
+	 * member NAME SET: name-set matching over an unresolvable supertype was withholding two Pony
+	 * findings against library structures and three against project ones.
+	 */
+	@:pin('control')
+	@:killer('M-CHECKINDEX-PROJECT-FINAL')
+	public function testLibraryStructureVetoesOnceStructuralJoins(): Void {
+		// Leading assertion — the structure has to be OUT of scope for the join to be the subject.
+		Assert.equals(1, finalPublic([]), 'the bare candidate is reported');
+		Assert.equals(0, finalPublic([SHAPE_FILE]), 'a library structure the candidate conforms to vetoes var -> final');
 	}
 
 	/** `prefer-final-public-field` over the `Impl` fixture, whose interface lives in the `library` half. */
