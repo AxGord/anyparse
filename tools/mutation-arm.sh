@@ -216,13 +216,45 @@ for name in $names; do
 
     if [ "$kind" = "FORCE" ]; then
         # The member's signature, verbatim, up to and including the line the
-        # body opens on — the fragment `hxq patch` matches, and the anchor the
+        # BODY opens on — the fragment `hxq patch` matches, and the anchor the
         # forced `return` is spliced after. Taken from the tree rather than
         # stored, so a signature change cannot silently stale the arm.
+        #
+        # The body brace is found by BALANCING the member's own braces, not by
+        # "the first line that ends in an open brace": a RETURN TYPE may open a
+        # brace of its own — `Null<{ … }>`, an inline anonymous structure — and
+        # the line-shape heuristic stopped at THAT brace, so the forced `return`
+        # landed inside the type and `hxq patch` refused the result as
+        # unparseable. S104 hit it twice and worked around it with
+        # `find`/`replace` both times. The body's brace is the LAST one that opens
+        # at depth 0, and its match has to be the member's final one; a member
+        # whose braces do not balance, or whose body opens mid-line, is refused BY
+        # NAME rather than rendered wrong.
         ( cd "$gen" && "$repo/bin/hxq" show "$file" --select "FnMember:$method" ) > "$workroot/$name.node"
-        awk '{ print } /\{$/ { exit }' "$workroot/$name.node" > "$workroot/$name.hdr"
-        if [ ! -s "$workroot/$name.hdr" ]; then
-            echo "mutation-arm.sh: $name: could not read $type#$method out of $file" >&2
+        if ! node -e '
+const fs = require("fs");
+const src = fs.readFileSync(process.argv[1], "utf8");
+// Braces inside a comment, a string, a char or a regex literal are not code —
+// a doc line naming a closing brace, a one-character literal, a regex class —
+// so those runs are skipped rather than counted. Char codes throughout: the
+// snippet is carried inside a single-quoted shell argument.
+const SL = 47, ST = 42, BS = 92, TL = 126, SQ = 39, DQ = 34, OB = 123, CB = 125;
+let depth = 0, open = -1, close = -1;
+for (let i = 0; i < src.length; i++) {
+    const c = src.charCodeAt(i), d = src.charCodeAt(i + 1);
+    if (c === SL && d === SL) { i = src.indexOf("\n", i); if (i < 0) break; continue; }
+    if (c === SL && d === ST) { const e = src.indexOf("*/", i + 2); i = e < 0 ? src.length : e + 1; continue; }
+    if (c === TL && d === SL) { i++; while (++i < src.length) { const r = src.charCodeAt(i); if (r === BS) i++; else if (r === SL) break; } continue; }
+    if (c === SQ || c === DQ) { while (++i < src.length) { const q = src.charCodeAt(i); if (q === BS) i++; else if (q === c) break; } continue; }
+    if (c === OB) { if (depth === 0) open = i; depth++; }
+    else if (c === CB) { depth--; if (depth === 0) close = i; }
+}
+if (open < 0 || depth !== 0 || close !== src.replace(/\s+$/, "").length - 1) process.exit(1);
+const nl = src.indexOf("\n", open);
+if (nl < 0 || src.slice(open + 1, nl).trim() !== "") process.exit(1);
+process.stdout.write(src.slice(0, nl + 1));
+' "$workroot/$name.node" > "$workroot/$name.hdr"; then
+            echo "mutation-arm.sh: $name: could not read the body brace of $type#$method out of $file — the member's braces do not balance, or its body opens mid-line" >&2
             exit 2
         fi
         {

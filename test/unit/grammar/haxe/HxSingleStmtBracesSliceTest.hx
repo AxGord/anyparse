@@ -60,6 +60,9 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-FRAME-OFF')
+	@:killer('M-SSB-DANGLING-NONE')
 	public inline function testDanglingElseThroughLoopBodyKeepsBraces(): Void {
 		// KEY safety gate (suppress frame): the loop body itself sees no
 		// `else`, but unwrapping `{ if (b) x(); }` inside the then-body of
@@ -89,6 +92,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-CHAIN-OFF')
 	public inline function testIfElseIfChainKeepsBracesWhenAnyBranchMulti(): Void {
 		// if/else-if CHAIN symmetry: `if (a) { multi } else if (b) { single }` — the else-if
 		// body must NOT de-brace while a sibling chain branch keeps braces (asymmetry violation).
@@ -107,6 +112,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-CHAIN-OFF')
 	public inline function testElseIfChainLaterBranchForcesEarlierBraces(): Void {
 		// The chain-root scan (not the immediate-pair gate 7): a LATER multi branch
 		// forces an EARLIER single-block branch to keep its braces. The outer `if`'s
@@ -118,6 +125,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-CHAIN-OFF')
 	public inline function testDeepMixedElseIfChainKeepsAllBraced(): Void {
 		// Deep (4-branch) chain with the multi branch in the MIDDLE: the keeper
 		// propagates BOTH backward (root scan) and forward (`_ssbChainSuppress` down
@@ -180,6 +189,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		roundTrip('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\t// keep me\n\t\t\tx();\n\t\t}\n\t}\n}');
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TRAIL-COMMENT-OFF')
 	public inline function testTrailingCommentIfBodyDeBraces(): Void {
 		// Owner spec: a same-line trailing comment on the single statement TRAVELS with the
 		// de-braced statement - braces removed, comment stays after the statement's `;`.
@@ -289,6 +300,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		roundTrip('class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t}\n\t}\n}');
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-WRAP-DIRECTION')
 	public inline function testBareThenIfGetsBracesAdded(): Void {
 		// Repair direction (ω-ssb-wrap): a BARE if in then-position gains
 		// braces — fmt self-heals sources unwrapped by the pre-gate-8 writer.
@@ -327,6 +340,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-CHAIN-OFF')
 	public inline function testElseIfChainLinkNotWrapped(): Void {
 		// An `IfStmt` in ELSE position is an `else if` chain link, not a bare
 		// statement needing braces: wrapping it would emit `else { if (b) … }`,
@@ -363,6 +378,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-CHAIN-OFF')
 	public inline function testSuppressedFrameChainBracesEveryBranch(): Void {
 		// CHAIN invariant inside a suppress frame: the head's immediate sibling is the
 		// `else if` link (never brace-bearing), so only the spine scan can see the keeper.
@@ -413,6 +430,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-CHAIN-OFF')
 	public inline function testChainKeeperForcesBracesOnEveryBareBranch(): Void {
 		// Chain symmetry through the repair arm: one brace-keeping branch in the
 		// middle of a 4-link chain braces every OTHER branch, bare ones included.
@@ -472,6 +491,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TRAIL-COMMENT-OFF')
 	public inline function testTrailingCommentForBodyDeBraces(): Void {
 		// Loop-body counterpart: the trailing comment travels with the de-braced for-body.
 		assertFmt(
@@ -480,6 +501,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TRAIL-COMMENT-OFF')
 	public inline function testTrailingCommentWhileBodyDeBraces(): Void {
 		assertFmt(
 			'class F {\n\tfunction f():Void {\n\t\twhile (cond()) {\n\t\t\tstep(); // c\n\t\t}\n\t}\n}',
@@ -506,6 +529,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TAIL-SEALED-NONE')
 	public inline function testSealedInnerIfDeBracesUnderTrailingElse(): Void {
 		// TRAILING-SPINE gate 4: the inner `if` lives in an arrow body inside a call, so the
 		// call's `)` seals it - a following `else` can never reach it and the braces go.
@@ -540,6 +565,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TAIL-SEALED-NONE')
 	public inline function testSwitchSealedInnerIfDeBraces(): Void {
 		// A `switch` ends on `}`, so an `if` in its last case is sealed from the trailing
 		// `else` - the whole-subtree scan kept these braced for nothing.
@@ -599,6 +626,10 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-FRAME-OFF')
+	@:killer('M-SSB-DANGLING-NONE')
+	@:killer('M-SSB-TAIL-SEALED-NONE')
 	public inline function testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces(): Void {
 		// Both halves of the spine walk in one shape. The then-body's single `for` ends on a
 		// brace-bearing body, so the THEN-body de-braces (the `HxForStmt.body` field arm -
@@ -613,6 +644,10 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-FRAME-OFF')
+	@:killer('M-SSB-DANGLING-NONE')
+	@:killer('M-SSB-TAIL-SEALED-NONE')
 	public inline function testBracedCatchBodySealsTryCatchBeforeElse(): Void {
 		// The block-bodied `TryCatchStmt` arm: the spine ends on the LAST catch clause's
 		// body, which is brace-bearing here, so the trailing `else` cannot reach the `if`
@@ -631,6 +666,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 	 * does. Gate 2 used to fail closed on that slot, which (through the symmetry gate) kept
 	 * the braces on BOTH branches of a real site whose branches were single statements.
 	 */
+	@:pin('control')
+	@:killer('M-SSB-OPEN-TRAIL-NONE')
 	public inline function testOpenTrailingCommentTravelsWithTheStatement(): Void {
 		assertFmt(
 			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t} else { // handlers\n\t\t\tq();\n\t\t}\n\t}\n}',

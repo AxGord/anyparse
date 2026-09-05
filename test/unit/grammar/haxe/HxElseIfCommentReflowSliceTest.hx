@@ -216,6 +216,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	}
 
 	/** The reported shape: a braced then-body takes the comment after its `{`. */
+	@:pin('control')
+	@:killer('M-EICR-BOUNDARY-SKIP')
 	public function testBracedElseIfGluesAndTrailsCommentAfterOpenCurly(): Void {
 		Assert.equals(BRACED_REFLOWED, reflow(BRACED_SRC));
 	}
@@ -226,6 +228,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	}
 
 	/** Each link of a chain carries its own comment and reflows independently. */
+	@:pin('control')
+	@:killer('M-EICR-BOUNDARY-SKIP')
 	public function testChainReflowsEveryLinkIndependently(): Void {
 		Assert.equals(CHAIN_REFLOWED, reflow(CHAIN_SRC));
 	}
@@ -234,6 +238,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * `singleStatementBraces: remove` and the reflow meet on one site: the braces
 	 * go in the same pass that glues the link, so one run reaches the bare form.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-KNOB-IGNORED')
 	public function testSingleStatementBraceRemovalAndReflowLandInOnePass(): Void {
 		Assert.equals(SSB_REFLOWED, reflow(SSB_SRC));
 		Assert.equals(SSB_KEPT, keep(SSB_SRC));
@@ -267,6 +273,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * The braced fixtures above never exercise this arm - their block body always
 	 * breaks after `{`.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-HEADTEXT-ANY')
 	public function testInlineBodyPolicyLeavesNoAnchorAndRefuses(): Void {
 		Assert.equals(NO_ANCHOR_CANON, write(NO_ANCHOR_SRC, CONFIG_INLINE_BODY));
 		Assert.equals(NO_ANCHOR_CANON, write(NO_ANCHOR_CANON, CONFIG_INLINE_BODY));
@@ -290,6 +298,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * already holds the hardline it is anchored to, so it can never flip that
 	 * group's flat-vs-broken answer.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-BOUNDARY-SKIP')
 	public function testOverLongGluedHeadLineIsAccepted(): Void {
 		Assert.equals(WIDE_GLUED, reflow(WIDE_SRC));
 		Assert.equals(WIDE_GLUED, reflow(WIDE_GLUED));
@@ -303,6 +313,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * pass - and the result is exactly what the writer emits for the same shape
 	 * written by hand, which is the third assert.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-BOUNDARY-SKIP')
 	public function testConditionWrapPolicySeesTheRelocatedComment(): Void {
 		Assert.equals(WIDE_COND_OPENED, write(WIDE_SRC, CONFIG_COND_WRAP));
 		Assert.equals(WIDE_COND_OPENED, write(WIDE_COND_OPENED, CONFIG_COND_WRAP));
@@ -317,6 +329,9 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * the head. Anchoring on that inner break put the comment after `(`, where the
 	 * next pass read the first operand as part of the comment and lost it.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-BOUNDARY-SKIP')
+	@:killer('M-EICR-KNOB-IGNORED')
 	public function testWrappedConditionAnchorsAfterTheOpenCurly(): Void {
 		Assert.equals(WRAPPED_COND_REFLOWED, write(WRAPPED_COND_SRC, CONFIG_ONE_PER_LINE));
 		Assert.equals(WRAPPED_COND_REFLOWED, write(WRAPPED_COND_REFLOWED, CONFIG_ONE_PER_LINE));
@@ -330,6 +345,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * head positions that can hold one are pinned: after the block's `{`, and after
 	 * the condition's `)` with the `{` on the next line.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-HEADTEXT-ANY')
 	public function testExistingHeadTrailingCommentRefusesReflow(): Void {
 		Assert.equals(HEAD_TRAIL_SRC, reflow(HEAD_TRAIL_SRC));
 		Assert.equals(HEAD_TRAIL_SRC, keep(HEAD_TRAIL_SRC));
@@ -340,6 +357,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * UNCONDITIONAL break, so the comment is always the last thing on its line and
 	 * nothing can be glued behind it.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-BOUNDARY-SKIP')
 	public function testCommentWithOpenDelimitersIsSafe(): Void {
 		Assert.equals(OPEN_DELIM_REFLOWED, reflow(OPEN_DELIM_SRC));
 		Assert.equals(OPEN_DELIM_REFLOWED, reflow(OPEN_DELIM_REFLOWED));
@@ -363,6 +382,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * of the head", so the walk refuses instead of picking one branch and losing the
 	 * comment from the other. The catch-all arm of `scan` is what answers here.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-SOFTLINE-ANCHOR')
 	public function testProbeShapedBodyRefusesReflow(): Void {
 		Assert.equals(GLUED_BODY_CANON, write(GLUED_BODY_SRC, CONFIG_GLUED_BODY));
 		Assert.equals(GLUED_BODY_CANON, write(GLUED_BODY_CANON, CONFIG_GLUED_BODY));
@@ -384,6 +405,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * Asserted on OUTPUT, not on timing: a suite assert on wall clock is a flake, but
 	 * the exponential shape cannot produce this answer in reasonable time either way.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-HEADTEXT-ANY')
 	public function testDeepRefusedChainStaysCorrect(): Void {
 		Assert.equals(deepChain(16, true), write(deepChain(16, false), CONFIG_INLINE_BODY));
 	}
@@ -397,6 +420,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * meaning was wrong: the head line closes at `}`, and a head never closes a
 	 * block it did not finish.
 	 */
+	@:pin('control')
+	@:killer('M-EICR-HEADTEXT-ANY')
 	public function testEmptyThenBodyDoesNotMigrateTheComment(): Void {
 		Assert.equals(EMPTY_THEN_CANON, reflow(EMPTY_THEN_SRC));
 		Assert.equals(EMPTY_THEN_CANON, keep(EMPTY_THEN_SRC));
@@ -404,6 +429,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	}
 
 	/** Byte-inertness with the knob off: every fixture keeps the pre-knob layout. */
+	@:pin('control')
+	@:killer('M-EICR-KNOB-IGNORED')
 	public function testKnobOffKeepsEveryPreKnobLayout(): Void {
 		Assert.equals(BRACED_SRC, keep(BRACED_SRC));
 		Assert.equals(BARE_SRC, keep(BARE_SRC));
@@ -418,6 +445,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	}
 
 	/** Both reflowed forms are already writer-canonical, so a second pass changes nothing. */
+	@:pin('control')
+	@:killer('M-EICR-BOUNDARY-SKIP')
 	public function testReflowedFormsAreIdempotent(): Void {
 		Assert.equals(BRACED_REFLOWED, reflow(BRACED_REFLOWED));
 		Assert.equals(BARE_REFLOWED, reflow(BARE_REFLOWED));

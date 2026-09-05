@@ -504,6 +504,117 @@ per-wave number and still not a per-slice one. Doubling `--jobs` is the only lev
 is worth less than it looks: 4 → 8 buys **1.39×**, not 2× (306 s → 220 s, against 156 s if
 the builds were independent) — the Haxe builds contend with each other on this machine.
 
+#### The narrower cut: one GATE of a helper, not the helper (S105)
+
+S104's four diffuse helpers were re-asked one BRANCH at a time — a `find`/`replace` fragment
+that neutralises ONE gate and leaves the rest of the member standing, or a `force` on one of
+the small runtime predicates the helper calls. Nineteen such cuts were rendered against
+`a873d6b2` and each run over the WHOLE suite. Eleven owned a fixture and became arms, four
+killed NOTHING at all, and four stayed diffuse. `M-CURLY-CTORS-NONE` was re-measured in the
+same sweep and reproduces S104 exactly: **50 FAILURE, 0 ERROR, 3 pinned, 47 unpinned.**
+
+Blast counts below exclude the oracle-driven CLI e2e family — the same flake S96 and S104
+document. It is identified the same way, by turning up under unrelated cuts: five different
+classes appeared across nine of these nineteen runs, never the same set twice, and one cut
+that changes nothing observable (`buildBlockEndedByteCheck` without its whitespace rewind)
+still produced one. `--fast`, the wave cadence, never sees them.
+
+| narrowed cut | blast | outcome |
+|---|---|---|
+| `WriterBraceSymmetryLowering#deBraceBodyAccess` — `isThenBodyExpr` → false | 1 | `M-SSB-WRAP-DIRECTION` |
+| … — `ssbTrailCommentExpr` → null | 3, one class | `M-SSB-TRAIL-COMMENT-OFF` |
+| … — `ssbSuppressCond` → null | 4 over 2 classes | `M-SSB-FRAME-OFF` |
+| … — `thenChainSuppressExpr` → false | 7 over 2 classes | `M-SSB-CHAIN-OFF` (6 pins + 1 `+extra`) |
+| … — `elseSiblingKeepsExpr` → false (gate 7) | **0** | not armed — no fixture at all |
+| … — `elseFollowsExpr` → false | **0** | not armed — no fixture at all |
+| `WriterBraceSymmetryLowering#findThenSiblingAccess` — drop the `baseOptional` exclusion | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#tailSealed` → false | 4, one class | `M-SSB-TAIL-SEALED-NONE` |
+| `SingleStmtBraces#openTrailingOf` → null | 1 | `M-SSB-OPEN-TRAIL-NONE` |
+| `SingleStmtBraces#tailDanglingIf` → false | 4 over 2 classes | `M-SSB-DANGLING-NONE` |
+| `ElseIfCommentReflow#scan` — a post-condition `WrapBoundary` skipped whole | 7, one class | `M-EICR-BOUNDARY-SKIP` |
+| `ElseIfCommentReflow#scan` — `isHeadText` ignored | 4, one class | `M-EICR-HEADTEXT-ANY` |
+| `ElseIfCommentReflow#scan` — `isHardline` dropped | 1 | `M-EICR-SOFTLINE-ANCHOR` |
+| `WriterBodyPolicyLowering#buildElseIfCommentReflowLayout` — the knob unread | 3, one class | `M-EICR-KNOB-IGNORED` |
+| `WriterOptFanout#setSuppressCallRestProbeField` — identity short-circuit removed | **0** | not armed — byte-inert |
+| `WriterOptFanout#setSuppressCallRestProbeField` — copy-on-write removed | 6 over 5 classes | not armed — no single owner |
+| `StarLoopLowering#buildBlockEndedByteCheck` — whitespace rewind off | **0** | not armed — no fixture at all |
+| `StarLoopLowering#buildBlockEndedByteCheck` — the `;` acceptance dropped | 70 over 22 classes | not armed — no single owner |
+| `StarLoopLowering#buildBlockEndedByteCheck` — the schema predicate dropped | 43 over 20 classes | not armed — no single owner |
+
+**The 47 moved for the first time in this arc: 47 → 34.** Six of the nineteen
+`HxSingleStmtBracesSliceTest` fixtures inside that blast now name an arm
+(`testBracedCatchBodySealsTryCatchBeforeElse`, `testDanglingElseThroughLoopBodyKeepsBraces`,
+`testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces`, `testSealedInnerIfDeBracesUnderTrailingElse`,
+`testSwitchSealedInnerIfDeBraces`, `testOpenTrailingCommentTravelsWithTheStatement`), six of the
+eight in `HxElseIfCommentReflowSliceTest`, and `HxTryBraceSymmetrySliceTest#testDanglingElseKeepsBraces`.
+The other 18 pins land on fixtures OUTSIDE that blast, which is the same work in the same
+classes — the registry goes 82 → 113 pins and 54 → 65 arms.
+
+**S104's reading held for the MODULE and was wrong for the GATE.** "At the granularity those
+modules expose, the biggest unpinned cluster has no single-owner seam" is exactly right about
+`deBraceBodyAccess` as a unit: cut whole it takes 51 fixtures over 4 classes. Cut one gate at a
+time it is four separate owners of 1, 3, 4 and 7 — and two more gates nothing exercises. The
+conclusion to carry forward is not "annotate the widest file" and not "this cluster has no
+owner", it is that a 200-line helper is not a seam; the gates inside it are, and each one is a
+`find`/`replace` fragment away from being addressable. Half the `HxSingleStmtBracesSliceTest`
+owners are not in a macro module at all — `tailSealed`, `openTrailingOf` and `tailDanglingIf`
+are ordinary runtime predicates in `anyparse.format.SingleStmtBraces`, and a FORCE arm on each
+is one line of registry.
+
+**Four branches no fixture in the suite notices.** Each is a live gate whose removal changes
+nothing the 14 077 tests can see, which is a statement about the TESTS, not proof the code is
+dead:
+
+- `deBraceBodyAccess`'s gate 7 — the immediate-pair "would the `else` sibling keep its braces"
+  probe. It is folded into the same `||` as the chain probe (`$elseSiblingKeepsExpr ||
+  $thenChainSuppressExpr`), and the chain half answers for every fixture that reaches it.
+- `deBraceBodyAccess`'s `elseFollows` argument, threaded into `unwrapStmt` and
+  `hoistTrailingComment`. The dangling-else shapes it looks like it defends are all held by the
+  suppress frame instead — `ssbSuppressCond` passes its own hard-coded `true` — so forcing this
+  one to `false` costs nothing.
+- `findThenSiblingAccess`'s `BASE_OPTIONAL != true` exclusion: no grammar today pairs
+  `dropSingleStmtBraces` with an optional field ahead of the then-body.
+- `buildBlockEndedByteCheck`'s whitespace rewind — no fixture has trailing whitespace between
+  the element and the byte the check reads.
+
+**Two arms with identical blasts, kept on purpose.** `M-SSB-FRAME-OFF` (the macro-level frame
+arming) and `M-SSB-DANGLING-NONE` (the runtime dangling-`if` predicate) kill the SAME four
+fixtures. Nothing in the suite tells the two mechanisms apart, and that is worth recording
+rather than hiding behind one arm: they are different modules, each is separately addressable,
+and a fixture that discriminates them would be a real addition.
+
+**Vacuity, per pinned fixture.** Twenty of the thirty-one meet the bar by construction (`F` —
+a single assertion). Three show the `.F` audit outright (`...F.`, `..FF`, `.F`), and
+`testWrappedConditionAnchorsAfterTheOpenCurly` shows `..F` under the second of its two arms.
+Seven fail leading assertions but keep passing ones (`F.`, `F..`, `F.F`, `FFFF..`) — the arm
+removes a REFUSAL, so the fixture's refusal cases go red together while its idempotence and
+default-off cases stay green; that split is the discrimination, and reshaping the fixture to
+manufacture a leading `.` would only move the same assertion. One is the honest exception S104
+opened: `testKnobOffKeepsEveryPreKnobLayout` shows `FFFF` under `M-EICR-KNOB-IGNORED`, because
+all four of its assertions ARE the knob being off and the cut is exactly "stop reading the
+knob". Its discrimination is the blast: the class has 22 fixtures and this cut takes 3.
+
+**The FORCE renderer's third blind spot is FIXED, not worked around.** S104 named it — a member
+whose RETURN TYPE opens a brace of its own (`Null<{ … }>`, an inline anonymous structure) — and
+routed both cases to `find`/`replace`. `mutation-arm.sh` now finds the body brace by BALANCING
+the member's own braces instead of taking "the first line that ends in `{`": the body's brace is
+the last one that opens at depth 0, and its match has to be the member's final `}`. Re-measured
+on the two members that hit it, the header goes from 1 line to 5 (`blankAroundMultilineExprs`)
+and to 7 (`detectCondWrapSpan`), landing on `} {` and `}> {` — the body's own line, not the
+type's. Braces inside comments, strings, char and regex literals are skipped: without that the
+balance is off by one on any member documenting a closing brace, and `SingleStmtBraces#tailSealed`
+— a plain `Bool` the OLD heuristic handled fine — would have started refusing. A member that
+still does not balance, or whose body opens mid-line, is refused BY NAME rather than rendered
+wrong. All 25 pre-existing FORCE arms render byte-identically under the new logic.
+
+| Run | Wall | Verdicts |
+|---|---|---|
+| `--all --fast`, `--jobs 4` (default), 65 arms | 393 s | 65 killed, 0 survived, 0 mismatch |
+
+**The cadence still holds at 65.** Per-arm cost stays flat — 5.65 s at 23 arms, 6.12 s at 50,
+**6.04 s at 65** — so the eleven new arms cost about 66 s of a per-wave run and nothing at all
+per slice. `--all --fast` is still the per-wave gate and one arm the per-edit one.
+
 `ANYPARSE_HXFORMAT_FORK` is unset for the run on purpose: the corpus harness is not what an arm measures, and a verdict must not depend on whether a fork path happens to be exported in the caller's shell.
 
 Every worktree the runner created is removed on exit, including on `INT`/`TERM`/`HUP`. A `worktree remove` that itself fails is swallowed so one bad entry cannot strand the rest — which does mean a stuck worktree can survive as a registered entry, so `git worktree list` is worth a glance after a crashed run. The workroot itself is never deleted: its transcripts, build logs and verdict files are the post-mortem. They accumulate in `TMPDIR` across a long campaign, so a campaign that runs for days is worth sweeping by hand.
@@ -720,6 +831,14 @@ listing it and the baseline loses a line. That is the only exit a `control` line
 the only reason this number may move DOWN. Eight new pins landed in that slice; the other
 seven were on fixtures that had claimed nothing, so they cost the baseline nothing — which
 is the property the paragraph above predicted and the first time it has been paid.
+
+**Still 294 after S105's thirty-one pins, and the check is one command.** The biggest pin wave
+this arc has landed moved the baseline by nothing, because the three classes it annotates —
+`HxSingleStmtBracesSliceTest`, `HxElseIfCommentReflowSliceTest`, `HxTryBraceSymmetrySliceTest` —
+contribute ZERO lines to `--list-claims`: their fixture docs describe layouts, not the fixture's
+role, so nothing in them ever read as a claim. Before assuming a wave will shrink the number,
+grep the census for the classes you are about to pin; a wave that touches none of them cannot
+move it, and reporting a shrink that did not happen is worse than reporting no change.
 
 **Two of the four kinds are not gateable toward a fix, deliberately.** `arm` and
 `control` have an annotation that retires the line. `base` and `vacuity` have

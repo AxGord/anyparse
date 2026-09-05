@@ -924,7 +924,8 @@ class TestDiscoveryParityTest extends Test {
 	 * its own — this is the runtime half, and it is what keeps the metas from
 	 * being dropped in a refactor without anything noticing.
 	 *
-	 * Forty-six entries over twenty-one classes, and still not a conversion of the tree: sixteen
+	 * One hundred and thirteen entries over thirty-three classes, and still not a conversion of
+	 * the tree: sixteen
 	 * are the seam coverage for the fourteen rules S73 touched that its deciding arm cannot
 	 * reach (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
 	 * where the arm name is the whole point — it is the only record that the fixture reaches the
@@ -952,18 +953,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
-			'unit.check.FieldWriteResolutionScopeTest#testOutOfScopePlainClassKeepsTheUnresolvedWritePoison :: control'
-			+ ' :: M-PLAINCLASS-SCOPEBLIND',
+			'unit.check.FieldWriteResolutionScopeTest#testOutOfScopePlainClassKeepsTheUnresolvedWritePoison'
+			+ ' :: control :: M-PLAINCLASS-SCOPEBLIND',
 			'unit.check.FieldWriteResolutionScopeTest#testProjectRootUnresolvedWriteVetoes :: control :: M-ROOTS-THIRDPARTY',
 			'unit.check.FieldWriteResolutionScopeTest#testResolvableLibraryInterfaceStopsVetoing :: control :: M-CHECKINDEX-PROJECT-FINAL',
-			'unit.check.FieldWriteResolutionScopeTest#testResolvableLibraryInterfaceStopsVetoingWriteRestriction :: control'
-			+ ' :: M-CHECKINDEX-PROJECT-READONLY',
+			'unit.check.FieldWriteResolutionScopeTest#testResolvableLibraryInterfaceStopsVetoingWriteRestriction'
+			+ ' :: control :: M-CHECKINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testSameSimpleNameThirdPartyTypeDoesNotVeto :: control :: M-DECLSITE-SCOPEWIDE',
-			'unit.check.FieldWriteResolutionScopeTest#testSkipParsingLibrarySourceDoesNotVetoProjectCandidate :: control'
-			+ ' :: M-SKIPSCAN-SCOPEWIDE',
+			'unit.check.FieldWriteResolutionScopeTest#testSkipParsingLibrarySourceDoesNotVetoProjectCandidate'
+			+ ' :: control :: M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
-			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly'
-			+ ' :: control :: M-WRITEINDEX-PROJECT-READONLY',
+			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly :: control :: M-WRITEINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
 			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
@@ -1014,6 +1014,47 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured'
 			+ ' :: control :: M-WORDOP-NO-RESTORE',
 			'unit.grammar.haxe.HxConditionalExprFitSliceTest#testOverwideGluedBreaksAtDirectiveSeams :: control :: M-NEWLINE-SIGNALS-NONE',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly'
+			+ ' :: control :: M-EICR-BOUNDARY-SKIP',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testChainReflowsEveryLinkIndependently :: control :: M-EICR-BOUNDARY-SKIP',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testCommentWithOpenDelimitersIsSafe :: control :: M-EICR-BOUNDARY-SKIP',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testConditionWrapPolicySeesTheRelocatedComment'
+			+ ' :: control :: M-EICR-BOUNDARY-SKIP',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testDeepRefusedChainStaysCorrect :: control :: M-EICR-HEADTEXT-ANY',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testEmptyThenBodyDoesNotMigrateTheComment :: control :: M-EICR-HEADTEXT-ANY',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testExistingHeadTrailingCommentRefusesReflow'
+			+ ' :: control :: M-EICR-HEADTEXT-ANY',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testInlineBodyPolicyLeavesNoAnchorAndRefuses'
+			+ ' :: control :: M-EICR-HEADTEXT-ANY',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testKnobOffKeepsEveryPreKnobLayout :: control :: M-EICR-KNOB-IGNORED',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testOverLongGluedHeadLineIsAccepted :: control :: M-EICR-BOUNDARY-SKIP',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testProbeShapedBodyRefusesReflow :: control :: M-EICR-SOFTLINE-ANCHOR',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testReflowedFormsAreIdempotent :: control :: M-EICR-BOUNDARY-SKIP',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testSingleStatementBraceRemovalAndReflowLandInOnePass'
+			+ ' :: control :: M-EICR-KNOB-IGNORED',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testWrappedConditionAnchorsAfterTheOpenCurly'
+			+ ' :: control :: M-EICR-BOUNDARY-SKIP,M-EICR-KNOB-IGNORED',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenIfGetsBracesAdded :: control :: M-SSB-WRAP-DIRECTION',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBracedCatchBodySealsTryCatchBeforeElse'
+			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testChainKeeperForcesBracesOnEveryBareBranch :: control :: M-SSB-CHAIN-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDanglingElseThroughLoopBodyKeepsBraces'
+			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDeepMixedElseIfChainKeepsAllBraced :: control :: M-SSB-CHAIN-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testElseIfChainLaterBranchForcesEarlierBraces :: control :: M-SSB-CHAIN-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testElseIfChainLinkNotWrapped :: control :: M-SSB-CHAIN-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces'
+			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testIfElseIfChainKeepsBracesWhenAnyBranchMulti :: control :: M-SSB-CHAIN-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testOpenTrailingCommentTravelsWithTheStatement'
+			+ ' :: control :: M-SSB-OPEN-TRAIL-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSealedInnerIfDeBracesUnderTrailingElse :: control :: M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSuppressedFrameChainBracesEveryBranch :: control :: M-SSB-CHAIN-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSwitchSealedInnerIfDeBraces :: control :: M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentForBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentIfBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentWhileBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testDanglingElseKeepsBraces :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOnlyTheLastCatchKeepsItsTerminator :: control :: M-TRY-CATCHES-SYM-OFF',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody :: control :: M-TRY-BODY-SYM-OFF',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive'
@@ -1099,7 +1140,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-NONCURLY-SAME-DROP',
 			'M-NEWLINE-SIGNALS-NONE',
 			'M-WORDOP-NO-RESTORE',
-			'M-BLANK-MULTILINE-OFF'
+			'M-BLANK-MULTILINE-OFF',
+			'M-SSB-WRAP-DIRECTION',
+			'M-SSB-TRAIL-COMMENT-OFF',
+			'M-SSB-FRAME-OFF',
+			'M-SSB-CHAIN-OFF',
+			'M-SSB-TAIL-SEALED-NONE',
+			'M-SSB-OPEN-TRAIL-NONE',
+			'M-SSB-DANGLING-NONE',
+			'M-EICR-BOUNDARY-SKIP',
+			'M-EICR-HEADTEXT-ANY',
+			'M-EICR-SOFTLINE-ANCHOR',
+			'M-EICR-KNOB-IGNORED'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1123,7 +1175,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-NONCURLY-SAME-DROP :: anyparse.macro.WriterPolicyLowering#sameLineNonCurlyBlockPolicySwitch',
 			'M-NEWLINE-SIGNALS-NONE :: anyparse.macro.WriterTriviaSlotLowering#collectFollowingNewlineSignals',
 			'M-WORDOP-NO-RESTORE :: anyparse.macro.OperatorLoopLowering#buildWordOpRestoreExpr',
-			'M-BLANK-MULTILINE-OFF :: anyparse.macro.WriterBlankLowering#blankAroundMultilineExprs'
+			'M-BLANK-MULTILINE-OFF :: anyparse.macro.WriterBlankLowering#blankAroundMultilineExprs',
+			'M-SSB-WRAP-DIRECTION :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
+			'M-SSB-TRAIL-COMMENT-OFF :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
+			'M-SSB-FRAME-OFF :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
+			'M-SSB-CHAIN-OFF :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
+			'M-EICR-KNOB-IGNORED :: anyparse.macro.WriterBodyPolicyLowering#buildElseIfCommentReflowLayout'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

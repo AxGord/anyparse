@@ -420,6 +420,91 @@
 			"find": "if (optField == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
 			"replace": "if (true) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
 			"note": "the knob wires empty mark/seen/apply splices whatever the grammar asked for, so nothing measures a multiline member and no blank is inserted around one"
+		},
+		{
+			"name": "M-SSB-WRAP-DIRECTION",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "final isThenBodyExpr: Expr = elseFieldName != null ? macro true : macro false;",
+			"replace": "final isThenBodyExpr: Expr = macro false;",
+			"note": "an `if` then-body stops identifying itself as one, so it is exempted from gate 8 alongside the loop bodies and a bare then opposite a braced else is never wrapped"
+		},
+		{
+			"name": "M-SSB-TRAIL-COMMENT-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "final ssbTrailCommentExpr: Null<Expr> = dropBraces",
+			"replace": "final ssbTrailCommentExpr: Null<Expr> = false",
+			"note": "the de-braced statement's same-line trailing comment is never hoisted, so it stays inside the block the unwrap just removed and leaves the output"
+		},
+		{
+			"name": "M-SSB-FRAME-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "final ssbSuppressCond: Null<Expr> = elseAccess == null\n\t? null",
+			"replace": "final ssbSuppressCond: Null<Expr> = true\n\t? null",
+			"note": "the `_setSsbSuppress` frame is never armed, so an unwrap nested inside a then-body stops being gated on the trailing `else` and a dangling else loses the braces that keep it bound"
+		},
+		{
+			"name": "M-SSB-CHAIN-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "final thenChainSuppressExpr: Expr = elseAccess == null\n\t? macro false",
+			"replace": "final thenChainSuppressExpr: Expr = true\n\t? macro false",
+			"note": "chain symmetry stops forcing braces, so one keeper branch of an else-if chain no longer makes its bare siblings keep theirs"
+		},
+		{
+			"name": "M-SSB-TAIL-SEALED-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tailSealed",
+			"force": "false",
+			"note": "no ctor reads as sealing its own tail, so a block, switch or do-while at the end of a body stops shielding the trailing `else` and the branch keeps braces it does not need"
+		},
+		{
+			"name": "M-SSB-OPEN-TRAIL-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "openTrailingOf",
+			"force": "null",
+			"note": "a body whose single statement carries an OPEN trailing comment reads as carrying none, so the comment stops travelling with the statement the de-brace lifts out"
+		},
+		{
+			"name": "M-SSB-DANGLING-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tailDanglingIf",
+			"force": "false",
+			"note": "no statement tail reads as a dangling `if`, so the de-brace stops refusing a body whose last statement would capture the enclosing `else`"
+		},
+		{
+			"name": "M-EICR-BOUNDARY-SKIP",
+			"type": "anyparse.format.ElseIfCommentReflow",
+			"method": "scan",
+			"find": "case WrapBoundary(inner): afterCond ? rewrap(scan(inner, trailing, true), d -> Doc.WrapBoundary(d)) : Scanning(true);",
+			"replace": "case WrapBoundary(inner): Scanning(true);",
+			"note": "a `WrapBoundary` past the condition is skipped whole instead of scanned, so the body's own boundary hides the anchor and every else-if comment reflow refuses"
+		},
+		{
+			"name": "M-EICR-HEADTEXT-ANY",
+			"type": "anyparse.format.ElseIfCommentReflow",
+			"method": "scan",
+			"find": "isHeadText(s) ? Scanning(afterCond) : Refused;",
+			"replace": "Scanning(afterCond);",
+			"note": "every rendered token reads as head text, so a `//`, a `}` or a `;` no longer ends the head line and the comment anchors past the position it belongs to"
+		},
+		{
+			"name": "M-EICR-SOFTLINE-ANCHOR",
+			"type": "anyparse.format.ElseIfCommentReflow",
+			"method": "scan",
+			"find": "afterCond && isHardline(flat) ? Anchored(Doc.Concat([trailing, doc])) : Refused;",
+			"replace": "afterCond ? Anchored(Doc.Concat([trailing, doc])) : Refused;",
+			"note": "a width-only break anchors the comment as readily as an unconditional one, so a body that merely COULD break takes the trailing comment the reflow was written to refuse"
+		},
+		{
+			"name": "M-EICR-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildElseIfCommentReflowLayout",
+			"find": "final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow && $afterKwExpr == null && _eicrLead.length == 1",
+			"replace": "final _eicrDoc: Null<anyparse.core.Doc> = $afterKwExpr == null && _eicrLead.length == 1",
+			"note": "the runtime gate stops reading `opt.elseIfCommentReflow`, so the reflow fires with the knob off and every pre-knob layout moves"
 		}
 	]
 }
