@@ -150,6 +150,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.FieldInitAtDeclarationCheckTest',
 		'unit.check.FieldInitInConstructorCheckTest',
 		'unit.check.FieldMutabilityMacroGateTest',
+		'unit.check.FieldWriteResolutionScopeTest',
 		'unit.check.FixVerifierBisectTest',
 		'unit.check.FixVerifierCoverageE2ETest',
 		'unit.check.FixVerifierGroupE2ETest',

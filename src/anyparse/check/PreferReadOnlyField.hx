@@ -34,16 +34,19 @@ using StringTools;
  *    are attributed to the SUBTYPE, so `writtenExternally` below would miss them.
  *    Merely HAVING a subtype no longer bails. That gate has two arms with DIFFERENT
  *    reach: the body scan runs over the resolution scope, so a subtype declared in a
- *    configured library root counts, but the `writtenAnywhere(subtype, …)` arm reads the PROJECT-scoped
- *    `FieldWriteIndex` (report UNION the declared `resolutionRoots`). Residual blind spot: a
- *    library-side write through a library subtype stays invisible, deliberately — see the scope
- *    note below. `MemberLookup.supertypeDeclaresMember`
+ *    configured library root counts, and since S97 the `writtenAnywhere(subtype, …)` arm reads a
+ *    write index over that same scope — so a write through a THIRD-PARTY subtype, made in a third
+ *    third-party file and therefore absent from the subtype's own body, is seen. That was the
+ *    residual blind spot this rule documented; it is closed. `MemberLookup.supertypeDeclaresMember`
  *    still bails when a supertype declares the same field.
  * 2. No write to the field NAME anywhere is unresolved
  *    (`FieldWriteIndex.hasUnresolvedWrite`) — an unresolved `recv.field = …` could be
  *    a hidden external write.
- * 3. The type is declared in exactly one file (`SymbolIndex.declarationSiteOf`) — an
- *    ambiguous simple name cannot pin the decl range, so it bails.
+ * 3. The type's declaration range can be pinned — read from the candidate's OWN file, falling
+ *    back to `SymbolIndex.declarationSiteOf` for a name the scope declares exactly once. The
+ *    fallback alone is not enough once the write index spans a library: a project type sharing a
+ *    SIMPLE name with a third-party one (`Helper`, `Input`) has no unique site, and every caller
+ *    reads that as "possibly written externally".
  * 4. No resolved write to the field lies outside that decl range
  *    (`FieldWriteIndex.writtenExternally`).
  * 5. No STRUCTURAL type pins the field mutable —
@@ -75,12 +78,17 @@ using StringTools;
  *
  * ## Whole-project scope required
  *
- * Like `prefer-final-public-field`, `run` builds the write index and the subtype gate over the
- * PROJECT scope — report files UNION the declared `resolutionRoots` — not over the lint scope, so
- * a narrow run still sees a writer in a module it never lints. A project declaring no roots keeps
+ * Like `prefer-final-public-field`, `run` answers over the PROJECT scope — report files UNION the
+ * declared `resolutionRoots` — not over the lint scope, so a narrow run still sees a writer in a
+ * module it never lints. A project declaring no roots keeps
  * the old limitation (`unused-private` carries it too): there the sound usage is linting the whole
- * project (`lint src/`). The LIBRARY half of the resolution scope stays out of both indexes; see
- * that check's note for the measurement.
+ * project (`lint src/`).
+ *
+ * The LIBRARY half of the resolution scope joins the WRITE index and nothing else — see that
+ * check's scope note for the census that decided it, and for the per-owner narrowing
+ * (`FieldWriteIndex.admits`) that keeps a third-party write from vetoing a project candidate.
+ * The name-keyed scans (the skipped-file scan, structural conformance, the supertype lookup) keep
+ * the project-scoped `SymbolIndex`: see that check's note for the measurement.
  */
 @:nullSafety(Strict)
 final class PreferReadOnlyField implements Check {
@@ -96,12 +104,14 @@ final class PreferReadOnlyField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		// The write proof's scope is the PROJECT, not the lint scope: a field's writer can be any
-		// project file, so a narrow run answers over the declared `resolutionRoots` too. Report-only
-		// when the project declares none — then the lint scope IS all this run can see.
+		// The name-keyed scans' scope is the PROJECT, not the lint scope: a field's writer can be
+		// any project file, so a narrow run answers over the declared `resolutionRoots` too.
+		// Report-only when the project declares none — then the lint scope IS all this run can see.
+		// The WRITE index is wider (the whole resolution scope, third-party half tagged) and rides
+		// the host memoised; see `PreferFinalPublicField`'s scope note for why the two differ.
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
-		final index: SymbolIndex = SymbolIndex.build(scope, plugin);
-		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(scope, plugin, index);
+		final index: SymbolIndex = RefactorSupport.projectIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
+		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
@@ -162,10 +172,14 @@ final class PreferReadOnlyField implements Check {
 		// here holds — measured as "Field <name> has different property access than core type" for
 		// every restriction, `(default, null)` and `(default, never)` alike.
 		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
-		if (writeIndex.hasUnresolvedWrite(name)) return;
-		if (!writeIndex.writtenAnywhere(owner, name)) return;
+		// Every write question about THIS candidate carries its file, so the write index can drop
+		// what a third-party source recorded: a haxelib cannot name a project type. The subtype
+		// question below deliberately does not — there the subject may itself be third-party, and
+		// its writes are the whole point of the library being in this index.
+		if (writeIndex.hasUnresolvedWrite(name, file)) return;
+		if (!writeIndex.writtenAnywhere(owner, name, file)) return;
 		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
-		if (writeIndex.writtenOutsideDeclaration(owner, name)) return;
+		if (writeIndex.writtenOutsideDeclaration(owner, name, file)) return;
 		// A no-init field whose sole write is one unconditional top-level constructor statement is
 		// `final`-izable — `prefer-final-public-field`'s constructor arm claims it (same shared
 		// predicate), so it is ceded to keep the fixes disjoint. Same cession for the

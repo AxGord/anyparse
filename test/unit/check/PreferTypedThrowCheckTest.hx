@@ -374,7 +374,9 @@ class PreferTypedThrowCheckTest extends Test {
 		report: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>
 	): CachingGrammarPlugin {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(library) } });
+		scoped.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+		);
 		return scoped;
 	}
 

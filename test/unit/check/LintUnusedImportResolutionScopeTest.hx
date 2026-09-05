@@ -140,7 +140,7 @@ class LintUnusedImportResolutionScopeTest extends Test {
 	private function runScoped(useSource: String, lib: Array<{ file: String, source: String }>): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: useSource }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
 		return new UnusedImport().run(report, scoped);
 	}
 

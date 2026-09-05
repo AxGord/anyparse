@@ -716,7 +716,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
 		final check: NoUnderscorePrefix = configured(config);
 		final vs: Array<Violation> = check.run(report, scoped);
 		Assert.equals(1, vs.length);

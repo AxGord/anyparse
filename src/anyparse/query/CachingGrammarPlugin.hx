@@ -118,6 +118,15 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private var _resolutionIndex: Null<SymbolIndex> = null;
 	private var _resolutionIndexBuilt: Bool = false;
 
+	// The two PROJECT-scope memos, same lifecycle as `_resolutionIndex` and cleared by the same
+	// per-pass call: both field-immutability checks demand each of them, so without a memo a
+	// `--fix` pass rebuilt the project symbol index and the write index TWICE per pass. Built
+	// lazily, so a run whose checks never reach them pays nothing.
+	private var _projectIndex: Null<SymbolIndex> = null;
+	private var _projectIndexBuilt: Bool = false;
+	private var _fieldWriteIndex: Null<FieldWriteIndex> = null;
+	private var _fieldWriteIndexBuilt: Bool = false;
+
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
 		_rootProvider = inner is ParsedRootProvider ? cast inner : null;
@@ -198,7 +207,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function resolutionProjectFiles(): Null<Array<{ file: String, source: String }>> {
 		final sources: Null<ResolutionSources> = scopeSources();
 		if (sources == null) return null;
-		final roots: Array<{ file: String, source: String }> = sources.projectRoots ?? [];
+		final roots: Array<{ file: String, source: String }> = sources.projectRoots;
 		return roots.length == 0 ? null : sources.report.concat(roots);
 	}
 
@@ -212,6 +221,55 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function setResolutionIndex(index: SymbolIndex): Void {
 		_resolutionIndex = index;
 		_resolutionIndexBuilt = true;
+		// Every derived memo is a function of THIS pass's sources; the fix loop calls this once per
+		// pass, which is exactly where they must expire. Clearing them here rather than exposing a
+		// second reset keeps "one call, one pass" as the whole invalidation story.
+		_projectIndex = null;
+		_projectIndexBuilt = false;
+		_fieldWriteIndex = null;
+		_fieldWriteIndexBuilt = false;
+	}
+
+	/**
+	 * `SymbolIndexHost`: the memoised PROJECT-scoped index — report files UNION the declared
+	 * `resolutionRoots` — or null when the project declared no roots, where the caller's own
+	 * report scope is the answer. The project twin of `resolutionIndex`, memoised for the same
+	 * reason: two checks demand it per pass and each was rebuilding the whole project index.
+	 */
+	public function projectIndex(): Null<SymbolIndex> {
+		if (_projectIndexBuilt) return _projectIndex;
+		final files: Null<Array<{ file: String, source: String }>> = resolutionProjectFiles();
+		_projectIndexBuilt = true;
+		if (files != null) _projectIndex = SymbolIndex.build(files, this);
+		return _projectIndex;
+	}
+
+	/**
+	 * `SymbolIndexHost`: the memoised write index over the RESOLUTION scope, with the library half
+	 * passed as the THIRD-PARTY partition so every per-candidate question can be narrowed back to
+	 * the project (`FieldWriteIndex.admits`). Null when no scope reached the run.
+	 *
+	 * The library belongs in THIS index and in no other the field checks use: a third-party
+	 * subtype of a project type writes an inherited field from a file the project scope does not
+	 * hold, and that write is attributed to the subtype, so only a library-wide write index can
+	 * answer `MemberWriteScan.subtypeWriteReaches`. The name-keyed scans stay project-scoped —
+	 * see `PreferFinalPublicField`'s scope note for what admitting the library costs them.
+	 */
+	public function fieldWriteIndex(): Null<FieldWriteIndex> {
+		if (_fieldWriteIndexBuilt) return _fieldWriteIndex;
+		final sources: Null<ResolutionSources> = scopeSources();
+		if (sources == null) return null;
+		final files: Null<Array<{ file: String, source: String }>> = resolutionFiles();
+		_fieldWriteIndexBuilt = true;
+		// THIRD-PARTY is the library half MINUS the declared `resolutionRoots`: the library array
+		// carries the project roots too (one memoised instance is what the parse tier keys on), and
+		// tagging those third-party would drop the very writes `resolutionRoots` exists to reveal — a
+		// project module outside the lint scope assigning the field.
+		final roots: Map<String, Bool> = [for (entry in sources.projectRoots) entry.file => true];
+		if (files != null) _fieldWriteIndex = FieldWriteIndex.build(files, this, resolutionIndex(), [
+			for (entry in sources.library.entries()) if (!roots.exists(entry.file)) entry.file
+		]);
+		return _fieldWriteIndex;
 	}
 
 	/**
@@ -482,7 +540,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
  */
 typedef ResolutionSources = {
 	final report: Array<{ file: String, source: String }>;
-	@:optional final projectRoots: Array<{ file: String, source: String }>;
+	final projectRoots: Array<{ file: String, source: String }>;
 	final library: LibrarySources;
 };
 

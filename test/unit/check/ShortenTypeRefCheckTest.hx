@@ -672,7 +672,8 @@ class ShortenTypeRefCheckTest extends Test {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({
 			declared: true,
-			sources: () -> {report: report, library: new LibrarySources([{ file: 'pkg/deep/Mod.hx', source: MOD_SOURCE }]) }
+			sources: () ->
+				{report: report, projectRoots: [], library: new LibrarySources([{ file: 'pkg/deep/Mod.hx', source: MOD_SOURCE }]) }
 		});
 		final vs: Array<Violation> = check.run(report, scoped);
 		Assert.equals(2, vs.length);
@@ -801,6 +802,7 @@ class ShortenTypeRefCheckTest extends Test {
 			declared: true,
 			sources: () -> {
 				report: report,
+				projectRoots: [],
 				library: new LibrarySources([
 					{ file: 'pkg/deep/Mod.hx', source: MOD_SOURCE },
 					{ file: 'pkg/deep/Foo.hx', source: FOO_SOURCE },
@@ -826,8 +828,10 @@ class ShortenTypeRefCheckTest extends Test {
 			declared: true,
 			sources: () -> {
 				report: report,
+				projectRoots: [],
 				library: new LibrarySources([
 					{ file: 'types/BASection.hx', source: BASECTION_SOURCE },
+
 					{ file: 'module/Hash.hx', source: MODULE_HASH_SOURCE }
 				])
 			}
