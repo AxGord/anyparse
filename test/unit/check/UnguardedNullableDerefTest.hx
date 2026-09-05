@@ -408,6 +408,48 @@ class UnguardedNullableDerefTest extends Test {
 		Assert.equals('u1.foo', span == null ? 'no span' : src.substring(span.from, span.to));
 	}
 
+	/**
+	 * A `?.` guard narrows its ROOT: `u?.b != null` cannot be true with a null `u`, because `?.`
+	 * short-circuits the whole remaining chain to null. Live site — `TM-Haxe4`'s
+	 * `src/utils/Error.hx:51` writes exactly this and was reported until the arm below existed.
+	 */
+	@:pin('control')
+	@:killer('M-SAFENAV-NO-NARROW')
+	public function testSafeNavGuardNarrowsRoot(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; if (u?.b != null) u.b.c(); } }').length);
+	}
+
+	/** The call spelling of the same chain — `u?.b()` is null whenever `u` is, so the guard proves the same thing. */
+	public function testSafeNavCallGuardNarrowsRoot(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; if (u?.b() != null) u.d(); } }').length);
+	}
+
+	/** `u?.b == null` proves NOTHING about `u` — the member may be null on a perfectly non-null receiver. */
+	public function testSafeNavNullTestDoesNotNarrow(): Void {
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; if (u?.b == null) u.b.c(); } }').length);
+	}
+
+	/**
+	 * The negations, both directions: `!(u?.b == null)` is the guard, `!(u?.b != null)` is its
+	 * opposite. `collectNarrow` decides by the SLOT it is filling, not by the operator it matched,
+	 * and this pair is what tells the two apart — an implementation keyed on the operator gets both
+	 * of these backwards while every un-negated fixture above stays green.
+	 */
+	public function testNegatedSafeNavGuardsKeepTheirPolarity(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; if (!(u?.b == null)) u.d(); } }').length);
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; if (!(u?.b != null)) u.d(); } }').length);
+	}
+
+	/**
+	 * The step directly off the root must be the SAFE one. With a null `u`, `u.b?.c != null`
+	 * THROWS rather than evaluating to null, so reading it as evidence would be the "it did not
+	 * crash, therefore it was non-null" argument — and the crash is what this check reports. Two
+	 * findings: the condition's own `u.b`, and the unnarrowed `u.d()` after it.
+	 */
+	public function testUnsafeFirstStepDoesNotNarrow(): Void {
+		Assert.equals(2, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; if (u.b?.c != null) u.d(); } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

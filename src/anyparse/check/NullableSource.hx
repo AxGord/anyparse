@@ -32,6 +32,19 @@ import anyparse.query.TypeResolver;
  * names no member set of its own. That string is a loss, not an answer, so it falls
  * through to the resolver, which reads the written source and peels the wrapper.
  *
+ * ## The cross-file arc asks the RESOLUTION index, and owes the exclusion list for it
+ *
+ * `Array.pop`, `List.first`, a library's `find` — every member this arc is about is declared
+ * OUTSIDE the files under report, so a report-scoped index answers "unknown" for all of them by
+ * construction. The caller therefore hands in the RESOLUTION index (report scope + declared roots
+ * + libs + std); measured on the Pony fork, that moves the method-call arc from 48 resolved
+ * questions of 421 to 194.
+ *
+ * Which is what makes `excludedCalls` load-bearing HERE and nowhere else in this class. The
+ * exclusion is applied to `instanceSigs` when the config is BUILT, and this arc reaches the same
+ * call by an index lookup that never sees that filter — so a wide enough index hands
+ * `Array.pop()` straight back, and the exclusion reads as honoured while being void.
+ *
  * An `Array` / `String` index, a same-named method on an unrelated type, and a
  * non-`Null<…>` (or unannotated and unresolvable) return are all safe misses.
  *
@@ -45,6 +58,10 @@ final class NullableSource {
 	 * grammar has no identifier kind or declares no nullable source at all (index
 	 * types, instance-return calls, and return markers all empty) — a caller then
 	 * skips the file.
+	 *
+	 * `exclude` is carried into the config as `excludedCalls`, not just applied to `instanceSigs`
+	 * here: the cross-file arc reaches the same `Type.method` through an index lookup that this
+	 * filter never touches, so it has to re-apply it itself.
 	 */
 	public static function build(shape: RefShape, ?exclude: Array<String>): Null<NullableSourceCfg> {
 		final identKind: Null<String> = shape.identKind;
@@ -63,6 +80,7 @@ final class NullableSource {
 			callKind: shape.callKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			instanceSigs: instanceSigs,
+			excludedCalls: excluded,
 			returnMarkers: returnMarkers
 		};
 	}
@@ -157,7 +175,8 @@ final class NullableSource {
 	 * resolves as an instance (its declared type via `TypeResolver.identTypeName`) or, failing
 	 * that, as a static receiver (its own name as a type); `index.returnNominalOf` supplies the
 	 * cross-file member nominal, conservative under a simple-name collision. Null when there is
-	 * no index, `recv` is not a plain identifier, or the lookup is unresolved / ambiguous — so
+	 * no index, `recv` is not a plain identifier, the `Type.method` is one of `cfg.excludedCalls`, or
+	 * the lookup is unresolved / ambiguous — so
 	 * `this.f()` and an external-typed receiver are safe misses.
 	 */
 	private static function crossFileReturnCallSource(
@@ -177,6 +196,13 @@ final class NullableSource {
 		final bound: Bool = recvName != null && TypeResolver.identBindingFrom(recv, root, cfg.shape) != null;
 		final lookupType: Null<String> = (bound ? null : recvName) ?? receiverTypeName(recv, root, declaredTypes, cfg, nominalOf);
 		if (lookupType == null) return null;
+		// The EXCLUSION list is applied to `instanceSigs` at build time, and this arc reaches the
+		// same call by a different route — an index lookup that never sees that filter. Without
+		// this line an `Array.pop()` a caller asked to be excluded comes back through the index
+		// the moment the index is wide enough to hold `Array` (measured: `LangTable:42`,
+		// `TablePrepare:100-101`, `Renderer.hx` x20 on the Pony fork), and the exclusion reads as
+		// honoured while being silently void.
+		if (cfg.excludedCalls.contains('${lookupType}.${parts.method}')) return null;
 		final retNominal: Null<String> = idx.members.returnNominalOf(lookupType, parts.method);
 		return retNominal != null && cfg.returnMarkers.contains(retNominal) ? '${recvName ?? lookupType}.${parts.method}()' : null;
 	}
@@ -218,5 +244,6 @@ typedef NullableSourceCfg = {
 	var callKind: Null<String>;
 	var fieldAccessKind: Null<String>;
 	var instanceSigs: Array<{ type: String, method: String }>;
+	var excludedCalls: Array<String>;
 	var returnMarkers: Array<String>;
 };

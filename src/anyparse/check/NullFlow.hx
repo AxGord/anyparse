@@ -100,6 +100,7 @@ private typedef FlowCtx = {
 	var nullCoalKind: Null<String>;
 	var callKind: Null<String>;
 	var fieldAccessKind: Null<String>;
+	var nullSafeAccessKind: Null<String>;
 	var indexAccessKind: Null<String>;
 	var nullAssertionCalls: Array<String>;
 	var assertTrueCalls: Array<String>;
@@ -508,6 +509,7 @@ final class NullFlow {
 			nullCoalKind: shape.nullCoalesceKind,
 			callKind: shape.callKind,
 			fieldAccessKind: shape.fieldAccessKind,
+			nullSafeAccessKind: shape.nullSafeAccessKind,
 			indexAccessKind: shape.indexAccessKind,
 			nullAssertionCalls: shape.nullAssertionCalls ?? [],
 			assertTrueCalls: shape.assertTrueCalls ?? [],
@@ -941,7 +943,7 @@ final class NullFlow {
 	 */
 	private static function clearMaybeByGuard(guard: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		final names: Array<String> = [];
-		collectNarrow(guard, names, ctx, ctx.notEqKind, BOOL_AND_KIND);
+		collectNarrow(guard, names, ctx, ctx.notEqKind, BOOL_AND_KIND, true);
 		for (n in names) state.maybe.remove(n);
 	}
 
@@ -1035,9 +1037,9 @@ final class NullFlow {
 		final written: Array<String> = [];
 		collectWrites(cond, written, ctx);
 		final nonNull: Array<String> = [];
-		collectNarrow(cond, nonNull, ctx, cmpNonNull, combineKind);
+		collectNarrow(cond, nonNull, ctx, cmpNonNull, combineKind, true);
 		final known: Array<String> = [];
-		collectNarrow(cond, known, ctx, cmpKnown, combineKind);
+		collectNarrow(cond, known, ctx, cmpKnown, combineKind, false);
 		// Feature 1: a bare Bool conjunct/disjunct carrying a laundered-guard fact narrows its target.
 		addLaunderedNarrowing(cond, base, ctx, combineKind, nonNull, known);
 		// Feature 2: a narrowed name narrows every local aliased to it, same polarity.
@@ -1081,19 +1083,25 @@ final class NullFlow {
 	 * (`!(a || b)` = `!a && !b`), so an `== null` disjunct proves non-null when false.
 	 */
 	private static function collectNarrow(
-		cond: QueryNode, out: Array<String>, ctx: FlowCtx, cmpKind: Null<String>, combineKind: String
+		cond: QueryNode, out: Array<String>, ctx: FlowCtx, cmpKind: Null<String>, combineKind: String, provesNonNull: Bool
 	): Void {
 		final kind: String = cond.kind;
 		if (cmpKind != null && kind == cmpKind) {
-			final operand: Null<QueryNode> = nullComparisonOperand(cond, ctx.identKind, ctx.nullLitKind);
+			// A SAFE-NAVIGATION operand only ever proves the NON-NULL side, and `provesNonNull` — not
+			// `cmpKind` — is what says which side this call is filling: the operator alone cannot,
+			// since the else-arm collects non-null names through `== null` by duality. `x?.a` null
+			// leaves `x` itself entirely unconstrained, so the known-null slot must never take one.
+			final operand: Null<QueryNode> = nullComparisonOperand(cond, ctx.identKind, ctx.nullLitKind) ?? (
+				provesNonNull ? safeNavChainRoot(cond, ctx) : null
+			);
 			if (operand != null) {
 				final nm: Null<String> = operand.name;
 				if (nm != null) out.push(nm);
 			}
 		} else if (kind == combineKind) {
-			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind);
+			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind, provesNonNull);
 		} else if (ctx.parenKind != null && kind == ctx.parenKind && cond.children.length == 1) {
-			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind);
+			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind, provesNonNull);
 		} else if (ctx.notKind != null && kind == ctx.notKind && cond.children.length == 1) {
 			// Feature 3: `!(…)` flips the comparison polarity AND the combine operator (De Morgan) — a
 			// negand proving x null then proves x non-null, and its `&&`/`||` swap; nested `!` unwinds
@@ -1105,7 +1113,7 @@ final class NullFlow {
 			else
 				cmpKind;
 			final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
-			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine);
+			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine, provesNonNull);
 		}
 	}
 
@@ -1331,9 +1339,9 @@ final class NullFlow {
 		final written: Array<String> = [];
 		collectWrites(andRhs, written, ctx);
 		final nn: Array<String> = [];
-		collectNarrow(andRhs, nn, ctx, ctx.notEqKind, BOOL_AND_KIND);
+		collectNarrow(andRhs, nn, ctx, ctx.notEqKind, BOOL_AND_KIND, true);
 		final kn: Array<String> = [];
-		collectNarrow(andRhs, kn, ctx, ctx.eqKind, BOOL_AND_KIND);
+		collectNarrow(andRhs, kn, ctx, ctx.eqKind, BOOL_AND_KIND, false);
 		for (t in nn) if (
 			t != name && !written.contains(t) && ctx.ownNames.contains(t) && !ctx.captured.contains(t)
 		) state.predicates.push({
@@ -1383,9 +1391,9 @@ final class NullFlow {
 		final arg: QueryNode = node.children[1];
 		final names: Array<String> = [];
 		if (asTrue)
-			collectNarrow(arg, names, ctx, ctx.notEqKind, BOOL_AND_KIND);
+			collectNarrow(arg, names, ctx, ctx.notEqKind, BOOL_AND_KIND, true);
 		else
-			collectNarrow(arg, names, ctx, ctx.eqKind, BOOL_OR_KIND);
+			collectNarrow(arg, names, ctx, ctx.eqKind, BOOL_OR_KIND, true);
 		for (n in names) state.maybe.remove(n);
 	}
 
@@ -1403,6 +1411,46 @@ final class NullFlow {
 		final recv: QueryNode = callee.children[0];
 		final recvName: Null<String> = recv.name;
 		return recv.kind != ctx.identKind || recvName == null ? null : '${recvName}.${method}';
+	}
+
+	/**
+	 * The plain identifier a null-comparison's SAFE-NAVIGATION operand is rooted at, when the step
+	 * directly off that root is the safe access itself — `account?.UserInfo != null` answers
+	 * `account`, and so does `account?.UserInfo.email != null` / `account?.load() != null`, because
+	 * `?.` short-circuits the WHOLE remaining chain to null. Null for every other shape.
+	 *
+	 * Only the NON-NULL direction may use it, and `collectNarrow` is what enforces that: `x?.a !=
+	 * null` proves `x != null`, but `x?.a == null` proves nothing about `x` — the member may simply
+	 * be null on a perfectly non-null receiver.
+	 *
+	 * The step directly off the root must be the safe one. `x.a?.b != null` is refused: with a null
+	 * `x` that condition THROWS rather than evaluating to null, so reading the false branch as
+	 * evidence would be the "it did not crash, therefore it was non-null" argument — which is
+	 * exactly the crash this family exists to report.
+	 *
+	 * Deliberately NOT folded into the public `nullComparisonOperand`: four other checks read that
+	 * predicate (`always-null-comparison`, `dead-null-guard`, `optional-param-shorthand`,
+	 * `nullable-switch-missing-null`) and each treats its answer as "this comparison is ABOUT that
+	 * name" — which `x?.a != null` is not, since the comparison also tests `a`.
+	 */
+	private static function safeNavChainRoot(cond: QueryNode, ctx: FlowCtx): Null<QueryNode> {
+		final safeKind: Null<String> = ctx.nullSafeAccessKind;
+		final nullLit: Null<String> = ctx.nullLitKind;
+		if (safeKind == null || nullLit == null || cond.children.length != 2) return null;
+		final left: QueryNode = cond.children[0];
+		final right: QueryNode = cond.children[1];
+		final leftIsNull: Bool = left.kind == nullLit;
+		if (leftIsNull == (right.kind == nullLit)) return null;
+		final chainKinds: Array<String> = [
+			for (k in [safeKind, ctx.fieldAccessKind, ctx.callKind, ctx.indexAccessKind]) if (k != null) k
+		];
+		var cur: QueryNode = leftIsNull ? right : left;
+		while (cur.children.length >= 1 && chainKinds.contains(cur.kind)) {
+			final receiver: QueryNode = cur.children[0];
+			if (receiver.kind == ctx.identKind) return cur.kind == safeKind ? receiver : null;
+			cur = receiver;
+		}
+		return null;
 	}
 
 }
