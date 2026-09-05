@@ -1107,11 +1107,18 @@ class MemberOrderCheckTest extends Test {
 	 * answers with the vaguer sentence and fails the second assertion while the first still passes.
 	 * A plain `public var x:Int = y;` does NOT trip the coarse gate - measured, that fixture
 	 * survived the swapped-gate arm.
+	 *
+	 * The trailing `m()` / `z` pair is NOT decoration. Since the report path learned to skip a
+	 * pair the language pins (`initReadsSibling` in `firstOutOfOrder`), a container whose ONLY
+	 * misorder is `X` over `Y` yields no violation at all - so `fix` is never asked and this
+	 * reason becomes unreachable. The unpinned `public var z` after `public function m` gives the
+	 * container one finding the report still makes, which is what keeps the whole-container
+	 * refusal - and this sentence - live.
 	 */
 	public function testASiblingReadPinNamesTheDependency(): Void {
 		final outcome: FixOutcome = fixOutcome(
-			'class C { private static final Y:Map<String, String> = ["a" => "b"]; '
-			+ 'public static final X:Array<String> = [for (k in Y.keys()) k]; }'
+			'class C { private static final Y:Map<String, String> = ["a" => "b"]; public static final X:Array<String> = [for ('
+			+ 'k in Y.keys()) k]; public function m():Void {} public var z:Int = 0; }'
 		);
 		Assert.equals(1, outcome.reasons.length);
 		Assert.equals(0, outcome.edits, 'the pinned container is left alone');
@@ -1124,6 +1131,45 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(
 			reason.indexOf('reads a sibling field') != -1, 'and names the dependency rather than the coarser side-effect gate: $reason'
 		);
+	}
+
+	/**
+	 * T545, the report half: a public constant whose initializer READS the private constant above
+	 * it is not out of order — canonical order (public constant first) would read the map before
+	 * it is built, so the language forbids exactly what the rule asks for. `--fix` already refused
+	 * this container; the REPORT still named it, which is a finding with no legal answer.
+	 *
+	 * The first assertion is the reachability control and PASSES at base: the same two members
+	 * with an initializer that reads NOTHING are genuinely misordered and stay reported, so the
+	 * fixture provably reaches the ordering walk. Only the second changes — RED at base, where it
+	 * reports `KEYS`.
+	 */
+	public function testAConstantReadingThePrivateOneAboveItIsNotReported(): Void {
+		final unpinned: String =
+			'class C { private static final MAP:Map<String, String> = ["a" => "b"]; public static final KEYS:Array<String> = []; }';
+		Assert.equals(1, violations(unpinned).length, 'the same shape with no dependency is still a finding');
+		final pinned: String = 'class C { private static final MAP:Map<String, String> = ["a" => "b"]; '
+			+ 'public static final KEYS:Array<String> = [for (k in MAP.keys()) k]; }';
+		Assert.equals(0, violations(pinned).length, 'reading the sibling above pins the order');
+	}
+
+	/**
+	 * The narrowness pin, and the reason this is a per-PAIR predicate rather than a call to the
+	 * fix path's whole-container `reorderRefusal`: skipping the pinned pair must not take the
+	 * container's other findings with it.
+	 *
+	 * Same two pinned constants, plus a public field after a public method — an ordinary misorder
+	 * nothing pins. RED at base, where `firstOutOfOrder` returns the pinned `KEYS` and this
+	 * container's real defect is never named at all.
+	 */
+	public function testSkippingThePinnedPairStillReportsTheContainersOtherMisorder(): Void {
+		final vs: Array<Violation> = violations(
+			'class C { private static final MAP:Map<String, String> = ["a" => "b"]; public static final KEYS:Array<String> = [for ('
+			+ 'k in MAP.keys()) k]; public function m():Void {} public var z:Int = 0; }'
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'z'"), 'the unpinned member is the one named: ${vs[0].message}');
+		Assert.isFalse(vs[0].message.contains('KEYS'), 'and the pinned one is not');
 	}
 
 	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */

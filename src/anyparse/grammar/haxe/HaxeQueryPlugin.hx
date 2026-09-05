@@ -941,7 +941,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			condOperandRunKinds: ['CondSpliceOpExpr'],
 			stringInterpIdentKind: 'Ident',
 			stringInterpBlockKind: 'Block',
-			reservedWords: HaxeNamingSupport.KEYWORDS,
+			reservedWords: HaxeIdentifierCase.KEYWORDS,
 
 			declTypeChildKinds: ['Anon', 'TypeRef'],
 			typeRefChildKinds: ['TypeRef'],
