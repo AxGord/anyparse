@@ -185,6 +185,8 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	}
 
 	/** VACUITY GUARD: without the key both halves survive — the `;` and the break. Green on the base binary. */
+	@:pin('control')
+	@:killer('M-NONCURLY-SAME-DROP')
 	public function testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive(): Void {
 		Assert.equals(HOR_SEMI_KEPT, HxWriteFixture.triviaWrite(HOR_SEMI, CFG_OFF));
 		Assert.equals(HOR_SPLIT_KEPT, HxWriteFixture.triviaWrite(HOR_SPLIT, CFG_OFF));

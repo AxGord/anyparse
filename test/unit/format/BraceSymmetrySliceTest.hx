@@ -174,6 +174,8 @@ class BraceSymmetrySliceTest extends Test {
 	 * removed must still be repaired. Without it the pin passes on an engine whose try/catch
 	 * symmetry is simply broken or switched off.
 	 */
+	@:pin('control')
+	@:killer('M-TRY-BODY-SYM-OFF')
 	public function testTheSameTryOutsideAMacroIsStillBraced(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\ttry p() catch (err:Dynamic) {\n\t\t\tq();\n\t\t\tr();\n\t\t}\n\t}\n}';
 		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);

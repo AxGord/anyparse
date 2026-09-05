@@ -979,8 +979,13 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-SUPERDECLARES-FALSE',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
+			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: M-TRY-BODY-SYM-OFF',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
+			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember'
+			+ ' :: control :: M-BLANK-MULTILINE-OFF',
+			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBetweenMultilineAndSingleLine'
+			+ ' :: control :: M-BLANK-MULTILINE-OFF',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine'
 			+ ' :: control :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLinePullsUpABodyThatFits :: control :: M-NO-WIRE',
@@ -999,7 +1004,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase'
 			+ ' :: control :: M-FIRST-LINE-FIT',
-			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak :: control :: M-EXPR-ELSE-PLAIN-SAME',
+			'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured'
+			+ ' :: control :: M-WORDOP-NO-RESTORE',
+			'unit.grammar.haxe.HxConditionalExprFitSliceTest#testOverwideGluedBreaksAtDirectiveSeams :: control :: M-NEWLINE-SIGNALS-NONE',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOnlyTheLastCatchKeepsItsTerminator :: control :: M-TRY-CATCHES-SYM-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody :: control :: M-TRY-BODY-SYM-OFF',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive'
+			+ ' :: control :: M-NONCURLY-SAME-DROP',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak'
+			+ ' :: control :: M-EXPR-ELSE-PLAIN-SAME,M-NONCURLY-SAME-DROP',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnElseLessValueIfKeepsItsTerminator :: control :: M-SBE-UNGATED',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnObjectLiteralBranchKeepsItsOwnLine :: control :: M-ELSE-BODY-SAME',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testKeepStillPreservesTheSourceBreak :: control :: M-KEEP-JOINS',
@@ -1069,7 +1082,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-ELSE-BODY-SAME',
 			'M-ARM-PATH-FLAT',
 			'M-CURLY-CTORS-NONE',
-			'M-SBE-UNGATED'
+			'M-SBE-UNGATED',
+			'M-TRY-BODY-SYM-OFF',
+			'M-TRY-CATCHES-SYM-OFF',
+			'M-NONCURLY-SAME-DROP',
+			'M-NEWLINE-SIGNALS-NONE',
+			'M-WORDOP-NO-RESTORE',
+			'M-BLANK-MULTILINE-OFF'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1087,7 +1106,13 @@ class TestDiscoveryParityTest extends Test {
 	public function testTheDeferredArmCensusNamesTheMacroModuleArms(): Void {
 		Assert.same([
 			'M-CURLY-CTORS-NONE :: anyparse.macro.WriterLowering#collectCurlyBlockCtorPatterns',
-			'M-SBE-UNGATED :: anyparse.macro.WriterLowering#semicolonBeforeSiblingWrap'
+			'M-SBE-UNGATED :: anyparse.macro.WriterLowering#semicolonBeforeSiblingWrap',
+			'M-TRY-BODY-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryBraceSymmetryWrap',
+			'M-TRY-CATCHES-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryCatchesSymmetryWrap',
+			'M-NONCURLY-SAME-DROP :: anyparse.macro.WriterPolicyLowering#sameLineNonCurlyBlockPolicySwitch',
+			'M-NEWLINE-SIGNALS-NONE :: anyparse.macro.WriterTriviaSlotLowering#collectFollowingNewlineSignals',
+			'M-WORDOP-NO-RESTORE :: anyparse.macro.OperatorLoopLowering#buildWordOpRestoreExpr',
+			'M-BLANK-MULTILINE-OFF :: anyparse.macro.WriterBlankLowering#blankAroundMultilineExprs'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
