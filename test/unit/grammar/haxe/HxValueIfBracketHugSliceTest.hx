@@ -135,6 +135,8 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	}
 
 	/** The whole rule on the reported input, from a FLAT source: nothing here is the input read back. */
+	@:pin('control')
+	@:killer('M-BRACKET-GLUE-NONE')
 	public function testTheReportedComprehensionReachesTheTargetLayout(): Void {
 		Assert.equals(HOR_HUGGED, HxWriteFixture.triviaWrite(HOR_FLAT, CFG_ON));
 	}
@@ -150,6 +152,8 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	}
 
 	/** The target layout is a fixed point — a second write changes nothing. */
+	@:pin('control')
+	@:killer('M-BRACKET-GLUE-NONE')
 	public function testTheTargetLayoutIsIdempotent(): Void {
 		Assert.equals(HOR_HUGGED, HxWriteFixture.triviaWrite(HOR_HUGGED, CFG_ON));
 	}
@@ -161,6 +165,8 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	}
 
 	/** An array LITERAL branch hugs too — the rule is about the `[`, not about the comprehension inside it. */
+	@:pin('control')
+	@:killer('M-BRACKET-GLUE-NONE')
 	public function testAnArrayLiteralBranchHugsTheHead(): Void {
 		Assert.equals(ARRAY_HUGGED, HxWriteFixture.triviaWrite(ARRAY_FLAT, CFG_ON));
 	}
@@ -175,11 +181,15 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	 * `;` goes and the `else` comes up to the `]`, reaching the SAME target bytes as the flat input above —
 	 * which is what the flat input could not prove, since a flat source leaves the `Keep` gap slot inline.
 	 */
+	@:pin('control')
+	@:killer('M-BRACKET-GLUE-NONE')
 	public function testTheSemicolonClosedSourceReachesTheTargetLayout(): Void {
 		Assert.equals(HOR_HUGGED, HxWriteFixture.triviaWrite(HOR_SEMI, CFG_ON));
 	}
 
 	/** The gap half on its own: no `;` to drop, only the source break before `else`, and it still closes. */
+	@:pin('control')
+	@:killer('M-BRACKET-GLUE-NONE')
 	public function testTheSplitCloserCuddlesTheElseWithNoSemicolonToDrop(): Void {
 		Assert.equals(HOR_HUGGED, HxWriteFixture.triviaWrite(HOR_SPLIT, CFG_ON));
 	}

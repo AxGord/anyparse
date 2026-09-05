@@ -46,6 +46,8 @@ class ElseSwitchPlacementSliceTest extends Test {
 		Assert.equals(TWO_LINE, HxWriteFixture.triviaWrite(TWO_LINE, KEEP));
 	}
 
+	@:pin('control')
+	@:killer('M-ELSE-SWITCH-TESTS-NONE')
 	public function testSamePlacesTheSwitchOnTheElseLine(): Void {
 		final out: String = HxWriteFixture.triviaWrite(TWO_LINE, SAME);
 		Assert.isTrue(out.indexOf('else switch s {') != -1, 'expected `else switch s {` in: <$out>');
@@ -73,6 +75,8 @@ class ElseSwitchPlacementSliceTest extends Test {
 	}
 
 	/** An `else if` chain that ENDS in an `else switch`: the chain links keep their own handler. */
+	@:pin('control')
+	@:killer('M-ELSE-SWITCH-TESTS-NONE')
 	public function testAnElseIfChainEndingInElseSwitch(): Void {
 		final src: String = 'class F {\n\tfunction f(s:String, b:Bool):Int {\n\t\tif (b)\n\t\t\treturn 0;\n'
 			+ '\t\telse if (s == \'\')\n\t\t\treturn 1;\n\t\telse\n\t\t\tswitch s {\n\t\t\t\tcase _:\n\t\t\t\t\treturn 2;\n\t\t\t}\n\t}\n}';
@@ -93,6 +97,8 @@ class ElseSwitchPlacementSliceTest extends Test {
 	 * wrote it, because the glue half-applies. Exact equality is the only assertion that separates
 	 * the two.
 	 */
+	@:pin('control')
+	@:killer('M-ELSE-SWITCH-COMMENT-GLUE')
 	public function testACommentBetweenElseAndSwitchDeclinesTheGlue(): Void {
 		final src: String = 'class F {\n\tfunction f(s:String):Int {\n\t\tif (s == \'\')\n\t\t\treturn 0;\n'
 			+ '\t\telse\n\t\t\t// why\n\t\t\tswitch s {\n\t\t\t\tcase _:\n\t\t\t\t\treturn 1;\n\t\t\t}\n\t}\n}';
