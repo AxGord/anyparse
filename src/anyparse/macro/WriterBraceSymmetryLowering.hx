@@ -359,6 +359,14 @@ final class WriterBraceSymmetryLowering {
 			expr: EField(macro value, elseFieldName),
 			pos: Context.currentPos()
 		} : null;
+		// Gates 4/5 arming, and REDUNDANT with the chain probe below: `chainForcesBraces`
+		// opens by asking `keepsBraces(thenBody, …, elseBody != null, …)`, which is this very
+		// condition evaluated one layer down. Wherever `elseFollows` would turn a de-brace into
+		// a keep, that call answers `true`, `siblingKeepsBraces` goes true and `unwrapStmt`
+		// returns at its own gate-7 keep before `elseFollows` is ever read - so forcing this to
+		// `false` is byte-identical (measured: 1 749 files, 222 of them rewritten by the knob).
+		// Kept as the direct spelling of the condition; the chain probe is the one that
+		// actually answers today.
 		final elseFollowsExpr: Expr = elseAccess == null ? macro false : macro $elseAccess != null;
 		// The body's own `@:trailOpt(';')` slot (`value.<field>TrailPresent`): a redundant
 		// trailing `;` (`for (…) { x; };`) would become `for (…) x;;` once de-braced — invalid
@@ -368,21 +376,15 @@ final class WriterBraceSymmetryLowering {
 		// shape the keep-braces gate defended against cannot occur. The gate itself stays
 		// as a fail-closed guard for any FUTURE field that both drops braces and emits a trail.
 		final trailSemiExpr: Expr = macro false;
-		// ω-single-stmt-braces symmetry (gate 7): probe whether the `else` sibling would
-		// KEEP its braces. If it does, this then-body keeps its own too - an if/else must
-		// de-brace both branches or neither. The else-body's own splice unwraps with
-		// `elseFollows=false, hasTrailingSemi=false`, so the probe mirrors those exactly.
-		final elseSiblingKeepsExpr: Expr = elseAccess == null
-			? macro false
-			: macro ($elseAccess != null
-				&& anyparse.format.SingleStmtBraces.keepsBraces(
-					$elseAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, false, false, false
-				));
 		// ω-single-stmt-braces CHAIN symmetry: force this then-body to keep its
 		// braces when we are mid-chain (`opt._ssbChainSuppress`, propagated from
 		// the root) OR when THIS `if` is the chain root and the spine scan finds a
-		// keeper. Folded into `siblingKeepsBraces` alongside the immediate-pair
-		// probe. For / while / do bodies (no `else` sibling) never force.
+		// keeper. This IS `siblingKeepsBraces`: the immediate-pair probe that used to sit
+		// beside it (gate 7, `keepsBraces(elseBody, …, false, false, false)`) was the
+		// terminal line of `chainForcesBraces` spelled twice - for a non-`if` else the two
+		// calls take byte-identical arguments, and for an `else if` the pair probe is
+		// constant `false` (an `IfStmt` is not a `BlockStmt` under `isIfThenBody=false`).
+		// For / while / do bodies (no `else` sibling) never force.
 		final thenChainSuppressExpr: Expr = elseAccess == null
 			? macro false
 			: macro (opt._ssbChainSuppress
@@ -399,7 +401,7 @@ final class WriterBraceSymmetryLowering {
 				var _sv = $fieldAccess;
 				_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
 					_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
-					$elseSiblingKeepsExpr || $thenChainSuppressExpr, $isThenBodyExpr
+					$thenChainSuppressExpr, $isThenBodyExpr
 				);
 				_sv;
 			}
@@ -419,8 +421,8 @@ final class WriterBraceSymmetryLowering {
 		// whole subtree from the trailing `else` - nothing inside it can be on the
 		// then-body's trailing spine, so suppressing there is pure over-keeping.
 		// `keepsBraces` mirrors the then splice's own arguments; it answers `false` for a
-		// branch that gate 7 would WRAP, which arms the frame needlessly but never
-		// disarms it wrongly (fail closed).
+		// branch the gate-7 repair direction would WRAP, which arms the frame needlessly but
+		// never disarms it wrongly (fail closed).
 		final ssbSuppressCond: Null<Expr> = elseAccess == null
 			? null
 			: macro ($elseAccess != null && opt.dropSingleStmtBraces
@@ -433,8 +435,8 @@ final class WriterBraceSymmetryLowering {
 		// statement's own `;`. Same gate args as the `unwrapStmt` splice above.
 		final ssbTrailCommentExpr: Null<Expr> = dropBraces
 			? macro anyparse.format.SingleStmtBraces.hoistTrailingComment(
-				$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
-				$elseSiblingKeepsExpr || $thenChainSuppressExpr, $isThenBodyExpr
+				$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr, $thenChainSuppressExpr,
+				$isThenBodyExpr
 			)
 			: null;
 		return { effAccess: effAccess, ssbSuppressCond: ssbSuppressCond, ssbTrailCommentExpr: ssbTrailCommentExpr };

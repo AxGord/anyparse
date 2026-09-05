@@ -32,6 +32,9 @@ class HxTryBraceSymmetrySliceTest extends Test {
 	private static final removeConfig: String = '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "remove" } },'
 		+ ' "sameLine": { "tryBody": "fitLine", "catchBody": "fitLine", "ifBody": "fitLine" } }';
 
+	@:pin('control')
+	@:killer('M-SSB-TRY-DEBRACE-NONE')
+	@:killer('M-SSB-TRY-SUBST-OFF')
 	public inline function testBracedGroupDeBraces(): Void {
 		assertFmt(
 			'class F {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp();\n\t\t} catch (e:Exception) {\n\t\t\tq();\n\t\t}\n\t}\n}',
@@ -39,6 +42,10 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-BARE-ILLEGAL')
+	@:killer('M-SSB-TRY-DEBRACE-NONE')
+	@:killer('M-SSB-TRY-SUBST-OFF')
 	public inline function testBareCatchDeBracesWithoutAWrapPass(): Void {
 		// The verdict counts an ALREADY bare body as de-braced. Asking "is every body braced" instead
 		// would wrap this catch and de-brace it again on the next pass — two rewrites for one answer.
@@ -48,6 +55,8 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		Assert.equals('class F {\n\tfunction f():Void {\n\t\ttry p() catch (e:Exception) q();\n\t}\n}\n', pass1);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TRY-SUBST-OFF')
 	public inline function testMultiStatementCatchBracesTheBareTry(): Void {
 		// The wrap direction: the catch cannot lose its braces, so the bare try body gains a block of
 		// its own rather than the pair staying half-braced.
@@ -59,6 +68,8 @@ class HxTryBraceSymmetrySliceTest extends Test {
 
 	@:pin('control')
 	@:killer('M-TRY-CATCHES-SYM-OFF')
+	@:killer('M-SSB-TRY-SUBST-OFF')
+	@:killer('M-SSB-TRY-DEBRACE-NONE')
 	public inline function testOnlyTheLastCatchKeepsItsTerminator(): Void {
 		// KEY safety gate: Haxe rejects a `;` in front of `catch` (`try p(); catch (e) q();` is
 		// "Expected }"), so every body but the last renders with its `@:trailOpt(';')` slot cleared.
@@ -109,6 +120,9 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TRY-DEBRACE-NONE')
+	@:killer('M-SSB-TRY-SUBST-OFF')
 	public inline function testOverflowBreaksAtTheSeamNotInsideTheCall(): Void {
 		// The construct group asks the width question ONCE, before the body's own call group commits.
 		// Without it the seam answered on the line the body had already broken, and the call had to
@@ -127,6 +141,7 @@ class HxTryBraceSymmetrySliceTest extends Test {
 
 	@:pin('control')
 	@:killer('M-TRY-BODY-SYM-OFF')
+	@:killer('M-SSB-TRY-SUBST-OFF')
 	public inline function testValueTryBracesTheBareBody(): Void {
 		// The value forms are wrap-only, exactly as `valueBraceSymmetry` leaves a value-`if`: a
 		// de-braced value body would need a terminator only the enclosing statement can supply.

@@ -924,8 +924,7 @@ class TestDiscoveryParityTest extends Test {
 	 * its own — this is the runtime half, and it is what keeps the metas from
 	 * being dropped in a refactor without anything noticing.
 	 *
-	 * One hundred and thirteen entries over thirty-three classes, and still not a conversion of
-	 * the tree: sixteen
+	 * One hundred and twenty-nine entries over thirty-four classes, and still not a conversion of the tree: sixteen
 	 * are the seam coverage for the fourteen rules S73 touched that its deciding arm cannot
 	 * reach (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
 	 * where the arm name is the whole point — it is the only record that the fixture reaches the
@@ -986,7 +985,11 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-SUPERDECLARES-FALSE',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
-			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: M-TRY-BODY-SYM-OFF',
+			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
+			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced'
+			+ ' :: control :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
+			'unit.format.BraceSymmetrySliceTest#testTheSemicolonDropAlsoHoldsUnderExpressionIfNext :: control :: M-SSB-VALUE-WRAP-OFF',
+			'unit.format.BraceSymmetrySliceTest#testTheStatementAndValueSkipListsAgree :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
 			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember'
@@ -1034,6 +1037,11 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-EICR-KNOB-IGNORED',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testWrappedConditionAnchorsAfterTheOpenCurly'
 			+ ' :: control :: M-EICR-BOUNDARY-SKIP,M-EICR-KNOB-IGNORED',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testBrokenShapeIsIdempotent :: control :: M-LOOPIF-NEVER',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testForIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testGuardIfWithoutElseStaysGlued :: control :: M-LOOPIF-ALWAYS',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testNonLoopAndNonIfBodiesUnchanged :: control :: M-LOOPIF-ALWAYS',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenIfGetsBracesAdded :: control :: M-SSB-WRAP-DIRECTION',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBracedCatchBodySealsTryCatchBeforeElse'
 			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
@@ -1041,6 +1049,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDanglingElseThroughLoopBodyKeepsBraces'
 			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDeepMixedElseIfChainKeepsAllBraced :: control :: M-SSB-CHAIN-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDoWhileBodyUnbraced :: control :: M-SSB-DOBODY-KEEP',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testElseIfChainLaterBranchForcesEarlierBraces :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testElseIfChainLinkNotWrapped :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces'
@@ -1049,14 +1058,26 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testOpenTrailingCommentTravelsWithTheStatement'
 			+ ' :: control :: M-SSB-OPEN-TRAIL-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSealedInnerIfDeBracesUnderTrailingElse :: control :: M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSuppressFrameDoBodyStillUnwraps :: control :: M-SSB-DOBODY-KEEP',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSuppressedFrameChainBracesEveryBranch :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSwitchSealedInnerIfDeBraces :: control :: M-SSB-TAIL-SEALED-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentForBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentIfBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentWhileBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testValueIfBareElseGainsBraces :: control :: M-SSB-VALUE-WRAP-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testValueIfBareThenGainsBraces :: control :: M-SSB-VALUE-WRAP-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBareCatchDeBracesWithoutAWrapPass'
+			+ ' :: control :: M-SSB-BARE-ILLEGAL,M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBracedGroupDeBraces'
+			+ ' :: control :: M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testDanglingElseKeepsBraces :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
-			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOnlyTheLastCatchKeepsItsTerminator :: control :: M-TRY-CATCHES-SYM-OFF',
-			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody :: control :: M-TRY-BODY-SYM-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testMultiStatementCatchBracesTheBareTry :: control :: M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOnlyTheLastCatchKeepsItsTerminator'
+			+ ' :: control :: M-TRY-CATCHES-SYM-OFF,M-SSB-TRY-SUBST-OFF,M-SSB-TRY-DEBRACE-NONE',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOverflowBreaksAtTheSeamNotInsideTheCall'
+			+ ' :: control :: M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody'
+			+ ' :: control :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive'
 			+ ' :: control :: M-NONCURLY-SAME-DROP',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak'
@@ -1151,7 +1172,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-EICR-BOUNDARY-SKIP',
 			'M-EICR-HEADTEXT-ANY',
 			'M-EICR-SOFTLINE-ANCHOR',
-			'M-EICR-KNOB-IGNORED'
+			'M-EICR-KNOB-IGNORED',
+			'M-SSB-DOBODY-KEEP',
+			'M-LOOPIF-NEVER',
+			'M-LOOPIF-ALWAYS',
+			'M-SSB-TRY-SUBST-OFF',
+			'M-SSB-TRY-DEBRACE-NONE',
+			'M-SSB-BARE-ILLEGAL',
+			'M-SSB-VALUE-WRAP-OFF'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

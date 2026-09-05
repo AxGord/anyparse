@@ -263,6 +263,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		assertInert('class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}', '{}');
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-DOBODY-KEEP')
 	public inline function testDoWhileBodyUnbraced(): Void {
 		// The mapped ExprBody drops the `;` — modern Haxe rejects
 		// `do i++; while (…)` ("Expected while"); `do i++ while (…);` is
@@ -615,6 +617,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-DOBODY-KEEP')
 	public inline function testSuppressFrameDoBodyStillUnwraps(): Void {
 		// ORDER pin for the `BlockBody` arm sitting ABOVE the suppress-gated path: a do-body
 		// is always followed by `while (...)`, so it can never sit on the trailing spine of
@@ -697,6 +701,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 	 * wrapped through the SAME `SingleStmtBraces.wrapInBlock`, given the block ctor and a lift into the
 	 * block's element type.
 	 */
+	@:pin('control')
+	@:killer('M-SSB-VALUE-WRAP-OFF')
 	public inline function testValueIfBareElseGainsBraces(): Void {
 		assertFmt(
 			'class F {\n\tfunction f(c:Bool):Int {\n\t\tfinal x:Int = if (c) {\n\t\t\tg();\n\t\t\t1;\n\t\t} else -1;\n\t\treturn x;\n'
@@ -707,6 +713,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	/** The symmetry reads the same from the other side: a bare THEN next to a braced `else`. */
+	@:pin('control')
+	@:killer('M-SSB-VALUE-WRAP-OFF')
 	public inline function testValueIfBareThenGainsBraces(): Void {
 		assertFmt(
 			'class F {\n\tfunction f(c:Bool):Int {\n\t\tfinal x:Int = if (c) 1 else {\n\t\t\tg();\n\t\t\t-1;\n\t\t};\n\t\treturn x;\n'

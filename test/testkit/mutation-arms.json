@@ -505,6 +505,55 @@
 			"find": "final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow && $afterKwExpr == null && _eicrLead.length == 1",
 			"replace": "final _eicrDoc: Null<anyparse.core.Doc> = $afterKwExpr == null && _eicrLead.length == 1",
 			"note": "the runtime gate stops reading `opt.elseIfCommentReflow`, so the reflow fires with the knob off and every pre-knob layout moves"
+		},
+		{
+			"name": "M-SSB-DOBODY-KEEP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "unwrapDoBody",
+			"force": "block",
+			"note": "the do-body arm stops substituting its single clean statement for the block, so `do { g(); } while (c)` keeps braces the suppress frame is explicitly told not to gate"
+		},
+		{
+			"name": "M-LOOPIF-NEVER",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isIfWithElse",
+			"force": "false",
+			"note": "the loop-body probe never sees an `if` with an `else`, so `loopBodyIfElseNext` never breaks the body under the header and every glued shape stays glued"
+		},
+		{
+			"name": "M-LOOPIF-ALWAYS",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isIfWithElse",
+			"force": "true",
+			"note": "the same probe answers yes for every body, so a bare guard `if` and a non-`if` body break under the loop header alongside the shape the knob exists for"
+		},
+		{
+			"name": "M-SSB-TRY-SUBST-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "trySubstBody",
+			"force": "body",
+			"note": "the try/catch group verdict is computed and then not applied - neither the wrap direction nor the de-brace one reaches a body"
+		},
+		{
+			"name": "M-SSB-TRY-DEBRACE-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tryDeBraced",
+			"force": "null",
+			"note": "verdict 2 can no longer strip a braced try/catch body, so only the wrap direction of the group verdict survives"
+		},
+		{
+			"name": "M-SSB-BARE-ILLEGAL",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "bareLegalAt",
+			"force": "false",
+			"note": "an ALREADY bare body blocks the group verdict instead of passing it, so a try/catch that is half de-braced is wrapped back up rather than finished"
+		},
+		{
+			"name": "M-SSB-VALUE-WRAP-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "symmetryNeedsValueWrap",
+			"force": "false",
+			"note": "the value-if/value-try symmetry wrap never fires, so a bare branch opposite a braced one keeps its shape and the semicolon drop that rides on the wrap stops happening"
 		}
 	]
 }

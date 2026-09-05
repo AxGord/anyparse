@@ -122,6 +122,8 @@ class BraceSymmetrySliceTest extends Test {
 	 * The first assertion is the VACUITY GUARD: with the wrap not firing at all there would be no
 	 * `};` either and the second assertion would pass on a writer that does nothing.
 	 */
+	@:pin('control')
+	@:killer('M-SSB-VALUE-WRAP-OFF')
 	public function testAWrappedValueThenBranchDropsItsSourceSemicolon(): Void {
 		final out: String = HxWriteFixture.triviaWrite(valueIf('p();'), SYMMETRIC);
 		Assert.isTrue(out.indexOf('if (a) {') != -1, 'the wrap must have fired at all in: <$out>');
@@ -129,6 +131,8 @@ class BraceSymmetrySliceTest extends Test {
 	}
 
 	/** The same pin in the shape the field report carries — `sameLine.expressionIf: "next"`, where the `};` got its own line. */
+	@:pin('control')
+	@:killer('M-SSB-VALUE-WRAP-OFF')
 	public function testTheSemicolonDropAlsoHoldsUnderExpressionIfNext(): Void {
 		final out: String = HxWriteFixture.triviaWrite(valueIf('p();'), SYMMETRIC_NEXT);
 		Assert.isTrue(out.indexOf('if (a) {') != -1, 'the wrap must have fired at all in: <$out>');
@@ -176,6 +180,7 @@ class BraceSymmetrySliceTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-TRY-BODY-SYM-OFF')
+	@:killer('M-SSB-TRY-SUBST-OFF')
 	public function testTheSameTryOutsideAMacroIsStillBraced(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\ttry p() catch (err:Dynamic) {\n\t\t\tq();\n\t\t\tr();\n\t\t}\n\t}\n}';
 		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);
@@ -220,6 +225,8 @@ class BraceSymmetrySliceTest extends Test {
 	 * output — the repair is the only thing `symmetric` does, so the inequality IS the verdict and
 	 * the pin never has to know what either layout looks like.
 	 */
+	@:pin('control')
+	@:killer('M-SSB-VALUE-WRAP-OFF')
 	public function testTheStatementAndValueSkipListsAgree(): Void {
 		final rows: Array<{ name: String, stmt: String, value: String }> = [
 			{ name: 'a bare call', stmt: stmtIf('p();'), value: valueIf('p();') },
