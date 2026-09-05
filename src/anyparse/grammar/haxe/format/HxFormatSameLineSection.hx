@@ -130,6 +130,16 @@ package anyparse.grammar.haxe.format;
  * counterparts (`ifBody` / `elseBody` / `forBody`) keep their own
  * defaults — the divergence is intentional.
  *
+ * The same key also drives the per-`else` GAP — `sameLineExpressionElse`,
+ * read by `HxIfExpr.elseBranch`: `same` maps to `Same`, `keep` to `Keep`
+ * (source-preserving), `next` to `SameOnBlock`, so the `else` cuddles to a
+ * `}` close (`} else {`) and keeps its forced break after every other
+ * shape; `fitLine` falls through to `Same`. Before S100 `next` mapped to
+ * `Keep` here, and a value-`if` with a `{ … }` branch then reproduced
+ * whatever break the source happened to carry while the STATEMENT twin of
+ * the same construct joined — one construct, two layouts, decided by
+ * position alone.
+ *
  * `expressionIfWithBlocks` (ω-expression-if-with-blocks) is an
  * orthogonal `Bool` knob (default `false`) that collapses
  * `BlockExpr` bodies on `HxIfExpr.thenBranch` / `elseBranch` to a
@@ -139,6 +149,15 @@ package anyparse.grammar.haxe.format;
  * `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))` on both
  * branches; non-block bodies fall through to the `expressionIf*`
  * cascade unchanged.
+ *
+ * What it does NOT do, spelled out because the name invites the other
+ * reading: it GLUES nothing. It never pulls `else` up to a `}` (that is
+ * `expressionIf`, whose `next` value gives the gap `SameOnBlock`), and it
+ * never hugs a branch value to its head (that is
+ * `expressionIfWithBrackets`, and only for `[`). Measured at `f8ba0a46` on
+ * the reported `} else {` shape: turning this knob on flattened BOTH block
+ * bodies onto one line and STILL left `else` on a line of its own. It is a
+ * body-CONTENTS flattener, and nothing else.
  *
  * omega-arrow-value-if-reflow: `expressionIfArrowBodyReflow` (default
  * `false`, absent = fork parity) is a `Bool` knob for the ONE context

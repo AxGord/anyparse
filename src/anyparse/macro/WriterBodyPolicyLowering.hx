@@ -399,8 +399,7 @@ final class WriterBodyPolicyLowering {
 				else
 					_dn(_cols, _dc([${valueIfGapExpr(softGap, macro _body)}, _body]));
 			};
-		}
-		else
+		} else
 			null;
 		return indentObjGuardedNext ?? (
 			hasKwSlots
@@ -687,8 +686,7 @@ final class WriterBodyPolicyLowering {
 			final cases: Array<Case> = [{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null }];
 			cases.push({ values: [macro _], expr: nextLayoutExpr, guard: null });
 			{ expr: ESwitch(bodyValueExpr, cases, null), pos: Context.currentPos() };
-		}
-		else
+		} else
 			nextLayoutExpr;
 		// omega-else-switch: the `Keep` body policy is the path Pony's config takes
 		// (`sameLine.elseBody` unset), so the knob has to be honoured HERE as well as

@@ -118,6 +118,14 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	private static final BLOCK_SEMI: String = 'class C {\n\tpublic function f(d: Int): Int {\n\t\treturn if (d > 0) {\n'
 		+ '\t\t\ttraceSomethingHere(1);\n\t\t\t1;\n\t\t};\n\t\telse {\n\t\t\ttraceSomethingHere(2);\n\t\t\t2;\n' + '\t\t}\n\t}\n}';
 
+	/**
+	 * What S100 makes of `BLOCK_SEMI` under either config: the curly close joins its `else` and the
+	 * optional `;` goes with the break it justified — `sameLine.expressionIf: next` now means
+	 * `SameOnBlock` for the gap, and the bracket knob is not what decides it.
+	 */
+	private static final BLOCK_JOINED: String = 'class C {\n\tpublic function f(d: Int): Int {\n\t\treturn if (d > 0) {\n'
+		+ '\t\t\ttraceSomethingHere(1);\n\t\t\t1;\n\t\t} else {\n\t\t\ttraceSomethingHere(2);\n\t\t\t2;\n' + '\t\t}\n\t}\n}';
+
 	/** A STATEMENT-`if` whose then-body owns the `;` — valid idiomatic Haxe the knob must never reach. */
 	private static final STMT_SEMI: String = 'class C {\n\tpublic function f(d: Int): Void {\n\t\tif (d > 0)\n'
 		+ '\t\t\ttraceSomethingHere(1);\n\t\telse\n\t\t\ttraceSomethingHere(2);\n\t}\n}';
@@ -183,13 +191,18 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	}
 
 	/**
-	 * The knob is keyed on the `[` ctor, so a BLOCK-valued branch keeps its `};` and its break under BOTH
-	 * configs. `expressionIfWithBlocks` collapses a block body's CONTENTS and has never hugged anything, so
-	 * the curly twin of this close side would be a new behaviour with no corpus consumer.
+	 * The knob is keyed on the `[` ctor, so a BLOCK-valued branch answers the same under BOTH configs —
+	 * which is still what this pin measures. S100 changed WHAT that answer is: the curly close side became
+	 * `SameLinePolicy.SameOnBlock`, fanned out of `sameLine.expressionIf: next` (which both configs here
+	 * set), so the `};` and the break now go the way the statement twin has always gone. The S79 note that
+	 * this twin "would be a new behaviour with no corpus consumer" was true at `56a7f2a8` and is not any
+	 * more: the user reported the shape off a swept Pony tree, 5 files carry it there and 1 here.
+	 * `expressionIfWithBlocks` is still not the seam — it collapses a block body's CONTENTS and hugs
+	 * nothing, on either side of S100.
 	 */
 	public function testABlockValuedBranchIsUntouchedByTheBracketKnob(): Void {
-		Assert.equals(BLOCK_SEMI, HxWriteFixture.triviaWrite(BLOCK_SEMI, CFG_ON));
-		Assert.equals(BLOCK_SEMI, HxWriteFixture.triviaWrite(BLOCK_SEMI, CFG_OFF));
+		Assert.equals(BLOCK_JOINED, HxWriteFixture.triviaWrite(BLOCK_SEMI, CFG_ON));
+		Assert.equals(BLOCK_JOINED, HxWriteFixture.triviaWrite(BLOCK_SEMI, CFG_OFF));
 	}
 
 	/** A statement-`if`'s `foo();` / `else` is valid idiomatic Haxe and stays byte-identical under the key. */
