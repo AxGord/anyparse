@@ -2565,12 +2565,28 @@ class WriterLowering {
 			macro _dt(' ');
 		final flagBased: Expr = sameLinePolicySwitch(optFlag, keepExpr);
 		if (prevBody == null || !child.fmtHasFlag('shapeAware')) return withPadTrailingDrop(prevPadTrailing, flagBased);
-		final blockPatterns: Array<Expr> = collectBlockCtorPatterns(prevBody.typePath);
-		if (blockPatterns.length == 0) return withPadTrailingDrop(prevPadTrailing, flagBased);
-		final cases: Array<Case> = [
-			{ values: blockPatterns, expr: flagBased, guard: null },
-			{ values: [macro _], expr: macro _dhl(), guard: null }
-		];
+		// ω-same-on-block: the block arm splits by the DELIMITER the branch opens
+		// with, because `SameLinePolicy.SameOnBlock` promises a cuddle after a `}`
+		// and after nothing else. A curly branch takes `flagBased`, where
+		// `SameOnBlock` falls through the default to a plain space — the `} else`
+		// join the policy is named for. A bracket branch takes the sibling switch,
+		// where `SameOnBlock` routes to `keepExpr` and the source keeps its own
+		// shape: gluing a `]` is house style, owned by the opt-in
+		// `bracketBodyGlueIfFlag` knob layered outside this separator, not a
+		// structural fact about the close. Every other `SameLinePolicy` value
+		// reaches both arms through the same `buildPolicySwitch` cases as before,
+		// so a grammar that never sees `SameOnBlock` is byte-identical.
+		final curlyPatterns: Array<Expr> = collectCurlyBlockCtorPatterns(prevBody.typePath);
+		final otherBlockPatterns: Array<Expr> = collectNonCurlyBlockCtorPatterns(prevBody.typePath);
+		if (curlyPatterns.length + otherBlockPatterns.length == 0) return withPadTrailingDrop(prevPadTrailing, flagBased);
+		final cases: Array<Case> = [];
+		if (curlyPatterns.length > 0) cases.push({ values: curlyPatterns, expr: flagBased, guard: null });
+		if (otherBlockPatterns.length > 0) cases.push({
+			values: otherBlockPatterns,
+			expr: sameLineNonCurlyBlockPolicySwitch(optFlag, keepExpr),
+			guard: null
+		});
+		cases.push({ values: [macro _], expr: macro _dhl(), guard: null });
 		final shapeAwareSwitch: Expr = { expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos() };
 		return sameLineSeparatorShapeAware({
 			child: child,
@@ -2984,6 +3000,30 @@ class WriterLowering {
 		];
 	}
 
+	/**
+	 * ω-same-on-block — the two halves `collectBlockCtorPatterns` returns as
+	 * one set, split by the delimiter its branch opens with.
+	 * `SameLinePolicy.SameOnBlock` promises a cuddle after a `}` and nothing
+	 * else, so the shape-aware separator needs the two halves as separate
+	 * switch arms; `collectBlockCtorPatterns` itself is unchanged and still
+	 * serves every caller that only asks "does this branch render as a
+	 * block".
+	 */
+	private function collectCurlyBlockCtorPatterns(bodyTypePath: String): Array<Expr> {
+		final rule: Null<ShapeNode> = _shape.rules[bodyTypePath];
+		return rule == null || rule.kind != Alt ? [] : [
+			for (branch in rule.children) if (isCurlyBlockCtorBranch(branch)) branchCtorPattern(bodyTypePath, branch)
+		];
+	}
+
+	private function collectNonCurlyBlockCtorPatterns(bodyTypePath: String): Array<Expr> {
+		final rule: Null<ShapeNode> = _shape.rules[bodyTypePath];
+		return rule == null || rule.kind != Alt ? [] : [
+			for (branch in rule.children)
+				if (isBlockCtorBranch(branch) && !isCurlyBlockCtorBranch(branch)) branchCtorPattern(bodyTypePath, branch)
+		];
+	}
+
 	private function collectBlockShapeEquivalentPatterns(bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = _shape.rules[bodyTypePath];
 		return rule == null || rule.kind != Alt ? [] : [
@@ -3065,6 +3105,29 @@ class WriterLowering {
 		return rule == null || rule.kind != Alt ? [] : [
 			for (branch in rule.children) if (isBracketBlockCtorBranch(branch)) branchCtorPattern(bodyTypePath, branch)
 		];
+	}
+
+	/**
+	 * ω-same-on-block — the curly sibling of `buildBracketBodyGlueTest`: true at
+	 * runtime when the gap policy named by `sameLineFlag` is `SameOnBlock` AND
+	 * the body value is a CURLY block ctor, i.e. exactly when the shape-aware
+	 * separator is about to join `}` to the following keyword. The one consumer
+	 * is `semicolonBeforeSiblingWrap`, which drops the optional `;` in that
+	 * state — `}; else` is not a join. `null` (inert) when the grammar passes no
+	 * flag name, or when the body type has no curly block ctor, so every other
+	 * field keeps its bytes.
+	 */
+	private function buildCurlyBlockCuddleTest(sameLineFlag: Null<String>, bodyTypePath: Null<String>, bodyValueExpr: Expr): Null<Expr> {
+		if (sameLineFlag == null || bodyTypePath == null) return null;
+		final patterns: Array<Expr> = collectCurlyBlockCtorPatterns(bodyTypePath);
+		if (patterns.length == 0) return null;
+		final flagAccess: Expr = optFieldAccess(sameLineFlag);
+		final sameOnBlock: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'SameLinePolicy', 'SameOnBlock']);
+		final ctorTest: Expr = {
+			expr: ESwitch(bodyValueExpr, [{ values: patterns, expr: macro true, guard: null }], macro false),
+			pos: Context.currentPos()
+		};
+		return macro $flagAccess == $sameOnBlock && $ctorTest;
 	}
 
 	/**
@@ -5303,9 +5366,10 @@ class WriterLowering {
 	): Null<Expr> {
 		final args: Null<Array<String>> = child.fmtReadStringArgs('semicolonBeforeSibling');
 		if (args == null) return null;
-		if (args.length != 1)
+		if (args.length != 1 && args.length != 2)
 			Context.fatalError(
-				'WriterLowering: @:fmt(semicolonBeforeSibling) expects 1 string arg (siblingField), got ${args.length}',
+				'WriterLowering: @:fmt(semicolonBeforeSibling) expects 1 or 2 string args '
+				+ '(siblingField, ?sameLineFlag), got ${args.length}',
 				Context.currentPos()
 			);
 		final siblingAccess: Null<Expr> = switch fieldAccess.expr {
@@ -5328,7 +5392,24 @@ class WriterLowering {
 		final glueTest: Null<Expr> = buildBracketBodyGlueTest(
 			child.fmtReadStringArgs(BRACKET_BODY_GLUE), child.annotations[AnnotationKeys.BASE_REF], fieldAccess
 		);
-		final emit: Expr = glueTest == null ? policyDispatch : macro (_sbeSibling && $glueTest ? _de() : $policyDispatch);
+		// ω-same-on-block CLOSE side, the curly twin of the line above: when the gap
+		// policy is `SameOnBlock` and this branch value IS a curly block, the `}` and
+		// the sibling keyword join, and `}; else` is not a join — the `;` goes with
+		// the break it used to justify. Gated on `_sbeSibling`, so an else-less
+		// value-`if` still carries the enclosing statement's terminator. This is what
+		// the STATEMENT twin has always emitted for the same source (`}; else {` →
+		// `} else {`); leaving the `;` here would be the very "one construct, two
+		// layouts" split the policy exists to close.
+		final curlyTest: Null<Expr> = buildCurlyBlockCuddleTest(
+			args.length == 2 ? args[1] : null, child.annotations[AnnotationKeys.BASE_REF], fieldAccess
+		);
+		final dropTest: Null<Expr> = if (glueTest == null)
+			curlyTest
+		else if (curlyTest == null)
+			glueTest
+		else
+			macro ($glueTest || $curlyTest);
+		final emit: Expr = dropTest == null ? policyDispatch : macro (_sbeSibling && $dropTest ? _de() : $policyDispatch);
 		return macro {
 			final _sbeSibling: Bool = $siblingAccess != null;
 			$emit;

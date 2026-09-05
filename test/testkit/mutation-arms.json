@@ -290,6 +290,38 @@
 			"find": "RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index)",
 			"replace": "FieldWriteIndex.build(scope, plugin, index)",
 			"note": "prefer-read-only-field goes back to a project-scoped write index, so a write through a third-party subtype is invisible again"
+		},
+		{
+			"name": "M-EXPR-ELSE-KEEP",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "case BodyPolicy.Next: SameLinePolicy.SameOnBlock;",
+			"replace": "case BodyPolicy.Next: SameLinePolicy.Keep;",
+			"note": "`sameLine.expressionIf: next` maps the else-gap back to `Keep`, so a value-`if` with a `{ … }` branch reproduces whatever break the source wrote while its statement twin joins"
+		},
+		{
+			"name": "M-EXPR-ELSE-PLAIN-SAME",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "case BodyPolicy.Next: SameLinePolicy.SameOnBlock;",
+			"replace": "case BodyPolicy.Next: SameLinePolicy.Same;",
+			"note": "the refuted cheap fix, wired as an arm: `next` maps onto a plain `Same`, so the shape-aware bracket arm joins an `else` onto a `]` and the curly `;` drop stops firing"
+		},
+		{
+			"name": "M-KEEP-JOINS",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "case BodyPolicy.Keep: SameLinePolicy.Keep;",
+			"replace": "case BodyPolicy.Keep: SameLinePolicy.SameOnBlock;",
+			"note": "`sameLine.expressionIf: keep` stops meaning keep for the else-gap and joins a break the config asked to preserve"
+		},
+		{
+			"name": "M-ELSE-BODY-SAME",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {\n\t\topt.expressionIfBody = p;\n\t\topt.expressionElseBody = p;\n\t}",
+			"replace": "else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {\n\t\topt.expressionIfBody = p;\n\t\topt.expressionElseBody = BodyPolicy.Same;\n\t}",
+			"note": "the else BODY stops following `expressionIf: next`, so the shape-aware forced break is suppressed and `SameOnBlock` joins an `else` onto an object-literal close"
 		}
 	]
 }

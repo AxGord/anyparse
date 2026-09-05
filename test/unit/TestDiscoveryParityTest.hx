@@ -732,6 +732,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxUniformStatementBlanksSliceTest',
 		'unit.grammar.haxe.HxUntypedBodyPolicySliceTest',
 		'unit.grammar.haxe.HxValueIfBracketHugSliceTest',
+		'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest',
 		'unit.grammar.haxe.HxValueIfFitSliceTest',
 		'unit.grammar.haxe.HxVarInitBreakAfterEqOverflowTest',
 		'unit.grammar.haxe.HxVarNoTypeSliceTest',
@@ -994,6 +995,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase'
 			+ ' :: control :: M-FIRST-LINE-FIT',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak :: control :: M-EXPR-ELSE-PLAIN-SAME',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnElseLessValueIfKeepsItsTerminator :: guard :: ',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnObjectLiteralBranchKeepsItsOwnLine :: control :: M-ELSE-BODY-SAME',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testKeepStillPreservesTheSourceBreak :: control :: M-KEEP-JOINS',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheJoinedLayoutIsIdempotent :: guard :: ',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheReportedValueIfJoinsItsElseToTheCurlyClose'
+			+ ' :: control :: M-EXPR-ELSE-KEEP',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheSemicolonBeforeElseGoesWithTheJoin'
+			+ ' :: control :: M-EXPR-ELSE-KEEP,M-EXPR-ELSE-PLAIN-SAME',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheStatementTwinKeepsTheLayoutItAlwaysHad :: guard :: ',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE'
 		], TestRegistry.pins(), 'the pin annotations, with their roles and killing arms');
@@ -1047,7 +1058,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-SUPERDECLARES-FALSE',
 			'M-UNRELATED-FALSE',
 			'M-WRITEINDEX-PROJECT-FINAL',
-			'M-WRITEINDEX-PROJECT-READONLY'
+			'M-WRITEINDEX-PROJECT-READONLY',
+			'M-EXPR-ELSE-KEEP',
+			'M-EXPR-ELSE-PLAIN-SAME',
+			'M-KEEP-JOINS',
+			'M-ELSE-BODY-SAME'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

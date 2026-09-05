@@ -139,8 +139,11 @@ final class WriterPolicyLowering {
 	 * (a `SameLinePolicy` enum abstract). `Next` maps to hardline at
 	 * the current indent, `Keep` routes to the caller-supplied
 	 * `keepExpr` (a slot-based dispatch in the kw-Ref site, a `Same`
-	 * fallback everywhere else), the default case (`Same` and unknown
-	 * values) emits a plain space.
+	 * fallback everywhere else), the default case (`Same`,
+	 * `SameOnBlock` and unknown values) emits a plain space — a caller
+	 * without shape information cannot honour a shape-aware policy, so it
+	 * degrades to the cuddle. The shape-aware sites that CAN honour it call
+	 * `sameLineNonCurlyBlockPolicySwitch` for their bracket-block arm.
 	 *
 	 * The case patterns are built as raw `EField` expressions to avoid
 	 * macro-time enum resolution against the `SameLinePolicy` abstract
@@ -150,6 +153,30 @@ final class WriterPolicyLowering {
 		return buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
 			{ values: ['Next'], expr: macro _dhl() },
 			{ values: ['Keep'], expr: keepExpr }
+		], macro _dt(' '));
+	}
+
+	/**
+	 * ω-same-on-block — the sibling of `sameLinePolicySwitch` for a
+	 * `@:fmt(shapeAware)` site whose preceding sibling is a block ctor that
+	 * is NOT a curly one (a `[ … ]` list ctor). The only difference is where
+	 * `SameOnBlock` lands: here it routes to `keepExpr` instead of falling
+	 * through the default to a plain space, because the policy's cuddle
+	 * promise is about a `}` close. A `]` close stays exactly where the
+	 * source put it — gluing it is house style, owned by the opt-in
+	 * `@:fmt(bracketBodyGlueIfFlag(...))` knob, which is layered OUTSIDE
+	 * this separator and therefore still wins when it is set.
+	 *
+	 * Without this arm the whole `SameOnBlock` fanout is measurably too
+	 * broad: on `f8ba0a46`, mapping `sameLine.expressionIf: next` onto a
+	 * plain `Same` moved 3 anyparse files instead of 1, and 2 of the 3 read
+	 * WORSE — `[] else {` and `['--code', staged]; else if (…)`, an `else`
+	 * glued to a list-literal branch that had been on its own line.
+	 */
+	private static function sameLineNonCurlyBlockPolicySwitch(optFlag: Expr, keepExpr: Expr): Expr {
+		return buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
+			{ values: ['Next'], expr: macro _dhl() },
+			{ values: ['Keep', 'SameOnBlock'], expr: keepExpr }
 		], macro _dt(' '));
 	}
 
