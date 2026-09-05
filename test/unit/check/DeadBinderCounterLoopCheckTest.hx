@@ -125,6 +125,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		);
 	}
 
+	@:pin('control') @:killer('M-SHADOWEXT-TRUE')
 	public function testFixRewritesMapLoopAndInsertsUsing(): Void {
 		assertFixCanonical(
 			wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}'),

@@ -1635,6 +1635,121 @@ Fourteen rules over sixteen slices is a small number, and it is small because th
 campaign has mostly been decomposing oversized types rather than changing check
 behaviour. The census is cheap insurance against the slice where it is not.
 
+### The fourteen rules S73 touched that its own arm cannot reach
+
+S93 measured which rules the campaign's deciding arm exercises (48 of 175) and then
+checked the landed slices against that. One slice came out badly: **S73** (`14e6a85f`,
+the `SymbolIndex` split into seven layers) touched 47 check files, and 14 of them are
+rules the arm never triggers — so its headline result, 209 files rewritten byte-identically
+by two engines, said nothing about any of the fourteen. S94 went and measured what, if
+anything, did.
+
+The short answer: **the evidence existed, nothing named it, and two call sites of the 27
+were genuinely uncovered.** Both are now fixtures, and all sixteen are `@:pin`ned so the
+next deletion is loud.
+
+#### The per-rule verdict
+
+Every rule below is reached by the `--fix` run and produces nothing. The middle column is
+the method S73 rewrote the call to — `index.foo(…)` became `index.<facet>.foo(…)` — and the
+right column the mutation arm that kills the rule's own fixture. Measured on `087e33d2`,
+one arm per build, full suite per arm.
+
+| rule | S73-rewritten call(s) | killing arm |
+|---|---|---|
+| `comparison-to-boolean` | `paths.resolvePathFinalMemberTypeSource` · `members.returnNominalOf` · `members.memberDeclarationsOf` · `structural.isAnonStructType` · `refs.declaringFiles` | M-PATHWALK-NULL (6) |
+| `dead-binder-counter-loop` | `members.memberShadowsExtension` | M-SHADOWEXT-TRUE (2) |
+| `field-init-in-constructor` | `members.typeProvablyLacksMember` | M-LACKSMEMBER-FALSE (6) |
+| `impossible-cast` | `subtypes.unrelatedClasses` | M-UNRELATED-FALSE (2) |
+| `impossible-is-check` | `subtypes.unrelatedClasses` | M-UNRELATED-FALSE (3) |
+| `redundant-this` | `members.inheritsMemberUnambiguously` | M-INHERITS-FALSE (6) |
+| `redundant-upcast` | `subtypes.isSubtype` | M-ISSUBTYPE-FALSE (4) |
+| `static-constant` | `traits.transitivelyCarriesBuildMacro` | M-BUILDMACRO-TRUE (10) |
+| `trivial-getter` | `traits.transitivelyCarriesBuildMacro` · `subtypes.{subtypeOverridesProperty, subtypeReferencesField, subtypeFiles, isSubtype}` · `members.{typeProvablyLacksMember, typeDeclaresMember, supertypeDeclaresMember}` | M-SUBOVERRIDE-TRUE (83) |
+| `unreachable-catch` | `subtypes.isSubtype` | M-ISSUBTYPE-FALSE (3) |
+| `prefer-case-guard` | `refs.declaringFiles` ×2 | M-DECLARINGFILES-EMPTY (4) |
+| `prefer-enum-abstract` | `subtypes.hasSubtype` · `traits.transitivelyCarriesRtti` | M-HASSUBTYPE-FALSE (1) |
+| `redundant-import` | `refs.declaringFiles` | M-DECLARINGFILES-EMPTY (6) |
+| `unused-public-member` | `traits.transitivelyCarriesRtti` · `text.nameOccursOutside` | M-NAMEOUTSIDE-TRUE (26) |
+
+**14 of 14 rules have a fixture that dies when a method S73 moved stops answering.** Counted
+by call site rather than by rule it is **25 of 27** — the two misses are below. An arm forces
+one layer method to a constant (`false` / `true` / `[]` / `null`); the parenthesised figure is
+how many fixtures of that rule's own class flipped.
+
+#### Three claims in the brief, re-measured
+
+- **"Ten of them are SILENT."** True for 12 of the 14, not for the 10 named. Force-enabled
+  one at a time over the six Pony roots, `unused-public-member` reports **183** findings and
+  `prefer-enum-abstract` **1**; the other twelve report **0**. `unused-public-member` is
+  outside the arm because Pony's `apqlint.json` disables it, and `prefer-enum-abstract`
+  because it is `RiskyFix` and a netless run never asks it — neither is silence. What IS
+  true of all fourteen: over anyparse's own `src test` (1740 files) they report **0**
+  findings between them, so no corpus this project owns can ever cover them.
+- **"Check none is cascade-only" (T583).** None is, and the census answers it by
+  construction rather than by inspection: `exerciseCensus` reads the ledger ACCUMULATED over
+  every pass, so a rule that reports nothing on pass 1 and fixes on pass 6 lands in
+  `exercised`, not in `reported nothing at all`. All six of T583's cascade-only rules are in
+  the exercised list of the run reproduced here (702 edits / 209 files / 8 passes,
+  175 / 48 / 31 / 10 / 86). Run in isolation the fourteen give `0 edit(s) in 0 file(s) over
+  1 pass(es)` and a census of `14 → 0 exercised, 0 reported, 4 never asked, 10 silent`.
+- **"S73's byte-identity said nothing about them."** True of the arm and false of the tree.
+  What covered them was the unit suite, and the suite is not a weaker net HERE: a fixture of
+  every one of the fourteen dies when the moved method stops answering. What was missing was
+  the statement, which is what the pins now are.
+
+#### Half of the risk was never a test's job
+
+A pure move can go wrong two ways: the call is rewired to the wrong facet, or the method's
+body changed on the way. The first cannot happen silently — the seven layers declare **55
+public methods and share not one name**, so `index.members.isSubtype` does not compile. The
+second is covered: each of the 19 methods the fourteen rules reach has at least one killing
+class in the suite. What is left at an UNCOVERED call site is neither: two same-typed
+arguments swapped in the rewritten call, which compiles and no arm can see. That is the
+residual, and it is why the two uncovered sites were worth closing rather than declaring.
+
+#### The two that were uncovered, and why they were the same shape
+
+Both are the RIGHT-HAND operand of a short-circuiting `||` whose left operand every existing
+fixture already satisfied:
+
+- `BackingFieldRefs.classifyOwnerBinding` — `typeDeclaresMember(c, field) || supertypeDeclaresMember(c, field)`.
+  Neither polarity of `M-SUPERDECLARES` moved a single `trivial-getter` fixture.
+  `TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor` closes it:
+  a class in the scanned file spells the backing name, is no subtype of the owner and does
+  not declare the name — only the supertype half can account for it, and an occurrence the
+  walk cannot account for blocks the collapse. The foreign supertype has to live in a file
+  the scan does NOT read: declaring it beside the real subtype puts its `private var _label`
+  into the walk, and a declaration name is none of the shapes `attributeOccurrence` binds, so
+  it blocks for an unrelated reason. `affectedSubtypeFiles` reads only subtype-declaring and
+  `@:access` files while the index reads them all — that gap is what the fixture needs.
+- `PreferEnumAbstract.fixGrouped` — `hasSubtype(plan.name) || transitivelyCarriesRtti(plan.name)`.
+  `PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym` closes it, and finding a reachable
+  shape took a measurement: `@:rtti` ON the container is refused earlier (`conversionPlan`
+  returns null when the preceding sibling is a metadata node) and a SUPERTYPE carrying it is
+  refused earlier still (`headEdit` demands the body opener immediately after the type name,
+  so no `extends` clause survives). Both would have been fixtures that pass for the wrong
+  reason. The one live route is the index's simple-name resolution — a HOMONYM in another
+  module carries the meta, `transitivelyCarriesRtti` finds it by name, and the conversion is
+  declined for a type that never carried it.
+
+#### What a gate now reads
+
+`@:pin('control')` + `@:killer('<arm>')` on one fixture per rule, plus the two new ones:
+sixteen entries, listed verbatim in
+`unit.TestDiscoveryParityTest#testThePilotPinsReachTheGeneratedRegistry`. Deleting or
+renaming a pinned fixture fails that assertion by name; `testkit.TestDiscovery` already
+refuses to build a `control` that names no arm. The arm ids encode the constant they force
+(`-TRUE` / `-FALSE` / `-EMPTY` / `-NULL`) because several methods only discriminate in one
+direction and a bare method name would not say which.
+
+**These pins guard behaviour that already held.** They are red against no commit; what makes
+them evidence is the arm, not a base-tree failure. Reproducing one: replace the named method's
+body in `src/anyparse/query/<Layer>.hx` with the constant the arm id spells, rebuild
+`test-js.hxml`, and the pinned fixture flips. Collateral is expected and is not a defect —
+`M-BUILDMACRO-TRUE` moves 407 assertions across 21 classes — because the arms mutate shared
+engine code rather than anything this slice added.
+
 ### The oracle answers for what it COMPILED, not for what you linted
 
 `haxe <compilerOracle> --no-output` exiting 0 is the strongest gate this project

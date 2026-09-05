@@ -191,6 +191,7 @@ class ComparisonToBooleanCheckTest extends Test {
 	 * A field access whose member resolves to a plain `Bool` is provably non-null, so the
 	 * `nullableOperandKinds` blanket veto is bypassed by the resolved-type proof.
 	 */
+	@:pin('control') @:killer('M-PATHWALK-NULL')
 	public function testFieldAccessBoolMemberFlagged(): Void {
 		Assert.equals(1, violations(typed('public var flag:Bool;', 'var b = o.flag == true;')).length);
 	}

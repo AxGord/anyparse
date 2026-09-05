@@ -246,6 +246,7 @@ class FieldInitInConstructorCheckTest extends Test {
 	 * type's other constants and BEFORE the instance field, not merely somewhere in the type. The
 	 * assertions are ORDERINGS rather than presence tests, so an insertion at the wrong rank fails.
 	 */
+	@:pin('control') @:killer('M-LACKSMEMBER-FALSE')
 	public function testConstantLandsInTheConstantsRank(): Void {
 		final out: String = applyIndexedFixOnce(wrap(
 			"\tpublic static final TAG:String = 'p';\n\tprivate static inline final HEADER_HEIGHT:Float = 30.0;\n"
