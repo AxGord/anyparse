@@ -268,6 +268,52 @@ class DuplicateCodeCheckTest extends Test {
 		Assert.equals(identity, check.messageIdentity(identity), 'the normalization is idempotent');
 	}
 
+	/**
+	 * THE discriminating pair for the token-interior half. Both copies collapse to the same
+	 * whitespace-normalized text and differ only in a string literal's own bytes — no shared
+	 * helper can print both — while the twin moves that same difference OUT of the literal and
+	 * into layout, where it is still a clone. So the render is a SHARPER key, not merely a
+	 * stricter one.
+	 */
+	@:pin('control')
+	@:killer('M-DUP-CODE-NORM-KEY')
+	public function testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs(): Void {
+		Assert.equals(
+			0, violations(src([
+				'class C {',
+				'\tfunction f():Void {',
+				'\t\ttrace(alpha, "one  two");',
+				'\t\ttrace(gamma, delta);',
+				'\t\ttrace(epsilon, zeta);',
+				'\t}',
+				'\tfunction g():Void {',
+				'\t\ttrace(alpha, "one two");',
+				'\t\ttrace(gamma, delta);',
+				'\t\ttrace(epsilon, zeta);',
+				'\t}',
+				'}'
+			])).length,
+			'the literal prints different text in each copy'
+		);
+		Assert.equals(
+			1, violations(src([
+				'class C {',
+				'\tfunction f():Void {',
+				'\t\ttrace(alpha, "one two");',
+				'\t\ttrace(gamma, delta);',
+				'\t\ttrace(epsilon, zeta);',
+				'\t}',
+				'\tfunction g():Void {',
+				'\t\ttrace(alpha,   "one two");',
+				'\t\ttrace(gamma, delta);',
+				'\t\ttrace(epsilon, zeta);',
+				'\t}',
+				'}'
+			])).length,
+			'the same difference in LAYOUT is still a clone'
+		);
+	}
+
 	private function violations(source: String): Array<Violation> {
 		return new DuplicateCode().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
 	}

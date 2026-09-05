@@ -12,9 +12,10 @@ import anyparse.runtime.Span;
 
 /**
  * Flags a run of three or more consecutive statements that appears, byte-for-byte
- * identical up to whitespace, in two or more places — a copy-paste clone the user's
- * rule says to always extract into a helper ("duplication is a bug, not a design
- * choice"). Two passes over the same normalized statement stream: a SAME-FILE pass
+ * identical up to LAYOUT (a literal's own interior compares exactly), in two or
+ * more places — a copy-paste clone the user's rule says to always extract into a
+ * helper ("duplication is a bug, not a design choice"). Two passes over the same
+ * normalized statement stream: a SAME-FILE pass
  * (`scanBlocks`) and a project-wide CROSS-FILE pass (`scanCrossFile`); a same-file
  * pair is reported by the first pass only, never by both. Purely structural (no type
  * information needed). `Info`, REPORT-ONLY — extraction is a refactoring (`hxq
@@ -32,12 +33,17 @@ import anyparse.runtime.Span;
  *   it made `lint src test` and `lint test src` name opposite ends of the same
  *   clone. Same-file pairs are skipped by the cross-file pass, so the two passes
  *   partition the clone space with no double-report.
- * - **Whitespace-only normalization.** Two statements are equal when their source
- *   text matches after every run of spaces / tabs / newlines is collapsed to a
- *   single space (and the ends trimmed). There is NO identifier normalization
- *   (alpha-renaming): only exact-logic clones match, so the check has zero false
- *   positives by construction. A comment inside a statement's span makes it
- *   textually different — not a clone; a comment BETWEEN
+ * - **Token-exact normalization.** Two statements are equal when their source
+ *   text matches after every run of spaces / tabs / newlines BETWEEN tokens is
+ *   collapsed to a single space (and the ends trimmed), while whitespace INSIDE a
+ *   token — a string or regex literal's own content — is compared byte for byte
+ *   (`SpanRender`). Layout is not code; a literal's interior is. There is NO
+ *   identifier normalization (alpha-renaming): only exact-logic clones match, so the
+ *   check has zero false positives by construction — a claim the interior half is
+ *   what makes true: measured on this project it removed four cross-file findings,
+ *   every one a pair of `--help` blocks whose option column is padded to a different
+ *   width, which no shared helper could produce. A comment inside a
+ *   statement's span makes it textually different — not a clone; a comment BETWEEN
  *   statements is trivia outside every statement span and does not affect equality.
  * - **Consecutive statements, one block.** A run is a maximal sequence of direct-child
  *   statements of a `ControlFlowSupport.blockKinds()` node (function body / nested
@@ -126,7 +132,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	}
 
 	public function description(): String {
-		return 'three or more consecutive statements duplicated (whitespace-insensitive) within the same file or across files';
+		return 'three or more consecutive statements duplicated (layout-insensitive, literal-exact) within the same file or across files';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -213,7 +219,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 			final stmts: Array<DupStmt> = [];
 			for (child in node.children) {
 				final span: Null<Span> = child.span;
-				if (span != null) stmts.push(normalizeStmt(source, span));
+				if (span != null) stmts.push(normalizeStmt(source, child, span));
 			}
 			if (stmts.length >= MIN_STATEMENTS) out.push(stmts);
 		}
@@ -221,16 +227,23 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	}
 
 	/**
-	 * Whitespace-normalized view of the statement at `span`: every run of spaces /
-	 * tabs / newlines collapsed to a single space with the ends trimmed, plus the
-	 * count of non-whitespace characters (the content-gate metric). The normalization
-	 * itself is `CheckScan.normalizeSpan`, shared with `extract-repeated-expression` and
-	 * `tail-merge`; this only pins it
-	 * to a statement span.
+	 * The comparison view of the statement at `span`: `SpanRender.renderSpan` — whitespace
+	 * BETWEEN tokens collapsed to a single space, whitespace INSIDE a token copied byte for
+	 * byte, the ends trimmed — plus the count of non-whitespace characters (the content-gate
+	 * metric) from `CheckScan.normalizeSpan`.
+	 *
+	 * The render and not the norm, because the norm is the key this rule REPORTS on with no
+	 * further test. `tail-merge` and `redundant-case-body` pair it with
+	 * `MemberKinds.structurallyEqual` and `prefer-case-guard` refuses content carrying a
+	 * backslash or a quote; this one bucketed three-gram norms outright, so `f("a  b")` and
+	 * `f("a b")` compared equal and two runs that are not the same code were reported as a
+	 * clone. A leaf has no structure inside it, so whitespace in its span is content by
+	 * construction — which is what makes the render an exact-token key without a second tree
+	 * to compare against, and what lets the type doc's "zero false positives" claim stand.
 	 */
-	private static function normalizeStmt(source: String, span: Span): DupStmt {
+	private static function normalizeStmt(source: String, node: QueryNode, span: Span): DupStmt {
 		final normalized: NormalizedSpan = CheckScan.normalizeSpan(source, span.from, span.to);
-		return { norm: normalized.norm, span: span, nonWs: normalized.nonWs };
+		return { text: SpanRender.renderSpan(source, span.from, span.to, node), span: span, nonWs: normalized.nonWs };
 	}
 
 	/**
@@ -268,7 +281,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		final sa: Array<DupStmt> = blocks[a.b];
 		final sb: Array<DupStmt> = blocks[b.b];
 		var len: Int = 0;
-		while (a.i + len < sa.length && b.i + len < sb.length && sa[a.i + len].norm == sb[b.i + len].norm) len++;
+		while (a.i + len < sa.length && b.i + len < sb.length && sa[a.i + len].text == sb[b.i + len].text) len++;
 		return len;
 	}
 
@@ -397,7 +410,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 
 
 	/**
-	 * Hash every three-gram of consecutive normalized statements across `blocks` into
+	 * Hash every three-gram of consecutive RENDERED statements across `blocks` into
 	 * start-position buckets — the shared index both the same-file pass (one file's blocks)
 	 * and the cross-file pass (every scoped file's blocks concatenated) probe for clones.
 	 */
@@ -405,7 +418,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		final grams: Map<String, Array<DupPos>> = [];
 		for (b => stmts in blocks) {
 			for (i in 0...stmts.length - (MIN_STATEMENTS - 1)) {
-				final key: String = stmts[i].norm + GRAM_SEP + stmts[i + 1].norm + GRAM_SEP + stmts[i + 2].norm;
+				final key: String = stmts[i].text + GRAM_SEP + stmts[i + 1].text + GRAM_SEP + stmts[i + 2].text;
 				final bucket: Null<Array<DupPos>> = grams[key];
 				if (bucket == null)
 					grams[key] = [{ b: b, i: i }];
@@ -418,9 +431,9 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 
 }
 
-/** A block statement: its whitespace-normalized text, source span, and non-whitespace-character count. */
+/** A block statement: its RENDERED comparison text (`SpanRender`), source span, and non-whitespace-character count. */
 typedef DupStmt = {
-	var norm: String;
+	var text: String;
 	var span: Span;
 	var nonWs: Int;
 }

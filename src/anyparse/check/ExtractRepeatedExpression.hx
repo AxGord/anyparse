@@ -13,8 +13,9 @@ using Lambda;
 
 /**
  * Flags a NON-TRIVIAL, PURE value expression that appears three or more times,
- * literally identical (up to whitespace), within ONE function body — a candidate
- * for a `final x = <expr>;` extraction so the value is computed once and reused.
+ * literally identical up to LAYOUT — whitespace between tokens, never a literal's
+ * own interior — within ONE function body: a candidate for a `final x = <expr>;`
+ * extraction so the value is computed once and reused.
  * `Info`, REPORT-ONLY: whether an extraction reads better (and where the `final`
  * belongs) is an author judgement, and the safe-extraction preconditions here are
  * heuristic, so `fix` produces no edits.
@@ -42,7 +43,13 @@ using Lambda;
  * - **Repeated three or more times** (`MIN_OCCURRENCES`) inside the SAME function
  *   body — a nested function / lambda is a separate body (its expressions never
  *   fold into the enclosing one), and a `MacroExpr` reification subtree is skipped
- *   (its identifiers may be spliced from elsewhere).
+ *   (its identifiers may be spliced from elsewhere). Occurrences are bucketed by
+ *   `CheckScan.normalizeSpan` and every surviving bucket is then re-split by
+ *   `SpanRender` (`splitByRender`): the norm is one linear scan and the cheap way
+ *   to find a repeat, but it collapses a string literal's own interior, so on its
+ *   own it would group `replace(s, "  ", " ")` with `replace(s, " ", " ")` — two
+ *   values no single `final` can hold, and a message quoting a spelling the
+ *   reported span does not carry.
  *
  * ## Exclusions
  *
@@ -180,13 +187,14 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 				bucket.push(c);
 		}
 		final kept: Array<Group> = [];
-		for (norm => occ in groups) if (occ.length >= MIN_OCCURRENCES) {
-			final rep: QueryNode = occ[0].node;
+		for (occ in groups) if (occ.length >= MIN_OCCURRENCES) for (text => exact in splitByRender(source, occ)) {
+			if (exact.length < MIN_OCCURRENCES) continue;
+			final rep: QueryNode = exact[0].node;
 			if (!isNonTrivial(rep, ctx)) continue;
 			if (!PurityScan.isPure(rep, ctx.purity)) continue;
-			if (allPairsExclusive(occ)) continue;
-			occ.sort((a, b) -> a.span.from - b.span.from);
-			kept.push({ norm: norm, occ: occ });
+			if (allPairsExclusive(exact)) continue;
+			exact.sort((a, b) -> a.span.from - b.span.from);
+			kept.push({ render: text, occ: exact });
 		}
 		for (g in dropSubsumed(kept)) {
 			final first: Candidate = g.occ[0];
@@ -275,18 +283,51 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 		return [for (g in groups) if (!isSubsumed(g, groups)) g];
 	}
 
+	/**
+	 * `occ` re-bucketed by RENDERED text — the EXACT key, which the whitespace-collapsed `norm`
+	 * only approximates.
+	 *
+	 * `norm` collapses whitespace inside a string literal too, so `replace(s, "  ", " ")` and
+	 * `replace(s, " ", " ")` land in one bucket — two expressions that are not the same value,
+	 * for which no single `final` local can stand. The split is applied to a SURVIVING bucket
+	 * rather than used as the bucket key: `norm` is one linear scan of the span while a render
+	 * walks the subtree for its leaves, and a candidate that never repeats never needs the
+	 * exact answer. Render equality implies `norm` equality, so no group is ever merged by it.
+	 */
+	private static function splitByRender(source: String, occ: Array<Candidate>): Map<String, Array<Candidate>> {
+		final out: Map<String, Array<Candidate>> = [];
+		for (c in occ) {
+			final key: String = SpanRender.renderSpan(source, c.span.from, c.span.to, c.node);
+			final bucket: Null<Array<Candidate>> = out[key];
+			if (bucket == null)
+				out[key] = [c];
+			else
+				bucket.push(c);
+		}
+		return out;
+	}
+
 	/** Whether every occurrence of `g` is strictly contained in some occurrence of a distinct group at least as frequent. */
 	private static function isSubsumed(g: Group, groups: Array<Group>): Bool {
 		for (h in groups) {
-			if (h.norm == g.norm || h.occ.length < g.occ.length) continue;
+			if (h.render == g.render || h.occ.length < g.occ.length) continue;
 			if (g.occ.foreach(go -> h.occ.exists(ho -> strictlyContains(ho.span, go.span)))) return true;
 		}
 		return false;
 	}
 
-	/** The finding message: occurrence count plus the truncated normalized expression. */
+	/**
+	 * The finding message: occurrence count plus the truncated expression, RENDERED — whitespace
+	 * between tokens collapsed, whitespace inside a token left alone.
+	 *
+	 * The text is quoted back to a reader expected to find it at the span the finding carries, so
+	 * it has to be that span's bytes. It is well-defined only because the group is render-exact:
+	 * `splitByRender` has already separated occurrences whose literals differ, so every member of
+	 * `g` spells this text identically and the earliest one — the one the finding is spanned at —
+	 * is not a special case.
+	 */
 	private static function buildMessage(g: Group): String {
-		final text: String = g.norm.length > MAX_MSG_EXPR ? '${g.norm.substr(0, MAX_MSG_EXPR)}...' : g.norm;
+		final text: String = g.render.length > MAX_MSG_EXPR ? '${g.render.substr(0, MAX_MSG_EXPR)}...' : g.render;
 		return 'the expression `${text}` is repeated ${g.occ.length}$REPEAT_TAIL — extract into a `final` local (report-only)';
 	}
 
@@ -294,6 +335,10 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 	 * `source[span]` with every run of whitespace collapsed to a single space and the ends
 	 * trimmed — `CheckScan.normalizeSpan`'s text half, shared with `duplicate-code` and
 	 * `tail-merge`; this check has no use for its non-whitespace count.
+	 *
+	 * The cheap PREFILTER key only: it collapses whitespace inside a string literal as well, so a
+	 * bucket it builds may hold expressions that are not the same value. `splitByRender` decides
+	 * the ones that survive the occurrence threshold.
 	 */
 	private static function normalize(source: String, span: Span): String {
 		return CheckScan.normalizeSpan(source, span.from, span.to).norm;
@@ -315,9 +360,9 @@ private typedef BranchStep = {
 	var idx: Int;
 }
 
-/** A repeated-expression group: the shared normalized text and its occurrences (earliest first). */
+/** A repeated-expression group: the shared RENDERED text (`SpanRender`) and its occurrences (earliest first). */
 private typedef Group = {
-	var norm: String;
+	var render: String;
 	var occ: Array<Candidate>;
 }
 

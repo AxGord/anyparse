@@ -118,6 +118,46 @@ final class SourceComments {
 	}
 
 	/**
+	 * `span` with leading and trailing TRIVIA — whitespace, and any byte inside one of
+	 * `comments` — cut off, or the empty span at `span.from` when it holds nothing else.
+	 *
+	 * A comment is not code the model dropped, it is code no PROJECTION carries: the tree has no
+	 * comment node anywhere, inside a conditional-compilation region or out of it. So a byte range
+	 * built from "what no child covers" reads a comment as unmodelled, and a diagnostic quoting
+	 * that range runs past the construct it names into the next statement's comment. Measured over
+	 * the two real trees `fmt` reaches, that is 1 region of 59 — cosmetic, and only at the ENDS: a
+	 * comment WITHIN the range is content the quote must keep, which is why this trims rather than
+	 * filters.
+	 *
+	 * Whitespace goes with it so the two rules cannot disagree about a range ending
+	 * `#end\n\t// note`: stopping at the newline would leave the comment standing, stopping at the
+	 * comment would leave the newline.
+	 */
+	public static function trimTrivia(source: String, span: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Span {
+		var from: Int = span.from;
+		var to: Int = span.to;
+		while (from < to) {
+			if (isSpaceAt(source, from)) {
+				from++;
+				continue;
+			}
+			final token: Null<{ from: Int, to: Int, isLine: Bool }> = enclosingComment(comments, from);
+			if (token == null) break;
+			from = token.to < to ? token.to : to;
+		}
+		while (to > from) {
+			if (isSpaceAt(source, to - 1)) {
+				to--;
+				continue;
+			}
+			final token: Null<{ from: Int, to: Int, isLine: Bool }> = enclosingComment(comments, to - 1);
+			if (token == null) break;
+			to = token.from > from ? token.from : from;
+		}
+		return new Span(from, to);
+	}
+
+	/**
 	 * The comment tokens among `regions` — the line and block comments of one source, in source
 	 * order, each as `{ from, to, isLine }`.
 	 *
@@ -444,6 +484,12 @@ final class SourceComments {
 		return -1;
 	}
 
+	/** Whether the byte at `at` is a space, tab, carriage return or newline. */
+	private static inline function isSpaceAt(source: String, at: Int): Bool {
+		final code: Int = source.fastCodeAt(at);
+		return code == ' '.code || code == '\t'.code || code == '\n'.code || code == '\r'.code;
+	}
+
 	/**
 	 * The continuation prefix ONE interior line of a block comment already uses: its own
 	 * indentation, extended through the gutter star and the single space after it when the line
@@ -568,6 +614,13 @@ final class SourceComments {
 			result = ls;
 		}
 		return result;
+	}
+
+	/** The comment token of `comments` covering `at`, or null when that byte is not inside one. */
+	private static function enclosingComment(
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int
+	): Null<{ from: Int, to: Int, isLine: Bool }> {
+		return comments.find(token -> token.from <= at && at < token.to);
 	}
 
 }

@@ -154,6 +154,30 @@ class ExtractRepeatedExpressionTest extends Test {
 		Assert.equals(identity, check.messageIdentity(identity));
 	}
 
+	/**
+	 * THE discriminating pair for the token-interior half. `norm` collapses whitespace inside a
+	 * string literal, so three calls bucket together although two spell their argument `"  "`
+	 * and one spells it `" "` — a group no single `final` local can stand for, reported at a
+	 * span whose own bytes the message then contradicted. `splitByRender` separates them. The
+	 * twin, where every occurrence spells the literal the same way, still reports, and its
+	 * message quotes the two-space literal exactly as it is written.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACT-REPEAT-RENDER-SPLIT')
+	public function testALiteralInteriorDifferenceSplitsTheGroup(): Void {
+		final mixed: String = 'class C { function m(s:String) { k(StringTools.replace(s, "  ", "-")); '
+			+ 'k(StringTools.replace(s, " ", "-")); k(StringTools.replace(s, "  ", "-")); } }';
+		Assert.equals(0, violations(mixed).length, 'two spellings of one argument are not one repeated expression');
+		final same: String = 'class C { function m(s:String) { k(StringTools.replace(s, "  ", "-")); '
+			+ 'k(StringTools.replace(s, "  ", "-")); k(StringTools.replace(s, "  ", "-")); } }';
+		final vs: Array<Violation> = violations(same);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(
+			vs[0].message.indexOf('StringTools.replace(s, "  ", "-")') != -1,
+			'the message quotes the literal as written, not whitespace-collapsed'
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ExtractRepeatedExpression().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

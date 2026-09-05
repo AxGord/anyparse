@@ -718,6 +718,28 @@
 			"find": "final inToken: Bool = next < tokens.length && tokens[next].from <= i;",
 			"replace": "final inToken: Bool = false;",
 			"note": "no byte is ever inside a token, so the display renderer collapses whitespace INSIDE a string literal again and a finding advertises a call the fix would not write"
+		},
+		{
+			"name": "M-DUP-CODE-NORM-KEY",
+			"type": "anyparse.check.DuplicateCode",
+			"method": "normalizeStmt",
+			"find": "return { text: SpanRender.renderSpan(source, span.from, span.to, node), span: span, nonWs: normalized.nonWs };",
+			"replace": "return { text: normalized.norm, span: span, nonWs: normalized.nonWs };",
+			"note": "statements compare on the whitespace-collapsed norm again, so two runs differing only inside a string literal bucket into one three-gram and are reported as a clone"
+		},
+		{
+			"name": "M-EXTRACT-REPEAT-RENDER-SPLIT",
+			"type": "anyparse.check.ExtractRepeatedExpression",
+			"method": "splitByRender",
+			"force": "[occ[0].norm => occ]",
+			"note": "every norm bucket stays one group, so occurrences whose literals differ are still counted as one repeated expression and the message quotes a spelling the reported span does not carry"
+		},
+		{
+			"name": "M-OPAQUE-REGION-TRIVIA-KEPT",
+			"type": "anyparse.query.SourceComments",
+			"method": "trimTrivia",
+			"force": "span",
+			"note": "the quoted range keeps its leading and trailing trivia, so a comment after the `#end` closes the region quote and a space before the `#if` becomes the column the note names"
 		}
 	]
 }

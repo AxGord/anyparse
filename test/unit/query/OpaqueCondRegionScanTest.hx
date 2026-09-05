@@ -53,6 +53,13 @@ class OpaqueCondRegionScanTest extends Test {
 		+ '\t\t#if display\n\t\t} catch (_:Dynamic) {\n\t\t}\n\t\t#end\n\t\treturn fields;\n\t}\n}\n';
 
 	/**
+	 * A signature-position splice with a line comment between the `#end` and the shared body —
+	 * the shape that puts trivia inside the byte run no child covers.
+	 */
+	private static final TRAILING_COMMENT: String =
+		'class C {\n\tstatic function foo() #if foo :SomeType #end\n\t// note after the end\n\t{\n\t\tbar;\n\t}\n}\n';
+
+	/**
 	 * THE discriminating pair. Both regions hold one `{` and one `}`; the only difference is
 	 * the trailing `else`, which leaves the statement unfinished at the `#end` and forces the
 	 * splice fallback. A brace-delta rule answers the same for both and is therefore not the
@@ -122,6 +129,25 @@ class OpaqueCondRegionScanTest extends Test {
 	/** A source with no `#if` at all never reaches the parse, and answers no note. */
 	public function testASourceWithoutConditionalCompilationYieldsNothing(): Void {
 		Assert.equals(0, FmtCommand.opaqueCondRegionNotes(new HaxeQueryPlugin(), 'A.hx', 'class C {\n\tvar a: Int = 1;\n}\n').length);
+	}
+
+	/**
+	 * A comment after the `#end` is TRIVIA, so it falls in the byte run no child covers and used
+	 * to close the quote — `"#if foo :SomeType #end // note after the end"`. No projection carries
+	 * a comment node anywhere, inside a region or out of it, so those bytes are not something the
+	 * model dropped HERE; they come off both ends of the quoted range, the COORDINATE with them.
+	 *
+	 * The fixture is a signature-position splice on purpose: the shapes whose interior a grammar
+	 * could learn to parse (a `catch` tail, an `else` tail, a bare `case` label, a lone `{` or
+	 * `}`) may stop being opaque, and this pin is about the quote, not about which shapes are.
+	 */
+	@:pin('control')
+	@:killer('M-OPAQUE-REGION-TRIVIA-KEPT')
+	public function testACommentAfterTheEndStaysOutOfTheQuote(): Void {
+		final notes: Array<String> = FmtCommand.opaqueCondRegionNotes(new HaxeQueryPlugin(), 'A.hx', TRAILING_COMMENT);
+		Assert.equals(1, notes.length);
+		Assert.isTrue(notes[0].indexOf('"#if foo :SomeType #end"') != -1, 'the quote stops at the `#end`: ${notes[0]}');
+		Assert.isTrue(notes[0].indexOf('A.hx:2:24:') != -1, 'and the coordinate is the `#if`, not the space before it: ${notes[0]}');
 	}
 
 	private static function regionsOf(source: String): Array<OpaqueCondRegion> {
