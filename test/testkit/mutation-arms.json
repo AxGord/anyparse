@@ -609,6 +609,22 @@
 			"find": "if (decl.type.isAnonStruct) return null;",
 			"replace": "if (decl.type.isAnonStruct) return nominal;",
 			"note": "a nominal naming an ANONYMOUS-STRUCTURE typedef is compared as a name, so a structure member typed by one refutes every class that could unify with it"
+		},
+		{
+			"name": "M-NULLABLE-NO-CHAIN",
+			"type": "anyparse.check.NullableSource",
+			"method": "receiverTypeName",
+			"find": "nominalOf == null ? null : nominalOf(node);",
+			"replace": "null;",
+			"note": "the receiver type is the written annotation or nothing, so every field-path / call receiver falls back to unknown and the null family stops seeing the sources only the chain resolver names"
+		},
+		{
+			"name": "M-NULLABLE-WRAPPER-OPAQUE",
+			"type": "anyparse.check.NullableSource",
+			"method": "receiverTypeName",
+			"find": "final lossy: Bool = declared == null || (cfg.shape.memberTransparentWrapperTypeNames ?? []).contains(declared);",
+			"replace": "final lossy: Bool = declared == null;",
+			"note": "the lossy `Null` that `declaredTypes` records for a `Null<Map<K, V>>` counts as an answer again, so a wrapped receiver goes back to being a safe miss"
 		}
 	]
 }

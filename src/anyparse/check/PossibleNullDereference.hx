@@ -24,14 +24,18 @@ import anyparse.runtime.Span;
  * `Map` index yields `Null<V>` (an `Array` / `String` index a non-null `T`),
  * `Array.pop` / `Array.shift` / `List.pop` yield `Null<T>` (a same-named method on
  * an unrelated type does not), and a `Null<T>`-returning function yields a nullable
- * result. So the deref flags only when the receiver is a `nullableIndexTypeNames`
- * index or a `nullableInstanceReturnCalls` call on a plain identifier of matching
- * declared type (`TypeResolver.identTypeName`), or a call whose plain-identifier
- * callee binds to a function whose `TypeInfoProvider.returnTypes` outer nominal is
- * a `nullableReturnMarkerTypes` (`Null`). All resolution requires
- * `plugin is TypeInfoProvider`. An `Array` / `String` / unannotated / `Null<Map<…>>`
- * receiver, an unrelated-type method, a non-`Null<…>` (or unannotated) return, and
- * a qualified `this.f()` / `obj.f()` callee are safe misses.
+ * result. So the deref flags only when the receiver is a
+ * `nullableIndexTypeNames` index or a `nullableInstanceReturnCalls` call whose
+ * receiver type matches, or a call whose plain-identifier callee binds to a function
+ * whose `TypeInfoProvider.returnTypes` outer nominal is a `nullableReturnMarkerTypes`
+ * (`Null`). The receiver type is asked in two steps: its own written annotation
+ * (`TypeResolver.identTypeName`) when it is a plain identifier, then
+ * `CheckScan.typeNominalResolver` — the chain resolver, which reaches a field path
+ * (`o.cache[k]`), a call receiver (`g().pop()`) and the `Null<Map<…>>` the annotation
+ * map degrades to the bare name `Null`. All resolution requires
+ * `plugin is TypeInfoProvider`. An `Array` / `String` receiver, an unannotated and
+ * unresolvable one, an unrelated-type method, a non-`Null<…>` (or unannotated) return,
+ * and a qualified `this.f()` / `obj.f()` callee are safe misses.
  *
  * ## Point-wise, not flow-sensitive
  *
@@ -78,7 +82,10 @@ final class PossibleNullDereference implements Check {
 			if (tree == null) continue;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
-			walk(violations, entry.file, tree, tree, declaredTypes, returnTypes, ctx);
+			final nominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
+				entry.source, plugin, tree, entry.file, index, true
+			);
+			walk(violations, entry.file, tree, tree, declaredTypes, returnTypes, nominalOf, ctx);
 		}
 		return violations;
 	}
@@ -93,14 +100,15 @@ final class PossibleNullDereference implements Check {
 	/** Walk `node`, flagging a deref whose receiver is a nullable source. */
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>,
-		returnTypes: Map<Int, String>, ctx: Ctx
+		returnTypes: Map<Int, String>, nominalOf: Null<(QueryNode) -> Null<String>>, ctx: Ctx
 	): Void {
 		if (ctx.opaqueKinds.contains(node.kind)) return;
 		if (ctx.derefKinds.contains(node.kind) && node.children.length >= 1) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
-				final source: Null<String> =
-					NullableSource.describe(node.children[0], root, declaredTypes, returnTypes, ctx.cfg, ctx.index);
+				final source: Null<String> = NullableSource.describe(
+					node.children[0], root, declaredTypes, returnTypes, ctx.cfg, ctx.index, nominalOf
+				);
 				if (source != null) out.push({
 					file: file,
 					span: span,
@@ -110,7 +118,7 @@ final class PossibleNullDereference implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(out, file, c, root, declaredTypes, returnTypes, ctx);
+		for (c in node.children) walk(out, file, c, root, declaredTypes, returnTypes, nominalOf, ctx);
 	}
 
 }

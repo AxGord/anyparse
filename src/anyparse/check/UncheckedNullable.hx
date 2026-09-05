@@ -33,9 +33,26 @@ using Lambda;
  *   with a string-literal operand is a string context (`n + "x"` concatenates),
  *   so it is skipped — `+` is the one operator that doubles as concatenation.
  *
- * Only the LITERAL string case is spared; `parseInt(s) + strVar` (a `Null<T>`
- * value that happens to be a `String`) still flags — telling those apart needs
- * a typechecker.
+ * Only the LITERAL string case is spared; `parseInt(s) + strVar` (a `Null<T>` value
+ * that happens to be a `String`) still flags — telling those apart needs a
+ * typechecker.
+ *
+ * ## It is NOT part of the type-aware null family, and a typechecker buys it nothing
+ *
+ * This check reads NO types: no `TypeInfoProvider`, no `TypeResolver`, no
+ * `MemberLookup`, no `NullableSource`. Every question it asks is a node KIND and a
+ * dotted NAME out of `RefShape`. It is grouped with `possible-null-dereference` and
+ * `unguarded-nullable-deref` by SUBJECT (a `Null<T>` used unchecked), never by
+ * machinery, and a census that counts it as type-dependent is counting the subject.
+ *
+ * The gap above was priced rather than assumed: all 13 findings on the 872-file
+ * `pony` tree were read by hand and all 13 are genuine numeric contexts (`* SCALE`,
+ * `/ 180 * Math.PI`, `Std.int(… * SCALE)`, a `cfg.scale *` product) — the
+ * string-operand shape the paragraph warns about occurs ZERO times, so a typechecker
+ * would remove nothing. Widening the other way — accepting ANY call whose return is a
+ * nullable number instead of the two signatures — is blocked one layer down rather
+ * than by inference: `SymbolIndex` stores a return's outer NOMINAL (`Null`), not its
+ * type ARGUMENT, so nothing available can tell `Null<Int>` from `Null<String>`.
  */
 @:nullSafety(Strict)
 final class UncheckedNullable implements Check {

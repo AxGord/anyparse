@@ -969,6 +969,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
 			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
+			'unit.check.PossibleNullDereferenceTest#testCallReturnPopFlagged :: control :: M-NULLABLE-NO-CHAIN',
+			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
+			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesSubtypedContainer :: control :: M-HASSUBTYPE-FALSE',
@@ -993,6 +996,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor'
 			+ ' :: control :: M-SUPERDECLARES-FALSE',
+			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
@@ -1196,7 +1200,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-STRUCT-NULL-OPAQUE',
 			'M-STRUCT-TYPEPARAM-CLOSED',
 			'M-STRUCT-DYNAMIC-CLOSED',
-			'M-STRUCT-ANON-CLOSED'
+			'M-STRUCT-ANON-CLOSED',
+			'M-NULLABLE-NO-CHAIN',
+			'M-NULLABLE-WRAPPER-OPAQUE'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
