@@ -61,20 +61,53 @@ final class CondRegionScan {
 	 * writer re-emits it byte-verbatim.
 	 */
 	public static function opaqueCondRegionMentioning(scope: QueryNode, source: String, name: String, shape: RefShape): Null<Span> {
+		if (name.length == 0) return null;
+		for (region in opaqueCondRegions(scope, source, shape))
+			for (gap in region.gaps)
+				if (SourceText.mentionsIdent(source, gap, name)) return gap;
+		return null;
+	}
+
+	/**
+	 * Every `#if ... #end` region under `scope` that the parser captured RAW — one record per
+	 * opaque node, in document order, each carrying the region's own span and the byte runs
+	 * inside it that no child covers.
+	 *
+	 * This is the predicate behind two user-visible behaviours that read as unrelated: a
+	 * name-driven mutating op REFUSES over such a region (nothing in it projects, so a rewrite
+	 * would part-apply), and `fmt` LEAVES it byte-for-byte while reformatting everything around
+	 * it. Neither is about how the region's braces balance — `#if x if (c) { g(); } else #end
+	 * h();` has an equal number of `{` and `}` and is opaque, while the same region without the
+	 * trailing `else` is an ordinary `Conditional` and formats. What decides it is whether the
+	 * bytes between the directives are a balanced subtree IN THEIR GRAMMATICAL POSITION; when
+	 * they are not, the grammar falls back to one of `RefShape.opaqueCondRegionKinds`.
+	 *
+	 * `region` runs from the FIRST unmodelled byte to the LAST — not from the node's own start,
+	 * which is a different place in half the shapes: a `CondSpliceTail` begins at the operand
+	 * BEFORE its `#if` (`s.replace(...) #if sys .replace(...) #end`), so quoting the node would
+	 * bury the directive under a hundred characters of leading call chain. Bounding by the gaps
+	 * instead lands on the `#if` in every shape and stops at the `#end`, keeping the in-branch
+	 * children between them (the operands of a `CondSpliceOpExpr` are inside the region) and
+	 * dropping the continuation after it. A gap of pure WHITESPACE is not an unmodelled byte at
+	 * all — it is layout between two children — and counting one extended the quote past the
+	 * `#end` into the shared body it precedes; those are filtered, which also cannot change the
+	 * mention scan above, since no identifier occurs in whitespace. A node left with no gap
+	 * yields no record: there is nothing the model dropped.
+	 */
+	public static function opaqueCondRegions(scope: QueryNode, source: String, shape: RefShape): Array<OpaqueCondRegion> {
 		final kinds: Array<String> = shape.opaqueCondRegionKinds ?? [];
-		if (kinds.length == 0 || name.length == 0) return null;
-		function walk(node: QueryNode): Null<Span> {
+		final out: Array<OpaqueCondRegion> = [];
+		if (kinds.length == 0) return out;
+		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
-			if (span != null && kinds.contains(node.kind))
-				for (gap in unmodelledGaps(node, span))
-					if (SourceText.mentionsIdent(source, gap, name)) return gap;
-			for (c in node.children) {
-				final found: Null<Span> = walk(c);
-				if (found != null) return found;
+			if (span != null && kinds.contains(node.kind)) {
+				final gaps: Array<Span> = unmodelledGaps(node, span).filter(g -> source.substring(g.from, g.to).trim().length > 0);
+				if (gaps.length > 0) out.push({ region: new Span(gaps[0].from, gaps[gaps.length - 1].to), gaps: gaps });
 			}
-			return null;
+			for (c in node.children) walk(c);
 		}
-		return walk(scope);
+		walk(scope);
+		return out;
 	}
 
 	/**
@@ -304,6 +337,17 @@ final class CondRegionScan {
 	}
 
 }
+
+/**
+ * One `#if ... #end` region a grammar captured RAW, as `CondRegionScan.opaqueCondRegions`
+ * reports it: `region` is the directive region itself — what a diagnostic quotes and what
+ * `fmt` leaves byte-for-byte — and `gaps` the byte runs inside the node that no child covers,
+ * the narrower set a fail-closed text scan is allowed to read.
+ */
+typedef OpaqueCondRegion = {
+	final region: Span;
+	final gaps: Array<Span>;
+};
 
 /**
  * The seams `RefactorSupport.condArmDeclarations` reads while scanning one conditional region's

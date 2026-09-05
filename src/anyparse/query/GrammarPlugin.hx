@@ -1580,9 +1580,11 @@ typedef RefShape = {
 	 * The structural conditional kind (`conditionalMemberKind`) is deliberately NOT one of
 	 * these: it keeps its guarded material as real children, which every consumer resolves.
 	 *
-	 * Read by `RefactorSupport.opaqueCondRegionMentioning`, the fail-closed gate the
-	 * mutating ops consult. Optional; unset leaves those ops with no such gate — correct for
-	 * a grammar with no conditional compilation, silent corruption for one that has it.
+	 * Read by `CondRegionScan.opaqueCondRegions`, which serves both consumers of the fact: the
+	 * fail-closed gate the mutating ops consult, and the note `fmt` prints for a region it
+	 * leaves byte-for-byte while reformatting around it. Optional; unset leaves those ops with
+	 * no such gate — correct for a grammar with no conditional compilation, silent corruption
+	 * for one that has it, and a formatter that declines regions without saying so.
 	 */
 	@:optional var opaqueCondRegionKinds: Array<String>;
 
