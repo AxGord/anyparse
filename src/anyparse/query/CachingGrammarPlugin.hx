@@ -117,11 +117,6 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private var _resolutionScope: Null<ResolutionScope> = null;
 	private var _resolutionIndex: Null<SymbolIndex> = null;
 	private var _resolutionIndexBuilt: Bool = false;
-
-	// The two PROJECT-scope memos, same lifecycle as `_resolutionIndex` and cleared by the same
-	// per-pass call: both field-immutability checks demand each of them, so without a memo a
-	// `--fix` pass rebuilt the project symbol index and the write index TWICE per pass. Built
-	// lazily, so a run whose checks never reach them pays nothing.
 	private var _projectIndex: Null<SymbolIndex> = null;
 	private var _projectIndexBuilt: Bool = false;
 	private var _fieldWriteIndex: Null<FieldWriteIndex> = null;

@@ -229,24 +229,6 @@ final class FieldWriteIndex {
 		return _writes.exists(w -> w.owner == type && w.field == field && admits(_thirdParty.exists(w.file), ownerFile));
 	}
 
-	/**
-	 * Whether a write recorded in a source of the given half can reach a candidate declared in
-	 * `ownerFile`. A project source can write anything it can name; a THIRD-PARTY source (a
-	 * `resolutionLibs` / std file) cannot name a project type at all, so it can hold no
-	 * statically-typed write into one — the dependency direction is one-way. `ownerFile` null
-	 * means the caller is not asking about a specific candidate and every write is admitted.
-	 *
-	 * What this deliberately does NOT cover, because no name-keyed index can: a third-party
-	 * function taking `Dynamic` and writing a member of whatever it was handed. That write is
-	 * unresolved in ANY scope, and the project scope never saw it either, so narrowing here
-	 * removes no proof the base run had. A third-party SUBTYPE of a project type — the shape that
-	 * genuinely writes a project field from a third-party file — is not narrowed away: its writes
-	 * are attributed to the SUBTYPE, and `MemberWriteScan.subtypeWriteReaches` asks about that
-	 * subtype with no `ownerFile`, plus scans its declaration slice textually.
-	 */
-	private inline function admits(writeIsThirdParty: Bool, ownerFile: Null<String>): Bool {
-		return ownerFile == null || !writeIsThirdParty || _thirdParty.exists(ownerFile);
-	}
 
 	/**
 	 * How many resolved writes target `type`.`field` across the file set — the
@@ -286,25 +268,6 @@ final class FieldWriteIndex {
 		return site == null || writtenExternally(type, field, site.file, site.span, ownerFile);
 	}
 
-	/**
-	 * The declaration range of `type`, pinned to `ownerFile` when the caller knows which file
-	 * declares its candidate. `SymbolIndex.declarationSiteOf` answers only for a simple name the
-	 * scope declares EXACTLY ONCE, so widening the scope past the project turns a common project
-	 * type name — `Helper`, `Input`, `Config` — ambiguous and the site nulls out, which every
-	 * caller must read as "possibly written externally". The caller does hold the owner's file;
-	 * reading the declaration THERE is the per-owner answer the simple name cannot give. Falls
-	 * back to the scope-wide lookup when the file is unindexed or declares no such type.
-	 */
-	private function declarationSite(type: String, ownerFile: Null<String>): Null<{ file: String, span: Span }> {
-		if (ownerFile != null) {
-			final fi: Null<FileInfo> = _index.fileInfo(ownerFile);
-			if (fi != null) {
-				final t: Null<TypeDeclInfo> = fi.types.find(td -> td.name == type);
-				if (t != null) return { file: ownerFile, span: t.span };
-			}
-		}
-		return _index.declarationSiteOf(type);
-	}
 
 	/**
 	 * Whether any write to a field named `field` could not be attributed to a concrete
@@ -347,6 +310,45 @@ final class FieldWriteIndex {
 		final ownerParams: Null<Array<String>> = _typeParams[owner];
 		if (ownerParams != null && ownerParams.contains(cand)) return true;
 		return !uniquePlainClass(cand) || importShadowed(cand, ownerFile);
+	}
+
+	/**
+	 * Whether a write recorded in a source of the given half can reach a candidate declared in
+	 * `ownerFile`. A project source can write anything it can name; a THIRD-PARTY source (a
+	 * `resolutionLibs` / std file) cannot name a project type at all, so it can hold no
+	 * statically-typed write into one — the dependency direction is one-way. `ownerFile` null
+	 * means the caller is not asking about a specific candidate and every write is admitted.
+	 *
+	 * What this deliberately does NOT cover, because no name-keyed index can: a third-party
+	 * function taking `Dynamic` and writing a member of whatever it was handed. That write is
+	 * unresolved in ANY scope, and the project scope never saw it either, so narrowing here
+	 * removes no proof the base run had. A third-party SUBTYPE of a project type — the shape that
+	 * genuinely writes a project field from a third-party file — is not narrowed away: its writes
+	 * are attributed to the SUBTYPE, and `MemberWriteScan.subtypeWriteReaches` asks about that
+	 * subtype with no `ownerFile`, plus scans its declaration slice textually.
+	 */
+	private inline function admits(writeIsThirdParty: Bool, ownerFile: Null<String>): Bool {
+		return ownerFile == null || !writeIsThirdParty || _thirdParty.exists(ownerFile);
+	}
+
+	/**
+	 * The declaration range of `type`, pinned to `ownerFile` when the caller knows which file
+	 * declares its candidate. `SymbolIndex.declarationSiteOf` answers only for a simple name the
+	 * scope declares EXACTLY ONCE, so widening the scope past the project turns a common project
+	 * type name — `Helper`, `Input`, `Config` — ambiguous and the site nulls out, which every
+	 * caller must read as "possibly written externally". The caller does hold the owner's file;
+	 * reading the declaration THERE is the per-owner answer the simple name cannot give. Falls
+	 * back to the scope-wide lookup when the file is unindexed or declares no such type.
+	 */
+	private function declarationSite(type: String, ownerFile: Null<String>): Null<{ file: String, span: Span }> {
+		if (ownerFile != null) {
+			final fi: Null<FileInfo> = _index.fileInfo(ownerFile);
+			if (fi != null) {
+				final t: Null<TypeDeclInfo> = fi.types.find(td -> td.name == type);
+				if (t != null) return { file: ownerFile, span: t.span };
+			}
+		}
+		return _index.declarationSiteOf(type);
 	}
 
 	/**
@@ -393,8 +395,7 @@ final class FieldWriteIndex {
 	public static function build(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex, ?thirdPartyFiles: Array<String>
 	): FieldWriteIndex {
-		final thirdParty: Map<String, Bool> = [];
-		if (thirdPartyFiles != null) for (f in thirdPartyFiles) thirdParty[f] = true;
+		final thirdParty: Map<String, Bool> = pathSet(thirdPartyFiles);
 		final shape: RefShape = plugin.refShape();
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final symbols: SymbolIndex = index ?? SymbolIndex.build(files, plugin);
@@ -868,6 +869,13 @@ final class FieldWriteIndex {
 			map[owner] = params;
 		else
 			for (p in params) if (!cur.contains(p)) cur.push(p);
+	}
+
+	/** `paths` as a membership set — null (no partition supplied) is the empty set, where nothing is third-party. */
+	private static function pathSet(paths: Null<Array<String>>): Map<String, Bool> {
+		final out: Map<String, Bool> = [];
+		if (paths != null) for (p in paths) out[p] = true;
+		return out;
 	}
 
 }

@@ -42,12 +42,10 @@ class FieldWriteResolutionScopeTest extends Test {
 	private static final CTX: String = 'package proj;\n\nclass Ctx {\n\n\tpublic var mode: Int = 0;\n\n\tpublic function new() {}\n\n}\n';
 
 	/** A third-party subtype of `Base` that writes nothing itself — its declaration slice holds no `slot`. */
-	private static final SUB: String = 'package ext;\n\nimport proj.Base;\n\nclass Sub extends Base {\n\n\tpublic function new() {\n'
-		+ '\t\tsuper();\n\t}\n\n}\n';
+	private static final SUB: String = 'package ext;\n\nimport proj.Base;\n\nclass Sub extends Base {}\n';
 
 	/** A third-party subtype of `Ctx`, likewise silent about the inherited field. */
-	private static final CTX_SUB: String = 'package ext;\n\nimport proj.Ctx;\n\nclass CtxSub extends Ctx {\n\n\tpublic function new() {\n'
-		+ '\t\tsuper();\n\t}\n\n}\n';
+	private static final CTX_SUB: String = 'package ext;\n\nimport proj.Ctx;\n\nclass CtxSub extends Ctx {}\n';
 
 	/** A THIRD third-party file writing the inherited field through a subtype-typed receiver. */
 	private static final SUB_WRITER: String = 'package ext;\n\nclass SubWriter {\n\n\tpublic function new() {}\n\n'
@@ -65,15 +63,12 @@ class FieldWriteResolutionScopeTest extends Test {
 	private static final LIB_BASE: String =
 		'package ext;\n\nclass Base {\n\n\tpublic var other: Int = 0;\n\n\tpublic function new() {}\n\n}\n';
 
-	private static final SUB_FILE: { file: String, source: String } = { file: 'ext/Sub.hx', source: SUB };
-	private static final CTX_SUB_FILE: { file: String, source: String } = { file: 'ext/CtxSub.hx', source: CTX_SUB };
-	private static final SUB_WRITER_FILE: { file: String, source: String } = { file: 'ext/SubWriter.hx', source: SUB_WRITER };
-	private static final CTX_SUB_WRITER_FILE: { file: String, source: String } = {
-		file: 'ext/CtxSubWriter.hx',
-		source: CTX_SUB_WRITER
-	};
-	private static final DYN_WRITER_FILE: { file: String, source: String } = { file: 'ext/DynWriter.hx', source: DYN_WRITER };
-	private static final LIB_BASE_FILE: { file: String, source: String } = { file: 'ext/Base.hx', source: LIB_BASE };
+	private static final SUB_FILE: SourceFile = { file: 'ext/Sub.hx', source: SUB };
+	private static final CTX_SUB_FILE: SourceFile = { file: 'ext/CtxSub.hx', source: CTX_SUB };
+	private static final SUB_WRITER_FILE: SourceFile = { file: 'ext/SubWriter.hx', source: SUB_WRITER };
+	private static final CTX_SUB_WRITER_FILE: SourceFile = { file: 'ext/CtxSubWriter.hx', source: CTX_SUB_WRITER };
+	private static final DYN_WRITER_FILE: SourceFile = { file: 'ext/DynWriter.hx', source: DYN_WRITER };
+	private static final LIB_BASE_FILE: SourceFile = { file: 'ext/Base.hx', source: LIB_BASE };
 
 	/**
 	 * The blind spot both rules' docs described until this slice: the subtype is third-party, it
@@ -140,18 +135,14 @@ class FieldWriteResolutionScopeTest extends Test {
 	}
 
 	/** `prefer-read-only-field` over the `Base` fixture with `library` third-party files and `roots` project roots. */
-	private static function readOnly(
-		library: Array<{ file: String, source: String }>, ?roots: Array<{ file: String, source: String }>
-	): Int {
-		final report: Array<{ file: String, source: String }> = [{ file: 'proj/Base.hx', source: BASE }];
+	private static function readOnly(library: Array<SourceFile>, ?roots: Array<SourceFile>): Int {
+		final report: Array<SourceFile> = [{ file: 'proj/Base.hx', source: BASE }];
 		return new PreferReadOnlyField().run(report, scoped(report, roots ?? [], library)).length;
 	}
 
 	/** `prefer-final-public-field` over the `Ctx` fixture, same scope shape. */
-	private static function finalPublic(
-		library: Array<{ file: String, source: String }>, ?roots: Array<{ file: String, source: String }>
-	): Int {
-		final report: Array<{ file: String, source: String }> = [{ file: 'proj/Ctx.hx', source: CTX }];
+	private static function finalPublic(library: Array<SourceFile>, ?roots: Array<SourceFile>): Int {
+		final report: Array<SourceFile> = [{ file: 'proj/Ctx.hx', source: CTX }];
 		return new PreferFinalPublicField().run(report, scoped(report, roots ?? [], library)).length;
 	}
 
@@ -159,10 +150,7 @@ class FieldWriteResolutionScopeTest extends Test {
 	 * A plugin hosting the scope in the shape `LintCommand` builds: the library half carries the
 	 * declared roots too, which is exactly the overlap the third-party partition has to subtract.
 	 */
-	private static function scoped(
-		report: Array<{ file: String, source: String }>, roots: Array<{ file: String, source: String }>,
-		library: Array<{ file: String, source: String }>
-	): CachingGrammarPlugin {
+	private static function scoped(report: Array<SourceFile>, roots: Array<SourceFile>, library: Array<SourceFile>): CachingGrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope({
 			declared: true,
@@ -172,3 +160,9 @@ class FieldWriteResolutionScopeTest extends Test {
 	}
 
 }
+
+/** One source the scope holds — the shape every scope half in this file is an array of. */
+private typedef SourceFile = {
+	var file: String;
+	var source: String;
+};
