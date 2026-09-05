@@ -26,9 +26,9 @@ final class MemberSpacing {
 	public static final GROUP_SEPARATOR: String = '\n\n';
 
 	/**
-	 * The spacing-only degradation for a container whose member order cannot be
-	 * rewritten safely (`reorderSafe` refused): normalise every violating
-	 * inter-slot gap over the ORIGINAL member sequence - one blank line between
+	 * The spacing-only degradation for a container whose member order cannot be rewritten safely
+	 * (`reorderRefusal` named a gate): normalise every violating inter-slot gap over the
+	 * ORIGINAL member sequence - one blank line between
 	 * rank groups, none inside a tight field group - and, via `emitDirectiveSpacing`,
 	 * set every member-level `#if`/`#end` block off with a blank line before and
 	 * after, leaving the order itself untouched (the order finding stays report-only).

@@ -635,7 +635,10 @@ final class LintFixDriver {
 	): Void {
 		final entry: RuleFixOutcome = ledgerFor(ledger, rule);
 		entry.edits += editCount;
-		if (editCount != 0) return;
+		if (editCount != 0) {
+			notePartialDeclines(entry, own, countDeclines);
+			return;
+		}
 		// EVERY pass, and counted in EDIT SETS rather than findings — the whole point of it having a
 		// list of its own. A gate refusal is not a re-report of what an earlier edit exposed, it is a
 		// standing fact about these edits and the only sentence anyone gets about why the fix
@@ -651,6 +654,31 @@ final class LintFixDriver {
 		for (v in own) {
 			final reason: Null<String> = refusal ?? v.declineReason;
 			if (reason != null) bumpReason(entry.reasons, reason, 1);
+		}
+	}
+
+	/**
+	 * Count the findings a check declined in a call that DID return edits — the ones it fixed some
+	 * of and refused the rest of.
+	 *
+	 * The ledger read a non-empty edit list as "this rule answered", and every finding in the same
+	 * call that it had refused went unmentioned: no `declined` count, no reason, no row. Measured on
+	 * this project's own tree, `member-order` declined 13 of its 26 findings and the run named 11 —
+	 * the two missing ones were containers whose reorder was refused while their BLANK-LINE fix
+	 * landed, so the rule's edit count for that file was non-zero and the refusal disappeared.
+	 *
+	 * Only a finding the check itself SPOKE for is counted here. A silent one cannot be: the call
+	 * returned edits, so "no edit for this finding" is not derivable from the edit list — a check is
+	 * free to fix three findings with one span. `Violation.declineReason` is the only evidence that
+	 * a specific finding was refused, which is exactly what makes writing it the check's job.
+	 */
+	private static function notePartialDeclines(entry: RuleFixOutcome, own: Array<Violation>, countDeclines: Bool): Void {
+		if (!countDeclines) return;
+		for (v in own) {
+			final reason: Null<String> = v.declineReason;
+			if (reason == null) continue;
+			entry.declined++;
+			bumpReason(entry.reasons, reason, 1);
 		}
 	}
 

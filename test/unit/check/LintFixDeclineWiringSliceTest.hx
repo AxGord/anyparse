@@ -597,6 +597,81 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.same([{ text: 'a', count: 2 }, { text: 'b', count: 1 }], FixVerifier.checkReasons(own));
 	}
 
+	/**
+	 * A check that fixes ONE of its findings and refuses another is still asked to account for the
+	 * refused one - and the safe loop's ledger records it.
+	 *
+	 * The hole this pins is not a rule's: `noteFixOutcome` returned the moment the edit list was
+	 * non-empty, so every finding the same call had declined vanished from the run's output. The
+	 * whole ledger block is keyed off `declined != 0`, so the rule got no row at all, no reason,
+	 * and nothing anywhere said a finding had been withheld. Measured on this project's own tree
+	 * before the fix: `member-order` declined 13 findings and the run named 11 - the two it lost
+	 * were containers whose reorder it refused while their blank-line fix landed.
+	 *
+	 * Deliberately built from a SYNTHETIC group, not from a real check: the accounting belongs to
+	 * the driver, and a pin written against one rule would go green again the day that rule is
+	 * retired. `reasoned(null)` is the control in the same call - a finding the check said nothing
+	 * about cannot be counted, because with edits present "no edit for this finding" is not
+	 * derivable (one span may fix three findings).
+	 *
+	 * RED at base on `declined`, on `reasons` and on the rendered line.
+	 */
+	public function testAPartialDeclineIsCountedThoughTheRuleAlsoFixed(): Void {
+		#if (sys || nodejs)
+		final group: RuleEdits = {
+			rule: 'a-rule',
+			findings: [reasoned('the order is pinned: a fixture reason'), reasoned(null)],
+			edits: [{ span: new Span(0, 1), text: '' }],
+			overlapped: false,
+			refusal: null
+		};
+		final ledger: Map<String, RuleFixOutcome> = [];
+		LintFixDriver.ledgerFileLintEdits(ledger, [group], true);
+		final row: Null<RuleFixOutcome> = ledger['a-rule'];
+		if (row == null) {
+			Assert.fail('the rule has no ledger row');
+			return;
+		}
+		Assert.equals(1, row.edits, 'the edit it DID produce is still its edit');
+		Assert.equals(1, row.declined, 'and the finding it spoke against is counted, the silent one is not');
+		Assert.same([{ text: 'the order is pinned: a fixture reason', count: 1 }], row.reasons);
+		final lines: String = LintFixLedger.unfixedFixLedger(ledger, [], [], []).join('');
+		Assert.isTrue(lines.indexOf('the order is pinned: a fixture reason') != -1, 'and the reason reaches the rendered block: $lines');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The other side of the same gate: a rule that produced edits and declared NOTHING keeps its
+	 * silent row, so the change cannot turn "fixed" into "declined" by arithmetic alone.
+	 *
+	 * GREEN at base - it guards the behaviour the fix must not disturb, and is not a base-red pin.
+	 */
+	public function testARuleThatSaidNothingIsNotCountedAsDeclining(): Void {
+		#if (sys || nodejs)
+		final group: RuleEdits = {
+			rule: 'quiet-rule',
+			findings: [reasoned(null), reasoned(null)],
+			edits: [{ span: new Span(0, 1), text: '' }],
+			overlapped: false,
+			refusal: null
+		};
+		final ledger: Map<String, RuleFixOutcome> = [];
+		LintFixDriver.ledgerFileLintEdits(ledger, [group], true);
+		final row: Null<RuleFixOutcome> = ledger['quiet-rule'];
+		if (row == null) {
+			Assert.fail('the rule has no ledger row');
+			return;
+		}
+		Assert.equals(0, row.declined);
+		Assert.equals(0, row.reasons.length);
+		Assert.equals('', LintFixLedger.unfixedFixLedger(ledger, [], [], []).join(''), 'a rule with no declines gets no block');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** One violation carrying `reason`, or none — the shape a check hands back from `fix`. */
 	private static function reasoned(reason: Null<String>): Violation {
 		return {

@@ -1062,6 +1062,70 @@ class MemberOrderCheckTest extends Test {
 		Assert.notEquals(src, fixedSource(src), 'a small reorder is still applied');
 	}
 
+	/**
+	 * The over-budget decline SAYS it is the budget, and the same shape under the budget says
+	 * nothing - a fixed finding carries no reason.
+	 *
+	 * Both arms run the SAME fixture generator at two sizes, so the only thing that can separate
+	 * them is the budget itself; an assertion that only read the big arm would also pass on a
+	 * check that wrote its sentence onto every finding it ever saw.
+	 *
+	 * RED at base on the first assertion: the check emitted the spacing-only fallback and left
+	 * `declineReason` null, which is what `apq lint --fix` printed as "withheld it, without saying
+	 * why" for 12 of this project's own 13 residual findings.
+	 */
+	public function testTheOverBudgetDeclineNamesTheBudget(): Void {
+		final over: FixOutcome = fixOutcome(swapWithBody(300));
+		Assert.equals(1, over.reasons.length);
+		Assert.equals(0, over.edits, 'the over-budget container is left alone');
+		final reason: Null<String> = over.reasons[0];
+		if (reason == null) {
+			Assert.fail('the over-budget decline said nothing');
+			return;
+		}
+		Assert.isTrue(
+			reason.indexOf('whole-container permutation') != -1 && reason.indexOf('200 lines') != -1,
+			'the reason names the mechanism and the budget: $reason'
+		);
+		final under: FixOutcome = fixOutcome(swapWithBody(3));
+		Assert.isTrue(under.edits > 0, 'the same shape under the budget IS reordered');
+		Assert.same([null], under.reasons, 'so it declines nothing and says nothing');
+	}
+
+	/**
+	 * A container the ORDER of whose fields is load-bearing says which dependency holds it, not
+	 * that some initializer somewhere has a side effect.
+	 *
+	 * `X`'s initializer READS `Y`, so canonical order (public constant before private) would read
+	 * `Y` before it is built. This is the one of this project's 13 residual `member-order` findings
+	 * that is not the budget - `HaxeNamingSupport.MODIFIER_KINDS`, whose initializer comprehends
+	 * `MOD_KIND_TO_NAME.keys()` - copied down to two members, and it reports the same sentence.
+	 *
+	 * RED at base (no reason at all). It also discriminates the gate ORDER, which is why the
+	 * fixture keeps the CALL rather than reading the sibling plainly: `Y.keys()` makes the coarser
+	 * side-effecting-flip gate true as well, so a `reorderRefusal` that asked that one first
+	 * answers with the vaguer sentence and fails the second assertion while the first still passes.
+	 * A plain `public var x:Int = y;` does NOT trip the coarse gate - measured, that fixture
+	 * survived the swapped-gate arm.
+	 */
+	public function testASiblingReadPinNamesTheDependency(): Void {
+		final outcome: FixOutcome = fixOutcome(
+			'class C { private static final Y:Map<String, String> = ["a" => "b"]; '
+			+ 'public static final X:Array<String> = [for (k in Y.keys()) k]; }'
+		);
+		Assert.equals(1, outcome.reasons.length);
+		Assert.equals(0, outcome.edits, 'the pinned container is left alone');
+		final reason: Null<String> = outcome.reasons[0];
+		if (reason == null) {
+			Assert.fail('the sibling-read pin said nothing');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('the order is pinned') == 0, 'a pinned order says so first: $reason');
+		Assert.isTrue(
+			reason.indexOf('reads a sibling field') != -1, 'and names the dependency rather than the coarser side-effect gate: $reason'
+		);
+	}
+
 	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
 	private inline function contentRankedBlockSource(): String {
 		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
@@ -1082,6 +1146,25 @@ class MemberOrderCheckTest extends Test {
 		final check: MemberOrder = new MemberOrder();
 		check.setConfigResolver(emptyConfigResolver());
 		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/**
+	 * Every finding's `declineReason` AFTER the fix pass, in report order - the field the check
+	 * writes on a finding it refused, and `null` for one it fixed - beside the number of edits the
+	 * same call produced.
+	 *
+	 * Reads the SAME violation objects the fix was handed, because that is the whole wiring under
+	 * test: `Check.fix` is given the caller's own findings, so a note written there reaches the
+	 * ledger without any return value carrying it. The edit count comes back with them because a
+	 * reason on its own cannot tell a DECLINE from a rule that spoke and fixed anyway.
+	 */
+	private function fixOutcome(src: String): FixOutcome {
+		final check: MemberOrder = new MemberOrder();
+		check.setConfigResolver(emptyConfigResolver());
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		final applied: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin);
+		return { reasons: [for (v in vs) v.declineReason], edits: applied.length };
 	}
 
 	private function edits(src: String, ?resolve: (String) -> LintConfig): Array<{ span: Span, text: String }> {
@@ -1174,3 +1257,16 @@ class MemberOrderCheckTest extends Test {
 	}
 
 }
+
+/**
+ * What ONE `member-order` fix call answered for ONE source: the `declineReason` of each finding it
+ * was handed, in report order, beside the number of edits it produced.
+ *
+ * The two travel together because neither alone says what happened. A null reason is what a FIXED
+ * finding carries and also what a silently declined one carried before this check learned to speak;
+ * only the edit count separates them.
+ */
+typedef FixOutcome = {
+	var reasons: Array<Null<String>>;
+	var edits: Int;
+};

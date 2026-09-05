@@ -174,10 +174,13 @@ final class MemberOrder implements Check implements ConfigAware {
 		final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
 		final movableArglessNew: Bool = violations.length > 0
 			&& LintConfig.resolveWith(_resolveConfig, violations[0].file).boolOption('member-order', 'movableArglessNew') == true;
-		final flagged: Array<Int> = [];
+		// Keyed by the flagged member's slot start, the same coordinate `firstLayoutIssue` re-derives
+		// on this path — so a container that declines can write its reason onto the very finding that
+		// reported it, rather than the caller inferring one from an empty edit list.
+		final flagged: Map<Int, Violation> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
+			if (span != null) flagged[span.from] = v;
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
 		// The file this pass is rewriting, for the build-macro gate: every violation a fix pass is
@@ -284,7 +287,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * degrades to spacing-only fixes).
 	 */
 	private static function fixWalk(
-		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Array<Int>,
+		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Map<Int, Violation>,
 		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>, file: Null<String>, regions: Array<LexRegion>
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind))
@@ -300,28 +303,41 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * `#if`-guarded members, a rebuilt region with regenerated `#if`/`#end`
 	 * directives. Falls back to in-place slot swaps when an inter-member gap holds
 	 * non-whitespace a rebuild would silently drop. A reorder-unsafe container
-	 * (`reorderSafe` refused) degrades to `emitSpacingOnly`: the blank-line
+	 * names its gate through `reorderRefusal` and degrades to `emitSpacingOnly`: the blank-line
 	 * normalisation between rank groups still lands, the order stays untouched.
 	 */
 	private static function emitReorder(
-		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>,
+		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Map<Int, Violation>,
 		accessors: Map<Int, Bool>, movableArglessNew: Bool, index: Null<SymbolIndex>, file: Null<String>, regions: Array<LexRegion>
 	): Void {
 		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, accessors, regions);
 		if (members.length < 2) return;
 		final plan: SortPlan = computePlan(members, source, shape);
 		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan);
-		if (bad == null || !flagged.contains(bad.member.span.from)) return;
+		if (bad == null) return;
+		final reported: Null<Violation> = flagged[bad.member.span.from];
+		if (reported == null) return;
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> compareOrder(a, b, plan));
-		if (
-			!reorderSafe(members, sorted, source, shape, movableArglessNew, regions)
-			|| !macroBuiltMetaOrderKept(members, sorted, container, index, file)
-		) {
+		final pinned: Null<String> = reorderRefusal(members, sorted, source, shape, movableArglessNew, regions);
+		if (pinned != null) {
+			reported.declineReason = pinned;
+			MemberSpacing.emitSpacingOnly(edits, members, source);
+			return;
+		}
+		if (!macroBuiltMetaOrderKept(members, sorted, container, index, file)) {
+			reported.declineReason = 'the order is pinned: this type is built by a MACRO that reads its field list in declaration '
+				+ 'order, so the relative order of its annotated members is what the macro dispatches on';
 			MemberSpacing.emitSpacingOnly(edits, members, source);
 			return;
 		}
 		if (relocatedLines(members, sorted, source) > MAX_RELOCATED_LINES) {
+			// The number is deliberately NOT in the sentence: the ledger buckets by exact text, so a
+			// per-container measurement would make one row per file and bury the shared cause under
+			// its own detail. The budget IS the cause; the measurement is one `--rule member-order`
+			// run away.
+			reported.declineReason = 'the reorder is a whole-container permutation and this one would move more than $MAX_RELOCATED_LINES'
+				+ ' lines for a single reported member, over the review budget — split the type, or move the member with `apq move-member`';
 			MemberSpacing.emitSpacingOnly(edits, members, source);
 			return;
 		}
@@ -336,7 +352,13 @@ final class MemberOrder implements Check implements ConfigAware {
 			return;
 		}
 		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape);
-		if (rebuilt == null) return;
+		if (rebuilt == null) {
+			// The only decline that emits NOTHING, spacing included: the rebuild owns the whole
+			// conditional region, so there is no sub-edit of it that is still safe to make.
+			reported.declineReason = 'the order is pinned: the `#if` region could not be regenerated from its member slots, so '
+				+ 'reordering it would lose bytes';
+			return;
+		}
 		edits.push({ span: new Span(members[0].regionFrom, members[members.length - 1].regionTo), text: rebuilt });
 	}
 
@@ -364,22 +386,46 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether reordering `members` cannot change behaviour. Reordering changes behaviour
-	 * only via FIELD initializers (they run in declaration order; statics at class-load,
-	 * instance fields in the constructor - independent phases). Bails on stranded trivia
-	 * (an `#else` the branch model could not absorb, an orphan comment), on a conditional
-	 * region holding bytes no member slot covers, or on a field-init order flip a text scan
-	 * cannot prove safe. `movableArglessNew` (the opt-in option) exempts a pure argless-`new`
-	 * allocation from the side-effecting-flip bail - see `isMovableAllocation`.
+	 * Why reordering `members` could change behaviour, in the words the finding gets told - or null
+	 * when it cannot. Reordering changes behaviour only via FIELD initializers (they run in
+	 * declaration order; statics at class-load, instance fields in the constructor - independent
+	 * phases). Bails on stranded trivia (an `#else` the branch model could not absorb, an orphan
+	 * comment), on a conditional region holding bytes no member slot covers, or on a field-init
+	 * order flip a text scan cannot prove safe. `movableArglessNew` (the opt-in option) exempts a
+	 * pure argless-`new` allocation from the side-effecting-flip bail - see `isMovableAllocation`.
+	 *
+	 * It returns the SENTENCE rather than a bool because every one of these bails is permanent for
+	 * the container it fires on: re-running the fixer produces the same refusal for ever, and a
+	 * reader who is not told which gate closed has no way to tell that from a fixer that has not got
+	 * round to the case yet. The caller writes it onto the finding as `Violation.declineReason`.
 	 */
-	private static function reorderSafe(
+	private static function reorderRefusal(
 		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape, movableArglessNew: Bool,
 		regions: Array<LexRegion>
-	): Bool {
-		return !hasUnmodelledElse(members, source) && !hasOrphanComment(members, source, regions)
-			&& !hasSideEffectingFieldFlip(members, sorted, shape, source, movableArglessNew)
-			&& !hasSiblingReadFlip(members, sorted, source) && conditionalRegionsCovered(members, source)
-			&& !splitsCoexistingRegion(members);
+	): Null<String> {
+		if (hasUnmodelledElse(members, source))
+			return 'the order is pinned: this type holds an `#else` shape the branch model does not represent';
+		if (hasOrphanComment(members, source, regions))
+			return 'the order is pinned: a comment between two members belongs to no member slot, so a reorder would strand it';
+		// Asked BEFORE the side-effect gate although either alone refuses the container: a field that
+		// reads its sibling almost always also carries a call, so the coarser gate would answer first
+		// and the reader would be told "some initializer has a side effect" for a member whose real
+		// constraint is a NAMED dependency on the field above it. Which gate is asked first decides
+		// only the sentence, never the verdict.
+		if (hasSiblingReadFlip(members, sorted, source))
+			return 'the order is pinned: a field initializer here reads a sibling field the reorder would move BELOW it, which '
+				+ 'would read it before it is initialized';
+		if (hasSideEffectingFieldFlip(members, sorted, shape, source, movableArglessNew))
+			return 'the order is pinned: the reorder would flip a side-effecting field initializer past another initialized '
+				+ 'same-phase field, which runs the two in the other order';
+		if (!conditionalRegionsCovered(members, source))
+			return 'the order is pinned: a conditional region holds bytes no member slot covers, so rebuilding it would drop them';
+		// The suppression below is the last arm of a six-gate guard cascade: folding just this one
+		// into a ternary nests the whole chain into a pyramid and detaches the comment above from
+		// the gate it explains — measured, the rule's own `--fix` did exactly that.
+		if (splitsCoexistingRegion(members)) // noqa: prefer-ternary-return
+			return 'the order is pinned: one conditional construct declares members of two sections, and reordering would split it';
+		return null;
 	}
 
 	/**
