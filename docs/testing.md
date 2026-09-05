@@ -374,14 +374,32 @@ A cut is one of two shapes, and a record must declare exactly one:
 
 Both are `hxq patch --select 'FnMember:<method>'` payloads, which is the point: an arm survives every edit that does not rename its member. A stored line number, or a checked-in git patch, does not.
 
-**Three build errors, all free.** `TestDiscovery` cross-checks the registry against the tree while it is already walking it:
+**Five build errors, all free.** `TestDiscovery` cross-checks the registry against the tree while it is already walking it:
 
 - a `@:killer` naming no declared arm, reported at the fixture's own position;
 - a declared arm no `@:killer` names — an arm exists to kill a pin;
 - a declared arm whose `type` no longer declares that `method`, asked of the COMPILER (`Context.getModule` plus a field lookup), not of the file's text;
+- a declared arm whose `type` names a module no classpath this build reads carries at all — distinct, since S102, from a module this build merely cannot SEE;
 - the registry file itself gone, which every `@:killer` in the tree resolves through.
 
 The third is the one nothing could catch before, because it needs no test run and no sweep — and it is the one that had already happened: S94 recorded that four of the `trivial-getter` lines its arm depends on had already been moved into `check/BackingFieldRefs.hx` by S74, so the dependency stood while the file it named did not.
+
+**The COMPILER cannot answer for macro-time code, and until S102 that REFUSED the arm.** `Context.getModule` types into the context being COMPILED, so a module whose every type sits behind `#if macro` — all 62 modules directly under `src/anyparse/macro/`, 71 with `strategy/` — contributes no type to the test build. The old check collapsed that with a module the classpath does not carry and reported `resolves to no class`, which made the entire macro-time half of the engine unaddressable by an arm: S100 wanted four arms against a `WriterLowering` writer seam and had to cut the config LOADER instead, and on `d86c958b` `anyparse.macro.*` held 0 of the 39 declared arms.
+
+Measured on `d86c958b`, with a probe compiled against `src`:
+
+| asked of | `Context.getModule` answers |
+|---|---|
+| `anyparse.macro.WriterLowering` | `ok, 0 type(s)` |
+| `anyparse.macro.Lowering` | `ok, 0 type(s)` |
+| `anyparse.macro.NoSuchModuleAtAll` | THREW `Type not found` |
+| `anyparse.query.TypeTraits` | `ok, 1 type(s): TInst(TypeTraits)` |
+
+Those are two different facts and separating them is the whole fix. A module the classpath does not carry still stops the build; an arm whose type is real but invisible here is DEFERRED — recorded in `TestRegistry.deferredArms()` and answered by `unit.MutationArmAddressTest`, which resolves the type to the file `tools/mutation-arm.sh` would patch and asks anyparse's own parser for a `FnMember:<method>`. The parser has no blind spot here: a `#if` region is a `Conditional` node whose branches are ordinary children. That walk also answers a question the build macro never asked at all — the runner resolves a type to a file by hand (`for root in src test`), and nothing checked that step either.
+
+There is no build-macro route around the typer, and both dodges were measured rather than argued: `Context.defined('macro')` reads false inside a macro function during a js build, `Type.resolveClass` at macro runtime answers null for macro-side and runtime-side classes alike, and the obvious `@:build` on a type declared inside `#if macro` is a compiler refusal in as many words — `You cannot use @:build inside a macro`.
+
+The trade is that a macro-module arm's member check moves from a build ERROR to a suite failure. That is not the "declared but unverified" class S96 refused: the check is machine-run on every suite run, it is asked of the real parser rather than of prose, and the whole walk costs 0.42 s including node start-up — ~20 files, one of them `WriterLowering.hx` at 367 KB. What the gate does NOT check is whether a FRAGMENT arm's `find` text still occurs: that is `anyparse.query.Patch`'s own matcher, and calling it per arm would run a canonical writer round-trip over every host file. Running the arm answers it, loudly.
 
 **Running one is one command.**
 

@@ -36,6 +36,9 @@ typedef TestCensus = {
 	/** Every distinct `@:killer` arm name the tree spells, for the registry cross-check. */
 	killers: Array<String>,
 
+	/** Arms whose type this build's typer cannot see, in registry order — deferred to the parser. */
+	deferred: Array<String>,
+
 	/** Every fixture whose doc-comment prose claims a role no annotation records. */
 	claims: Array<String>
 };
@@ -86,6 +89,17 @@ typedef TestCensus = {
  * nobody names stops it too, and an arm whose member has been renamed or moved
  * out from under it stops it before anyone runs a sweep. Running one is
  * `tools/mutation-arm.sh <NAME>`.
+ *
+ * **What the typer cannot answer, the parser does.** A module whose every type
+ * sits behind `#if macro` contributes NO type to this build, so asking the
+ * compiler whether `anyparse.macro.WriterLowering` declares a member is asking
+ * the wrong instrument — and until this slice the answer, `resolves to no
+ * class`, refused the arm and left the whole macro-time half of the engine
+ * unaddressable by one. `moduleTypes` now separates the two answers
+ * `Context.getModule` gives: an absent module still stops the build, while an
+ * arm whose type is real but invisible here is recorded in
+ * `TestRegistry.deferredArms()` and answered by `unit.MutationArmAddressTest`,
+ * which parses the very file `tools/mutation-arm.sh` would patch.
  *
  * **No state.** Everything the macro emits is a fresh literal built per call
  * (`classNames()` returns a new array each time), so the generated
@@ -160,6 +174,7 @@ class TestDiscovery {
 			bases: [],
 			pins: [],
 			killers: [],
+			deferred: [],
 			claims: []
 		};
 		for (module in modules) if (!SELF_MODULES.contains(module)) for (moduleType in Context.getModule(module)) switch moduleType {
@@ -167,7 +182,7 @@ class TestDiscovery {
 				consider(ref.get(), census, table.arms);
 			case _:
 		}
-		checkArms(table.arms, census.killers);
+		checkArms(table.arms, census.killers, census.deferred);
 		census.registered.sort((a, b) -> compareStrings(qualified(a), qualified(b)));
 		census.dead.sort(compareStrings);
 		census.bases.sort(compareStrings);
@@ -180,6 +195,7 @@ class TestDiscovery {
 		final pins: Array<String> = census.pins;
 		final claims: Array<String> = census.claims;
 		final arms: Array<String> = table.arms.map(MutationArms.render);
+		final deferred: Array<String> = census.deferred;
 		final generated: Array<Field> = (macro class Generated {
 			/** Hand every discovered case to `add`, in generation order. */
 			public static function addAll(add: (utest.Test) -> Void): Void $b{adds}
@@ -198,6 +214,9 @@ class TestDiscovery {
 
 			/** Every declared mutation arm as `<name> :: <type>#<method> :: <cut> :: <note>`. */
 			public static function arms(): Array<String> return $v{arms};
+
+			/** Every arm the typer could not answer for, as `<name> :: <type>#<method>`. */
+			public static function deferredArms(): Array<String> return $v{deferred};
 
 			/** Every fixture whose prose claims a role no annotation records, as `<class>#<method> :: <kinds>`. */
 			public static function claims(): Array<String> return $v{claims};
@@ -390,11 +409,14 @@ class TestDiscovery {
 	 * leaves the recipe pointing at nothing, and until somebody RUNS the arm
 	 * nothing says so — four of the `trivial-getter` lines S94's arm depends on had
 	 * already been moved into another file by S74, before the pin naming that arm
-	 * was ever read back. Asking the
-	 * compiler costs nothing here: every module an arm names is in the test build
-	 * already.
+	 * was ever read back. Asking the compiler costs nothing here: every module an arm names is in the
+	 * test build already — but it can only be asked about a module this build
+	 * TYPES. A module whose types are all behind `#if macro` contributes none, and
+	 * that is a third answer, not a failure: the arm goes on `deferred`, and
+	 * `unit.MutationArmAddressTest` asks the parser the same question of the file
+	 * the runner patches.
 	 */
-	private static function checkArms(arms: Array<MutationArm>, killers: Array<String>): Void {
+	private static function checkArms(arms: Array<MutationArm>, killers: Array<String>, deferred: Array<String>): Void {
 		for (arm in arms) {
 			if (!killers.contains(arm.name))
 				Context.error(
@@ -402,27 +424,59 @@ class TestDiscovery {
 					+ ' — an arm exists to kill a pin, so give it one or drop it',
 					Context.currentPos()
 				);
-			final owner: Null<ClassType> = classNamed(arm.type);
-			if (owner == null)
-				Context.error('$ARMS_FILE: "${arm.name}" names the type ${arm.type}, which resolves to no class', Context.currentPos());
-			else if (!declaresMethod(owner, arm.method))
+			final types: Null<Array<Type>> = moduleTypes(arm.type);
+			if (types == null)
 				Context.error(
-					'$ARMS_FILE: "${arm.name}" cuts ${arm.type}#${arm.method}, and ${arm.type} declares no such method'
-					+ ' — a rename or a move left the arm behind; re-point it at the member the cut belongs to now',
+					'$ARMS_FILE: "${arm.name}" names the type ${arm.type}, and no module of that path is on the classpath'
+					+ ' — check the spelling, or the root the module lives under',
 					Context.currentPos()
 				);
+			else if (types.length == 0)
+				deferred.push('${arm.name} :: ${arm.type}#${arm.method}');
+			else {
+				final owner: Null<ClassType> = classIn(types, arm.type);
+				if (owner == null)
+					Context.error('$ARMS_FILE: "${arm.name}" names the type ${arm.type}, which resolves to no class', Context.currentPos());
+				else if (!declaresMethod(owner, arm.method))
+					Context.error(
+						'$ARMS_FILE: "${arm.name}" cuts ${arm.type}#${arm.method}, and ${arm.type} declares no such method'
+						+ ' — a rename or a move left the arm behind; re-point it at the member the cut belongs to now',
+						Context.currentPos()
+					);
+			}
 		}
 	}
 
-	/** The class a dotted module path names, or null when nothing of that name resolves. */
-	private static function classNamed(path: String): Null<ClassType> {
+	/**
+	 * The types module `path` contributes to THIS build, or null when no module of
+	 * that path is on the classpath at all.
+	 *
+	 * The two answers `Context.getModule` gives for a module it produces no class from
+	 * are NOT the same fact, and the whole macro-time half of the engine sits on the
+	 * difference. Measured on `d86c958b` with a probe compiled against `src`:
+	 * `anyparse.macro.NoSuchModuleAtAll` THROWS `Type not found`, while
+	 * `anyparse.macro.WriterLowering` and `anyparse.macro.Lowering` each answer `ok, 0
+	 * type(s)` — the file is on the classpath and every type in it is behind
+	 * `#if macro`, which a non-macro build excludes. Collapsing the two, as this
+	 * function's predecessor did, made every macro-time member unaddressable by an arm
+	 * and made a typo indistinguishable from one.
+	 *
+	 * There is no build-macro route around that, and both dodges were measured rather
+	 * than argued. `Context.getModule` types into the context being COMPILED, not the
+	 * one the macro runs in — `Context.defined('macro')` reads false inside a macro
+	 * function during a js build, and `Type.resolveClass` at macro runtime answers null
+	 * for macro-side and runtime-side classes alike. The other dodge, a `@:build` on a
+	 * type declared inside `#if macro`, is a compiler refusal in as many words:
+	 * `You cannot use @:build inside a macro`.
+	 */
+	private static function moduleTypes(path: String): Null<Array<Type>> {
+		return try Context.getModule(path) catch (exception: Exception) null;
+	}
+
+	/** The class a dotted module path names among `types`, or null when the module declares no such type. */
+	private static function classIn(types: Array<Type>, path: String): Null<ClassType> {
 		final parts: Array<String> = path.split('.');
-		var moduleTypes: Array<Type> = [];
-		try
-			moduleTypes = Context.getModule(path)
-		catch (exception: Exception)
-			return null;
-		for (moduleType in moduleTypes) switch moduleType {
+		for (moduleType in types) switch moduleType {
 			case TInst(ref, _):
 				final c: ClassType = ref.get();
 				if (c.name == parts[parts.length - 1]) return c;
