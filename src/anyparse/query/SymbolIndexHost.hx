@@ -46,4 +46,14 @@ interface SymbolIndexHost {
 	 */
 	function resolutionFiles(): Null<Array<{ file: String, source: String }>>;
 
+	/**
+	 * The PROJECT sources — report files UNION the declared `resolutionRoots` — or null when the
+	 * project declared no roots, in which case the report scope the caller already holds IS the
+	 * answer. Narrower than `resolutionFiles` by exactly the third-party half (`resolutionLibs`,
+	 * the std), for a proof about what can WRITE a project type's member: those roots are the
+	 * project's own files, a haxelib is not, and a name-keyed write scan that admits one only ever
+	 * stops reporting.
+	 */
+	function resolutionProjectFiles(): Null<Array<{ file: String, source: String }>>;
+
 }

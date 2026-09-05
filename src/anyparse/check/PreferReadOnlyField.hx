@@ -7,6 +7,7 @@ import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -33,9 +34,10 @@ using StringTools;
  *    are attributed to the SUBTYPE, so `writtenExternally` below would miss them.
  *    Merely HAVING a subtype no longer bails. That gate has two arms with DIFFERENT
  *    reach: the body scan runs over the resolution scope, so a subtype declared in a
- *    configured library root counts, but the `writtenAnywhere(subtype, …)` arm reads the
- *    report-scoped `FieldWriteIndex`. Residual blind spot: a library-side write through a
- *    library subtype stays invisible until that index is widened too. `MemberLookup.supertypeDeclaresMember`
+ *    configured library root counts, but the `writtenAnywhere(subtype, …)` arm reads the PROJECT-scoped
+ *    `FieldWriteIndex` (report UNION the declared `resolutionRoots`). Residual blind spot: a
+ *    library-side write through a library subtype stays invisible, deliberately — see the scope
+ *    note below. `MemberLookup.supertypeDeclaresMember`
  *    still bails when a supertype declares the same field.
  * 2. No write to the field NAME anywhere is unresolved
  *    (`FieldWriteIndex.hasUnresolvedWrite`) — an unresolved `recv.field = …` could be
@@ -73,9 +75,12 @@ using StringTools;
  *
  * ## Whole-project scope required
  *
- * Like `prefer-final-public-field` / `unused-private`, the write-index and subtype
- * gate are only sound when the lint scope contains every file referencing the type;
- * the sound usage is linting the whole project (`lint src/`).
+ * Like `prefer-final-public-field`, `run` builds the write index and the subtype gate over the
+ * PROJECT scope — report files UNION the declared `resolutionRoots` — not over the lint scope, so
+ * a narrow run still sees a writer in a module it never lints. A project declaring no roots keeps
+ * the old limitation (`unused-private` carries it too): there the sound usage is linting the whole
+ * project (`lint src/`). The LIBRARY half of the resolution scope stays out of both indexes; see
+ * that check's note for the measurement.
  */
 @:nullSafety(Strict)
 final class PreferReadOnlyField implements Check {
@@ -91,8 +96,12 @@ final class PreferReadOnlyField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin, index);
+		// The write proof's scope is the PROJECT, not the lint scope: a field's writer can be any
+		// project file, so a narrow run answers over the declared `resolutionRoots` too. Report-only
+		// when the project declares none — then the lint scope IS all this run can see.
+		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
+		final index: SymbolIndex = SymbolIndex.build(scope, plugin);
+		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);

@@ -7,6 +7,7 @@ import anyparse.query.FieldWriteIndex;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -50,8 +51,9 @@ import anyparse.runtime.Span;
  *    subtype. Merely HAVING a subtype no longer bails. The two arms have DIFFERENT reach:
  *    the body scan runs over the resolution scope, so a subtype declared in a configured
  *    library root counts, while the `writtenAnywhere(subtype, …)` arm reads the
- *    report-scoped `FieldWriteIndex` — a library-side write through a library subtype is
- *    the residual blind spot. The same gate also bails when a SUPERtype declares
+ *    PROJECT-scoped `FieldWriteIndex` (report UNION the declared `resolutionRoots`) — a
+ *    library-side write through a library subtype is the residual blind spot, and a deliberate
+ *    one. The same gate also bails when a SUPERtype declares
  *    the same field (`MemberLookup.supertypeDeclaresMember`): its property access is
  *    then fixed by that interface / superclass var, which final would violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface (which supertypeDeclaresMember treats as absent): out of scope it may still declare a mutable member, so the rewrite is skipped conservatively.
  * 3. No unresolved write can target the field
@@ -81,12 +83,20 @@ import anyparse.runtime.Span;
  *
  * ## Whole-project scope required
  *
- * The write-index and the subtype gate are only sound when the lint scope contains
- * EVERY file that can reference the type. Run over a single file in isolation, an
- * external writer / subtype is invisible and the field would be wrongly flagged.
- * This is the same limitation `unused-private` / `prefer-final-field` carry; like
- * them, this is a full-scope check and the sound usage is linting the whole
- * project (`lint src/`).
+ * The write index and the subtype gate are only sound over a scope holding EVERY file that can
+ * reference the type, and that is NOT the lint scope: `run` builds both over the PROJECT scope —
+ * report files UNION the declared `resolutionRoots` (`RefactorSupport.resolutionProjectSourcesOf`),
+ * the key whose whole purpose is that a narrow lint still answers over the whole project. Without
+ * it the answer moved with the command line: `hxq lint src/anyparse/core --fix` finalized three
+ * `LoweringCtx` fields that `src/anyparse/macro/Build.hx` assigns, and under `--no-oracle` there is
+ * no revert net, so the non-compiling tree stayed on disk.
+ *
+ * A project declaring no `resolutionRoots` still answers from the report scope alone — the
+ * limitation `unused-private` / `prefer-final-field` carry, and there the sound usage is still
+ * linting the whole project (`lint src/`). What does NOT join either index is the LIBRARY half of
+ * the resolution scope (`resolutionLibs`, the std): a haxelib cannot assign into the project, and
+ * admitting it to a scan keyed on a member NAME only suppresses — measured over the Pony fork, 16
+ * of 109 findings lost and none gained.
  */
 @:nullSafety(Strict)
 final class PreferFinalPublicField implements Check {
@@ -103,8 +113,12 @@ final class PreferFinalPublicField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin, index);
+		// The write proof's scope is the PROJECT, not the lint scope: a field's writer can be any
+		// project file, so a narrow run answers over the declared `resolutionRoots` too. Report-only
+		// when the project declares none — then the lint scope IS all this run can see.
+		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
+		final index: SymbolIndex = SymbolIndex.build(scope, plugin);
+		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);

@@ -123,6 +123,23 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The PROJECT sources — report files UNION the declared `resolutionRoots` — when `plugin` hosts a
+	 * scope that has any, else null (the caller falls back to the report files it was handed). The
+	 * counterpart of `resolutionSourcesOf` for a proof that must widen past the LINT scope without
+	 * widening past the PROJECT: a write to a project type's field lives in a project file, never in a
+	 * haxelib or the std, and a scan keyed on a member NAME that admits those only loses findings to
+	 * the names they happen to share.
+	 *
+	 * Gated on `hasDeclaredResolutionScope`, like `unused-private`'s zero-occurrence scan and unlike
+	 * `resolutionIndexOf`: the implicit std-only scope declares no roots, so it can only ever answer
+	 * null here anyway, and asking the narrow predicate says why in the code.
+	 */
+	public static inline function resolutionProjectSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host != null && host.hasDeclaredResolutionScope() ? host.resolutionProjectFiles() : null;
+	}
+
+	/**
 	 * Whether a BARE `typeName` needs no import to resolve from a file in `filePkg` — which only a
 	 * module's MAIN type read from that module's OWN package ever does. A SUB-MODULE type is
 	 * invisible bare outside its own module, a sibling file in the same package included.
