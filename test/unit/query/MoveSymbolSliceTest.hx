@@ -807,14 +807,14 @@ class MoveSymbolSliceTest extends Test {
 	 * A STRING literal is the other half of the same question, and nothing masks one: the reference
 	 * scans see a string's bytes exactly as they see code.
 	 *
-	 * The comment spelling of both arms is already pinned — `testACommentOnlyMentionStillCountsAsAReference`
-	 * for the import and `testACommentOnlyMentionDoesNotRefuseAPrivateType` for the private refusal. What
-	 * is new here is the STRING mention, and the two arms in one fixture: the TEXT scan (`namesAnyOf`)
-	 * counts it, which is the conservative direction wherever the answer WRITES an import (a redundant
-	 * import costs a lint advisory, a missing one costs the build), while the PROVEN scan
-	 * (`namesAnyNodeOf`) does not — and that arm REFUSES rather than imports, because a module-`private`
-	 * type cannot be imported from another module at all. Same file, same single mention, opposite
-	 * answers.
+	 * The comment spelling of both arms is pinned elsewhere — `testACommentOnlyMentionIsNotAReference`
+	 * for the import and `testACommentOnlyMentionDoesNotRefuseAPrivateType` for the private refusal —
+	 * and since S80 a comment counts for neither. What is pinned HERE is the STRING mention, and the
+	 * two arms in one fixture: the TEXT scan (`NameMentionScan.sourceNamesAny`) counts it, which is the
+	 * conservative direction wherever the answer WRITES an import (a redundant import costs a lint
+	 * advisory, a missing one costs the build), while the PROVEN scan (`NameMentionScan.nodeNamesAny`)
+	 * does not — and that arm REFUSES rather than imports, because a module-`private` type cannot be
+	 * imported from another module at all. Same file, same single mention, opposite answers.
 	 */
 	public function testAStringOnlyMentionBuysTheImportAndDoesNotRefuseThePrivateMove(): Void {
 		inline function moveWith(modifier: String): MoveResult {
@@ -847,14 +847,17 @@ class MoveSymbolSliceTest extends Test {
 	/**
 	 * A comment ending in a PERIOD, directly above a line that starts with the moved type's name.
 	 *
-	 * `namesAnyOf`'s comment regions are NOT a mask that drops mentions written inside comments — the
-	 * scan counts those deliberately, which is the conservative direction when the answer WRITES an
-	 * import. What the regions decide is the QUALIFICATION test: a name a `.` precedes is spelled
-	 * fully qualified and owes no import, and `qualifiedBefore` only believes that `.` when it is not
-	 * itself inside a comment. Hand the scan no regions and a comment's own full stop becomes that
-	 * `.` — the last real reference in the file goes uncounted, the repair import is never written,
-	 * and the source file stops compiling with `Type not found`. Measured: with the regions dropped
-	 * this fixture loses `import p.Host.Moved;` and nothing else changes.
+	 * `NameMentionScan.sourceNamesAny` uses its comment regions for TWO unrelated jobs, and this pins
+	 * the second. The first is the MASK: since S80 an occurrence inside a comment is not counted at all.
+	 * The second is the QUALIFICATION test — a name a `.` precedes is spelled fully qualified and owes
+	 * no import, and `qualifiedBefore` only believes that `.` when it is not itself inside a comment.
+	 * Hand the scan no regions and a comment's own full stop becomes that `.` — the last real reference
+	 * in the file goes uncounted, the repair import is never written, and the source file stops
+	 * compiling with `Type not found`. Measured: with the regions dropped this fixture loses
+	 * `import p.Host.Moved;` and nothing else changes.
+	 *
+	 * So the discriminator the two jobs draw together is comment-ADJACENT (counted, here) against
+	 * comment-INTERIOR (not counted, `testACommentOnlyMentionIsNotAReference`).
 	 *
 	 * The second arm is the control — the same file with the period removed answers identically,
 	 * which is what makes the first arm a statement about the regions rather than about the fixture.
@@ -881,14 +884,19 @@ class MoveSymbolSliceTest extends Test {
 	/**
 	 * The carry-collision scan of the DESTINATION reads the DESTINATION's own comment regions.
 	 *
-	 * `referencedInDest` is handed a region array, and the file it scans is `destSource` — two things
-	 * a single-array hop can silently disagree about. It did: a seam refactor across 109 files passed
-	 * the CURSOR file's regions into this scan, and every gate the campaign runs stayed green, because
-	 * no capture drives a move op at all. Here the cursor file's comment is a doc block near its top
-	 * and the destination's is deep inside a method, so the two region sets cannot stand in for each
-	 * other: with the destination's, the `.` closing its comment is not a qualification and the
-	 * reference is seen, which is the refusal; with the cursor's, that same `.` reads as a
+	 * `NameMentionScan.destinationNamesType` (`MoveSymbol.referencedInDest` when this pin was written)
+	 * is handed a region array, and the file it scans is `destSource` — two things a single-array hop
+	 * can silently disagree about. It did: a seam refactor across 109 files passed the CURSOR file's
+	 * regions into this scan, and every gate the campaign runs stayed green, because no capture drives
+	 * a move op at all. Here the cursor file's comment is a doc block near its top and the
+	 * destination's is deep inside a method, so the two region sets cannot stand in for each other:
+	 * with the destination's, the `.` closing its comment is not a qualification and the reference on
+	 * the NEXT line is seen, which is the refusal; with the cursor's, that same `.` reads as a
 	 * qualification and the import is carried — silently rebinding the destination's own `Dep`.
+	 *
+	 * The mention here is comment-ADJACENT, not comment-interior, which is why S81's T535 fix leaves
+	 * this pin green: the refusal is owed to `Dep.tag()` on the following line, not to the note above
+	 * it. The interior spelling is pinned in `unit.query.NameMentionScanTest`.
 	 *
 	 * The control is the shape the qualification test is FOR: a genuinely qualified `q.Dep.tag()` in
 	 * the destination is not an unqualified reference and does not contest the carry.
@@ -2300,7 +2308,7 @@ class MoveSymbolSliceTest extends Test {
 	/**
 	 * A mention that appears ONLY in a COMMENT is NOT the reference an import exists for.
 	 *
-	 * S62 pinned the opposite here, deliberately: `namesAnyOf` passed the comment spans on to the
+	 * S62 pinned the opposite here, deliberately: the text scan passed the comment spans on to the
 	 * qualification test and never tested the occurrence itself against them, on the reasoning that
 	 * keeping an import a file no longer needs costs a lint advisory while dropping one it does need
 	 * costs the build. The second half is true and the first half is not the whole cost: a comment is
@@ -2308,6 +2316,10 @@ class MoveSymbolSliceTest extends Test {
 	 * writing it created the very coupling the move was removing — measured as T512, where a scope
 	 * file whose only `Thing` was a doc line came back carrying `import b.Holder.Thing;` at rc 0 with
 	 * nothing said about it.
+	 *
+	 * Since S81 that mask is `NameMentionScan.sourceNamesAny`'s, shared by every shape of the question
+	 * the move family asks — the write side here, and the refuse side in
+	 * `unit.query.NameMentionScanTest`.
 	 *
 	 * The second arm is the control and it is what makes this a statement about the SCAN rather than
 	 * about the fixture: the same file, the same doc block, plus one real `Moved.tag()` — the import

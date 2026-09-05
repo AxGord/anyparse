@@ -821,6 +821,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.MoveMemberSliceTest',
 		'unit.query.MoveSymbolSliceTest',
 		'unit.query.MutationVerdictTest',
+		'unit.query.NameMentionScanTest',
 		'unit.query.NewFileSliceTest',
 		'unit.query.ParenGuardSliceTest',
 		'unit.query.ParseFailureLocusTest',
