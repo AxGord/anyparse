@@ -835,6 +835,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.MutationVerdictTest',
 		'unit.query.NameMentionScanTest',
 		'unit.query.NewFileSliceTest',
+		'unit.query.OpaqueCondRegionScanTest',
 		'unit.query.ParenGuardSliceTest',
 		'unit.query.ParseFailureLocusTest',
 		'unit.query.PatchSliceTest',
@@ -1105,6 +1106,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheSemicolonBeforeElseGoesWithTheJoin'
 			+ ' :: control :: M-EXPR-ELSE-KEEP,M-EXPR-ELSE-PLAIN-SAME',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheStatementTwinKeepsTheLayoutItAlwaysHad :: guard :: ',
+			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote'
+			+ ' :: control :: M-OPAQUE-REGION-WS-GAP',
+			'unit.query.OpaqueCondRegionScanTest#testDanglingElseIsOpaqueWhileItsBraceIdenticalTwinIsNot'
+			+ ' :: control :: M-OPAQUE-REGION-NONE',
+			'unit.query.OpaqueCondRegionScanTest#testTheNoteNamesTheLineTheRegionAndTheReason :: control :: M-OPAQUE-REGION-NONE',
+			'unit.query.OpaqueCondRegionScanTest#testTheQuoteStartsAtTheIfEvenWhenTheNodeBeginsBeforeIt'
+			+ ' :: control :: M-OPAQUE-REGION-NODE-SPAN',
+			'unit.query.OpaqueCondRegionScanTest#testTheSplitTryReportsBothOfItsRegions :: control :: M-OPAQUE-REGION-NONE',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE'
 		], TestRegistry.pins(), 'the pin annotations, with their roles and killing arms');
@@ -1202,7 +1211,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-STRUCT-DYNAMIC-CLOSED',
 			'M-STRUCT-ANON-CLOSED',
 			'M-NULLABLE-NO-CHAIN',
-			'M-NULLABLE-WRAPPER-OPAQUE'
+			'M-NULLABLE-WRAPPER-OPAQUE',
+			'M-OPAQUE-REGION-NONE',
+			'M-OPAQUE-REGION-NODE-SPAN',
+			'M-OPAQUE-REGION-WS-GAP'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

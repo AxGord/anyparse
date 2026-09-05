@@ -625,6 +625,29 @@
 			"find": "final lossy: Bool = declared == null || (cfg.shape.memberTransparentWrapperTypeNames ?? []).contains(declared);",
 			"replace": "final lossy: Bool = declared == null;",
 			"note": "the lossy `Null` that `declaredTypes` records for a `Null<Map<K, V>>` counts as an answer again, so a wrapped receiver goes back to being a safe miss"
+		},
+		{
+			"name": "M-OPAQUE-REGION-NONE",
+			"type": "anyparse.query.CondRegionScan",
+			"method": "opaqueCondRegions",
+			"force": "[]",
+			"note": "no #if region is ever reported opaque, so fmt goes back to declining one in silence and the mutating ops lose their fail-closed gate over it"
+		},
+		{
+			"name": "M-OPAQUE-REGION-NODE-SPAN",
+			"type": "anyparse.query.CondRegionScan",
+			"method": "opaqueCondRegions",
+			"find": "out.push({ region: new Span(gaps[0].from, gaps[gaps.length - 1].to), gaps: gaps })",
+			"replace": "out.push({ region: new Span(span.from, span.to), gaps: gaps })",
+			"note": "the quoted region becomes the whole splice node, so a tail splice names the operand BEFORE its #if instead of the directive"
+		},
+		{
+			"name": "M-OPAQUE-REGION-WS-GAP",
+			"type": "anyparse.query.CondRegionScan",
+			"method": "opaqueCondRegions",
+			"find": ".filter(g -> source.substring(g.from, g.to).trim().length > 0)",
+			"replace": ".filter(g -> true)",
+			"note": "a whitespace-only gap counts as an unmodelled byte again, so the quote runs past the #end into the shared body that follows it"
 		}
 	]
 }

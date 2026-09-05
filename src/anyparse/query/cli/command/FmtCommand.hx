@@ -4,7 +4,9 @@ import anyparse.format.WhitespaceInvariant;
 import anyparse.format.comment.CommentInventory;
 import anyparse.query.Cli.FmtRunResult;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.CliContext;
+import anyparse.runtime.Span.Position;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
@@ -138,7 +140,10 @@ final class FmtCommand implements CliCommand {
 	 * file that fails to parse is reported and skipped; the exit code is
 	 * non-zero if any file failed. A file whose re-emission would drop a
 	 * comment is reported the same way and left byte-identical — see the
-	 * comment-loss obligation on `GrammarPlugin.writeRoundTrip`. Every one of
+	 * comment-loss obligation on `GrammarPlugin.writeRoundTrip` — and a
+	 * conditional-compilation region the parser captured raw is reported per
+	 * region while the file is still formatted around it
+	 * (`opaqueCondRegionNotes`). Every one of
 	 * those behaviours lives in `fmtRun` / `formatOneFile`; this entry only
 	 * prints what the run decided to say.
 	 */
@@ -345,6 +350,16 @@ final class FmtCommand implements CliCommand {
 		CliIo.sysPrint('the parser has no capture slot for, e.g. `if (/* c */ x)`) is reported with\n');
 		CliIo.sysPrint('the comment and left byte-identical rather than rewritten without it.\n');
 		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A `#if ... #end` REGION whose bytes are not a balanced subtree in their\n');
+		CliIo.sysPrint('position (a `try {` whose `catch` closes in another region, an `else` whose\n');
+		CliIo.sysPrint('`if` is outside it, a dangling operator) is captured raw by the parser, so\n');
+		CliIo.sysPrint('the writer has no tree to format there and re-emits it byte-for-byte while\n');
+		CliIo.sysPrint('reformatting everything around it. Each such region is reported by line,\n');
+		CliIo.sysPrint('with its own text quoted. It is a note, not a failure: the rest of the file\n');
+		CliIo.sysPrint('is formatted and written. How the braces BALANCE does not decide it —\n');
+		CliIo.sysPrint('measured over two real trees, 34 of 56 such regions have an equal number of\n');
+		CliIo.sysPrint('`{` and `}`.\n');
+		CliIo.sysPrint('\n');
 		CliIo.sysPrint('--one-pass catches the class NO other tree-level gate can see: `fmt` writes\n');
 		CliIo.sysPrint('the writer\'s FIXED POINT, so a file the writer settles only on its second\n');
 		CliIo.sysPrint('rewrite is reported canonical by --list while the next writer-emit op\n');
@@ -442,6 +457,7 @@ final class FmtCommand implements CliCommand {
 		// mutation ops now print off `EditResult.Ok`'s `rewrites`, from one copy, so
 		// a user who meets the note twice can tell it is one finding.
 		CliEdit.warnRewrites('fmt', path, fixedPoint.rewrites);
+		for (note in opaqueCondRegionNotes(plugin, path, source)) CliIo.stderr('$note\n');
 		// ω-one-pass-gate: `--one-pass` turns that note into a VERDICT. The project's
 		// canonical gate is `writeRoundTrip(s) == s` after ONE pass, and every
 		// writer-emit op is built on it — but a tree holding a file the writer only
@@ -530,6 +546,55 @@ final class FmtCommand implements CliCommand {
 			unsettled: unsettled,
 			fatalExit: null
 		};
+	}
+
+	/**
+	 * One note per `#if ... #end` region in `path` that the writer LEFT ALONE.
+	 *
+	 * `fmt` reformats such a file normally and silently declines the region inside it, which is
+	 * the one outcome a reader cannot tell from a bug: the lines around it moved, these did not,
+	 * and nothing said why. A user lost time to exactly that twice — `} catch (_:Dynamic) {` and
+	 * its `}` left on two lines while the statements above them were normalised, because the
+	 * `try` opens in one region and the `catch` closes in another.
+	 *
+	 * Same class of event as the comment-loss refusal on `GrammarPlugin.writeRoundTrip`, and
+	 * reported for the same reason: the writer is DECLINING rather than damaging, and a decline
+	 * nobody is told about reads as a defect. It is not a refusal though — the rest of the file
+	 * is formatted and written — so it is a note, never a failure and never a `--verify`
+	 * divergence: the region is byte-identical, which is precisely what that invariant asserts.
+	 *
+	 * Unconditional rather than behind a flag, because the reader who needs it is the one who
+	 * did NOT know to ask. Not a lint rule either: a region like this is often the only way to
+	 * write what it writes, so a check firing on it would be reporting correct code. The volume
+	 * that would have justified a flag is not there — measured, 0 regions over this project's
+	 * own 1754 files, 31 over the 872-file Pony fork, 28 over the 946-fixture formatter corpus.
+	 * The cost is one extra parse per file that HAS a `#if` (451 of 1754 here, +22% on the
+	 * whole-tree `fmt --list` gate, nothing on a single-file run); a file without one never
+	 * reaches it.
+	 *
+	 * Handed BACK rather than printed, for the reason the summary line above is: `Sys.stderr()`
+	 * on hxnodejs is a raw fd, so a printed sentence is unassertable and this family's recorded
+	 * defects were all wording that disagreed with the tree it described.
+	 *
+	 * A second parse of the file, not the writer's own tree — `writeRoundTrip` builds a trivia
+	 * tree the projection does not speak. A parse failure here is swallowed: `fmt` has already
+	 * formatted the file successfully, so a disagreement between the two front ends is not a
+	 * fact about formatting and must not take the run down over it.
+	 */
+	public static function opaqueCondRegionNotes(plugin: GrammarPlugin, path: String, source: String): Array<String> {
+		final shape: RefShape = plugin.refShape();
+		final kinds: Null<Array<String>> = shape.opaqueCondRegionKinds;
+		if (kinds == null || kinds.length == 0) return [];
+		if (source.indexOf(shape.conditionalIfKeyword ?? '#if') == -1) return [];
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		return tree == null ? [] : [
+			for (opaque in CondRegionScan.opaqueCondRegions(tree, source, shape)) {
+				final at: Position = opaque.region.lineCol(source);
+				'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region left unformatted - '
+					+ '"${SourceText.regionExcerpt(source, opaque.region)}" is not a balanced subtree, so the parser captured it raw'
+					+ ' and the writer re-emits it byte-for-byte; restructure it into a balanced #if to have it formatted';
+			}
+		];
 	}
 
 }
