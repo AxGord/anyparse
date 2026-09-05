@@ -280,7 +280,9 @@ final class LintFixDriver {
 				continue;
 			}
 			var settled: Null<{ text: String, rewrites: Null<Int> }> = null;
-			switch CanonicalEdit.canonicalize(entry.source, contributedEdits(groups), false, cached, optsByFile[entry.file]) {
+			switch CanonicalEdit.canonicalize(
+				entry.source, contributedEdits(groups), false, cached, optsByFile[entry.file], contributedCarried(groups)
+			) {
 				case Ok(text, rewrites):
 					settled = { text: text, rewrites: rewrites };
 				case Err(message):
@@ -435,7 +437,15 @@ final class LintFixDriver {
 		for (check in checks) {
 			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 			if (own.length == 0) continue;
-			final checkEdits: Array<{ span: Span, text: String }> = check.fix(source, own, cached, index);
+			// A `CarryingFix` is asked ONCE, through the richer seam, and its `fix` is the pure
+			// projection of what comes back — asking both would run the same analysis twice and let
+			// the two answers disagree, which is exactly what that interface's contract forbids.
+			final carrying: Array<CarryingEdit> = check is CarryingFix
+				? (cast check: CarryingFix).fixCarrying(source, own, cached, index)
+				: [];
+			final checkEdits: Array<{ span: Span, text: String }> = check is CarryingFix
+				? [for (edit in carrying) { span: edit.span, text: edit.text }]
+				: check.fix(source, own, cached, index);
 			// The guard runs BEFORE the ledger, because the ledger's subject is what the check
 			// ACHIEVED and a refused edit set achieves nothing. Counting it as `edits` claimed the rule
 			// had fixed these findings, so the run reported no decline for them at all — and the one
@@ -467,6 +477,11 @@ final class LintFixDriver {
 				rule: check.id(),
 				findings: own,
 				edits: checkEdits,
+				// Only a NON-EMPTY carry is worth passing on: an edit that quotes nothing cannot have
+				// moved anything across it, and the guard's first test is the array length.
+				carried: [
+					for (edit in carrying) if (edit.carried.length > 0) { edit: edit.span, spans: edit.carried }
+				],
 				overlapped: overlapped,
 				refusal: refused
 			};
@@ -508,6 +523,18 @@ final class LintFixDriver {
 	/** The disjoint edit set `groups` currently contribute, in check order — recomputed, so a refusal recorded later shrinks it. */
 	public static function contributedEdits(groups: Array<RuleEdits>): Array<{ span: Span, text: String }> {
 		return CanonicalEdit.dropContainedEdits([for (group in groups) if (contributes(group)) for (e in group.edits) e]);
+	}
+
+	/**
+	 * The VERBATIM CARRY declarations of the same groups `contributedEdits` returns edits for.
+	 * Unfiltered by `dropContainedEdits` on purpose: the guard looks each declaration up by its
+	 * edit's span and skips one whose edit is not in the set, so a contained edit's declaration
+	 * costs a lookup rather than needing a second span filter to stay in step.
+	 */
+	public static function contributedCarried(groups: Array<RuleEdits>): Array<CarriedEdit> {
+		return [
+			for (group in groups) if (contributes(group)) for (declared in group.carried) declared
+		];
 	}
 
 	/**
@@ -561,7 +588,7 @@ final class LintFixDriver {
 			}
 			group.overlapped = false;
 			kept.push(group);
-			switch CanonicalEdit.canonicalize(source, contributedEdits(kept), false, cached, optsJson) {
+			switch CanonicalEdit.canonicalize(source, contributedEdits(kept), false, cached, optsJson, contributedCarried(kept)) {
 				case Ok(text, rewrites):
 					settled = { text: text, rewrites: rewrites };
 					for (e in group.edits) keptEdits.push(e);

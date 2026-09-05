@@ -116,6 +116,40 @@ class DocOwnerGuardSliceTest extends Test {
 		Assert.isTrue(text.indexOf('function z') >= 0, 'the append did not land:\n$text');
 	}
 
+	/**
+	 * The incident T554 reports, reduced to the two declarations it actually needed — and the
+	 * reason this slice restored a paragraph rather than only writing a guard.
+	 *
+	 * `MemberKinds.FIELD_MEMBER_KINDS` carried a doc naming what its kinds MEAN and who asks
+	 * (`Rename`, `Inline`). On 2026-07-26 commit `969ef368` inserted two newly-documented
+	 * constants at that declaration, which is the zero-width-insert-with-a-line-break shape:
+	 * the doc stayed put and the insert slid under it. From then on the paragraph led
+	 * `TYPEDEF_DECL_KIND`, then `DOC_OPEN`, and travelled into `SourceComments` with `DOC_OPEN`
+	 * in S72's module split, where a reader found it welded to a one-line doc about `/**`.
+	 *
+	 * So the mechanism was the doc-splitting INSERT, not the comment WELD the brief expected:
+	 * `CommentOwnerGuard.detachedComment` cannot see this one at all, because an insert adds
+	 * text and the two comments involved were only ever ONE block (whitespace between them).
+	 * The half that could see it is `docSplittingEdit`, and it has refused this shape since
+	 * S23 — so this test GUARDS PRE-EXISTING BEHAVIOUR and is not base-red. Its value is that
+	 * the incident now has a fixture: the next reader who finds a stranded paragraph can check
+	 * in one run whether the seam would still let it happen.
+	 */
+	public function testTheInsertThatStrandedFieldMemberKindsIsRefused(): Void {
+		final kindSet: String = 'final class RefactorSupport {\n\n\t/**\n\t * Class-member declaration kinds (fields / methods).'
+			+ ' A binding whose\n\t * decl node carries one of these kinds is a class member, not a local.\n\t */\n'
+			+ '\tpublic static final FIELD_MEMBER_KINDS: Array<String> = [\'VarMember\', \'FnMember\'];\n\n}\n';
+		final inserted: String =
+			'\t/** The grammar kind a `typedef` projects as. */\n\tprivate static final TYPEDEF_DECL_KIND: String = \'TypedefDecl\';\n\n';
+		switch SeamEdit.insert(kindSet, 'public static final FIELD_MEMBER_KINDS', inserted) {
+			case Ok(text):
+				Assert.fail('expected a refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('between a doc comment') >= 0, 'unexpected message: $message');
+				Assert.isTrue(message.indexOf('FIELD_MEMBER_KINDS') >= 0, 'the refusal does not name the list it protected: $message');
+		}
+	}
+
 	/** The refusal must name the declaration it protected, not just complain. */
 	private function assertRefused(source: String, before: String, owner: String): Void {
 		switch SeamEdit.insert(source, before, MID) {

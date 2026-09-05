@@ -1,10 +1,12 @@
 package unit.check;
 
+import anyparse.check.Check.CarryingEdit;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.PreferTernaryReturn;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -219,7 +221,16 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals('return a\n? 1 // already linked\n: 0;', es[0].text);
 	}
 
-	/** An OWN-LINE comment between the two statements is not about either value — it keeps the leading-block hoist. */
+	/**
+	 * An OWN-LINE comment between the two statements is not about either value — the rule still
+	 * COMPUTES the leading-block hoist, unchanged, and this pins that it does.
+	 *
+	 * What changed under it in S86 is who has the last word: the edit now declares the three
+	 * ranges it quotes verbatim, and `CanonicalEdit.canonicalize` refuses to WRITE this one,
+	 * because the comment stood after `a` and `1` in the source and stands before both here.
+	 * `testTheRunOfOneHoistIsRefusedAtTheSeam` is that verdict; keep the two together, since this
+	 * test alone now describes a text nothing puts on disk.
+	 */
 	public function testOwnLineCommentBetweenStatementsStillHoists(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			'class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1;\n\t\t// why zero\n\t\treturn 0;\n\t}\n}'
@@ -228,7 +239,13 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals('// why zero\nreturn a ? 1 : 0;', es[0].text);
 	}
 
-	/** Both kinds at once: the guard-line one attaches, the own-line one hoists — neither is dropped. */
+	/**
+	 * Both kinds at once: the guard-line one attaches, the own-line one hoists — neither is
+	 * dropped. The SPLIT is what this pins and it is unchanged; the own-line half is refused at
+	 * the seam for the reason `testOwnLineCommentBetweenStatementsStillHoists` records, and the
+	 * guard-line half is the reason a blanket "refuse a comment in the region" rule would be wrong
+	 * — `// linked` never changes sides, so nothing objects to it.
+	 */
 	public function testBothPositionsSplitCorrectly(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			'class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1; // linked\n\t\t// why zero\n\t\treturn 0;\n\t}\n}'
@@ -468,6 +485,50 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals(1, violations(trailing).length, 'a guard-line trailing comment rides its branch through the march');
 		Assert.equals(1, violations(single).length, 'a run of one is folded in place, so its leading comment keeps its subject');
 		Assert.equals(0, violations(ownLine).length, 'an own-line comment between two rungs would be hoisted off the gate it explains');
+	}
+
+	/**
+	 * T553 — the run-of-ONE hoist, re-decided against the clause now that it is written, and the
+	 * answer is that the clause DOES reach it: the framework refuses the edit.
+	 *
+	 * S84 kept this hoist deliberately and asked for the decision to be revisited. The two tests
+	 * that pin it — `testOwnLineCommentBetweenStatementsStillHoists` and
+	 * `testBothPositionsSplitCorrectly` — are UNCHANGED and still pass, and that is the shape of
+	 * the decision rather than an oversight: the rule goes on COMPUTING the fold (the first three
+	 * assertions here are those two tests' claim, restated so a failure below is provably the
+	 * seam's verdict and not a fixture that never reached the rule), and
+	 * `CanonicalEdit.canonicalize` declines to write it. The user is not left guessing — `apq lint
+	 * --fix` reports it as `fix DECLINED` with the guard's own sentence.
+	 *
+	 * Why the decision went this way rather than "the clause does not reach a run of one": the
+	 * comment stood after `a` and `1` in the source and stands before both in the replacement,
+	 * which is the same fact the cascade march produces, only one step long. What made it
+	 * arguable was cost, and the cost is MEASURED at zero — `--all --fix` over the Pony fork
+	 * (702 edits / 209 files / 8 passes) and over this repo's own `src` + `test` (111 edits / 59
+	 * files / 4 passes) are byte-identical with and without the declaration, and neither run
+	 * produces a single carry refusal. The shape is real (this fixture) and rare.
+	 *
+	 * Killed by arm `F1` (`CommentOwnerGuard.hoistedComment` returning null) and by arm `F3`
+	 * (`buildEdit` declaring an empty carry).
+	 */
+	public function testTheRunOfOneHoistIsRefusedAtTheSeam(): Void {
+		final source: String = 'class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1;\n\t\t// why zero\n\t\treturn 0;\n\t}\n}';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: PreferTernaryReturn = new PreferTernaryReturn();
+		final carrying: Array<CarryingEdit> = check.fixCarrying(source, check.run([{ file: 'C.hx', source: source }], plugin), plugin);
+		Assert.equals(1, carrying.length, 'the rule still computes the fold - the seam is what declines it');
+		Assert.equals('// why zero\nreturn a ? 1 : 0;', carrying[0].text);
+		Assert.equals(3, carrying[0].carried.length, 'condition, then-value and else-value are what the replacement quotes');
+		switch CanonicalEdit.canonicalize(
+			source, [{ span: carrying[0].span, text: carrying[0].text }],
+			true, plugin, null, [{ edit: carrying[0].span, spans: carrying[0].carried }]
+		) {
+			case Ok(text):
+				Assert.fail('expected a refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('carries verbatim') >= 0, 'this is not the carry refusal: $message');
+				Assert.isTrue(message.indexOf('why zero') >= 0, 'the refusal does not name the comment: $message');
+		}
 	}
 
 	private function violations(src: String): Array<Violation> {

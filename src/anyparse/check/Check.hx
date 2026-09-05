@@ -385,6 +385,71 @@ interface GroupedFix {
 }
 
 /**
+ * One fix edit plus the source ranges its replacement quotes VERBATIM. `span` / `text` are the
+ * raw edit `Check.fix` returns; `carried` names the ranges of the SAME source whose text appears
+ * byte for byte inside `text`, in the order they appear THERE.
+ *
+ * A rewriting fix assembles its replacement out of the code it keeps — a condition, a returned
+ * value, a branch body — and interleaves whatever else stood in the region. That interleaving is
+ * where a comment stops leading the statement it explains, and no gate can see it from the two
+ * texts alone, because an ordinary in-place rewrite changes the same bytes. Naming the quoted
+ * ranges is what makes it decidable; see `anyparse.query.CanonicalEdit.CarriedEdit`, the seam-side
+ * form this projects into, and `CommentOwnerGuard.hoistedComment`, the question it answers.
+ *
+ * An empty `carried` is a legal declaration and means what it says: this edit quotes nothing, so
+ * nothing can have been moved across it. A fix that emits fresh syntax is in that state by nature.
+ */
+typedef CarryingEdit = {
+	final span: Span;
+	final text: String;
+	final carried: Array<Span>;
+}
+
+/**
+ * Opt-in capability of a `Check` whose autofix builds its replacement out of SOURCE FRAGMENTS,
+ * declaring which ones so `lint --fix` can refuse an edit that carries a comment past the code it
+ * documents.
+ *
+ * The flat `Array<{span, text}>` of `Check.fix` has no slot to say it, and the seam it feeds is
+ * where the question has to be asked: `CanonicalEdit.canonicalize` is the one function every
+ * writer-emit op and both `--fix` paths pass through, and the three structural refusals it
+ * already makes (`BodySlotGuard.emptiedSlot`, `docSplittingEdit`,
+ * `CommentOwnerGuard.detachedComment`) are all decidable from the texts. This fourth one is not,
+ * which is why it is the only one that needs the producer to speak.
+ *
+ * The cost is deliberately paid by the producer that BENEFITS. A check that declares nothing is
+ * judged exactly as before, byte for byte; a check that declares gets its comment-hoisting edits
+ * refused by the framework instead of having to model the hazard itself. `prefer-ternary-return`
+ * is the worked example, and it is worth reading for the price: its `buildEdit` already held the
+ * three spans it quotes (it passes them to `preservedComments` to decide which comments to
+ * hoist), so the declaration is the array it had already built.
+ *
+ * LIMIT, the mirror of the one `GroupedFix` records: the declaration is read in
+ * `LintFixDriver.collectFileLintEdits`, which is the SAFE fix loop. `FixVerifier` calls
+ * `Check.fix` directly for a `RiskyFix` check and passes no carry, so a check that is both would
+ * get no carry guard on the verified path. Theoretical today — the one implementor is not
+ * `RiskyFix` — and it is the same shape of gap, one seam over.
+ *
+ * CONTRACT, the same one `GroupedFix` carries: a `CarryingFix`'s `Check.fix` MUST be the pure
+ * projection of `fixCarrying` (`[for (e in fixCarrying(...)) { span: e.span, text: e.text }]`), so
+ * the two views can never disagree about WHICH edits the fix produces — only about what is known
+ * about them. Nothing detects a divergence; the obligation is on the implementor.
+ */
+@:nullSafety(Strict)
+interface CarryingFix {
+
+	/**
+	 * The same edits `Check.fix` returns for `violations` (this check's OWN, for ONE `source`),
+	 * each carrying the source ranges its replacement quotes verbatim. An empty array = nothing
+	 * to fix.
+	 */
+	public function fixCarrying(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<CarryingEdit>;
+
+}
+
+/**
  * Opt-in declaration that a `Check` has NO autofix AT ALL — report-only BY DESIGN, rather
  * than because a gate closed on this run.
  *

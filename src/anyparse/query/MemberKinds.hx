@@ -38,11 +38,25 @@ final class MemberKinds {
 	];
 
 	/**
-	 * Every member kind a type body can declare that is not a constructor — the data
-	 * fields above plus the function forms. Built from `DATA_FIELD_KINDS` so the two are
-	 * each other's complement by construction: a kind added to one can no longer go
-	 * missing from the other. Its name reads narrower than it is; `isDataFieldKind` is
-	 * the test for the data half alone.
+	 * Every member kind a type body can declare that is not a constructor — the data fields above
+	 * plus the function forms. Built from `DATA_FIELD_KINDS` so the two are each other's complement
+	 * by construction: a kind added to one can no longer go missing from the other. Its name reads
+	 * narrower than it is; `isDataFieldKind` is the test for the data half alone.
+	 *
+	 * A binding whose decl node carries one of these kinds is a class MEMBER, not a local, and that
+	 * is the question the two scope-correct refactoring ops ask through `isFieldMemberKind`: `Rename`
+	 * gates `this.<name>` augmentation on it (`nodeAtFromIsFieldMember`), and `Inline` refuses to
+	 * inline a free identifier that resolves to one, because it may be a property getter.
+	 * `FinalModifiedMember` is the `final` METHOD form (`final function f()`); the query projection
+	 * surfaces its name off the inner `HxFinalModifierMember.fn`, so it is a member like `FnMember`
+	 * for `this.<name>` purposes.
+	 *
+	 * That second paragraph is the doc this list LOST. On 2026-07-26 (`969ef368`) an insert put two
+	 * newly-documented constants between it and this declaration, so it went on to lead
+	 * `TYPEDEF_DECL_KIND`, then `DOC_OPEN`, and rode into `SourceComments` with `DOC_OPEN` when S72
+	 * split the module — describing, from there, a kind set nobody could reach it from.
+	 * `CanonicalEdit.docSplittingEdit` refuses that insert shape today; the pin is
+	 * `unit.query.DocOwnerGuardSliceTest.testTheInsertThatStrandedFieldMemberKindsIsRefused`.
 	 */
 	public static final FIELD_MEMBER_KINDS: Array<String> = DATA_FIELD_KINDS.concat([
 		'FnMember',

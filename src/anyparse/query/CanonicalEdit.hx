@@ -23,7 +23,8 @@ using Lambda;
  * insertion between a documentation block and the declaration it documents re-parses perfectly
  * and silently reassigns the doc — and `CommentOwnerGuard` is its sibling on the replacement
  * side, refusing an edit that welds two comment blocks together by deleting the code that stood
- * between them.
+ * between them and — for an edit that DECLARES what it quotes verbatim (`CarriedEdit`) — one that
+ * moves a comment across code it kept.
  */
 @:nullSafety(Strict)
 final class CanonicalEdit {
@@ -87,7 +88,8 @@ final class CanonicalEdit {
 	 * compiled defaults.
 	 */
 	public static function canonicalize(
-		source: String, edits: Array<{ span: Span, text: String }>, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+		source: String, edits: Array<{ span: Span, text: String }>, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String,
+		?carried: Array<CarriedEdit>
 	): EditResult {
 		if (!reformat) {
 			final canon: Null<String> =
@@ -162,6 +164,15 @@ final class CanonicalEdit {
 		// what this already judged.
 		final detached: Null<String> = CommentOwnerGuard.detachedComment(source, edits, spliced, regions, plugin);
 		if (detached != null) return Err(detached);
+
+		// The fourth question, and the one that needs the caller's COOPERATION: an edit that
+		// quotes source fragments verbatim and moves a comment across one of them. The three
+		// above are decidable from the two texts; this one is not, because an in-place rewrite
+		// changes the same bytes a hoist does — so the edit has to declare what it carried, and
+		// only an edit that does gets the answer. Every other caller passes nothing and is judged
+		// exactly as before.
+		final hoisted: Null<String> = carried == null ? null : CommentOwnerGuard.hoistedComment(source, edits, carried, regions);
+		if (hoisted != null) return Err(hoisted);
 
 		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT
 		// writer-emit op puts on it, and that gate is `writeRoundTrip(s) == s`
@@ -443,4 +454,29 @@ enum EditResult {
 	Ok(text: String, ?rewrites: Int);
 	Err(message: String);
 
+}
+
+/**
+ * One edit's VERBATIM CARRY: the source ranges whose text that edit's replacement quotes byte
+ * for byte. `edit` is the span of the edit this describes — the edits reaching one
+ * `canonicalize` are pairwise disjoint, so a span identifies one across any filtering or
+ * reordering the caller does between building the declaration and making the call — and
+ * `spans` are the carried ranges IN THE ORDER THEY APPEAR IN THE REPLACEMENT, which is what
+ * lets the guard locate them by a single left-to-right scan instead of guessing.
+ *
+ * Why an edit has to SAY this rather than have it derived: a replacement is text, and the
+ * question `CommentOwnerGuard.hoistedComment` asks — did a comment move across code that
+ * SURVIVED — is not decidable from the two texts, because an ordinary in-place rewrite changes
+ * the same bytes an out-of-order one does. The declaration is what tells the two apart, and it
+ * is cheap exactly where it matters: a fix that assembles its replacement out of source
+ * fragments already holds those spans (`PreferTernaryReturn.buildEdit` passes the same three to
+ * `preservedComments`), while a fix that emits fresh syntax carries nothing and declares
+ * nothing.
+ *
+ * Purely OPT-IN, and inert without a declaration: an edit set that declares no carry is judged
+ * exactly as it was before this type existed.
+ */
+typedef CarriedEdit = {
+	final edit: Span;
+	final spans: Array<Span>;
 }

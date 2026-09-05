@@ -268,6 +268,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final refused: RuleEdits = {
 			rule: 'r-refused',
 			findings: [],
+			carried: [],
 			edits: [{ span: new Span(outer, outer + 5), text: '\'aaa' }],
 			overlapped: false,
 			refusal: null
@@ -275,6 +276,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final deferred: RuleEdits = {
 			rule: 'r-deferred',
 			findings: [],
+			carried: [],
 			edits: [{ span: new Span(inner, inner + 3), text: 'bbb' }],
 			overlapped: true,
 			refusal: null
@@ -348,6 +350,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final accepted: RuleEdits = {
 			rule: 'r-accepted',
 			findings: [],
+			carried: [],
 			edits: [{ span: new Span(0, 1), text: 'p' }],
 			overlapped: false,
 			refusal: null
@@ -355,6 +358,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final deferred: RuleEdits = {
 			rule: 'r-deferred',
 			findings: [],
+			carried: [],
 			edits: [{ span: new Span(0, 1), text: 'p' }],
 			overlapped: true,
 			refusal: null
@@ -621,6 +625,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final group: RuleEdits = {
 			rule: 'a-rule',
 			findings: [reasoned('the order is pinned: a fixture reason'), reasoned(null)],
+			carried: [],
 			edits: [{ span: new Span(0, 1), text: '' }],
 			overlapped: false,
 			refusal: null
@@ -653,6 +658,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final group: RuleEdits = {
 			rule: 'quiet-rule',
 			findings: [reasoned(null), reasoned(null)],
+			carried: [],
 			edits: [{ span: new Span(0, 1), text: '' }],
 			overlapped: false,
 			refusal: null
