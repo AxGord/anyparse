@@ -1427,26 +1427,33 @@ final class HaxeFormatConfigLoader {
 		// for HxIfExpr.elseBranch. Independent of body-placement
 		// fanout (which has the arrow-body regression gate above).
 		//
-		// Mapping rationale: `Next` maps to `Keep` (NOT `Next`) so
-		// the writer reads the synth `BeforeKwNewline` slot and
-		// preserves whatever the source had. Fork's actual semantic
-		// for `expressionIf=next` is block-shape-aware (`} else {`
-		// stays cuddled even with `next`, only non-block prev breaks).
-		// Mapping to `Keep` reproduces this correctly across the
-		// corpus because:
-		//  - block-shape branches in source are typically inline →
-		//    Keep slot=false → space → matches fork's cuddle.
-		//  - non-block (e.g. object-lit) branches in source typically
-		//    have the `\n` already → Keep slot=true → hardline →
-		//    matches fork's break.
-		// True shape-aware Next dispatch (force-break for non-block,
-		// cuddle for block, regardless of source) would need a
-		// dedicated `@:fmt(shapeAware)` variant — deferred until a
-		// fixture surfaces that the source-preserving mapping mishits.
+		// ω-same-on-block: `next` maps to `SameOnBlock`, the shape-aware
+		// dispatch the pre-S100 note here described and deferred ("would
+		// need a dedicated `@:fmt(shapeAware)` variant — deferred until a
+		// fixture surfaces that the source-preserving mapping mishits").
+		// `Keep` was the stand-in: it makes the writer read the synth
+		// `BeforeKwNewline` slot and preserve whatever the source wrote,
+		// which lands on the right answer only where the source already
+		// agrees. The fixture that surfaced is the shape a reader meets
+		// most — a value-`if` with a `{ … }` branch and a break before
+		// `else` keeps that break forever, while the STATEMENT twin of
+		// the same construct joins to `} else {` (its `sameLineElse`
+		// defaults to `Same`). One construct, two layouts, decided by
+		// value-vs-statement position alone.
+		//
+		// `SameOnBlock` is `Same` after a CURLY close and byte-identical
+		// to `Keep` after everything else, so the two shapes that were
+		// already right stay right: a non-block branch (object literal,
+		// `macro { … }`, a bare value) keeps the forced break the
+		// `@:fmt(shapeAware)` switch gives it, and a BRACKET-block branch
+		// keeps its source shape — measured, mapping `next` onto a plain
+		// `Same` instead moved 3 anyparse files rather than 1 and made 2
+		// of them worse (`[] else {`, `['--code', staged]; else if (…)`).
 		// `Same` and `Keep` map directly. `FitLine` falls through to
 		// `Same` (no SameLinePolicy counterpart).
 		opt.sameLineExpressionElse = switch p {
-			case BodyPolicy.Keep, BodyPolicy.Next: SameLinePolicy.Keep;
+			case BodyPolicy.Keep: SameLinePolicy.Keep;
+			case BodyPolicy.Next: SameLinePolicy.SameOnBlock;
 			case _: SameLinePolicy.Same;
 		};
 	}

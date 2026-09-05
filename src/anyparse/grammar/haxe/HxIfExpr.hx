@@ -87,7 +87,8 @@ package anyparse.grammar.haxe;
  * the SameLinePolicy companion for the pre-`else` gap, distinct from
  * statement-`if`'s `sameLineElse`. Default `Same` matches the
  * pre-slice hardcoded space behaviour. JSON `sameLine.expressionIf`
- * fans out unconditionally (Same/Keep/Next/FitLine→Same fallback) —
+ * fans out unconditionally (`same`→`Same`, `keep`→`Keep`,
+ * `next`→`SameOnBlock`, `fitLine`→`Same`) —
  * the pre-`else` gap has no arrow-body interaction, so the
  * BodyPolicy Next/FitLine gate does not apply here. `Keep` consults
  * the synth `elseBranchBeforeKwNewline` slot (computed against the
@@ -99,9 +100,15 @@ package anyparse.grammar.haxe;
  * runtime ctor is non-block (anything other than `BlockExpr` /
  * `ObjectLit`) AND `expressionElseBody` is `Next` / `FitLine`, the
  * pre-`else` separator switches to a hardline regardless of the
- * `sameLineExpressionElse` flag. Block-shape `thenBranch` (block /
- * object literal) keeps the flag-driven separator so `} else {`
- * cuddles when the source did. `Same`-policy and `Keep`+inline-slot
+ * `sameLineExpressionElse` flag.
+ * A block-shape `thenBranch` keeps a flag-driven separator, and since S100
+ * the block arm is SPLIT by delimiter: a CURLY close reads
+ * `sameLinePolicySwitch`, where `SameOnBlock` falls through to a plain
+ * space, so `} else {` cuddles whatever the source wrote; a BRACKET close
+ * reads `sameLineNonCurlyBlockPolicySwitch`, where `SameOnBlock` routes to
+ * the `Keep` slot, so a `]` close keeps its source shape and gluing it
+ * stays `expressionIfWithBrackets`'s job.
+ * `Same`-policy and `Keep`+inline-slot
  * suppress the shape-aware break (matches the gate at
  * `WriterLowering.hx:2670+`).
  *
@@ -131,11 +138,14 @@ package anyparse.grammar.haxe;
  * sibling of that meta, and owns THREE seams rather than one: the branch
  * value hugs its head (`bodyPolicyWrap`), the `@:trailOpt(';')` slot above
  * is dropped when an `elseBranch` follows (`semicolonBeforeSiblingWrap`), and
- * the pre-`else` gap becomes a plain space (`beforeKwSeparator`). The last
- * two are the CLOSE side: `sameLineExpressionElse` resolves to `Keep` under
- * `sameLine.expressionIf: next`, so without them a source that wrote `];` on
- * its own line keeps `else` on the next one no matter what the knob says, and
- * the hug reads as half a shape. Keyed on the `[` ctor, so a block-valued or
+ * the pre-`else` gap becomes a plain space (`beforeKwSeparator`).
+ * The last two are the CLOSE side: under `sameLine.expressionIf: next` the
+ * gap resolves to `SameOnBlock`, and the shape-aware switch routes that to
+ * the source-preserving `Keep` slot on its BRACKET arm — deliberately, so
+ * the S100 curly cuddle leaves `]` alone — so without these two seams a
+ * source that wrote `];` on its own line keeps `else` on the next one no
+ * matter what the knob says, and the hug reads as half a shape.
+ * Keyed on the `[` ctor, so a block-valued or
  * plain-valued branch is byte-identical either way. Caveat: under
  * Trivia mode `// line comments` inside the block body fold against
  * the next token and break syntax — same limitation as fork; the
@@ -229,7 +239,7 @@ typedef HxIfExpr = {
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
 		inlineBlockBodyIfFlag('expressionIfWithBlocks'), bracketBodyGlueIfFlag('expressionIfWithBrackets'), propagateValueIfBranch,
-		arrowValueIfReflowSite, semicolonBeforeSibling('elseBranch'),
+		arrowValueIfReflowSite, semicolonBeforeSibling('elseBranch', 'sameLineExpressionElse'),
 		valueBraceSymmetry('elseBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'))
 	var thenBranch: HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
