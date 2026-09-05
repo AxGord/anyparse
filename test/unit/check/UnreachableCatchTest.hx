@@ -43,6 +43,7 @@ class UnreachableCatchTest extends Test {
 		Assert.equals(1, violations('class E {} class C { function f() { try { g(); } catch (e:E) {} catch (e:E) {} } }').length);
 	}
 
+	@:pin('control') @:killer('M-ISSUBTYPE-FALSE')
 	public function testSubtypeAfterSupertypeFlagged(): Void {
 		// catch Base then Sub — Sub<:Base, so Base already caught it.
 		Assert.equals(

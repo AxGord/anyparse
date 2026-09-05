@@ -917,31 +917,52 @@ class TestDiscoveryParityTest extends Test {
 	 * its own — this is the runtime half, and it is what keeps the metas from
 	 * being dropped in a refactor without anything noticing.
 	 *
-	 * Two entries, one class, on purpose: the tree is NOT converted.
+	 * Thirty-two entries over eighteen classes, and still not a conversion of the tree: sixteen
+	 * are the seam coverage for the fourteen rules S73 touched that its deciding arm cannot
+	 * reach (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
+	 * where the arm name is the whole point — it is the only record that the fixture reaches the
+	 * moved code, and deleting the fixture now fails HERE rather than silently.
 	 */
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		Assert.same([
+			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
+			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
+			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
+			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
+			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
+			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
+			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',
+			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesSubtypedContainer :: control :: M-HASSUBTYPE-FALSE',
+			'unit.check.RedundantImportCheckTest#testSubTypeImportBesideItsModuleImportIsRedundant :: control :: M-DECLARINGFILES-EMPTY',
+			'unit.check.RedundantThisCheckTest#testInheritedFromOtherFileBaseFlagged :: control :: M-INHERITS-FALSE',
+			'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
+			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
+			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
+			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor'
+			+ ' :: control :: M-SUPERDECLARES-FALSE',
+			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
+			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
-			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine :: control '
-			+ ':: M-FIRST-LINE-FIT',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine'
+			+ ' :: control :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLinePullsUpABodyThatFits :: control :: M-NO-WIRE',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testKeepReadsTheSourceBreak :: control :: M-ALWAYS-SAME',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testNextLayoutIsIdempotent :: control :: M-ALWAYS-SAME',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testNextPutsTheBodyOnItsOwnLine :: control :: M-NO-WIRE',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testSameKeepsAFlatBodyOnTheHeadLine :: control :: M-ALWAYS-NEXT',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testSamePullsTheBodyUpOntoTheHeadLine :: control :: M-NO-WIRE',
-			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testTheSpecificKeyOutranksTheExpressionIfFanout :: control '
-			+ ':: M-FANOUT-FIRST',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testTheSpecificKeyOutranksTheExpressionIfFanout'
+			+ ' :: control :: M-FANOUT-FIRST',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testFilterIfWithoutElseStillCuddles :: control :: M-CUDDLE-OFF',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyCuddles :: control :: M-ELSE-GATE',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyCuddlesWithTightBrackets :: control :: M-ELSE-GATE',
-			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyUnderFitLineLeavesTheHeadLine :: control '
-			+ ':: M-FIRST-LINE-FIT',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyUnderFitLineLeavesTheHeadLine'
+			+ ' :: control :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE',
-			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase :: control '
-			+ ':: M-FIRST-LINE-FIT'
-		], TestRegistry.pins(), 'the pilot annotations, with their roles and killing arms');
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase'
+			+ ' :: control :: M-FIRST-LINE-FIT'
+		], TestRegistry.pins(), 'the pin annotations, with their roles and killing arms');
 	}
 
 	public function testFixturelessSubclassesAreReportedRatherThanRegistered(): Void {

@@ -483,6 +483,52 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * The SECOND operand of the occurrence walk's exclusion test, which nothing reached before:
+	 * a class in a SCANNED file that spells the backing name, is no subtype of the owner, and
+	 * does not declare the name itself — so only `MemberLookup.supertypeDeclaresMember` can
+	 * account for it, and an occurrence the walk cannot account for blocks the collapse outright.
+	 *
+	 * The foreign supertype has to live in a file the scan does NOT read. Declaring it beside the
+	 * real subtype puts its `private var _label` declaration in the walk too, and a declaration
+	 * name is none of the shapes `attributeOccurrence` binds — it lands in the uncovered bucket
+	 * and blocks the collapse for a reason that has nothing to do with the operand under test.
+	 * `affectedSubtypeFiles` reads only subtype-declaring and `@:access` files, while the index
+	 * reads them all, which is exactly the gap this fixture needs.
+	 *
+	 * This guards behaviour that already held; what it adds is reach. This rule and
+	 * `prefer-enum-abstract` are the two whose S73-rewritten call sites no fixture exercised
+	 * (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"), and
+	 * both are the right-hand operand of a short-circuiting `||` whose left operand every
+	 * existing fixture already satisfied.
+	 */
+	@:pin('control') @:killer('M-SUPERDECLARES-FALSE')
+	public function testForeignHierarchyBackingNameStaysAccountedFor(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var label(get, set):String;\n\tprivate var _label:String = \'\';\n\tfunction '
+					+ 'get_label():String return _label;\n\tfunction set_label(v:String):String { redraw(); return _label = v; }\n}'
+			},
+			{
+				file: 'Sub.hx',
+				source: 'class Sub extends Base {\n\tpublic function draw():String return _label;\n}\n\nclass Heir extends Foreign '
+					+ '{\n\tpublic function read():String return _label;\n}'
+			},
+			{ file: 'Foreign.hx', source: 'class Foreign {\n\tprivate var _label:String = \'x\';\n}' }
+		];
+		// Leading: the shape reports, so the fixture provably reaches the collapse the assertion below
+		// then reads the output of.
+		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		// One string over BOTH reads: `Sub`'s is the rename only the collapse can produce, `Heir`'s is
+		// the one it must leave alone, and neither half can be satisfied without the other.
+		Assert.equals(
+			'class Sub extends Base {\n\tpublic function draw():String\n\t\treturn label;\n}\n\nclass Heir extends Foreign {\n'
+			+ '\tpublic function read():String\n\t\treturn _label;\n}\n',
+			crossFixApply(files)['Sub.hx']
+		);
+	}
+
 	public function testCrossFileMultiSubtypeReadsAtomic(): Void {
 		// Two subtypes in two files each read the backing field; ALL are rewritten in one atomic rename.
 		final files: Array<{ file: String, source: String }> = [

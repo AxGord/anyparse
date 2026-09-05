@@ -85,6 +85,7 @@ import utest.Test;
 		Assert.equals(0, withUser('Reflect.field(c, \'orphaned\');').length);
 	}
 
+	@:pin('control') @:killer('M-NAMEOUTSIDE-TRUE')
 	public function testInterpolationEscapeKeepsTheMember(): Void {
 		// `'\x24zqxwvEscaped'` DECODES to `'$zqxwvEscaped'`, a real read. The token map cannot see
 		// it — a word-boundary scan reads `x24zqxwvEscaped` as ONE token — so this is the whole of

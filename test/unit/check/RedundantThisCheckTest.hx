@@ -145,6 +145,7 @@ class RedundantThisCheckTest extends Test {
 	 * A member inherited from a base in ANOTHER file in the set is flagged — the index
 	 * is built over every linted file, not just the one holding the access.
 	 */
+	@:pin('control') @:killer('M-INHERITS-FALSE')
 	public function testInheritedFromOtherFileBaseFlagged(): Void {
 		final vs: Array<Violation> = new RedundantThis().run([
 			{ file: 'Base.hx', source: 'class Base { public function inh():Void {} }' },

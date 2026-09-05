@@ -204,6 +204,7 @@ class PreferCaseGuardCheckTest extends Test {
 	}
 
 	/** The same for a real `enum`, reached through a qualified constructor path. */
+	@:pin('control') @:killer('M-DECLARINGFILES-EMPTY')
 	public function testInScopeEnumNotFlagged(): Void {
 		final other: String = 'enum E {\n\tA;\n\tB;\n}';
 		Assert.equals(0, scopedViolations(other, sw('case E.A: if (b) p();\n\t\t\tcase E.B: q();')).length);
