@@ -626,13 +626,10 @@ module — for **19 whole-suite runs** in all (a twentieth did not build, below)
 `b2ce7401`; blast counts below exclude the oracle-driven CLI e2e
 family the same way S105 excluded it (`FixVerifier*E2ETest`, `ExplicitLocalTypeOracle*`,
 `ExplicitTypeReturnOracleTest`, `CompilerOracleE2ETest`, `LintPerFileConfigCliTest`,
-`MoveExtractDocCensusTest`), identified as before by turning up under unrelated cuts. There is a
-cheaper tell than the five-classes-across-nine-runs argument S105 had to make, though not a
-free one: of the **25** such rows — spread over **9 of the 19 runs**, the same fraction S105
-saw — **21 are an `ERROR` verdict** — a compiler-oracle server that died or never started, not an assertion — and only 4 a
-`FAILURE`. The sharpest single row is
-`ExplicitTypeReturnOracleTest#testCliFixAnnotatesReturnTypes`, which appears once as `ERROR E`
-and once as `FAILURE F..` under two cuts that share no mechanism.
+`MoveExtractDocCensusTest`), identified as before by turning up under unrelated cuts. **Of the
+25 such rows, 21 were an `ERROR` verdict and 4 a `FAILURE` — and that ratio is NOT a usable
+tell.** S107 wrote it up as one ("an `ERROR` on an oracle fixture is almost certainly the
+flake"), S111 refuted it, and S113 measured what to do instead; the correct rule is below.
 
 | cut | blast (flake family excluded) | outcome |
 |---|---|---|
@@ -771,6 +768,10 @@ test tools` (1 754 files):
 | anyparse `src` + `test` + `tools`, 1 754 files | **58** | **0** |
 | the fork corpus, 946 `.hxtest` fixtures | **0** | 0 |
 
+⚠️ **That 58 is all FOUR emitting sites, not this one** — S113 re-measured it per site and got
+39 / 6 / 13 / 0; the byte split below is the same population. See "The rewind is emitted at FOUR
+sites" (S113) further down.
+
 So the corpus is not merely quiet about this code — it never reaches it at all, which is why
 every previous measurement came back zero. The 58 fires split by the byte the rewind lands on:
 47 on `}`, 5 on a comment's last character, **6 on `;`**. Only the six can matter — for the other
@@ -848,8 +849,96 @@ the conjunction is the narrowest of the three. Recorded as a refusal, with its n
 The unpinned count moves **30 → 29**: the only census fixture these arms reach is
 `ElseSwitchPlacementSliceTest#testACommentBetweenElseAndSwitchDeclinesTheGlue`. The other seven new
 pins land outside the census blast, which is where S107's twelve landed too. Of the 29 that remain,
-**7 are outside this fence** — 4 `unit.cli.LintFixFixedPointCliTest` (the flake family), 2
-`unit.check.*`, 1 `unit.query.*`.
+**7 are outside this fence** — 4 `unit.cli.LintFixFixedPointCliTest` (called the flake family
+here; S113 re-ran the census at `--jobs 1` and they are ordinary `FAILURE`s naming the cut's own
+effect — real unpinned blast), 2 `unit.check.*`, 1 `unit.query.*`.
+
+#### The extra rows are a function of LOAD — re-run, never classify by verdict kind (S113)
+
+S107 turned its flake census into a tell: *"of the 25 such rows, 21 are an `ERROR` verdict and
+only 4 a `FAILURE`"*, read as "an `ERROR` on an oracle fixture is almost certainly the flake".
+S111 refuted the premise — the identical patch re-run at `--jobs 2` produced **8** extra rows
+instead of 25, with `ERROR`s in different classes — and this slice measured the remedy. Same
+tree, same two patches, nothing else changed:
+
+| run | `M-PEB-WS-REWIND-TRYPARSE-OFF` | `M-PEB-WS-REWIND-SEPSTARTS-OFF` |
+|---|---:|---:|
+| `--jobs 4`, the two whole-suite tracks concurrent | 1 pin + **7 extra** | 1 pin + **1 extra** |
+| `--jobs 1`, the two tracks serial | 1 pin + **0 extra** | 1 pin + **0 extra** |
+
+**The rule: on an unexplained extra row, re-run the SAME patch at a lower `--jobs` before treating
+any of it as a finding — and do not classify by `ERROR`-vs-`FAILURE`.** Three reasons the verdict
+kind cannot carry that weight. S107's own numbers already had 4 of 25 flakes come back `FAILURE`,
+and a `FAILURE` flake is the direction that costs, because it reads as real blast. A row's marker
+string mixes the two anyway: two of the eight rows above are `ERROR ...FE` and `ERROR .FE` — one
+flaky fixture producing a real assertion failure AND an error inside a single run. And the class
+list is not fixed: these eight land in `ExplicitLocalTypeOracleE2ETest` (2),
+`ExplicitTypeReturnOracleTest` (1), `FixVerifierCoverageE2ETest` (3) and `FixVerifierGroupE2ETest`
+(1) — not S107's six, not S105's five.
+
+**Serial buys an EXACT census, not merely a cleaner one.** A whole-suite `M-CURLY-CTORS-NONE` run
+at `--jobs 1` came back **50 failures, 0 `ERROR`** — every row a real assertion failure naming the
+mutation's effect. The hand-maintained exclusion list S104, S105, S107 and S111 each had to
+subtract is therefore an artefact of measuring under load, not a property of those classes. It
+also corrects one entry: S111 filed the four `unit.cli.LintFixFixedPointCliTest` rows of that
+census as "the flake family", and serially they are ordinary `FAILURE`s whose messages name the
+de-nesting the cut removed — real unpinned blast. The price is wall time: the two-arm pair is 57 s
+at `--jobs 4` and 104 s serial, and `M-CURLY-CTORS-NONE` alone is 51 s.
+
+#### The rewind is emitted at FOUR sites, and 58 was three sites' sum (S113)
+
+S111 instrumented the block-ended whitespace rewind, read **58 fires** over `fmt --list
+--one-pass src test tools`, and recorded them as `StarLoopLowering.buildBlockEndedByteCheck`'s.
+The same seven-line block is spliced by **four** macro members — `hxq lit '_pebRew' src` returns
+16 mentions, four per site — and instrumenting all four separately splits that 58:
+
+| site | member | what compiles to it | `fmt`, 1 754 files | whole suite |
+|---|---|---|---:|---:|
+| close-peek struct field | `StarLoopLowering#buildBlockEndedByteCheck` | `HxFnBlock.stmts` | **39** | 233 |
+| `@:tryparse`, no close literal | `StarLoopLowering#buildTryparseSepLoop` | `HxConditionalStmt.body` / `elseBody`, `HxElseifStmt.body`, both `HxCondSplice*Open.body` | **6** | 17 |
+| enum branch, lead/trail, `sepStartsElement` | `Lowering#lowerStarBlockEndedSepStarts` | `HxStatement.BlockStmt`, `HxExpr.BlockExpr`, `HxDoWhileBody.BlockBody` | **13** | 46 |
+| enum branch, lead/trail, no `sepStartsElement` | `Lowering#lowerStarBlockEndedSepLast` | `unit.miniblock.MiniBlock.Block` | **0** | 0 |
+
+It is the same population, not a different measurement: the byte the rewind lands on splits 47 `}`
+/ 6 `;` / 5 on a comment's last character, exactly S111's split, and all 58 carry `p=true` so the
+answer still differs zero times on this tree. **The attribution was the error, and it propagates
+backwards** — S105's and S107's deletion candidates cut ONE of the four sites, so their
+zero-results covered less than a quarter of the emitted code, not all of it.
+
+**Two of the three unarmed sites take an arm.** The discriminating shape is S111's — `return macro
+if (c) foo();` swallows its own `;`, `ReturnStmt`'s `@:trailOpt(';')` misses, and `stmtNoSemi`
+answers `false` for `ReturnStmt` — routed to each site by its host construct: a nested `{ … }`
+block reaches `lowerStarBlockEndedSepStarts`, a `#if js … #end` region reaches
+`buildTryparseSepLoop`. Instrumented, each fixture fires its own site once and nothing else, with
+`b=';'`, `bNo='\t'` and `p=false` — the rewind decides alone.
+
+| arm | member | blast, `--jobs 1`, whole suite |
+|---|---|---:|
+| `M-PEB-WS-REWIND-TRYPARSE-OFF` | `StarLoopLowering#buildTryparseSepLoop` | **1**, its own pin, `FAILURE FF` |
+| `M-PEB-WS-REWIND-SEPSTARTS-OFF` | `Lowering#lowerStarBlockEndedSepStarts` | **1**, its own pin, `FAILURE FF` |
+
+`unit.lowering.StarBlockEndedWsRewindSitesTest` is the pair of fixtures plus a plain twin for each
+— a body whose `;` IS its own last byte — and the twins stay green under either arm, which is the
+discrimination. **The consequence differs from the close-peek site's**, which is worth knowing
+because it decides what a future oracle could catch: cutting the rewind at
+`buildBlockEndedByteCheck` leaves `PARSE OK` and a different tree, while cutting it at either of
+these makes the source fail to parse outright (`error at 5:4: unexpected input`).
+
+**The fourth site is a refusal with its number.** `lowerStarBlockEndedSepLast` is live — its byte
+check is EVALUATED 11 times over the whole suite — but the rewind moves in none of them, and it
+moves nowhere on the 1 754-file tree either, because the only grammar that routes to it is
+`unit.miniblock.MiniBlock`, whose two element rules are an identifier regex and a `}`-terminated
+block. Neither can leave trailing whitespace consumed, so `_pebRew` cannot move and an arm on it
+would `SURVIVE` by construction. Reaching it would take a new grammar written for the purpose,
+which is the tautological-pin shape S66 recorded; it stays unarmed.
+
+**The unpinned census is unchanged at 29.** `M-CURLY-CTORS-NONE` re-run whole-suite at
+`--jobs 1` takes 50 fixtures, 21 of them pinned — the same 29 S111 left, distributed 12
+`HxSingleStmtBracesSliceTest`, 4 `LintFixFixedPointCliTest`, 2 each in `HxTriviaWriteTest` /
+`HxValueIfBracketHugSliceTest` / `HxElseIfCommentReflowSliceTest`, and seven singletons. This
+slice's two pins land outside that blast, which is where S107's twelve and S111's seven landed
+too, so the count does not move. The claim census is unchanged at 294 for the usual reason: an
+annotated class contributes no claim line.
 
 ## Macro-specific tests
 

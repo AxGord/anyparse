@@ -754,6 +754,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.lowering.GeneratedLexicalScanSecondGrammarTest',
 		'unit.lowering.RegexFirstBytesTest',
 		'unit.lowering.StarBlockEndedTest',
+		'unit.lowering.StarBlockEndedWsRewindSitesTest',
 		'unit.lowering.StarBlockEndedWsRewindTest',
 		'unit.lowering.StarSepStartsElementTest',
 		'unit.lowering.WriterFamilyCtxBundleTest',
@@ -1125,6 +1126,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheSemicolonBeforeElseGoesWithTheJoin'
 			+ ' :: control :: M-EXPR-ELSE-KEEP,M-EXPR-ELSE-PLAIN-SAME',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheStatementTwinKeepsTheLayoutItAlwaysHad :: guard :: ',
+			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyKeepsTheStatementAfterASwallowedTerminator'
+			+ ' :: control :: M-PEB-WS-REWIND-TRYPARSE-OFF',
+			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyWithAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
+			'unit.lowering.StarBlockEndedWsRewindSitesTest#testANestedBlockKeepsTheStatementAfterASwallowedTerminator'
+			+ ' :: control :: M-PEB-WS-REWIND-SEPSTARTS-OFF',
+			'unit.lowering.StarBlockEndedWsRewindSitesTest#testANestedBlockWithAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindTest#testASwallowedTerminatorBehindTrailingWhitespaceStillEndsTheStatement'
 			+ ' :: control :: M-PEB-WS-REWIND-OFF',
 			'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
@@ -1245,7 +1252,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-PEB-WS-REWIND-OFF',
 			'M-BRACKET-GLUE-NONE',
 			'M-ELSE-SWITCH-COMMENT-GLUE',
-			'M-ELSE-SWITCH-TESTS-NONE'
+			'M-ELSE-SWITCH-TESTS-NONE',
+			'M-PEB-WS-REWIND-TRYPARSE-OFF',
+			'M-PEB-WS-REWIND-SEPSTARTS-OFF'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1278,7 +1287,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-PEB-WS-REWIND-OFF :: anyparse.macro.StarLoopLowering#buildBlockEndedByteCheck',
 			'M-BRACKET-GLUE-NONE :: anyparse.macro.WriterLowering#buildBracketBodyGlueTest',
 			'M-ELSE-SWITCH-COMMENT-GLUE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchCases',
-			'M-ELSE-SWITCH-TESTS-NONE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchTests'
+			'M-ELSE-SWITCH-TESTS-NONE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchTests',
+			'M-PEB-WS-REWIND-TRYPARSE-OFF :: anyparse.macro.StarLoopLowering#buildTryparseSepLoop',
+			'M-PEB-WS-REWIND-SEPSTARTS-OFF :: anyparse.macro.Lowering#lowerStarBlockEndedSepStarts'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

@@ -18,12 +18,14 @@ import utest.Test;
  * the ELEMENT's own rule to have consumed trailing whitespace. Two rules do — an
  * `@:trailOpt(';')` that MISSES leaves its pre-match `skipWs` standing, and
  * `OperatorLoopLowering`'s no-operator-match path deliberately declines to rewind when the
- * consumed run held a newline and no comment (`omega-untyped-keep`) — so the rewind fires
- * 58 times over this project's own 1 754 sources.
+ * consumed run held a newline and no comment (`omega-untyped-keep`) — so the rewind fires 39
+ * times at THIS site over this project's own 1 754 sources. Fifty-eight fires across all
+ * FOUR members that splice this same block — see
+ * `unit.lowering.StarBlockEndedWsRewindSitesTest` for the other three.
  *
- * Fifty-two of those fires cannot change the answer: the byte the rewind lands on is `}`
- * or a comment's last character, which is not `;` either way. The remaining six land ON a
- * `;`, and there the rewind is the whole difference between `_isBE` and a thrown
+ * Thirty-four of this site's 39 fires cannot change the answer: the byte the rewind lands
+ * on is `}` or a comment's last character, which is not `;` either way. The remaining FIVE
+ * land ON a `;`, and there the rewind is the whole difference between `_isBE` and a thrown
  * expected-separator — which is why the shape below is the fixture and not a `}`-ended one.
  *
  * `return macro if (c) foo();` is that shape: the `;` is swallowed by the reification, so
