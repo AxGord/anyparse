@@ -12,18 +12,23 @@ using StringTools;
  *
  * ## Why this is not `CheckScan.normalizeSpan`
  *
- * That sibling collapses whitespace EVERYWHERE, literal interiors included. Its own doc says so,
- * and for its five consumers that is right: `duplicate-code`, `extract-repeated-expression`,
- * `tail-merge`, `redundant-case-body` and `prefer-case-guard` want an equality KEY, and a key
- * that ignores layout is what makes two textually-different-but-identical statements compare
- * equal (each pairs it with a structural test, or with a literal-content key of its own, so the
- * collapse cannot manufacture a false match).
+ * That sibling collapses whitespace EVERYWHERE, literal interiors included. As an equality KEY
+ * that is right wherever something EXACT stands beside it: `tail-merge` and
+ * `redundant-case-body` pair it with `MemberKinds.structurallyEqual`, `prefer-case-guard` refuses
+ * content carrying a backslash or either quote, and `extract-repeated-expression` uses it as a
+ * cheap prefilter and re-splits every surviving bucket by this renderer. Standing alone it
+ * manufactures matches instead: `duplicate-code` bucketed three-gram norms outright and read two
+ * `--help` blocks padded to different column widths as a clone, so it keys on this renderer too.
+ * The sentence here used to claim all five consumers paired it; two of them did not.
  *
  * A MESSAGE is the opposite job. Its text is quoted back to a reader who is expected to find it
  * in the file, and where the check also offers a fix, that text is the code the fix would write.
  * A message rendering `'  '` as `' '` cannot be verified by reading, and it misdescribes the
  * rewrite — `prefer-static-extension` splices the receiver's bytes verbatim, so the two were
- * free to disagree. Normalising for comparison and rendering for display are two operations;
+ * free to disagree. `extract-repeated-expression` is the second display consumer and needed only
+ * the first half: it is report-only, so nothing there writes the quoted text, but the finding is
+ * spanned at an occurrence a reader is expected to go and read. Normalising for comparison and
+ * rendering for display are two operations;
  * they were one function, and only the comparison half was ever correct.
  *
  * ## Token interiors come from the TREE

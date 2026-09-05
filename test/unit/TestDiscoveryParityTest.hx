@@ -956,6 +956,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.ProseClaimCensusTest#testTheTwoUnrecordableKindsStayOnTheList :: control :: M-CLAIM-NOKINDS',
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
+			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs'
+			+ ' :: control :: M-DUP-CODE-NORM-KEY',
+			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup'
+			+ ' :: control :: M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
 			'unit.check.FieldWriteResolutionScopeTest#testLibraryStructureVetoesOnceStructuralJoins'
 			+ ' :: control :: M-CHECKINDEX-PROJECT-FINAL',
@@ -1139,6 +1143,7 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-PEB-WS-REWIND-OFF',
 			'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: ',
+			'unit.query.OpaqueCondRegionScanTest#testACommentAfterTheEndStaysOutOfTheQuote :: control :: M-OPAQUE-REGION-TRIVIA-KEPT',
 			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote'
 			+ ' :: control :: M-OPAQUE-REGION-WS-GAP',
 			'unit.query.OpaqueCondRegionScanTest#testDanglingElseIsOpaqueWhileItsBraceIdenticalTwinIsNot'
@@ -1257,6 +1262,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-ELSE-SWITCH-COMMENT-GLUE',
 			'M-ELSE-SWITCH-TESTS-NONE',
 			'M-RENDER-SPAN-TOKENS',
+			'M-DUP-CODE-NORM-KEY',
+			'M-EXTRACT-REPEAT-RENDER-SPLIT',
+			'M-OPAQUE-REGION-TRIVIA-KEPT',
 			'M-PEB-WS-REWIND-TRYPARSE-OFF',
 			'M-PEB-WS-REWIND-SEPSTARTS-OFF'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');

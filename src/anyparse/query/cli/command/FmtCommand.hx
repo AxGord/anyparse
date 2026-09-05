@@ -3,10 +3,11 @@ package anyparse.query.cli.command;
 import anyparse.format.WhitespaceInvariant;
 import anyparse.format.comment.CommentInventory;
 import anyparse.query.Cli.FmtRunResult;
+import anyparse.query.CondRegionScan.OpaqueCondRegion;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.CliContext;
-import anyparse.runtime.Span.Position;
+import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
@@ -567,10 +568,23 @@ final class FmtCommand implements CliCommand {
 	 * did NOT know to ask. Not a lint rule either: a region like this is often the only way to
 	 * write what it writes, so a check firing on it would be reporting correct code. The volume
 	 * that would have justified a flag is not there — measured, 0 regions over this project's
-	 * own 1754 files, 31 over the 872-file Pony fork, 28 over the 946-fixture formatter corpus.
-	 * The cost is one extra parse per file that HAS a `#if` (451 of 1754 here, +22% on the
-	 * whole-tree `fmt --list` gate, nothing on a single-file run); a file without one never
-	 * reaches it.
+	 * own 1757 files, 31 over the Pony fork, 28 over the 946-fixture formatter corpus.
+	 * The cost is one extra parse per file that HAS a `#if` (451 of 1757 here, +15-20% on the
+	 * whole-tree `fmt --list` gate as interleaved medians, nothing on a single-file run); a file
+	 * without one never reaches it.
+	 *
+	 * ## The lazy variant does not exist
+	 *
+	 * Deferring the parse to the files `fmt` leaves UNCHANGED removes none of that cost. Both real
+	 * trees this runs over are ALREADY canonical — `0 of 1757` here, `0 of 680` over the Pony
+	 * fork's `src` —
+	 * so "unchanged" is every file and the rule is the identity on exactly the gate it was proposed
+	 * for. Its inverse, notes only for a file `fmt` rewrites, is free on that gate and deletes the
+	 * whole output instead: 31 of 31 Pony regions sit in files that are already canonical. Nor is
+	 * there anything to optimise in the walk — short-circuiting `CondRegionScan.opaqueCondRegions`
+	 * AFTER the parse measured 11.09 s against the full note's 11.01 s, while skipping the parse as
+	 * well measured 9.56 s. The whole cost is a SECOND FRONT END: the writer already declines this
+	 * region and could say so, and then no projection parse is needed here at all.
 	 *
 	 * Handed BACK rather than printed, for the reason the summary line above is: `Sys.stderr()`
 	 * on hxnodejs is a raw fd, so a printed sentence is unassertable and this family's recorded
@@ -587,11 +601,23 @@ final class FmtCommand implements CliCommand {
 		if (kinds == null || kinds.length == 0) return [];
 		if (source.indexOf(shape.conditionalIfKeyword ?? '#if') == -1) return [];
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
-		return tree == null ? [] : [
-			for (opaque in CondRegionScan.opaqueCondRegions(tree, source, shape)) {
-				final at: Position = opaque.region.lineCol(source);
+		if (tree == null) return [];
+		final regions: Array<OpaqueCondRegion> = CondRegionScan.opaqueCondRegions(tree, source, shape);
+		if (regions.length == 0) return [];
+		// Asked only once a region exists: the lexical scan is a second pass over the file, and
+		// the overwhelmingly common answer above is the empty array.
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		return [
+			for (opaque in regions) {
+				// The region is the bytes no CHILD covers, and no projection carries a comment
+				// node, so a comment sitting between the `#end` and the continuation lands in
+				// that range and the quote runs past the directive into it. Trimmed for the
+				// COORDINATE as well as the quote: a comment before the `#if` moves the line the
+				// note names off the directive it is about.
+				final quoted: Span = SourceComments.trimTrivia(source, opaque.region, comments);
+				final at: Position = quoted.lineCol(source);
 				'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region left unformatted - '
-					+ '"${SourceText.regionExcerpt(source, opaque.region)}" is not a balanced subtree, so the parser captured it raw'
+					+ '"${SourceText.regionExcerpt(source, quoted)}" is not a balanced subtree, so the parser captured it raw'
 					+ ' and the writer re-emits it byte-for-byte; restructure it into a balanced #if to have it formatted';
 			}
 		];
