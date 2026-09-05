@@ -101,8 +101,8 @@ needs the constructor inventory rather than the module list.
 
 `@:fmt` is the grammar's channel into the WRITER half of the build macro. It carries no
 built-in meaning of its own (invariant 6): a grammar declares a flag on a rule type or a
-field, and `WriterLowering` — with `TriviaTypeSynth` and `Lowering` for the trivia and
-span twins — decides what layout the flag lowers to. A flag nothing reads is silently
+field, and `WriterLowering` — with `TriviaPairSlots` / `TriviaPairAltCtor` and
+`Lowering` for the trivia and span twins — decides what layout the flag lowers to. A flag nothing reads is silently
 inert, which is why this section is an INVENTORY rather than a specification: the list
 below is what the macro answers to today, extracted from the declarations themselves.
 
@@ -201,23 +201,26 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterLowering` | 121 |
 | `WriterTriviaStarDispatch` | 43 |
 | `WriterKwRefLowering` | 31 |
-| `TriviaTypeSynth` | 17 |
 | `WriterCtorBlankLowering` | 17 |
 | `WriterRefLeadLowering` | 17 |
 | `Lowering` | 16 |
 | `WriterPrattLowering` | 14 |
 | `WriterPolicyLowering` | 10 |
+| `TriviaPairSlots` | 9 |
+| `TriviaPairAltCtor` | 8 |
 | `WriterBodyPolicyLowering` | 3 |
-| `WriterCodegen` | 3 |
+| `WriterCodegen` | 2 |
 | `WriterBlankLowering` | 2 |
 | `WriterBraceSymmetryLowering` | 2 |
 | `WriterCondWrapLowering` | 2 |
 | `WriterLoweringSupport` | 2 |
 | `WriterTriviaSlotLowering` | 2 |
 | `StructFieldTrailLowering` | 1 |
+| `TriviaPairConverters` | 1 |
 | `WriterArrowValueIfLowering` | 1 |
 | `TriviaSlotNames` | 1 |
 | `WriterChainLowering` | 1 |
+| `WriterOptFanout` | 1 |
 
 Read the shape of it, not just the numbers. The counts sum to far more than 212 because a
 flag is named wherever it is asked, and several are asked in two emitters.
@@ -243,6 +246,18 @@ wildcard import plus the class-level `@:access` reaches them unqualified). 24 of
 moved. That axis is orthogonal to the shape families and stops much sooner: the remaining
 102 members read build state, and moving one of those is a signature change at every call
 site.
+
+The `TriviaPair*` and `WriterOptFanout` rows are a THIRD axis, and they are there because
+the second one had nothing to say about them. `TriviaTypeSynth` (95 members) and
+`WriterCodegen` (75) declare no instance field AT ALL — every member of both was already
+static — so the state census that split `WriterLowering` returns 100 % pure and decides
+nothing. What binds instead is the QUALIFIED call site: `WriterCodegen.<member>` is spelled
+twice outside its file and 48 of its members left at zero call-site change, while
+`TriviaTypeSynth.<member>` is spelled 133 times outside its file, 59 of those the ALL-CAPS
+slot-name constants, which is why the name vocabulary stayed and the three question-shaped
+families (`TriviaPairAltCtor` — which extra positional argument an Alt branch shape earns;
+`TriviaPairSlots` — which trivia slot a struct field earns; `TriviaPairConverters` — how a
+paired value converts to and from its raw sibling) left instead.
 
 **Four flags are handler-only** — a macro module names them, no shipped grammar declares
 them, so they are absent from the inventory above: `blankLinesBeforeCtor` and

@@ -3897,7 +3897,7 @@ class Lowering {
 		// `opt.formatStringInterpolation == false`. Trivia-only because
 		// the synth-pair ctor is the carrier; plain pipelines keep the
 		// pre-slice ctor arity.
-		final triviaCaptureSource: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isCaptureSourceBranch(branch);
+		final triviaCaptureSource: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isCaptureSourceBranch(branch);
 		// ω-issue-257-firstline: ctors with `@:fmt(bodyPolicy(...))` on a
 		// single-Ref kw-led branch (e.g. `HxStatement.ReturnStmt`) carry
 		// a positional `bodyOnSameLine:Bool` arg in the synth pair. The
@@ -3906,7 +3906,7 @@ class Lowering {
 		// source-shape-aware. Trivia-only — plain mode keeps the
 		// original ctor arity and falls back to width-driven layout
 		// via `widthAware`.
-		final triviaBodyPolicyKw: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+		final triviaBodyPolicyKw: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch);
 		// omega-paren-wrap-source-newline: ctors with @:fmt(captureWrapOpenNewline)
 		// on a single-Ref @:wrap branch carry a positional wrapOpenNewline:
 		// Bool arg in the synth pair. Parser captures whether the gap
@@ -3915,7 +3915,9 @@ class Lowering {
 		// `(\n<inner>\n)` (open broken; preserves authored shape on
 		// chain inners) and `(<inner>\n)` (glued; unchanged default).
 		// Trivia-only; plain mode keeps the original ctor arity.
-		final triviaWrapOpenNewline: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+		final triviaWrapOpenNewline: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isAltWrapOpenNewlineBranch(
+			branch
+		);
 		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
 		// ctors with `@:fmt(captureKwNewline)` carry a positional
 		// `kwNewline:Bool` arg. The parser captures whether the gap between
@@ -3924,7 +3926,7 @@ class Lowering {
 		// `HxVarDecl` multiVar fold reproduces the source `var`→head newline
 		// under `WrapMode.Keep`. Trivia-only; plain mode keeps the original
 		// ctor arity (head always glued to `var `).
-		final triviaKwNewline: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltKwNewlineBranch(branch);
+		final triviaKwNewline: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isAltKwNewlineBranch(branch);
 		final ctorCall: Expr = buildKwRefCtorCall(
 			ctorRef, triviaTrailOpt, triviaCaptureSource, triviaBodyPolicyKw, triviaWrapOpenNewline, triviaKwNewline
 		);

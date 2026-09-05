@@ -747,7 +747,7 @@ final class WriterKwRefLowering {
 			// `@:fmt(spaceBeforeTrail)` prepends a space so a
 			// word-start trail (`#end`) does not fuse with the body's last
 			// word character.
-			final isTriviaTrailOpt: Bool = kw.ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
+			final isTriviaTrailOpt: Bool = kw.ctx.trivia && TriviaPairAltCtor.isAltTrailOptBranch(branch);
 			final trailEmit: String = branch.fmtHasFlag('spaceBeforeTrail') ? ' $trailText' : trailText;
 			final trailExpr: Expr = if (isTriviaTrailOpt) {
 				final flagAccess: Expr = macro $i{argNames[1]};
