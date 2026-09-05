@@ -92,20 +92,40 @@ import anyparse.runtime.Span;
  *
  * A project declaring no `resolutionRoots` still answers from the report scope alone — the
  * limitation `unused-private` / `prefer-final-field` carry, and there the sound usage is still
- * linting the whole project (`lint src/`). The LIBRARY half of the resolution scope (`resolutionLibs`, the std) joins the WRITE index and
- * nothing else. S97 measured admitting it to everything: over the Pony fork that lost 18 of 112
- * findings and gained none, and the census says none of the 18 came from the write index — 10 came
- * from `SymbolIndex.text.skippedMayReference` (a skip-parsing library file that merely SPELLS the
- * member name), 3 from structural conformance against a library anonymous structure, 5 from
- * `declarationSiteOf` going ambiguous once a library declares a type of the same SIMPLE name
- * (`Helper`, `Input`). So the name-keyed scans keep the project-scoped `SymbolIndex`, while the
- * write index spans the resolution scope with the library half tagged third-party: every question
- * a rule asks about ITS OWN candidate carries that candidate's file and is narrowed back out
- * (`FieldWriteIndex.admits`), since a haxelib cannot name a project type and so cannot hold a
- * statically-typed write into one. Net over Pony: 2 findings lost, 11 gained (112 -> 121). Both
- * losses were `Rotor.speed` / `Wards.speed`, freed at base by a proof that `Single` is a project
- * class no builtin converts into — true only because the report scope hid the std's
- * `abstract Single to Float from Float`, which any `Int` reaches.
+ * linting the whole project (`lint src/`).
+ *
+ * ## Which half of the scope answers which question
+ *
+ * The LIBRARY half (`resolutionLibs`, the std) is admitted per QUESTION, not per rule, and the
+ * split is measured rather than argued. Admitting it to EVERYTHING loses findings, and the
+ * losses are not one mechanism: over the Pony fork a whole-scope index costs 12 of 121 findings
+ * and gains none — 10 from `SymbolIndex.text.skippedMayReference`, a skip-parsing library source
+ * that merely SPELLS the member name (11 when it is the only wide layer), and 2 from structural
+ * conformance against a library anonymous structure. So:
+ *
+ *  - The WRITE index spans the resolution scope with the library half tagged third-party. It is
+ *    the index that WANTS the library: a third-party subtype's write is invisible anywhere else.
+ *  - The name/type index — `members`, `subtypes`, `traits`, and the skip-parse `text` scan —
+ *    spans it too. A library supertype, an implemented library interface and a library `@:build`
+ *    are real vetoes the project scope cannot see, and admitting them costs nothing measurable:
+ *    Pony's four rules report the identical 121 findings either way.
+ *  - The STRUCTURAL scan alone keeps the PROJECT-scoped index. It matches an anonymous structure
+ *    by member NAME set with no type check, over a closure that reads an unresolvable supertype
+ *    as declaring everything, so a `MonoBehaviour` subclass conforms to `haxe.macro.Expr.TypePath`
+ *    and to `haxe.macro.Type.EnumType`. That is the residual 2, and it is a defect in the
+ *    conformance proof — the same wildcard already withholds 3 findings from the project scope
+ *    alone — rather than a property of the library.
+ *
+ * What makes the wide index affordable is that every question a rule asks about ITS OWN candidate
+ * carries that candidate's file and is narrowed back to the project half: `FieldWriteIndex.admits`
+ * for a write, `RawSourceScan.admits` for the skip-parse scan. A haxelib can neither name a project
+ * type nor hold a statically-typed write into one.
+ *
+ * The one loss S97's split did cost — `Rotor.speed` / `Wards.speed` — was a corrected false proof:
+ * both were freed by a claim that `Single` is a project class no builtin converts into, true only
+ * while the report scope hid the std's `abstract Single to Float from Float`. That proof now
+ * resolves the annotation from the candidate's own file (`FieldWriteIndex.plainClassInScope`), so
+ * it answers the same in both scopes instead of by accident in one.
  */
 @:nullSafety(Strict)
 final class PreferFinalPublicField implements Check {
@@ -122,17 +142,21 @@ final class PreferFinalPublicField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		// The name-keyed scans' scope is the PROJECT, not the lint scope: a field's writer can be
-		// any project file, so a narrow run answers over the declared `resolutionRoots` too.
-		// Report-only when the project declares none — then the lint scope IS all this run can see.
-		// The WRITE index is wider (the whole resolution scope, third-party half tagged) and rides
-		// the host memoised; the scope note below says why the two differ.
+		// Two indexes, split per QUESTION rather than per rule — the scope note above says what
+		// each half costs. `projectScoped` is report files UNION the declared `resolutionRoots`
+		// (the lint scope alone when a project declares none); `index` is the whole resolution
+		// scope with the library half tagged third-party, and every per-candidate question it
+		// answers carries the candidate's file so the tag can narrow it back out. The STRUCTURAL
+		// scan is the one gate that keeps `projectScoped`: it is keyed on a member NAME and
+		// matches an anonymous structure by member set alone, so the library's structures veto
+		// far past what they can unify with.
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
-		final index: SymbolIndex = RefactorSupport.projectIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
+		final projectScoped: SymbolIndex = RefactorSupport.projectIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
+		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? projectScoped;
 		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
+			if (exported) considerField(violations, file, source, field, owner, index, projectScoped, writeIndex, plugin);
 		});
 		return violations;
 	}
@@ -164,7 +188,7 @@ final class PreferFinalPublicField implements Check {
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
-		writeIndex: FieldWriteIndex, plugin: GrammarPlugin
+		projectScoped: SymbolIndex, writeIndex: FieldWriteIndex, plugin: GrammarPlugin
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -172,8 +196,9 @@ final class PreferFinalPublicField implements Check {
 		// A file the grammar could not read can hold any write, so no single-assignment proof
 		// survives it — but only when it can reach this MEMBER, which it can only do by
 		// spelling the name. A whole-project veto here silenced the rule for every file in a
-		// scope holding one unparseable file.
-		if (index.text.skippedMayReference(name)) return;
+		// scope holding one unparseable file. The candidate's own file narrows the scan back off
+		// the library half: a skip-parsing haxelib source cannot name a project type.
+		if (index.text.skippedMayReference(name, file)) return;
 		// A macro-built type's fields are not what the declaration says — see
 		// `TypeTraits.transitivelyCarriesBuildMacro`.
 		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
@@ -197,7 +222,7 @@ final class PreferFinalPublicField implements Check {
 		// declaring `name` mutably is expected — a READ position, so every write gate below is
 		// blind to it — and a `final` field satisfies neither a structural `var` nor a
 		// structural method.
-		if (index.structural.structuralConformanceForbidsFinal(owner, name)) return;
+		if (projectScoped.structural.structuralConformanceForbidsFinal(owner, name)) return;
 		// Core-API gate: a `@:coreApi` type's members are pinned to the property access of a core
 		// type in the compiler's std path that no scope here holds, and `var` -> `final` is
 		// "Field <name> has different property access than core type".

@@ -952,8 +952,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
+			'unit.check.FieldWriteResolutionScopeTest#testOutOfScopePlainClassKeepsTheUnresolvedWritePoison :: control'
+			+ ' :: M-PLAINCLASS-SCOPEBLIND',
 			'unit.check.FieldWriteResolutionScopeTest#testProjectRootUnresolvedWriteVetoes :: control :: M-ROOTS-THIRDPARTY',
+			'unit.check.FieldWriteResolutionScopeTest#testResolvableLibraryInterfaceStopsVetoing :: control :: M-CHECKINDEX-PROJECT-FINAL',
+			'unit.check.FieldWriteResolutionScopeTest#testResolvableLibraryInterfaceStopsVetoingWriteRestriction :: control'
+			+ ' :: M-CHECKINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testSameSimpleNameThirdPartyTypeDoesNotVeto :: control :: M-DECLSITE-SCOPEWIDE',
+			'unit.check.FieldWriteResolutionScopeTest#testSkipParsingLibrarySourceDoesNotVetoProjectCandidate :: control'
+			+ ' :: M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly'
 			+ ' :: control :: M-WRITEINDEX-PROJECT-READONLY',
@@ -1069,7 +1076,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-ELSE-BODY-SAME',
 			'M-ARM-PATH-FLAT',
 			'M-CURLY-CTORS-NONE',
-			'M-SBE-UNGATED'
+			'M-SBE-UNGATED',
+			'M-SKIPSCAN-SCOPEWIDE',
+			'M-CHECKINDEX-PROJECT-FINAL',
+			'M-CHECKINDEX-PROJECT-READONLY',
+			'M-PLAINCLASS-SCOPEBLIND'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

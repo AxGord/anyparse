@@ -26,6 +26,13 @@ final class RawSourceScan {
 	/** The paths the parser could not read, handed over by the owning index. */
 	private final _skipped: Array<String>;
 
+	/**
+	 * The scope's THIRD-PARTY half — a `resolutionLibs` / std path -> true — handed over by the
+	 * owning index, empty for an index built over project sources alone. The discriminator the
+	 * per-owner narrowing keys on, and the raw-text twin of `FieldWriteIndex._thirdParty`.
+	 */
+	private final _thirdParty: Map<String, Bool>;
+
 	/** Per-file source text, handed over by the owning index. */
 	private final _sources: Map<String, String>;
 
@@ -39,11 +46,14 @@ final class RawSourceScan {
 	private var _grantScanSource: Null<String>;
 
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
-	public function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin) {
+	public function new(
+		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
+	) {
 		_files = files;
 		_skipped = skipped;
 		_sources = sources;
 		_plugin = plugin;
+		_thirdParty = thirdParty;
 	}
 
 	/**
@@ -107,9 +117,19 @@ final class RawSourceScan {
 	 *
 	 * Conservative in the same direction as before wherever it cannot see: a skipped file whose
 	 * source was not retained answers true.
+	 *
+	 * `ownerFile` narrows the scan per OWNER, the way `FieldWriteIndex.admits` narrows the write
+	 * bail: a skipped THIRD-PARTY source cannot hold a write into a type the PROJECT declares — it
+	 * cannot name that type — so it is dropped for a project-owned candidate. Omit it to ask the
+	 * unnarrowed question, which is what a subject that may itself be third-party wants. This is
+	 * what lets the library into the index at all: over the Pony fork, an unnarrowed scan over the
+	 * resolution scope loses 10 findings to seven skip-parsing haxelib sources that merely SPELL a
+	 * project member's name, and recovers every one of them per owner.
 	 */
-	public function skippedMayReference(name: String): Bool {
-		return name.length == 0 ? _skipped.length > 0 : _skipped.exists(file -> skippedSourceMentions(_sources[file], name));
+	public function skippedMayReference(name: String, ?ownerFile: String): Bool {
+		return name.length == 0
+			? _skipped.exists(file -> admits(file, ownerFile))
+			: _skipped.exists(file -> admits(file, ownerFile) && skippedSourceMentions(_sources[file], name));
 	}
 
 	/**
@@ -123,9 +143,13 @@ final class RawSourceScan {
 	 * named is barely better than the whole-run veto it replaced.
 	 *
 	 * An empty name means the same here as there — every skipped file, since nothing was asked.
+	 *
+	 * `ownerFile` narrows per owner exactly as it does there, so the two cannot drift apart.
 	 */
-	public function skippedFilesMentioning(names: Array<String>): Array<String> {
-		return _skipped.filter(file -> names.exists(name -> name.length == 0 || skippedSourceMentions(_sources[file], name)));
+	public function skippedFilesMentioning(names: Array<String>, ?ownerFile: String): Array<String> {
+		return _skipped.filter(
+			file -> admits(file, ownerFile) && names.exists(name -> name.length == 0 || skippedSourceMentions(_sources[file], name))
+		);
 	}
 
 	/**
@@ -151,6 +175,18 @@ final class RawSourceScan {
 		_grantScanSource = source;
 		_grantScanAnswer = RefactorSupport.carriesAllowGrant(source, _plugin);
 		return _grantScanAnswer;
+	}
+
+	/**
+	 * Whether a skipped `file` counts for a candidate declared in `ownerFile` — the per-owner
+	 * narrowing both scans above share. A null owner asks the unnarrowed question; otherwise a
+	 * third-party skipped source counts only for a third-party owner. The raw-text twin of
+	 * `FieldWriteIndex.admits`, and conservative on the same terms: an index built over project
+	 * sources alone has an empty third-party map, so every file counts and the answer is what it
+	 * was before this parameter existed.
+	 */
+	private inline function admits(file: String, ownerFile: Null<String>): Bool {
+		return ownerFile == null || !_thirdParty.exists(file) || _thirdParty.exists(ownerFile);
 	}
 
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */

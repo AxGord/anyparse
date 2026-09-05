@@ -104,17 +104,18 @@ final class PreferReadOnlyField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		// The name-keyed scans' scope is the PROJECT, not the lint scope: a field's writer can be
-		// any project file, so a narrow run answers over the declared `resolutionRoots` too.
-		// Report-only when the project declares none — then the lint scope IS all this run can see.
-		// The WRITE index is wider (the whole resolution scope, third-party half tagged) and rides
-		// the host memoised; see `PreferFinalPublicField`'s scope note for why the two differ.
+		// Two indexes, split per QUESTION — see `PreferFinalPublicField`'s scope note, which owns
+		// the census. `projectScoped` is report files UNION the declared `resolutionRoots` and is
+		// read by the STRUCTURAL gate alone; `index` is the whole resolution scope with the
+		// library half tagged third-party, and every per-candidate question carries the
+		// candidate's file so the tag narrows it back out.
 		final scope: Array<{ file: String, source: String }> = RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
-		final index: SymbolIndex = RefactorSupport.projectIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
+		final projectScoped: SymbolIndex = RefactorSupport.projectIndexOf(plugin) ?? SymbolIndex.build(scope, plugin);
+		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? projectScoped;
 		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
+			if (exported) considerField(violations, file, source, field, owner, index, projectScoped, writeIndex, plugin);
 		});
 		return violations;
 	}
@@ -144,7 +145,7 @@ final class PreferReadOnlyField implements Check {
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
-		writeIndex: FieldWriteIndex, plugin: GrammarPlugin
+		projectScoped: SymbolIndex, writeIndex: FieldWriteIndex, plugin: GrammarPlugin
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -154,8 +155,9 @@ final class PreferReadOnlyField implements Check {
 		// A file the grammar could not read can hold any write, so no internal-only proof
 		// survives it — but only when it can reach this MEMBER, which it can only do by
 		// spelling the name. A whole-project veto here silenced the rule for every file in a
-		// scope holding one unparseable file.
-		if (index.text.skippedMayReference(name)) return;
+		// scope holding one unparseable file. The candidate's own file narrows the scan back off
+		// the library half: a skip-parsing haxelib source cannot name a project type.
+		if (index.text.skippedMayReference(name, file)) return;
 		// A macro-built type's fields are not what the declaration says — see
 		// `TypeTraits.transitivelyCarriesBuildMacro`.
 		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
@@ -166,7 +168,7 @@ final class PreferReadOnlyField implements Check {
 		// Structural-conformance gate: a `(default, null)` field does not satisfy a structural
 		// `var name:T` the type may be unified with. A structural METHOD member is fine here —
 		// that is the one kind this gate is narrower than `prefer-final-public-field`'s.
-		if (index.structural.structuralConformanceForbidsWriteRestriction(owner, name)) return;
+		if (projectScoped.structural.structuralConformanceForbidsWriteRestriction(owner, name)) return;
 		// Core-API gate: `(default, null)` is a property-access change, and a `@:coreApi` type's
 		// members are pinned to the access of a core type in the compiler's std path that no scope
 		// here holds — measured as "Field <name> has different property access than core type" for
@@ -192,7 +194,7 @@ final class PreferReadOnlyField implements Check {
 		// unconditional cession there drops the finding on the floor — neither rule reports it.
 		// That is exactly the `Iterator`-shaped field this gate was added for, whose correct
 		// answer is this rule's `(default, null)`, not silence.
-		final finalizable: Bool = !index.structural.structuralConformanceForbidsFinal(owner, name);
+		final finalizable: Bool = !projectScoped.structural.structuralConformanceForbidsFinal(owner, name);
 		if (finalizable && CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (finalizable && CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
 		out.push({

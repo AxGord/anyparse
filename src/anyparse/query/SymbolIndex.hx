@@ -441,7 +441,9 @@ final class SymbolIndex {
 	/** Per-file source text, retained so a subtype-ward body scan (`SubtypeGraph.subtypeReferencesField`) can inspect a subtype's raw declaration span for a backing-field reference. */
 	private final _sources: Map<String, String>;
 
-	private function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin) {
+	private function new(
+		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
+	) {
 		_files = files;
 		_skipped = skipped;
 		_sources = sources;
@@ -450,7 +452,7 @@ final class SymbolIndex {
 		members = new MemberLookup(files, refs);
 		structural = new StructuralTypes(files, refs, subtypes, members);
 		paths = new MemberPathWalk(files, refs, members);
-		text = new RawSourceScan(files, skipped, sources, plugin);
+		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
 		traits = new TypeTraits(files, sources, refs);
 	}
 
@@ -654,14 +656,22 @@ final class SymbolIndex {
 	 * throws. The file basename (the path tail sans `.hx`) drives the
 	 * module path and the `isMain` flag for each type, mirroring
 	 * `CrossRename`'s parse-each-file pattern.
+	 *
+	 * `thirdPartyFiles` partitions the scope: those paths are a `resolutionLibs` / std half that
+	 * the project depends ON, never the other way round, so a per-owner question can drop them
+	 * (`RawSourceScan.admits`). Omit it for an index over project sources alone — every file then
+	 * counts for every owner, which is what an unpartitioned index has always answered.
 	 */
-	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): SymbolIndex {
+	public static function build(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?thirdPartyFiles: Array<String>
+	): SymbolIndex {
 		final extracted: {
 			files: Array<FileInfo>,
 			skipped: Array<String>,
 			sources: Map<String, String>
 		} = SymbolIndexBuilder.extract(files, plugin);
-		return new SymbolIndex(extracted.files, extracted.skipped, extracted.sources, plugin);
+		final thirdParty: Map<String, Bool> = [for (file in thirdPartyFiles ?? []) file => true];
+		return new SymbolIndex(extracted.files, extracted.skipped, extracted.sources, plugin, thirdParty);
 	}
 
 	/**

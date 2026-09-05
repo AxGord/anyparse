@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -51,6 +52,7 @@ typedef UnresolvedWrite = {
 /** A parsed nominal type source: the simple `name` plus the raw text between its type-parameter brackets, if any. */
 private typedef NominalParts = {
 	var name: String;
+	var path: String;
 	var params: Null<String>;
 }
 
@@ -286,13 +288,20 @@ final class FieldWriteIndex {
 	 * to the candidate's declared type. "Provably cannot" requires that type —
 	 * `Null<T>` unwrapped — to be a non-builtin nominal that (1) does not name one
 	 * of the OWNER's type parameters (there it denotes the instantiation argument,
-	 * not the same-named project type), (2) resolves to EXACTLY ONE indexed decl of
-	 * a plain-class kind (`RefShape.classDeclKinds` — no implicit conversions, so
-	 * no builtin value can flow in; an abstract's `@:from`, an interface, a
-	 * typedef, an enum, a builtin, or an unresolved name keeps the poison), and
-	 * (3) is not shadowed in the candidate's own file by an import of a
-	 * same-simple-named module from elsewhere (`importShadowed` — the annotation
-	 * would denote the imported type, not the indexed class).
+	 * not the same-named project type) and (2) resolves FROM THE CANDIDATE'S OWN FILE — through
+	 * that file's package and imports — to exactly one indexed decl of a plain-class kind
+	 * (`plainClassInScope`; an abstract's `@:from`, an interface, a typedef, an enum, a builtin,
+	 * an ambiguous name or one the file's scope does not reach all keep the poison).
+	 *
+	 * Condition (2) used to be scope-BLIND — global uniqueness among indexed decls, patched by a
+	 * separate import-shadowing test — and that answers about a type the candidate's file cannot
+	 * even name. Measured on the Pony fork: `Rotor.speed: Single` was freed because the report
+	 * scope declared exactly one plain class `Single`, which `Rotor.hx` neither imports nor shares
+	 * a package with — its `Single` is the std's `@:coreType abstract Single to Float from Float`,
+	 * which any `Int` reaches. The blind form gets that right only while the std happens to be in
+	 * scope (a second `Single` breaks the uniqueness); resolving from `ownerFile` gets it right
+	 * either way — 121 findings with the std, 121 without, where the blind form reported 121 and
+	 * 123.
 	 */
 	public function hasUnresolvedWriteTargeting(field: String, owner: String, ownerFile: String): Bool {
 		var any: Bool = false;
@@ -305,11 +314,11 @@ final class FieldWriteIndex {
 		if (!allTyped) return true;
 		final candidateTypeSource: Null<String> = _index.members.memberTypeSourceOf(owner, field);
 		if (candidateTypeSource == null) return true;
-		final cand: Null<String> = nominalSimpleName(candidateTypeSource, _unwrapNames, _rejectNames);
-		if (cand == null || _builtinNames.contains(cand)) return true;
+		final parsed: Null<NominalParts> = nominalParse(candidateTypeSource, _unwrapNames);
+		if (parsed == null || _rejectNames.contains(parsed.name) || _builtinNames.contains(parsed.name)) return true;
 		final ownerParams: Null<Array<String>> = _typeParams[owner];
-		if (ownerParams != null && ownerParams.contains(cand)) return true;
-		return !uniquePlainClass(cand) || importShadowed(cand, ownerFile);
+		if (ownerParams != null && ownerParams.contains(parsed.name)) return true;
+		return !plainClassInScope(parsed.path, ownerFile);
 	}
 
 	/**
@@ -352,36 +361,40 @@ final class FieldWriteIndex {
 	}
 
 	/**
-	 * Whether `name` resolves in the symbol index to EXACTLY ONE type declaration
-	 * whose kind is a plain class (`RefShape.classDeclKinds`) — the no-implicit-
-	 * conversion proof `hasUnresolvedWriteTargeting` stands on. Zero decls (a
-	 * builtin / external type), several (ambiguous), or a non-class kind all fail.
+	 * Whether the type reference `path`, READ FROM `file`, denotes exactly one indexed
+	 * declaration and that declaration is a plain class (`RefShape.classDeclKinds`) — the
+	 * no-implicit-conversion proof `hasUnresolvedWriteTargeting` stands on. An abstract's
+	 * `@:from`, an interface, a typedef, an enum, a name the file's package and imports do not
+	 * reach, and a name several in-scope declarations answer to, all fail.
+	 *
+	 * The resolution is the index's own (`TypeRefIndex.resolveTypeRef` -> `simpleRefInScope`), so
+	 * package, `import`, `using` and wildcard visibility decide it — not a global simple-name
+	 * count, which answers about a declaration the file may have no way to name. That difference
+	 * is what makes the proof independent of how WIDE the index is: a name is either in this
+	 * file's scope or it is not, whether or not some library elsewhere declares one too.
+	 *
+	 * The import-SHADOW test the resolver does not do is done here. `simpleRefInScope` admits a
+	 * ROOT-package declaration from every file unconditionally, which is right for visibility and
+	 * wrong for denotation: `import ext.pack.ShadowM;` beside a root-package `ShadowM` makes the
+	 * written name mean the imported one, and nothing indexed here can say what THAT declares. So
+	 * an explicit `import` / `using` / alias binding the reference's simple name to any module
+	 * other than the one it resolved to fails the proof. A dotted reference is exempt: an import
+	 * cannot shadow a path.
 	 */
-	private function uniquePlainClass(name: String): Bool {
-		final decls: Array<TypeDeclInfo> = declsNamedIn(_index, name);
-		return decls.length == 1 && _classKinds.contains(decls[0].kind);
-	}
-
-	/**
-	 * Whether the simple type name `name`, as written in `file`, is SHADOWED by an
-	 * import: the file imports (or aliases to `name`, or `using`s) a module whose
-	 * last segment is `name` but which is NOT the indexed declaring module — the
-	 * annotation then denotes the imported out-of-scope type, so nothing can be
-	 * proven about it. Wildcard imports are not compared (their package content is
-	 * unknowable); an unindexed file or an ambiguous declaring module poisons.
-	 */
-	private function importShadowed(name: String, file: String): Bool {
+	private function plainClassInScope(path: String, file: String): Bool {
 		final fi: Null<FileInfo> = _index.fileInfo(file);
-		if (fi == null) return true;
-		final declaredPath: Null<String> = _index.importPathOf(name);
-		if (declaredPath == null) return true;
+		if (fi == null) return false;
+		final resolved: Null<ResolvedType> = _index.refs.resolveTypeRef(path, fi);
+		if (resolved == null || !_classKinds.contains(resolved.type.kind)) return false;
+		if (path.indexOf('.') >= 0) return true;
+		final declaredPath: String = resolved.type.isMain ? resolved.file.module : '${resolved.file.module}.${resolved.type.name}';
 		for (imp in fi.imports) if (imp.kind != ImportKind.Wild) {
 			if (imp.kind == ImportKind.Alias) {
-				if (imp.raw == name) return true;
-			} else if (SourceText.lastSegment(imp.raw) == name && imp.raw != declaredPath)
-				return true;
+				if (imp.raw == path) return false;
+			} else if (SourceText.lastSegment(imp.raw) == path && imp.raw != declaredPath)
+				return false;
 		}
-		return false;
+		return true;
 	}
 
 	/**
@@ -721,9 +734,13 @@ final class FieldWriteIndex {
 	}
 
 	/**
-	 * Parse a verbatim type source into its nominal simple name and raw
-	 * type-parameter text: `Null<…>` wrappers (`unwrapNames`) unwrapped first, then
-	 * the head validated as a dotted identifier path. Null for any other shape.
+	 * Parse a verbatim type source into its nominal simple name, the WRITTEN path that name came
+	 * from, and the raw type-parameter text: `Null<…>` wrappers (`unwrapNames`) unwrapped first,
+	 * then the head validated as a dotted identifier path. Null for any other shape.
+	 *
+	 * `path` keeps what the annotation actually says, `name` its last segment. A resolver that is
+	 * handed the simple name of a QUALIFIED annotation resolves some other type of that name; one
+	 * handed the path resolves the written one.
 	 */
 	private static function nominalParse(source: String, unwrapNames: Array<String>): Null<NominalParts> {
 		var t: String = source.trim();
@@ -740,10 +757,12 @@ final class FieldWriteIndex {
 			}
 		}
 		final lt: Int = t.indexOf('<');
-		if (lt < 0) return isDottedIdentPath(t) ? { name: SourceText.lastSegment(t), params: null } : null;
+		if (lt < 0) return isDottedIdentPath(t) ? { name: SourceText.lastSegment(t), path: t, params: null } : null;
 		if (!t.endsWith('>')) return null;
 		final head: String = t.substring(0, lt).trim();
-		return isDottedIdentPath(head) ? { name: SourceText.lastSegment(head), params: t.substring(lt + 1, t.length - 1) } : null;
+		return isDottedIdentPath(head)
+			? { name: SourceText.lastSegment(head), path: head, params: t.substring(lt + 1, t.length - 1) }
+			: null;
 	}
 
 	/**
