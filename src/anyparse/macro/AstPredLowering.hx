@@ -145,7 +145,7 @@ class AstPredLowering {
 		final declared: Int = branch.children.length;
 		return switch _mode {
 			case PredSpans: declared + 1;
-			case PredTrivia if (isTriviaBearing(rule)): declared + TriviaTypeSynth.extraAltArgs(branch);
+			case PredTrivia if (isTriviaBearing(rule)): declared + TriviaPairAltCtor.extraAltArgs(branch);
 			case _: declared;
 		};
 	}

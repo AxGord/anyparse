@@ -339,7 +339,7 @@ final class WriterArrowValueIfLowering {
 			final trailIndex: Int = altCloseTrailingParamIndex(branch);
 			if (trailIndex < 0) continue;
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ac.ruleCtorPath(refPath, branch.annotations.get(AnnotationKeys.BASE_CTOR)));
-			final arity: Int = branch.children.length + TriviaTypeSynth.countAltExtras(branch);
+			final arity: Int = branch.children.length + TriviaPairConverters.countAltExtras(branch);
 			final args: Array<Expr> = [for (i in 0...arity) i == trailIndex ? macro _aifValueTrail : macro _];
 			cases.push({
 				values: [{ expr: ECall(ctorRef, args), pos: pos }],
@@ -378,14 +378,14 @@ final class WriterArrowValueIfLowering {
 	@:access(anyparse.macro.TriviaTypeSynth)
 	private static function arrowValueIfCommentSlots(child: ShapeNode, node: ShapeNode): Array<{ suffix: String, isList: Bool }> {
 		final slots: Array<{ suffix: String, isList: Bool }> = [];
-		if (TriviaTypeSynth.isOptionalKw(child)) {
+		if (TriviaPairSlots.isOptionalKw(child)) {
 			slots.push({ suffix: TriviaTypeSynth.AFTER_KW_SUFFIX, isList: false });
 			slots.push({ suffix: TriviaTypeSynth.KW_LEADING_SUFFIX, isList: true });
 			slots.push({ suffix: TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, isList: true });
 			slots.push({ suffix: TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, isList: false });
 		}
-		if (TriviaTypeSynth.isBareNonFirstRef(child, node)) slots.push({ suffix: TriviaTypeSynth.BEFORE_LEADING_SUFFIX, isList: true });
-		if (TriviaTypeSynth.isTrailRef(child)) slots.push({ suffix: TriviaTypeSynth.AFTER_TRAIL_SUFFIX, isList: false });
+		if (TriviaPairSlots.isBareNonFirstRef(child, node)) slots.push({ suffix: TriviaTypeSynth.BEFORE_LEADING_SUFFIX, isList: true });
+		if (TriviaPairSlots.isTrailRef(child)) slots.push({ suffix: TriviaTypeSynth.AFTER_TRAIL_SUFFIX, isList: false });
 		return slots;
 	}
 

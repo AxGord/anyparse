@@ -2999,7 +2999,7 @@ class WriterLowering {
 		final rule: Null<ShapeNode> = _shape.rules[prevBareRefBody.typePath];
 		if (rule == null || rule.kind != Alt) return null;
 		final cases: Array<Case> = [];
-		for (branch in rule.children) if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
+		for (branch in rule.children) if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch)) {
 			final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			final ctorPath: Array<String> = ruleCtorPath(prevBareRefBody.typePath, ctorName);
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
@@ -3091,12 +3091,12 @@ class WriterLowering {
 	private function branchSynthExtraArity(bodyTypePath: String, branch: ShapeNode): Int {
 		if (!isTriviaBearing(bodyTypePath)) return 0;
 		var extras: Int = 0;
-		if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
+		if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch)) {
 			extras++;
 			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) extras++;
 		}
-		if (TriviaTypeSynth.isAltTrailOptBranch(branch)) extras++;
-		if (TriviaTypeSynth.isCaptureSourceBranch(branch)) extras++;
+		if (TriviaPairAltCtor.isAltTrailOptBranch(branch)) extras++;
+		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) extras++;
 		return extras;
 	}
 
@@ -3262,7 +3262,7 @@ class WriterLowering {
 	 * keeps the declared arity.
 	 */
 	private function branchExtraArgs(branch: ShapeNode): Int {
-		return _ctx.trivia ? TriviaTypeSynth.extraAltArgs(branch) : 0;
+		return _ctx.trivia ? TriviaPairAltCtor.extraAltArgs(branch) : 0;
 	}
 
 	/**
@@ -3506,9 +3506,9 @@ class WriterLowering {
 		// loop's terminal `_lead` is discarded on close-peek break, and
 		// `collectTrivia`'s newline-anchored scan skips same-line
 		// comments after the open lit anyway.
-		final hasOrphan: Bool = TriviaTypeSynth.isAltCloseTrailingBranch(branch) && branch.readMetaString(':lead') != null
+		final hasOrphan: Bool = TriviaPairAltCtor.isAltCloseTrailingBranch(branch) && branch.readMetaString(':lead') != null
 			&& !branch.hasMeta(':tryparse');
-		final trailCloseAccess: Null<Expr> = TriviaTypeSynth.isAltCloseTrailingBranch(branch) ? macro $i{argNames[1]} : null;
+		final trailCloseAccess: Null<Expr> = TriviaPairAltCtor.isAltCloseTrailingBranch(branch) ? macro $i{argNames[1]} : null;
 		final trailOpenAccess: Null<Expr> = hasOrphan ? macro $i{argNames[2]} : null;
 		// ω-orphan-trivia-alt: orphan trivia between the last Star
 		// element and the close literal (e.g. trailing line comment

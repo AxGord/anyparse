@@ -127,32 +127,32 @@ final class WriterLoweringSupport {
 		if (!altSlotHasSlot(branch, slot)) return null;
 		var idx: Int = baseIdx;
 		if (slot == CloseTrailing) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
+		if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch)) {
 			idx++;
 			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) idx += 3; // noqa: magic-number
 		}
 		if (slot == TrailOpt) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isAltTrailOptBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isAltTrailOptBranch(branch)) idx++;
 		if (slot == CaptureSource) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isCaptureSourceBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) idx++;
 		if (slot == BodyPolicyKw) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isAltBodyPolicyKwBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch)) idx++;
 		if (slot == WrapOpenNewline) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) idx++;
 		if (slot == KwNewline) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isAltKwNewlineBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isAltKwNewlineBranch(branch)) idx++;
 		if (slot == ChainNewline) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) idx++;
 		if (slot == ChainLeadComment) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) idx++;
 		if (slot == ChainAfterComment) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isInfixChainBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isInfixChainBranch(branch)) idx++;
 		if (slot == ChainRhsTrail) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isRhsTrailBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isRhsTrailBranch(branch)) idx++;
 		if (slot == TernaryCondTrail) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isTernaryTrailBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) idx++;
 		if (slot == TernaryThenTrail) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isTernaryTrailBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 
@@ -162,17 +162,17 @@ final class WriterLoweringSupport {
 	 */
 	private static function altSlotHasSlot(branch: ShapeNode, slot: AltSlot): Bool {
 		return switch slot {
-			case CloseTrailing: TriviaTypeSynth.isAltCloseTrailingBranch(branch);
-			case TrailOpt: TriviaTypeSynth.isAltTrailOptBranch(branch);
-			case CaptureSource: TriviaTypeSynth.isCaptureSourceBranch(branch);
-			case BodyPolicyKw: TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
-			case WrapOpenNewline: TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
-			case KwNewline: TriviaTypeSynth.isAltKwNewlineBranch(branch);
-			case ChainNewline, ChainLeadComment: TriviaTypeSynth.isAltChainNewlineBranch(branch);
-			case PostfixOpSpace: TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
-			case ChainAfterComment: TriviaTypeSynth.isInfixChainBranch(branch);
-			case ChainRhsTrail: TriviaTypeSynth.isRhsTrailBranch(branch);
-			case TernaryCondTrail, TernaryThenTrail: TriviaTypeSynth.isTernaryTrailBranch(branch);
+			case CloseTrailing: TriviaPairAltCtor.isAltCloseTrailingBranch(branch);
+			case TrailOpt: TriviaPairAltCtor.isAltTrailOptBranch(branch);
+			case CaptureSource: TriviaPairAltCtor.isCaptureSourceBranch(branch);
+			case BodyPolicyKw: TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch);
+			case WrapOpenNewline: TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
+			case KwNewline: TriviaPairAltCtor.isAltKwNewlineBranch(branch);
+			case ChainNewline, ChainLeadComment: TriviaPairAltCtor.isAltChainNewlineBranch(branch);
+			case PostfixOpSpace: TriviaPairAltCtor.isPostfixOpSpaceBranch(branch);
+			case ChainAfterComment: TriviaPairAltCtor.isInfixChainBranch(branch);
+			case ChainRhsTrail: TriviaPairAltCtor.isRhsTrailBranch(branch);
+			case TernaryCondTrail, TernaryThenTrail: TriviaPairAltCtor.isTernaryTrailBranch(branch);
 		};
 	}
 

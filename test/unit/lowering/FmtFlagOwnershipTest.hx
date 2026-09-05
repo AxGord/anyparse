@@ -55,23 +55,26 @@ class FmtFlagOwnershipTest extends Test {
 		'WriterLowering' => 121,
 		'WriterTriviaStarDispatch' => 43,
 		'WriterKwRefLowering' => 31,
-		'TriviaTypeSynth' => 17,
 		'WriterCtorBlankLowering' => 17,
 		'WriterRefLeadLowering' => 17,
 		'Lowering' => 16,
 		'WriterPrattLowering' => 14,
 		'WriterPolicyLowering' => 10,
+		'TriviaPairSlots' => 9,
+		'TriviaPairAltCtor' => 8,
 		'WriterBodyPolicyLowering' => 3,
-		'WriterCodegen' => 3,
+		'WriterCodegen' => 2,
 		'WriterBlankLowering' => 2,
 		'WriterBraceSymmetryLowering' => 2,
 		'WriterCondWrapLowering' => 2,
 		'WriterLoweringSupport' => 2,
 		'WriterTriviaSlotLowering' => 2,
 		'StructFieldTrailLowering' => 1,
+		'TriviaPairConverters' => 1,
 		'WriterArrowValueIfLowering' => 1,
 		'TriviaSlotNames' => 1,
-		'WriterChainLowering' => 1
+		'WriterChainLowering' => 1,
+		'WriterOptFanout' => 1
 	];
 
 	/**
