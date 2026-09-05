@@ -69,6 +69,9 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-FRAME-OFF')
+	@:killer('M-SSB-DANGLING-NONE')
 	public inline function testDanglingElseKeepsBraces(): Void {
 		// KEY safety gate: the last catch body ends the whole construct, so a de-braced tail ending on
 		// an else-less `if` would capture the `else` that follows the try/catch. Those braces are
