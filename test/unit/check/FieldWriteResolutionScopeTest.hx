@@ -82,6 +82,8 @@ class FieldWriteResolutionScopeTest extends Test {
 	 * declaration slice does not spell the name, so the rule used to report a rewrite the
 	 * subtype's writer forbids.
 	 */
+	@:pin('control')
+	@:killer('M-WRITEINDEX-PROJECT-READONLY')
 	public function testThirdPartySubtypeWriteVetoesReadOnly(): Void {
 		// Leading assertion — the fixture reaches the code: the subtype ALONE leaves the finding standing.
 		Assert.equals(1, readOnly([SUB_FILE]), 'a third-party subtype that writes nothing must not veto');
@@ -89,6 +91,8 @@ class FieldWriteResolutionScopeTest extends Test {
 	}
 
 	/** The same blind spot on `prefer-final-public-field`'s never-written arm. */
+	@:pin('control')
+	@:killer('M-WRITEINDEX-PROJECT-FINAL')
 	public function testThirdPartySubtypeWriteVetoesFinal(): Void {
 		// Leading assertion — the subtype alone must still leave the rewrite reportable.
 		Assert.equals(1, finalPublic([CTX_SUB_FILE]), 'a third-party subtype that writes nothing must not veto');
@@ -102,6 +106,8 @@ class FieldWriteResolutionScopeTest extends Test {
 	 * index at all — so this guards what admitting the library must not cost; the arm that kills it
 	 * is the one making `FieldWriteIndex.admits` unconditionally true.
 	 */
+	@:pin('control')
+	@:killer('M-ADMITS-TRUE')
 	public function testThirdPartyUnresolvedWriteDoesNotVeto(): Void {
 		// Leading assertion — the candidate is reportable with no library at all.
 		Assert.equals(1, readOnly([]), 'the bare candidate is reported');
@@ -114,6 +120,8 @@ class FieldWriteResolutionScopeTest extends Test {
 	 * kills it is the one tagging the project roots third-party — the library array carries them,
 	 * so the partition has to subtract them explicitly.
 	 */
+	@:pin('control')
+	@:killer('M-ROOTS-THIRDPARTY')
 	public function testProjectRootUnresolvedWriteVetoes(): Void {
 		Assert.equals(0, readOnly([], [DYN_WRITER_FILE]), 'a project-root Dynamic write vetoes');
 	}
@@ -125,6 +133,8 @@ class FieldWriteResolutionScopeTest extends Test {
 	 * is the per-owner answer. Passes at base (no library in the index there); the arm that kills
 	 * it drops the owner-file pin.
 	 */
+	@:pin('control')
+	@:killer('M-DECLSITE-SCOPEWIDE')
 	public function testSameSimpleNameThirdPartyTypeDoesNotVeto(): Void {
 		Assert.equals(1, readOnly([LIB_BASE_FILE]), 'an unrelated third-party Base must not veto the project Base');
 	}

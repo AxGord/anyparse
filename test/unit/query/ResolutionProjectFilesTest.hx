@@ -73,6 +73,8 @@ class ResolutionProjectFilesTest extends Test {
 	 * rules demand each of them, so without the memo a `--fix` pass built the project symbol index
 	 * and the resolution-scoped write index TWICE per pass.
 	 */
+	@:pin('control')
+	@:killer('M-MEMO-OFF')
 	public function testDerivedIndexesAreMemoised(): Void {
 		final plugin: CachingGrammarPlugin = scoped([ROOT], [ROOT, LIB]);
 		final index: Null<SymbolIndex> = plugin.projectIndex();
@@ -88,6 +90,8 @@ class ResolutionProjectFilesTest extends Test {
 	 * ...and the fix loop's once-per-pass `setResolutionIndex` expires them, since both are a
 	 * function of THIS pass's report sources. One call, one pass, is the whole invalidation story.
 	 */
+	@:pin('control')
+	@:killer('M-NO-INVALIDATE')
 	public function testSetResolutionIndexExpiresDerivedIndexes(): Void {
 		final plugin: CachingGrammarPlugin = scoped([ROOT], [ROOT, LIB]);
 		final index: Null<SymbolIndex> = plugin.projectIndex();
