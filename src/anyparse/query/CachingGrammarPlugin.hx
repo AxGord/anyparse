@@ -168,9 +168,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * source once per pass would otherwise be the tier's own overhead.
 	 */
 	public function resolutionFiles(): Null<Array<{ file: String, source: String }>> {
-		final scope: Null<ResolutionScope> = _resolutionScope;
-		if (scope == null) return null;
-		final sources: ResolutionSources = scope.sources();
+		final sources: Null<ResolutionSources> = scopeSources();
+		if (sources == null) return null;
 		_shared.promote(sources.library, this);
 		// Drop the LIBRARY roots the moment the process-scoped tier owns their projections.
 		// Library sources are demanded as `{parseFile, spanInfo}` and only that, and those two
@@ -183,6 +182,24 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		// re-parses, which is correct, just slower.
 		for (entry in sources.library.entries()) _rootCache.remove(entry.source);
 		return sources.report.concat(sources.library.entries());
+	}
+
+	/**
+	 * `SymbolIndexHost`: the PROJECT file set — report files UNION the declared `resolutionRoots`,
+	 * and nothing from `resolutionLibs` or the std. The scope for a proof that must see every file
+	 * which can WRITE a project type's field: a narrow lint reaches the rest of the project through
+	 * it, while a haxelib and the std stay out, since neither can assign into the project and a scan
+	 * keyed on a member name only loses findings to their common names.
+	 *
+	 * Null when the project declared no `resolutionRoots` — the caller's fallback is then exactly the
+	 * report scope it already holds, and handing back a copy of it would buy a second identical index.
+	 * Reads the same memoised sources as `resolutionFiles`, so demanding both costs one library read.
+	 */
+	public function resolutionProjectFiles(): Null<Array<{ file: String, source: String }>> {
+		final sources: Null<ResolutionSources> = scopeSources();
+		if (sources == null) return null;
+		final roots: Array<{ file: String, source: String }> = sources.projectRoots ?? [];
+		return roots.length == 0 ? null : sources.report.concat(roots);
 	}
 
 	/**
@@ -411,6 +428,11 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return result;
 	}
 
+	/** The injected scope's two-and-a-half views, forced (the library read happens here), or null when none was injected. */
+	private inline function scopeSources(): Null<ResolutionSources> {
+		return _resolutionScope?.sources();
+	}
+
 	/**
 	 * The parsed root of `source`, memoised for the whole run — the ONE parse the four
 	 * projections above share. `exists` is the read rather than a null test because a
@@ -447,9 +469,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 }
 
 /**
- * The two halves of a resolution scope, kept APART on purpose. `report` is the files the run
+ * The three views of a resolution scope, kept APART on purpose. `report` is the files the run
  * lints and may rewrite — read live, so a `--fix` pass sees the current sources. `library` is
- * the configured resolution roots / libs / std, read-only for the whole run.
+ * the configured resolution roots / libs / std, read-only for the whole run. `projectRoots` is
+ * the `resolutionRoots` SUBSET of that library — the project's own sources and nothing else —
+ * for a proof that must widen past the report scope without admitting third-party code (see
+ * `LintCommand.readResolutionRoots`).
  *
  * The split is what bounds `CachingGrammarPlugin`'s process-scoped parse tier: only `library`
  * is promoted into it, so a `--fix` loop's per-pass intermediate sources — a fresh string per
@@ -457,6 +482,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
  */
 typedef ResolutionSources = {
 	final report: Array<{ file: String, source: String }>;
+	@:optional final projectRoots: Array<{ file: String, source: String }>;
 	final library: LibrarySources;
 };
 

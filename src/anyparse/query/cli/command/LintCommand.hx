@@ -332,16 +332,24 @@ final class LintCommand implements CliCommand {
 		// over the report would be one string compare per (report x library) pair — ~160k on an
 		// 800-file project, for a lookup that is answered in one hash.
 		final reportPaths: Map<String, Bool> = [for (f in files) realPath(f.file) => true];
+		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
 		return {
 			declared: declared,
 			sources: () -> {
+				final memoisedRoots: Null<Array<{ file: String, source: String }>> = projectRoots;
 				final memoised: Null<Array<{ file: String, source: String }>> = library;
-				final libFiles: Array<{ file: String, source: String }> = memoised ?? readResolutionLibrary(
-					roots, libNames, stdEnabled, reportPaths
-				);
-				library = libFiles;
-				return { report: files, library: new LibrarySources(libFiles) };
+				if (memoisedRoots == null || memoised == null) {
+					final rootFiles: Array<{ file: String, source: String }> = readResolutionRoots(roots, reportPaths);
+					projectRoots = rootFiles;
+					// The library half stays the WHOLE read-only scope — project roots included — so the
+					// process-scoped parse tier keeps promoting exactly what it did, and it stays ONE
+					// memoised array instance (`SharedParseTier.promote` keys on the instance).
+					library = rootFiles.concat(readResolutionLibrary(libNames, stdEnabled, reportPaths, rootFiles));
+				}
+				final rootFiles: Array<{ file: String, source: String }> = projectRoots ?? [];
+				final libFiles: Array<{ file: String, source: String }> = library ?? [];
+				return { report: files, projectRoots: rootFiles, library: new LibrarySources(libFiles) };
 			}
 		};
 	}
@@ -374,20 +382,43 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * Read every `.hx` under the resolution scope's roots — `roots` verbatim, `libNames` resolved
-	 * to haxelib source dirs, plus the auto-discovered Haxe std — excluding the run's own report
-	 * files (`reportPaths`, keyed by `realPath`). The whole of `resolutionThunk`'s FIRST-DEMAND work,
-	 * split out so the thunk itself is the memo and nothing else.
+	 * Read every `.hx` under the project's declared `resolutionRoots`, excluding the run's own report
+	 * files (`reportPaths`, keyed by `realPath`) — the PROJECT half of the resolution scope.
+	 *
+	 * Separable from the library half because of what a write scan may believe. A declared root is the
+	 * project's OWN source, so a file there can assign a project type's field; a haxelib and the Haxe
+	 * std cannot — the dependency runs the other way. Admitting them to a scan keyed on a member NAME
+	 * therefore only ever suppresses: measured over the Pony fork, folding the library into
+	 * `prefer-final-public-field` / `prefer-read-only-field`'s write index lost 16 of 109 findings
+	 * (`speed`, `panel`, `timer`, `ready`, `names` — every one a name the std also spells) and gained
+	 * none.
+	 */
+	private static function readResolutionRoots(
+		roots: Array<String>, reportPaths: Map<String, Bool>
+	): Array<{ file: String, source: String }> {
+		return readResolutionSources(roots, reportPaths);
+	}
+
+	/**
+	 * Read every `.hx` under the resolution scope's LIBRARY roots — `libNames` resolved to haxelib
+	 * source dirs, plus the auto-discovered Haxe std — excluding the run's own report files
+	 * (`reportPaths`, keyed by `realPath`) and everything `readResolutionRoots` already read
+	 * (`alreadyRead`). Together with that function, the whole of `resolutionThunk`'s FIRST-DEMAND
+	 * work, split out so the thunk itself is the memo and nothing else.
+	 *
+	 * A lib dir or std spec that IS a declared root needs no dir-level dedup here: its files were
+	 * already read as roots, so `alreadyRead` drops them one by one — which is what the single
+	 * pre-split scan list achieved by seeding itself with `roots`.
 	 */
 	private static function readResolutionLibrary(
-		roots: Array<String>, libNames: Array<String>, stdEnabled: Bool, reportPaths: Map<String, Bool>
+		libNames: Array<String>, stdEnabled: Bool, reportPaths: Map<String, Bool>, alreadyRead: Array<{ file: String, source: String }>
 	): Array<{ file: String, source: String }> {
 		// Resolve the declared haxelib NAMES to source dirs ON FIRST DEMAND ONLY — the
 		// `haxelib libpath` spawn lives here, reached only through the thunk, never in its
 		// null-decision, so a run whose checks never build the index (e.g. `--rule
 		// prefer-single-quotes`) pays no haxelib cost. A name that does not resolve (typo /
 		// uninstalled) is dropped with a stderr note so the run proceeds as if the lib were absent.
-		final scanRoots: Array<String> = roots.copy();
+		final scanRoots: Array<String> = [];
 		for (name in libNames) {
 			final dir: Null<String> = HaxelibResolver.libSourceDir(name);
 			if (dir == null)
@@ -407,12 +438,21 @@ final class LintCommand implements CliCommand {
 		// whichever side reaches it first.
 		final stdDir: Null<String> = stdEnabled ? StdResolver.stdDir() : null;
 		if (stdDir != null) for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) scanRoots.push(spec);
-		final libFiles: Array<{ file: String, source: String }> = [];
-		for (path in CliArgs.expandInputs(scanRoots, '.hx').paths) if (!reportPaths.exists(realPath(path))) {
+		final exclude: Map<String, Bool> = reportPaths.copy();
+		for (entry in alreadyRead) exclude[realPath(entry.file)] = true;
+		return readResolutionSources(scanRoots, exclude);
+	}
+
+	/** Read every `.hx` matched by `specs`, skipping any whose `realPath` is in `exclude` and any that cannot be read. */
+	private static function readResolutionSources(
+		specs: Array<String>, exclude: Map<String, Bool>
+	): Array<{ file: String, source: String }> {
+		final out: Array<{ file: String, source: String }> = [];
+		for (path in CliArgs.expandInputs(specs, '.hx').paths) if (!exclude.exists(realPath(path))) {
 			final src: Null<String> = try CliIo.readSourceForParse(path) catch (exception: Exception) null;
-			if (src != null) libFiles.push({ file: path, source: src });
+			if (src != null) out.push({ file: path, source: src });
 		}
-		return libFiles;
+		return out;
 	}
 
 	/**
