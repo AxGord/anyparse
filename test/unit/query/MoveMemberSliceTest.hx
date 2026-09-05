@@ -1368,6 +1368,37 @@ class MoveMemberSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * A carried import takes the destination run's OWN ordered slot, not the end of the header.
+	 *
+	 * `MoveSymbol.importAnchor` seats a NAMED path in the run — the ordered slot `add-import` gets —
+	 * and falls back to the end of the header when handed no path. `carriedImportEdit` handed it
+	 * none, so every carried import was APPENDED past the run: measured on a destination holding
+	 * `import haxe.io.Path;`, carrying `haxe.io.Bytes` produced `Path, Bytes` and one `import-order`
+	 * finding on a file `move-member` had just written. Same mechanism, one argument.
+	 *
+	 * The leading assertions pass on the base engine — the destination's own import survives and the
+	 * dependency is carried — so what fails there is the ORDER claim and nothing else. The changed-file
+	 * count is asserted with them: a carry that landed in no file at all would satisfy neither.
+	 */
+	public function testACarriedImportTakesTheDestinationRunsOrderedSlot(): Void {
+		final a: String =
+			'package pkg;\n\nimport haxe.io.Bytes;\n\nclass A {\n\tpublic static function util(b:Bytes):Int return b.length;\n}';
+		final b: String = 'package pkg;\n\nimport haxe.io.Path;\n\nclass B {\n\tpublic static function keep(p:Path):Int return 0;\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b }
+		]);
+		Assert.equals(2, changes.length, 'the source and the destination change, and nothing else does');
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.isTrue(newB.contains('import haxe.io.Path;'), "the destination's own import survives");
+		Assert.isTrue(newB.contains('import haxe.io.Bytes;'), 'and the dependency is carried');
+		Assert.isTrue(
+			newB.contains('import haxe.io.Bytes;\nimport haxe.io.Path;'),
+			'the carried import takes its slot in the run, adjacent and in order: $newB'
+		);
+	}
+
 	private function move(
 		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
 		?via: String, ?closure: Bool, ?scaffold: Bool

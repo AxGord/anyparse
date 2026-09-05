@@ -23,6 +23,13 @@ class SetModifierSliceTest extends Test {
 
 	private static inline final PRIVATE_FN: String = 'package p;\nclass C {\n\tprivate function f(): Int return 1;\n}';
 
+	/**
+	 * A module-level `private typedef`, the T577 fixture: `class C` and a module-private helper type
+	 * beside it. Line 4 column 1 is the `private` keyword, which the cursor convention reads as the
+	 * declaration's first token.
+	 */
+	private static inline final MODULE_PRIVATE_TYPEDEF: String = 'package p;\nclass C {}\n\nprivate typedef Helper = {\n\tvar n:Int;\n}';
+
 	/** private → public, body intact, old visibility gone. */
 	public function testFlipVisibility(): Void {
 		final text: String = okText(SetModifier.setModifier(PRIVATE_FN, 3, 2, ['public'], true, new HaxeQueryPlugin()));
@@ -143,17 +150,23 @@ class SetModifierSliceTest extends Test {
 	/**
 	 * The FOURTH list read through the same walk: a `#if … #end` region contributing a bare
 	 * DECLARATION keyword (`RefShape.condDeclPrefixKeywordKinds` — the `enum` of `enum abstract`).
-	 * It is neither a modifier sibling nor an annotation, so the old walk stopped at it too and
-	 * `private #if (haxe_ver >= 4.2) enum #end abstract E(Int)` came back with `public` spliced
-	 * BELOW the `#end`, beside the `private` still standing above it.
+	 * It is neither a modifier sibling nor an annotation, so the old walk stopped at it too and the
+	 * recomputed run came back spliced BELOW the `#end`, beside the visibility still standing above it.
+	 *
+	 * The change is `-private` and not the visibility FLIP this test used to drive: the shape is a
+	 * module-level type, and S92 measured that Haxe rejects `public` on every module-level kind, so the
+	 * flip pinned a splice position with an edit whose output does not compile. The insertion arm — no
+	 * keyword to splice over, so the new one goes in FRONT of the region — is pinned separately by
+	 * `testAVisibilityAddedBeforeAConditionalDeclKeywordRegion`, which adds the one visibility a
+	 * module-level declaration can carry.
 	 */
 	public function testAConditionalDeclKeywordRegionIsNeitherSwallowedNorDuplicated(): Void {
 		final src: String = 'package p;\n\nprivate\n#if (haxe_ver >= 4.2)\nenum\n#end\nabstract E(Int) {\n\tfinal X = 1;\n}\n';
-		final text: String = okText(SetModifier.setModifier(src, 7, 1, ['public'], true, new HaxeQueryPlugin()));
-		Assert.equals(1, occurrences(text, 'public'), text);
+		final text: String = okText(SetModifier.setModifier(src, 7, 1, ['-private'], true, new HaxeQueryPlugin()));
 		Assert.equals(0, occurrences(text, 'private'), text);
 		Assert.equals(1, occurrences(text, '#if (haxe_ver >= 4.2)'), text);
 		Assert.equals(1, occurrences(text, 'enum'), text);
+		Assert.equals(1, occurrences(text, 'abstract E(Int)'), text);
 	}
 
 	/**
@@ -258,6 +271,133 @@ class SetModifierSliceTest extends Test {
 		final src: String = 'package p;\nclass C {\n\tprivate static inline function f(): Int return 1;\n}';
 		final text: String = okText(SetModifier.setModifier(src, 3, 2, ['public'], true, new HaxeQueryPlugin()));
 		Assert.isTrue(text.contains('public static inline function f'), 'not in ORDER: $text');
+	}
+
+	/**
+	 * `public` on a MODULE-LEVEL declaration is refused, and the refusal names the only spelling
+	 * that works.
+	 *
+	 * The op used to write it: `wrote src/M.hx` at rc 0, a file anyparse re-parses, and
+	 * `haxe -cp src --no-output M` answering `public modifier is not supported for enums`. Measured
+	 * on 4.3.7 across all seven module-level shapes — five type kinds plus a module-level function
+	 * and var — `public` is rejected on every one, so the refusal needs no per-kind carve-out.
+	 *
+	 * The leading assertion is the fixture's reachability proof: `-private` on the SAME address
+	 * succeeds on the base engine and on this one, so a failure below is the claim failing, not the
+	 * address missing.
+	 */
+	public function testModuleLevelPublicIsRefusedNamingTheRemoval(): Void {
+		final dropped: String = okText(SetModifier.setModifier(MODULE_PRIVATE_TYPEDEF, 4, 1, ['-private'], true, new HaxeQueryPlugin()));
+		Assert.isTrue(dropped.contains('typedef Helper'), 'the address must reach the module-level declaration');
+		Assert.isFalse(dropped.contains('private'), 'and -private must drop the keyword');
+		final refused: EditResult = SetModifier.setModifier(MODULE_PRIVATE_TYPEDEF, 4, 1, ['public'], true, new HaxeQueryPlugin());
+		assertErrContains(refused, 'MODULE level');
+		assertErrContains(refused, '-private');
+	}
+
+	/**
+	 * `+public` is the same change with the other spelling, and is refused the same way — the guard
+	 * reads the change's NAME, not whether it carries a `+`. The fixture's reachability is proved by
+	 * `testModuleLevelPublicIsRefusedNamingTheRemoval`, which serves `-private` at the same address.
+	 */
+	public function testModuleLevelPlusPublicIsRefusedToo(): Void {
+		assertErrContains(SetModifier.setModifier(MODULE_PRIVATE_TYPEDEF, 4, 1, ['+public'], true, new HaxeQueryPlugin()), 'MODULE level');
+	}
+
+	/**
+	 * A module-level declaration that carries NO visibility is already public, so the refusal says
+	 * so instead of naming a keyword to drop. The base engine wrote `public typedef Helper` here —
+	 * the same invalid file, from a call that changed nothing semantically.
+	 */
+	public function testModuleLevelPublicOnABareDeclarationIsRefused(): Void {
+		final bare: String = 'package p;\nclass C {}\n\ntypedef Helper = {\n\tvar n:Int;\n}';
+		// Reachability first, and it passes on the base engine: a change this address CAN serve.
+		Assert.isTrue(
+			okText(SetModifier.setModifier(bare, 4, 1, ['-private'], true, new HaxeQueryPlugin())).contains('typedef Helper'),
+			'the address must reach the module-level declaration'
+		);
+		final refused: EditResult = SetModifier.setModifier(bare, 4, 1, ['public'], true, new HaxeQueryPlugin());
+		assertErrContains(refused, 'MODULE level');
+		assertErrContains(refused, 'it already is');
+	}
+
+	/**
+	 * A module-level declaration wrapped in `#if … #end` is still module-level: the region node is
+	 * the one ancestor kind `isModuleLevel` sees through. A predicate written as "the declaration's
+	 * parent is the parsed root" passes every other fixture here and fails this one.
+	 */
+	public function testModuleLevelPublicIsRefusedThroughAConditionalRegion(): Void {
+		final guarded: String = 'package p;\nclass C {}\n\n#if js\nprivate typedef Helper = {\n\tvar n:Int;\n}\n#end';
+		// Reachability first, and it passes on the base engine: the guarded declaration IS addressable
+		// and `-private` serves it, so what fails below is the module-level claim and not the address.
+		final dropped: String = okText(SetModifier.setModifier(guarded, 5, 1, ['-private'], true, new HaxeQueryPlugin()));
+		Assert.isTrue(dropped.contains('typedef Helper'), 'the guarded declaration is addressable');
+		Assert.isTrue(dropped.contains('#if js'), 'and its region survives');
+		assertErrContains(SetModifier.setModifier(guarded, 5, 1, ['public'], true, new HaxeQueryPlugin()), 'MODULE level');
+	}
+
+	/**
+	 * A member of an `enum abstract` DOES take `public`, and must not be caught by the module-level
+	 * refusal. The discriminating control for how `isModuleLevel` is written: `RefShape.typeDeclKinds`
+	 * — the kind list that looks like the answer — does not list `EnumAbstractDecl`, so a predicate
+	 * built on it calls this member module-level and refuses a change Haxe accepts.
+	 */
+	public function testAnEnumAbstractMemberStillTakesPublic(): Void {
+		final src: String = 'package p;\n\nenum abstract E(Int) {\n\tprivate static final X:Int = 1;\n}';
+		final text: String = okText(SetModifier.setModifier(src, 4, 2, ['public'], true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains('public static final X'), 'an enum-abstract member takes public');
+	}
+
+	/**
+	 * `-public` at module level is a REMOVAL, and removals stay allowed — the refusal is about
+	 * adding a keyword that has no spelling there, not about naming it. Guards the ADD-only
+	 * boundary the refusal's doc claims; the behaviour itself predates this slice.
+	 */
+	public function testMinusPublicStaysAllowedAtModuleLevel(): Void {
+		final text: String = okText(SetModifier.setModifier(MODULE_PRIVATE_TYPEDEF, 4, 1, ['-public'], true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains('typedef Helper'), 'the declaration survives');
+		Assert.isFalse(text.contains('private'), '-public clears the visibility run');
+	}
+
+	/**
+	 * THE user-facing answer behind both halves of T577: how a module-level `private` is removed.
+	 * `-private` does it on every module-level kind Haxe has, and has always done so — this test
+	 * guards PRE-EXISTING behaviour, and passes unchanged on the base engine. It is here because
+	 * the refusal above points every caller at it, so a regression would silently turn that
+	 * refusal into a dead end.
+	 */
+	public function testMinusPrivateRemovesTheKeywordOnEveryModuleLevelKind(): Void {
+		final bodies: Array<String> = [
+			'private class Helper {}',
+			'private interface Helper {}',
+			'private enum Helper {\n\tA;\n}',
+			'private typedef Helper = {\n\tvar n:Int;\n}',
+			'private abstract Helper(Int) {}'
+		];
+		for (body in bodies) {
+			final text: String = okText(
+				SetModifier.setModifier('package p;\nclass C {}\n\n$body', 4, 1, ['-private'], true, new HaxeQueryPlugin())
+			);
+			Assert.isTrue(text.contains('Helper'), 'the declaration survives: $body');
+			Assert.isFalse(text.contains('private'), 'the keyword is gone: $body');
+		}
+	}
+
+	/**
+	 * The INSERTION arm of the same region shape: with no modifier keyword to splice over, the new
+	 * visibility goes in FRONT of the `#if … enum #end` the declaration's head begins with. Written
+	 * after the `#end` it produced `enum private abstract E(Int)`, which anyparse re-parses happily
+	 * and Haxe rejects with `Unexpected keyword "private"`.
+	 *
+	 * The order assertion is what discriminates: every occurrence count stays 1 either way, so a
+	 * regression that moves the keyword past the region satisfies all of them.
+	 */
+	public function testAVisibilityAddedBeforeAConditionalDeclKeywordRegion(): Void {
+		final src: String = 'package p;\n\n#if (haxe_ver >= 4.2)\nenum\n#end\nabstract E(Int) {\n\tfinal X = 1;\n}\n';
+		final text: String = okText(SetModifier.setModifier(src, 6, 1, ['private'], true, new HaxeQueryPlugin()));
+		Assert.equals(1, occurrences(text, 'private'), text);
+		Assert.equals(1, occurrences(text, 'enum'), text);
+		Assert.isTrue(text.indexOf('private') < text.indexOf('#if'), 'the insertion goes in FRONT of the region: $text');
 	}
 
 	private function okText(res: EditResult): String {

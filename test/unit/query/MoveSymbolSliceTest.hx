@@ -1175,13 +1175,19 @@ class MoveSymbolSliceTest extends Test {
 			}
 		}
 		Assert.equals('package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n'));
+		// `q.Dep` sorts before `q.Other`, and since S92 the carried line takes the run's own slot
+		// rather than being appended past it.
 		Assert.equals(
-			'package p;\n\nimport q.Other;\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n\nimport q.Other;\n')
+			'package p;\n\nimport q.Dep;\nimport q.Other;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n\nimport q.Other;\n')
 		);
 		// The same two headers with NO trailing newline. That is the boundary: the anchor lands exactly
 		// ON the append point rather than past it, and a `>` test sent both straight back down the
 		// two-edit path whose output is `import and using may not appear after a declaration`.
 		Assert.equals('package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;'));
+		// …and the ORDER goes back to the append here, which is not a second policy: `ImportOrder.lineOf`
+		// requires a terminated line, so an import that ends the file is in no run at all and there is no
+		// slot to take. `add-import` answers the same way on the same header and nobody sees it, because
+		// the canonical gate refuses a file with no trailing newline before the anchor is ever asked.
 		Assert.equals(
 			'package p;\n\nimport q.Other;\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n\nimport q.Other;')
 		);

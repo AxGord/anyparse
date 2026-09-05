@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.check.CheckScan;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -216,6 +217,42 @@ final class CliEdit {
 				raw == null ? null : ElementSpan.declEditSpan(source, tree, n, raw, regions);
 			}
 		];
+	}
+
+	/**
+	 * The bare modifier KEYWORD an EXPLICIT `--select` / `--match` address names, lower-cased, or
+	 * null — for the one op whose meaning changes when the address is a modifier rather than a
+	 * position that merely lands on one.
+	 *
+	 * `--select 'Private'` and `--at <line>:1` on `private typedef Helper` resolve to the SAME byte
+	 * offset, and `resolveAddressPos` hands both on as a bare position — after which
+	 * `ElementSpan.declGroupSpan` reads the modifier as the first token of the declaration it
+	 * precedes and walks forward to it. That walk is correct for a position (the cursor convention
+	 * says line:col points at an element's first token, and a declaration's first token IS its
+	 * leading keyword) and wrong for a selector, which named the modifier node itself. Asked here,
+	 * where the MODE is still known, rather than in the span layer, which by then cannot tell the
+	 * two apart.
+	 *
+	 * A `@:meta` is deliberately NOT included: `declGroupSpan` treats an annotation as an element in
+	 * its own right, so `--select 'Meta:@:keep'` already addresses the annotation and nothing
+	 * else. A resolution failure answers null — the op re-resolves and reports the real error.
+	 */
+	public static function namedModifierKeyword(
+		source: String, plugin: GrammarPlugin, select: Null<String>, matchPat: Null<String>, nth: Null<Int>
+	): Null<String> {
+		if (select == null && matchPat == null) return null;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		if (tree == null) return null;
+		return switch Address.resolve(tree, source, plugin, {
+			select: select,
+			match: matchPat,
+			nth: nth
+		}) {
+			case Ok(_, node):
+				node != null && CheckScan.modifierKinds(plugin.refShape()).contains(node.kind) ? node.kind.toLowerCase() : null;
+			case Err(_):
+				null;
+		};
 	}
 
 }
