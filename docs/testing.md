@@ -575,7 +575,8 @@ dead:
 - `findThenSiblingAccess`'s `BASE_OPTIONAL != true` exclusion: no grammar today pairs
   `dropSingleStmtBraces` with an optional field ahead of the then-body.
 - `buildBlockEndedByteCheck`'s whitespace rewind — no fixture has trailing whitespace between
-  the element and the byte the check reads.
+  the element and the byte the check reads. (True of the suite as it stood; NOT true of the code
+  — S111 wrote the fixture that does, and armed it. See "The rewind fires 58 times" below.)
 
 **Two arms with identical blasts, kept on purpose.** `M-SSB-FRAME-OFF` (the macro-level frame
 arming) and `M-SSB-DANGLING-NONE` (the runtime dangling-`if` predicate) kill the SAME four
@@ -724,15 +725,16 @@ unchanged.
   First-match already excludes the optional one. A discriminating fixture therefore needs a
   grammar whose optional brace-dropping field is declared FIRST, i.e. a second grammar
   declaration — S66's rule — not a Haxe source.
-- **`buildBlockEndedByteCheck`'s whitespace rewind — unreached by every oracle, kept.**
-  `_prevEndPos` is `ctx.pos` taken immediately after the element and BEFORE `skipWs`, so a
-  whitespace byte at `_prevEndPos - 1` requires the element's OWN rule to have consumed trailing
-  whitespace. With the rewind removed the engine is byte-identical over the fork corpus
+- **`buildBlockEndedByteCheck`'s whitespace rewind — REACHED, load-bearing, pinned (S111).**
+  The reading below was the honest one from the evidence available, and it was wrong. The premise
+  — "a whitespace byte at `_prevEndPos - 1` requires the element's OWN rule to have consumed
+  trailing whitespace" — is right; what nobody checked is that two rules DO. Instrumenting the
+  rewind and running the engine over the tree fires it 58 times, and one shape flips the answer.
+  See "The rewind fires 58 times" below. The original note, kept because the measurements in it
+  are real: with the rewind removed the engine is byte-identical over the fork corpus
   (`781 pass / 120 fail / 43 skip-parse`, the histogram diffs to zero lines) and over 1 749
-  `src/` + `test/` files, on top of S105's zero unit fixtures. It is the strongest remaining
-  deletion candidate — it is a `while` loop per element on the parser's hot path — but unlike
-  gate 7 there is no expression-level subsumption to point at, and a wrong verdict in parser code
-  corrupts a parse silently.
+  `src/` + `test/` files, on top of S105's zero unit fixtures — every one of those oracles is
+  blind to it, which is the actual finding.
 
 **The oracle these settlements rest on, and why the corpus alone could not carry them.**
 `singleStatementBraces` is NOT set in the project's own `hxformat.json`, so the corpus sweep and
@@ -750,6 +752,104 @@ after the parent's sweep, not a claim that the arm exercised anything.
 `ANYPARSE_HXFORMAT_FORK` is unset for the run on purpose: the corpus harness is not what an arm measures, and a verdict must not depend on whether a fork path happens to be exported in the caller's shell.
 
 Every worktree the runner created is removed on exit, including on `INT`/`TERM`/`HUP`. A `worktree remove` that itself fails is swallowed so one bad entry cannot strand the rest — which does mean a stuck worktree can survive as a registered entry, so `git worktree list` is worth a glance after a crashed run. The workroot itself is never deleted: its transcripts, build logs and verdict files are the post-mortem. They accumulate in `TMPDIR` across a long campaign, so a campaign that runs for days is worth sweeping by hand.
+
+#### The rewind fires 58 times, and one shape needs it (S111)
+
+S107 left `StarLoopLowering#buildBlockEndedByteCheck`'s whitespace rewind as "the strongest
+remaining deletion candidate" on three zero-results: 0 unit fixtures, 0 corpus lines, 0 differing
+`src/` + `test/` files. All three are true and none of them is about the rewind. They are about
+the ORACLES: a byte-identical output cannot distinguish "the loop never ran" from "the loop ran
+and the other half of the `||` answered anyway".
+
+**Instrument the loop instead of the output.** A probe build traces once per fire, carrying the
+byte the rewind lands on (`_b`), the byte a rewind-free check would have read (`_bNo`), the
+schema predicate's answer (`_p`), and a source window. Measured over `fmt --list --one-pass src
+test tools` (1 754 files):
+
+| | fires | answer differs |
+|---|---|---|
+| anyparse `src` + `test` + `tools`, 1 754 files | **58** | **0** |
+| the fork corpus, 946 `.hxtest` fixtures | **0** | 0 |
+
+So the corpus is not merely quiet about this code — it never reaches it at all, which is why
+every previous measurement came back zero. The 58 fires split by the byte the rewind lands on:
+47 on `}`, 5 on a comment's last character, **6 on `;`**. Only the six can matter — for the other
+52 the byte is not `;` with or without the rewind, so both readings fall through to the predicate.
+
+**The rules that consume trailing whitespace, named.** Two, and both are deliberate:
+`@:trailOpt(';')` runs its pre-match `skipWs` and does NOT rewind on a miss; and
+`OperatorLoopLowering`'s no-operator-match path explicitly declines to restore `ctx.pos` when the
+consumed run held a newline and no comment (`omega-untyped-keep` — it stashes the newline signal
+into `pendingTrivia` instead, so a `bodyBeforeNewline` slot downstream still fires).
+
+**The discriminating shape is a Haxe source, not a second grammar.** A statement whose own
+terminator was swallowed by something INSIDE it, followed by another statement:
+
+```haxe
+class C { function f() { return macro if (c) foo(); trace(1); } }
+```
+
+`macro if (c) foo();` reifies the whole if-STATEMENT, `;` included, so `ReturnStmt`'s own
+`@:trailOpt(';')` misses, and the miss leaves the following whitespace consumed. The byte check
+is then the only thing that can accept the gap, because `stmtNoSemi` answers `false` for
+`ReturnStmt` by construction — it is absent from `NO_SEMI_STMT_CTORS`, whose own doc says the
+byte check covers "stmts whose own `@:trailOpt(';')` consumed the terminator". Predicate and byte
+check are COMPLEMENTS here, not a subsumption. Without the rewind the BlockBody Star refuses the
+second statement and the function body falls back to `ExprBody(BlockExpr(…))` — `PARSE OK` either
+way, a different tree, and every `apq` query and check reads that tree.
+
+`unit.lowering.StarBlockEndedWsRewindTest` is that fixture plus two guards (the `final r = macro
+…` twin, which the predicate DOES answer for, and an ordinary `foo();`, whose terminator is its
+own last byte). `M-PEB-WS-REWIND-OFF` neutralises the rewind's loop condition and takes **1
+fixture over the WHOLE suite** — its own pin, no `+extra`. That figure IS the vacuum S105 and
+S107 measured, now closed: before this fixture the suite had nothing to say about the rewind at
+all.
+
+**Verdict: KEEP.** The `while` on the hot path stays; the perf question S107 raised is moot.
+
+#### Four more probes, two owners, three refusals (S111)
+
+Continuing S107's method — probe the SMALL neighbours in BOTH directions — over the four unpinned
+owners it named. Blasts are whole-suite, with the oracle-driven CLI-e2e flake family excluded;
+that family is identified the same way as before and one instrument check is worth recording:
+`p1` was first measured at `--jobs 4` alongside five other whole-suite tracks and showed **19
+extra `ERROR` rows** across `unit.cli.Apq*CliTest`; the identical patch re-run at `--jobs 2` showed
+**3**, in different classes. Concurrency, not coupling — quote a blast from the least-loaded run
+you have.
+
+| cut | blast (flakes excluded) | outcome |
+|---|---|---|
+| `WriterLowering#buildBracketBodyGlueTest` → `null` | 5, one class | `M-BRACKET-GLUE-NONE` |
+| `WriterBodyPolicyLowering#buildElseSwitchCases` — the comment gate on `sameGuard` dropped | **1** | `M-ELSE-SWITCH-COMMENT-GLUE` |
+| `WriterBodyPolicyLowering#buildElseSwitchTests` — no cases built | 2, one class | `M-ELSE-SWITCH-TESTS-NONE` |
+| `WriterBodyPolicyLowering#buildElseSwitchCases` — `sameGuard` → `false` | 2, the SAME two | not armed — IDENTICAL to the row above |
+| `WriterLowering#buildBracketBodyGlueTest` — the ctor test dropped, flag kept | 4, a SUBSET of the 5 | not armed — no second mechanism |
+| `WriterLowering#buildBracketBodyGlueTest` → `macro true` | **~200 over 60+ classes** | not armed — no single owner |
+| `SingleStmtBraces#needsSymmetryWrap` → `false` | **16 over 3 classes** | not armed — no single owner |
+| … — the `SYMMETRY_WRAP_SKIP_CTORS` gate ignored | **27 over 4 classes** | not armed — no single owner |
+| … — the `innerSelfTerminates` gate ignored | **56 over 6 classes** (33 in one) | not armed — no single owner |
+
+`buildBracketBodyGlueTest`'s two directions are NOT the `LoopBodyShape` pair: `null` owns one
+class cleanly, `macro true` is diffuse, and the narrowed middle (`macro $flagAccess`, ctor test
+dropped) kills a strict SUBSET of what `null` kills — the one fixture that separates them,
+`testAnArrayLiteralBranchHugsTheHead`, is already in the `null` arm's pin set, so a second arm
+would record no second mechanism. Same reasoning as S107's caller/callee identities, one step
+weaker: subset rather than equality.
+
+**T638 settled, and its premise held only halfway.** `SingleStmtBraces#needsSymmetryWrap` is
+`private static inline`, so a FORCE cut is `Cannot inline a not final return` — S107's fourth
+blind spot, reproduced. A `find`/`replace` that rewrites the body EXPRESSION builds and runs fine,
+so the workaround is confirmed. But the member has **no owner to give the arm**: cut whole it
+takes 16 fixtures over 3 classes, and neither of its two inner gates narrows it — 27 over 4 and
+56 over 6, both WIDER than the whole. It is the `deBraceBodyAccess` situation in reverse: there,
+cutting one gate at a time split a diffuse helper into four owners; here every gate is diffuse and
+the conjunction is the narrowest of the three. Recorded as a refusal, with its numbers.
+
+The unpinned count moves **30 → 29**: the only census fixture these arms reach is
+`ElseSwitchPlacementSliceTest#testACommentBetweenElseAndSwitchDeclinesTheGlue`. The other seven new
+pins land outside the census blast, which is where S107's twelve landed too. Of the 29 that remain,
+**7 are outside this fence** — 4 `unit.cli.LintFixFixedPointCliTest` (the flake family), 2
+`unit.check.*`, 1 `unit.query.*`.
 
 ## Macro-specific tests
 

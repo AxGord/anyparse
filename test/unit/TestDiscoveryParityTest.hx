@@ -754,6 +754,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.lowering.GeneratedLexicalScanSecondGrammarTest',
 		'unit.lowering.RegexFirstBytesTest',
 		'unit.lowering.StarBlockEndedTest',
+		'unit.lowering.StarBlockEndedWsRewindTest',
 		'unit.lowering.StarSepStartsElementTest',
 		'unit.lowering.WriterFamilyCtxBundleTest',
 		'unit.query.AddElementSliceTest',
@@ -1013,6 +1014,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.format.BraceSymmetrySliceTest#testTheStatementAndValueSkipListsAgree :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
+			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testACommentBetweenElseAndSwitchDeclinesTheGlue'
+			+ ' :: control :: M-ELSE-SWITCH-COMMENT-GLUE',
+			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testAnElseIfChainEndingInElseSwitch :: control :: M-ELSE-SWITCH-TESTS-NONE',
+			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testSamePlacesTheSwitchOnTheElseLine :: control :: M-ELSE-SWITCH-TESTS-NONE',
 			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember'
 			+ ' :: control :: M-BLANK-MULTILINE-OFF',
 			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBetweenMultilineAndSingleLine'
@@ -1099,6 +1104,14 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody'
 			+ ' :: control :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testAnArrayLiteralBranchHugsTheHead :: control :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheReportedComprehensionReachesTheTargetLayout'
+			+ ' :: control :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheSemicolonClosedSourceReachesTheTargetLayout'
+			+ ' :: control :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheSplitCloserCuddlesTheElseWithNoSemicolonToDrop'
+			+ ' :: control :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheTargetLayoutIsIdempotent :: control :: M-BRACKET-GLUE-NONE',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive'
 			+ ' :: control :: M-NONCURLY-SAME-DROP',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak'
@@ -1112,6 +1125,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheSemicolonBeforeElseGoesWithTheJoin'
 			+ ' :: control :: M-EXPR-ELSE-KEEP,M-EXPR-ELSE-PLAIN-SAME',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheStatementTwinKeepsTheLayoutItAlwaysHad :: guard :: ',
+			'unit.lowering.StarBlockEndedWsRewindTest#testASwallowedTerminatorBehindTrailingWhitespaceStillEndsTheStatement'
+			+ ' :: control :: M-PEB-WS-REWIND-OFF',
+			'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
+			'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: ',
 			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote'
 			+ ' :: control :: M-OPAQUE-REGION-WS-GAP',
 			'unit.query.OpaqueCondRegionScanTest#testDanglingElseIsOpaqueWhileItsBraceIdenticalTwinIsNot'
@@ -1224,7 +1241,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-SAFENAV-NO-NARROW',
 			'M-OPAQUE-REGION-NONE',
 			'M-OPAQUE-REGION-NODE-SPAN',
-			'M-OPAQUE-REGION-WS-GAP'
+			'M-OPAQUE-REGION-WS-GAP',
+			'M-PEB-WS-REWIND-OFF',
+			'M-BRACKET-GLUE-NONE',
+			'M-ELSE-SWITCH-COMMENT-GLUE',
+			'M-ELSE-SWITCH-TESTS-NONE'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1253,7 +1274,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-SSB-TRAIL-COMMENT-OFF :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
 			'M-SSB-FRAME-OFF :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
 			'M-SSB-CHAIN-OFF :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
-			'M-EICR-KNOB-IGNORED :: anyparse.macro.WriterBodyPolicyLowering#buildElseIfCommentReflowLayout'
+			'M-EICR-KNOB-IGNORED :: anyparse.macro.WriterBodyPolicyLowering#buildElseIfCommentReflowLayout',
+			'M-PEB-WS-REWIND-OFF :: anyparse.macro.StarLoopLowering#buildBlockEndedByteCheck',
+			'M-BRACKET-GLUE-NONE :: anyparse.macro.WriterLowering#buildBracketBodyGlueTest',
+			'M-ELSE-SWITCH-COMMENT-GLUE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchCases',
+			'M-ELSE-SWITCH-TESTS-NONE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchTests'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
