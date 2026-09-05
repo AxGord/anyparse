@@ -85,6 +85,30 @@ using anyparse.macro.MetaInspect;
  * at 11 sites, and it reads the process-scoped `_predRootStatic` that
  * `generate` writes.
  *
+ * ONE more went to `WriterBraceSymmetryLowering`, and it is a different
+ * axis again — the STATE-CARRYING half of a family whose pure half had
+ * already left. Re-running the census over the 121 members that remained,
+ * but recording the SLICE each member needs rather than a yes/no, says
+ * something the pure/impure split cannot: 50 members / 2482 lines reach
+ * the instance only through `_ctx.trivia` and `_shape.rules` — one `Bool`
+ * and one `Map`. That is one call graph, not a decomposition (it is
+ * everything reachable from `isTriviaBearing`), but it prices the families
+ * inside it, and the prices differ by twenty-five times. The trivia-paired
+ * NAMING vocabulary — `isTriviaBearing`, `writeFnFor`, `ruleCtorPath`,
+ * `ruleValueCT` — is the CHEAPEST to free and the WORST to move: 42 lines
+ * behind 33 inbound call sites, because `isTriviaBearing` is the hub
+ * (fan-in 19) and a hub is what everything else is impure THROUGH. The
+ * ctor-pattern lookups are 218 lines behind 25 sites. Brace symmetry is
+ * 382 lines behind SEVEN, so brace symmetry moved: twelve members plus
+ * `VALUE_BRACE_SYMMETRY_MIN_ARGS`, each now `private static` with a
+ * `BraceSymmetryCtx` bundle (`_braceSym`) as its first argument.
+ *
+ * That the move is byte-inert is not an inference. This module is
+ * `#if macro`, so nothing here reaches a JS target's output — only the
+ * writer it GENERATES does. A build of the moved tree hashes into the same
+ * four-md5 float set an unmoved tree produces, which is the same `cmp`
+ * proof the purity moves had.
+ *
  * ⚠️ Star emission FORKS across FOUR sites — `Lowering.emitStarFieldSteps`
  * and its `lowerEnumBranch` Case 4 branch on the parse side,
  * `emitWriterStarField` and `lowerEnumStar` here. Both writer forks stayed
@@ -151,9 +175,6 @@ class WriterLowering {
 	 */
 	private static inline final COMPLEX_ITEM_KINDS_PRED: String = 'complexItemKinds';
 
-	/** `@:fmt(valueBraceSymmetry)` required args (siblingField, blockCtor, stmtCtor); any further ones are skip-ctors. */
-	private static inline final VALUE_BRACE_SYMMETRY_MIN_ARGS: Int = 3;
-
 	/**
 	 * ω-orphan-prefix-member — the first-field escape read at three sites that
 	 * must agree on ONE answer: it also gates `TriviaTypeSynth.isBareNonFirstRef`
@@ -214,6 +235,9 @@ class WriterLowering {
 	/** The arrow-value-`if` family's ctx bundle — see `WriterArrowValueIfLowering`. */
 	private final _arrowValueIf: anyparse.macro.WriterArrowValueIfLowering.ArrowValueIfCtx;
 
+	/** The brace-symmetry family's ctx bundle — see `WriterBraceSymmetryLowering`. */
+	private final _braceSym: anyparse.macro.WriterBraceSymmetryLowering.BraceSymmetryCtx;
+
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
 		_shape = shape;
 		_formatInfo = formatInfo;
@@ -253,6 +277,13 @@ class WriterLowering {
 			isTriviaBearing: isTriviaBearing,
 			ruleCtorPath: ruleCtorPath,
 			branchSynthExtraArity: branchSynthExtraArity
+		};
+		_braceSym = {
+			shape: shape,
+			ctx: ctx,
+			findCtorPattern: findCtorPattern,
+			isTriviaBearing: isTriviaBearing,
+			ruleCtorPath: ruleCtorPath
 		};
 	}
 
@@ -1631,13 +1662,13 @@ class WriterLowering {
 		// ignored. Sole consumer: `HxCondSpliceOpExpr.terms`.
 		final tryparseFillItems: Bool = starNode.fmtHasFlag('fillItems');
 		parts.push(TriviaTryparseLowering.triviaTryparseStarExpr(
-			tryCatchesSymmetryWrap(starNode, fieldAccess, elemRefName), elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB,
-			tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs,
-			tryparsePadLeading, tryparsePadTrailing, propagateExprPosition, refuseFlatOnComplex, cascadeInfos.afterCtorInfos,
-			cascadeInfos.beforeCtorInfos, cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos,
-			metaLineEndOptField, cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr,
-			tryparseForceInlineSep, tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null, tryparseBlockEnded,
-			tryparseSepFaithful, tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
+			tryCatchesSymmetryWrap(_braceSym, starNode, fieldAccess, elemRefName), elemFn, sepExpr, sameLineName != null, nestBody,
+			tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride, caseBodyFlagNames,
+			flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing, propagateExprPosition, refuseFlatOnComplex,
+			cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos, cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
+			cascadeInfos.headCtorInfos, metaLineEndOptField, cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware,
+			tryparsePriorAfterTrailExpr, tryparseForceInlineSep, tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null,
+			tryparseBlockEnded, tryparseSepFaithful, tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
 			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,
 			refuseGlueOnControlFlow, tryparseFillItems
 		));
@@ -5247,7 +5278,7 @@ class WriterLowering {
 			return;
 		final sourcePresent: Expr = macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText});
 		final emit: Expr = semicolonBeforeSiblingWrap(child, trailOptText, fieldAccess, sourcePresent) ?? sourcePresent;
-		parts.push(valueBraceSymmetryTrailDrop(child, fieldAccess, emit));
+		parts.push(valueBraceSymmetryTrailDrop(_braceSym, child, fieldAccess, emit));
 	}
 
 	/**
@@ -5482,9 +5513,9 @@ class WriterLowering {
 		// chain root it is the spine scan over then + else-if bodies. Reused by the
 		// unwrap gate (terminal else block) AND the else-if writeCall propagation.
 		// `macro false` off-path (plain mode / non-dropSingleStmtBraces field).
-		final elseChainSuppressExpr: Expr = buildElseChainSuppressExpr(node, child, fieldAccess);
+		final elseChainSuppressExpr: Expr = buildElseChainSuppressExpr(_braceSym, node, child, fieldAccess);
 		final dropElseBraces: Bool = _ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces');
-		final thenSiblingKeepsExpr: Expr = dropElseBraces ? buildThenSiblingKeepsProbe(node, typePath) : macro false;
+		final thenSiblingKeepsExpr: Expr = dropElseBraces ? buildThenSiblingKeepsProbe(_braceSym, node, typePath) : macro false;
 		// ω-single-stmt-braces trailing-comment hoist for the else-body: same gate args as
 		// its `unwrapStmt` splice below (elseFollows=false, hasTrailingSemi=false, isThenBody=false)
 		// so the hoisted comment fires exactly when the de-brace does.
@@ -5571,7 +5602,7 @@ class WriterLowering {
 					);
 				_sv;
 			}
-			: valueBraceSymmetryWrap(child, fieldAccess);
+			: valueBraceSymmetryWrap(_braceSym, child, fieldAccess);
 		parts.push(macro {
 			final _optVal = $optValInit;
 			if (_optVal != null)
@@ -5580,79 +5611,6 @@ class WriterLowering {
 				_de();
 		});
 		return thisPadTrailing;
-	}
-
-	/**
-	 * ω-single-stmt-braces gate-7 symmetry probe for an else-body splice. Reaches the
-	 * sibling then-body (the mandatory bodyPolicy field carrying `dropSingleStmtBraces`)
-	 * and builds a runtime `keepsBraces(value.<then>, ...)` expr so the else keeps its
-	 * braces whenever the then keeps its own. Mirrors the then splice's own unwrap args
-	 * exactly: `elseFollows=true` (an `else` is present in this branch) plus the then's
-	 * real `@:trailOpt(';')` slot. `macro false` (no constraint) when there is no such
-	 * sibling.
-	 */
-	private function buildThenSiblingKeepsProbe(node: ShapeNode, typePath: String): Expr {
-		final found: Null<{ sibling: ShapeNode, name: String, access: Expr }> = findThenSiblingAccess(node);
-		if (found == null) return macro false;
-		final thenAccess: Expr = found.access;
-		final trailSlot: String = found.name + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX;
-		final thenTrailAccess: Expr = { expr: EField(macro value, trailSlot), pos: Context.currentPos() };
-		final thenTrail: Expr = found.sibling.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true && isTriviaBearing(typePath)
-			? macro ($thenTrailAccess == true)
-			: macro false;
-		// The probed sibling IS an if-then-body, so the omega-ssb-wrap arm applies
-		// (a bare `if` there renders braced) - pass `isIfThenBody=true`.
-		return macro anyparse.format.SingleStmtBraces.keepsBraces(
-			$thenAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $thenTrail, true
-		);
-	}
-
-	/**
-	 * ω-single-stmt-braces CHAIN-symmetry runtime force-keep for an else-body
-	 * splice. `opt._ssbChainSuppress || chainForcesBraces(value.<then>,
-	 * value.<else>, …)` — true mid-chain (propagated from the root) or when THIS
-	 * `if` is the chain root and the spine scan finds a brace-keeping branch.
-	 * Reaches the sibling then-body via `findThenSiblingAccess`;
-	 * `macro opt._ssbChainSuppress` alone when there is no such sibling. Returns
-	 * `macro false` off-path (plain mode, or a field without
-	 * `@:fmt(dropSingleStmtBraces)`) so the flag is never referenced where the opt
-	 * typedef may lack it.
-	 */
-	private function buildElseChainSuppressExpr(node: ShapeNode, child: ShapeNode, fieldAccess: Expr): Expr {
-		if (!_ctx.trivia || !child.fmtHasFlag('dropSingleStmtBraces')) return macro false;
-		final found: Null<{ sibling: ShapeNode, name: String, access: Expr }> = findThenSiblingAccess(node);
-		if (found == null) return macro opt._ssbChainSuppress;
-		final thenAccess: Expr = found.access;
-		return macro (opt._ssbChainSuppress
-			|| anyparse.format.SingleStmtBraces.chainForcesBraces(
-				$thenAccess, $fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
-			));
-	}
-
-	/**
-	 * ω-single-stmt-braces CHAIN symmetry: wrap an else-body writeCall's opt to
-	 * propagate `_ssbChainSuppress` DOWN an else-if spine. SET on an else-if
-	 * continuation (its own then-body keeps braces and the signal reaches the next
-	 * link), CLEAR on a non-if terminal else so an if-chain nested inside that
-	 * block de-braces on its own merits. `e` unchanged off-path (plain mode /
-	 * non-dropSingleStmtBraces field / target with no `IfStmt` ctor).
-	 *
-	 * `e` MUST be a chain rooted at the generated writer function's own `opt` —
-	 * the shim is passed `opt` as its `chainBaseArg`, which lets it mutate an
-	 * already-cloned link in place instead of copying the 210-field record
-	 * again. A chain rooted anywhere else would let it mutate an opt someone
-	 * else still holds.
-	 */
-	private function wrapElseChainSuppress(e: Expr, child: ShapeNode, refName: String, chainSuppressExpr: Expr): Expr {
-		if (!_ctx.trivia || !child.fmtHasFlag('dropSingleStmtBraces')) return e;
-		final ifPat: Null<Expr> = findCtorPattern(refName, 'IfStmt');
-		if (ifPat == null) return e;
-		final setExpr: Expr = macro _setSsbChainSuppress($e, $chainSuppressExpr, opt);
-		final clearExpr: Expr = macro _setSsbChainSuppress($e, false, opt);
-		return {
-			expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
-			pos: Context.currentPos()
-		};
 	}
 
 	/**
@@ -5800,7 +5758,7 @@ class WriterLowering {
 		final writeFn: String = writeFnFor(refName);
 		// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-		final deBraced = deBraceBodyAccess(child, fieldAccess, elseFieldName);
+		final deBraced = deBraceBodyAccess(_braceSym, child, fieldAccess, elseFieldName);
 		final effAccess: Expr = deBraced.effAccess;
 		final ssbSuppressCond: Null<Expr> = deBraced.ssbSuppressCond;
 		final ssbTrailCommentExpr: Null<Expr> = deBraced.ssbTrailCommentExpr;
@@ -5855,119 +5813,6 @@ class WriterLowering {
 		// condWrap span cannot push its own `@:lead` (the open paren is owned by
 		// the start field and emitted via the splice's emitCondition wrap).
 		if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) emitMandatoryLead(child, parts, leadText, fieldAccess);
-	}
-
-	/**
-	 * ω-single-stmt-braces: compute the body field's runtime access after the
-	 * `@:fmt(dropSingleStmtBraces)` de-brace transform, plus the suppress-frame
-	 * condition the writeCall opt needs. Extracted verbatim from
-	 * `emitMandatoryRefField` (its sole caller) so that function stays under the
-	 * cyclomatic-complexity ceiling; off-path (flag absent or plain mode) the
-	 * returned `effAccess` is byte-identical to `fieldAccess` and `ssbSuppressCond`
-	 * is null.
-	 */
-	private function deBraceBodyAccess(
-		child: ShapeNode, fieldAccess: Expr, elseFieldName: Null<String>
-	): { effAccess: Expr, ssbSuppressCond: Null<Expr>, ssbTrailCommentExpr: Null<Expr> } {
-		// ω-single-stmt-braces: a body field carrying `@:fmt(dropSingleStmtBraces)`
-		// (trivia mode only) substitutes its runtime value with
-		// `SingleStmtBraces.unwrapStmt(value.<field>, …)` BEFORE any writeCall /
-		// layout / shape dispatch, so a `{ single; }` block body is seen (and laid
-		// out) as the bare inner statement everywhere downstream — incl. the next
-		// sibling's shape-aware `else` separator and the `semicolonNextLineElse`
-		// re-render (both consume the substituted access via `prevBareRefBody`).
-		// `elseFollows` (an `else` sibling is present at runtime) arms the
-		// dangling-else gate inside the helper; the same condition (narrowed to a
-		// then-body that renders WITHOUT braces) wraps the writeCall's opt in
-		// `_setSsbSuppress` so unwraps nested deeper in the then-body
-		// (e.g. `if (a) while (c) { if (b) x; } else y`) are gated too.
-		// `elseFieldName` is non-null only for `HxIfStmt.thenBody` (via
-		// `fitLineIfWithElse`'s optionalBodyFieldName channel); for / while bodies
-		// pass `false`. Off-path (`dropSingleStmtBraces` absent or plain mode) the
-		// access is byte-identical to pre-slice.
-		final dropBraces: Bool = _ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces');
-		final elseAccess: Null<Expr> = dropBraces && elseFieldName != null ? {
-			expr: EField(macro value, elseFieldName),
-			pos: Context.currentPos()
-		} : null;
-		final elseFollowsExpr: Expr = elseAccess == null ? macro false : macro $elseAccess != null;
-		// The body's own `@:trailOpt(';')` slot (`value.<field>TrailPresent`): a redundant
-		// trailing `;` (`for (…) { x; };`) would become `for (…) x;;` once de-braced — invalid
-		// to the Haxe compiler — so it fails the unwrap closed (braces kept).
-		// omega-ssb-trailopt-drop: always `false` — the trail slot of a brace-droppable
-		// field is no longer emitted (see `emitMandatoryRefTrail`), so the `for (…) x;;`
-		// shape the keep-braces gate defended against cannot occur. The gate itself stays
-		// as a fail-closed guard for any FUTURE field that both drops braces and emits a trail.
-		final trailSemiExpr: Expr = macro false;
-		// ω-single-stmt-braces symmetry (gate 7): probe whether the `else` sibling would
-		// KEEP its braces. If it does, this then-body keeps its own too - an if/else must
-		// de-brace both branches or neither. The else-body's own splice unwraps with
-		// `elseFollows=false, hasTrailingSemi=false`, so the probe mirrors those exactly.
-		final elseSiblingKeepsExpr: Expr = elseAccess == null
-			? macro false
-			: macro ($elseAccess != null
-				&& anyparse.format.SingleStmtBraces.keepsBraces(
-					$elseAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, false, false, false
-				));
-		// ω-single-stmt-braces CHAIN symmetry: force this then-body to keep its
-		// braces when we are mid-chain (`opt._ssbChainSuppress`, propagated from
-		// the root) OR when THIS `if` is the chain root and the spine scan finds a
-		// keeper. Folded into `siblingKeepsBraces` alongside the immediate-pair
-		// probe. For / while / do bodies (no `else` sibling) never force.
-		final thenChainSuppressExpr: Expr = elseAccess == null
-			? macro false
-			: macro (opt._ssbChainSuppress
-				|| anyparse.format.SingleStmtBraces.chainForcesBraces(
-					$fieldAccess, $elseAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
-				));
-		// omega-ssb-wrap: `isIfThenBody` is a MACRO-time discriminator - `elseFieldName`
-		// is non-null only for `HxIfStmt.thenBody` (the fitLineIfWithElse
-		// optionalBodyFieldName channel), so for / while / do bodies pass `false` and
-		// stay exempt from gate 8 and the wrap direction.
-		final isThenBodyExpr: Expr = elseFieldName != null ? macro true : macro false;
-		final effAccess: Expr = dropBraces
-			? macro {
-				var _sv = $fieldAccess;
-				_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
-					_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
-					$elseSiblingKeepsExpr || $thenChainSuppressExpr, $isThenBodyExpr
-				);
-				_sv;
-			}
-			: tryBraceSymmetryWrap(
-				// omega-try-brace-symmetry composes here rather than in a branch of its own: a field
-				// carries at most ONE of the two symmetry metas, so each wrap is inert for the other's
-				// fields and the pair is byte-identical to the pre-slice access without either.
-				child,
-				valueBraceSymmetryWrap(child, fieldAccess)
-			);
-		// The runtime gate includes `opt.dropSingleStmtBraces` so the default-off
-		// path never allocates a suppress-frame opt copy (byte-inert AND
-		// allocation-inert).
-		// omega-ssb-span-precision: the frame is armed ONLY when the then-body renders
-		// WITHOUT braces. A brace-bearing then-body ends on its own `}`, which seals the
-		// whole subtree from the trailing `else` - nothing inside it can be on the
-		// then-body's trailing spine, so suppressing there is pure over-keeping.
-		// `keepsBraces` mirrors the then splice's own arguments; it answers `false` for a
-		// branch that gate 7 would WRAP, which arms the frame needlessly but never
-		// disarms it wrongly (fail closed).
-		final ssbSuppressCond: Null<Expr> = elseAccess == null
-			? null
-			: macro ($elseAccess != null && opt.dropSingleStmtBraces
-				&& !anyparse.format.SingleStmtBraces.keepsBraces(
-					$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true
-				));
-		// ω-single-stmt-braces trailing-comment hoist: when the de-brace fires AND the
-		// single statement carries a same-line trailing comment, `hoistTrailingComment`
-		// returns it (else null) so `buildBodyWriteCall` folds it after the bare
-		// statement's own `;`. Same gate args as the `unwrapStmt` splice above.
-		final ssbTrailCommentExpr: Null<Expr> = dropBraces
-			? macro anyparse.format.SingleStmtBraces.hoistTrailingComment(
-				$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
-				$elseSiblingKeepsExpr || $thenChainSuppressExpr, $isThenBodyExpr
-			)
-			: null;
-		return { effAccess: effAccess, ssbSuppressCond: ssbSuppressCond, ssbTrailCommentExpr: ssbTrailCommentExpr };
 	}
 
 	/**
@@ -6060,199 +5905,7 @@ class WriterLowering {
 				};
 			}
 		}
-		return wrapElseChainSuppress(e, child, refName, elseChainSuppressExpr);
-	}
-
-	/**
-	 * omega-value-brace-symmetry: `@:fmt(valueBraceSymmetry('<siblingField>', '<blockCtor>', '<stmtCtor>',
-	 * '<skipCtor>'…))` gives a VALUE-position branch the brace symmetry `SingleStmtBraces` gate 7 gives a
-	 * statement one — when the sibling branch is a `{ … }` block, this branch is wrapped in a synthesized
-	 * single-statement block of its own.
-	 *
-	 * The statement gate cannot reach here: it keys on the statement block kind, and a braced branch of a
-	 * value-`if` is a block EXPRESSION. What was left is the shape this closes — `if (c) { … } else -1`.
-	 *
-	 * The block is SYNTHESIZED rather than drawn as braces around the branch's Doc, for the reason gate 8
-	 * synthesizes one: the real writer then renders it, so a second format pass over the result produces the
-	 * same bytes. A Doc-level wrap would have to reproduce that rendering exactly or `fmt` would stop being
-	 * idempotent, with nothing to catch the drift. `SingleStmtBraces.wrapInBlock` builds it — the same
-	 * constructor the statement side uses, given the block ctor and a typed `lift` that raises the branch
-	 * EXPRESSION into the block's element type.
-	 *
-	 * Gated on trivia mode (the ctor arity differs in plain mode) and on `opt.dropSingleStmtBraces`, the knob
-	 * that already owns the statement-side symmetry: the two are the repair directions of ONE policy.
-	 * Returns `fieldAccess` untouched for every field without the meta.
-	 */
-	private function valueBraceSymmetryWrap(child: ShapeNode, fieldAccess: Expr): Expr {
-		final args: Null<Array<String>> = child.fmtReadStringArgs('valueBraceSymmetry');
-		final stmtPath: Null<String> = valueBraceSymmetryStmtPath(child, args);
-		if (args == null || stmtPath == null) return fieldAccess;
-		final stmtRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(stmtPath, args[2]));
-		final blockCtor: String = args[1];
-		final needsWrap: Expr = valueBraceSymmetryProbe(args, macro _vbsVal);
-		return macro {
-			final _vbsVal = $fieldAccess;
-			$needsWrap
-				? cast anyparse.format.SingleStmtBraces.wrapInBlock(
-					cast _vbsVal, $v{blockCtor}, _vbsInner -> $stmtRef(cast _vbsInner, true)
-				)
-				: _vbsVal;
-		};
-	}
-
-	/**
-	 * The block ctor's ELEMENT type path when `child` really does opt into
-	 * `@:fmt(valueBraceSymmetry(…))` and the wrap can be built, `null` otherwise
-	 * (no meta, plain mode, or an unresolvable rule). Shared by the wrap itself and
-	 * by the `@:trailOpt` drop below so the two can never disagree on whether the
-	 * wrap is live for a field.
-	 */
-	private function valueBraceSymmetryStmtPath(child: ShapeNode, args: Null<Array<String>>): Null<String> {
-		if (args == null || !_ctx.trivia) return null;
-		if (args.length < VALUE_BRACE_SYMMETRY_MIN_ARGS)
-			Context.fatalError(
-				'WriterLowering: @:fmt(valueBraceSymmetry) expects at least 3 string args (siblingField, blockCtor'
-				+ ', stmtCtor, [skipCtor…]), got ${args.length}',
-				Context.currentPos()
-			);
-		final valuePath: Null<String> = child.annotations[AnnotationKeys.BASE_REF];
-		return valuePath == null ? null : starElementTypePath(valuePath, args[1]);
-	}
-
-	/**
-	 * omega-value-brace-symmetry (trail): a field whose value the wrap ACTUALLY wraps
-	 * must not also re-emit its `@:trailOpt(LIT)` slot. The synthesized block already
-	 * carries the branch's terminator inside itself (the lift raises the expression
-	 * into an `ExprStmt`), so emitting the slot as well puts the source's `;` back
-	 * after the closing brace — `if (c) { f(); };` in front of an `else`, which reads
-	 * as a syntax error even though Haxe accepts it.
-	 *
-	 * The statement side has no such gate because it needs none: `emitMandatoryRefTrail`
-	 * drops the slot of every `@:fmt(dropSingleStmtBraces)` field outright
-	 * (omega-ssb-trailopt-drop). A value branch cannot do that — with NO sibling the
-	 * same slot can be holding the ENCLOSING statement's terminator — so the drop is
-	 * conditioned on the wrap firing, which requires the sibling to be a block.
-	 */
-	private function valueBraceSymmetryTrailDrop(child: ShapeNode, fieldAccess: Expr, emit: Expr): Expr {
-		final args: Null<Array<String>> = child.fmtReadStringArgs('valueBraceSymmetry');
-		if (args == null || valueBraceSymmetryStmtPath(child, args) == null) return emit;
-		final needsWrap: Expr = valueBraceSymmetryProbe(args, fieldAccess);
-		return macro $needsWrap ? _de() : $emit;
-	}
-
-	/**
-	 * The ELEMENT type path of `ctor`'s single Star child in the rule at `typePath`, or null when it has none.
-	 *
-	 * The element ref sits one level BELOW the Star — `branch → Star → inner Ref` — the same walk
-	 * `emitWriterStarField` makes to name its per-element write function. Reading `BASE_REF` off the Star
-	 * itself answers null, which is what a value-`if` block ctor looks like from the outside.
-	 */
-	private function starElementTypePath(typePath: String, ctor: String): Null<String> {
-		final rule: Null<ShapeNode> = _shape.rules[typePath];
-		if (rule == null || rule.kind != Alt) return null;
-		for (branch in rule.children) if (branch.annotations.get(AnnotationKeys.BASE_CTOR) == ctor) {
-			final star: Null<ShapeNode> = branch.children.length == 1 && branch.children[0].kind == Star ? branch.children[0] : null;
-			return star == null || star.children.length == 0 ? null : star.children[0].annotations.get(AnnotationKeys.BASE_REF);
-		}
-		return null;
-	}
-
-	/**
-	 * The Ref target of `fieldName` on `typePath`'s Seq rule, or null when the rule is not a Seq, has
-	 * no such field, or the field is not a bare Ref. Mirror of `findElementBodyField`, which answers
-	 * the opposite question (which FIELD holds a known type).
-	 */
-	private function seqFieldRefTarget(typePath: String, fieldName: String): Null<String> {
-		final rule: Null<ShapeNode> = _shape.rules[typePath];
-		if (rule == null || rule.kind != Seq) return null;
-		for (child in rule.children) if (child.kind == Ref && child.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == fieldName)
-			return child.annotations.get(AnnotationKeys.BASE_REF);
-		return null;
-	}
-
-	/**
-	 * The `lift` closure `SingleStmtBraces.wrapInBlock` takes when the block's ELEMENT type differs
-	 * from the wrapped value's — a value form wraps an EXPRESSION into a block expression whose
-	 * elements are statements, so the expression has to be raised into one. `macro null` when no lift
-	 * is wanted (a statement body wraps into a block of statements, same type) or the element type
-	 * cannot be resolved.
-	 */
-	private function blockElemLift(valuePath: Null<String>, blockCtor: String, stmtCtor: Null<String>): Expr {
-		if (valuePath == null || stmtCtor == null) return macro null;
-		final stmtPath: Null<String> = starElementTypePath(valuePath, blockCtor);
-		if (stmtPath == null) return macro null;
-		final stmtRef: Expr = MacroStringTools.toFieldExpr(ruleCtorPath(stmtPath, stmtCtor));
-		return macro (_tbsInner -> $stmtRef(cast _tbsInner, true));
-	}
-
-	/**
-	 * omega-try-brace-symmetry: `@:fmt(tryBraceSymmetry('<catchesField>', '<blockCtor>', '<stmtCtor>'))`
-	 * on a try/catch BODY field gives the construct the brace symmetry `SingleStmtBraces` gate 7 gives
-	 * an if/else — one verdict for the try body and every `catch` body together, so a construct is
-	 * never left braced on one side and bare on the other. `@:fmt(tryDeBrace)` alongside it opts the
-	 * form into the DE-brace half; without it the meta only ever adds braces, which is how
-	 * `valueBraceSymmetry` treats a value-position branch and why the value forms carry it bare.
-	 *
-	 * The third arg is optional and names the ctor that raises the wrapped value into the block's
-	 * element type — needed by the value forms, absent for the statement one (block of statements).
-	 *
-	 * Gated on trivia mode (the ctor arity differs in plain mode) and, at runtime, on
-	 * `opt.dropSingleStmtBraces`: the same knob already owns both if/else directions, and try/catch is
-	 * the third pair of directions of that ONE policy. Returns `fieldAccess` untouched without the meta.
-	 */
-	private function tryBraceSymmetryWrap(child: ShapeNode, fieldAccess: Expr): Expr {
-		final args: Null<Array<String>> = child.fmtReadStringArgs('tryBraceSymmetry');
-		if (args == null || !_ctx.trivia) return fieldAccess;
-		if (args.length < 2)
-			Context.fatalError(
-				'WriterLowering: @:fmt(tryBraceSymmetry) expects at least 2 string args (catchesField, blockCtor'
-				+ ', [stmtCtor]), got ${args.length}',
-				Context.currentPos()
-			);
-		final catchesAccess: Expr = { expr: EField(macro value, args[0]), pos: Context.currentPos() };
-		final blockCtor: String = args[1];
-		final liftExpr: Expr = blockElemLift(child.annotations[AnnotationKeys.BASE_REF], blockCtor, args[2]);
-		final deBrace: Bool = child.fmtHasFlag('tryDeBrace');
-		return macro {
-			var _tbs = $fieldAccess;
-			_tbs = cast anyparse.format.SingleStmtBraces.trySymmetryBody(
-				_tbs, $catchesAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $v{blockCtor}, $v{deBrace},
-				$liftExpr
-			);
-			_tbs;
-		};
-	}
-
-	/**
-	 * The catches-Star half of `tryBraceSymmetryWrap`:
-	 * `@:fmt(tryCatchBraceSymmetry('<bodyField>', '<blockCtor>', '<stmtCtor>'))` on the `catches` Star
-	 * substitutes the ARRAY with one whose clause bodies carry the same group verdict the try body got.
-	 *
-	 * The two metas live on sibling fields of the SAME struct on purpose: only the parent can see both
-	 * halves of the group, so neither an opt-flag frame (`_ssbSuppress`) nor a probe from inside a
-	 * clause writer is needed — a catch clause's own writer has no way to reach the try body.
-	 */
-	private function tryCatchesSymmetryWrap(starNode: ShapeNode, fieldAccess: Expr, elemRefName: String): Expr {
-		final args: Null<Array<String>> = starNode.fmtReadStringArgs('tryCatchBraceSymmetry');
-		if (args == null || !_ctx.trivia) return fieldAccess;
-		if (args.length < 2)
-			Context.fatalError(
-				'WriterLowering: @:fmt(tryCatchBraceSymmetry) expects at least 2 string args (bodyField, blockCtor'
-				+ ', [stmtCtor]), got ${args.length}',
-				Context.currentPos()
-			);
-		final bodyAccess: Expr = { expr: EField(macro value, args[0]), pos: Context.currentPos() };
-		final blockCtor: String = args[1];
-		final liftExpr: Expr = blockElemLift(seqFieldRefTarget(elemRefName, args[0]), blockCtor, args[2]);
-		final deBrace: Bool = starNode.fmtHasFlag('tryDeBrace');
-		return macro {
-			var _tcs = $fieldAccess;
-			_tcs = cast anyparse.format.SingleStmtBraces.trySymmetryCatches(
-				_tcs, $bodyAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, $v{blockCtor}, $v{deBrace},
-				$liftExpr
-			);
-			_tcs;
-		};
+		return wrapElseChainSuppress(_braceSym, e, child, refName, elseChainSuppressExpr);
 	}
 
 	/** `AstPredsT.<name>(<args>)` — trivia-family predicate call for the static trivia emit helpers. */

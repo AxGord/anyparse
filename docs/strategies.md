@@ -198,7 +198,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 
 | module | inventory flags it names |
 |---|---|
-| `WriterLowering` | 121 |
+| `WriterLowering` | 117 |
 | `WriterTriviaStarDispatch` | 43 |
 | `WriterKwRefLowering` | 31 |
 | `WriterCtorBlankLowering` | 17 |
@@ -208,10 +208,10 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterPolicyLowering` | 10 |
 | `TriviaPairSlots` | 9 |
 | `TriviaPairAltCtor` | 8 |
+| `WriterBraceSymmetryLowering` | 6 |
 | `WriterBodyPolicyLowering` | 3 |
 | `WriterCodegen` | 2 |
 | `WriterBlankLowering` | 2 |
-| `WriterBraceSymmetryLowering` | 2 |
 | `WriterCondWrapLowering` | 2 |
 | `WriterLoweringSupport` | 2 |
 | `WriterTriviaSlotLowering` | 2 |
@@ -225,7 +225,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 Read the shape of it, not just the numbers. The counts sum to far more than 212 because a
 flag is named wherever it is asked, and several are asked in two emitters.
 
-`WriterLowering` still answers 121 of 212, and that number is not a per-flag split waiting
+`WriterLowering` still answers 117 of 212, and that number is not a per-flag split waiting
 to finish. The writer lowering is organised by grammar SHAPE — Star, Ref, Terminal, Alt
 branch, Pratt — and a flag is a branch INSIDE one of those emitters, not a unit of its own,
 so splitting by flag would mean rewriting the emitters. What the six `Writer*Lowering`
@@ -234,18 +234,39 @@ motion: each is one region of that module's call graph moved whole, with the fla
 emitters happened to ask travelling along. Reading a family's row therefore tells you how
 `@:fmt`-dense that shape is, not that the flag belongs to it.
 
-The four newest rows — `WriterRefLeadLowering`, `WriterCondWrapLowering`,
-`WriterTriviaSlotLowering`, `WriterBraceSymmetryLowering`, plus a fifth,
-`WriterStarPadLowering`, that names no inventory flag at all and therefore has no row —
-are a split along a DIFFERENT axis: not "which shape family is this member in" but "what
-state does this member read". A census of `WriterLowering`'s 127 members found 25 that
-touch none of `_shape` / `_formatInfo` / `_ctx` / the six ctx bundles, directly or through
-a callee — pure functions of their arguments, for which `private function` →
-`private static function` in a sibling module costs no call-site change at all (the
-wildcard import plus the class-level `@:access` reaches them unqualified). 24 of the 25
-moved. That axis is orthogonal to the shape families and stops much sooner: the remaining
-102 members read build state, and moving one of those is a signature change at every call
-site.
+`WriterRefLeadLowering`, `WriterCondWrapLowering`, `WriterTriviaSlotLowering`,
+`WriterBraceSymmetryLowering`, plus a fifth, `WriterStarPadLowering`, that names no
+inventory flag at all and therefore has no row — are a split along a DIFFERENT axis: not
+"which shape family is this member in" but "what state does this member read". A census of
+`WriterLowering`'s 127 members found 25 that touch none of `_shape` / `_formatInfo` /
+`_ctx` / the six ctx bundles, directly or through a callee — pure functions of their
+arguments, for which `private function` → `private static function` in a sibling module
+costs no call-site change at all (the wildcard import plus the class-level `@:access`
+reaches them unqualified). 24 of the 25 moved. That axis is orthogonal to the shape
+families and stops much sooner: the remaining 102 members read build state, and moving one
+of those is a signature change at every call site.
+
+Which is why the axis that came NEXT is neither of those two, and why
+`WriterBraceSymmetryLowering` is the one row that grew rather than appearing. Re-run the
+census over the 121 members left, but record for each what SLICE of the instance it needs
+rather than a yes/no: 50 members / 2482 lines reach the instance only through `_ctx.trivia`
+and `_shape.rules` — one `Bool` and one `Map`. That is not a decomposition on its own (it
+is "everything reachable from `isTriviaBearing`", one call graph, no name), but it prices
+every candidate family inside it, and the prices differ by a factor of twenty-five: the
+trivia-paired NAMING vocabulary (`isTriviaBearing`, `writeFnFor`, `ruleCtorPath`,
+`ruleValueCT`) is 42 lines behind 33 inbound call sites, the ctor-pattern lookups 218 lines
+behind 25, and the brace-symmetry family 382 lines behind SEVEN. Cheapest-to-free and
+cheapest-to-move are opposite ends of the same graph — a hub frees the most members and
+costs the most call sites — so the state census names candidates and only the inbound count
+picks between them.
+
+So the brace-symmetry family moved, and this is the shape a member that reads build state
+takes when it does: `private static`, with a `BraceSymmetryCtx` bundle as its first
+argument, built once in `WriterLowering`'s constructor exactly like `_pratt` / `_kwRef` /
+`_bodyPolicy` / `_arrowValueIf`. The bundle carries `shape`, `ctx` and the three shape-name
+helpers whose other callers stayed behind. Nothing about the emitted writer changes: the
+macro package is `#if macro`, so none of it reaches a JS target's output and a build of the
+moved tree is byte-identical to a build of the unmoved one.
 
 The `TriviaPair*` and `WriterOptFanout` rows are a THIRD axis, and they are there because
 the second one had nothing to say about them. `TriviaTypeSynth` (95 members) and
