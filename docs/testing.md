@@ -615,6 +615,138 @@ wrong. All 25 pre-existing FORCE arms render byte-identically under the new logi
 **6.04 s at 65** — so the eleven new arms cost about 66 s of a per-wave run and nothing at all
 per slice. `--all --fast` is still the per-wave gate and one arm the per-edit one.
 
+#### The ten named candidates: seven owners, three identities, five empty (S107)
+
+S105 handed this slice ten one-line FORCE candidates in `anyparse.format.SingleStmtBraces` and
+four gates (T631) that nothing in the suite exercises. All ten rendered as FORCE with no
+`find`/`replace` fallback, which is the balancing renderer S105 built doing its job. Ten more
+cuts were added along the way — the opposite direction of four predicates, plus a neighbouring
+module — for **19 whole-suite runs** in all (a twentieth did not build, below), each against
+`b2ce7401`; blast counts below exclude the oracle-driven CLI e2e
+family the same way S105 excluded it (`FixVerifier*E2ETest`, `ExplicitLocalTypeOracle*`,
+`ExplicitTypeReturnOracleTest`, `CompilerOracleE2ETest`, `LintPerFileConfigCliTest`,
+`MoveExtractDocCensusTest`), identified as before by turning up under unrelated cuts. There is a
+cheaper tell than the five-classes-across-nine-runs argument S105 had to make, though not a
+free one: of the **25** such rows — spread over **9 of the 19 runs**, the same fraction S105
+saw — **21 are an `ERROR` verdict** — a compiler-oracle server that died or never started, not an assertion — and only 4 a
+`FAILURE`. The sharpest single row is
+`ExplicitTypeReturnOracleTest#testCliFixAnnotatesReturnTypes`, which appears once as `ERROR E`
+and once as `FAILURE F..` under two cuts that share no mechanism.
+
+| cut | blast (flake family excluded) | outcome |
+|---|---|---|
+| `SingleStmtBraces#unwrapDoBody` → `block` | 2, one class | `M-SSB-DOBODY-KEEP` |
+| `SingleStmtBraces#trySubstBody` → `body` | 7 over 2 classes (6 + 1) | `M-SSB-TRY-SUBST-OFF` |
+| `SingleStmtBraces#tryDeBraced` → `null` | 4, one class | `M-SSB-TRY-DEBRACE-NONE` |
+| `SingleStmtBraces#bareLegalAt` → `false` | 1 | `M-SSB-BARE-ILLEGAL` |
+| `LoopBodyShape#isIfWithElse` → `false` | 3, one class | `M-LOOPIF-NEVER` |
+| `LoopBodyShape#isIfWithElse` → `true` | 2, one class | `M-LOOPIF-ALWAYS` |
+| `SingleStmtBraces#withoutExprTrail` → `null` | 4, one class | not armed — IDENTICAL to `tryDeBraced` |
+| `SingleStmtBraces#singleCleanInner` → `null` | 2, one class | not armed — IDENTICAL to `unwrapDoBody` |
+| `SingleStmtBraces#elseTailDanglingIf` → `false` | 4 over 2 classes | not armed — IDENTICAL to `M-SSB-DANGLING-NONE` |
+| `SingleStmtBraces#tailOperandIndex` → `-1` | 1 | not armed — pins nothing new |
+| `SingleStmtBraces#innerSelfTerminates` → `false` | **50** over 5 classes (39 in one) | not armed — no single owner |
+| `SingleStmtBraces#singleCleanElem` → `null` | **37** over 4 classes (31 in one) | not armed — no single owner |
+| `SingleStmtBraces#symmetryNeedsValueWrap` → `false` | 5 over 2 classes | `M-SSB-VALUE-WRAP-OFF` |
+| `SingleStmtBraces#symmetryNeedsValueWrap` → `true` | **183** over 39 classes | not armed — no single owner |
+| `SingleStmtBraces#containsIf` → `false` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#containsIf` → `true` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#bareLegalAt` → `true` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#tailCatchDanglingIf` → `false` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#fieldTailDanglingIf` → `false` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#needsSymmetryWrap` → `false` | — | BUILD-FAIL, see below |
+
+**The unpinned count moves 34 → 30**, and the four it takes are
+`HxSingleStmtBracesSliceTest#testSuppressFrameDoBodyStillUnwraps` plus all three of
+`HxLoopBodyIfElseSliceTest`. The registry goes **113 → 129 pins and 65 → 72 arms**; the other twelve new pins are in
+`HxTryBraceSymmetrySliceTest` (4), `BraceSymmetrySliceTest` (3) and
+`HxSingleStmtBracesSliceTest` (5 — the value-if pair and the two do-body fixtures), all outside
+the census blast.
+
+**Half the wave's yield came from a module nobody had probed.** `anyparse.format.LoopBodyShape`
+is two members — a doc comment and `isIfWithElse` — and forcing that one predicate BOTH ways
+partitions its test class exactly: `false` takes the three fixtures that assert the break
+happens, `true` takes the two that assert it does not. Neither direction alone owns the class;
+the pair does, with disjoint blasts. The named ten were all in the 894-line neighbour, and the
+biggest single-class yield was next door.
+
+**Two identities, structural rather than coincidental.** `withoutExprTrail` has exactly ONE
+caller (`tryDeBraced`'s final `else`) and `singleCleanInner` exactly one (`unwrapDoBody`), so
+each pair is one cut spelled at two depths — `hxq refs <name> src` is the whole check, and it is
+worth running before declaring a second arm. `elseTailDanglingIf` → `false` is a third: it kills
+the same four fixtures as `M-SSB-DANGLING-NONE` (`tailDanglingIf` → `false`), which says the
+whole suite-visible effect of `tailDanglingIf` flows through the `IfStmt` / `IfExpr` else-field
+route and none of it through the loop, try or meta routes — `tailCatchDanglingIf` and
+`fieldTailDanglingIf` forced to `false` change nothing at all. Unlike S105's kept pair
+(`M-SSB-FRAME-OFF` / `M-SSB-DANGLING-NONE`, two different MODULES), these three are a caller and
+its callee in one file, so a second arm would record no second mechanism; the identity is
+recorded here instead.
+
+**The FORCE renderer's fourth blind spot: an `inline` member.** `needsSymmetryWrap` is
+`private static inline`, and prepending a `return` to a body that already ends in one gives
+`src/anyparse/format/SingleStmtBraces.hx:461: Cannot inline a not final return` — a BUILD-FAIL,
+which `mutation-check.sh` reports as its own verdict rather than as a survival, so it cannot be
+mistaken for a vacuum. The workaround is the one S104 used for the other blind spots: a
+`find`/`replace` that rewrites the body EXPRESSION instead of prepending a statement.
+
+**Cost and cadence at 72.** `--all --fast --jobs 4`: **433 s, 72 killed / 0 survived /
+0 mismatch / 0 error** — **6.01 s per arm**, in line with 5.65 s at 23, 6.12 s at 50 and 6.04 s
+at 65 (the same run at 71 arms, taken minutes earlier, was 422 s / 5.94 s). Seven arms cost about
+42 s of a per-wave run and nothing at all per slice, so the per-wave `--all --fast` cadence holds
+unchanged.
+
+##### T631 — the four gates no fixture notices, settled
+
+- **`deBraceBodyAccess` gate 7 (`elseSiblingKeepsExpr`) — DEAD LOGIC, deleted.** Not "the `||`
+  partner answers for the fixtures we have": the partner answers for every possible input.
+  `chainForcesBraces(thenBody, elseBody, …)` ENDS on
+  `keepsBraces(cur, drop, symmetry, suppress, false, false, false)` where `cur` is the else body
+  itself whenever that body is not an `IfStmt` — byte-identical arguments to gate 7 — and when it
+  IS an `IfStmt` gate 7 is constant `false`, because `keepsBraces` with `isIfThenBody = false`
+  asks `ctor == 'BlockStmt'`. So `$elseSiblingKeepsExpr || $thenChainSuppressExpr` was
+  `$thenChainSuppressExpr` for all inputs. Deleting it removes ten lines and one `keepsBraces`
+  tree-walk per then-body splice; the same predicate still runs inside `chainForcesBraces`.
+- **The `elseFollows` argument — DEAD in the current wiring, KEPT, and S105's stated mechanism
+  was wrong.** S105 read it as "held by the suppress frame's own hard-coded `true`". The frame
+  gates unwraps nested DEEPER in the then-body; the direct then-body's own splice is held by the
+  chain probe, which opens with `keepsBraces(thenBody, …, elseBody != null, …)` — this very
+  condition, one layer down. Where `elseFollows` would turn a de-brace into a keep, that call
+  answers `true`, `siblingKeepsBraces` goes true, and `unwrapStmt` returns at its own gate-7 keep
+  before `elseFollows` is read; where it would not, the two arguments agree. It is kept because
+  removing it deletes a predicate EVALUATION (gate 7's removal did not — the same call still
+  runs), and this module's whole register is fail-closed. The subsumption is now written into the
+  code instead of the guess.
+- **`findThenSiblingAccess`'s `BASE_OPTIONAL != true` exclusion — inert by FIELD ORDER, kept.**
+  The mechanism S105 did not name: the probe is `Array.find`, so it takes the FIRST child
+  carrying `dropSingleStmtBraces`. Four structs carry that flag —
+  `HxIfStmt` (`thenBody`, `elseBody`), `HxForStmt`, `HxWhileStmt`, `HxDoWhileStmt` — and only
+  `HxIfStmt` has two, with the required `thenBody` declared before the `@:optional` `elseBody`.
+  First-match already excludes the optional one. A discriminating fixture therefore needs a
+  grammar whose optional brace-dropping field is declared FIRST, i.e. a second grammar
+  declaration — S66's rule — not a Haxe source.
+- **`buildBlockEndedByteCheck`'s whitespace rewind — unreached by every oracle, kept.**
+  `_prevEndPos` is `ctx.pos` taken immediately after the element and BEFORE `skipWs`, so a
+  whitespace byte at `_prevEndPos - 1` requires the element's OWN rule to have consumed trailing
+  whitespace. With the rewind removed the engine is byte-identical over the fork corpus
+  (`781 pass / 120 fail / 43 skip-parse`, the histogram diffs to zero lines) and over 1 749
+  `src/` + `test/` files, on top of S105's zero unit fixtures. It is the strongest remaining
+  deletion candidate — it is a `while` loop per element on the parser's hot path — but unlike
+  gate 7 there is no expression-level subsumption to point at, and a wrong verdict in parser code
+  corrupts a parse silently.
+
+**The oracle these settlements rest on, and why the corpus alone could not carry them.**
+`singleStatementBraces` is NOT set in the project's own `hxformat.json`, so the corpus sweep and
+`fmt --list` say nothing about this code. The measurement was a purpose-built one: three `cp -R`
+copies of `src/` + `test/` (1 749 files) under a config that turns the knob ON, formatted by the
+base engine and by each cut's engine, then `diff -rq`. That config rewrites **222 of the 1 749**
+— and a control copy with only the `sameLine … fitLine` keys rewrites **0**, so all 222 are the
+knob. Gate 7 deleted, `elseFollows` forced off, and BOTH together each came back **0 differing
+entries**. The same `cp -R` arm over Pony (872 `.hx` under its own `hxformat.json`, which does not
+set the knob) is quoted as a PAIR rather than an absolute: base `0 of 872 rewritten, 3 failed` and
+slice `0 of 872 rewritten, 3 failed`, with `diff -rq` between the two formatted trees at 0
+entries. The `0 rewritten` on both sides is the tree already sitting at the engine's fixed point
+after the parent's sweep, not a claim that the arm exercised anything.
+
 `ANYPARSE_HXFORMAT_FORK` is unset for the run on purpose: the corpus harness is not what an arm measures, and a verdict must not depend on whether a fork path happens to be exported in the caller's shell.
 
 Every worktree the runner created is removed on exit, including on `INT`/`TERM`/`HUP`. A `worktree remove` that itself fails is swallowed so one bad entry cannot strand the rest — which does mean a stuck worktree can survive as a registered entry, so `git worktree list` is worth a glance after a crashed run. The workroot itself is never deleted: its transcripts, build logs and verdict files are the post-mortem. They accumulate in `TMPDIR` across a long campaign, so a campaign that runs for days is worth sweeping by hand.
@@ -839,6 +971,13 @@ contribute ZERO lines to `--list-claims`: their fixture docs describe layouts, n
 role, so nothing in them ever read as a claim. Before assuming a wave will shrink the number,
 grep the census for the classes you are about to pin; a wave that touches none of them cannot
 move it, and reporting a shrink that did not happen is worse than reporting no change.
+
+**Still 294 after S107's sixteen pins, and the pre-check was run first.** Of the four classes it
+annotates, three contribute ZERO lines to `--list-claims`
+(`HxLoopBodyIfElseSliceTest`, `HxTryBraceSymmetrySliceTest`, `HxSingleStmtBracesSliceTest`) and
+the fourth contributes ONE — `BraceSymmetrySliceTest`, and that one line belongs to a fixture S104
+already retired by annotating it. So the wave could not move the number in either direction, and
+the census was checked BEFORE the pins landed rather than explained afterwards.
 
 **Two of the four kinds are not gateable toward a fix, deliberately.** `arm` and
 `control` have an annotation that retires the line. `base` and `vacuity` have

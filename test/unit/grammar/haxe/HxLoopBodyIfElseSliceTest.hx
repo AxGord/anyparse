@@ -126,24 +126,32 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 		'class C {\n\n\tfunction pick(flag:Bool):Void {\n\t\tif (flag)\n\t\t\ttakeFirst();\n\t\telse\n\t\t\ttakeSecond();\n\t}\n\n}';
 
 	/** The reported `for` site: with the knob on, the `else` moves under its own `if`. */
+	@:pin('control')
+	@:killer('M-LOOPIF-NEVER')
 	public function testForIfElseBreaksUnderHeader(): Void {
 		Assert.equals(FOR_IF_ELSE_NEXT, triviaWrite(FOR_IF_ELSE_GLUED, NEXT_ON));
 		Assert.equals(FOR_IF_ELSE_GLUED, triviaWrite(FOR_IF_ELSE_GLUED, NEXT_OFF));
 	}
 
 	/** The reported `while` site: a block-bodied `if`/`else` takes the same break. */
+	@:pin('control')
+	@:killer('M-LOOPIF-NEVER')
 	public function testWhileIfElseBreaksUnderHeader(): Void {
 		Assert.equals(WHILE_IF_ELSE_NEXT, triviaWrite(WHILE_IF_ELSE_GLUED, NEXT_ON));
 		Assert.equals(WHILE_IF_ELSE_GLUED, triviaWrite(WHILE_IF_ELSE_GLUED, NEXT_OFF));
 	}
 
 	/** Already broken: writing the target shape again reproduces it, so one `fmt` pass is a fixed point. */
+	@:pin('control')
+	@:killer('M-LOOPIF-NEVER')
 	public function testBrokenShapeIsIdempotent(): Void {
 		Assert.equals(FOR_IF_ELSE_NEXT, triviaWrite(FOR_IF_ELSE_NEXT, NEXT_ON));
 		Assert.equals(WHILE_IF_ELSE_NEXT, triviaWrite(WHILE_IF_ELSE_NEXT, NEXT_ON));
 	}
 
 	/** The project idiom is the population the gate exists to spare: no `else`, so the body stays on the header line. */
+	@:pin('control')
+	@:killer('M-LOOPIF-ALWAYS')
 	public function testGuardIfWithoutElseStaysGlued(): Void {
 		Assert.equals(FOR_GUARD_STMT, triviaWrite(FOR_GUARD_STMT, NEXT_ON));
 		Assert.equals(FOR_GUARD_STMT, triviaWrite(FOR_GUARD_STMT, NEXT_OFF));
@@ -154,6 +162,8 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	}
 
 	/** A non-`if` loop body and an `if`/`else` outside a loop are both outside the gate. */
+	@:pin('control')
+	@:killer('M-LOOPIF-ALWAYS')
 	public function testNonLoopAndNonIfBodiesUnchanged(): Void {
 		Assert.equals(FOR_PLAIN_BODY, triviaWrite(FOR_PLAIN_BODY, NEXT_ON));
 		Assert.equals(FOR_PLAIN_BODY, triviaWrite(FOR_PLAIN_BODY, NEXT_OFF));
