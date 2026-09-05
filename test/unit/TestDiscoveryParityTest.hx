@@ -87,6 +87,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.DiscoveryOnlyProbeTest',
 		'unit.ExtensionMethodsExtractionTest',
 		'unit.LexicalRegionAgreementTest',
+		'unit.MutationArmsTest',
 		'unit.SpanModeProbe',
 		'unit.TestDiscoveryParityTest',
 		'unit.check.AlwaysNullComparisonTest',
@@ -927,6 +928,13 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		Assert.same([
+			'unit.MutationArmsTest#testADuplicateArmNameIsRefused :: guard :: ',
+			'unit.MutationArmsTest#testANonJsonTableIsOneComplaint :: guard :: ',
+			'unit.MutationArmsTest#testARowDeclaringBothCutsIsRefused :: control :: M-ARM-ROW-OK',
+			'unit.MutationArmsTest#testARowDeclaringNeitherCutIsRefused :: control :: M-ARM-ROW-OK,M-ARM-ANYNAME',
+			'unit.MutationArmsTest#testAWellFormedTableAnswersByName :: control :: M-ARM-ANYNAME',
+			'unit.MutationArmsTest#testAnUndeclaredNameResolvesToNoArm :: control :: M-ARM-ANYNAME',
+			'unit.MutationArmsTest#testRenderNamesTheMemberAndTheCut :: guard :: ',
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
@@ -965,6 +973,44 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase'
 			+ ' :: control :: M-FIRST-LINE-FIT'
 		], TestRegistry.pins(), 'the pin annotations, with their roles and killing arms');
+	}
+
+	/**
+	 * The arm registry reaches the generated registry, by NAME.
+	 *
+	 * Same trade as `REGISTERED_CLASSES` above and no stronger: this is derived
+	 * from the very table `TestDiscovery` validated, so it cannot catch a WRONG
+	 * arm — only a silently vanished or renamed one, which is the failure a
+	 * `@:killer` cannot report because the build would have stopped first. The
+	 * names are pinned rather than the rendered lines: an arm's note is prose, and
+	 * rewording it should not be a test edit.
+	 */
+	public function testTheArmRegistryReachesTheGeneratedRegistry(): Void {
+		Assert.same([
+			'M-ALWAYS-NEXT',
+			'M-ALWAYS-SAME',
+			'M-ARM-ANYNAME',
+			'M-ARM-ROW-OK',
+			'M-BUILDMACRO-TRUE',
+			'M-CUDDLE-OFF',
+			'M-DECLARINGFILES-EMPTY',
+			'M-ELSE-GATE',
+			'M-FANOUT-FIRST',
+			'M-FIRST-LINE-FIT',
+			'M-HASSUBTYPE-FALSE',
+			'M-INHERITS-FALSE',
+			'M-ISSUBTYPE-FALSE',
+			'M-KINDS',
+			'M-LACKSMEMBER-FALSE',
+			'M-NAMEOUTSIDE-TRUE',
+			'M-NO-WIRE',
+			'M-PATHWALK-NULL',
+			'M-RTTI-FALSE',
+			'M-SHADOWEXT-TRUE',
+			'M-SUBOVERRIDE-TRUE',
+			'M-SUPERDECLARES-FALSE',
+			'M-UNRELATED-FALSE'
+		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
 	public function testFixturelessSubclassesAreReportedRatherThanRegistered(): Void {

@@ -16,8 +16,10 @@ package testkit;
  *  - `deadTests()` — fixture-named methods utest will never run.
  *  - `baseClasses()` — `utest.Test` subclasses that carry no fixture.
  *  - `pins()` — every `@:pin`ned fixture with its role and killing arms.
+ *  - `arms()` — every mutation arm `mutation-arms.json` declares, with the
+ *    member it cuts and how.
  *
- * `unit.TestDiscoveryParityTest` pins all five.
+ * `unit.TestDiscoveryParityTest` pins all six.
  */
 @:build(testkit.TestDiscovery.build())
 final class TestRegistry {}
