@@ -57,6 +57,8 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-TRY-CATCHES-SYM-OFF')
 	public inline function testOnlyTheLastCatchKeepsItsTerminator(): Void {
 		// KEY safety gate: Haxe rejects a `;` in front of `catch` (`try p(); catch (e) q();` is
 		// "Expected }"), so every body but the last renders with its `@:trailOpt(';')` slot cleared.
@@ -120,6 +122,8 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-TRY-BODY-SYM-OFF')
 	public inline function testValueTryBracesTheBareBody(): Void {
 		// The value forms are wrap-only, exactly as `valueBraceSymmetry` leaves a value-`if`: a
 		// de-braced value body would need a terminator only the enclosing statement can supply.

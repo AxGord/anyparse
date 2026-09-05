@@ -200,7 +200,6 @@ final class ProseClaimCensusTest extends Test {
 		'unit.cli.ResolutionScopeCliTest#testSymlinkedSpellingOfTheSameTreeStillDedups :: base',
 		'unit.core.BodyGroupPrefixChargeConsumerTest#testRestStackAlsoDefersAnInlineNestedBody :: control',
 		'unit.format.BraceSymmetrySliceTest#testTheSameBlockOutsideAMacroIsStillDeBraced :: control',
-		'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control',
 		'unit.format.WrapFlatSourceFixedPointTest#testMultiArgFillPacksACommittedBodyOnPassTwo :: control,base',
 		'unit.format.WrapProbeRestAwarenessSliceTest#testArrowRestAwareProbeKeepsItsCtor :: control,base',
 		'unit.format.WrapProbeRestAwarenessSliceTest#testPlainProbeKeepsItsCtor :: control,base',

@@ -85,6 +85,8 @@ final class HxConditionalExprFitSliceTest extends Test {
 	}
 
 	/** The reported shape: an over-wide glued region drops every directive onto its own line. */
+	@:pin('control')
+	@:killer('M-NEWLINE-SIGNALS-NONE')
 	public function testOverwideGluedBreaksAtDirectiveSeams(): Void {
 		Assert.equals(LADDER, triviaWrite(GLUED, FIT_ON));
 	}

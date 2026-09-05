@@ -42,6 +42,12 @@ class HxBlankAroundMultilineMembersTest extends Test {
 		super();
 	}
 
+	/**
+	 * The same measurement at the other seam: the blank lands between a multi-line member and the
+	 * single-line one that follows it.
+	 */
+	@:pin('control')
+	@:killer('M-BLANK-MULTILINE-OFF')
 	public function testBlankAppearsBetweenMultilineAndSingleLine(): Void {
 		final src: String =
 			'class C {\n\tstatic final a:Array<String> = [\n\t\t\'$WIDE\',\n\t\t\'$WIDE\'\n\t];\n\tstatic final b:Int = 1;\n}';
@@ -50,6 +56,16 @@ class HxBlankAroundMultilineMembersTest extends Test {
 		);
 	}
 
+	/**
+	 * The knob's own shape: a member whose source spans lines gains a blank line above it.
+	 *
+	 * The `blankAroundMultilineExprs` splices are what measure it. `M-BLANK-MULTILINE-OFF` wires
+	 * the empty triple whatever the grammar asked for, and this fixture and
+	 * `testBlankAppearsBetweenMultilineAndSingleLine` are the only two the cut takes down
+	 * outside the oracle-driven CLI e2e classes.
+	 */
+	@:pin('control')
+	@:killer('M-BLANK-MULTILINE-OFF')
 	public function testBlankAppearsBeforeAMultilineMember(): Void {
 		final src: String =
 			'class C {\n\tstatic final a:Int = 1;\n\tstatic final b:Array<String> = [\n\t\t\'$WIDE\',\n\t\t\'$WIDE\'\n\t];\n}';
