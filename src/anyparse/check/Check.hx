@@ -424,6 +424,12 @@ typedef CarryingEdit = {
  * three spans it quotes (it passes them to `preservedComments` to decide which comments to
  * hoist), so the declaration is the array it had already built.
  *
+ * LIMIT, the mirror of the one `GroupedFix` records: the declaration is read in
+ * `LintFixDriver.collectFileLintEdits`, which is the SAFE fix loop. `FixVerifier` calls
+ * `Check.fix` directly for a `RiskyFix` check and passes no carry, so a check that is both would
+ * get no carry guard on the verified path. Theoretical today — the one implementor is not
+ * `RiskyFix` — and it is the same shape of gap, one seam over.
+ *
  * CONTRACT, the same one `GroupedFix` carries: a `CarryingFix`'s `Check.fix` MUST be the pure
  * projection of `fixCarrying` (`[for (e in fixCarrying(...)) { span: e.span, text: e.text }]`), so
  * the two views can never disagree about WHICH edits the fix produces — only about what is known
