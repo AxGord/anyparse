@@ -144,6 +144,7 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 	/** A `[ … ]` branch keeps the SOURCE shape: gluing a `]` is `expressionIfWithBrackets`, not this policy. */
 	@:pin('control')
 	@:killer('M-EXPR-ELSE-PLAIN-SAME')
+	@:killer('M-NONCURLY-SAME-DROP')
 	public function testABracketBranchKeepsTheSourceBreak(): Void {
 		Assert.equals(BRACKET, HxWriteFixture.triviaWrite(BRACKET, CFG_NEXT));
 	}

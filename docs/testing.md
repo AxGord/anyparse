@@ -437,6 +437,73 @@ A `SURVIVED` or `MISMATCH` row is evidence about the FIXTURE, not noise to retry
 
 **One caveat on the whole-suite mode, measured.** Twenty-three concurrent full-suite runs at `--jobs 4` put the oracle-driven CLI end-to-end fixtures under load, and they flake there: across two `--all` sweeps of the same tree, 11 failure names appeared in one run and not the other — `unit.check.*OracleE2ETest`, `unit.check.OracleCacheTest`, `unit.cli.LintPerFileConfigCliTest`, `unit.check.NamingCheckMemberFixTest`, `unit.check.MagicNumberCheckTest.testRespectsIgnoreFromDisk`. That they are flakes rather than coupling is not a guess: `M-ARM-ROW-OK` cuts `test/testkit/MutationArms.hx`, a file no check reads, and five of its eleven "extras" in the first sweep were `unit.check.*`. Every VERDICT was stable across both sweeps; it is the `+extra` column that should be read as approximate. `--fast` has neither problem.
 
+#### Which seams an arm can OWN, decided by blast (S104)
+
+`M-CURLY-CTORS-NONE` was the first arm on a `#if macro` module, and S102 read it as
+"52 fixtures suite-wide, only three pinned". Re-measured on `69d11a37`: **50 fixtures, 0
+errors, and 3 of them carry a pin.** The two extra ERRORs S102 saw on `41034926` were the
+oracle-driven CLI e2e flakes described in the caveat above — the 47 unpinned is what
+reproduces, not the 52. Those 47 are the writer seams S83 (`Lowering` → 5 modules), S85
+(`WriterLowering`'s purity half → 5), S87 (`TriviaTypeSynth` / `WriterCodegen` → 4), S91
+(`WriterBraceSymmetryLowering`'s ctx bundle) and S100 (`SameOnBlock`): passing tests whose
+relationship to the seam nothing recorded.
+
+**Pick the seam by MEASUREMENT, never by list.** Thirteen candidate cuts were rendered
+against `HEAD` and run over the WHOLE suite; the blast decided which became an arm. The
+fixture that dies first and alone is the pin; a diffuse blast has said the seam has no
+single owner, and annotating the widest file anyway would put the pin back where the arc
+started.
+
+| candidate cut | blast, whole suite | outcome |
+|---|---|---|
+| `WriterPolicyLowering#sameLineNonCurlyBlockPolicySwitch` | 2 | `M-NONCURLY-SAME-DROP` |
+| `WriterBlankLowering#blankAroundMultilineExprs` | 2 + 5 oracle-e2e flakes | `M-BLANK-MULTILINE-OFF` |
+| `OperatorLoopLowering#buildWordOpRestoreExpr` | 2 | `M-WORDOP-NO-RESTORE` |
+| `WriterBraceSymmetryLowering#tryCatchesSymmetryWrap` | 4 + 1 flake | `M-TRY-CATCHES-SYM-OFF` |
+| `WriterTriviaSlotLowering#collectFollowingNewlineSignals` | 6, all in one class | `M-NEWLINE-SIGNALS-NONE` |
+| `WriterBraceSymmetryLowering#tryBraceSymmetryWrap` | 7 over 2 classes | `M-TRY-BODY-SYM-OFF` |
+| `WriterOptFanout#setSuppressCallRestProbeField` | 17, half oracle-e2e | not armed — no single owner |
+| `WriterBraceSymmetryLowering#findThenSiblingAccess` | 21 over 5 classes | not armed — no single owner |
+| `WriterBraceSymmetryLowering#deBraceBodyAccess` | 51 over 4 classes | not armed — no single owner |
+| `StarLoopLowering#buildBlockEndedByteCheck` | 119 | not armed — no single owner |
+
+Two of the six new arms get the NARROWEST reading — `KILLED` with no `+extra`, killing
+exactly their own pins: `M-NONCURLY-SAME-DROP` (2 pins, 2 fixtures) and
+`M-BLANK-MULTILINE-OFF` (2 pins, 2 fixtures). `M-WORDOP-NO-RESTORE` has it under `--fast`
+and one collateral fixture suite-wide. The other three get the `+extra` reading the table
+above calls EXPECTED for shared code: 5, 3 and 5 collateral fixtures, every one of them in
+a class the arm's own family owns.
+
+**A cut whose tree does not compile is not evidence about any fixture.** Three more
+candidates came back `BUILD-FAIL` and were dropped rather than re-aimed:
+`WriterCondWrapLowering#detectCondWrapSpan` trips the macro's own guard
+(`@:fmt(condWrap) requires @:trail on the field`), and `TriviaPairAltCtor#isTernaryTrailBranch`
+/ `#isPostfixOpSpaceBranch` both fail with `Lowering.hx: Too many arguments` — those
+predicates decide the SYNTHESISED ctor's arity, so forcing one false desynchronises the
+parse lowering from the paired type rather than removing a behaviour.
+
+**A third shape the FORCE renderer cannot cut**, beside a trailing `// noqa` on the
+signature line (S98) and an `inline` member (S96): a member whose RETURN TYPE opens a brace
+of its own — `Null<{ … }>`, an inline anonymous structure. `mutation-arm.sh` takes the
+header as "every line up to and including the one ending in `{`", which lands on the
+type's brace, and the spliced `return` then sits inside the type. Both such candidates here
+(`detectCondWrapSpan`, `blankAroundMultilineExprs`) needed a `find`/`replace` cut; the
+second is in the registry as one.
+
+**Cost at 50 arms, 16 cores** — S96 measured 23 arms at 130 s:
+
+| Run | Wall | Verdicts |
+|---|---|---|
+| `--all --fast`, `--jobs 4` (default) | 306 s | 50 killed |
+| `--all --fast`, `--jobs 8` | 220 s | 50 killed |
+
+**The cadence holds.** Per-arm cost is flat — 5.65 s at 23 arms, 6.12 s at 50 — because a
+track is one `haxe test-js.hxml` plus a sub-second filtered run, so `--all --fast` grows
+linearly in the arm count and not at all in the suite's size. Five minutes is still a
+per-wave number and still not a per-slice one. Doubling `--jobs` is the only lever, and it
+is worth less than it looks: 4 → 8 buys **1.39×**, not 2× (306 s → 220 s, against 156 s if
+the builds were independent) — the Haxe builds contend with each other on this machine.
+
 `ANYPARSE_HXFORMAT_FORK` is unset for the run on purpose: the corpus harness is not what an arm measures, and a verdict must not depend on whether a fork path happens to be exported in the caller's shell.
 
 Every worktree the runner created is removed on exit, including on `INT`/`TERM`/`HUP`. A `worktree remove` that itself fails is swallowed so one bad entry cannot strand the rest — which does mean a stuck worktree can survive as a registered entry, so `git worktree list` is worth a glance after a crashed run. The workroot itself is never deleted: its transcripts, build logs and verdict files are the post-mortem. They accumulate in `TMPDIR` across a long campaign, so a campaign that runs for days is worth sweeping by hand.
@@ -645,6 +712,15 @@ seven recorded, none listed. The `unrecorded` half is not waiting for the
 annotation pass — it is what makes a slice that annotates as it goes cost nothing
 here.
 
+**294 at `69d11a37`, and the one that left did so the right way.** S104 armed
+`unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced`, whose doc
+already called it "the KILLER control for the pin above" — a `control` claim in prose that
+now carries `@:pin('control')` + `@:killer('M-TRY-BODY-SYM-OFF')`, so the predicate stops
+listing it and the baseline loses a line. That is the only exit a `control` line has, and
+the only reason this number may move DOWN. Eight new pins landed in that slice; the other
+seven were on fixtures that had claimed nothing, so they cost the baseline nothing — which
+is the property the paragraph above predicted and the first time it has been paid.
+
 **Two of the four kinds are not gateable toward a fix, deliberately.** `arm` and
 `control` have an annotation that retires the line. `base` and `vacuity` have
 none, and inventing one would be prose retyped as metadata — the exact failure
@@ -655,7 +731,8 @@ base, 12 vacuity, and 71 fixtures whose ONLY reason for being listed is one of
 them — are a register of what is still prose, not a queue.
 
 **The gate is a ratchet, and it is the suite rather than the build.**
-`unit.ProseClaimCensusTest.BASELINE` holds the 295 lines; the fixture compares
+`unit.ProseClaimCensusTest.BASELINE` holds the baseline — 295 lines at `7331535c`,
+294 now; the fixture compares
 them against `TestRegistry.claims()`. A new claim without an annotation fails
 the suite, and so does an annotated one still listed. It is a list and not a
 count on purpose (S70: a scalar merged silently wrong across two branches).

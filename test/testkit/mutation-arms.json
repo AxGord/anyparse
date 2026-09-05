@@ -377,6 +377,49 @@
 			"find": "final resolved: Null<ResolvedType> = _index.refs.resolveTypeRef(path, fi);",
 			"replace": "final named: Array<ResolvedType> = _index.refs.resolvedDeclsNamed(SourceText.lastSegment(path));\n\t\tfinal resolved: Null<ResolvedType> = named.length == 1 ? named[0] : null;",
 			"note": "the plain-class proof goes back to a scope-blind global uniqueness count, so a type the candidate file can neither import nor reach by package frees the candidate"
+		},
+		{
+			"name": "M-TRY-BODY-SYM-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "tryBraceSymmetryWrap",
+			"force": "fieldAccess",
+			"note": "the try BODY stops going through `SingleStmtBraces.trySymmetryBody`, so a bare body opposite a braced catch keeps its asymmetry instead of gaining a block of its own"
+		},
+		{
+			"name": "M-TRY-CATCHES-SYM-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "tryCatchesSymmetryWrap",
+			"force": "fieldAccess",
+			"note": "the catch LIST stops going through `SingleStmtBraces.trySymmetryCatches`, so a braced group never de-braces and every catch but the last keeps the `;` Haxe rejects in front of `catch`"
+		},
+		{
+			"name": "M-NONCURLY-SAME-DROP",
+			"type": "anyparse.macro.WriterPolicyLowering",
+			"method": "sameLineNonCurlyBlockPolicySwitch",
+			"force": "sameLinePolicySwitch(optFlag, keepExpr)",
+			"note": "a `[ … ]` block ctor separator falls back to the curly switch, where `SameOnBlock` matches no case and lands on the default space - so a bracket branch loses the source break the policy promised it"
+		},
+		{
+			"name": "M-NEWLINE-SIGNALS-NONE",
+			"type": "anyparse.macro.WriterTriviaSlotLowering",
+			"method": "collectFollowingNewlineSignals",
+			"force": "[]",
+			"note": "no downstream field contributes a captured-newline signal, so the conditional-expression seam has nothing to read and the source ladder collapses onto one line"
+		},
+		{
+			"name": "M-WORDOP-NO-RESTORE",
+			"type": "anyparse.macro.OperatorLoopLowering",
+			"method": "buildWordOpRestoreExpr",
+			"force": "macro {}",
+			"note": "the operator loop stops rewinding to `_preWsPos` when the token that ended it is a WORD operator, so the trivia the loop consumed is lost and a conditional region after a metadata block no longer parses"
+		},
+		{
+			"name": "M-BLANK-MULTILINE-OFF",
+			"type": "anyparse.macro.WriterBlankLowering",
+			"method": "blankAroundMultilineExprs",
+			"find": "if (optField == null) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
+			"replace": "if (true) return { markExpr: macro {}, seenExpr: macro {}, applyExpr: macro {} };",
+			"note": "the knob wires empty mark/seen/apply splices whatever the grammar asked for, so nothing measures a multiline member and no blank is inserted around one"
 		}
 	]
 }

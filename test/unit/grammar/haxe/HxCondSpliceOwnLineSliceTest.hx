@@ -83,6 +83,8 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	 * `#if debug ... #end` and then more statements. Swallowing the region
 	 * as a splice tail makes the whole function body fail on `h();`.
 	 */
+	@:pin('control')
+	@:killer('M-WORDOP-NO-RESTORE')
 	public function testOwnLineStatementConditionalAfterMetaBlockStaysStructured(): Void {
 		final body: Array<HxStatement> = parseBody(
 			'class C { function f() {\n\t\t@:privateAccess {\n\t\t\tg();\n\t\t}\n'
