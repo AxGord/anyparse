@@ -14,7 +14,7 @@ import utest.Assert;
  * --write` rewrites the file and a branch that was never parsed would be
  * DELETED from it. Every test here therefore pins BOTH branches.
  *
- * Three mechanisms:
+ * Four mechanisms:
  *
  *  - `HxDecl.CondSharedBodyDecl` / `HxCondSharedBodyDecl` -- parallel
  *    TYPE-DECL headers, each opening the body, members shared after
@@ -24,9 +24,12 @@ import utest.Assert;
  *  - `HxStatement.CondSpliceBlockClose` -- a region that CLOSES its
  *    enclosing block and re-opens a continuation, `}` shared after
  *    `#end`.
+ *  - `HxStatement.CondSpliceBlockTail` -- a region that CLOSES its
+ *    enclosing block and then opens AND closes a block of its own, all
+ *    before `#end`. Raw head, structural body.
  *
- * Plus a regression guard for the opener/closer region PAIR, which looks
- * like a block-opening region but must stay two `CondSpliceStmt`s.
+ * Plus a regression guard for the opener/closer region PAIR: the opener
+ * looks like a block-opening region but must stay a `CondSpliceStmt`.
  */
 @:nullSafety(Strict)
 class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
@@ -162,19 +165,108 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 	 * lives in a SECOND region, also ends on `{`. Consuming a `}` after
 	 * its shared statements would steal the enclosing function's closer.
 	 * The `#else` requirement in `HxCondBlockOpenRaw` keeps
-	 * `CondSpliceBlockOpen` off it, so the file stays two
-	 * `CondSpliceStmt`s exactly as before this slice.
+	 * `CondSpliceBlockOpen` off it, so the OPENER stays a `CondSpliceStmt`
+	 * that binds the shared `g();` as its tail. The CLOSER region is a
+	 * `CondSpliceBlockTail` since S115 - it closes the `try` and carries a
+	 * block of its own - and the `return` after `#end` is a sibling
+	 * statement, no longer swallowed as a tail.
 	 */
-	public function testOpenerCloserPairStaysCondSpliceStmt(): Void {
+	public function testOpenerCloserPairKeepsOpenerACondSpliceStmt(): Void {
 		final body: Array<HxStatement> = parseBody(
 			'class C { function f():Void { #if display try { #end g(); #if display } catch (_:Dynamic) { } #end return; } }'
 		);
-		Assert.equals(2, body.length);
-		for (stmt in body) switch stmt {
+		Assert.equals(3, body.length);
+		switch body[0] {
 			case CondSpliceStmt(_):
 				Assert.pass();
 			case null, _:
-				Assert.fail('expected CondSpliceStmt, got $stmt');
+				Assert.fail('expected CondSpliceStmt for the opener, got ${body[0]}');
+		}
+		switch body[1] {
+			case CondSpliceBlockTail(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected CondSpliceBlockTail for the closer, got ${body[1]}');
+		}
+		switch body[2] {
+			case VoidReturnStmt:
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected VoidReturnStmt after the region, got ${body[2]}');
+		}
+	}
+
+	/**
+	 * THE USER-REPORTED DEFECT (`pony/magic/builder/ChainBuilder.hx:72`,
+	 * asked for twice). The closing region's catch body is EMPTY and written
+	 * over two lines; an unguarded `} catch (_: Dynamic) {\n}` has always
+	 * collapsed to `{}`, but inside a region the writer had no tree to
+	 * collapse. `CondSpliceBlockTail` gives it one - and leaves the HEAD raw,
+	 * so the source's own `_:Dynamic` spelling survives the rewrite while the
+	 * body is formatted like any other block.
+	 */
+	public function testBlockTailRegionCollapsesEmptyCatchBody(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\t#if display\n\t\ttry {\n\t\t#end\n\t\tg();\n'
+			+ '\t\t#if display\n\t\t} catch (_:Dynamic) {\n\t\t}\n\t\t#end\n\t\treturn;\n\t}\n}';
+		final out: String = triviaWrite(src);
+		Assert.isTrue(out.indexOf('\t\t#if display\n\t\t} catch (_:Dynamic) {}\n\t\t#end\n') >= 0, 'collapsed catch tail, got:\n$out');
+		Assert.equals(-1, out.indexOf('} catch (_:Dynamic) {\n\t\t}'));
+	}
+
+	/**
+	 * A NON-empty block-tail body is a real statement list, so it round-trips
+	 * byte for byte the way any other block does - the collapse above is the
+	 * block writer's ordinary empty-body answer, not a special case.
+	 */
+	public function testBlockTailRegionRoundTripsNonEmptyBody(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\t#if display\n\t\ttry {\n\t\t#end\n\t\tg();\n'
+			+ '\t\t#if display\n\t\t} catch (e:Dynamic) {\n\t\t\ttrace(e);\n\t\t\th();\n\t\t}\n\t\t#end\n\t\treturn;\n\t}\n}';
+		Assert.equals(src, triviaWrite(src));
+	}
+
+	/**
+	 * The split the ctor makes: the unbalanced HEAD (the `}` that closes a
+	 * block opened in ANOTHER region, plus the catch clause glued to it)
+	 * stays raw bytes, and everything from its `{` on is a real node the
+	 * writer formats.
+	 */
+	public function testBlockTailRegionKeepsHeadRawAndBodyStructural(): Void {
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f():Void { #if display try { #end g(); #if display } catch (_:Dynamic) { trace(1); h(); } #end return; } }'
+		);
+		switch body[1] {
+			case CondSpliceBlockTail(inner):
+				Assert.isTrue((inner.raw: String).indexOf('} catch (_:Dynamic)') >= 0, 'raw head verbatim, got ${inner.raw}');
+				Assert.equals(-1, (inner.raw: String).indexOf('{'));
+				Assert.equals('#end', (inner.endKw: String));
+				switch inner.body {
+					case BlockStmt(stmts):
+						Assert.equals(2, stmts.length);
+					case null, _:
+						Assert.fail('expected BlockStmt body, got ${inner.body}');
+				}
+			case null, _:
+				Assert.fail('expected CondSpliceBlockTail, got ${body[1]}');
+		}
+	}
+
+	/**
+	 * DISJOINTNESS -- `pony/tests/AsyncTests.hx:63`. A closing region that
+	 * opens no block of its own reaches `CondSpliceBlockClose` exactly as
+	 * before: `HxCondBlockTailRaw` needs a `{` after the leading `}` and
+	 * finds none, so the new ctor fail-rewinds rather than mis-binding the
+	 * `#end`.
+	 */
+	public function testCloseRegionWithoutOwnBlockStaysCondSpliceBlockClose(): Void {
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f():Void { #if cs pony.cs.Synchro.lock(isRead, function() { #end a(); #if cs }); #end } }'
+		);
+		Assert.equals(2, body.length);
+		switch body[1] {
+			case CondSpliceBlockClose(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected CondSpliceBlockClose, got ${body[1]}');
 		}
 	}
 
