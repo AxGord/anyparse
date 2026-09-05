@@ -60,6 +60,43 @@
 			"note": "every type reads as carrying a build macro, so static-constant stops promoting a field a macro cannot have written"
 		},
 		{
+			"name": "M-CLAIM-ALL-RECORDED",
+			"type": "testkit.ProseClaims",
+			"method": "records",
+			"force": "true",
+			"note": "every prose claim reads as already recorded by an annotation, so the census empties and the ratchet has nothing to compare"
+		},
+		{
+			"name": "M-CLAIM-CODE-BLIND",
+			"type": "testkit.ProseClaims",
+			"method": "withoutCodeSenses",
+			"find": "return without(text, CODE_SENSES);",
+			"replace": "return text;",
+			"note": "the code senses of `control` stay in the text, so a rule's doc about control flow reads as a fixture claiming to be a control"
+		},
+		{
+			"name": "M-CLAIM-NEG-BLIND",
+			"type": "testkit.ProseClaims",
+			"method": "withoutNegatedArm",
+			"find": "return without(text, NEGATED_ARM);",
+			"replace": "return text;",
+			"note": "`NOT killed by` stays in the text, so the one fixture that says it has no arm reads as claiming one"
+		},
+		{
+			"name": "M-CLAIM-NOKINDS",
+			"type": "testkit.ProseClaims",
+			"method": "kindsOf",
+			"force": "[]",
+			"note": "no doc comment claims anything, so the census is empty and every prose convention reads as already annotated"
+		},
+		{
+			"name": "M-CLAIM-RAW-DOC",
+			"type": "testkit.ProseClaims",
+			"method": "normalize",
+			"force": "doc ?? ''",
+			"note": "the doc keeps its gutter and line breaks, so a claim wrapped across two lines is invisible — the failure mode of a line-oriented search"
+		},
+		{
 			"name": "M-CUDDLE-OFF",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "shapeComprehensionCuddledOpen",

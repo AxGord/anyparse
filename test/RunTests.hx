@@ -142,6 +142,8 @@ class RunTests {
 			TestRegistry.pins();
 		else if (args.contains('--list-arms'))
 			TestRegistry.arms();
+		else if (args.contains('--list-claims'))
+			TestRegistry.claims();
 		else
 			null;
 		if (lines == null) return false;

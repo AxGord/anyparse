@@ -538,9 +538,9 @@ may ever name — a registration written for it would delete the only standing
 evidence that discovery, not a list, is what runs it.
 
 **Machine-checkable test metadata.** This campaign writes rich claims in
-test doc comments — "green at base by construction" (41 occurrences in
-`test/unit`), "vacuous" (54), "by construction" (53), "killed by" (9) — and
-nothing checks any of them. `@:pin('<role>')` names what a fixture is FOR and
+test doc comments — an arm that must break the fixture, a sibling it is the
+control for, whether it was red at the base commit, whether an assertion could
+pass vacuously — and until the census below, nothing checked any of them. `@:pin('<role>')` names what a fixture is FOR and
 `@:killer('<arm>')` names the mutation arm that must break it; `TestDiscovery`
 refuses to build a `@:pin('control')` that names no arm, so the reviewer's
 catch becomes a compile error.
@@ -555,8 +555,144 @@ registry slice brought it to **39 pins across 19 classes naming 23 arms**
 is prose retyped as metadata" — is what the arm registry answers: every arm
 name now resolves to a declared record the build checks and one command runs
 (see "Declared arms" above). What is still NOT rolled out is the metadata on
-the rest of the tree: 39 pins against ~14 000 fixtures, and the doc-comment
-conventions those counts above measure remain unchecked prose everywhere else.
+the rest of the tree — 46 pins against 14 047 fixtures — and the section below
+counts exactly what that leaves as prose.
+
+### The prose census: 295 fixtures claim something no annotation records
+
+S96 stated its own residue in one sentence — 39 pins against 14 039 fixtures,
+with the doc-comment conventions the metadata was meant to replace still
+unchecked prose everywhere else. That sentence carried four counts
+("green at base by construction" 41, "vacuous" 54, "by construction" 53,
+"killed by" 9) and **none of the four reproduces**, under any of the four
+instruments tried (see "Controlling the instrument" below). They are gone; what
+follows was measured.
+
+**The predicate.** `testkit.ProseClaims.kindsOf` reads ONE fixture's doc comment,
+normalized to a single line (gutter stripped, line breaks closed up), and
+answers which of four claim kinds it makes:
+
+| kind | what the prose claims | what records it |
+|---|---|---|
+| `arm` | a mutation that must break this fixture — "Killed by arm M3" | `@:killer('<arm>')` |
+| `control` | this fixture is the control for a sibling | `@:pin('control')` |
+| `base` | it was RED / green at the base commit | *nothing* |
+| `vacuity` | its assertions were audited for passing trivially | *nothing* |
+
+`testkit.TestDiscovery` asks that of every fixture it discovers, drops the kinds
+an annotation on that fixture already records, and emits the rest as
+`TestRegistry.claims()` — one line per fixture, `<class>#<method> :: <kinds>`.
+
+**What it refuses, and what it lets through.** A gate that counted phrases would
+be noise, so two exclusions are load-bearing and each is measured:
+
+- **the code senses of `control`.** A rule's doc talks about control flow, a
+  control-exit node, a control head, or quotes the role name in backticks. The
+  bare word flags **214** fixtures; blanking those senses first leaves **196**,
+  and all 18 it drops are genuinely about code. A 62-fixture hand audit of what
+  survives (40 sampled from the anchored form, plus the 22 the looser form adds)
+  found **one** false positive, `control-exit`, which is now on the list.
+- **the denials.** "NOT killed by any arm in this slice, and that is what it is
+  here to say" is a fixture stating it has NO arm. One fixture spells that, and
+  without the exclusion it would head the list of fixtures that owe one.
+
+It still lets through, by construction, a claim spelled in a `//` comment beside
+the assertions rather than in the doc block, and a claim in a CLASS doc rather
+than a fixture's (38 classes carry one — the subject here is the fixture, and
+there is no per-class annotation to record anything against).
+
+**The census, at `7331535c`:**
+
+| | fixtures |
+|---|---|
+| fixtures discovered | 14 039 |
+| fixtures whose prose claims something | 295 |
+| — a `control` relationship | 196 |
+| — a base-redness | 113 |
+| — an `arm` | 41 |
+| — a vacuity audit | 12 |
+| of those, recorded by a `@:pin` / `@:killer` | **0** |
+
+**The two vocabularies are disjoint, and that is the finding.** Not one of the
+295 carries any pin, and not one of the 39 pinned fixtures spells "killed by" or
+"control" in its prose — the annotation REPLACED the sentence rather than joining
+it. So at `7331535c` "claims something no annotation records" and "claims
+something" are the same set.
+
+They stopped being the same set on the first merge. S97 landed in the same wave
+with seven new `@:pin('control')` fixtures whose docs DO call themselves controls
+(`unit.check.FieldWriteResolutionScopeTest`, `unit.query.ResolutionProjectFilesTest`),
+and the census stayed at **295** across that merge: seven new control claims, all
+seven recorded, none listed. The `unrecorded` half is not waiting for the
+annotation pass — it is what makes a slice that annotates as it goes cost nothing
+here.
+
+**Two of the four kinds are not gateable toward a fix, deliberately.** `arm` and
+`control` have an annotation that retires the line. `base` and `vacuity` have
+none, and inventing one would be prose retyped as metadata — the exact failure
+`TestDiscovery`'s own error message names: neither "was this red at the base
+commit" nor "could this assertion pass trivially" is answerable at build time,
+so a `@:pin('red-at-base')` would assert what nothing checks. Those claims — 113
+base, 12 vacuity, and 71 fixtures whose ONLY reason for being listed is one of
+them — are a register of what is still prose, not a queue.
+
+**The gate is a ratchet, and it is the suite rather than the build.**
+`unit.ProseClaimCensusTest.BASELINE` holds the 295 lines; the fixture compares
+them against `TestRegistry.claims()`. A new claim without an annotation fails
+the suite, and so does an annotated one still listed. It is a list and not a
+count on purpose (S70: a scalar merged silently wrong across two branches).
+
+It is NOT a `Context.error`, unlike every other check in this layer, for one
+reason: the list is GENERATED, so regenerating it needs a working binary — and a
+build error would refuse to produce the binary that prints its own answer. The
+arm table does not have that problem because it is hand-written.
+
+```sh
+haxe test-js.hxml && node bin/test.js --list-claims   # already LC_ALL=C sorted
+```
+
+**Controlling the instrument.** Three independent measurements of the same tree:
+
+- a scratch build macro reading `ClassField.doc` (python analysis downstream),
+- `testkit.ProseClaims` in Haxe, plain string scanning, no regex,
+- `hxq lit '<phrase>' test/unit --include-comments`.
+
+The first two agree **exactly** — 14 047 fixtures, 297 claims, 196 + 2 control
+(the 2 being this slice's own pinned fixtures, which the predicate correctly
+drops as recorded). The third does not, and the reason is population, not
+matching: `lit` counts comment NODES and string LITERALS anywhere in a file,
+where the census counts DOC COMMENTS ON FIXTURES. For "vacuous" that is 60
+hits against 12 fixtures — the other 48 are assertion messages, `//` notes
+inside method bodies, and docs on helpers.
+
+The obvious second explanation — that a line-oriented tool misses a claim
+wrapped across a doc-comment line break — is real but small, and measuring it
+mattered: **4 of 297**, three `base` and one `arm`. `M-CLAIM-RAW-DOC` is the arm
+that removes the line-joining, so those four plus one fixture of this slice's own
+are what it kills.
+
+**The cost of the annotation pass, deferred here on purpose.** S97 owns
+`test/unit/query/**` and `test/unit/check/**` in the same wave, and that is where
+the work is:
+
+| | count |
+|---|---|
+| gateable claims (`arm` ∪ `control`) | 224 |
+| in 90 distinct test classes | |
+| under `unit.query.*` | 95 |
+| under `unit.check.*` | 89 |
+| under `unit.grammar.haxe.*` | 30 |
+| elsewhere (`format`, `cli`, `core`) | 10 |
+
+Every one of the 41 `arm` claims names its arm in a LOCAL vocabulary — `M1`…`M17`,
+`F1`, `F2`, `no-wildcard-repoint`, `no-binds-filter` — none of which
+`mutation-arms.json` declares. So the pass is not "add 224 metas": each `arm`
+claim needs a registry row (type, member, cut) before its `@:killer` will build,
+and each `control` claim needs a `@:killer` too, since a control naming no arm is
+already a build error. The arms are shared across sibling fixtures within a
+class, so the registry grows by roughly one row per distinct cut rather than per
+fixture — order 60–90 new rows against the 28 declared today, and `--all --fast`
+grows with them (130 s for 23 arms, so ~10 minutes at 110).
 
 **The staging arm is gone.** `test/RunTestsLegacy.hx` — the runner as it was,
 758 hand-written lines unmodified except for the class rename, built by

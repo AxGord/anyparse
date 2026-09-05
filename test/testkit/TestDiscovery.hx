@@ -34,7 +34,10 @@ typedef TestCensus = {
 	pins: Array<String>,
 
 	/** Every distinct `@:killer` arm name the tree spells, for the registry cross-check. */
-	killers: Array<String>
+	killers: Array<String>,
+
+	/** Every fixture whose doc-comment prose claims a role no annotation records. */
+	claims: Array<String>
 };
 
 /**
@@ -156,7 +159,8 @@ class TestDiscovery {
 			dead: [],
 			bases: [],
 			pins: [],
-			killers: []
+			killers: [],
+			claims: []
 		};
 		for (module in modules) if (!SELF_MODULES.contains(module)) for (moduleType in Context.getModule(module)) switch moduleType {
 			case TInst(ref, _):
@@ -168,11 +172,13 @@ class TestDiscovery {
 		census.dead.sort(compareStrings);
 		census.bases.sort(compareStrings);
 		census.pins.sort(compareStrings);
+		census.claims.sort(compareStrings);
 		final adds: Array<Expr> = census.registered.map(newCase);
 		final names: Array<String> = census.registered.map(qualified);
 		final dead: Array<String> = census.dead;
 		final bases: Array<String> = census.bases;
 		final pins: Array<String> = census.pins;
+		final claims: Array<String> = census.claims;
 		final arms: Array<String> = table.arms.map(MutationArms.render);
 		final generated: Array<Field> = (macro class Generated {
 			/** Hand every discovered case to `add`, in generation order. */
@@ -192,6 +198,9 @@ class TestDiscovery {
 
 			/** Every declared mutation arm as `<name> :: <type>#<method> :: <cut> :: <note>`. */
 			public static function arms(): Array<String> return $v{arms};
+
+			/** Every fixture whose prose claims a role no annotation records, as `<class>#<method> :: <kinds>`. */
+			public static function claims(): Array<String> return $v{claims};
 		}).fields;
 		return Context.getBuildFields().concat(generated);
 	}
@@ -232,7 +241,7 @@ class TestDiscovery {
 			return;
 		}
 		for (name in statics) census.dead.push('$fq#$name :: static, and utest discovers instance methods only');
-		collectPins(c, census, arms);
+		collectFixtureRecords(c, census, arms);
 		if (fixtureNames(c).length == 0) {
 			census.bases.push(fq);
 			return;
@@ -312,20 +321,31 @@ class TestDiscovery {
 	}
 
 	/**
-	 * Validate and record the `@:pin` / `@:killer` pair on each fixture of `c`.
+	 * Validate the `@:pin` / `@:killer` pair on each fixture of `c`, and record what
+	 * its doc comment claims WITHOUT one.
 	 *
 	 * A `@:pin('control')` with no `@:killer` is a build error: a control whose
 	 * killing arm nobody names is a claim the reviewer has to take on trust, which
 	 * is the state this metadata exists to end. A `@:killer` naming an arm
 	 * `mutation-arms.json` does not declare is the same error one level down — the
-	 * name was free text until the registry existed, so nothing said the arm could
-	 * be found, let alone run.
+	 * name was free text until the registry existed, so nothing said the arm could be
+	 * found, let alone run.
+	 *
+	 * The census is the same question asked of the PROSE. `testkit.ProseClaims` reads
+	 * a fixture's doc comment for the four conventions the metadata was meant to
+	 * replace — an arm, a control, a base-redness, a vacuity audit — and every claim
+	 * no annotation records lands in `TestRegistry.claims()`. Nothing is refused here:
+	 * a build error would need a built binary to regenerate the list it complains
+	 * about, so the ratchet is `unit.ProseClaimCensusTest` instead.
 	 */
-	private static function collectPins(c: ClassType, census: TestCensus, arms: Array<MutationArm>): Void {
+	private static function collectFixtureRecords(c: ClassType, census: TestCensus, arms: Array<MutationArm>): Void {
 		final fq: String = qualified(c);
 		for (f in c.fields.get()) if (isFixtureMethod(f)) {
 			final roles: Array<MetadataEntry> = f.meta.extract(PIN_META);
 			final killers: Array<String> = [for (entry in f.meta.extract(KILLER_META)) for (arg in metaArgs(entry)) arg];
+			final roleNames: Array<String> = [for (entry in roles) for (arg in metaArgs(entry)) arg];
+			final unrecorded: Array<String> = ProseClaims.unrecorded(f.doc, roleNames, killers);
+			if (unrecorded.length > 0) census.claims.push(ProseClaims.render('$fq#${f.name}', unrecorded));
 			if (roles.length == 0) {
 				if (killers.length > 0)
 					Context.error(
