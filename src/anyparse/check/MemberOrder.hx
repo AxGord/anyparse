@@ -420,10 +420,7 @@ final class MemberOrder implements Check implements ConfigAware {
 				+ 'same-phase field, which runs the two in the other order';
 		if (!conditionalRegionsCovered(members, source))
 			return 'the order is pinned: a conditional region holds bytes no member slot covers, so rebuilding it would drop them';
-		// The suppression below is the last arm of a six-gate guard cascade: folding just this one
-		// into a ternary nests the whole chain into a pyramid and detaches the comment above from
-		// the gate it explains — measured, the rule's own `--fix` did exactly that.
-		if (splitsCoexistingRegion(members)) // noqa: prefer-ternary-return
+		if (splitsCoexistingRegion(members))
 			return 'the order is pinned: one conditional construct declares members of two sections, and reordering would split it';
 		return null;
 	}
