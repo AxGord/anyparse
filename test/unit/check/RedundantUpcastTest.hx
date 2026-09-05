@@ -16,6 +16,7 @@ import utest.Test;
  */
 class RedundantUpcastTest extends Test {
 
+	@:pin('control') @:killer('M-ISSUBTYPE-FALSE')
 	public function testUpcastFlagged(): Void {
 		Assert.equals(
 			1, violations('class Base {} class Sub extends Base {} class C { function f(s:Sub) { var b = cast(s, Base); } }').length

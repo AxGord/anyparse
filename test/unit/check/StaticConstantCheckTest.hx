@@ -23,6 +23,7 @@ import utest.Test;
  */
 class StaticConstantCheckTest extends Test {
 
+	@:pin('control') @:killer('M-BUILDMACRO-TRUE')
 	public function testScalarInstanceFinalFlagged(): Void {
 		final vs: Array<Violation> =
 			violations('class C {\n\tprivate final _minScale:Float = 0.5;\n\tfunction f():Float return _minScale;\n}');
