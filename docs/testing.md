@@ -616,9 +616,16 @@ there is no per-class annotation to record anything against).
 **The two vocabularies are disjoint, and that is the finding.** Not one of the
 295 carries any pin, and not one of the 39 pinned fixtures spells "killed by" or
 "control" in its prose — the annotation REPLACED the sentence rather than joining
-it. So "claims something no annotation records" and "claims something" are, today,
-the same set, and the `unrecorded` half of the predicate is a no-op that only
-starts doing work as the annotation pass lands.
+it. So at `7331535c` "claims something no annotation records" and "claims
+something" are the same set.
+
+They stopped being the same set on the first merge. S97 landed in the same wave
+with seven new `@:pin('control')` fixtures whose docs DO call themselves controls
+(`unit.check.FieldWriteResolutionScopeTest`, `unit.query.ResolutionProjectFilesTest`),
+and the census stayed at **295** across that merge: seven new control claims, all
+seven recorded, none listed. The `unrecorded` half is not waiting for the
+annotation pass — it is what makes a slice that annotates as it goes cost nothing
+here.
 
 **Two of the four kinds are not gateable toward a fix, deliberately.** `arm` and
 `control` have an annotation that retires the line. `base` and `vacuity` have
