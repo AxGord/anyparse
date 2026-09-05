@@ -166,7 +166,12 @@ final class HxAstPredLowering extends AstPredLowering {
 		'TryCatchStmtBare',
 		'Conditional',
 		'EllipsisStmt',
-		'CondSpliceBlockClose'
+		'CondSpliceBlockClose',
+		// A block-tail region closes its own block at its own `#end`, so the next
+		// statement needs no `;` between them — same self-terminating shape as
+		// `CondSpliceBlockClose`, and without it PLAIN mode skip-parses the file
+		// while the trivia parser accepts it (`CondSpliceBlockTail`).
+		'CondSpliceBlockTail'
 	];
 
 	/**

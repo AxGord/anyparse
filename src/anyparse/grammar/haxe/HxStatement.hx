@@ -467,6 +467,21 @@ enum HxStatement {
 	CondSpliceBlockOpen(inner: HxCondSpliceBlockOpen);
 
 	/**
+	 * BLOCK-TAIL region: the fragment CLOSES the enclosing block and then
+	 * opens AND closes a block of its own, all before `#end` - see
+	 * `HxCondSpliceBlockTail`. Only the unbalanced head is raw; the region's
+	 * own block is a real `HxStatement` the writer formats.
+	 *
+	 * Tried BEFORE `CondSpliceStmt` for the reason `CondSpliceBlockOpen` is:
+	 * `CondSpliceStmt`'s `{raw, tail}` shape matches these regions too, and
+	 * swallowing the whole region into `raw` is exactly the defect this ctor
+	 * removes. `HxCondBlockTailRaw`'s leading-`}`-before-any-`{` constraint
+	 * keeps the two disjoint - no dangling-else fragment opens with a `}`.
+	 */
+	@:kw('#if')
+	CondSpliceBlockTail(inner: HxCondSpliceBlockTail);
+
+	/**
 	 * Token-splice fallback for `#if` statement regions the structured
 	 * `Conditional` fail-rewinds on (dangling-else if-heads) — see
 	 * `HxCondSpliceStmt`. Tried directly after it. Also catches a `#if`

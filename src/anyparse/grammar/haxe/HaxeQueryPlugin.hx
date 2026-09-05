@@ -932,6 +932,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'CondSpliceTail',
 				'CondSpliceStmt',
 				'CondSpliceBlockOpen',
+				'CondSpliceBlockTail',
 				'CondSpliceSwitchOpen',
 				'CondSpliceBlockClose',
 				'CondSpliceCase',
