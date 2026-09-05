@@ -341,10 +341,17 @@ final class MoveSymbol {
 		destSource: String, carried: Array<String>, plugin: GrammarPlugin
 	): Null<{ span: Span, text: String }> {
 		if (carried.length == 0) return null;
-		final anchor: ImportAnchor = importAnchor(destSource, plugin);
+		// `importAnchor` seats a NAMED path in the destination's own import run — the ordered slot
+		// `add-import` gets — and falls back to the end of the header when it is handed no path. This
+		// used to hand it none, so every carried import was APPENDED past the run: measured on a
+		// destination holding `import other.Zeta;`, carrying `other.Dep` produced `Zeta, Dep` and one
+		// `import-order` finding on a file the op had just written. Same mechanism, one argument.
+		final ordered: Null<ImportAnchor> = orderedCarriedAnchor(destSource, carried, plugin);
+		final anchor: ImportAnchor = ordered ?? importAnchor(destSource, plugin);
+		final lines: Array<String> = ordered == null ? carried : sortedImportLines(carried, ordered.order);
 		return {
 			span: new Span(anchor.offset, anchor.offset),
-			text: '${anchor.lead}${carried.join('\n')}\n${anchor.trail}'
+			text: '${anchor.lead}${lines.join('\n')}\n${anchor.trail}'
 		};
 	}
 
@@ -1476,6 +1483,56 @@ final class MoveSymbol {
 			if (at < region.to) return region.from;
 		}
 		return -1;
+	}
+
+	/**
+	 * The destination import run's own SLOT for the whole carried block, or null when the block
+	 * cannot take one and the end-of-header anchor stays the answer.
+	 *
+	 * One zero-width edit can only sit at ONE offset, and two of them at the same offset are
+	 * ordered by `applyEdits`' width tie-break, which cannot tell them apart. So the ordered seat is
+	 * taken only when every carried line is a plain `import <path>;` (an alias or a wildcard binds
+	 * names the run's order cannot see, and a `using` is ranked by `usingSeatOf` instead) and every
+	 * one of those paths anchors at the SAME offset — which is exactly the condition under which
+	 * the block belongs between one pair of the run's existing lines. Paths that would land on
+	 * different sides of an existing import, and a run whose order `orderAt` does not recognise
+	 * (`order < 0`), both fall back rather than imposing an order the destination never had.
+	 */
+	private static function orderedCarriedAnchor(destSource: String, carried: Array<String>, plugin: GrammarPlugin): Null<ImportAnchor> {
+		var chosen: Null<ImportAnchor> = null;
+		for (line in carried) {
+			final path: Null<String> = plainImportPath(line);
+			if (path == null) return null;
+			final anchor: ImportAnchor = importAnchor(destSource, plugin, path);
+			if (anchor.order < 0) return null;
+			if (chosen == null)
+				chosen = anchor;
+			else if (chosen.offset != anchor.offset)
+				return null;
+		}
+		return chosen;
+	}
+
+	/**
+	 * The module path of a plain `import <path>;` line, or null for every other import spelling —
+	 * an alias (`import a.B as C;`), a wildcard (`import a.*;`) and a `using` all answer null, so a
+	 * block holding one never takes the ordered seat.
+	 */
+	private static function plainImportPath(line: String): Null<String> {
+		if (!line.startsWith('import ') || !line.endsWith(';')) return null;
+		final path: String = line.substring('import '.length, line.length - 1).trim();
+		return path.length == 0 || path.indexOf(' ') >= 0 || path.indexOf('*') >= 0 ? null : path;
+	}
+
+	/**
+	 * `lines` sorted under the destination run's own `order` — the block a `orderedCarriedAnchor`
+	 * seat receives. The dependency walk emits them in the order it MET them, which is the right
+	 * answer for the end-of-header fallback and the wrong one inside a sorted run.
+	 */
+	private static function sortedImportLines(lines: Array<String>, order: Int): Array<String> {
+		final sorted: Array<String> = lines.copy();
+		sorted.sort((a, b) -> ImportOrder.compare(order, plainImportPath(a) ?? a, plainImportPath(b) ?? b));
+		return sorted;
 	}
 
 }

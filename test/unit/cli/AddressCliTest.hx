@@ -29,6 +29,14 @@ class AddressCliTest extends Test {
 	private static final MEMBER_FIXTURE: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n\n'
 		+ '\tfunction g():Int\n' + '\t\treturn 2;\n\n\t#if js\n\tfunction h():Int\n\t\treturn 3;\n\t#else\n\tfunction h():Int\n'
 		+ '\t\treturn 4;\n\t#end\n}\n';
+
+	/**
+	 * A MODULE-LEVEL fixture for the modifier-address tests: a main type and a module-private
+	 * helper beside it. Line 3 is the `private` keyword — the same byte offset `--select 'Private'`
+	 * resolves to, which is what makes the two addresses collide. Writer-canonical, since these ops
+	 * are canonical-gated and a drifted fixture is refused before any of them decides anything.
+	 */
+	private static final MODULE_PRIVATE_FIXTURE: String = 'class C {}\n\nprivate typedef Helper = {\n\tvar n:Int;\n}\n';
 	#end
 
 	public function testAddElementAfterSelect(): Void {
@@ -313,6 +321,83 @@ class AddressCliTest extends Test {
 		final out: String = File.getContent(path);
 		Assert.isTrue(out.indexOf('function g(') < 0);
 		Assert.isTrue(out.indexOf('function f(') >= 0);
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `--select '<Modifier>'` is not an element address, and `remove-element` refuses it.
+	 *
+	 * `--select 'Private'` and a position on that same keyword resolve to the SAME byte offset;
+	 * `resolveAddressPos` hands both on as a bare position, and `ElementSpan.declGroupSpan` then
+	 * walks forward to the declaration the modifier precedes. Asked to remove a MODIFIER, the op
+	 * removed the whole `private typedef Helper` DECLARATION and reported `wrote <file>` at rc 0 —
+	 * silent work destruction, and the reason S90 had to route around it with `patch`.
+	 *
+	 * The leading assertions are the reachability proof: the fixture's declaration is present
+	 * before the call, and still byte-for-byte present after it.
+	 */
+	public function testRemoveElementRefusesAModifierSelector(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_mod', MODULE_PRIVATE_FIXTURE);
+		Assert.isTrue(File.getContent(path).indexOf('private typedef Helper') >= 0, 'the fixture declares it');
+		var rc: Int = 0;
+		final err: String = CliFixture.captureStderr(() -> rc = Cli.run(['remove-element', path, '--select', 'Private', '--write']));
+		Assert.notEquals(0, rc, 'a modifier address must not be served');
+		Assert.equals(MODULE_PRIVATE_FIXTURE, File.getContent(path), 'the file must be untouched');
+		#if nodejs
+		Assert.isTrue(err.indexOf('MODIFIER') >= 0, 'the refusal must name what the address is: $err');
+		Assert.isTrue(err.indexOf('set-modifier') >= 0, 'and must name the op that drops a keyword: $err');
+		#end
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The POSITION form on the same keyword still removes the declaration — the cursor convention
+	 * says `<line>[:<col>]` points at an element's FIRST TOKEN, and a modified declaration's first
+	 * token is its leading keyword. That is why the refusal above is gated on the address MODE and
+	 * not on the resolved node's kind: the two addresses mean different things at one offset.
+	 * Pre-existing behaviour, pinned because the fix could have been written to break it: a guard on
+	 * the resolved node KIND alone refuses this too, and the suite stayed green until the fixture
+	 * spelled the column.
+	 */
+	public function testRemoveElementByPositionOnAModifierStillRemovesTheDeclaration(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_modpos', MODULE_PRIVATE_FIXTURE);
+		// The COLUMN is the discriminator, and it has to be spelled: a bare `<line>` never resolves to
+		// a modifier at all (`Address.declAfterModifierPrefix` skips the prefix run and hands back the
+		// declaration), so a mode-blind guard would leave it alone and the test would prove nothing.
+		// `3:1` is the byte `--select 'Private'` resolves to, and at base both spellings deleted the
+		// declaration — the second one after echoing `target Private`.
+		final rc: Int = Cli.run(['remove-element', path, '3:1', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('Helper') < 0, 'the declaration goes with its modifier run');
+		Assert.isTrue(out.indexOf('class C') >= 0, 'and nothing else does');
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A `@:meta` selector is NOT caught by the modifier refusal: `declGroupSpan` treats an
+	 * annotation as an element in its own right, so `--select 'Meta:@:keep'` already addresses the
+	 * annotation and only it. The control that keeps the refusal off the rest of the prefix run.
+	 */
+	public function testRemoveElementStillRemovesAMetaBySelector(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_meta', 'class C {\n\t@:keep\n\tprivate function f():Int\n\t\treturn 1;\n}\n');
+		final rc: Int = Cli.run(['remove-element', path, '--select', 'Meta:@:keep', '--write']);
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('@:keep') < 0, 'the annotation is removed');
+		Assert.isTrue(out.indexOf('private function f') >= 0, 'and the declaration it annotated is not');
 		FileSystem.deleteFile(path);
 		#else
 		Assert.pass('non-sys target');
