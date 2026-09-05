@@ -838,7 +838,7 @@ final class MoveMember {
 		// ALIAS for an alias one — the moment an alias dependency became carriable it would have
 		// emitted `import D;` here while `MoveSymbol` emitted the same wrong line separately.
 		final carried: Array<String> = [];
-		for (m in prep.moved) switch MoveSymbol.dependencyImportLinesToCarry(
+		for (m in prep.moved) switch DependencyCarry.dependencyImportLinesToCarry(
 			prep.srcSource, m.group.groupSpan, prep.srcInfo, prep.destInfo, prep.destSource, prep.index, plugin, typeRefShape,
 			prep.srcTypeName
 		) {
