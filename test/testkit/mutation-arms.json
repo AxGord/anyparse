@@ -15,6 +15,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-ADMITS-TRUE",
+			"type": "anyparse.query.FieldWriteIndex",
+			"method": "admits",
+			"find": "return ownerFile == null || !writeIsThirdParty || _thirdParty.exists(ownerFile);",
+			"replace": "return true;",
+			"note": "every write is admitted whatever half of the scope recorded it, so a third-party write to a field NAME poisons a project candidate again"
+		},
+		{
 			"name": "M-ALWAYS-NEXT",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applySameLine",
@@ -64,6 +72,14 @@
 			"method": "declaringFiles",
 			"force": "[]",
 			"note": "no type is declared anywhere, so a check that resolves a simple name to its declaring file stops seeing it"
+		},
+		{
+			"name": "M-DECLSITE-SCOPEWIDE",
+			"type": "anyparse.query.FieldWriteIndex",
+			"method": "declarationSite",
+			"find": "final fi: Null<FileInfo> = _index.fileInfo(ownerFile);",
+			"replace": "final fi: Null<FileInfo> = null;",
+			"note": "the owner-file pin is gone, so a declaration range comes only from the scope-wide simple name and a type sharing one with a library type has none"
 		},
 		{
 			"name": "M-ELSE-GATE",
@@ -126,11 +142,27 @@
 			"note": "no absence is ever provable, so field-init-in-constructor stops ranking a constant it could prove nothing about"
 		},
 		{
+			"name": "M-MEMO-OFF",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "projectIndex",
+			"find": "if (_projectIndexBuilt) return _projectIndex;",
+			"replace": "if (false) return _projectIndex;",
+			"note": "the project index is rebuilt on every demand, so the two field rules pay for it once each per pass instead of sharing one"
+		},
+		{
 			"name": "M-NAMEOUTSIDE-TRUE",
 			"type": "anyparse.query.RawSourceScan",
 			"method": "nameOccursOutside",
 			"force": "true",
 			"note": "every name reads as occurring outside its own file, so unused-public-member keeps every member it should have flagged"
+		},
+		{
+			"name": "M-NO-INVALIDATE",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "setResolutionIndex",
+			"find": "_projectIndex = null;\n\t\t_projectIndexBuilt = false;",
+			"replace": "if (_projectIndex == null) _projectIndexBuilt = false;",
+			"note": "a new --fix pass keeps the previous pass's project index, so the checks answer from sources the pass already rewrote"
 		},
 		{
 			"name": "M-NO-WIRE",
@@ -147,6 +179,14 @@
 			"find": "return pathFinalMemberWalk(fromFile, startTypeName, memberPath, false, []);",
 			"replace": "return null;",
 			"note": "a member path resolves to nothing, so comparison-to-boolean stops learning the type of a field-access operand. A fragment rather than a force: the member is inline, and a forced return ahead of the body is a non-final return the compiler refuses"
+		},
+		{
+			"name": "M-ROOTS-THIRDPARTY",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "fieldWriteIndex",
+			"find": "for (entry in sources.library.entries()) if (!roots.exists(entry.file)) entry.file",
+			"replace": "for (entry in sources.library.entries()) entry.file",
+			"note": "the declared resolutionRoots are tagged third-party along with the library, so a write from a project module outside the lint scope stops vetoing"
 		},
 		{
 			"name": "M-RTTI-FALSE",
@@ -182,6 +222,22 @@
 			"method": "unrelatedClasses",
 			"force": "false",
 			"note": "no two classes are provably unrelated, so impossible-cast and impossible-is-check stop reporting"
+		},
+		{
+			"name": "M-WRITEINDEX-PROJECT-FINAL",
+			"type": "anyparse.check.PreferFinalPublicField",
+			"method": "run",
+			"find": "RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index)",
+			"replace": "FieldWriteIndex.build(scope, plugin, index)",
+			"note": "prefer-final-public-field goes back to a project-scoped write index, so a write through a third-party subtype is invisible again"
+		},
+		{
+			"name": "M-WRITEINDEX-PROJECT-READONLY",
+			"type": "anyparse.check.PreferReadOnlyField",
+			"method": "run",
+			"find": "RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index)",
+			"replace": "FieldWriteIndex.build(scope, plugin, index)",
+			"note": "prefer-read-only-field goes back to a project-scoped write index, so a write through a third-party subtype is invisible again"
 		}
 	]
 }

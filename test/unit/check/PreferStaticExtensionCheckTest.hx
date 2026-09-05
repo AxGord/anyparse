@@ -468,7 +468,9 @@ class PreferStaticExtensionCheckTest extends Test {
 			{ file: 'Widget.hx', source: WIDGET_SOURCE }
 		];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(library) } });
+		scoped.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+		);
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		check.setConfigResolver(_ -> LintConfig.parse(EXT_CONFIG));
 		final violations: Array<Violation> = check.run(report, scoped);
