@@ -678,6 +678,97 @@ class LintFixDeclineWiringSliceTest extends Test {
 		#end
 	}
 
+	/**
+	 * The census tells the four things a `--fix` run can be about a rule apart, and NAMES the ones the
+	 * run exercised.
+	 *
+	 * The proof this campaign closes every slice on is `lint --all --fix` over a real tree run by two
+	 * engines with the outputs byte-compared. That is a strong statement about a rule whose fix wrote
+	 * bytes and NO statement about one the tree never triggered, and a run said nothing that told the
+	 * two apart. Not hypothetical: `trivial-getter` has zero occurrences in every corpus this project
+	 * owns, so ten consecutive slices could have quoted byte-identity about it and proved nothing.
+	 *
+	 * At base `LintFixLedger.exerciseCensus` does not exist and this file does not compile — the four
+	 * counts and the exercised list are text no earlier revision can produce, so the RED is a build
+	 * failure rather than a wrong string. What discriminates instead is the mutation arms: widening
+	 * `edits > 0` to `edits >= 0` moves `beta` into the exercised list, and dropping the `notAsked`
+	 * arm moves `delta` out of its own bucket; each flips this pin alone.
+	 */
+	public function testTheCensusNamesTheRulesTheRunExercised(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = [];
+		LintFixDriver.ledgerFor(ledger, 'alpha').edits = 3;
+		final beta: RuleFixOutcome = LintFixDriver.ledgerFor(ledger, 'beta');
+		beta.reported = 4;
+		beta.declined = 4;
+		// `gamma` gets no row at all — the rule ran over the tree and matched nothing, which is the
+		// bucket the whole block exists for. `delta` stands for the risky set a netless run never asks.
+		final all: String = LintFixLedger.exerciseCensus(ledger, ['alpha', 'beta', 'gamma', 'delta'], ['delta']).join('');
+		Assert.isTrue(
+			all.indexOf(
+				'of the 4 rule(s) this run was given, 1 produced an edit, 1 reported and got none, 1 were never asked, '
+				+ '1 reported nothing at all'
+			) >= 0,
+			'the four buckets partition the rule set, and their counts sum to it - got: $all'
+		);
+		Assert.isTrue(all.indexOf('\n  exercised: alpha\n') >= 0, 'and the ONE rule that wrote bytes is the whole named list - got: $all');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A run that rewrote nothing says so, instead of printing an empty list.
+	 *
+	 * That is the run whose output proves the least — an unchanged tree is byte-identical under any
+	 * engine at all — and an empty list after a colon is exactly the shape a reader skims past.
+	 */
+	public function testTheCensusSaysWhenTheRunProvedNothingAtAll(): Void {
+		#if (sys || nodejs)
+		final all: String = LintFixLedger.exerciseCensus([], ['alpha', 'beta'], []).join('');
+		Assert.isTrue(
+			all.indexOf('0 produced an edit, 0 reported and got none, 0 were never asked, 2 reported nothing at all') >= 0,
+			'two rules, both silent, and the line says so - got: $all'
+		);
+		Assert.isTrue(
+			all.indexOf('exercised: none — this run rewrote nothing') >= 0, 'and the empty list is a sentence, not a blank - got: $all'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The census travels WITH the decline block, and closes it.
+	 *
+	 * `printUnfixedLedger` writes to `Sys.stderr`, which no test can read, so a dropped call would
+	 * return the run to saying nothing with every existing pin still green. `ledgerLines` is that
+	 * write split from what it writes, and this pin is the reason it exists.
+	 */
+	public function testTheLedgerBlockCarriesTheCensus(): Void {
+		#if (sys || nodejs)
+		final check: Null<Check> = Linter.byId('unused-local');
+		if (check == null) {
+			Assert.fail('unused-local is not registered');
+			return;
+		}
+		final ledger: Map<String, RuleFixOutcome> = [];
+		final row: RuleFixOutcome = LintFixDriver.ledgerFor(ledger, 'unused-local');
+		row.reported = 2;
+		row.declined = 2;
+		final all: String = LintFixLedger.ledgerLines(ledger, [check], [], [], false).join('');
+		final decline: Int = all.indexOf('unused-local 2:');
+		final census: Int = all.indexOf('rule census — of the 1 rule(s) this run was given');
+		Assert.isTrue(decline >= 0, 'the decline row is still printed - got: $all');
+		Assert.isTrue(census > decline, 'and the census closes the block rather than replacing it - got: $all');
+		Assert.isTrue(
+			all.indexOf('0 produced an edit, 1 reported and got none') >= 0, 'counted over the rules this run was given - got: $all'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** One violation carrying `reason`, or none — the shape a check hands back from `fix`. */
 	private static function reasoned(reason: Null<String>): Violation {
 		return {

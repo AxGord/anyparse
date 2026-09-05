@@ -267,6 +267,50 @@ final class MoveGuardedImportCarryTest extends Test {
 		);
 	}
 
+	/**
+	 * A carried BLOCK that takes one slot is sorted under the run's own order, not left in the order
+	 * the dependency walk met the names in.
+	 *
+	 * The walk reaches `haxe.io.Path` first and `haxe.io.Bytes` second; both sort before the
+	 * destination's `haxe.zip.Entry`, so both anchor at the SAME slot and the block takes it. Left
+	 * unsorted the result reads `Path, Bytes, Entry`, which is the run out of order — the very
+	 * finding the seat exists to stop. This is the only fixture that separates the seat from the
+	 * SORT: with one carried line the sort is a no-op, and a straddling pair never reaches it.
+	 */
+	public function testACarriedBlockIsSortedUnderTheRunsOwnOrder(): Void {
+		final src: String = 'package a;\n\nimport haxe.io.Bytes;\nimport haxe.io.Path;\n\nclass Src {\n'
+			+ '\tpublic static function read(p: String): String {\n\t\tfinal name: String = Path.withoutDirectory(p);\n'
+			+ '\t\treturn Bytes.ofString(name).toString();\n\t}\n}\n';
+		final dest: String =
+			'package b;\n\nimport haxe.zip.Entry;\n\nclass Keep {\n\tpublic static function keep(e: Entry): String return \'\';\n}\n';
+		final seated: String = destinationOf(src, 6, 7, dest);
+		Assert.isTrue(
+			seated.contains('import haxe.io.Bytes;\nimport haxe.io.Path;\nimport haxe.zip.Entry;'),
+			'the carried block is sorted under the run it joins: $seated'
+		);
+	}
+
+	/**
+	 * An ALIASED carried import never takes the run's ordered slot, even when its module path would
+	 * sort into it.
+	 *
+	 * `import a.B as C;` binds a name the run's order cannot see — `ImportBlockOrder` ENDS a run at
+	 * one for exactly that reason — so seating it between two plain imports splits an ordered run
+	 * into two, a layout the destination never had. `haxe.io.Bytes` sorts before the destination's
+	 * `haxe.zip.Entry`, so the slot exists and is declined; the line goes to the end-of-header
+	 * anchor, byte-identical to what the base engine wrote.
+	 */
+	public function testAnAliasedCarriedImportDeclinesTheOrderedSlot(): Void {
+		final src: String = 'package a;\n\nimport haxe.io.Bytes as B;\n\nclass Src {\n'
+			+ '\tpublic static function read(p: String): String return B.ofString(p).toString();\n}\n';
+		final dest: String =
+			'package b;\n\nimport haxe.zip.Entry;\n\nclass Keep {\n\tpublic static function keep(e: Entry): String return \'\';\n}\n';
+		final seated: String = destinationOf(src, 5, 7, dest);
+		Assert.isTrue(
+			seated.contains('import haxe.zip.Entry;\nimport haxe.io.Bytes as B;'), 'an alias goes under the run, not into it: $seated'
+		);
+	}
+
 	/** `GUARDED_SRC` moved into `dest`, returning the destination's new bytes. */
 	private inline function movedInto(dest: String): String {
 		return destinationOf(GUARDED_SRC, 9, 7, dest);
@@ -333,50 +377,6 @@ final class MoveGuardedImportCarryTest extends Test {
 
 	private static function typeRefShape(): TypeRefShape {
 		return new HaxeQueryPlugin().typeRefShape();
-	}
-
-	/**
-	 * A carried BLOCK that takes one slot is sorted under the run's own order, not left in the order
-	 * the dependency walk met the names in.
-	 *
-	 * The walk reaches `haxe.io.Path` first and `haxe.io.Bytes` second; both sort before the
-	 * destination's `haxe.zip.Entry`, so both anchor at the SAME slot and the block takes it. Left
-	 * unsorted the result reads `Path, Bytes, Entry`, which is the run out of order — the very
-	 * finding the seat exists to stop. This is the only fixture that separates the seat from the
-	 * SORT: with one carried line the sort is a no-op, and a straddling pair never reaches it.
-	 */
-	public function testACarriedBlockIsSortedUnderTheRunsOwnOrder(): Void {
-		final src: String = 'package a;\n\nimport haxe.io.Bytes;\nimport haxe.io.Path;\n\nclass Src {\n'
-			+ '\tpublic static function read(p: String): String {\n' + '\t\tfinal name: String = Path.withoutDirectory(p);\n'
-			+ '\t\treturn Bytes.ofString(name).toString();\n\t}\n}\n';
-		final dest: String = 'package b;\n\nimport haxe.zip.Entry;\n\nclass Keep {\n'
-			+ '\tpublic static function keep(e: Entry): String return \'\';\n}\n';
-		final seated: String = destinationOf(src, 6, 7, dest);
-		Assert.isTrue(
-			seated.contains('import haxe.io.Bytes;\nimport haxe.io.Path;\nimport haxe.zip.Entry;'),
-			'the carried block is sorted under the run it joins: $seated'
-		);
-	}
-
-	/**
-	 * An ALIASED carried import never takes the run's ordered slot, even when its module path would
-	 * sort into it.
-	 *
-	 * `import a.B as C;` binds a name the run's order cannot see — `ImportBlockOrder` ENDS a run at
-	 * one for exactly that reason — so seating it between two plain imports splits an ordered run
-	 * into two, a layout the destination never had. `haxe.io.Bytes` sorts before the destination's
-	 * `haxe.zip.Entry`, so the slot exists and is declined; the line goes to the end-of-header
-	 * anchor, byte-identical to what the base engine wrote.
-	 */
-	public function testAnAliasedCarriedImportDeclinesTheOrderedSlot(): Void {
-		final src: String = 'package a;\n\nimport haxe.io.Bytes as B;\n\nclass Src {\n'
-			+ '\tpublic static function read(p: String): String return B.ofString(p).toString();\n}\n';
-		final dest: String = 'package b;\n\nimport haxe.zip.Entry;\n\nclass Keep {\n'
-			+ '\tpublic static function keep(e: Entry): String return \'\';\n}\n';
-		final seated: String = destinationOf(src, 5, 7, dest);
-		Assert.isTrue(
-			seated.contains('import haxe.zip.Entry;\nimport haxe.io.Bytes as B;'), 'an alias goes under the run, not into it: $seated'
-		);
 	}
 
 }
