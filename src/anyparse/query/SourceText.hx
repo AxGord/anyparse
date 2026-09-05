@@ -238,7 +238,23 @@ final class SourceText {
 	 * source lines still names itself in one message line.
 	 */
 	public static function regionExcerpt(source: String, span: Span): String {
-		final flat: String = ~/\s+/g.replace(source.substring(span.from, span.to), ' ').trim();
+		return regionsExcerpt(source, [span]);
+	}
+
+	/**
+	 * The same excerpt over SEVERAL disjoint runs, joined by `…` where the bytes between
+	 * them are elided.
+	 *
+	 * The caller is a diagnostic quoting the parts of a construct a model DROPPED, and those
+	 * are not always one run: an unbalanced `#if` region whose node kept children inside it
+	 * has raw scaffolding on both sides of them, and quoting from the first raw byte to the
+	 * last would put formatted code inside a sentence that says the writer re-emits it
+	 * verbatim. One run in, one run out — the single-span form above is this function with a
+	 * one-element array, so the truncation rule has one copy.
+	 */
+	public static function regionsExcerpt(source: String, spans: Array<Span>): String {
+		final parts: Array<String> = [for (s in spans) ~/\s+/g.replace(source.substring(s.from, s.to), ' ').trim()];
+		final flat: String = parts.filter(p -> p.length > 0).join(' … ');
 		return flat.length <= REGION_EXCERPT_CHARS ? flat : '${flat.substr(0, REGION_EXCERPT_CHARS)}...';
 	}
 

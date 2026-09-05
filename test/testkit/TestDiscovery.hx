@@ -431,8 +431,12 @@ class TestDiscovery {
 					+ ' — check the spelling, or the root the module lives under',
 					Context.currentPos()
 				);
-			else if (types.length == 0)
-				deferred.push('${arm.name} :: ${arm.type}#${arm.method}');
+			// A non-default kind addresses something the TYPER has no question for — a grammar
+			// declaration's `@:re` terminal is a module-level `MetaCall`, and an abstract is not a
+			// `ClassType` to ask for a method at all. Same third answer as a `#if macro` module:
+			// deferred to the parser, which reads the file the runner patches.
+			else if (types.length == 0 || arm.kind != MutationArms.DEFAULT_KIND)
+				deferred.push('${arm.name} :: ${MutationArms.address(arm)}');
 			else {
 				final owner: Null<ClassType> = classIn(types, arm.type);
 				if (owner == null)

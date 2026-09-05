@@ -198,7 +198,10 @@ final class FmtCommand implements CliCommand {
 		var diverged: Int = 0;
 		var unsettled: Int = 0;
 		for (path in paths) {
-			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write && !o.verify, listMode, o.verify, o.onePass);
+			// `o.list`, not `listMode`: the opaque-region notes are off for an EXPLICIT `--list`
+			// and on when list mode was merely implied, which is the difference between a gate
+			// and a survey — `opaqueCondRegionNotes` carries the reading and the measurement.
+			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write && !o.verify, listMode, o.verify, o.onePass, o.list);
 			if (r.fatalExit != null) {
 				// Re-bound for the same reason as `parsedExit` above.
 				final fatal: Int = r.fatalExit;
@@ -356,10 +359,17 @@ final class FmtCommand implements CliCommand {
 		CliIo.sysPrint('`if` is outside it, a dangling operator) is captured raw by the parser, so\n');
 		CliIo.sysPrint('the writer has no tree to format there and re-emits it byte-for-byte while\n');
 		CliIo.sysPrint('reformatting everything around it. Each such region is reported by line,\n');
-		CliIo.sysPrint('with its own text quoted. It is a note, not a failure: the rest of the file\n');
-		CliIo.sysPrint('is formatted and written. How the braces BALANCE does not decide it —\n');
-		CliIo.sysPrint('measured over two real trees, 34 of 56 such regions have an equal number of\n');
-		CliIo.sysPrint('`{` and `}`.\n');
+		CliIo.sysPrint('with its own text quoted; a region unbalanced only in its HEAD says so and\n');
+		CliIo.sysPrint('quotes just the head, because the rest of it IS formatted. It is a note,\n');
+		CliIo.sysPrint('not a failure: the rest of the file is formatted and written. How the\n');
+		CliIo.sysPrint('braces BALANCE does not decide it — measured over two real trees, 34 of 56\n');
+		CliIo.sysPrint('such regions have an equal number of `{` and `}`.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Those notes cost one extra parse per file that has a `#if`, so an EXPLICIT\n');
+		CliIo.sysPrint('--list turns them off: that flag is the machine mode, one line per drifted\n');
+		CliIo.sysPrint('path, and it is what a whole-tree gate spells. Surveying a directory needs\n');
+		CliIo.sysPrint('no flag at all — `apq fmt <dir>` implies the same listing and keeps the\n');
+		CliIo.sysPrint('notes, as do --write, --verify and a single file to stdout.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('--one-pass catches the class NO other tree-level gate can see: `fmt` writes\n');
 		CliIo.sysPrint('the writer\'s FIXED POINT, so a file the writer settles only on its second\n');
@@ -422,7 +432,8 @@ final class FmtCommand implements CliCommand {
 	}
 
 	private static function formatOneFile(
-		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, verify: Bool = false, onePass: Bool = false
+		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, verify: Bool = false, onePass: Bool = false,
+		listedExplicitly: Bool = false
 	): FmtFileResult {
 		final source: String = try CliIo.readFile(path) catch (exception: Exception) {
 			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
@@ -458,7 +469,7 @@ final class FmtCommand implements CliCommand {
 		// mutation ops now print off `EditResult.Ok`'s `rewrites`, from one copy, so
 		// a user who meets the note twice can tell it is one finding.
 		CliEdit.warnRewrites('fmt', path, fixedPoint.rewrites);
-		for (note in opaqueCondRegionNotes(plugin, path, source)) CliIo.stderr('$note\n');
+		for (note in opaqueCondRegionNotes(plugin, path, source, listedExplicitly)) CliIo.stderr('$note\n');
 		// ω-one-pass-gate: `--one-pass` turns that note into a VERDICT. The project's
 		// canonical gate is `writeRoundTrip(s) == s` after ONE pass, and every
 		// writer-emit op is built on it — but a tree holding a file the writer only
@@ -569,11 +580,29 @@ final class FmtCommand implements CliCommand {
 	 * write what it writes, so a check firing on it would be reporting correct code. The volume
 	 * that would have justified a flag is not there — measured, 0 regions over this project's
 	 * own 1757 files, 31 over the Pony fork, 28 over the 946-fixture formatter corpus.
-	 * The cost is one extra parse per file that HAS a `#if` (451 of 1757 here, +15-20% on the
+	 * The cost is one extra parse per file that HAS a `#if` (451 of 1757 here, +19.9% on the
 	 * whole-tree `fmt --list` gate as interleaved medians, nothing on a single-file run); a file
-	 * without one never reaches it.
+	 * without one never reaches it, and an EXPLICIT `--list` skips it altogether — the first line
+	 * of the body has the reading.
 	 *
-	 * ## The lazy variant does not exist
+	 * ## Two sentences, because two things are true
+	 *
+	 * A region whose node kept CHILDREN inside it is unbalanced in its HEAD only, and the old
+	 * single sentence claimed the writer re-emits the whole thing byte-for-byte. Measured over the
+	 * Pony fork's 31 regions: 22 are wholly raw (`CondSpliceStmt` 13, `CondSpliceCase` 3,
+	 * `CondSpliceTail` 3, `CondSpliceExpr` 2, `CondSpliceMember` 1, `CondSpliceBlockClose` 1) and
+	 * 9 are head-only (`CondSharedBodyDecl` 4, `CondSpliceBlockOpen` 4, `CondSpliceBlockTail` 1),
+	 * where the quoted range ran past the `#end` over statements the writer reformats — invisible
+	 * in the output only because the excerpt truncates at sixty characters. Those get their own
+	 * sentence and a quote that stops at the first child.
+	 *
+	 * What decides it is the TREE, not the ctor name, so a grammar that gives an existing ctor a
+	 * structural field cannot leave a hand-kept list stale. `RefShape.opaqueCondRegionKinds` stays
+	 * the WIDE set — it is what the mutating ops' fail-closed gate reads through
+	 * `CondRegionScan.opaqueCondRegionMentioning`, and a head that spells a type name must keep
+	 * refusing a rename — and only this note reads the narrower fact.
+	 *
+	 * ## The lazy variant does not exist, and the writer cannot answer either
 	 *
 	 * Deferring the parse to the files `fmt` leaves UNCHANGED removes none of that cost. Both real
 	 * trees this runs over are ALREADY canonical — `0 of 1757` here, `0 of 680` over the Pony
@@ -583,8 +612,19 @@ final class FmtCommand implements CliCommand {
 	 * whole output instead: 31 of 31 Pony regions sit in files that are already canonical. Nor is
 	 * there anything to optimise in the walk — short-circuiting `CondRegionScan.opaqueCondRegions`
 	 * AFTER the parse measured 11.09 s against the full note's 11.01 s, while skipping the parse as
-	 * well measured 9.56 s. The whole cost is a SECOND FRONT END: the writer already declines this
-	 * region and could say so, and then no projection parse is needed here at all.
+	 * well measured 9.56 s. The whole cost is a SECOND FRONT END.
+	 *
+	 * Taking that front end away by asking the WRITER instead was the standing proposal, and it
+	 * does not survive being read. `writeRoundTrip` parses with `HaxeModuleTriviaParser`
+	 * (`{trivia: true}`); spans exist only under `{spans: true}`, where `SpanTypeSynth` adds the
+	 * trailing `_span` argument, and `anyparse.runtime.Trivial` carries eleven fields, none of them
+	 * an offset. So the writer's tree cannot name a region's line, its span or its quote whatever
+	 * it recorded — and it records nothing: a `@:rawString` terminal reaches
+	 * `WriterLowering.lowerTerminal` by the same path a string literal does, and the one generated
+	 * query walker is `buildQueryWalker(HxModule, HaxeModuleSpanParser)`, over the SPAN parser's
+	 * paired AST rather than this one. Exposing the decline is therefore a PARSER change — have
+	 * the trivia parse record each opaque ctor's own byte range — not an exposure of something
+	 * already there.
 	 *
 	 * Handed BACK rather than printed, for the reason the summary line above is: `Sys.stderr()`
 	 * on hxnodejs is a raw fd, so a printed sentence is unassertable and this family's recorded
@@ -595,7 +635,19 @@ final class FmtCommand implements CliCommand {
 	 * formatted the file successfully, so a disagreement between the two front ends is not a
 	 * fact about formatting and must not take the run down over it.
 	 */
-	public static function opaqueCondRegionNotes(plugin: GrammarPlugin, path: String, source: String): Array<String> {
+	public static function opaqueCondRegionNotes(
+		plugin: GrammarPlugin, path: String, source: String, listedExplicitly: Bool = false
+	): Array<String> {
+		// ω-region-note-list: the notes are OFF when `--list` was SPELLED and on when list mode was
+		// merely implied. The flag is the machine mode — one line per drifted path, which is what a
+		// whole-tree gate asks for — and this second front end is what costs that gate +19.9%
+		// (10.44 s against 8.83 s as interleaved medians over 1 760 files, S109 and S114 measuring
+		// the same figure before). A human surveying a directory types `fmt <dir>` and never has to
+		// know the flag exists, which is the reader these notes were written for; `--write`,
+		// `--verify` and a single file to stdout keep them too. The gate lives HERE rather than at
+		// the call site because the parse below is the whole cost, and because a fixture can then
+		// reach it.
+		if (listedExplicitly) return [];
 		final shape: RefShape = plugin.refShape();
 		final kinds: Null<Array<String>> = shape.opaqueCondRegionKinds;
 		if (kinds == null || kinds.length == 0) return [];
@@ -609,16 +661,30 @@ final class FmtCommand implements CliCommand {
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		return [
 			for (opaque in regions) {
-				// The region is the bytes no CHILD covers, and no projection carries a comment
-				// node, so a comment sitting between the `#end` and the continuation lands in
-				// that range and the quote runs past the directive into it. Trimmed for the
+				// The bytes the writer re-emits verbatim are the GAPS, not the whole region. A
+				// region whose node kept CHILDREN inside it is unbalanced in its scaffolding only —
+				// `CondSharedBodyDecl` keeps two class headers and the `#else` / `#end` markers raw
+				// around a member list it formats — so quoting from the first raw byte to the last
+				// ran the sentence over code the writer reformats. A wholly raw region has exactly
+				// one gap and its quote is unchanged.
+				//
+				// No projection carries a comment node anywhere, so a comment between the `#end` and
+				// the continuation lands in a gap and used to close the quote. Trimmed for the
 				// COORDINATE as well as the quote: a comment before the `#if` moves the line the
-				// note names off the directive it is about.
-				final quoted: Span = SourceComments.trimTrivia(source, opaque.region, comments);
-				final at: Position = quoted.lineCol(source);
-				'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region left unformatted - '
-					+ '"${SourceText.regionExcerpt(source, quoted)}" is not a balanced subtree, so the parser captured it raw'
-					+ ' and the writer re-emits it byte-for-byte; restructure it into a balanced #if to have it formatted';
+				// note names off the directive it is about. A gap that was ONLY a comment trims to
+				// nothing and drops out; if every one of them does, the region itself is the quote.
+				final trimmed: Array<Span> = [for (gap in opaque.gaps) SourceComments.trimTrivia(source, gap, comments)];
+				final raw: Array<Span> = trimmed.filter(s -> s.to > s.from);
+				final quoted: Array<Span> = raw.length > 0 ? raw : [SourceComments.trimTrivia(source, opaque.region, comments)];
+				final at: Position = quoted[0].lineCol(source);
+				final excerpt: String = SourceText.regionsExcerpt(source, quoted);
+				opaque.formatted.length > 0
+					? 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region formatted only in part - '
+						+ '"$excerpt" is not a balanced subtree in its position, so the parser captured those bytes raw and the'
+						+ ' writer re-emits them byte-for-byte; what the quote elides is formatted like any other subtree'
+					: 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region left unformatted - '
+						+ '"$excerpt" is not a balanced subtree, so the parser captured it raw'
+						+ ' and the writer re-emits it byte-for-byte; restructure it into a balanced #if to have it formatted';
 			}
 		];
 	}

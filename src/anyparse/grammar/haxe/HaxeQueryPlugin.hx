@@ -1009,7 +1009,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'WeakMap.get'
 			],
 			nullableReturnMarkerTypes: ['Null'],
-			nullableFlowExcludedCalls: ['Array.pop', 'Array.shift', 'List.pop', 'List.first', 'List.last'],
+			nullableFlowExcludedCalls: [
+				'Array.pop',
+				'Array.shift',
+				'List.pop',
+				'List.first',
+				'List.last',
+				'Reflect.copy'
+			],
 			nullAssertionCalls: ['Assert.notNull'],
 			assertTrueCalls: ['Assert.isTrue'],
 			assertFalseCalls: ['Assert.isFalse'],

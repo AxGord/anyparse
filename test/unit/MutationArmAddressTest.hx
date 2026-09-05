@@ -35,8 +35,9 @@ using Lambda;
  * whose branches are ordinary children — so this walk answers for a macro-time
  * member exactly as it does for a runtime one. It also answers a question the
  * build macro never asked at all: the runner resolves a type to a FILE by hand
- * (`for root in src test`) and selects `FnMember:<method>` in it, and until now
- * nothing checked that either step still lands.
+ * (`for root in src test`) and selects `<kind>:<member>` in it — `FnMember` unless the record
+ * spells another, which is how an arm reaches a grammar DECLARATION with no method to
+ * cut — and until now nothing checked that either step still lands.
  *
  * What it deliberately does NOT check is whether a FRAGMENT arm's `find` text
  * still occurs. That is `anyparse.query.Patch`'s matcher, and calling it per arm
@@ -45,9 +46,6 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class MutationArmAddressTest extends Test {
-
-	/** The selector `tools/mutation-arm.sh` hands `hxq patch` for every arm, whatever its cut. */
-	private static inline final MEMBER_KIND: String = 'FnMember';
 
 	/**
 	 * Every arm resolves to a file under `src/` or `test/` that declares its member.
@@ -60,6 +58,7 @@ final class MutationArmAddressTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-ARM-PATH-FLAT')
+	@:killer('M-ARM-KIND-UNSPELLED')
 	public function testEveryDeclaredArmAddressesALiveMember(): Void {
 		#if (sys || nodejs)
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -83,9 +82,12 @@ final class MutationArmAddressTest extends Test {
 				trees[file] = parsed;
 				parsed;
 			};
-			final selector: Selector = Selector.parse('$MEMBER_KIND:${parts[1]}');
+			// The kind is the arm's own — `FnMember` for a member cut, and whatever a record
+			// spells for one that addresses a grammar DECLARATION instead.
+			final address: String = MutationArms.selectorOf(parts[1]);
+			final selector: Selector = Selector.parse(address);
 			if (Engine.select(tree, selector, plugin.selectKindEquivalence()).length == 0)
-				unaddressed.push('$member: $file declares no $MEMBER_KIND of that name');
+				unaddressed.push('$member: $file has no $address');
 		}
 		Assert.isTrue(rendered.length > 0, 'the registry has to carry arms for this walk to mean anything');
 		Assert.equals(0, unaddressed.length, 'arms whose member the runner could not reach:\n  ${unaddressed.join('\n  ')}');

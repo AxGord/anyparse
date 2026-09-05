@@ -23,6 +23,23 @@ import utest.Test;
  */
 class UnguardedNullableDerefTest extends Test {
 
+	/**
+	 * A stand-in for the standard library's `Reflect`, so the fixture below reaches the seed it
+	 * is about.
+	 *
+	 * `Reflect.copy` is seeded through `NullableSource.crossFileReturnCallSource`, which needs
+	 * the INDEX to hold a type of that name whose member returns a `Null<T>`. A one-file probe
+	 * never reaches that arc at all, so a fixture written as one passes whatever the exclusion
+	 * list says — measured: it survived `M-NULLABLE-FLOW-EXCLUDE-NONE` while its `Array.pop`
+	 * neighbours died. `other` is the same signature under a name the list does not carry, and
+	 * it is what makes the pair discriminate.
+	 */
+	private static final REFLECT: { file: String, source: String } = {
+		file: 'Reflect.hx',
+		source: 'class Reflect { public static function copy<T>(o:Null<T>):Null<T> return o;'
+			+ ' public static function other<T>(o:Null<T>):Null<T> return o; }'
+	};
+
 	public function testMapBindingFieldFlagged(): Void {
 		final vs: Array<Violation> = violations('class C { function f(m:Map<String,Int>) { var u = m[k]; g(); u.foo; } function g() {} }');
 		Assert.equals(1, vs.length);
@@ -448,6 +465,41 @@ class UnguardedNullableDerefTest extends Test {
 	 */
 	public function testUnsafeFirstStepDoesNotNarrow(): Void {
 		Assert.equals(2, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; if (u.b?.c != null) u.d(); } }').length);
+	}
+
+	/**
+	 * `Reflect.copy` is excluded for a DIFFERENT reason from the collection accessors above,
+	 * and it is a NAME in the list rather than a rule because no rule can derive it.
+	 *
+	 * Its signature is `Reflect.copy<T>(o: Null<T>): Null<T>` — identity-nullable by
+	 * SEMANTICS — and parametricity admits `function f<T>(x: Null<T>): Null<T> return null;`
+	 * with exactly that type, so nothing over the signature separates the two. The sound
+	 * alternative, `TypeResolver.isProvablyNonNull`, needs `@:nullSafety` active at both ends
+	 * and moved 0 of the 6 real sites this exclusion moves: three `opt.<field> = …` writes
+	 * after `Reflect.copy(HaxeFormat.instance.defaultWriteOptions)` in this project and two
+	 * `s.<field> = …` writes in `pony/pixi/PixiExtends.hx`, whose arguments are a non-null
+	 * field and a required parameter.
+	 *
+	 * The `Map` twin is the must-not-fire half: a call that really can answer null still
+	 * seeds, so the exclusion is a name and not a hole in the seed.
+	 */
+	@:pin('control')
+	@:killer('M-NULLABLE-FLOW-EXCLUDE-NONE')
+	public function testReflectCopyBindingNotFlagged(): Void {
+		Assert.equals(
+			0, violationsFiles([
+				REFLECT,
+				{ file: 'C.hx', source: 'class C { function f(o:Foo) { var s = Reflect.copy(o); s.fill = 1; } }' }
+			]).length,
+			'an identity-nullable copy of a non-null value does not seed the flow'
+		);
+		Assert.equals(
+			1, violationsFiles([
+				REFLECT,
+				{ file: 'C.hx', source: 'class C { function f(o:Foo) { var s = Reflect.other(o); s.fill = 1; } }' }
+			]).length,
+			'while the same-shaped neighbour the list does not name still does'
+		);
 	}
 
 	private function violations(src: String): Array<Violation> {

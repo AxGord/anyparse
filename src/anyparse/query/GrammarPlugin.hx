@@ -2012,6 +2012,17 @@ typedef RefShape = {
 	 * guard flow cannot model, so seeding them as `MaybeNull` produces systematic false
 	 * positives at `Warning` severity. The point-wise `possible-null-dereference` still
 	 * flags them at `Info` (advisory). Optional; unset excludes nothing.
+	 *
+	 * `Reflect.copy` is here for a DIFFERENT reason, and it is a name rather than a rule
+	 * on purpose. Its signature is `Reflect.copy<T>(o: Null<T>): Null<T>` — identity-nullable
+	 * by SEMANTICS — and no predicate over that signature derives it: parametricity admits
+	 * `function f<T>(x: Null<T>): Null<T> return null;` with the same type. The sound
+	 * alternative, gating on a `@:nullSafety` annotation through
+	 * `TypeResolver.isProvablyNonNull`, needs the mode active at BOTH ends and moved 0 of the
+	 * 6 real sites — all four host files carry none at all. So the honest cut is the name.
+	 * Measured: 5 findings to 2 on this project (three `opt.<field> = …` writes after
+	 * `Reflect.copy(HaxeFormat.instance.defaultWriteOptions)`) and 27 to 25 on the Pony fork,
+	 * with nothing added anywhere.
 	 */
 	@:optional var nullableFlowExcludedCalls: Array<String>;
 

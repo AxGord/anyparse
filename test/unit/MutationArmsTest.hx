@@ -39,6 +39,16 @@ final class MutationArmsTest extends Test {
 		+ '"note": "the layer stops answering"},{"name": "X-BOTH", "type": "pack.Layer", "method": '
 		+ '"answer", "force": "false", "find": "a", "note": "which one"}]}';
 
+	/** A default-kind row beside one addressing a grammar declaration's `@:re` terminal. */
+	private static final KINDED: String = '{"arms": [{"name": "X-FORCE", "type": "pack.Layer", "method": "answer", "force": "false", '
+		+ '"note": "the layer stops answering"},{"name": "X-META", "type": "pack.Raw", "method": "@:re", "kind": "MetaCall", '
+		+ '"find": "a", "replace": "b", "note": "the terminal never matches"}]}';
+
+	/** A valid row beside one asking for a forced return on something that has no signature. */
+	private static final FORCED_KIND: String = '{"arms": [{"name": "X-FORCE", "type": "pack.Layer", "method": "answer", '
+		+ '"force": "false", "note": "the layer stops answering"},{"name": "X-FORCED-META", "type": "pack.Raw", '
+		+ '"method": "@:re", "kind": "MetaCall", "force": "false", "note": "nothing to splice after"}]}';
+
 	/** Two rows that are each well-formed and share a name. */
 	private static final DUPLICATE: String = '{"arms": ['
 		+ '{"name": "X-TWICE", "type": "pack.Layer", "method": "answer", "force": "false", "note": "first"},'
@@ -152,6 +162,44 @@ final class MutationArmsTest extends Test {
 		Assert.equals(2, table.arms.length);
 		Assert.equals('X-FORCE :: pack.Layer#answer :: return false; :: the layer stops answering', MutationArms.render(table.arms[0]));
 		Assert.equals('X-FRAGMENT :: pack.Other#shape :: fragment :: the shape reads b', MutationArms.render(table.arms[1]));
+	}
+
+	/**
+	 * An arm that names no kind addresses a member, and one that names a kind spells it.
+	 *
+	 * The kind is what lets an arm reach a grammar DECLARATION: `HxCondBlockTailRaw` is an
+	 * abstract with no method at all, and the cut that disables it lands on its `@:re`
+	 * terminal, a module-level `MetaCall`. `address` is the only place the runner's selector
+	 * is written down, so an arm that drops the kind there silently asks for
+	 * `FnMember:@:re` and reaches nothing.
+	 */
+	@:pin('control')
+	@:killer('M-ARM-KIND-UNSPELLED')
+	public function testAKindedArmSpellsItsKindInTheAddress(): Void {
+		final table: ArmTable = MutationArms.parse(KINDED);
+		Assert.same([], table.errors, 'the second table is clean, so the fixture reaches the render');
+		Assert.equals('pack.Layer#answer', MutationArms.address(table.arms[0]), 'the default kind stays unspelled');
+		Assert.equals('pack.Raw#MetaCall:@:re', MutationArms.address(table.arms[1]), 'and a kinded arm carries it');
+		Assert.equals('FnMember:answer', MutationArms.selectorOf('answer'), 'a bare member reads back as the default kind');
+		Assert.equals(
+			'MetaCall:@:re', MutationArms.selectorOf('MetaCall:@:re'), 'and a colon-bearing name splits once, not at every colon'
+		);
+	}
+
+	/**
+	 * A `force` cut cannot address anything but a member: the runner splices `return <x>;`
+	 * after a function signature, and a metadata node has no signature to splice after.
+	 * Refused at the ROW, where the arm has a name, rather than in the shell, where it would
+	 * be a rendering failure with nothing to point at.
+	 */
+	@:pin('control')
+	@:killer('M-ARM-ROW-OK')
+	public function testAForcedCutWithANonDefaultKindIsRefused(): Void {
+		final table: ArmTable = MutationArms.parse(FORCED_KIND);
+		Assert.notNull(MutationArms.find(table.arms, 'X-FORCE'), 'the valid sibling row is admitted, so the read reached the table');
+		Assert.equals(1, table.errors.length, 'the forced row with a kind is one complaint');
+		Assert.stringContains('X-FORCED-META', table.errors[0]);
+		Assert.stringContains('only FnMember can carry one', table.errors[0]);
 	}
 
 }
