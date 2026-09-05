@@ -5,6 +5,8 @@ import anyparse.check.Linter;
 import anyparse.check.OversizedType;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.SymbolIndex;
 import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
@@ -223,6 +225,98 @@ class OversizedTypeCheckTest extends Test {
 		Assert.equals(1, withConfig('{"rules": {"oversized-type": {"grants": ["Other: not this type"]}}}', classWithMembers(51)).length);
 	}
 
+	/**
+	 * The interface carve-out, and the one arm that is RED at base: a type whose members are in the
+	 * MAJORITY declared by an interface it implements is not a decomposition candidate, because a
+	 * member the contract requires cannot be moved out at all. 30 dictated + 25 of its own = 55
+	 * members, over the 50 cap on the raw count and silent on the carved one.
+	 *
+	 * The first assertion is the reachability control and PASSES at base: the identical 55-member
+	 * type WITHOUT the `implements` clause is still reported, so the fixture provably reaches the
+	 * walk and the second assertion fails on its own claim rather than by exception. It is also
+	 * what makes this pin discriminate the CLAUSE rather than the member count.
+	 *
+	 * The plugin is a `CachingGrammarPlugin` carrying a resolution index, not the bare
+	 * `HaxeQueryPlugin` the other cases use: the carve-out resolves the interface through
+	 * `SymbolIndexHost`, so it is INERT without one — which is the same reason a `lint` run over a
+	 * scope too narrow to hold the interface keeps reporting.
+	 */
+	public function testAMajorityDictatedTypeIsNotADecompositionCandidate(): Void {
+		final iface: { file: String, source: String } = { file: 'I.hx', source: ifaceWithMethods(30) };
+		Assert.equals(
+			1, withIndex([iface, { file: 'C.hx', source: implementor(30, 25, false) }]).length,
+			'the same 55 members with no implements clause stay reported'
+		);
+		Assert.equals(0, withIndex([iface, { file: 'C.hx', source: implementor(30, 25, true) }]).length);
+	}
+
+	/**
+	 * The bound the carve-out must never cross, and the reason `contractFacade` asks TWO questions:
+	 * a type that is also fat in its OWN members keeps its finding however much of it the contract
+	 * dictates. 60 dictated + 51 of its own = 111; the dictated share is a majority, but 51 own
+	 * members are over the cap by themselves.
+	 *
+	 * GREEN at base — it guards the new gate's own bound rather than a behaviour change. Its arm is
+	 * dropping `own <= maxMembers` from `contractFacade`, which silences this fixture at once.
+	 */
+	public function testATypeFatInItsOwnMembersIsStillReported(): Void {
+		final vs: Array<Violation> = withIndex([
+			{ file: 'I.hx', source: ifaceWithMethods(60) },
+			{ file: 'C.hx', source: implementor(60, 51, true) }
+		]);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('111 members (max 50)'), vs[0].message);
+	}
+
+	/**
+	 * The other half of `contractFacade`: a MINORITY dictated share carves nothing. 5 dictated + 50
+	 * of its own = 55, and 50 own members are within the cap — so without the share test this type
+	 * would fall silent, which is what a plain subtraction would have done to `MemberOrder` (5 of
+	 * 54 dictated) and `HaxeNamingSupport` (6 of 55) on this very tree.
+	 *
+	 * GREEN at base — it guards the share test. Its arm is dropping `dictated >= own`.
+	 */
+	public function testAMinorityDictatedTypeIsStillReported(): Void {
+		final vs: Array<Violation> = withIndex([
+			{ file: 'I.hx', source: ifaceWithMethods(5) },
+			{ file: 'C.hx', source: implementor(5, 50, true) }
+		]);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('55 members (max 50)'), vs[0].message);
+	}
+
+	/**
+	 * An `implements` target the scope cannot resolve carves NOTHING — the same 55-member type as
+	 * the first case, with `I.hx` left out of the file set.
+	 *
+	 * This is the pin for the direction the reused predicate gets wrong. `MemberLookup`'s
+	 * `typeProvablyLacksMember` answers "declares it OR is unresolvable", which is the SAFE union
+	 * for `make-final` (a spurious true means "skip the rewrite") and the UNSAFE one here (a
+	 * spurious true means "this member is dictated"). Consumed without the resolvability gate, ONE
+	 * unresolvable interface makes all 55 members read as dictated, `own` falls to 0 and the type
+	 * goes quiet on no evidence at all.
+	 *
+	 * GREEN at base — it guards the gate. Its arm is deleting the `resolveStartType` loop from
+	 * `dictatedMemberCount`, which turns this fixture silent.
+	 */
+	public function testAnUnresolvableInterfaceCarvesNothing(): Void {
+		final vs: Array<Violation> = withIndex([{ file: 'C.hx', source: implementor(30, 25, true) }]);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('55 members (max 50)'), vs[0].message);
+	}
+
+	/**
+	 * Run the check over `files` through a plugin that HOSTS a resolution index built from them —
+	 * the shape a real `lint` run has, and the one the interface carve-out needs. The bare
+	 * `HaxeQueryPlugin` every other case here uses is not a `SymbolIndexHost`, so the carve-out
+	 * cannot run through it at all.
+	 */
+	private function withIndex(files: Array<{ file: String, source: String }>): Array<Violation> {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionIndex(SymbolIndex.build(files, plugin));
+		return new OversizedType().run(files, plugin);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new OversizedType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -250,6 +344,18 @@ class OversizedTypeCheckTest extends Test {
 		FileSystem.deleteFile('$dir/apqlint.json');
 		FileSystem.deleteDirectory(dir);
 		return out;
+	}
+
+	/** An interface named `I` declaring `n` methods `m0`… — the contract a fixture's members are dictated by. */
+	private static function ifaceWithMethods(n: Int): String {
+		return 'interface I {\n' + [for (i in 0...n) '\tfunction m$i():Void;'].join('\n') + '\n}';
+	}
+
+	/** A class named `C` with `methods` methods `m0`… and `fields` fields of its own, implementing `I` or not. */
+	private static function implementor(methods: Int, fields: Int, implementsIface: Bool): String {
+		return 'class C${implementsIface ? ' implements I' : ''} {\n'
+			+ [for (i in 0...methods) '\tpublic function m$i():Void {}'].join('\n') + '\n'
+			+ [for (i in 0...fields) '\tvar v$i:Int;'].join('\n') + '\n}';
 	}
 
 	/** A parseable class named `C` with exactly `n` field members, one per line. */

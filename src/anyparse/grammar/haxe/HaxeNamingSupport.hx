@@ -8,7 +8,6 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
 
@@ -65,62 +64,6 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * blast radius reaches every rule that selects on visibility.
 	 */
 	public static inline final INTERFACE_MOD: String = 'interface';
-
-	/**
-	 * Haxe reserved keywords. A de-prefixed local whose bare name lands on one of
-	 * these is not a usable identifier, so its rename is skipped (report-only).
-	 * Published through `RefShape.reservedWords` for the checks that DERIVE an
-	 * identifier without going through a policy normalizer.
-	 */
-	public static final KEYWORDS: Array<String> = [
-		'abstract',
-		'break',
-		'case',
-		'cast',
-		'catch',
-		'class',
-		'continue',
-		'default',
-		'do',
-		'dynamic',
-		'else',
-		'enum',
-		'extends',
-		'extern',
-		'false',
-		'final',
-		'for',
-		'function',
-		'if',
-		'implements',
-		'import',
-		'in',
-		'inline',
-		'interface',
-		'is',
-		'macro',
-		'new',
-		'null',
-		'operator',
-		'overload',
-		'override',
-		'package',
-		'private',
-		'public',
-		'return',
-		'static',
-		'super',
-		'switch',
-		'this',
-		'throw',
-		'true',
-		'try',
-		'typedef',
-		'untyped',
-		'using',
-		'var',
-		'while'
-	];
 
 	/** The node kind of a binding declared after the comma in `var a = 1, b = 2;` — see `VarHost`. */
 	private static inline final VAR_MORE_KIND: String = 'VarMore';
@@ -306,11 +249,11 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg("^([A-Z][A-Z0-9_]*|[a-z][a-zA-Z0-9]*)$", ''),
 				label: 'UPPER_SNAKE or camelCase static final',
-				normalize: stripUnderscorePrefix,
+				normalize: HaxeIdentifierCase.stripUnderscorePrefix,
 				// The OTHER shape this rule's format accepts. Reached only when the stripped spelling is
 				// taken — `_height` next to an inherited `height` is the shape that found this: the
 				// stripped name collides, and the constant's own siblings are UPPER_SNAKE anyway.
-				normalizeAlt: upperSnakeConstant
+				normalizeAlt: HaxeIdentifierCase.upperSnakeConstant
 			},
 			{
 				category: NamingCategory.Field,
@@ -318,7 +261,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: ['public', 'static'],
 				format: new EReg("^_[a-z][a-zA-Z0-9]*$", ''),
 				label: 'private field _ prefix',
-				normalize: underscoreCamel
+				normalize: HaxeIdentifierCase.underscoreCamel
 			},
 			{
 				category: NamingCategory.Field,
@@ -330,7 +273,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				// prefix is a PRIVATE-field marker and carries nothing on a public one. Only a leading
 				// underscore is derivable - an UPPER_SNAKE public field (`STORE_FILE_NAME`) strips to
 				// itself, so `correctedName` yields null and the finding stays report-only.
-				normalize: stripUnderscorePrefix
+				normalize: HaxeIdentifierCase.stripUnderscorePrefix
 			},
 			{
 				category: NamingCategory.Method,
@@ -338,7 +281,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg("^[a-z][a-zA-Z0-9_]*$", ''),
 				label: 'camelCase method',
-				normalize: stripUnderscorePrefix
+				normalize: HaxeIdentifierCase.stripUnderscorePrefix
 			},
 			{
 				category: NamingCategory.Local,
@@ -346,7 +289,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg(LOCAL_CASE_PATTERN, ''),
 				label: 'camelCase local (no _ prefix)',
-				normalize: snakeToCamel
+				normalize: HaxeIdentifierCase.snakeToCamel
 			},
 			{
 				category: NamingCategory.Param,
@@ -354,7 +297,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg(CAMEL_CASE_PATTERN, ''),
 				label: 'camelCase parameter',
-				normalize: snakeToCamel
+				normalize: HaxeIdentifierCase.snakeToCamel
 			},
 			{
 				category: NamingCategory.CatchVar,
@@ -362,7 +305,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg(CAMEL_CASE_PATTERN, ''),
 				label: 'camelCase catch variable',
-				normalize: snakeToCamel
+				normalize: HaxeIdentifierCase.snakeToCamel
 			}
 		];
 		// checkstyle's `ignoreExtern` defaults to TRUE and every `NameCheckBase` check honours it. The
@@ -441,11 +384,6 @@ final class HaxeNamingSupport implements NamingSupport {
 	/** Whether `category` is a type MEMBER (field / constant / method) - the categories a `@:rtti` class's reflection reads by name. */
 	private static inline function isMemberCategory(category: NamingCategory): Bool {
 		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
-	}
-
-	/** Whether `c` is an ASCII decimal digit. */
-	private static inline function isDigit(c: Int): Bool {
-		return c >= '0'.code && c <= '9'.code;
 	}
 
 	/**
@@ -543,42 +481,6 @@ final class HaxeNamingSupport implements NamingSupport {
 			case 'CatchClause': NamingCategory.CatchVar;
 			case _: null;
 		}
-	}
-
-	/**
-	 * The mechanical fix for a private field missing its `_` prefix: prepend `_` to the shared
-	 * `camelCore` (`shape` -> `_shape`, `Shape` -> `_shape`, `HEIGHT` -> `_height`, `URLPath` ->
-	 * `_urlPath`, `CELLS_NUM_X` -> `_cellsNumX`). Sharing `camelCore` - and through it
-	 * `smartSegment` - is what stops the fix MANUFACTURING a lowercase-head-over-caps-tail name
-	 * (`_hEIGHT`), which the `naming` artifact arm could never report back: its pattern is anchored
-	 * at the head, and the `_` prefix hides it. Splitting on `_` is what makes an UPPER_SNAKE
-	 * private field FIXABLE rather than report-only - the rule's own format (`^_[a-z][a-zA-Z0-9]*$`)
-	 * admits no internal underscore, so a name that keeps one can never satisfy the rule it is
-	 * being corrected for. No keyword test: every result opens with `_`, so none can be a keyword.
-	 * Not `inline` - passed as a `NamingRule.normalize` function value.
-	 */
-	private static function underscoreCamel(name: String): Null<String> {
-		final core: Null<String> = camelCore(name);
-		return core == null ? null : '_$core';
-	}
-
-	/**
-	 * The mechanical fix for a static final wrongly given a private-field `_` prefix:
-	 * strip the leading underscore(s), keeping the result whenever it is a
-	 * syntactically valid identifier (`_forceBuild` → `forceBuild`, `_FORCE_BUILD` →
-	 * `FORCE_BUILD`). Whether the stripped name actually conforms to the Constant
-	 * rule's format is decided by the caller (`Naming.renameEditsFor` gates on
-	 * `rule.format.match`), so both camelCase and UPPER_SNAKE pass here while a name
-	 * matching neither (`_FORCE_build` → `FORCE_build`) is filtered there. A strip that
-	 * leaves an invalid identifier, or one that lands on a Haxe keyword (`_new` → `new`, the
-	 * CONSTRUCTOR name), → null. Not `inline` — passed as a `NamingRule.normalize` function value.
-	 */
-	private static function stripUnderscorePrefix(name: String): Null<String> {
-		var i: Int = 0;
-		while (i < name.length && name.fastCodeAt(i) == '_'.code) i++;
-		if (i == 0) return null;
-		final stripped: String = name.substr(i);
-		return new EReg("^[a-zA-Z][a-zA-Z0-9_]*$", '').match(stripped) && !KEYWORDS.contains(stripped) ? stripped : null;
 	}
 
 	/**
@@ -823,92 +725,6 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * One `snake_case` segment normalized. An ALL-UPPERCASE segment (a screaming
-	 * constant word like `FILE`) is lowercased whole so the camel join reads
-	 * naturally (`missingFile`, not `mISSINGFILE`). A segment OPENING with an acronym
-	 * run - two or more uppercase (or embedded digit) characters immediately followed by
-	 * a lowercase letter - lowercases that run EXCEPT its last character, which heads the
-	 * next word (`URLPath` -> `urlPath`, `HTTP2Server` -> `http2Server`). Any other segment
-	 * carrying a lowercase letter is kept verbatim, preserving an already-camel word (`Id`,
-	 * `scaleX`). A digit-only segment has no letters and is kept as-is. Not `inline` - a
-	 * helper of `snakeToCamel`.
-	 */
-	private static function smartSegment(segment: String): String {
-		if (new EReg("^[A-Z][A-Z0-9]*$", '').match(segment)) return segment.toLowerCase();
-		final run: Int = leadingAcronymRun(segment);
-		return run < 2 ? segment : segment.substr(0, run - 1).toLowerCase() + segment.substr(run - 1);
-	}
-
-	/**
-	 * The length of `segment`'s leading uppercase (or embedded-digit) run when a LOWERCASE
-	 * letter follows it, else 0: `URLPath` -> 4, `HTTP2Server` -> 6, `MyLocal` -> 1,
-	 * `HEIGHT` -> 0 (nothing follows the run), `scaleX` -> 0. A digit counts only inside the
-	 * run, never as its first character, so a name can never open with a digit anyway.
-	 */
-	private static function leadingAcronymRun(segment: String): Int {
-		var i: Int = 0;
-		while (i < segment.length) {
-			final c: Int = segment.fastCodeAt(i);
-			final upper: Bool = c >= 'A'.code && c <= 'Z'.code;
-			final digit: Bool = i > 0 && c >= '0'.code && c <= '9'.code;
-			if (!upper && !digit) break;
-			i++;
-		}
-		if (i == 0 || i >= segment.length) return 0;
-		final next: Int = segment.fastCodeAt(i);
-		return next >= 'a'.code && next <= 'z'.code ? i : 0;
-	}
-
-	/**
-	 * The mechanical fix for a local / param / catch name violating camelCase: the shared
-	 * `camelCore` (`_items` -> `items`, `__scaleX` -> `scaleX`, `MyLocal` -> `myLocal`, `min_gap` ->
-	 * `minGap`), refused when the result is a Haxe keyword (`_new` -> `new`) - not a usable
-	 * identifier here, unlike under `underscoreCamel`'s `_` prefix, so the binding stays
-	 * report-only. Subsumes the former de-prefix / lowercase-first normalizers. Not `inline` -
-	 * passed as a `NamingRule.normalize` function value.
-	 */
-	private static function snakeToCamel(name: String): Null<String> {
-		final lowered: Null<String> = camelCore(name);
-		return lowered == null || KEYWORDS.contains(lowered) ? null : lowered;
-	}
-
-	/**
-	 * The camelCase core both `snakeToCamel` and `underscoreCamel` correct through: strip every
-	 * leading underscore, split the rest on `_`, apply `smartSegment`'s word policy per segment,
-	 * join with capitalised heads, and lowercase the first letter. An all-uppercase segment is
-	 * lowercased whole (`MISSING_FILE` -> `missingFile`); a segment opening with an acronym run
-	 * keeps only that run's last character capitalised (`URLPath` -> `urlPath`); a mixed-case
-	 * segment is preserved (`coachingQualification_Id` -> `coachingQualificationId`). Null when
-	 * nothing survives the strip (`_`, `__`), or when a separator falls between two DIGIT runs and
-	 * camelCase therefore cannot re-encode it (see the loop). The keyword test and the `_` prefix
-	 * belong to the callers - that is the whole of what the two corrections differ by.
-	 */
-	private static function camelCore(name: String): Null<String> {
-		var start: Int = 0;
-		while (start < name.length && name.fastCodeAt(start) == '_'.code) start++;
-		final segments: Array<String> = [for (s in name.substr(start).split('_')) if (s.length > 0) smartSegment(s)];
-		if (segments.length == 0) return null;
-		final buf: StringBuf = new StringBuf();
-		buf.add(segments[0]);
-		for (i in 1...segments.length) {
-			final seg: String = segments[i];
-			final prev: String = segments[i - 1];
-			// A `_` BETWEEN TWO DIGIT RUNS is the one separator camelCase cannot re-encode: the capital
-			// that marks every other segment boundary does not exist for a digit, so the two runs fuse
-			// into one and the name changes meaning - `_u5_7` (an age band "U5 - 7") would read as
-			// `_u57`, and `_u1_14` / `_u11_4` would BOTH land on `_u1114`. A digit run next to a LETTER
-			// keeps its boundary either way (`HEADLINE_1` -> `Headline1`, `1_TEXTFORMAT` -> `1Textformat`),
-			// so only this pairing refuses. No derivable correction means the declaration stays
-			// report-only, which is what the rule already did for every multi-segment name before the
-			// split landed.
-			if (isDigit(seg.fastCodeAt(0)) && isDigit(prev.fastCodeAt(prev.length - 1))) return null;
-			buf.add(seg.charAt(0).toUpperCase() + seg.substr(1));
-		}
-		final joined: String = buf.toString();
-		return joined.charAt(0).toLowerCase() + joined.substr(1);
-	}
-
-	/**
 	 * Is a declaration of `category` named `name` a Haxe idiom no naming policy governs? A discard
 	 * binding (`_`, `__` - `for (_ in items)`, a placeholder param) carries no meaning to
 	 * spell correctly, and a dunder name (`__init__` - the static module
@@ -993,16 +809,6 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function modNames(kinds: Array<String>): Array<String> {
 		return [for (kind in kinds) MOD_KIND_TO_NAME[kind] ?? kind];
-	}
-
-
-	/**
-	 * `name` respelled UPPER_SNAKE, or null when that changes nothing or does not spell an
-	 * identifier. The constant rule's `normalizeAlt`: its format's other branch.
-	 */
-	private static function upperSnakeConstant(name: String): Null<String> {
-		final upper: String = SourceText.upperSnake(name);
-		return upper != name && SourceText.isIdentifier(upper) ? upper : null;
 	}
 
 

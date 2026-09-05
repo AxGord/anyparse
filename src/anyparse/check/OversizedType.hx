@@ -8,8 +8,10 @@ import anyparse.query.Clusters;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -30,6 +32,17 @@ using StringTools;
  *   blocks (`RefShape.conditionalMemberKind`) so guarded members count too;
  *   modifier siblings are not members and are not counted.
  * - **line extent** — the number of source lines the type's span covers.
+ *
+ * ## The interface carve-out
+ *
+ * A member an implemented interface DECLARES cannot be moved out of the type without breaking
+ * the contract, so a type whose bulk is its `implements` surface is being reported for a size no
+ * decomposition reaches. When the dictated members are the MAJORITY and the ones the type owns
+ * are within the member cap, the member clause is dropped; the LINE clause never is.
+ * `contractFacade` carries both conditions, the measured distribution behind them and what the
+ * carve-out loses; `dictatedMemberCount` carries why resolvability is settled before membership.
+ * It needs a `SymbolIndexHost` plugin to resolve the interfaces at all, so a scope too narrow to
+ * hold them keeps reporting — this gate can only ever fall silent on evidence.
  *
  * ## Grammar-agnostic
  *
@@ -126,6 +139,8 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		if (containerKinds.length == 0 || memberKinds.length == 0) return [];
 		final violations: Array<Violation> = [];
+		var index: Null<SymbolIndex> = null;
+		var indexAsked: Bool = false;
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
@@ -142,6 +157,13 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 					final built: CallGraph = graph ?? CallGraph.build([entry], plugin);
 					graph = built;
 					noMemberSeam(built, typeName);
+				},
+				dictated: (typeName, names) -> {
+					if (!indexAsked) {
+						indexAsked = true;
+						index = hostIndex(plugin);
+					}
+					dictatedMemberCount(index, entry.file, typeName, names);
 				}
 			};
 			walk(violations, entry.file, entry.source, tree, cfg);
@@ -206,10 +228,12 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		if (span == null) return;
 		final name: String = type.name ?? '<anonymous>';
 		if (cfg.granted.contains(name)) return;
-		final members: Int = countMembers(type, cfg);
+		final names: Array<String> = memberNames(type, cfg);
+		final members: Int = names.length;
 		final lines: Int = lineExtent(source, span);
 		final over: Array<String> = [];
-		if (members > cfg.maxMembers) over.push('$members$MEMBERS_UNIT${cfg.maxMembers})');
+		if (members > cfg.maxMembers && !contractFacade(members, cfg.dictated(name, names), cfg.maxMembers))
+			over.push('$members$MEMBERS_UNIT${cfg.maxMembers})');
 		if (lines > cfg.maxLines) over.push('$lines$LINES_UNIT${cfg.maxLines})');
 		if (over.length == 0) return;
 		final headerEnd: Int = source.indexOf('\n', span.from);
@@ -279,19 +303,19 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	}
 
 	/**
-	 * The number of member declarations among `parent`'s children, recursing into `#if` conditional-compilation blocks so guarded members count too — an `#if` and its `#else` branches ALL count (a source-size metric measures what is written, not one compiled configuration). Modifier
-	 * siblings (visibility / static runs preceding a member) are separate nodes
-	 * whose kinds are not in `memberKinds`, so they are never counted.
+	 * The NAMES of the member declarations among `parent`'s children, in document order, recursing into `#if` conditional-compilation blocks so guarded members count too — an `#if` and its `#else` branches ALL count (a source-size metric measures what is written, not one compiled configuration). Modifier siblings (visibility / static runs preceding a member) are separate nodes whose kinds are not in `memberKinds`, so they are never counted.
+	 *
+	 * The LENGTH is the member metric; the names themselves feed the interface carve-out. A nameless member projects as the empty string, which no interface can declare, so it counts toward the total and never toward the dictated share.
 	 */
-	private static function countMembers(parent: QueryNode, cfg: OversizedCfg): Int {
-		var count: Int = 0;
+	private static function memberNames(parent: QueryNode, cfg: OversizedCfg): Array<String> {
+		final names: Array<String> = [];
 		for (child in parent.children) {
 			if (cfg.conditionalKind != null && child.kind == cfg.conditionalKind)
-				count += countMembers(child, cfg);
+				for (nested in memberNames(child, cfg)) names.push(nested);
 			else if (cfg.memberKinds.contains(child.kind))
-				count++;
+				names.push(child.name ?? '');
 		}
-		return count;
+		return names;
 	}
 
 	/** The number of source lines `span` covers — newlines in the slice + 1. */
@@ -299,6 +323,94 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		var lines: Int = 1;
 		for (i in span.from ... span.to) if (source.fastCodeAt(i) == '\n'.code) lines++;
 		return lines;
+	}
+
+	/**
+	 * The resolution-scoped `SymbolIndex` the interface carve-out resolves through, or null when
+	 * `plugin` hosts none.
+	 *
+	 * Gated on `SymbolIndexHost` the same way `unused-private` reaches its widest scope, and on
+	 * `hasAnyResolutionScope` rather than `hasDeclaredResolutionScope`: the interfaces this
+	 * carve-out must resolve are the ones the linted type WRITES in its own `implements` clause,
+	 * so the report scope is where they live and an implicit std-only scope is no hazard — a std
+	 * interface a project type implements is exactly as dictating as a local one. Null here means
+	 * the carve-out cannot run, and a carve-out that cannot run reports, never silences.
+	 */
+	private static function hostIndex(plugin: GrammarPlugin): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host?.resolutionIndex();
+	}
+
+	/**
+	 * How many of `members` the type's own `implements` clause DICTATES — declared by one of the
+	 * interfaces it names, transitively through that interface's own supertypes — or null when
+	 * the question cannot be answered here.
+	 *
+	 * Null in four cases, every one of which leaves the finding standing: no index, the file not
+	 * in it, the type not in that file's declarations, or ANY implemented interface unresolvable
+	 * in the scope. The last one is the whole reason this function exists rather than a bare
+	 * `MemberLookup.implementsInterfaceDeclaringMember` loop. That predicate answers
+	 * "declares it OR is unresolvable" and is consumed by `make-final`, where a spurious true
+	 * means "skip the rewrite" and is therefore free. Consumed HERE the same true would mean
+	 * "this member is dictated" — one unresolvable interface would make every member look
+	 * dictated and silence the finding on a type nobody has proved anything about. So
+	 * resolvability is settled first, through the same resolver `typeProvablyLacksMember` itself
+	 * starts from (`TypeRefIndex.resolveStartType`, against the OWNER's file, since an
+	 * `implements` entry is a simple name written in that file's scope), and only then is the
+	 * membership question asked.
+	 */
+	private static function dictatedMemberCount(
+		index: Null<SymbolIndex>, file: String, typeName: String, members: Array<String>
+	): Null<Int> {
+		if (index == null) return null;
+		final info: Null<FileInfo> = index.fileInfo(file);
+		if (info == null) return null;
+		final decl: Null<TypeDeclInfo> = info.types.find(t -> t.name == typeName);
+		if (decl == null) return null;
+		final interfaces: Array<String> = decl.interfaces;
+		if (interfaces.length == 0) return 0;
+		for (iface in interfaces) if (index.refs.resolveStartType(iface, file) == null) return null;
+		var dictated: Int = 0;
+		for (member in members) if (member.length > 0 && interfaces.exists(i -> !index.members.typeProvablyLacksMember(i, member, file)))
+			dictated++;
+		return dictated;
+	}
+
+	/**
+	 * Whether a type's member count is DICTATED rather than authored — the carve-out that stops
+	 * this rule firing on a contract facade.
+	 *
+	 * The finding says "decomposition candidate", and decomposition can only move members the
+	 * type OWNS. A member an implemented interface declares cannot leave without breaking the
+	 * contract, so a type whose bulk is its `implements` surface is being reported for a size its
+	 * author cannot reduce by splitting: the seam there is in the INTERFACE SET, an architecture
+	 * decision, not in the member list.
+	 *
+	 * Two conditions, and each one is load-bearing:
+	 *
+	 * - **the dictated members are at least half** (`dictated >= own`). Measured over this
+	 *   project's nine findings the dictated share is bimodal with nothing in between —
+	 *   `Lowering`, `WriterLowering`, `MoveMember` and the two oversized test classes at 0 %,
+	 *   `MemberOrder` at 9 % (5 of 54: `Check` + `ConfigAware`) and `HaxeNamingSupport` at 11 %
+	 *   (6 of 55: `NamingSupport`), then `CachingGrammarPlugin` at 61 % (34 of 56) and
+	 *   `HaxeQueryPlugin` at 63 % (34 of 54), both implementing FIVE interfaces of which
+	 *   `GrammarPlugin` alone declares 21 members. Any threshold in 0.15–0.60 splits that gap
+	 *   identically; a half is the one that needs no tuning and states the claim directly.
+	 * - **the OWN members are within the cap** (`own <= maxMembers`). Without it a type with 300
+	 *   authored members behind 400 dictated ones would be silenced by the share alone. With it
+	 *   the carve-out can only ever forgive the dictated surface, never a type that is fat in its
+	 *   own right — which is exactly what it must not do.
+	 *
+	 * What it loses, said plainly: a god-class that got that way by implementing a god-interface
+	 * is no longer reported by THIS rule. That is deliberate — the size is real, but the lever is
+	 * the interface, and pointing a member-count metric at it produces a finding whose only
+	 * honest fix is out of the metric's reach. The LINE extent is untouched by the carve-out, so
+	 * such a type still reports the moment its dictated members grow long rather than numerous.
+	 */
+	private static function contractFacade(members: Int, dictated: Null<Int>, maxMembers: Int): Bool {
+		if (dictated == null) return false;
+		final own: Int = members - dictated;
+		return own <= maxMembers && dictated >= own;
 	}
 
 }
@@ -315,4 +427,5 @@ private typedef OversizedCfg = {
 	final maxLines: Int;
 	final granted: Array<String>;
 	final noSeam: (String) -> Bool;
+	final dictated: (String, Array<String>) -> Null<Int>;
 };
