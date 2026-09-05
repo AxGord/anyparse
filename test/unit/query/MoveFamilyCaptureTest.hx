@@ -21,8 +21,8 @@ using Lambda;
  * leave the whole suite green — the defect was caught by the worker's own forwarding audit, not by a
  * gate.
  *
- * So this class is the gate that was missing: ten fixtures driven through the four ops, with the
- * FULL resulting bytes of every changed file pinned. It is deliberately not a set of `contains`
+ * So this class is the gate that was missing: seventeen fixtures driven through the four ops, with
+ * the FULL resulting bytes of every changed file pinned. It is deliberately not a set of `contains`
  * assertions — the regression it exists for changed a decision, not a token, and the only assertion
  * that catches "a decision moved" without knowing which decision is the whole file.
  *
@@ -34,6 +34,11 @@ using Lambda;
  * list at all, in either direction (T511 refused the move over one, T512 wrote a real import into
  * one), a destination must never be handed an import of its own module (T518), and a destination
  * whose only mention of a CARRIED dependency is a comment must not veto the carry (T535).
+ *
+ * S90 added four more for the REPOINT side of the module-static wildcard S88 taught the CARRY
+ * side (T568): a bare caller that only that wildcard bound, a rival wildcard that outranks it, a
+ * local that shadows it, and a sub-module source type it never bound at all. Three are RED at
+ * base; the fourth says in its own doc that it is not, and why it is here anyway.
  *
  * Pure and in-memory: each op is driven through its own `Array<{file, source}>` entry point, so
  * there is no temp directory, no ordering between tests and no cost worth measuring. Run it alone
@@ -471,6 +476,203 @@ final class MoveFamilyCaptureTest extends Test {
 				file: 'b/Dest.hx',
 				source: 'package b;\n\nimport a.Src;\n\n@:access(a.Src)\nclass Dest {\n\n\tpublic static function keep(): Int return S'
 				+ 'rc.hidden();\n\n\tpublic static function label(): Int return Src.hidden();\n\n}\n'
+			}
+		]);
+	}
+
+	/**
+	 * The T568 headline: a caller that reached the moved STATIC as a BARE name through the source
+	 * module's own `import a.Src.*;`. Neither existing scan could see it — `qualifiedReceiverEdits`
+	 * needs a receiver and `collectBareCallerHits` only walks the SOURCE file — so the base engine
+	 * returned Ok with TWO changed files and left `helper(1)` standing over a type that no longer
+	 * declares it (`Unknown identifier : helper`, compile-proved).
+	 *
+	 * RED at base on both halves: the changed-file count (2, not 3) and, once that is satisfied,
+	 * `a/User.hx`'s bytes. `stays(2)` is the discriminator inside the file — it comes through the
+	 * SAME wildcard and is not moved, so a repoint that qualified by import rather than by member
+	 * would rewrite it too. Killed by the arm `no-wildcard-repoint` (drop the
+	 * `collectWildcardBareEdits` call from `move`).
+	 */
+	public function testABareWildcardCallerIsRepointedByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tpublic static function helper(n: Int): Int return'
+					+ ' n + 1;\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
+			},
+			{
+				file: 'a/User.hx',
+				source: 'package a;\n\nimport a.Src.*;\n\nclass User {\n\n\tpublic function new() {}\n\n'
+					+ '\tpublic function go(): Int return helper(1) + stays(2);\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n'
+			}
+		];
+		capture(MoveMember.move('a/Src.hx', 'Src', ['helper'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
+			},
+			{
+				file: 'a/User.hx',
+				source: 'package a;\n\nimport a.Src.*;\nimport b.Dest;\n\nclass User {\n\n\tpublic functi'
+				+ 'on new() {}\n\n\tpublic function go(): Int return Dest.helper(1) + stays(2);\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n\tpublic static func'
+				+ 'tion helper(n: Int): Int return n + 1;\n\n}\n'
+			}
+		]);
+	}
+
+	/**
+	 * Two files reach a bare `helper` through a module-static wildcard and only ONE of them meant the
+	 * source module. `a/Rival.hx` declares `import c.Other.*;` BELOW `import a.Src.*;`, and Haxe
+	 * resolves the LAST wildcard — measured on 4.3.7, two files differing only in that order printed
+	 * `B` and `A` — so its call never named `Src` and must survive the move untouched.
+	 *
+	 * RED at base (2 changed files, not 3, and `a/Wild.hx` absent). The discriminator for the
+	 * ordering filter is the COUNT: dropping it repoints `a/Rival.hx` too and the list grows to 4.
+	 * Killed by the arm `no-rival-order-filter` (drop the `providers.exists` clause from
+	 * `DependencyCarry.wildcardBareReferences`).
+	 */
+	public function testARivalWildcardKeepsItsBareCallerByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Rival.hx',
+				source: 'package a;\n\nimport a.Src.*;\nimport c.Other.*;\n\nclass Rival {\n\n\tpublic fu'
+					+ 'nction new() {}\n\n\tpublic function go(): Int return helper(1);\n\n}\n'
+			},
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tpublic static function helper(n: Int): Int return'
+					+ ' n + 1;\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
+			},
+			{
+				file: 'a/Wild.hx',
+				source: 'package a;\n\nimport a.Src.*;\n\nclass Wild {\n\n\tpublic function new() {}\n\n'
+					+ '\tpublic function go(): Int return helper(1);\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n'
+			},
+			{
+				file: 'c/Other.hx',
+				source: 'package c;\n\nclass Other {\n\n\tpublic static function helper(n: Int): Int return n + 2;\n\n}\n'
+			}
+		];
+		capture(MoveMember.move('a/Src.hx', 'Src', ['helper'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
+			},
+			{
+				file: 'a/Wild.hx',
+				source: 'package a;\n\nimport a.Src.*;\nimport b.Dest;\n\nclass Wild {\n\n\tpublic functi'
+				+ 'on new() {}\n\n\tpublic function go(): Int return Dest.helper(1);\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n\tpublic static func'
+				+ 'tion helper(n: Int): Int return n + 1;\n\n}\n'
+			}
+		]);
+	}
+
+	/**
+	 * One file, two bare `helper` reads, one binder each. `shadowed()` declares a local of that name,
+	 * so its read is resolved by the file itself; `free()` has no such binder and came through the
+	 * wildcard. The answer has to be per OCCURRENCE — a per-NAME verdict would have to rewrite both or
+	 * neither, and rewriting the local read produces `Dest.helper` where an Int was meant.
+	 *
+	 * RED at base (2 changed files, not 3). The local read is the discriminator, and it is a BYTE one:
+	 * an arm that drops the binding test keeps the count at 3 and only the file's bytes move. Killed
+	 * by the arm `no-binding-filter` (drop `h.bindingSpan == null` from
+	 * `DependencyCarry.wildcardBareReferences`).
+	 */
+	public function testALocalShadowKeepsItsBareReadByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Local.hx',
+				source: 'package a;\n\nimport a.Src.*;\n\nclass Local {\n\n\tpublic function new() {}\n\n\tpublic function shadowed(): Int '
+					+ '{\n\t\tfinal helper: Int = 5;\n\t\treturn helper;\n\t}\n\n\tpublic function free(): Int return helper(1);\n\n}\n'
+			},
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tpublic static function helper(n: Int): Int return'
+					+ ' n + 1;\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n'
+			}
+		];
+		capture(MoveMember.move('a/Src.hx', 'Src', ['helper'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
+			{
+				file: 'a/Local.hx',
+				source: 'package a;\n\nimport a.Src.*;\nimport b.Dest;\n\nclass Local {\n\n\tpublic funct'
+				+ 'ion new() {}\n\n\tpublic function shadowed(): Int {\n\t\tfinal helper: Int = 5;\n\t\treturn helper;'
+				+ '\n\t}\n\n\tpublic function free(): Int return Dest.helper(1);\n\n}\n'
+			},
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n\tpublic static func'
+				+ 'tion helper(n: Int): Int return n + 1;\n\n}\n'
+			}
+		]);
+	}
+
+	/**
+	 * A move out of a SUB-MODULE type, which a module-static wildcard never bound: measured on 4.3.7,
+	 * `import a.Src.*;` brings in the MAIN type's statics only, so `a/User.hx`'s bare `helper` resolves
+	 * through the `z.Free.*` wildcard above it and is none of this move's business — it prints 10, not
+	 * 2. `mainStatic()` in the same expression is what the `a.Src.*` statement is actually there for.
+	 *
+	 * GREEN at base, and says so: the base engine repoints no wildcard caller at all, so it cannot get
+	 * this one wrong either. It is here as the arm-discriminator for the binds-it filter — killed by
+	 * the arm `no-binds-filter` (drop `src.names.contains(name)` from
+	 * `DependencyCarry.wildcardBareReferences`), which repoints `a/User.hx` and takes the count to 3.
+	 */
+	public function testASubModuleMoveRepointsNoWildcardCallerByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tpublic static function mainStatic(): Int return 1'
+					+ ';\n\n}\n\nclass Extra {\n\n\tpublic static function helper(n: Int): Int return n + 1;\n\n\tpublic st'
+					+ 'atic function stays(n: Int): Int return n - 1;\n\n}\n'
+			},
+			{
+				file: 'a/User.hx',
+				source: 'package a;\n\nimport z.Free.*;\nimport a.Src.*;\n\nclass User {\n\n\tpublic func'
+					+ 'tion new() {}\n\n\tpublic function go(): Int return helper(1) + mainStatic();\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n'
+			},
+			{
+				file: 'z/Free.hx',
+				source: 'package z;\n\nclass Free {\n\n\tpublic static function helper(n: Int): Int return n + 9;\n\n}\n'
+			}
+		];
+		capture(MoveMember.move('a/Src.hx', 'Extra', ['helper'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tpublic static function mainStatic(): Int return 1'
+				+ ';\n\n}\n\nclass Extra {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n\tpublic static func'
+				+ 'tion helper(n: Int): Int return n + 1;\n\n}\n'
 			}
 		]);
 	}
