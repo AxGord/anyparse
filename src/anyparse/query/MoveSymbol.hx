@@ -375,17 +375,17 @@ final class MoveSymbol {
 		// user. What does not merge stays in the anchor group — and goes LAST there, so the plain
 		// statements keep the order the dependency walk found them in.
 		final guardedEdits: Array<{ span: Span, text: String }> = [];
-		final carried: Array<String> = splitGuardedBlocks(destSource, rawCarried, plugin, guardedEdits);
+		final carried: Array<String> = splitGuardedBlocks(destSource, destInfo, rawCarried, plugin, guardedEdits);
 		final usings: Array<String> = carriedUsingLines(carried);
 		final ranked: Bool = destInfo.imports.exists(imp -> imp.kind == ImportKind.Using);
 		// Nothing to rank, or nothing to rank AGAINST: the ordinary anchor is the whole answer, and a
 		// lone carried `using` is then the only one the destination has.
-		if (usings.length == 0 || !ranked) return {
+		if (usings.length == 0 || !ranked) return foldColocated({
 			usingEdit: null,
 			importEdit: carriedImportEdit(destSource, carried, plugin),
 			guardedEdits: guardedEdits,
 			unseated: []
-		};
+		});
 		final ordinary: Int = importAnchor(destSource, plugin).offset;
 		final seat: Int = usingSeatOf(destSource, destInfo, ordinary);
 		final rest: Array<String> = carriedImportLines(carried);
@@ -395,7 +395,7 @@ final class MoveSymbol {
 		// by `applyEdits`' width tie-break, which cannot tell them apart, leaving the order to
 		// `Array.sort` — which Haxe does not guarantee stable. ONE edit removes the question, and the
 		// `using` lines lead it so they still rank last.
-		return if (seat < 0)
+		final seated: CarriedEdits = if (seat < 0)
 			{
 				usingEdit: null,
 				importEdit: carriedImportEdit(destSource, rest, plugin),
@@ -416,6 +416,7 @@ final class MoveSymbol {
 				guardedEdits: guardedEdits,
 				unseated: []
 			};
+		return foldColocated(seated);
 	}
 
 	/**
@@ -455,12 +456,42 @@ final class MoveSymbol {
 	}
 
 	/**
+	 * Fold a merged `#if` region's edit into the ordinary import edit when the two land on the SAME
+	 * offset — which they now can, since a carried region merges on the line after its region's own
+	 * last import and that is exactly where the ordinary anchor sits when the header root IS that
+	 * region (a whole-file `#if macro`, the shape `src/anyparse/macro` is written in).
+	 *
+	 * Two zero-width inserts at one offset are separated only by `applyEdits`' width tie-break, which
+	 * cannot tell them apart, leaving their order to `Array.sort` — which Haxe does not guarantee
+	 * stable. The same reason `carriedDestEdits` folds a coinciding `using` seat rather than emitting
+	 * a second edit beside it.
+	 */
+	private static function foldColocated(edits: CarriedEdits): CarriedEdits {
+		final importEdit: Null<{ span: Span, text: String }> = edits.importEdit;
+		if (importEdit == null || edits.guardedEdits.length == 0) return edits;
+		final kept: Array<{ span: Span, text: String }> = [];
+		var text: String = importEdit.text;
+		for (edit in edits.guardedEdits) if (
+			edit.text != '' && edit.span.from == importEdit.span.from && edit.span.to == importEdit.span.to
+		)
+			text += edit.text;
+		else
+			kept.push(edit);
+		return {
+			usingEdit: edits.usingEdit,
+			importEdit: { span: importEdit.span, text: text },
+			guardedEdits: kept,
+			unseated: edits.unseated
+		};
+	}
+
+	/**
 	 * `carried` with every guarded REGION that merges into one the destination already has taken out
 	 * of it and appended to `into` as an edit; a region with no such seat stays in the returned list,
 	 * at its end, to be written whole at the import anchor.
 	 */
 	private static function splitGuardedBlocks(
-		destSource: String, carried: Array<String>, plugin: GrammarPlugin, into: Array<{ span: Span, text: String }>
+		destSource: String, destInfo: FileInfo, carried: Array<String>, plugin: GrammarPlugin, into: Array<{ span: Span, text: String }>
 	): Array<String> {
 		final shape: RefShape = plugin.refShape();
 		final blocks: Array<String> = carried.filter(line -> GuardedImportCarry.isBlock(line, shape));
@@ -468,7 +499,9 @@ final class MoveSymbol {
 		final out: Array<String> = carried.filter(line -> !GuardedImportCarry.isBlock(line, shape));
 		final destBlocks: Array<CondBlock> = GuardedImportCarry.blocksOf(destSource, plugin);
 		for (block in blocks) {
-			final seat: Null<{ span: Span, text: String }> = GuardedImportCarry.mergeSeat(destSource, destBlocks, block, shape);
+			final seat: Null<{ span: Span, text: String }> = GuardedImportCarry.mergeSeat(
+				destSource, destBlocks, block, shape, destInfo.imports
+			);
 			if (seat == null)
 				out.push(block);
 			else if (seat.text != '')
@@ -526,7 +559,6 @@ final class MoveSymbol {
 	private static function carriedImportLines(carried: Array<String>): Array<String> {
 		return carried.filter(line -> !line.startsWith('using '));
 	}
-
 
 	/**
 	 * The source range to CUT for the declaration that OWNS `declSpan`:

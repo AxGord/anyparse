@@ -3,10 +3,13 @@ package anyparse.query;
 import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.GuardedImportCarry.GuardedCarry;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.Refs.RefHit;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -168,6 +171,10 @@ final class DependencyCarry {
 			final line: String = DependencyCarry.importLineFor(provider, source);
 			if (!carried.contains(line)) carried.push(line);
 		}
+		final wildRefusal: Null<String> = foldWildcardCarry(
+			source, declSpan, cursorInfo, destInfo, files, plugin, carried, guarded, cursorDirectives
+		);
+		if (wildRefusal != null) return CarryErr(wildRefusal);
 		for (group in guarded) carried.push(GuardedImportCarry.blockText(group.condition, group.lines, shape));
 		return CarryOk(usingLinesToCarry(
 			source, tree, memberAccessKinds(shape), declSpan, cursorInfo, destInfo, destSource, files, carried,
@@ -278,7 +285,21 @@ final class DependencyCarry {
 		dep: String, source: String, cursorInfo: FileInfo, directives: Array<CondDirective>, shape: RefShape,
 		guarded: Array<{ condition: String, lines: Array<String> }>
 	): Null<String> {
-		switch GuardedImportCarry.carryFor(dep, cursorInfo.file, source, cursorInfo, directives, shape) {
+		return foldGuardedResult(GuardedImportCarry.carryFor(dep, cursorInfo.file, source, cursorInfo, directives, shape), source, guarded);
+	}
+
+	/**
+	 * Fold one already-computed guarded carry into `guarded`, grouped by the condition that guards
+	 * it, or return the refusal it carries.
+	 *
+	 * Split from `foldGuardedCarry` so the module-static WILDCARD arm can reuse it: that arm selects
+	 * its own providers (a `pkg.Mod.*` statement is not reachable by the last-segment match
+	 * `GuardedImportCarry.carryFor` does), and everything after the selection is identical.
+	 */
+	private static function foldGuardedResult(
+		result: GuardedCarry, source: String, guarded: Array<{ condition: String, lines: Array<String> }>
+	): Null<String> {
+		switch result {
 			case GuardedNone:
 			case GuardedRefusal(message):
 				return message;
@@ -933,6 +954,193 @@ final class DependencyCarry {
 		return MoveSymbol.importStatementText(imp, path, statementSource.substring(imp.span.from, imp.span.to));
 	}
 
+	/**
+	 * The `import <module>.*;` statements the moved declaration reaches a name through, appended to
+	 * `carried` (or folded into `guarded` when the statement is `#if`-guarded), and the refusal a
+	 * carry that would silently rebind owes instead.
+	 *
+	 * A MODULE-static wildcard binds no type at all — measured on 4.3.7, `import m.Mod.*;` brings in
+	 * the MAIN type's static fields and, for an enum main type, its constructors; a SUB-module type's
+	 * statics stay unbound (`Unknown identifier : fromSide`). So nothing the dependency walk asks
+	 * about — a type position, an upper-initial receiver — can ever see one, and the whole class of
+	 * name it provides was invisible to the carry: `move-member` wrote a destination reading
+	 * `Unknown identifier : packOf` at rc 0, `wrote 2 file(s)`, with the advisory calling the miss
+	 * best-effort (T559). For `src/anyparse/macro` that is not an edge: 20 files reach
+	 * `MacroNames.*` this way, 73 reach `ExitCode.*`, and the moved body of the very member S87
+	 * carried by hand reached `WriterLoweringSupport.optFieldAccess` through one.
+	 *
+	 * The refusals are the two ways a carry cannot repair the name. A member the DESTINATION's own
+	 * type declares wins over any import (measured: a class declaring `fromMain` printed `own`, not
+	 * the wildcard's), so the moved body would silently rebind to it. And a second module-static
+	 * wildcard at the destination whose module declares any of the same names is decided by
+	 * STATEMENT ORDER — the last one wins, measured, with no diagnostic — so whichever way the
+	 * carried line is seated one of the two files changes meaning.
+	 */
+	private static function foldWildcardCarry(
+		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, files: Array<FileInfo>, plugin: GrammarPlugin,
+		carried: Array<String>, guarded: Array<{ condition: String, lines: Array<String> }>, directives: Null<Array<CondDirective>>
+	): Null<String> {
+		final shape: RefShape = plugin.refShape();
+		final providers: Array<WildProvider> = wildcardStaticProviders(cursorInfo, files, shape);
+		if (providers.length == 0) return null;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return null;
+		final free: Array<String> = freeNamesInside(tree, declSpan, shape, providers);
+		if (free.length == 0) return null;
+		var scanned: Null<Array<CondDirective>> = directives;
+		for (provider in providers) {
+			final wanted: Array<String> = provider.names.filter(name -> free.contains(name));
+			if (wanted.length == 0) continue;
+			// Asked BEFORE the already-present skip: a destination that declares the name shadows the
+			// moved body whether or not anything is carried, so a statement already standing there is
+			// no reason to stay silent about it.
+			final shadow: Null<String> = shadowedByDestMember(provider, wanted, destInfo);
+			if (shadow != null) return shadow;
+			if (destInfo.imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == provider.imp.raw)) continue;
+			final refusal: Null<String> = rivalWildcardCollision(provider, wanted, destInfo, files, shape);
+			if (refusal != null) return refusal;
+			if (!provider.imp.guarded) {
+				final line: String = DependencyCarry.importLineFor(provider.imp, source);
+				if (!carried.contains(line)) carried.push(line);
+				continue;
+			}
+			final walk: Array<CondDirective> = scanned ?? GuardedImportCarry.directivesOf(source, plugin);
+			scanned = walk;
+			final guardRefusal: Null<String> = foldGuardedResult(
+				GuardedImportCarry.carryForProviders([provider.imp], wanted[0], cursorInfo.file, source, walk, shape), source, guarded
+			);
+			if (guardRefusal != null) return guardRefusal;
+		}
+		return null;
+	}
+
+	/**
+	 * The reason a name a module-static wildcard binds cannot survive the move at all, or null.
+	 *
+	 * A member the DESTINATION MODULE declares wins over every imported static — measured on 4.3.7, a
+	 * class declaring `fromMain` printed `own` rather than the wildcard's — so the moved body would
+	 * silently rebind to it. Asked whether or not the statement is carried, because carrying is not
+	 * what creates the shadow.
+	 *
+	 * Every type of the destination FILE is asked, not the one type the member is landing in: this
+	 * layer answers for a whole file and has no destination type to narrow to. A sibling type's
+	 * member does not really shadow, so that costs a refusal rather than a rebind — the direction
+	 * every gate in this module takes.
+	 */
+	private static function shadowedByDestMember(provider: WildProvider, wanted: Array<String>, destInfo: FileInfo): Null<String> {
+		final shadowed: Null<String> = wanted.find(name -> destInfo.types.exists(t -> t.members.exists(m -> m.name == name)));
+		return shadowed == null
+			? null
+			: 'the moved code reaches "$shadowed" through "import ${provider.imp.raw};", and ${destInfo.file} declares a member '
+				+ '"$shadowed" of its own — a type\'s own member wins over an imported static, so the moved body would silently '
+				+ 'rebind to it; rename one of the two, or qualify the reference as ${SourceText.lastSegment(provider.module)}.$shadowed';
+	}
+
+	/**
+	 * The reason a module-static wildcard must not be CARRIED past a rival one the destination
+	 * already has, or null.
+	 *
+	 * A second module-static wildcard declaring a name in common is decided by STATEMENT ORDER — the
+	 * last one wins, measured on 4.3.7 with no diagnostic — so whichever way the carried line is
+	 * seated one of the two files changes meaning.
+	 *
+	 * Asked of the whole name SET rather than of the names the moved body uses: an overlap the moved
+	 * code does not touch is still an overlap the DESTINATION's own code may, and this gate has no
+	 * way to tell a used one from an idle one. It costs a refusal on a shape where two wildcard
+	 * modules merely share a name, which no file in this tree does.
+	 */
+	private static function rivalWildcardCollision(
+		provider: WildProvider, wanted: Array<String>, destInfo: FileInfo, files: Array<FileInfo>, shape: RefShape
+	): Null<String> {
+		for (other in wildcardStaticProviders(destInfo, files, shape)) if (other.module != provider.module) {
+			final clash: Null<String> = provider.names.find(name -> other.names.contains(name));
+			if (clash != null)
+				return 'the moved code reaches "${wanted[0]}" through "import ${provider.imp.raw};", and ${destInfo.file} already '
+					+ 'carries "import ${other.imp.raw};" — both modules declare "$clash", and Haxe resolves the LAST wildcard, so '
+					+ 'carrying this one would silently rebind either the moved code or that file\'s own; qualify the references, or '
+					+ 'move the dependency too';
+		}
+		return null;
+	}
+
+	/**
+	 * Every unguarded-or-guarded `import <module>.*;` of `info`'s file whose head names a MODULE the
+	 * index holds, paired with the simple names it binds.
+	 *
+	 * A wildcard whose head is a PACKAGE is a different statement with a different answer —
+	 * `wildcardBinding` prices that one, because it binds TYPES — and one whose head the index cannot
+	 * see binds names this walk cannot enumerate, so it contributes nothing rather than a guess.
+	 */
+	private static function wildcardStaticProviders(info: FileInfo, files: Array<FileInfo>, shape: RefShape): Array<WildProvider> {
+		final out: Array<WildProvider> = [];
+		for (imp in info.imports) if (imp.kind == ImportKind.Wild && imp.raw.endsWith('.*')) {
+			final head: String = imp.raw.substring(0, imp.raw.length - 2);
+			final holder: Null<FileInfo> = files.find(fi -> fi.module == head);
+			if (holder == null) continue;
+			final names: Array<String> = staticNamesOf(holder, shape);
+			if (names.length > 0) out.push({ imp: imp, module: head, names: names });
+		}
+		return out;
+	}
+
+	/**
+	 * The simple names a module-static wildcard on `holder` binds: every member of its MAIN type that
+	 * is reachable as `MainType.<name>` — a `static` one, an `enum abstract` value (static without
+	 * carrying the modifier, which is what `implicitlyStaticMember` is for), and an enum
+	 * constructor. Measured on 4.3.7: a SUB-module type's statics are NOT bound by the wildcard, so
+	 * only the main type is read.
+	 */
+	private static function staticNamesOf(holder: FileInfo, shape: RefShape): Array<String> {
+		final main: Null<TypeDeclInfo> = holder.types.find(t -> t.isMain);
+		if (main == null) return [];
+		final kind: String = main.kind;
+		return [
+			for (m in main.members)
+				if (m.isStatic || MemberKinds.implicitlyStaticMember(kind, m.kind, shape) || MemberKinds.isEnumConstructorKind(m.kind))
+					m.name
+		];
+	}
+
+	/**
+	 * Which of the wildcard-bound names the declaration at `declSpan` writes as a BARE identifier
+	 * that nothing in its own file binds.
+	 *
+	 * Both halves are load-bearing. The mention has to be a NODE — a name inside a comment or a
+	 * string is not a reference, and this answer WRITES an import. And it has to be unbound: a local,
+	 * a parameter or a member of the source type that happens to share a name with one of the
+	 * module's statics is resolved by the file itself, and carrying a statement for it would add an
+	 * import nothing needs — `redundant-import` then reports the file the move just wrote.
+	 */
+	private static function freeNamesInside(
+		tree: QueryNode, declSpan: Span, shape: RefShape, providers: Array<WildProvider>
+	): Array<String> {
+		final identKind: String = shape.identKind;
+		final candidates: Array<String> = [];
+		for (provider in providers) for (name in provider.names) if (!candidates.contains(name)) candidates.push(name);
+		final mentioned: Array<String> = [];
+		collectBareMentions(tree, declSpan, identKind, candidates, mentioned);
+		if (mentioned.length == 0) return [];
+		final hits: Map<String, Array<RefHit>> = Refs.findMulti(mentioned, tree, shape);
+		return [
+			for (name in mentioned)
+				if (!(hits[name] ?? []).exists(h -> h.bindingSpan != null && h.span.from >= declSpan.from && h.span.to <= declSpan.to)) name
+		];
+	}
+
+	/** The recursive half of `freeNamesInside`: distinct `identKind` names inside `declSpan` that are candidates. */
+	private static function collectBareMentions(
+		node: QueryNode, declSpan: Span, identKind: String, candidates: Array<String>, out: Array<String>
+	): Void {
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (
+			name != null && span != null && node.kind == identKind && span.from >= declSpan.from && span.to <= declSpan.to
+			&& candidates.contains(name) && !out.contains(name)
+		)
+			out.push(name);
+		for (c in node.children) collectBareMentions(c, declSpan, identKind, candidates, out);
+	}
+
 }
 
 /**
@@ -978,4 +1186,20 @@ typedef NameBinding = {
 typedef NameSpan = {
 	var name: String;
 	var span: Span;
+}
+
+/**
+ * One module-static wildcard of a file (`import pkg.Mod.*;`): the statement, the MODULE its head
+ * names, and the simple names it binds — the main type's statics, an `enum abstract`'s values and
+ * an enum's constructors.
+ *
+ * The names are carried beside the statement because the statement's own text cannot answer for
+ * them: `raw` ends in `*`, so which names a wildcard provides is an INDEX question, asked once per
+ * provider and then read twice — for the moved body's free names and for the destination's own
+ * wildcards, which is where the two answers have to be compared.
+ */
+private typedef WildProvider = {
+	var imp: ImportInfo;
+	var module: String;
+	var names: Array<String>;
 }
