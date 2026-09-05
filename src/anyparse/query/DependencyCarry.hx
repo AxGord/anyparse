@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.GuardedImportCarry.GuardedCarry;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Refs.RefHit;
+import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
@@ -210,6 +211,54 @@ final class DependencyCarry {
 		if (wild != null) return { path: wild, ownModule: false };
 		final scoped: Null<String> = packageOrTopLevelBinding(name, info, files);
 		return scoped == null ? null : { path: scoped, ownModule: false };
+	}
+
+	/**
+	 * Every BARE occurrence in `tree` that ONLY `srcModule`'s module-static wildcard binds to one
+	 * of `names` — the references a move of those members out of that module leaves dangling.
+	 *
+	 * The mirror of `foldWildcardCarry`, over the same `wildcardStaticProviders` model, and the two
+	 * are NOT symmetric. The carry repairs the MOVED code by adding a statement to the destination;
+	 * a caller left behind cannot be repaired that way, because the statement it already has still
+	 * names the source module and the member is no longer there. So this side returns occurrences
+	 * to REPOINT, and its caller qualifies each one at the destination type.
+	 *
+	 * Three filters, each deciding a real shape:
+	 *  - the file must declare `import <srcModule>.*;` at all — a bare name in a file without one is
+	 *    bound by something else entirely, and rewriting it would be a rename of a stranger;
+	 *  - the name must be one that wildcard BINDS, which `staticNamesOf` answers (the MAIN type
+	 *    only, its statics plus `enum abstract` values and enum constructors) — the same answer the
+	 *    carry reads, so a member the wildcard never provided is never repointed;
+	 *  - a RIVAL module-static wildcard declared LATER in the same file wins the name outright —
+	 *    measured on 4.3.7, two files differing only in the order of `import p.A.*;` and
+	 *    `import p.B.*;` printed `B` and `A` respectively — so such an occurrence never named the
+	 *    source module and is left alone.
+	 *
+	 * Asked per OCCURRENCE rather than per name: a hit `Refs` binds to a local, a parameter or the
+	 * file's own member is resolved by the file itself, while its unbound siblings in the same file
+	 * still came through the wildcard. Answering by name would have to pick one verdict for both.
+	 */
+	public static function wildcardBareReferences(
+		callerInfo: FileInfo, tree: QueryNode, names: Array<String>, srcModule: String, files: Array<FileInfo>, shape: RefShape
+	): Array<WildBareRef> {
+		final providers: Array<WildProvider> = wildcardStaticProviders(callerInfo, files, shape);
+		final src: Null<WildProvider> = providers.find(p -> p.module == srcModule);
+		if (src == null) return [];
+		final srcAt: Int = src.imp.span.from;
+		final bound: Array<String> = [
+			for (name in names)
+				if (src.names.contains(name) && !providers.exists(o ->
+					o.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name)
+				))
+					name
+		];
+		if (bound.length == 0) return [];
+		final hits: Map<String, Array<RefHit>> = Refs.findMulti(bound, tree, shape);
+		return [
+			for (name in bound)
+				for (h in hits[name] ?? [])
+					if (h.kind != RefKind.Decl && h.bindingSpan == null) { name: name, span: h.span, interpolated: h.interpolated }
+		];
 	}
 
 	/**
@@ -1202,4 +1251,19 @@ private typedef WildProvider = {
 	var imp: ImportInfo;
 	var module: String;
 	var names: Array<String>;
+}
+
+/**
+ * One BARE occurrence that a module-static wildcard is the only binder of: the name, the
+ * identifier's own span, and whether it is a braceless `$name` string interpolation.
+ *
+ * The interpolation flag travels because the two spellings take different edits — an ordinary
+ * identifier is qualified by an insert in front of it, a `$name` has to be re-spelled
+ * `${Q.name}` (`MoveMember.qualifyEdit`) — and nothing downstream can recover the flag from the
+ * span alone.
+ */
+typedef WildBareRef = {
+	var name: String;
+	var span: Span;
+	var interpolated: Bool;
 }

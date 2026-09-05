@@ -23,7 +23,7 @@ using Lambda;
  * One resolved member of a type declaration: the member node, the
  * modifier / meta sibling run that precedes it, and the enclosing decl.
  */
-private typedef MemberGroup = {
+typedef MemberGroup = {
 	var member: QueryNode;
 	var modifiers: Array<QueryNode>;
 	var groupSpan: Span;
@@ -70,7 +70,7 @@ private typedef QualifiedHit = {
  * A destination field to mirror under `--scaffold`: its name and the
  * verbatim source of its declared type on the source type.
  */
-private typedef ScaffoldField = {
+typedef ScaffoldField = {
 	var name: String;
 	var type: String;
 }
@@ -93,7 +93,7 @@ private typedef SiblingScanState = {
  * the resolved moved-member set (source order), and the indexed file
  * infos.
  */
-private typedef MovePrep = {
+typedef MovePrep = {
 	var srcFile: String;
 
 	/**
@@ -141,7 +141,7 @@ private enum PrepResult {
  * Internal result of `resolveViaField`: an existing routing field, a
  * name to scaffold (`--scaffold`), or a refusal.
  */
-private enum ViaResult {
+enum ViaResult {
 
 	VOk(name: String);
 	VScaffold(name: String);
@@ -269,6 +269,7 @@ final class MoveMember {
 		final outsideCallersOf: Map<String, Int> = [for (m in prep.moved) m.name => 0];
 		for (m in prep.moved) if (m.isStatic)
 			outsideCallersOf[m.name] = collectQualifiedEdits(prep, m, editsByFile, movedTextEdits, callerFilesNeedingImport);
+		collectWildcardBareEdits(prep, editsByFile, callerFilesNeedingImport, outsideCallersOf);
 
 		// Sibling scan first — its missing-dest-final-fields drive both the
 		// `new Dest(...)` wiring args and the destination scaffold.
@@ -280,7 +281,7 @@ final class MoveMember {
 		} = collectSiblingEdits(prep, captures, scaffold, plugin, movedTextEdits);
 		if (sibling.error != null) return Err(sibling.error);
 		final scaffoldFields: Array<ScaffoldField> = if (sibling.missingDestFields.length > 0) {
-			switch resolveScaffoldFields(prep, sibling.missingDestFields, plugin) {
+			switch MoveScaffold.resolveScaffoldFields(prep, sibling.missingDestFields, plugin) {
 				case { error: e } if (e != null): return Err(e);
 				case { fields: f }: f;
 			}
@@ -316,14 +317,6 @@ final class MoveMember {
 
 	private static inline function pushUnique(names: Array<String>, name: String): Void {
 		if (!names.contains(name)) names.push(name);
-	}
-
-	private static inline function deriveViaName(destTypeName: String): String {
-		return destTypeName == '' ? '_via' : '_${destTypeName.charAt(0).toLowerCase()}${destTypeName.substr(1)}';
-	}
-
-	private static inline function paramNameOf(fieldName: String): String {
-		return fieldName.startsWith('_') ? fieldName.substr(1) : fieldName;
 	}
 
 	private static inline function constructorGroupOf(
@@ -677,6 +670,57 @@ final class MoveMember {
 	}
 
 	/**
+	 * Repoints every caller that reached a moved STATIC member as a BARE name through the source
+	 * module's own `import <srcModule>.*;` — the mirror, on the REPOINT side, of the carry S88
+	 * taught `DependencyCarry` (T568).
+	 *
+	 * `qualifiedReceiverEdits` sees a receiver, `collectBareCallerHits` sees a binding inside the
+	 * source file; a bare name in ANOTHER file has neither, so the whole class was invisible and the
+	 * op wrote `wrote 2 file(s)` at rc 0 over a tree that no longer compiles
+	 * (`Unknown identifier : helper`). Not an edge: 148 module-static wildcard statements across 109
+	 * files of `src/` reach 170 distinct members bare, over 455 name-file pairs.
+	 *
+	 * Qualified at the destination rather than repaired by carrying `import <destModule>.*;` into the
+	 * caller. A carried wildcard would bring EVERY static of the destination into a file the move was
+	 * never asked about, and Haxe decides two wildcards binding one name by statement order alone
+	 * (measured) — so the repair would rebind names the move never touched. Qualifying edits exactly
+	 * the occurrences that broke, and reuses the import debt (`callerFilesNeedingImport`) and the
+	 * visibility promotion (`outsideCallersOf`) the receiver-qualified path already owes.
+	 *
+	 * The DESTINATION file is asked too, but only outside the destination type: a bare occurrence
+	 * INSIDE it resolves to the type's own member once the move lands (a type's own member wins over
+	 * any imported static, measured), while a sibling type in the same module never saw it that way
+	 * and still needs the qualifier.
+	 */
+	private static function collectWildcardBareEdits(
+		prep: MovePrep, editsByFile: Map<String, Array<{ span: Span, text: String }>>, callerFilesNeedingImport: Array<String>,
+		outsideCallersOf: Map<String, Int>
+	): Void {
+		final statics: Array<String> = [for (m in prep.moved) if (m.isStatic) m.name];
+		if (statics.length == 0) return;
+		final files: Array<FileInfo> = prep.index.allFiles();
+		for (file => tree in prep.trees) if (file != prep.srcFile) {
+			final info: Null<FileInfo> = prep.index.fileInfo(file);
+			if (info == null) continue;
+			final isDest: Bool = file == prep.destFile;
+			for (ref in DependencyCarry.wildcardBareReferences(info, tree, statics, prep.srcModule.path, files, prep.shape)) {
+				if (isDest && ref.span.from >= prep.destDecl.fullSpan.from && ref.span.to <= prep.destDecl.fullSpan.to) continue;
+				final m: Null<MovedMember> = prep.moved.find(mm -> mm.name == ref.name);
+				if (m == null) continue;
+				// Re-bound: Strict does not carry a narrowed local into an anonymous struct literal.
+				final mNN: MovedMember = m;
+				final hit: BareHit = { m: mNN, offset: ref.span.from, interp: ref.interpolated ? ref.span : null };
+				editsFor(editsByFile, file).push(qualifyEdit(hit, '${prep.destTypeName}.'));
+				// A caller inside the destination FILE is repointed but owes nothing else: no import (it
+				// is the same file) and no promotion (the member is landing there).
+				if (isDest) continue;
+				outsideCallersOf[ref.name] = (outsideCallersOf[ref.name] ?? 0) + 1;
+				pushUnique(callerFilesNeedingImport, file);
+			}
+		}
+	}
+
+	/**
 	 * The edit qualifying one bare reference with `qualifier` (`Dest.` for a static, `via.`
 	 * for an instance member).
 	 *
@@ -994,52 +1038,6 @@ final class MoveMember {
 	}
 
 	/**
-	 * Resolves the source-type instance field of type `destTypeName` that
-	 * remaining bare instance callers are rewired through: an explicit
-	 * `viaField` is validated, otherwise the unique candidate is picked.
-	 */
-	private static function resolveViaField(prep: MovePrep, viaField: Null<String>, scaffold: Bool, plugin: GrammarPlugin): ViaResult {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(prep.srcSource) : [];
-		final fields: Array<MemberGroup> = [
-			for (g in membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions))
-				if (MemberKinds.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
-		];
-		if (viaField != null) {
-			final g: Null<MemberGroup> = fields.find(f -> f.member.name == viaField);
-			if (g == null)
-				return scaffold
-					? scaffoldViaResult(prep, viaField, plugin.lexicalRegions)
-					: VErr('"${prep.srcTypeName}" has no instance field "$viaField" (--via)');
-			final gSpan: Null<Span> = g.member.span;
-			final declaredType: Null<String> = gSpan != null ? declared[gSpan.from] : null;
-			return declaredType != null && declaredType != prep.destTypeName
-				? VErr('--via field "$viaField" is declared as "$declaredType", not "${prep.destTypeName}"')
-				: VOk(viaField);
-		}
-		final candidates: Array<String> = [
-			for (g in fields) {
-				final gSpan: Null<Span> = g.member.span;
-				final name: Null<String> = g.member.name;
-				if (gSpan != null && name != null && declared[gSpan.from] == prep.destTypeName) name;
-			}
-		];
-		return switch candidates {
-			case [one]: VOk(one);
-			case []: scaffold
-				? scaffoldViaResult(prep, deriveViaName(prep.destTypeName), plugin.lexicalRegions)
-				: VErr(
-					'caller(s) of the moved instance member(s) remain in "${prep.srcTypeName}" but it has no field of '
-					+ 'type "${prep.destTypeName}" to route them through — add one '
-					+ '(e.g. `private final _x: ${prep.destTypeName}`), wire it in the constructor, pass --via <field>, or --scaffold'
-				);
-			case many: VErr(
-				'multiple fields of type "${prep.destTypeName}" on "${prep.srcTypeName}" (${many.join(', ')}) — pass --via <field>'
-			);
-		};
-	}
-
-	/**
 	 * Up-front refusals independent of the edit collection: a moved member
 	 * whose name a case pattern captures, or (for an instance move) a moved
 	 * body referencing `this` — which would silently re-bind to the
@@ -1080,7 +1078,7 @@ final class MoveMember {
 		}
 		final instanceHits: Array<BareHit> = bareHits.filter(h -> !h.m.isStatic);
 		if (instanceHits.length == 0) return null;
-		final via: { name: String, scaffold: Bool } = switch resolveViaField(prep, viaField, scaffold, plugin) {
+		final via: { name: String, scaffold: Bool } = switch MoveScaffold.resolveViaField(prep, viaField, scaffold, plugin) {
 			case VErr(message): return message;
 			case VOk(name): { name: name, scaffold: false };
 			case VScaffold(name): { name: name, scaffold: true };
@@ -1097,7 +1095,7 @@ final class MoveMember {
 			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
 		}
 		if (via.scaffold) {
-			final error: Null<String> = scaffoldViaField(prep, via.name, scaffoldFields, editsByFile, plugin.lexicalRegions);
+			final error: Null<String> = MoveScaffold.scaffoldViaField(prep, via.name, scaffoldFields, editsByFile, plugin.lexicalRegions);
 			if (error != null) return error;
 			advisoryExtras.push(
 				'--scaffold added via field "${via.name}" wired `new ${prep.destTypeName}(...)` in the "${prep.srcTypeName}" constructor'
@@ -1314,126 +1312,6 @@ final class MoveMember {
 	}
 
 	/**
-	 * A `new() {}` with no parameters and an empty body — the auto-emitted
-	 * constructor of a fresh `hxq new` class, safe for `--scaffold` to
-	 * replace with a real one.
-	 */
-	private static function isTrivialCtor(source: String, group: MemberGroup): Bool {
-		final hasParam: Bool = group.member.children.exists(c -> c.kind == 'Required' || c.kind == 'Optional');
-		if (hasParam) return false;
-		final body: Null<QueryNode> = group.member.children.find(c -> c.kind == 'BlockBody');
-		if (body == null || body.children.length > 0) return false;
-		final bodySpan: Null<Span> = body.span;
-		// No parameters, no statement children, and nothing but whitespace
-		// between the braces — a comment is trivia (not a child) and must
-		// not be silently clobbered.
-		return bodySpan != null && isAllWhitespace(source.substring(bodySpan.from + 1, bodySpan.to - 1));
-	}
-
-	private static function ctorBodyClose(source: String, ctorMember: QueryNode): Null<Int> {
-		final span: Null<Span> = ctorMember.span;
-		if (span == null) return null;
-		var close: Int = span.to - 1;
-		if (close >= source.length) close = source.length - 1;
-		while (close >= span.from && SourceText.isSpace(source.fastCodeAt(close))) close--;
-		return close < span.from || source.fastCodeAt(close) != '}'.code ? null : close;
-	}
-
-	/**
-	 * The `private final <name>: <type>;` declarations plus a constructor
-	 * assigning each, ready to splice into an empty destination.
-	 */
-	private static function scaffoldDestBlock(fields: Array<ScaffoldField>): String {
-		final fieldLines: String = [for (f in fields) '\tprivate final ${f.name}: ${f.type};'].join('\n');
-		final params: String = [for (f in fields) '${paramNameOf(f.name)}: ${f.type}'].join(', ');
-		final assigns: String = [
-			for (f in fields) {
-				final p: String = paramNameOf(f.name);
-				'\t\t${p == f.name ? 'this.${f.name} = $p;' : '${f.name} = $p;'}';
-			}
-		].join('\n');
-		return '$fieldLines\n\n\tpublic function new($params) {\n$assigns\n\t}';
-	}
-
-	/**
-	 * Resolves the verbatim declared type of each named source field via
-	 * `TypeInfoProvider.declaredTypeSources`. Returns an error when a field
-	 * has no explicit nominal annotation to mirror onto the destination.
-	 */
-	private static function resolveScaffoldFields(
-		prep: MovePrep, names: Array<String>, plugin: GrammarPlugin
-	): { error: Null<String>, fields: Array<ScaffoldField> } {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return { error: 'cannot --scaffold: the grammar does not expose declared field types', fields: [] };
-		final typeSources: Map<Int, String> = provider.declaredTypeSources(prep.srcSource);
-		final members: Array<MemberGroup> = membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions);
-		final fields: Array<ScaffoldField> = [];
-		for (name in names) {
-			final g: Null<MemberGroup> = members.find(mm -> mm.member.name == name);
-			final gSpan: Null<Span> = g?.member.span;
-			final type: Null<String> = gSpan != null ? typeSources[gSpan.from] : null;
-			if (type == null) return {
-				error: 'cannot --scaffold field "$name": its type on "${prep.srcTypeName}" is not an explicit nominal annotation',
-				fields: []
-			};
-			final typeNN: String = type;
-			fields.push({ name: name, type: typeNN });
-		}
-		return { error: null, fields: fields };
-	}
-
-	/**
-	 * Emits the mirrored final fields + constructor onto the destination.
-	 * With no destination constructor the block is returned to prepend to
-	 * the moved-member insert; with a trivial `new() {}` the block replaces
-	 * it in place; a real constructor is refused.
-	 */
-	private static function applyDestScaffold(
-		prep: MovePrep, fields: Array<ScaffoldField>, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
-		lexicalRegions: (String) -> Array<LexRegion>
-	): { error: Null<String>, prependBlock: String } {
-		final block: String = scaffoldDestBlock(fields);
-		final ctor: Null<MemberGroup> = constructorGroupOf(prep.destDecl, prep.destSource, prep.shape, lexicalRegions);
-		if (ctor == null) return { error: null, prependBlock: block };
-		if (!isTrivialCtor(prep.destSource, ctor)) return {
-			error: '"${prep.destTypeName}" already has a constructor — --scaffold targets an empty destination '
-				+ '(a bare `new() {}` or no constructor)',
-			prependBlock: ''
-		};
-		final from: Int = lineStartOf(prep.destSource, ctor.groupSpan.from);
-		editsFor(editsByFile, prep.destFile).push({ span: new Span(from, ctor.groupSpan.to), text: block });
-		return { error: null, prependBlock: '' };
-	}
-
-	/**
-	 * Adds the via field to the source type and wires
-	 * `<via> = new <Dest>(<fields>);` at the end of its constructor. Refuses
-	 * when the source type has no constructor to wire into.
-	 */
-	private static function scaffoldViaField(
-		prep: MovePrep, viaName: String, fields: Array<ScaffoldField>, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
-		lexicalRegions: (String) -> Array<LexRegion>
-	): Null<String> {
-		final ctor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape, lexicalRegions);
-		if (ctor == null) return 'cannot --scaffold via field "$viaName": "${prep.srcTypeName}" has no constructor to wire it in';
-		final fieldFrom: Int = lineStartOf(prep.srcSource, ctor.groupSpan.from);
-		editsFor(editsByFile, prep.srcFile).push({
-			span: new Span(fieldFrom, fieldFrom),
-			text: '\tprivate final $viaName: ${prep.destTypeName};\n\n'
-		});
-		final bodyClose: Null<Int> = ctorBodyClose(prep.srcSource, ctor.member);
-		if (bodyClose == null) return 'cannot --scaffold via field "$viaName": could not locate the "${prep.srcTypeName}" constructor body';
-		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && SourceText.isSpace(StringTools.fastCodeAt(prep.srcSource, wsStart - 1))) wsStart--;
-		final args: String = [for (f in fields) f.name].join(', ');
-		editsFor(editsByFile, prep.srcFile).push({
-			span: new Span(wsStart, bodyClose),
-			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);\n\t'
-		});
-		return null;
-	}
-
-	/**
 	 * Cuts the moved members from the source and pushes the destination
 	 * insert: the scaffold block (fields + constructor) when generating,
 	 * then a blank-framed run of the moved members before the closing `}`.
@@ -1446,7 +1324,7 @@ final class MoveMember {
 	): Null<String> {
 		var destPrepend: String = '';
 		if (scaffoldFields.length > 0) {
-			final scaf: { error: Null<String>, prependBlock: String } = applyDestScaffold(
+			final scaf: { error: Null<String>, prependBlock: String } = MoveScaffold.applyDestScaffold(
 				prep, scaffoldFields, editsByFile, lexicalRegions
 			);
 			if (scaf.error != null) return scaf.error;
@@ -1462,20 +1340,6 @@ final class MoveMember {
 		final destFrame: String = destPrepend == '' ? '\n\n${blocks.join('\n\n')}\n\n' : '\n\n$destPrepend\n\n${blocks.join('\n\n')}\n\n';
 		editsFor(editsByFile, prep.destFile).push({ span: new Span(wsStart, bodyClose), text: destFrame });
 		return null;
-	}
-
-	/**
-	 * Wraps a scaffold via name in a `VScaffold`, refusing when the name
-	 * already collides with a source member (a duplicate field or an
-	 * ambiguous reference would otherwise be generated silently).
-	 */
-	private static function scaffoldViaResult(prep: MovePrep, name: String, lexicalRegions: (String) -> Array<LexRegion>): ViaResult {
-		return memberGroupOf(prep.srcDecl, name, prep.srcSource, prep.shape, lexicalRegions) != null
-			? VErr(
-				'cannot --scaffold via field "$name": "${prep.srcTypeName}" already declares a member with that name '
-				+ '— pass a different --via'
-			)
-			: VScaffold(name);
 	}
 
 	/**
