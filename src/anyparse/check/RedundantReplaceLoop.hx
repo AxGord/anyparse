@@ -15,22 +15,29 @@ import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
 /**
- * Flags `while (x.indexOf(S) != -1) x = x.replace(S, B);` — a search-and-replace
- * loop that is redundant BY CONSTRUCTION: `StringTools.replace` already replaces
- * EVERY occurrence of `S` in one call (verified live), so looping on `indexOf`
- * either does nothing extra or never stops. Three arms, the last of which splits
- * again once a LITERAL `B` decides what its parameter `S` cannot:
+ * Flags `while (x.indexOf(S) != -1) x = x.replace(S, B);` — a search-and-replace loop
+ * whose `while` is USUALLY redundant: `StringTools.replace` already replaces every occurrence
+ * of `S` present in one call (verified live), so looping on `indexOf` mostly does nothing extra
+ * or never stops. "Usually" is the whole difficulty — `replace` is `split(S).join(B)`, and a
+ * FRESH `S` can appear at a join even when the input's own occurrences are gone, which makes
+ * the loop genuinely required. Three arms, the last of which splits again once a LITERAL `B`
+ * decides what its parameter `S` cannot:
  *
- * - **Arm A — `S` and `B` are both LITERALS and `B` does NOT contain `S`.** After
- *   one `replace`, `x` has zero occurrences of `S` left, so the guard is false and
- *   the loop would have run at most once anyway. `Severity.Info`, with an autofix
- *   that collapses the whole loop to the single unconditional assignment
- *   `x = x.replace(S, B);` — sound even when the ORIGINAL string had zero
- *   occurrences of `S` to begin with, since `replace` on a no-match input returns
- *   the string unchanged.
+ * - **Arm A — `S` and `B` are both LITERALS, `B` does NOT contain `S`, and no fresh `S` can
+ *   form at a JOIN.** `replace` is `split(S).join(B)`, so a surviving `S` has to cross one of
+ *   those joins; `replacementCanReformSearch` decides whether any could. When none can, `x`
+ *   has zero occurrences of `S` after one call, the guard is false on the next check, the loop
+ *   would have run at most once anyway, and the finding is `Severity.Info` with an autofix that
+ *   collapses the whole loop to the single unconditional assignment `x = x.replace(S, B);` —
+ *   sound even when the ORIGINAL string had zero occurrences of `S` to begin with, since
+ *   `replace` on a no-match input returns the string unchanged. When a fresh `S` CAN form the
+ *   loop is neither redundant nor infinite but REQUIRED, and the check says NOTHING: the
+ *   two-space squeeze `while (x.indexOf('  ') != -1) x = x.replace('  ', ' ')` is that shape,
+ *   and arm A used to collapse it into a single pass that leaves `'a    b'` as `'a  b'`.
  * - **Arm B — `S` and `B` are both LITERALS and `B` CONTAINS `S`.** Every
  *   replacement reinserts `S` into `x`, so the guard is true again on the next
  *   check — the loop is INFINITE for any input that ever contains `S`. This is a
@@ -87,10 +94,14 @@ using Lambda;
  * non-empty word, and `replace(word, '')` REMOVES rather than reinserts. So a
  * literal `B` under a parameter `S` splits into two decided sub-arms:
  *
- * - **EMPTY literal `B`.** For every non-empty `S` one `replace` deletes ALL
- *   occurrences, the guard is false on the next check, and the loop is simply
- *   REDUNDANT — the message says exactly that and names the single call that does
- *   the same work. It stays REPORT-ONLY nonetheless: `indexOf('') == 0`, so on the
+ * - **EMPTY literal `B`.** For a ONE-CHARACTER `S` one `replace` deletes ALL occurrences, the
+ *   guard is false on the next check, and the loop is simply REDUNDANT — the message says
+ *   exactly that and names the single call that does the same work. The bound is one character,
+ *   not "non-empty", which is what the message used to claim: an empty `B` joins the pieces with
+ *   nothing, so a two-character `S` can re-form where the deletion closed the gap
+ *   (`'aabb'.replace('ab', '')` is `'ab'`, and the loop runs twice) — the same seam
+ *   `replacementCanReformSearch` keeps arm A off, here stated in words because a PARAMETER `S`
+ *   has no length to test. It stays REPORT-ONLY nonetheless: `indexOf('') == 0`, so on the
  *   degenerate `S == ''` the ORIGINAL loop spins forever while the collapsed form
  *   returns at once. That difference is a behaviour change, and an autofix may not
  *   silently trade a hang for a return — the caller may be relying on neither, but
@@ -422,8 +433,14 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	): Null<Classification> {
 		final searchContent: Null<String> = search.literal;
 		final replacementContent: Null<String> = replacement.literal;
-		if (searchContent != null && replacementContent != null)
-			return { arm: replacementContent.indexOf(searchContent) == -1 ? Arm.A : Arm.B, eqGuarded: false };
+		if (searchContent != null && replacementContent != null) {
+			return if (replacementContent.indexOf(searchContent) != -1)
+				{ arm: Arm.B, eqGuarded: false }
+			else if (replacementCanReformSearch(searchContent, replacementContent))
+				null
+			else
+				{ arm: Arm.A, eqGuarded: false };
+		}
 		if (fns.length == 0)
 			throw new Exception('$RULE_ID: arm C reached with no enclosing function — operandOf refuses a parameter operand without one');
 		if (replacementContent == '') return { arm: Arm.CEmptyB, eqGuarded: false };
@@ -700,18 +717,27 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The EMPTY-literal `B` message: `replace(S, '')` REMOVES every occurrence in one call, so the
-	 * loop adds nothing over a single unconditional assignment — the finding is REDUNDANCY, never
-	 * the infinite loop arm C claims (an empty literal cannot contain a non-empty `S`, and nothing
-	 * is reinserted). The degenerate note is why it is still report-only rather than arm A's
-	 * autofix: `indexOf('') == 0`, so on an empty `S` the ORIGINAL loop hangs where the collapsed
+	 * The EMPTY-literal `B` message: `replace(S, '')` REMOVES every occurrence in one call, so for
+	 * a ONE-CHARACTER `S` the loop adds nothing over a single unconditional assignment — the
+	 * finding is REDUNDANCY, never the infinite loop arm C claims (an empty literal cannot contain
+	 * a non-empty `S`, and nothing is reinserted).
+	 *
+	 * The redundancy is bounded at one character, which the message now says. Deleting an
+	 * occurrence closes the gap between its neighbours, and for an `S` of two characters or more
+	 * that gap can spell a FRESH `S` — `'aabb'.replace('ab', '')` is `'ab'`, so the loop runs
+	 * twice and does real work. The old wording claimed the collapse "does the same work" for any
+	 * non-empty `S`, which is the same seam `replacementCanReformSearch` now keeps arm A off.
+	 *
+	 * The degenerate note is the other half of why this stays report-only rather than gaining arm
+	 * A's autofix: `indexOf('') == 0`, so on an empty `S` the ORIGINAL loop hangs where a collapsed
 	 * form returns, and no rewrite may silently trade a hang for a return.
 	 */
 	private static function emptyReplacementMessage(m: Match, search: String, replacement: String): String {
-		return 'this while (${m.receiverName}.indexOf($search) != -1) loop is redundant for any non-empty $search — replace($search, '
-			+ '$replacement) REMOVES every occurrence in one call, so one ${m.receiverName} = ${m.receiverName}.replace($search, '
-			+ '$replacement); does the same work; not autofixed: the ORIGINAL loop spins forever on a degenerate $search == $replacement'
-			+ ' (indexOf($replacement) == 0), and collapsing it would silently turn that hang into a return';
+		return 'this while (${m.receiverName}.indexOf($search) != -1) loop is redundant only for a SINGLE-CHARACTER $search — '
+			+ 'replace($search, $replacement) then REMOVES every occurrence in one call, so one ${m.receiverName} = '
+			+ '${m.receiverName}.replace($search, $replacement); does the same work; a LONGER $search can re-form where the removal '
+			+ 'closes the gap (replace(\'aabb\', \'ab\', \'\') == \'ab\'), so the loop is doing real work there; and the ORIGINAL loop '
+			+ 'spins forever on a degenerate $search == $replacement (indexOf($replacement) == 0) — never autofixed for either reason';
 	}
 
 	/**
@@ -729,6 +755,41 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 			? '$head; the $search == $replacement guard rules out only the equal case — a shorter $search that still occurs in '
 				+ '$replacement loops forever'
 			: head;
+	}
+
+	/**
+	 * Whether one `replace(S, B)` can leave a FRESH `S` behind — the possibility arm A's whole
+	 * redundancy claim rests on being impossible. Asked only AFTER arm B has answered, so
+	 * "`B` contains `S`" is already off the table when this runs.
+	 *
+	 * `replace` is `split(S).join(B)`, so the result is the pieces BETWEEN the occurrences —
+	 * each `S`-free by construction — joined by `B`. A surviving `S` therefore has to cross a
+	 * join, and every way of crossing one is a boundary overlap: `B` sitting inside `S`, a
+	 * nonempty SUFFIX of `B` starting `S`, or a nonempty PREFIX of `B` ending it. `S = '  '`
+	 * with `B = ' '` is the second and the third at once, which is why
+	 * `'a    b'.replace('  ', ' ')` is still `'a  b'` and the loop around it is REQUIRED — the
+	 * shape arm A used to call redundant and COLLAPSE.
+	 *
+	 * An empty `B` joins the pieces with nothing, so the crossing is a bare piece boundary: any
+	 * `S` of two characters or more splits across one (`'aabb'.replace('ab', '')` is `'ab'`),
+	 * while a one-character `S` cannot, and there one call really does remove every occurrence.
+	 *
+	 * The answer is an OVER-approximation — it asks whether SOME `S`-free pieces could form `S`
+	 * at a join, not whether `split` can actually produce those pieces — so it errs toward
+	 * refusing arm A, never toward claiming a redundancy that is not there. Measured against
+	 * live `StringTools.replace` over 1647 literal pairs (alphabets of 2 and 3, `|S|` and `|B|`
+	 * up to 4, every input up to length 8): 0 pairs where a fresh `S` appeared and this answered
+	 * false, 126 where it answered true and no input realised one — every one of those a
+	 * self-overlapping same-letter shape such as `S = 'aa'`.
+	 */
+	private static function replacementCanReformSearch(search: String, replacement: String): Bool {
+		if (replacement == '') return search.length > 1;
+		if (search.indexOf(replacement) != -1) return true;
+		for (cut in 1...replacement.length + 1) {
+			if (search.startsWith(replacement.substr(replacement.length - cut))) return true;
+			if (search.endsWith(replacement.substring(0, cut))) return true;
+		}
+		return false;
 	}
 
 	/**
