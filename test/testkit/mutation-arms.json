@@ -10,8 +10,15 @@
 		"after the member's signature, leaving the rest of the body behind as dead",
 		"code — the shape S94 measured 22 of. `find`/`replace` splices text inside",
 		"the member instead, for a cut a constant cannot express; both are",
-		"`hxq patch --select 'FnMember:<method>'` payloads, so an arm survives every",
-		"edit that does not rename its member, which a stored line number does not."
+		"`hxq patch --select '<kind>:<method>'` payloads, so an arm survives every",
+		"edit that does not rename its member, which a stored line number does not.",
+		"",
+		"`kind` is the projected node the selector addresses and defaults to",
+		"`FnMember`. A grammar DECLARATION has no method to cut — its `@:re`",
+		"terminal is a module-level `MetaCall` — so such an arm spells its kind and",
+		"is answered by the parser (`unit.MutationArmAddressTest`) rather than by",
+		"the typer. Only `find`/`replace` can carry one: a forced `return` is",
+		"spliced after a function signature."
 	],
 	"arms": [
 		{
@@ -757,6 +764,45 @@
 			"find": "_bc == ' '.code || _bc == '\\t'.code || _bc == '\\n'.code || _bc == '\\r'.code",
 			"replace": "false",
 			"note": "the enum-branch lead/trail Star's own copy of the byte check reads _prevEndPos - 1 raw, so a nested `{ … }` block whose statement swallowed its own terminator refuses the following statement and the file stops parsing"
+		},
+		{
+			"name": "M-COND-BLOCK-TAIL-NEVER",
+			"type": "anyparse.grammar.haxe.HxCondBlockTailRaw",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "@:re('",
+			"replace": "@:re('(?!)",
+			"note": "the block-tail terminal never matches, so a `#if` region that closes its enclosing block and opens one of its own falls back to CondSpliceStmt and the whole region is raw bytes again"
+		},
+		{
+			"name": "M-ARM-KIND-UNSPELLED",
+			"type": "testkit.MutationArms",
+			"method": "address",
+			"force": "'${arm.type}#${arm.method}'",
+			"note": "an arm's address never spells its kind, so a cut aimed at a grammar declaration asks for FnMember and the addressability gate reaches nothing"
+		},
+		{
+			"name": "M-REGION-INSIDE-NONE",
+			"type": "anyparse.query.CondRegionScan",
+			"method": "childrenInside",
+			"force": "[]",
+			"note": "an opaque region never reports the children it kept, so a region unbalanced only in its head is described as wholly raw again and the quote runs back over the statements the writer formats"
+		},
+		{
+			"name": "M-REGION-NOTES-ALWAYS",
+			"type": "anyparse.query.cli.command.FmtCommand",
+			"method": "opaqueCondRegionNotes",
+			"find": "if (listedExplicitly) return [];",
+			"replace": "",
+			"note": "the notes are built even for an explicit --list, so the whole-tree gate pays a second front end per file that has a #if again"
+		},
+		{
+			"name": "M-NULLABLE-FLOW-EXCLUDE-NONE",
+			"type": "anyparse.check.UnguardedNullableDeref",
+			"method": "run",
+			"find": "NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? [])",
+			"replace": "NullableSource.build(shape, [])",
+			"note": "nothing is excluded from the flow seed, so Reflect.copy and the length-guarded collection accessors seed MaybeNull again and every write through the result is a Warning"
 		}
 	]
 }

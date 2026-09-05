@@ -150,6 +150,49 @@ class OpaqueCondRegionScanTest extends Test {
 		Assert.isTrue(notes[0].indexOf('A.hx:2:24:') != -1, 'and the coordinate is the `#if`, not the space before it: ${notes[0]}');
 	}
 
+	/**
+	 * A region the ctor keeps CHILDREN inside gets its own sentence, and a quote made of the
+	 * raw bytes alone.
+	 *
+	 * `CondSpliceBlockTail` is unbalanced in its HEAD only — the `}` closes a `{` opened in
+	 * another region — while everything from its own `{` on is an ordinary statement the
+	 * writer formats. The old single sentence said the writer re-emits the whole region
+	 * byte-for-byte, and the quoted range ran from the first raw byte to the last, straight
+	 * over that statement; on the Pony fork 9 of 31 regions were that shape. The `…` is where
+	 * the formatted block was.
+	 */
+	@:pin('control')
+	@:killer('M-REGION-INSIDE-NONE')
+	public function testAPartlyRawRegionSaysSoAndQuotesOnlyItsRawBytes(): Void {
+		final notes: Array<String> = FmtCommand.opaqueCondRegionNotes(new HaxeQueryPlugin(), 'A.hx', SPLIT_TRY);
+		Assert.equals(2, notes.length);
+		Assert.equals(
+			'apq fmt: A.hx:9:3: conditional-compilation region formatted only in part - "#if display } catch (_:Dynamic) … #end"'
+			+ ' is not a balanced subtree in its position, so the parser captured those bytes raw and the writer re-emits them'
+			+ ' byte-for-byte; what the quote elides is formatted like any other subtree',
+			notes[1]
+		);
+		Assert.stringContains('region left unformatted', notes[0], 'and the wholly raw opener keeps the sentence it always had');
+	}
+
+	/**
+	 * An EXPLICIT `--list` builds no notes at all, and everything else still does.
+	 *
+	 * The notes are a second front end — one full projection parse per file that has a `#if` —
+	 * and that is +19.9% on the whole-tree `fmt --list --one-pass` gate, measured as
+	 * interleaved medians. `--list` is the machine mode a gate spells; a human surveying a
+	 * directory types `fmt <dir>`, which implies the same listing and keeps the notes. Nothing
+	 * about the FILE decides it: both real trees are already canonical, so "only for an
+	 * unchanged file" is the identity and its inverse deletes every note there is.
+	 */
+	@:pin('control')
+	@:killer('M-REGION-NOTES-ALWAYS')
+	public function testAnExplicitListBuildsNoNotes(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.equals(2, FmtCommand.opaqueCondRegionNotes(plugin, 'A.hx', SPLIT_TRY, false).length, 'the survey path keeps them');
+		Assert.equals(0, FmtCommand.opaqueCondRegionNotes(plugin, 'A.hx', SPLIT_TRY, true).length, 'an explicit --list builds none');
+	}
+
 	private static function regionsOf(source: String): Array<OpaqueCondRegion> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();

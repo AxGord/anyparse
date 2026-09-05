@@ -171,6 +171,8 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 	 * block of its own - and the `return` after `#end` is a sibling
 	 * statement, no longer swallowed as a tail.
 	 */
+	@:pin('control')
+	@:killer('M-COND-BLOCK-TAIL-NEVER')
 	public function testOpenerCloserPairKeepsOpenerACondSpliceStmt(): Void {
 		final body: Array<HxStatement> = parseBody(
 			'class C { function f():Void { #if display try { #end g(); #if display } catch (_:Dynamic) { } #end return; } }'
@@ -205,6 +207,8 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 	 * so the source's own `_:Dynamic` spelling survives the rewrite while the
 	 * body is formatted like any other block.
 	 */
+	@:pin('control')
+	@:killer('M-COND-BLOCK-TAIL-NEVER')
 	public function testBlockTailRegionCollapsesEmptyCatchBody(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\t#if display\n\t\ttry {\n\t\t#end\n\t\tg();\n'
 			+ '\t\t#if display\n\t\t} catch (_:Dynamic) {\n\t\t}\n\t\t#end\n\t\treturn;\n\t}\n}';
@@ -217,6 +221,11 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 	 * A NON-empty block-tail body is a real statement list, so it round-trips
 	 * byte for byte the way any other block does - the collapse above is the
 	 * block writer's ordinary empty-body answer, not a special case.
+	 * No @:pin: this fixture SURVIVES M-COND-BLOCK-TAIL-NEVER, measured. With
+	 * the terminal cut the region falls back to CondSpliceStmt, whose raw
+	 * capture reproduces these bytes byte for byte too - a round trip is a
+	 * fidelity guard here, not a discriminator, and the three fixtures that
+	 * name the arm are the ones that read the tree.
 	 */
 	public function testBlockTailRegionRoundTripsNonEmptyBody(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\t#if display\n\t\ttry {\n\t\t#end\n\t\tg();\n'
@@ -230,6 +239,8 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 	 * stays raw bytes, and everything from its `{` on is a real node the
 	 * writer formats.
 	 */
+	@:pin('control')
+	@:killer('M-COND-BLOCK-TAIL-NEVER')
 	public function testBlockTailRegionKeepsHeadRawAndBodyStructural(): Void {
 		final body: Array<HxStatement> = parseBody(
 			'class C { function f():Void { #if display try { #end g(); #if display } catch (_:Dynamic) { trace(1); h(); } #end return; } }'

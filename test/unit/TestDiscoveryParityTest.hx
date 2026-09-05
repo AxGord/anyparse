@@ -937,9 +937,11 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testThePilotPinsReachTheGeneratedRegistry(): Void {
 		Assert.same([
-			'unit.MutationArmAddressTest#testEveryDeclaredArmAddressesALiveMember :: control :: M-ARM-PATH-FLAT',
+			'unit.MutationArmAddressTest#testEveryDeclaredArmAddressesALiveMember :: control :: M-ARM-PATH-FLAT,M-ARM-KIND-UNSPELLED',
 			'unit.MutationArmAddressTest#testTheDeferredArmsAreTheOnesTheWalkAnswersFor :: control :: M-ARM-PATH-FLAT',
 			'unit.MutationArmsTest#testADuplicateArmNameIsRefused :: guard :: ',
+			'unit.MutationArmsTest#testAForcedCutWithANonDefaultKindIsRefused :: control :: M-ARM-ROW-OK',
+			'unit.MutationArmsTest#testAKindedArmSpellsItsKindInTheAddress :: control :: M-ARM-KIND-UNSPELLED',
 			'unit.MutationArmsTest#testAModulePathBecomesTheTwoCandidateFiles :: control :: M-ARM-PATH-FLAT',
 			'unit.MutationArmsTest#testANonJsonTableIsOneComplaint :: guard :: ',
 			'unit.MutationArmsTest#testARowDeclaringBothCutsIsRefused :: control :: M-ARM-ROW-OK',
@@ -1012,6 +1014,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor'
 			+ ' :: control :: M-SUPERDECLARES-FALSE',
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
+			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
@@ -1050,6 +1053,12 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured'
 			+ ' :: control :: M-WORDOP-NO-RESTORE',
+			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody'
+			+ ' :: control :: M-COND-BLOCK-TAIL-NEVER',
+			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionKeepsHeadRawAndBodyStructural'
+			+ ' :: control :: M-COND-BLOCK-TAIL-NEVER',
+			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testOpenerCloserPairKeepsOpenerACondSpliceStmt'
+			+ ' :: control :: M-COND-BLOCK-TAIL-NEVER',
 			'unit.grammar.haxe.HxConditionalExprFitSliceTest#testOverwideGluedBreaksAtDirectiveSeams :: control :: M-NEWLINE-SIGNALS-NONE',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly'
 			+ ' :: control :: M-EICR-BOUNDARY-SKIP',
@@ -1144,8 +1153,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: ',
 			'unit.query.OpaqueCondRegionScanTest#testACommentAfterTheEndStaysOutOfTheQuote :: control :: M-OPAQUE-REGION-TRIVIA-KEPT',
+			'unit.query.OpaqueCondRegionScanTest#testAPartlyRawRegionSaysSoAndQuotesOnlyItsRawBytes :: control :: M-REGION-INSIDE-NONE',
 			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote'
 			+ ' :: control :: M-OPAQUE-REGION-WS-GAP',
+			'unit.query.OpaqueCondRegionScanTest#testAnExplicitListBuildsNoNotes :: control :: M-REGION-NOTES-ALWAYS',
 			'unit.query.OpaqueCondRegionScanTest#testDanglingElseIsOpaqueWhileItsBraceIdenticalTwinIsNot'
 			+ ' :: control :: M-OPAQUE-REGION-NONE',
 			'unit.query.OpaqueCondRegionScanTest#testTheNoteNamesTheLineTheRegionAndTheReason :: control :: M-OPAQUE-REGION-NONE',
@@ -1266,7 +1277,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'M-OPAQUE-REGION-TRIVIA-KEPT',
 			'M-PEB-WS-REWIND-TRYPARSE-OFF',
-			'M-PEB-WS-REWIND-SEPSTARTS-OFF'
+			'M-PEB-WS-REWIND-SEPSTARTS-OFF',
+			'M-COND-BLOCK-TAIL-NEVER',
+			'M-ARM-KIND-UNSPELLED',
+			'M-REGION-INSIDE-NONE',
+			'M-REGION-NOTES-ALWAYS',
+			'M-NULLABLE-FLOW-EXCLUDE-NONE'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1301,7 +1317,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-ELSE-SWITCH-COMMENT-GLUE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchCases',
 			'M-ELSE-SWITCH-TESTS-NONE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchTests',
 			'M-PEB-WS-REWIND-TRYPARSE-OFF :: anyparse.macro.StarLoopLowering#buildTryparseSepLoop',
-			'M-PEB-WS-REWIND-SEPSTARTS-OFF :: anyparse.macro.Lowering#lowerStarBlockEndedSepStarts'
+			'M-PEB-WS-REWIND-SEPSTARTS-OFF :: anyparse.macro.Lowering#lowerStarBlockEndedSepStarts',
+			'M-COND-BLOCK-TAIL-NEVER :: anyparse.grammar.haxe.HxCondBlockTailRaw#MetaCall:@:re'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

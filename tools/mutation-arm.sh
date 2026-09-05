@@ -24,9 +24,14 @@
 #   --list   print the registry and exit.
 #
 # What it does per arm: takes the arm's record, renders it into an
-# `hxq patch --select 'FnMember:<method>'` payload, applies it inside a scratch
+# `hxq patch --select '<kind>:<method>'` payload, applies it inside a scratch
 # worktree at HEAD, captures the result as a git patch, and hands the patch to
-# `tools/mutation-check.sh` with the arm's OWN pins as the expectation set.
+# `tools/mutation-check.sh` with the arm's OWN pins as the expectation set. The
+# kind is `FnMember` unless the record spells another: a grammar DECLARATION has
+# no method to cut, and its `@:re` terminal is a module-level `MetaCall`. Only a
+# `find`/`replace` cut can address one — a forced `return` is spliced after a
+# function signature, so `MutationArms.rowErrors` refuses `force` with any other
+# kind before this script ever sees it.
 # Nothing here classifies a transcript — `apq mutation-verdict` does, out of the
 # unmutated tree, exactly as it already did for a hand-written manifest.
 #
@@ -90,7 +95,8 @@ if (force === "") {
     const replace = arm.replace === undefined || arm.replace === null ? "" : String(arm.replace);
     fs.writeFileSync(process.argv[3], String(arm.find) + "\n====\n" + replace + "\n");
 }
-process.stdout.write([force === "" ? "FIND" : "FORCE", arm.type, arm.method, force].join("\t") + "\n");
+const kind = arm.kind === undefined || arm.kind === null || arm.kind === "" ? "FnMember" : String(arm.kind);
+process.stdout.write([force === "" ? "FIND" : "FORCE", arm.type, arm.method, kind, force].join("\t") + "\n");
 ' "$arms_json" "$1" "$2"
 }
 
@@ -194,10 +200,11 @@ for name in $names; do
     if ! meta=$(read_arm "$name" "$payload"); then
         exit 2
     fi
-    kind=$(printf '%s' "$meta" | cut -f1)
+    cut_kind=$(printf '%s' "$meta" | cut -f1)
     type=$(printf '%s' "$meta" | cut -f2)
     method=$(printf '%s' "$meta" | cut -f3)
-    force=$(printf '%s' "$meta" | cut -f4)
+    node_kind=$(printf '%s' "$meta" | cut -f4)
+    force=$(printf '%s' "$meta" | cut -f5)
     # The two classpath roots `test-js.hxml` declares, in its order. An arm may
     # cut the suite's own infrastructure as readily as the engine's, and both
     # are addressed by type path rather than by a stored file name.
@@ -214,7 +221,7 @@ for name in $names; do
         exit 2
     fi
 
-    if [ "$kind" = "FORCE" ]; then
+    if [ "$cut_kind" = "FORCE" ]; then
         # The member's signature, verbatim, up to and including the line the
         # BODY opens on — the fragment `hxq patch` matches, and the anchor the
         # forced `return` is spliced after. Taken from the tree rather than
@@ -230,7 +237,7 @@ for name in $names; do
         # at depth 0, and its match has to be the member's final one; a member
         # whose braces do not balance, or whose body opens mid-line, is refused BY
         # NAME rather than rendered wrong.
-        ( cd "$gen" && "$repo/bin/hxq" show "$file" --select "FnMember:$method" ) > "$workroot/$name.node"
+        ( cd "$gen" && "$repo/bin/hxq" show "$file" --select "$node_kind:$method" ) > "$workroot/$name.node"
         if ! node -e '
 const fs = require("fs");
 const src = fs.readFileSync(process.argv[1], "utf8");
@@ -265,7 +272,7 @@ process.stdout.write(src.slice(0, nl + 1));
         } > "$payload"
     fi
 
-    if ! ( cd "$gen" && "$repo/bin/hxq" patch "$file" --select "FnMember:$method" --write - < "$payload" ) \
+    if ! ( cd "$gen" && "$repo/bin/hxq" patch "$file" --select "$node_kind:$method" --write - < "$payload" ) \
         > "$workroot/$name.apply.log" 2>&1; then
         echo "mutation-arm.sh: $name: the cut did not apply — $workroot/$name.apply.log" >&2
         exit 2

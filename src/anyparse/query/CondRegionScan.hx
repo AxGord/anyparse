@@ -102,7 +102,15 @@ final class CondRegionScan {
 			final span: Null<Span> = node.span;
 			if (span != null && kinds.contains(node.kind)) {
 				final gaps: Array<Span> = unmodelledGaps(node, span).filter(g -> source.substring(g.from, g.to).trim().length > 0);
-				if (gaps.length > 0) out.push({ region: new Span(gaps[0].from, gaps[gaps.length - 1].to), gaps: gaps });
+				if (gaps.length > 0) {
+					final region: Span = new Span(gaps[0].from, gaps[gaps.length - 1].to);
+					out.push({
+						kind: node.kind,
+						region: region,
+						gaps: gaps,
+						formatted: childrenInside(node, region)
+					});
+				}
 			}
 			for (c in node.children) walk(c);
 		}
@@ -295,6 +303,32 @@ final class CondRegionScan {
 	}
 
 	/**
+	 * The children of `node` whose whole span lies inside `region` — the parts of an
+	 * opaque region the writer DOES format.
+	 *
+	 * A `#if` region is opaque because it is not a balanced subtree in its position, and
+	 * for several ctors that is true of the HEAD only: `CondSpliceBlockTail` keeps the
+	 * unbalanced `}` and the clause glued to it raw and parses the region's own block as
+	 * an ordinary statement, and `CondSpliceOpExpr` keeps every operand a real node. The
+	 * region span runs from the first unmodelled byte to the last, so those children sit
+	 * INSIDE it — which is what tells a diagnostic that "left byte-for-byte" is a claim
+	 * about the head, not about the region.
+	 *
+	 * Asked structurally rather than off a second kind list: the split is a property of
+	 * the tree the grammar produced, so a ctor that gains or loses a structural field
+	 * cannot leave a hand-kept list stale. Children reaching PAST the region (the tail
+	 * after `#end`, the shared body of a block-open) are not inside it and do not count.
+	 */
+	private static function childrenInside(node: QueryNode, region: Span): Array<Span> {
+		final out: Array<Span> = [];
+		for (c in node.children) {
+			final s: Null<Span> = c.span;
+			if (s != null && s.from >= region.from && s.to <= region.to) out.push(s);
+		}
+		return out;
+	}
+
+	/**
 	 * The declarations of `scan.name` this conditional region carries, ONE per arm that declares it,
 	 * in arm order — the per-region half of `exclusiveBranchRedeclaration`.
 	 *
@@ -345,8 +379,19 @@ final class CondRegionScan {
  * the narrower set a fail-closed text scan is allowed to read.
  */
 typedef OpaqueCondRegion = {
+
+	/** The projected ctor the grammar fell back to — one of `RefShape.opaqueCondRegionKinds`. */
+	final kind: String;
+
 	final region: Span;
 	final gaps: Array<Span>;
+
+	/**
+	 * The node's own children lying wholly INSIDE `region` — the parts of it the writer
+	 * formats like any other subtree. Empty for a wholly-raw region; non-empty for the
+	 * ctors that keep only their unbalanced HEAD raw.
+	 */
+	final formatted: Array<Span>;
 };
 
 /**

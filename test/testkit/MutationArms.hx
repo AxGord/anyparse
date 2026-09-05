@@ -24,6 +24,13 @@ typedef MutationArm = {
 	/** The member. */
 	method: String,
 
+	/**
+	 * The projected node KIND the selector addresses, `FnMember` unless the record says
+	 * otherwise — a grammar declaration has no method to cut, and its `@:re` terminal is a
+	 * module-level `MetaCall`.
+	 */
+	kind: String,
+
 	/** RETURN arm: `return <force>;` inserted directly after the signature, or null. */
 	force: Null<String>,
 
@@ -71,6 +78,13 @@ typedef ArmTable = {
  */
 @:nullSafety(Strict)
 final class MutationArms {
+
+	/**
+	 * The node kind an arm addresses when its record names none — the shape every arm had
+	 * before a grammar DECLARATION needed one, and the only shape a `force` cut can take
+	 * (the runner splices a `return` after a function's signature).
+	 */
+	public static inline final DEFAULT_KIND: String = 'FnMember';
 
 	/** Keys every arm must carry a non-empty string for. */
 	private static final REQUIRED_KEYS: Array<String> = ['name', 'type', 'method', 'note'];
@@ -122,6 +136,7 @@ final class MutationArms {
 				name: required(entry, 'name'),
 				type: required(entry, 'type'),
 				method: required(entry, 'method'),
+				kind: nonEmpty(entry, 'kind') ?? DEFAULT_KIND,
 				force: nonEmpty(entry, 'force'),
 				find: nonEmpty(entry, 'find'),
 				replace: text(entry, 'replace'),
@@ -154,6 +169,12 @@ final class MutationArms {
 		if (force == null && fragment == null) out.push('$at declares neither "force" nor "find" — an arm has to say what it cuts');
 		if (force != null && fragment != null) out.push('$at declares both "force" and "find" — an arm cuts one way');
 		if (fragment == null && text(entry, 'replace') != null) out.push('$at declares "replace" without "find"');
+		final kind: Null<String> = nonEmpty(entry, 'kind');
+		if (force != null && kind != null && kind != DEFAULT_KIND)
+			out.push(
+				'$at declares "force" with kind "$kind" — a forced return is spliced after a function signature,'
+				+ ' so only $DEFAULT_KIND can carry one; use "find"/"replace"'
+			);
 		return out;
 	}
 
@@ -165,7 +186,32 @@ final class MutationArms {
 	/** One line for `node bin/test.js --list-arms`, and the shape the parity test pins. */
 	public static function render(arm: MutationArm): String {
 		final cut: String = arm.force == null ? 'fragment' : 'return ${arm.force};';
-		return '${arm.name} :: ${arm.type}#${arm.method} :: $cut :: ${arm.note}';
+		return '${arm.name} :: ${address(arm)} :: $cut :: ${arm.note}';
+	}
+
+	/**
+	 * Where the cut lands, as one token — `<type>#<method>` for the ordinary member arm and
+	 * `<type>#<kind>:<method>` for an arm addressing anything else.
+	 *
+	 * The default kind stays UNSPELLED so 97 of 98 existing rows are byte-unchanged, and the
+	 * one that is not says what it addresses. `selectorOf` reads the second half back; the
+	 * rendered line is the only place the runner's address is written down, so both the
+	 * `--list-arms` output and `TestRegistry.deferredArms()` go through here.
+	 */
+	public static function address(arm: MutationArm): String {
+		return arm.kind == DEFAULT_KIND ? '${arm.type}#${arm.method}' : '${arm.type}#${arm.kind}:${arm.method}';
+	}
+
+	/**
+	 * The `hxq` selector for the member half of an `address` — `FnMember:walk` for a bare
+	 * name, and the record's own kind when one is spelled.
+	 *
+	 * Split at the FIRST colon: a metadata name is itself colon-bearing (`MetaCall:@:re`), so
+	 * splitting on every colon would hand the selector `MetaCall:@`.
+	 */
+	public static function selectorOf(member: String): String {
+		final at: Int = member.indexOf(':');
+		return at == -1 ? '$DEFAULT_KIND:$member' : member;
 	}
 
 	/** A key the row is already known to carry; the fallback never fires after `rowErrors`. */
