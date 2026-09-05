@@ -747,6 +747,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.lowering.RegexFirstBytesTest',
 		'unit.lowering.StarBlockEndedTest',
 		'unit.lowering.StarSepStartsElementTest',
+		'unit.lowering.WriterFamilyCtxBundleTest',
 		'unit.query.AddElementSliceTest',
 		'unit.query.AddImportSliceTest',
 		'unit.query.AddMemberSliceTest',
