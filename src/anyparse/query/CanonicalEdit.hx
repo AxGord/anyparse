@@ -19,9 +19,11 @@ using Lambda;
  *
  * The guards belong here too, because they are conditions on an edit SET rather than on any one
  * edit: `dropContainedEdits` and `editsOverlapAny` keep a batch from spliceing nested or
- * overlapping spans, and `docSplittingEdit` is the doc-attribution refusal the re-parse gate
- * cannot see — an insertion between a documentation block and the declaration it documents
- * re-parses perfectly and silently reassigns the doc.
+ * overlapping spans, `docSplittingEdit` is the doc-attribution refusal the re-parse gate cannot see — an
+ * insertion between a documentation block and the declaration it documents re-parses perfectly
+ * and silently reassigns the doc — and `CommentOwnerGuard` is its sibling on the replacement
+ * side, refusing an edit that welds two comment blocks together by deleting the code that stood
+ * between them.
  */
 @:nullSafety(Strict)
 final class CanonicalEdit {
@@ -143,10 +145,24 @@ final class CanonicalEdit {
 		// NOT writer-canonical it answers `Ok(applyEdits(...))` on the `Err` path, so a
 		// refusal this function returns — this one included — is discarded for those
 		// three callers. The guard is advisory on a drifted file.
-		final splitDoc: Null<String> = docSplittingEdit(source, edits, plugin.lexicalRegions(source));
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final splitDoc: Null<String> = docSplittingEdit(source, edits, regions);
 		if (splitDoc != null) return Err(splitDoc);
 
 		final spliced: String = applyEdits(source, edits);
+
+		// The third question, and the last thing this seam can ask that the re-parse cannot: a
+		// comment left standing above code it never documented. `docSplittingEdit` above covers the
+		// INSERT that steals a doc; this covers the REPLACEMENT that hoists a comment past the
+		// statement it explains, which is what `prefer-ternary-return`'s march up a guard cascade did
+		// to this repo's own `MemberOrder.reorderRefusal` — two per-gate explanations stacked above a
+		// seven-level ternary pyramid, one of them the note warning against that transformation.
+		// Asked on the SPLICE rather than the settled text: the writer re-emits a comment interior
+		// verbatim and never moves one across code, so the fixed-point loop below can only re-indent
+		// what this already judged.
+		final detached: Null<String> = CommentOwnerGuard.detachedComment(source, edits, spliced, regions, plugin);
+		if (detached != null) return Err(detached);
+
 		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT
 		// writer-emit op puts on it, and that gate is `writeRoundTrip(s) == s`
 		// after ONE pass. The writer does not always land there in one: a wrap

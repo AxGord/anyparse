@@ -1,0 +1,127 @@
+package unit.query;
+
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
+import haxe.Exception;
+import utest.Assert;
+import utest.Test;
+
+/**
+ * `CommentOwnerGuard.detachedComment` — the comment-attachment half of the writer-emit gate,
+ * asked from `canonicalize` next to `BodySlotGuard` and `docSplittingEdit`.
+ *
+ * The clause: an autofix must preserve more than "the result re-parses", and this is the third
+ * thing the parse gate cannot see. `BodySlotGuard` pins which statements a brace-less construct
+ * governs; `docSplittingEdit` pins whose declaration a doc block documents; this pins that a
+ * comment keeps the code it stands above.
+ *
+ * The measured incident is `prefer-ternary-return` marching up the six-gate cascade in this
+ * repo's own `MemberOrder.reorderRefusal` — 10 edits over 7 passes that welded two per-gate
+ * explanations into one block above a seven-level ternary pyramid, one of them the note warning
+ * against exactly that transformation. It re-parsed, it was byte-canonical, `fmt --list` was
+ * clean and every lint rule was silent, so the only thing that could have caught it was a human
+ * re-reading the file.
+ *
+ * The criterion is positive and textual: two comment BLOCKS are two blocks because code stands
+ * between them, so an edit that leaves both in ONE block has deleted that code from between them
+ * and at least one of the two no longer leads what it documented. It says nothing about an edit
+ * that REWRITES the code under a single block, which is the shape every ordinary autofix has —
+ * `testInPlaceRewriteUnderOneCommentIsAccepted` is that control, and a criterion built on "the
+ * text after the comment changed" would have failed it.
+ *
+ * NOT pinned here, deliberately: the pre-filter (`removesGapCode`, the `before.length < 2`
+ * early-out) is a COST gate and nothing else — a pure insertion cannot weld two source blocks
+ * together, so removing the filter changes no verdict and no test can kill it. Saying so is
+ * worth more than a control that would pass either way.
+ */
+class CommentOwnerGuardSliceTest extends Test {
+
+	/** Two own-line comments with one statement between them — the minimum shape a weld needs. */
+	private static final TWO_BLOCKS: String =
+		'class C {\n\tfunction f(): Void {\n\t\ta();\n\t\t// why b\n\t\tb();\n\t\t// why c\n\t\tc();\n\t}\n}\n';
+
+	/** One comment leading a pair the ternary fold rewrites in place. */
+	private static final ONE_BLOCK: String =
+		'class C {\n\tfunction f(a: Bool): Int {\n\t\t// why the guard\n\t\tif (a) return 1;\n\t\treturn 0;\n\t}\n}\n';
+
+	/**
+	 * The reported corruption, at the seam: the code between two comments goes, the comments meet,
+	 * and `// why b` now stands above `c()`. Flipped by deleting the `CommentOwnerGuard` call in
+	 * `CanonicalEdit.canonicalize`.
+	 */
+	public function testWeldingTwoCommentBlocksIsRefused(): Void {
+		switch SeamEdit.replace(TWO_BLOCKS, 'b();', '') {
+			case Ok(text):
+				Assert.fail('expected a refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('welded to') >= 0, 'unexpected message: $message');
+				Assert.isTrue(message.indexOf('why b') >= 0, 'the refusal does not name the first comment: $message');
+				Assert.isTrue(message.indexOf('why c') >= 0, 'the refusal does not name the second comment: $message');
+		}
+	}
+
+	/**
+	 * The same weld reached by a REPLACEMENT that hoists rather than deletes — the actual
+	 * `prefer-ternary-return` shape, where the fix quotes the code it keeps and stacks the
+	 * comments in front of it. The statement survives; what does not survive is its position
+	 * between the two comments.
+	 */
+	public function testHoistingACommentPastSurvivingCodeIsRefused(): Void {
+		switch SeamEdit.replace(TWO_BLOCKS, '// why b\n\t\tb();\n\t\t// why c\n\t\tc();', '// why b\n\t\t// why c\n\t\tb();\n\t\tc();') {
+			case Ok(text):
+				Assert.fail('expected a refusal, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('welded to') >= 0, 'unexpected message: $message');
+		}
+	}
+
+	/**
+	 * CONTROL, and the reason the criterion is about BLOCKS rather than about the text that
+	 * follows a comment: an in-place rewrite replaces the very code the comment leads, and the
+	 * comment goes on leading it. A guard that compared the following text would refuse every
+	 * autofix in the project.
+	 */
+	public function testInPlaceRewriteUnderOneCommentIsAccepted(): Void {
+		final text: String = assertOk(SeamEdit.replace(ONE_BLOCK, 'if (a) return 1;\n\t\treturn 0;', 'return a ? 1 : 0;'));
+		Assert.isTrue(text.indexOf('// why the guard\n\t\treturn a ? 1 : 0;') >= 0, 'the comment no longer leads the rewrite:\n$text');
+	}
+
+	/** CONTROL: code still stands between the two comments, so neither lost anything. */
+	public function testReplacingTheSeparatingCodeIsAccepted(): Void {
+		final text: String = assertOk(SeamEdit.replace(TWO_BLOCKS, 'b();', 'd();'));
+		Assert.isTrue(text.indexOf('// why b\n\t\td();\n\t\t// why c') >= 0, 'the separation did not survive:\n$text');
+	}
+
+	/** CONTROL: an edit nowhere near the gap must not pay for the guard, nor be refused by it. */
+	public function testEditOutsideTheGapIsAccepted(): Void {
+		final text: String = assertOk(SeamEdit.replace(TWO_BLOCKS, 'a();', 'z();'));
+		Assert.isTrue(text.indexOf('z();') >= 0, 'the replacement did not land:\n$text');
+	}
+
+	/**
+	 * CONTROL for the direction the criterion must NOT read: deleting the statement a comment
+	 * leads, where no second block stands behind it, leaves the comment attached to nothing in
+	 * particular but welds no two blocks — and refusing it would block every fixer that removes a
+	 * commented statement. The line the guard draws is the weld, and this is the far side of it.
+	 */
+	public function testDeletingTheLastCommentedStatementIsAccepted(): Void {
+		final text: String = assertOk(SeamEdit.replace(TWO_BLOCKS, 'c();', ''));
+		Assert.isTrue(text.indexOf('// why c') >= 0, 'the comment was not kept:\n$text');
+	}
+
+	/** The `Ok` text, proved to re-parse; an `Err` fails the test with its own message. */
+	private function assertOk(result: EditResult): String {
+		switch result {
+			case Ok(text):
+				try
+					new HaxeQueryPlugin().parseFile(text)
+				catch (exception: Exception)
+					Assert.fail('the result failed to re-parse: ${exception.message}\n$text');
+				return text;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				return '';
+		}
+	}
+
+}

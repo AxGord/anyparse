@@ -12,6 +12,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -225,6 +226,19 @@ final class PreferTernaryReturn implements Check {
 			|| BoolExprShape.pendingBooleanTernaryTail(thenValue, shape) || BoolExprShape.pendingBooleanTernaryTail(elseValue, shape)
 			|| BoolExprShape.statementLikeValue(thenValue, shape) || BoolExprShape.statementLikeValue(elseValue, shape)
 			|| isStuckBooleanCollapse(thenValue, elseValue, shape, retType)
+			|| strandsCascadeComment(
+				// BEFORE the cascade claim, because it answers from spans this frame already has while
+				// that one walks a whole cascade and re-runs another rule's gates. It is also the arm that
+				// makes the claim's own refusal safe: `claimsCascade` declines a cascade whose comments it
+				// cannot carry, and until this gate existed that decline handed the very same cascade to
+				// this rule, which folded it and hoisted those comments.
+				kids,
+				i,
+				next,
+				s,
+				source,
+				comments
+			)
 			|| PreferIfExpressionReturn.claimsCascade(
 				// LAST, because it is the only disjunct that walks a whole cascade and re-runs another
 				// rule's gates: every cheap shape refusal above short-circuits it away.
@@ -389,6 +403,92 @@ final class PreferTernaryReturn implements Check {
 			bodyKinds: shape.functionBodyKinds ?? [],
 			paramKinds: shape.paramKinds ?? []
 		};
+	}
+
+	/**
+	 * Whether folding this pair would eventually strand a comment — the CASCADE question, which
+	 * a per-pair look cannot answer.
+	 *
+	 * A fold is not a local edit when the pair is the tail of a run of `if (c) return v;` rungs:
+	 * the fixed-point loop re-reports the rung above on the next pass, because its follower is now
+	 * a plain `return`, and marches all the way up. Each step quotes that rung's condition and
+	 * value verbatim and HOISTS everything else in the region to the front of the replacement
+	 * (`preservedComments`), so a per-gate explanation standing between two rungs ends up stacked
+	 * above the pyramid, detached from the gate it explains. Measured on this repo's own
+	 * `MemberOrder.reorderRefusal`: one reported finding on the last of six gates, `--fix` then
+	 * wrote 10 edits over 7 passes and welded both comment blocks to the top.
+	 *
+	 * The narrowing is deliberately the CONJUNCTION of the two candidate rules rather than either
+	 * one. Refusing every cascade tail on SHAPE alone is what `pairAt` already declines to do, and
+	 * S45 measured the price — 14 findings of 69 with no replacement anywhere. Refusing on a
+	 * comment alone would fire on the single pair whose own leading comment stays exactly where it
+	 * is. Both together name the one shape where a comment provably loses its subject: a march
+	 * long enough to cross a comment that no step of it copies.
+	 *
+	 * `head == i` — a run of ONE — returns before any of that, and what it protects is a comment
+	 * INSIDE the pair's own region, which the fold DOES hoist and which this project has decided to
+	 * accept (`testOwnLineCommentBetweenStatementsStillHoists`, `testBothPositionsSplitCorrectly`,
+	 * both of which drop to 0 edits without it). A comment LEADING the `if` needs no exception at
+	 * all: a statement span starts at the `if` keyword, so it is outside the region either way.
+	 *
+	 * Fail-CLOSED on a span it cannot read, and only then: with no comment in the file at all the
+	 * question is moot and the first line answers it without touching a span.
+	 */
+	private static function strandsCascadeComment(
+		kids: Array<QueryNode>, i: Int, next: QueryNode, s: Seams, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Bool {
+		if (comments.length == 0) return false;
+		// The run THIS rule can march up, by its own foldability predicate rather than the sibling
+		// rule's: `returnRunHead` answers for the cascade `prefer-if-expression-return` collects,
+		// and a rung it counts but `thenReturnValue` refuses would extend the region past the point
+		// where the march actually stops.
+		var head: Int = i;
+		while (head > 0) {
+			final rung: QueryNode = kids[head - 1];
+			if (!s.ifKinds.contains(rung.kind) || rung.children.length != 2) break;
+			if (thenReturnValue(rung.children[1], s.shape, s.returnKind) == null) break;
+			head--;
+		}
+		if (head == i) return false;
+		final from: Null<Span> = kids[head].span;
+		final to: Null<Span> = next.span;
+		final elseValue: Null<Span> = next.children.length < 1 ? null : next.children[0].span;
+		if (from == null || to == null || elseValue == null) return true;
+		// The spans the march copies VERBATIM: every rung's condition and returned value, plus the
+		// terminal return's value, which each later step re-copies as the accumulating else branch.
+		final kept: Array<Span> = [elseValue];
+		final values: Array<Span> = [];
+		for (j in head ... i + 1) {
+			final rung: QueryNode = kids[j];
+			final cond: Null<Span> = rung.children[0].span;
+			final value: Null<QueryNode> = thenReturnValue(rung.children[1], s.shape, s.returnKind);
+			final valueSpan: Null<Span> = value?.span;
+			if (cond == null || valueSpan == null) return true;
+			kept.push(cond);
+			kept.push(valueSpan);
+			values.push(valueSpan);
+		}
+		for (token in comments) {
+			if (token.from < from.from || token.to > to.to || spanCovers(kept, token)) continue;
+			if (!ridesItsBranch(source, values, token)) return true;
+		}
+		return false;
+	}
+
+	/** Whether one of `spans` contains `token` whole. */
+	private static function spanCovers(spans: Array<Span>, token: { from: Int, to: Int, isLine: Bool }): Bool {
+		return spans.exists(span -> token.from >= span.from && token.to <= span.to);
+	}
+
+	/**
+	 * Whether `token` is the guard's own TRAILING comment — one line, sitting after a rung's
+	 * returned value with no line break in between. `buildEdit` splices such a comment after the
+	 * `?` value instead of hoisting it, and the next step up finds it inside the else value it
+	 * copies whole, so it rides the march to the end still attached to its branch.
+	 */
+	private static function ridesItsBranch(source: String, values: Array<Span>, token: { from: Int, to: Int, isLine: Bool }): Bool {
+		return source.substring(token.from, token.to).trim().indexOf('\n') < 0
+			&& values.exists(span -> token.from >= span.to && source.substring(span.to, token.from).indexOf('\n') < 0);
 	}
 
 }
