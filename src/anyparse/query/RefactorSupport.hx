@@ -710,6 +710,38 @@ final class RefactorSupport {
 		return brace < 0 || source.fastCodeAt(brace) != '{'.code ? null : brace;
 	}
 
+	/**
+	 * The fully-qualified paths the `metaName` annotations written directly above `declNode` grant — the
+	 * meta run that decorates that one declaration, and nothing else in the file.
+	 *
+	 * Not the index's FILE-wide grant list: an annotation written on a sibling MEMBER reaches only that
+	 * member's body, so reading one as the type's would let a caller drop a grant a moved body needs.
+	 * Walked in the tree because a type-level annotation is a MODULE-level sibling of the declaration it
+	 * decorates (and of the `#if` region's, for a file wrapped in one), which no span of the type itself
+	 * contains.
+	 *
+	 * The tag comes from the CALLER rather than being spelled here: this layer is grammar-agnostic, and
+	 * `BuildMacroMetaSeamTest` fails the build on a target-language tag written into one. Each argument
+	 * is flattened whole, so a multi-target annotation answers every path it names, and the spelling is
+	 * returned verbatim: a caller comparing a fully-qualified path must not treat a short one — which
+	 * resolves through the file's own imports — as the same grant.
+	 */
+	public static function accessGrantsOn(tree: Null<QueryNode>, declNode: QueryNode, metaName: String): Array<String> {
+		if (tree == null) return [];
+		final out: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			var i: Int = node.children.indexOf(declNode) - 1;
+			while (i >= 0 && MemberKinds.META_KINDS.contains(node.children[i].kind)) {
+				final meta: QueryNode = node.children[i];
+				if (meta.name == metaName) for (arg in meta.children) out.push(flattenPath(arg));
+				i--;
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return out;
+	}
+
 	/** The offset just past `decl`'s NAME token — where its header (supertype clauses, type params) begins. */
 	private static function typeHeaderFrom(source: String, decl: TypeDeclMatch, typeName: String, regions: Array<LexRegion>): Int {
 		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;

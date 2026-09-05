@@ -95,14 +95,30 @@ final class GuardedImportCarry {
 	public static function carryFor(
 		dep: String, cursorFile: String, source: String, cursorInfo: FileInfo, directives: Array<CondDirective>, shape: RefShape
 	): GuardedCarry {
-		final providers: Array<ImportInfo> = [
+		return carryForProviders([
 			for (imp in cursorInfo.imports)
 				if (
 					imp.guarded && CARRIABLE_KINDS.contains(imp.kind) && SymbolIndex.pathImportedBy(imp) != null
 					&& SourceText.lastSegment(imp.raw) == dep
 				)
 					imp
-		];
+		], dep, cursorFile, source, directives, shape);
+	}
+
+	/**
+	 * The same answer as `carryFor` for providers the caller has already selected — the half that
+	 * reads each statement's guard and decides whether ONE condition carries them all.
+	 *
+	 * Split out because a MODULE-STATIC wildcard (`import pkg.Mod.*;`) cannot be found the way
+	 * `carryFor` finds a provider: its `raw` ends in `*`, so no last-segment match reaches it, and
+	 * which names it binds is a question for the index rather than for the statement's own text.
+	 * `DependencyCarry.foldWildcardCarry` selects those providers itself and needs this analysis
+	 * unchanged — `#if macro import anyparse.macro.MacroNames.*;` is the ordinary shape in
+	 * `src/anyparse/macro`, so the guarded arm is the one that carries it, not an edge case.
+	 */
+	public static function carryForProviders(
+		providers: Array<ImportInfo>, dep: String, cursorFile: String, source: String, directives: Array<CondDirective>, shape: RefShape
+	): GuardedCarry {
 		if (providers.length == 0) return GuardedNone;
 		var condition: Null<String> = null;
 		for (imp in providers) {
@@ -153,7 +169,7 @@ final class GuardedImportCarry {
 	 * that arm, under the negation of the condition it was carried for.
 	 */
 	public static function mergeSeat(
-		destSource: String, destBlocks: Array<CondBlock>, block: String, shape: RefShape
+		destSource: String, destBlocks: Array<CondBlock>, block: String, shape: RefShape, destImports: Array<ImportInfo>
 	): Null<{ span: Span, text: String }> {
 		final lines: Array<String> = bodyLinesOf(block);
 		if (lines.length == 0) return null;
@@ -165,10 +181,45 @@ final class GuardedImportCarry {
 			final held: Array<String> = [for (line in present.split('\n')) line.trim()];
 			final missing: Array<String> = lines.filter(line -> !held.contains(line.trim()));
 			if (missing.length == 0) return { span: new Span(dest.closeFrom, dest.closeFrom), text: '' };
-			final seat: Int = lineStartOf(destSource, dest.closeFrom);
+			final seat: Int = regionImportSeat(destSource, destImports, dest);
 			return { span: new Span(seat, seat), text: '${missing.join('\n')}\n' };
 		}
 		return null;
+	}
+
+	/**
+	 * Where a carried statement joins a region the destination already spells: on the line AFTER
+	 * that region's own last import, never above its `#end`.
+	 *
+	 * The two coincide for the region this merge was written for — a header-only
+	 * `#if (sys || nodejs) import sys.io.File; #end`, whose last import IS the line above `#end` —
+	 * and they are a whole file apart for the shape `src/anyparse/macro` is written in, where ONE
+	 * `#if macro` wraps the imports, the type declaration and everything else. Seating on the `#end`
+	 * line there wrote the carried import BELOW the class: `import and using may not appear after a
+	 * declaration`, at rc 0, `wrote 2 file(s)` (T558, reproduced on this tree by moving
+	 * `WriterPolicyLowering.buildCaseBodyFitPredicate` into `WriterBraceSymmetryLowering`).
+	 *
+	 * The last PLAIN import ranks over the last `using` for the same reason
+	 * `ImportOrder.lastHeaderEnd` prefers one: canonical Haxe orders the two runs, and a fresh
+	 * import belongs in the first. A region holding no import of its own seats at the top of its
+	 * own body, the one position above every declaration it could contain.
+	 */
+	private static function regionImportSeat(destSource: String, destImports: Array<ImportInfo>, dest: CondBlock): Int {
+		var plain: Int = -1;
+		var any: Int = -1;
+		for (imp in destImports) if (imp.span.from >= dest.headerEnd && imp.span.to <= dest.closeFrom) {
+			final to: Int = imp.span.to;
+			if (imp.kind != ImportKind.Using && to > plain) plain = to;
+			if (to > any) any = to;
+		}
+		final last: Int = plain >= 0 ? plain : any;
+		return nextLineStart(destSource, last < 0 ? dest.headerEnd : last);
+	}
+
+	/** Index of the first character of the line AFTER the one containing `at` — end of file when it is the last. */
+	private static function nextLineStart(source: String, at: Int): Int {
+		final nl: Int = source.indexOf('\n', at);
+		return nl < 0 ? source.length : nl + 1;
 	}
 
 	/**
@@ -233,12 +284,6 @@ final class GuardedImportCarry {
 	private static function bodyLinesOf(block: String): Array<String> {
 		final lines: Array<String> = block.split('\n');
 		return lines.length < 3 ? [] : lines.slice(1, lines.length - 1);
-	}
-
-	/** Index of the first character of the line containing `i`. */
-	private static function lineStartOf(source: String, i: Int): Int {
-		final nl: Int = source.lastIndexOf('\n', i);
-		return nl < 0 ? 0 : nl + 1;
 	}
 
 	/** One refusal, in the shape the collision gate's already use: what was reached, where, why, and the two ways out. */

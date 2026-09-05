@@ -375,6 +375,107 @@ final class MoveFamilyCaptureTest extends Test {
 	}
 
 	/**
+	 * `move-member` of a body that reaches a name through a MODULE-STATIC wildcard
+	 * (`import a.Names.*;`) — the statement is carried, so the destination compiles (T559).
+	 *
+	 * The base engine writes both files at rc 0 and leaves the destination reading
+	 * `Unknown identifier : packOf`; its advisory called the whole class best-effort. Captured in
+	 * full because two things are at stake at once and only the bytes hold both: WHICH statement is
+	 * carried (the wildcard, not an `import a.Names;` that would bind the type and not the static)
+	 * and WHERE the moved body keeps its bare spelling.
+	 */
+	public function testAModuleStaticWildcardCarriesByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Names.hx',
+				source: 'package a;\n\nclass Names {\n\n\tpublic static function packOf(s: String): String return s + \'!\';\n\n}\n'
+			},
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nimport a.Names.*;\n\nclass Src {\n\n\tpublic static function label(s: String): String return '
+					+ 'packOf(s);\n\n}\n'
+			},
+			{ file: 'b/Dest.hx', source: 'package b;\n\nclass Dest {\n\n\tpublic static function keep(): Int return 0;\n\n}\n' }
+		];
+		capture(MoveMember.move('a/Src.hx', 'Src', ['label'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
+			{ file: 'a/Src.hx', source: 'package a;\n\nimport a.Names.*;\n\nclass Src {\n\n}\n' },
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nimport a.Names.*;\n\nclass Dest {\n\n\tpublic static function keep(): Int return 0;\n\n\tpu'
+				+ 'blic static function label(s: String): String return packOf(s);\n\n}\n'
+			}
+		]);
+	}
+
+	/**
+	 * `move-member` into a destination whose WHOLE body — imports, declaration and all — sits inside
+	 * one `#if macro`, carrying a `#if`-guarded import into it (T558).
+	 *
+	 * The shape `src/anyparse/macro` is written in, and the one the merge seat was blind to: the
+	 * region's `#end` is the last line of the file, so seating above it wrote the carried import
+	 * BELOW the class — `import and using may not appear after a declaration`, at rc 0,
+	 * `wrote 2 file(s)`. Reproduced on this tree by moving
+	 * `WriterPolicyLowering.buildCaseBodyFitPredicate` into `WriterBraceSymmetryLowering`, where the
+	 * base engine's write turned 1 compile error into 11.
+	 *
+	 * Captured in full because the discriminator is a POSITION, not a token: the same line, one
+	 * declaration further up.
+	 */
+	public function testAGuardedCarryIntoAWholeFileRegionSeatsByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'p/Src.hx',
+				source: 'package p;\n\n#if macro\nimport haxe.crypto.Md5;\n\nclass Src {\n\n\tpublic static function util(): String r'
+					+ 'eturn Md5.encode(\'x\');\n\n}\n#end\n'
+			},
+			{
+				file: 'q/Host.hx',
+				source: 'package q;\n\n#if macro\nimport haxe.io.Path;\n\nclass Host {\n\n\tpublic function new() {}\n\n}\n#end\n'
+			}
+		];
+		capture(MoveMember.move('p/Src.hx', 'Src', ['util'], 'Host', null, false, false, scope, plugin(), typeRefShape()), [
+			{ file: 'p/Src.hx', source: 'package p;\n\n#if macro\nimport haxe.crypto.Md5;\n\nclass Src {\n\n}\n#end\n' },
+			{
+				file: 'q/Host.hx',
+				source: 'package q;\n\n#if macro\nimport haxe.io.Path;\nimport haxe.crypto.Md5;\n\nclass Host {\n\n\tpublic function n'
+				+ 'ew() {}\n\n\tpublic static function util(): String return Md5.encode(\'x\');\n\n}\n#end\n'
+			}
+		]);
+	}
+
+	/**
+	 * `move-member` of a body reading a PRIVATE static sibling into a destination whose type already
+	 * grants `@:access` to the source — the member-level copy the base engine writes is dead text
+	 * (T560), and S87 landed 10 of them across 3 files in one slice.
+	 *
+	 * Captured in full rather than as an absence assertion because the meta is not the only thing
+	 * the arm decides: the sibling call is qualified back to `Src.hidden()` in the same pass, and a
+	 * skip that took the qualification with it would still satisfy a `!contains('@:access')` test.
+	 */
+	public function testARedundantMemberAccessIsOmittedByteIdentically(): Void {
+		final scope: Array<{ file: String, source: String }> = [
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nclass Src {\n\n\tprivate static function hidden(): Int return 4;\n\n\tpublic static function l'
+					+ 'abel(): Int return hidden();\n\n}\n'
+			},
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nimport a.Src;\n\n@:access(a.Src)\nclass Dest {\n\n\tpublic static function keep(): Int return '
+					+ 'Src.hidden();\n\n}\n'
+			}
+		];
+		capture(MoveMember.move('a/Src.hx', 'Src', ['label'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
+			{ file: 'a/Src.hx', source: 'package a;\n\nclass Src {\n\n\tprivate static function hidden(): Int return 4;\n\n}\n' },
+			{
+				file: 'b/Dest.hx',
+				source: 'package b;\n\nimport a.Src;\n\n@:access(a.Src)\nclass Dest {\n\n\tpublic static function keep(): Int return S'
+				+ 'rc.hidden();\n\n\tpublic static function label(): Int return Src.hidden();\n\n}\n'
+			}
+		]);
+	}
+
+	/**
 	 * Require `result` to be `Ok` with EXACTLY the given files, each byte-for-byte. The count is
 	 * asserted too: a change that stops being emitted at all is the same class of regression as one
 	 * whose bytes drift, and only the count catches it.

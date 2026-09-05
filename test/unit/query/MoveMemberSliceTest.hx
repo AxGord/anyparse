@@ -1242,6 +1242,132 @@ class MoveMemberSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * A bare name the SOURCE binds through a module-static wildcard (`import a.Names.*;`) travels
+	 * with the moved body: the statement is carried, and the destination compiles (T559).
+	 *
+	 * The base engine wrote a destination reading `Unknown identifier : packOf` — rc 0,
+	 * `wrote 2 file(s)`, and an advisory calling the miss best-effort. It is not an edge:
+	 * `src/anyparse/macro` reaches `MacroNames.*` this way in 20 files and `ExitCode.*` in 73, and
+	 * the very member S87 repaired by hand reached `WriterLoweringSupport.optFieldAccess` through one.
+	 */
+	public function testModuleStaticWildcardIsCarried(): Void {
+		final changes: Array<MoveChange> = okChanges(
+			'a/Src.hx', 'Src', 'label', 'Dest',
+			wildcardScope('package b;\n\nclass Dest {\n\tpublic static function keep():Int return 0;\n}')
+		);
+		final dest: String = changeFor(changes, 'b/Dest.hx').newSource;
+		Assert.isTrue(dest.contains('return packOf(s)'), 'the moved body should reach packOf bare');
+		Assert.isTrue(dest.contains('import a.Names.*;'), 'the wildcard that binds packOf should be carried');
+	}
+
+	/**
+	 * The carry is not repeated when the destination already spells the same wildcard: the moved
+	 * body's binding is already there, and a second copy is a `redundant-import` finding in a file
+	 * the move just wrote.
+	 */
+	public function testModuleStaticWildcardAlreadyAtDestinationIsNotRepeated(): Void {
+		final changes: Array<MoveChange> = okChanges(
+			'a/Src.hx', 'Src', 'label', 'Dest',
+			wildcardScope(
+				'package b;\n\nimport a.Names.*;\n\nclass Dest {\n\tpublic static function own(s:String):String return packOf(s);\n}'
+			)
+		);
+		final dest: String = changeFor(changes, 'b/Dest.hx').newSource;
+		Assert.isTrue(dest.contains('return packOf(s)'), 'the moved body should reach packOf bare');
+		Assert.equals(1, dest.split('import a.Names.*;').length - 1, 'the wildcard should appear exactly once');
+	}
+
+	/**
+	 * A name the destination TYPE declares itself beats every imported static, so carrying the
+	 * wildcard would silently rebind the MOVED body to the destination's own member — compile-run
+	 * on 4.3.7 through the base engine, which wrote both files at rc 0 and turned `label('x')` from
+	 * `x-A` into `x-B`.
+	 */
+	public function testModuleStaticWildcardShadowedByADestinationMemberIsRefused(): Void {
+		assertErrContains(
+			move(
+				'a/Src.hx', 'Src', 'label', 'Dest',
+				wildcardScope('package b;\n\nclass Dest {\n\tpublic static function packOf(s:String):String return s + \'-B\';\n}')
+			),
+			'declares a member "packOf" of its own'
+		);
+	}
+
+	/**
+	 * A second module-static wildcard at the destination declaring the same name is decided by
+	 * STATEMENT ORDER — Haxe resolves the last one, measured, with no diagnostic — so whichever way
+	 * the carried line is seated one of the two files changes meaning. The base engine wrote it and
+	 * turned the moved `label('y')` from `y-A` into `y-C`, rc 0.
+	 */
+	public function testARivalModuleStaticWildcardAtTheDestinationIsRefused(): Void {
+		final scope: Array<{ file: String, source: String }> = wildcardScope(
+			'package b;\n\nimport c.Other.*;\n\nclass Dest {\n\tpublic static function own(s:String):String return packOf(s);\n}'
+		);
+		scope.push({
+			file: 'c/Other.hx',
+			source: 'package c;\n\nclass Other {\n\tpublic static function packOf(s:String):String return s + \'-C\';\n}'
+		});
+		assertErrContains(move('a/Src.hx', 'Src', 'label', 'Dest', scope), 'both modules declare "packOf"');
+	}
+
+	/**
+	 * A wildcard-bound name the moved body SHADOWS with a local of its own is resolved by the file
+	 * itself, so nothing is carried for it — the carry asks whether the name is FREE, not whether it
+	 * is written.
+	 */
+	public function testAShadowedWildcardNameCarriesNothing(): Void {
+		final scope: Array<{ file: String, source: String }> =
+			wildcardScope('package b;\n\nclass Dest {\n\tpublic static function keep():Int return 0;\n}');
+		scope[1] = {
+			file: 'a/Src.hx',
+			source: 'package a;\n\nimport a.Names.*;\n\nclass Src {\n\tpublic static function label(s:String):String {\n'
+				+ '\t\tfinal packOf:String = s + \'?\';\n\t\treturn packOf;\n\t}\n}'
+		};
+		final changes: Array<MoveChange> = okChanges('a/Src.hx', 'Src', 'label', 'Dest', scope);
+		final dest: String = changeFor(changes, 'b/Dest.hx').newSource;
+		Assert.isTrue(dest.contains('final packOf:String'), 'the moved body should keep its own local');
+		Assert.isFalse(dest.contains('import a.Names.*;'), 'a shadowed name buys no carry');
+	}
+
+	/**
+	 * The member-level `@:access` is not written when the destination TYPE already grants the same
+	 * path at CLASS level — S87 landed 10 such dead lines across 3 files in one slice (T560).
+	 *
+	 * Its control is `testSiblingReferenceQualifiedWithAccess` above, where the destination carries
+	 * no grant and the meta must still appear.
+	 */
+	public function testARedundantMemberLevelAccessIsNotWritten(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return scale(x) * 2;\n'
+			+ '\tstatic function scale(x:Int):Int return x + 10;\n}';
+		final b: String = 'package pkg;\n\n@:access(pkg.A)\nclass B {\n\tpublic static function keep():Int return A.scale(1);\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b }
+		]);
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.isTrue(newB.contains('A.scale(x) * 2'), 'sibling call should still qualify to A');
+		Assert.equals(1, newB.split('@:access(pkg.A)').length - 1, 'the class-level grant should not be repeated on the member');
+	}
+
+	/**
+	 * The same shadow, in the one arrangement where nothing is carried: the destination ALREADY
+	 * spells the wildcard AND declares the name. Carrying is not what creates the shadow, so the
+	 * "already present, nothing to do" skip must not reach before the refusal does.
+	 */
+	public function testAShadowIsRefusedEvenWhenTheWildcardIsAlreadyPresent(): Void {
+		assertErrContains(
+			move(
+				'a/Src.hx', 'Src', 'label', 'Dest',
+				wildcardScope(
+					'package b;\n\nimport a.Names.*;\n\nclass Dest {\n'
+					+ '\tpublic static function packOf(s:String):String return s + \'-B\';\n}'
+				)
+			),
+			'declares a member "packOf" of its own'
+		);
+	}
+
 	private function move(
 		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
 		?via: String, ?closure: Bool, ?scaffold: Bool
@@ -1296,6 +1422,26 @@ class MoveMemberSliceTest extends Test {
 		for (c in changes) if (c.file == file) return c;
 		Assert.fail('no change for file $file');
 		return { file: file, newSource: '' };
+	}
+
+	/**
+	 * The three-file scope every module-static wildcard test starts from: a module whose MAIN type
+	 * declares one static, a source that reaches it bare through `import a.Names.*;`, and the
+	 * caller-supplied destination.
+	 */
+	private function wildcardScope(dest: String): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'a/Names.hx',
+				source: 'package a;\n\nclass Names {\n\tpublic static function packOf(s:String):String return s + \'-A\';\n}'
+			},
+			{
+				file: 'a/Src.hx',
+				source: 'package a;\n\nimport a.Names.*;\n\nclass Src {\n'
+					+ '\tpublic static function label(s:String):String return packOf(s);\n}'
+			},
+			{ file: 'b/Dest.hx', source: dest }
+		];
 	}
 
 	private static function plugin(): HaxeQueryPlugin {

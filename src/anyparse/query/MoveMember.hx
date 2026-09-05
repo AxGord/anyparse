@@ -221,7 +221,8 @@ private enum ViaResult {
 final class MoveMember {
 
 	private static final ADVISORY: String = 'import-carrying is best-effort — it shares MoveSymbol\'s carry, so a type '
-		+ 'position and an UPPER-initial static receiver (T.go()) are priced, and every unguarded `using` of the source file '
+		+ 'position, an UPPER-initial static receiver (T.go()) and a bare name the source binds through a module-static '
+		+ 'wildcard (import pkg.Mod.*) are priced, and every unguarded `using` of the source file '
 		+ 'the destination lacks is carried when the moved body holds a member access at all. A dependency reached through a '
 		+ 'VALUE position (Type.createInstance(Dep, [])), a constructor pattern (case Red:) or a LOWERCASE receiver is not, '
 		+ 'a carried `using` is declared FIRST in the destination\'s own `using` run so it ranks last, and a destination '
@@ -807,6 +808,13 @@ final class MoveMember {
 		prep: MovePrep, m: MovedMember, movedTextEdits: Array<{ span: Span, text: String }>, advisoryExtras: Array<String>
 	): Void {
 		final accessPath: String = prep.srcInfo.pkg == '' ? prep.srcTypeName : '${prep.srcInfo.pkg}.${prep.srcTypeName}';
+		// A grant the destination TYPE already carries covers every member it will hold, the moved
+		// one included, so a member-level copy of it is dead text — S87 landed 10 of them across 3
+		// files in one slice, into destinations whose own `@:access(anyparse.macro.WriterLowering)`
+		// was the reason the move was legal in the first place. Only the fully-qualified spelling
+		// counts as a match: a short `@:access(Src)` resolves through the destination's own imports,
+		// and reading one as this path would DROP a grant the moved body needs.
+		if (RefactorSupport.accessGrantsOn(prep.trees[prep.destFile], prep.destDecl.declNode, '@:access').contains(accessPath)) return;
 		final lineStart: Int = lineStartOf(prep.srcSource, m.group.groupSpan.from);
 		final indent: String = prep.srcSource.substring(lineStart, m.group.groupSpan.from);
 		// A decl sharing its line with other code (one-line class) gets the
