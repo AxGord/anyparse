@@ -679,6 +679,14 @@
 			"find": ".filter(g -> source.substring(g.from, g.to).trim().length > 0)",
 			"replace": ".filter(g -> true)",
 			"note": "a whitespace-only gap counts as an unmodelled byte again, so the quote runs past the #end into the shared body that follows it"
+		},
+		{
+			"name": "M-RENDER-SPAN-TOKENS",
+			"type": "anyparse.check.SpanRender",
+			"method": "renderSpan",
+			"find": "final inToken: Bool = next < tokens.length && tokens[next].from <= i;",
+			"replace": "final inToken: Bool = false;",
+			"note": "no byte is ever inside a token, so the display renderer collapses whitespace INSIDE a string literal again and a finding advertises a call the fix would not write"
 		}
 	]
 }
