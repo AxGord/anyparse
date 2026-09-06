@@ -104,6 +104,14 @@
 			"note": "the doc keeps its gutter and line breaks, so a claim wrapped across two lines is invisible — the failure mode of a line-oriented search"
 		},
 		{
+			"name": "M-CUDDLE-FLATONLY",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"find": "if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;",
+			"replace": "if (itemFlat >= 0) return null;",
+			"note": "restores the pre-S146 gate — only an item that CANNOT render flat cuddles, so a comprehension that renders flat and still overflows keeps its `[` on a line of its own"
+		},
+		{
 			"name": "M-CUDDLE-OFF",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "shapeComprehensionCuddledOpen",
@@ -129,8 +137,8 @@
 			"name": "M-ELSE-GATE",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "isCuddleableComprehensionItem",
-			"find": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0;",
-			"replace": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0 && !hasTopLevelElse(item, 0);",
+			"find": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item);",
+			"replace": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && !hasTopLevelElse(item, 0);",
 			"note": "restores the S76 veto S78 removed — a comprehension whose body is an if/else refuses to cuddle its `[` again"
 		},
 		{

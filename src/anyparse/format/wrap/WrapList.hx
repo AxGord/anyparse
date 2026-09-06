@@ -4389,7 +4389,7 @@ class WrapList {
 	 * (`testWhileComprehensionNotCuddled`). Wire a body policy on `HxWhileExpr`
 	 * first if `while` comprehensions ever need this.
 	 *
-	 * Three gates, all cheap left-spine / flat walks already used by the sibling predicates:
+	 * Two gates, both cheap left-spine / flat walks already used by the sibling predicates:
 	 *  - first visible Text is the reserved `for` keyword (exact match —
 	 *    unambiguous, as in `isBlockBodyComprehensionItem`);
 	 *  - the body is NOT a head-glued `{ … }`
@@ -4403,14 +4403,18 @@ class WrapList {
 	 *    last token merely HAPPENS to be `}` (macro reification, object-
 	 *    literal / `switch` tail) is NOT excluded — it is pushed to a
 	 *    continuation line like any other expression body, so its `]`
-	 *    belongs on its own line (ω-comprehension-closer);
-	 *  - the item carries a forced hardline (`flatLength < 0`), i.e. it
-	 *    genuinely lays out across lines. A cascade can resolve `OnePerLine`
-	 *    on a NON-width rule (the generic `arrayWrap` cascade's
-	 *    `anyItemLength > 30`), and cuddling such an item would leave the
-	 *    whole body flat on the head line with a lone `]` below — the fit
-	 *    probe cannot catch that, since the item genuinely fits
-	 *    (`testInlineBodyComprehensionNotCuddled`).
+	 *    belongs on its own line (ω-comprehension-closer).
+	 *
+	 * A THIRD gate used to sit here and now lives one function down, in
+	 * `shapeComprehensionCuddledOpen`: `flatLength(item) < 0`, "the item carries
+	 * a forced hardline". It read as a shape question and was a WIDTH one — a
+	 * stand-in for "this comprehension does not fit its line", which held only
+	 * because an item that cannot render flat cannot fit either. The class it
+	 * silently excluded is the one the user reported (S146): an item that renders
+	 * flat perfectly well and still overflows, which under
+	 * `sameLine.comprehensionFor: fitLine` is every long comprehension in a real
+	 * tree. Width is not a property of the ITEM, so the two answers that replace
+	 * it are render-time probes on the SHAPE, not another predicate here.
 	 *
 	 * TWO further gates used to sit here and are GONE: a top-level `else` in the
 	 * item, and a nested second generator. Neither was a property of the BRACKET
@@ -4426,7 +4430,7 @@ class WrapList {
 	 * the `else` sits with its own `if`.
 	 */
 	private static function isCuddleableComprehensionItem(item: Doc): Bool {
-		return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && flatLength(item) < 0;
+		return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item);
 	}
 
 	/**
@@ -4453,18 +4457,66 @@ class WrapList {
 	 * already keeps the head on the open line or belongs to a cascade this knob
 	 * makes no claim about.
 	 *
-	 * FIT PROBE — `IfFirstLineExceeds(lineWidth, openShape, glueShape)`:
-	 * `flatTokenWidthFirstLine` walks the glued shape flat but DEFERS the body
-	 * `BodyGroup` and aborts at the first hardline, so what it measures is
-	 * exactly `open + inner-pad + <head through its closing `)`>`. The
-	 * threshold is bare `lineWidth`, NOT the `lineWidth + 1` of the cond-paren
-	 * probes: the primitive fires on `>= n`, and the running `col` here trails
-	 * the rendered column by the pending `OptSpace` that assignment /
-	 * object-field prefixes hold back, so the two offsets already cancel — a
+	 * TWO FIT PROBES, one per item class, because what the item's own Doc lets
+	 * a static walk measure is what decides which probe can answer at all. Both
+	 * fall back to `shapeOnePerLine` — the pre-knob layout.
+	 *
+	 * A. THE ITEM CANNOT RENDER FLAT (`flatLength(item) < 0`) —
+	 * `IfFirstLineExceeds(lineWidth, openShape, glueShape)`.
+	 * `flatTokenWidthFirstLine` walks the glued shape flat and aborts at the
+	 * first hardline, so on THIS class it measures exactly
+	 * `open + inner-pad + <head through its closing `)`>` — the item's OWN
+	 * forced break is what stops the walk. It also defers a body `BodyGroup`,
+	 * but that is a second, weaker stop and it does not generalise: under
+	 * `sameLine.comprehensionFor: fitLine` no `BodyGroup` reaches the item at
+	 * all — measured, `DocMeasure.flatTokenWidth`, which defers one to zero,
+	 * returns the item's FULL flat width (138 of 138 on the reported site) —
+	 * so the walk runs to the end and the probe measures the WHOLE
+	 * comprehension. That is why this probe cannot serve class B, and why the
+	 * first reading of the S146 report — "drop the `flatLength` gate and the
+	 * probe already there does the rest" — moved exactly one of the twelve
+	 * probe cells, and moved it into the shape the gate existed to refuse.
+	 *
+	 * The threshold is bare `lineWidth`, NOT the `lineWidth + 1` of the
+	 * cond-paren probes: the primitive fires on `>= n`, and the running `col`
+	 * here trails the rendered column by the pending `OptSpace` that assignment
+	 * / object-field prefixes hold back, so the two offsets already cancel — a
 	 * head landing exactly ON `maxLineLength` cuddles and one column past it
-	 * does not (`testHeadAtLimitCuddles` / `testHeadPastLimitFallsBack`). A
-	 * head that does not fit falls back to `shapeOnePerLine` — the pre-knob
-	 * layout.
+	 * does not (`testHeadAtLimitCuddles` / `testHeadPastLimitFallsBack`).
+	 *
+	 * B. THE ITEM RENDERS FLAT AND STILL OVERFLOWS (S146, the reported class):
+	 * `IfIndentWidthExceeds(cols + flatLength(item), lineWidth, …)` outside and
+	 * `IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape)` inside. The
+	 * outer probe asks the question the old `flatLength(item) < 0` gate was a
+	 * proxy for — does this comprehension fit its line — and asks it where the
+	 * answer decides something: on the line `shapeOnePerLine` WOULD give the
+	 * item, `indent + cols`. If the item fits there, that fallback shape is
+	 * already well formed and cuddling buys only the `[ … body` / lone `]`
+	 * layout; so a cascade that resolved `OnePerLine` on a NON-width rule (the
+	 * generic `arrayWrap` cascade's `anyItemLength > 30`) is declined here, by
+	 * width, instead of by a shape predicate standing in for width
+	 * (`testInlineBodyComprehensionNotCuddled`). Reading `f.indent` rather than
+	 * the pen column is the right frame for exactly that reason: the indent
+	 * being compared is the FALLBACK line's, not this one's. The inner probe is
+	 * the head-fit fallback that class A gets for free from its hardline —
+	 * `naturalFirstLineWidth` renders the glued shape speculatively, so when
+	 * the body group breaks under it the measurement is the head alone.
+	 *
+	 * B ALSO REQUIRES the item's FIRST break to sit right after the `for`
+	 * head's `)` (`firstBreakIsDelimChar(item, ')')`). The knob promises "head
+	 * on the `[` line, BODY one indent below", and only a body-level break can
+	 * deliver it. Where the item's first break is inside the HEAD instead —
+	 * `comprehensionFor: keep` glues the generator body, so the earliest break
+	 * a filter `if` offers is inside its own CONDITION — cuddling spends the
+	 * whole prefix as head budget and it is the head, not the body, that
+	 * splits. Measured on `testInnerOverflowKeepsOpenBracketAndWrapsBody`,
+	 * which is the ONE cell this gate flips: exploded, the head is one
+	 * 138-column line; cuddled at column 43 it is 169 and the filter's `&&`
+	 * chain breaks. A wrapping ITERABLE is NOT excluded — the walk resolves
+	 * every probe to its flat side, so `for (n in new IntIterator(a, b))` still
+	 * answers `)` and still cuddles (`pony/ui/xml/PixiXmlUi`, two sites, both
+	 * the wanted shape). Class A needs no such gate — its break is the forced
+	 * one, and where it lands is the body policy's business.
 	 *
 	 * The tail mirrors `shapeOnePerLine` exactly — the source / knob trailing
 	 * separator on `appendTrailingComma`, then the per-construct `trailBreak`
@@ -4478,6 +4530,8 @@ class WrapList {
 		appendTrailingComma: Bool, trailBreak: Doc, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
 	): Null<Doc> {
 		if (!enabled || mode != OnePerLine || items.length != 1 || !isCuddleableComprehensionItem(items[0])) return null;
+		final itemFlat: Int = flatLength(items[0]);
+		if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;
 		final glueShape: Doc = Concat([
 			Text(open),
 			openInside,
@@ -4487,7 +4541,9 @@ class WrapList {
 			Text(close)
 		]);
 		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
-		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
+		return itemFlat < 0
+			? IfFirstLineExceeds(lineWidth, openShape, glueShape)
+			: IfIndentWidthExceeds(cols + itemFlat, lineWidth, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape), openShape);
 	}
 
 	/**
