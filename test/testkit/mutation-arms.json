@@ -734,6 +734,21 @@
 			"note": "the `elseSwitch` knob contributes no case, so the policy selector never substitutes and `same` leaves the `switch` on its own line whatever the config asked for"
 		},
 		{
+			"name": "M-ELSE-SWITCH-CLOSE-NONE",
+			"type": "anyparse.macro.WriterCtorPatternLowering",
+			"method": "buildElseSwitchGlueTest",
+			"force": "null",
+			"note": "no branch body ever reads as a `switch` the knob glued to its head, so the pre-`else` gap falls back to the shape-aware hardline and a glued then-`switch` closes under an `else` on its own line"
+		},
+		{
+			"name": "M-ELSE-SWITCH-CLOSE-COMMENT",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitBodyPolicyBareRef",
+			"find": "macro ($glueCtorTest && $atRt == null && $blRt.length == 0);",
+			"replace": "glueCtorTest;",
+			"note": "the close-side glue stops asking whether a captured comment forced the body onto its own line, so the `else` cuddles a `}` that never moved up to the `if` head"
+		},
+		{
 			"name": "M-RENDER-SPAN-TOKENS",
 			"type": "anyparse.check.SpanRender",
 			"method": "renderSpan",

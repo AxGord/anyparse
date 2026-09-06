@@ -847,16 +847,20 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	elseIf: KeywordPlacement,
 
 	/**
-	 * omega-else-switch: keyword placement for a `switch` else-body, the twin of
-	 * `elseIf` for the other keyword-headed statement an `else` idiomatically
-	 * carries. `Same` glues it to the `else` line (`} else switch s {`), `Next`
-	 * puts it on the next line, `Keep` (the default) has no opinion and lets the
-	 * field's own `elseBody` / `expressionElseBody` policy decide - which is what
-	 * makes the knob byte-inert for every config that does not set it.
+	 * omega-else-switch: keyword placement for a `switch` BRANCH of an `if`, the
+	 * twin of `elseIf` for the other keyword-headed statement a branch
+	 * idiomatically carries. `Same` glues it to its keyword's line
+	 * (`if (c) switch s { … } else switch s { … }`), `Next` puts it on the next
+	 * line, `Keep` (the default) has no opinion and lets the field's own
+	 * `ifBody` / `elseBody` policy decide - which is what makes the knob
+	 * byte-inert for every config that does not set it.
 	 *
-	 * Fed by `sameLine.elseSwitch`; read at `HxIfStmt.elseBody` and
-	 * `HxIfExpr.elseBranch` through `@:fmt(elseSwitch(...))`, which names the
-	 * `switch` ctors itself so the core macro spells no grammar ctor.
+	 * Fed by `sameLine.elseSwitch`; read at BOTH branches of `HxIfStmt` and
+	 * `HxIfExpr` through `@:fmt(elseSwitch(...))`, which names the `switch` ctors
+	 * itself so the core macro spells no grammar ctor. Arming a THEN branch owns
+	 * a second seam the else branch never needed: the glued `switch` closes in
+	 * the head's own column, so the following `else` cuddles that `}` exactly as
+	 * it cuddles a block's (`PrevBodyInfo.headGlue`).
 	 */
 	elseSwitch: KeywordPlacement,
 	fitLineIfWithElse: Bool,

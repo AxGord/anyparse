@@ -919,6 +919,9 @@ final class WriterRefFieldLowering {
 		// `Next` when the knob is on and the body is an `if` that owns an
 		// `else`. Currently consumed by `HxForStmt.body` / `HxWhileStmt.body`.
 		final loopBodyIfElseArgs: Null<Array<String>> = child.fmtReadStringArgs('loopBodyIfElseNext');
+		// omega-else-switch: read ONCE - the body wrap decides the head glue from it and the
+		// close-side verdict below is built from the same names, so the two cannot drift.
+		final elseSwitchArgs: Null<Array<String>> = child.fmtReadStringArgs('elseSwitch');
 		parts.push(WriterBodyPolicyLowering.bodyPolicyWrap(ctx.bodyPolicy, {
 			flagName: bodyPolicyFlag,
 			exprFlagName: bodyPolicyExprFlag,
@@ -943,9 +946,25 @@ final class WriterRefFieldLowering {
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
 			arrowValueIfSite: child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE),
 			loopBodyIfElseArgs: loopBodyIfElseArgs,
-			elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
+			elseSwitchArgs: elseSwitchArgs
 		}));
-		return { access: fieldAccess, typePath: refName };
+		// omega-else-switch CLOSE side: the next field's gap gets the glue verdict
+		// from HERE, where the field's own meta and its own comment slots are in
+		// scope. A comment captured between the head and this body forces the body
+		// onto its own line whatever the policy said (`wrapBodyAfterTrail`), so a
+		// following keyword must not cuddle a close that never moved up; and a
+		// field carrying no `@:fmt(elseSwitch(...))` never glues at all, however
+		// the keyword field beside it is annotated. Null when the knob is absent -
+		// every existing gap keeps its bytes.
+		final glueCtorTest: Null<Expr> = buildElseSwitchGlueTest(ctx.ctorPat, elseSwitchArgs, refName, fieldAccess);
+		final headGlue: Null<Expr> = if (glueCtorTest == null || (afterTrailExpr == null && beforeLeadingExpr == null))
+			glueCtorTest;
+		else {
+			final atRt: Expr = afterTrailExpr ?? macro null;
+			final blRt: Expr = beforeLeadingExpr ?? macro ([]: Array<String>);
+			macro ($glueCtorTest && $atRt == null && $blRt.length == 0);
+		}
+		return { access: fieldAccess, typePath: refName, headGlue: headGlue };
 	}
 
 	/**

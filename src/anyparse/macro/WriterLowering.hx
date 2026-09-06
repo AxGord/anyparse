@@ -1690,10 +1690,19 @@ typedef WriterRule = {
  * a shape-aware leading separator on the following `@:fmt(sameLine(...))`
  * keyword: block ctors respect the flag, non-block ctors force a
  * hardline.
+ *
+ * `headGlue` is the runtime Bool that says the `elseSwitch` knob glued this
+ * body to its own head, so it closes in that head's column and the following
+ * keyword may cuddle the close exactly as it cuddles a block's. Built where
+ * the body is emitted, from that field's OWN meta and minus the captured
+ * comment that declines the glue - the gap must never infer it from the
+ * keyword field's meta, which says nothing about what the body did. Null on
+ * every path with no such knob.
  */
 typedef PrevBodyInfo = {
 	access: Expr,
-	typePath: String
+	typePath: String,
+	?headGlue: Null<Expr>
 };
 /**
  * One struct field's per-iteration metadata, produced by `readFieldMeta` and
@@ -1873,10 +1882,12 @@ typedef WrapBodyOpts = {
 	// node's own `else` field rather than about the CHILD's shape. Null → byte-inert.
 	?loopBodyIfElseArgs: Null<Array<String>>,
 	// omega-else-switch: the declarative names from
-	// `@:fmt(elseSwitch('<optField>', '<ctor>'…))` on an else-body field - the
+	// `@:fmt(elseSwitch('<optField>', '<ctor>'…))` on a BRANCH body field - the
 	// `KeywordPlacement` knob field first, then one or more body ctors that
-	// spell a keyword-headed `switch` else-body (`HxIfStmt.elseBody` names both
-	// the parenthesised and the bare `switch` statement ctor). The core macro
+	// spell a keyword-headed `switch` branch (`HxIfStmt` names both the
+	// parenthesised and the bare `switch` statement ctor, on `thenBody` and
+	// `elseBody` alike - the user's rule is that the two halves of one
+	// `if`/`else` are laid out the same way). The core macro
 	// therefore spells no grammar ctor of its own here, unlike the older
 	// `elseIf` flag beside it, which still hardcodes `IfStmt`/`IfExpr`.
 	// Null → byte-inert.

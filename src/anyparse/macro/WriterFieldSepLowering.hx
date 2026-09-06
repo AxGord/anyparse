@@ -151,7 +151,19 @@ final class WriterFieldSepLowering {
 			guard: null
 		});
 		cases.push({ values: [macro _], expr: macro _dhl(), guard: null });
-		final shapeAwareSwitch: Expr = { expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos() };
+		final ctorSwitch: Expr = { expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos() };
+		// omega-else-switch CLOSE side: a `switch` the knob glued to the PREVIOUS
+		// branch's head closes with a `}` in that head's own column, so the
+		// hardline the `_` arm above forces on every non-block ctor would leave
+		// the keyword stranded under a close it is flush with. The verdict comes
+		// from the previous FIELD (`PrevBodyInfo.headGlue`), never from this
+		// field's meta: at `next` / `keep`, on a field the knob does not arm, and
+		// under a captured comment that declined the glue, the same `switch` sits
+		// one indent deeper and the hardline is the right answer. Routed to
+		// `flagBased` rather than to a bare space so a glued close reads the same
+		// `sameLine` policy a curly close already reads.
+		final headGlue: Null<Expr> = prevBody.headGlue;
+		final shapeAwareSwitch: Expr = headGlue == null ? ctorSwitch : macro ($headGlue ? $flagBased : $ctorSwitch);
 		return sameLineSeparatorShapeAware(ctx, {
 			child: child,
 			prevBody: prevBody,

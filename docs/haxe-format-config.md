@@ -204,14 +204,19 @@ break; only `Keep` reads it. Full detail in `HxFormatSameLineSection`'s own doc.
 ## The three keys S67 added, and the position trap each of them has
 
 **`sameLine.elseSwitch: "same" | "next" | "keep"`** — keyword placement for a `switch`
-else-body, the twin of `sameLine.elseIf` for the other keyword-headed statement an `else`
-idiomatically carries. `"same"` glues it (`} else switch s { … }`), `"next"` puts it on its
-own line, `"keep"` (the DEFAULT) has no opinion and lets the field's `elseBody` /
-`expressionElseBody` policy decide. The default differs from `elseIf`'s (`Same`) on purpose:
-this key is new and must leave every existing config's bytes alone. It reaches BOTH the
-statement `if` and the value `if`. One refusal: a comment written between `else` and the
-`switch` declines the glue and the source layout is kept byte for byte — the glued layout has
-no channel for that comment.
+BRANCH of an `if`, the twin of `sameLine.elseIf` for the other keyword-headed statement a
+branch idiomatically carries. `"same"` glues it (`if (c) switch s { … } else switch s { … }`),
+`"next"` puts it on its own line, `"keep"` (the DEFAULT) has no opinion and lets the field's
+`ifBody` / `elseBody` (`expressionIfBody` / `expressionElseBody`) policy decide. The default
+differs from `elseIf`'s (`Same`) on purpose: this key is new and must leave every existing
+config's bytes alone. It reaches BOTH the statement `if` and the value `if`, and BOTH branches
+of each — S138 armed the then-branch after the user reported the two halves of one `if`/`else`
+coming back laid out differently, and stated the rule as SYMMETRY. A glued then-`switch` also
+closes in its head's own column, so the `else` cuddles that `}` the way it already cuddles a
+block's — two seams, not one, and the second is why `if (c) switch … }` + newline + `else` was
+never the right half-way answer. One refusal, on either branch: a comment written between the keyword and the `switch`
+declines the glue — both seams — and the source layout is kept byte for byte, because the glued
+layout has no channel for that comment.
 
 **`whitespace.bracesConfig.singleStatementBraces: "symmetric"`** — the ADD direction of a
 policy that until now only removed. An if/else (or try/catch group, or value-`if`) with

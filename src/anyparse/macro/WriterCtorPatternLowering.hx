@@ -278,6 +278,40 @@ final class WriterCtorPatternLowering {
 		return macro $flagAccess && $ctorTest;
 	}
 
+	/**
+	 * omega-else-switch CLOSE side: the runtime test that the body the knob glued
+	 * to its keyword head is the PRECEDING sibling of the gap being emitted -
+	 * `opt.<knobField> == Same` AND that body's runtime ctor is one the meta
+	 * names. Null when the field carries no `@:fmt(elseSwitch(...))`, or when the
+	 * body type declares none of the named ctors, so every other grammar and
+	 * every other field keep their bytes.
+	 *
+	 * A GLUED `switch` closes with a `}` in the head's own column, exactly as a
+	 * curly block does, so the `shapeAware` hardline that fires on every
+	 * non-block ctor is wrong for it and this test is what routes the gap back to
+	 * the flag-driven separator. Under `next` / `keep` the close sits one indent
+	 * deeper and the hardline is right, which is why the knob is part of the test
+	 * rather than the ctor alone.
+	 */
+	private static function buildElseSwitchGlueTest(
+		ctx: CtorPatternCtx, args: Null<Array<String>>, bodyTypePath: Null<String>, bodyValueExpr: Expr
+	): Null<Expr> {
+		if (args == null || bodyTypePath == null || args.length < 2) return null;
+		final patterns: Array<Expr> = [];
+		for (i in 1...args.length) {
+			final pat: Null<Expr> = findCtorPattern(ctx, bodyTypePath, args[i]);
+			if (pat != null) patterns.push(pat);
+		}
+		if (patterns.length == 0) return null;
+		final knob: Expr = optFieldAccess(args[0]);
+		final samePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'KeywordPlacement', 'Same']);
+		final ctorTest: Expr = {
+			expr: ESwitch(bodyValueExpr, [{ values: patterns, expr: macro true, guard: null }], macro false),
+			pos: Context.currentPos()
+		};
+		return macro $knob == $samePat && $ctorTest;
+	}
+
 	private static function branchCtorPattern(ctx: CtorPatternCtx, bodyTypePath: String, branch: ShapeNode): Expr {
 		final ctorName: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final arity: Int = branch.children.length + branchSynthExtraArity(ctx, bodyTypePath, branch);
