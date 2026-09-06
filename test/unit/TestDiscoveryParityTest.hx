@@ -793,6 +793,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.ApqTextRenderTest',
 		'unit.query.ApqUsesTest',
 		'unit.query.BodySlotGuardSliceTest',
+		'unit.query.BuildFailureTest',
 		'unit.query.CachingGrammarPluginTest',
 		'unit.query.CallGraphTest',
 		'unit.query.ChangeSigSliceTest',
