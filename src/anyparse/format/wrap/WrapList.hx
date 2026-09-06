@@ -4484,23 +4484,47 @@ class WrapList {
 	 * head landing exactly ON `maxLineLength` cuddles and one column past it
 	 * does not (`testHeadAtLimitCuddles` / `testHeadPastLimitFallsBack`).
 	 *
-	 * B. THE ITEM RENDERS FLAT AND STILL OVERFLOWS (S146, the reported class):
-	 * `IfIndentWidthExceeds(cols + flatLength(item), lineWidth, …)` outside and
-	 * `IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape)` inside. The
-	 * outer probe asks the question the old `flatLength(item) < 0` gate was a
-	 * proxy for — does this comprehension fit its line — and asks it where the
-	 * answer decides something: on the line `shapeOnePerLine` WOULD give the
-	 * item, `indent + cols`. If the item fits there, that fallback shape is
-	 * already well formed and cuddling buys only the `[ … body` / lone `]`
-	 * layout; so a cascade that resolved `OnePerLine` on a NON-width rule (the
-	 * generic `arrayWrap` cascade's `anyItemLength > 30`) is declined here, by
-	 * width, instead of by a shape predicate standing in for width
-	 * (`testInlineBodyComprehensionNotCuddled`). Reading `f.indent` rather than
-	 * the pen column is the right frame for exactly that reason: the indent
-	 * being compared is the FALLBACK line's, not this one's. The inner probe is
-	 * the head-fit fallback that class A gets for free from its hardline —
-	 * `naturalFirstLineWidth` renders the glued shape speculatively, so when
-	 * the body group breaks under it the measurement is the head alone.
+	 * B. THE ITEM RENDERS FLAT (S146 + T674): ONE probe,
+	 * `IfWidthExceeds(bodyBreaksWhenGlued, IfNaturalFirstLineExceeds(lineWidth,
+	 * openShape, glueShape), openShape)`. The knob promises "head on the `[`
+	 * line, BODY one indent below", so the only cell it can serve is the one
+	 * where the item's own group BREAKS under the glue. Where it does not, the
+	 * glued shape is a HALF-shape — head and body packed onto the `[` line with
+	 * the close delimiter alone underneath — which is worse than the fallback,
+	 * and it is what an unconditional cuddle produced for `FITTING_ITEM`.
+	 *
+	 * There is no "the body broke" primitive, but the question is arithmetic:
+	 * the item starts at `col + flatTokenWidth(open + openInside)` and its group
+	 * breaks exactly when the item's own flat width does not fit from there.
+	 * `IfWidthExceeds` fires on `col + flatTokenWidth(flatDoc) >= n` with
+	 * `flatDoc = openShape`, so the threshold is SOLVED for `n` rather than
+	 * calibrated: `lineWidth + 1 - glueLead - itemWidth +
+	 * flatTokenWidth(openShape)` reduces to `col + glueLead + itemWidth >
+	 * lineWidth` whatever `openShape` happens to measure, which is what keeps
+	 * this off the ±2-column knife edge three earlier formulations sat on.
+	 *
+	 * The PEN COLUMN is the right frame here and `f.indent` was not. The
+	 * statement prefix before the `[` — `return ` against
+	 * `final cr: Array<String> = ` — is exactly what decides whether the body
+	 * has to move down, and the FALLBACK line's indent cannot see it. It stays
+	 * idempotent because that prefix does not move between passes
+	 * (`testCuddledLayoutIsIdempotent`, `testTheReportedLayoutIsIdempotent`).
+	 *
+	 * The predecessor measured `indent + cols + flatLength(item)` — the line
+	 * `shapeOnePerLine` WOULD give the item — and declined whenever the item
+	 * fitted THERE. That line is one indent level deeper than the glue line and
+	 * blind to the prefix, so it declined the reported T674 site (the item is
+	 * exactly 140 columns at the fallback indent and 164 at the glue column)
+	 * while accepting `FITTING_ITEM` (140 at the glue column, so the body never
+	 * moved). Both cells now answer from the same arithmetic. A cascade that
+	 * resolved `OnePerLine` on a NON-width rule is declined for free rather than
+	 * by a second rule: an item that breaks at the glue column implies the whole
+	 * comprehension overflows (`testInlineBodyComprehensionNotCuddled`).
+	 *
+	 * The inner probe is the head-fit fallback that class A gets for free from
+	 * its hardline — `naturalFirstLineWidth` renders the glued shape
+	 * speculatively, so when the body group breaks under it the measurement is
+	 * the head alone.
 	 *
 	 * B ALSO REQUIRES the item's FIRST break to sit right after the `for`
 	 * head's `)` (`firstBreakIsDelimChar(item, ')')`). The knob promises "head
@@ -4541,9 +4565,11 @@ class WrapList {
 			Text(close)
 		]);
 		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
-		return itemFlat < 0
-			? IfFirstLineExceeds(lineWidth, openShape, glueShape)
-			: IfIndentWidthExceeds(cols + itemFlat, lineWidth, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape), openShape);
+		if (itemFlat < 0) return IfFirstLineExceeds(lineWidth, openShape, glueShape);
+		final glueLead: Int = DocMeasure.flatTokenWidth(Concat([Text(open), openInside]));
+		final itemWidth: Int = DocMeasure.flatTokenWidth(items[0]);
+		final bodyBreaksWhenGlued: Int = lineWidth + 1 - glueLead - itemWidth + DocMeasure.flatTokenWidth(openShape);
+		return IfWidthExceeds(bodyBreaksWhenGlued, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape), openShape);
 	}
 
 	/**

@@ -112,6 +112,14 @@
 			"note": "restores the pre-S146 gate — only an item that CANNOT render flat cuddles, so a comprehension that renders flat and still overflows keeps its `[` on a line of its own"
 		},
 		{
+			"name": "M-CUDDLE-FALLBACK-INDENT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"find": "return IfWidthExceeds(bodyBreaksWhenGlued, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape), openShape);",
+			"replace": "return IfIndentWidthExceeds(cols + itemWidth, lineWidth, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape), openShape);",
+			"note": "restores the S146 threshold — the cuddle is decided on the line `shapeOnePerLine` would give the item instead of on the glue column, so a comprehension whose item fits one indent deeper but not after `[ ` keeps its own bracket line (T674)"
+		},
+		{
 			"name": "M-CUDDLE-OFF",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "shapeComprehensionCuddledOpen",
@@ -800,8 +808,7 @@
 			"method": "trimTrivia",
 			"force": "span",
 			"note": "the quoted range keeps its leading and trailing trivia, so a comment after the `#end` closes the region quote and a space before the `#if` becomes the column the note names"
-		}
-,
+		},
 		{
 			"name": "M-PEB-WS-REWIND-TRYPARSE-OFF",
 			"type": "anyparse.macro.StarLoopLowering",
@@ -1088,12 +1095,12 @@
 			"note": "the registry memoises its command objects into process-scoped state, so every run of the CLI shares one instance of each command"
 		},
 		{
-		  "name": "M-LINT-RANGE-INERT",
-		  "type": "anyparse.query.cli.command.LintCommand",
-		  "method": "withinRange",
-		  "find": "if (range == null) return all;",
-		  "replace": "if (range == null) return all;\nif (all != null) return all;",
-		  "note": "the --range window stops filtering, so a write op's --fix rewrites every finding in the file instead of only those on the lines it changed"
+			"name": "M-LINT-RANGE-INERT",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withinRange",
+			"find": "if (range == null) return all;",
+			"replace": "if (range == null) return all;\nif (all != null) return all;",
+			"note": "the --range window stops filtering, so a write op's --fix rewrites every finding in the file instead of only those on the lines it changed"
 		},
 		{
 			"name": "M-CLI-REQUIREMATCH-STATIC",
@@ -1420,8 +1427,7 @@
 			"find": "if (accessKinds.contains(node.kind)) for (child in node.children) {",
 			"replace": "if (true) for (child in node.children) {",
 			"note": "every upper-initial identifier is priced, not only a member-access receiver, so a VALUE position such as `Type.createInstance(Dep, [])` contests a destination binding it never named"
-		}
-,
+		},
 		{
 			"name": "M-SSB-CHAIN-TAIL-OFF",
 			"type": "anyparse.format.SingleStmtBraces",

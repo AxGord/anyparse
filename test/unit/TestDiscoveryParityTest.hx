@@ -1122,6 +1122,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testWholeChainOverTheLimitStaircases :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAFlatItemThatStillOverflowsCuddlesItsHead :: control :: '
 			+ 'M-CUDDLE-FLATONLY',
+			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAnItemOverflowingTheGlueColumnCuddlesAndDropsItsBody :: control :: '
+			+ 'M-CUDDLE-FALLBACK-INDENT',
+			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testTheGlueOverflowLayoutIsIdempotent :: control :: '
+			+ 'M-CUDDLE-FALLBACK-INDENT',
 			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testTheReportedLayoutIsIdempotent :: control :: M-CUDDLE-FLATONLY',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine :: control :: '
 			+ 'M-FIRST-LINE-FIT',
@@ -1418,6 +1422,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-CLAIM-NOKINDS',
 			'M-CLAIM-RAW-DOC',
 			'M-CUDDLE-FLATONLY',
+			'M-CUDDLE-FALLBACK-INDENT',
 			'M-CUDDLE-OFF',
 			'M-DECLARINGFILES-EMPTY',
 			'M-DECLSITE-SCOPEWIDE',
