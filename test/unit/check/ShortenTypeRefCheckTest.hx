@@ -275,6 +275,8 @@ class ShortenTypeRefCheckTest extends Test {
 	 * input already satisfies, so without a path that must be imported in the same call the test
 	 * would pass just as well on a dead fix path.
 	 */
+	@:pin('control')
+	@:killer('M-SHORTEN-IMPORT-THRESHOLD-ONE')
 	public function testASingleSurvivingOccurrenceEarnsNoImport(): Void {
 		final src: String = inClass(
 			'',

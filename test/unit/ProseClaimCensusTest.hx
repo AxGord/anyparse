@@ -58,10 +58,38 @@ final class ProseClaimCensusTest extends Test {
 	 * all in that package.
 	 *
 	 * Two of the four kinds have an exit: an `arm` line leaves by gaining a
-	 * `@:killer`, a `control` line by gaining `@:pin(\'control\')`. `base` and
+	 * `@:killer`, a `control` line by gaining `@:pin('control')`. `base` and
 	 * `vacuity` have none — no annotation can answer "was this red at the base
 	 * commit" at build time — so those lines are a register of what is still
 	 * prose, not a queue.
+	 *
+	 * S142 measured what the `control` half actually is, and it is not a queue
+	 * either. At 235 lines, 107 were PURE `control` — the only shape that can
+	 * leave — over 65 classes, 38 of which hold exactly one. Thirty of those
+	 * 107 sit in 17 classes that ALREADY declare an arm; all 38 of those arms
+	 * were run and none of the 30 went red, so the cheap shape S129 found — a
+	 * line dying under an arm already declared — is empty here. At least 17 of
+	 * the 107 say in their own words that they are unchanged either way:
+	 * byte-identical with the gate reverted, already cuddled before the gate,
+	 * green on both sides. An arm forced onto one of those is the vacuous pin
+	 * this layer exists to prevent, and all five lines of
+	 * `HxArrowBlockBodyOpenSliceTest`, the densest class, are of that kind.
+	 *
+	 * On the densest class whose fixtures are gate controls rather than outcome
+	 * pins — `FieldInitAtDeclarationCheckTest`, 4 lines — four hand cuts found
+	 * no narrow discriminating seam: what flips those four flips 33 to 38 of
+	 * the 72 fixtures in that class, while the two narrow cuts that do exist
+	 * (2 and 3 failures) flip other fixtures instead. Three classes probed by
+	 * hand cost six cuts and yielded ONE retirable line,
+	 * `ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport`,
+	 * whose `IMPORT_THRESHOLD` is a narrow seam: cutting 2 to 1 fails four
+	 * fixtures and all four are in that class. So the rate is roughly one arm
+	 * per LINE, not per class.
+	 *
+	 * So a `control` line has a mechanical exit but not always an honest one.
+	 * Retire one only where a cut exists that flips THAT fixture and few
+	 * others. Minting a blunt arm to move this number would trade the register
+	 * for the thing it guards, and the number is not the point.
 	 */
 	private static final BASELINE: Array<String> = [
 		'unit.check.CoreApiConformanceGateTest#testPreferInlineIsUnaffectedByTheGate :: control',
@@ -171,7 +199,6 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.RedundantThisCheckTest#testInheritedTransitiveFlagged :: control',
 		'unit.check.RedundantToStringCheckTest#testBlockedSiteCarriesItsBlockerAsTheDeclineReason :: base',
 		'unit.check.ShadowingLocalCheckTest#testParameterSpellingsAreTheSiblingRulesFindings :: control',
-		'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control',
 		'unit.check.ShortenTypeRefCheckTest#testASuppressedRuntimeUseDoesNotBuyAMacroBodyImport :: control',
 		'unit.check.ShortenTypeRefCheckTest#testNestedGuardedImportOfTheSameNameRefusesTheShortForm :: control',
 		'unit.check.SimplifyBooleanTernaryCheckTest#testClaimedSpansHoldNothingForARealValuedTernary :: control',
