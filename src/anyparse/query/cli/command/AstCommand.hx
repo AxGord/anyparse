@@ -231,8 +231,10 @@ final class AstCommand implements CliCommand {
 		CliIo.sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
 		CliIo.sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
 		CliIo.sysPrint(
-			'  --spans             Append `@from-to` byte-range annotation to every rendered node — same-span duplicates ('
-			+ 'parser bug emitting two nodes at the same position) become a trivial visual signal.\n'
+			'  --spans             Append `@from-to` CODEPOINT-range annotation to every rendered node — same-span duplicates ('
+			+ 'parser bug emitting two nodes at the same position) become a trivial visual signal. Codepoints, NOT bytes: '
+			+ 'slicing a source file by these offsets with a byte index is off by one per multi-byte character before the node '
+			+ '(this repo writes multi-byte markers in comments, so it bites). Use `apq source --select` to read a node instead.\n'
 		);
 		CliIo.sysPrint(
 			'  --count             Print just the integer direct-child count at the displayed root ('

@@ -372,6 +372,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqSourceMetaArgCliTest',
 		'unit.cli.ApqStripDryRunCliTest',
 		'unit.cli.ApqStripFromClusterCliTest',
+		'unit.cli.ApqTestSummaryExitStatusCliTest',
 		'unit.cli.ApqWriterEqualsCliTest',
 		'unit.cli.ApqWriterProbeCliTest',
 		'unit.cli.CliCommandSeamTest',
@@ -1030,6 +1031,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
+			'unit.cli.ApqTestSummaryExitStatusCliTest#testTruncatedTranscriptDisagreesWithANonZeroExit :: control :: M-EXIT-STATUS-AGREES',
 			'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
 			'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
@@ -1366,7 +1368,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-PIEC-SPINE-CLAIM-ANY',
 			'M-ORPHAN-ARMS-SHARE-REASON',
 			'M-LINTFIX-ACCEPTED-BLAMED',
-			'M-ADDMETA-LOOSE-WRAPPER-CLIMB'
+			'M-ADDMETA-LOOSE-WRAPPER-CLIMB',
+			'M-EXIT-STATUS-AGREES'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

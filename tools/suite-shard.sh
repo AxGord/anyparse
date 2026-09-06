@@ -38,6 +38,14 @@
 #   tools/suite-shard.sh --bin /tmp/w1/test.js   # a private worker build
 #   tools/suite-shard.sh --keep              # keep the work directory on success
 #
+# The LAST line is always a verdict — `suite-shard: PASS — ...` or
+# `suite-shard: FAILED — <reason>; <reason>`. Read that one; every other
+# line is a measurement, and a measurement of a red run still reads as a
+# table of numbers. Each shard's transcript is also reconciled against that
+# shard's own exit status (`apq test-summary --exit-status`), so a shard
+# that DIED — non-zero exit, nothing failing in its report — is named
+# instead of contributing a green `0 failures / 0 errors` and a short total.
+#
 # --verify and --expect are mutually exclusive. Exit status is 0 only when
 # every shard is green AND parity holds. A red shard, an empty shard, a
 # substring collision, a registration the parser cannot name, a pinned
@@ -329,12 +337,27 @@ elapsed_ms=$(( $(now_ms) - started ))
 # a failure message quoted into `test-summary`'s stdout could otherwise
 # supply a stray "tests" or "assertions" token. No match at all is an
 # error, never a silent zero.
+#
+# $3 is the exit status the run itself returned, handed to `test-summary
+# --exit-status` so the transcript is checked AGAINST it. Counting a
+# transcript answers what it says, never whether the process reached the
+# end: a shard killed after one row summarises to `1 tests / 1 assertions
+# / 0 failures / 0 errors` and exits 0, so before this flag existed such a
+# shard contributed a green count pair and a short total to the aggregate
+# with nothing whatever on stderr (measured: 10 928 of 14 133 tests, every
+# printed count green, only `(exit 1)` dissenting). The counts are parsed
+# FIRST and the reconciliation reported second, because a disagreement
+# still leaves them the best answer available — the exit code is what
+# changes, not the numbers.
+#
+# Return: 0 agreed · 1 no report to count at all · 2 counted, but the
+# report and the exit status disagree.
 summarise() {
-    if ! hxq test-summary "$1" > "$2.summary" 2> "$2.err"; then
-        echo "suite-shard.sh: could not summarise $1" >&2
-        cat "$2.summary" "$2.err" >&2
-        echo "0 0 0 0" > "$2.nums"
-        return 1
+    ts_rc=0
+    if [ -n "${3:-}" ]; then
+        hxq test-summary "$1" --exit-status "$3" > "$2.summary" 2> "$2.err" || ts_rc=$?
+    else
+        hxq test-summary "$1" > "$2.summary" 2> "$2.err" || ts_rc=$?
     fi
     if [ -s "$2.err" ]; then
         # Collected rather than printed: the staleness advisory is
@@ -357,45 +380,92 @@ summarise() {
             print t + 0, a + 0, f + 0, e + 0
         }
     ' "$2.summary" > "$2.nums"; then
-        echo "suite-shard.sh: no utest report line in the summary of $1 — see $2.summary" >&2
+        echo "suite-shard.sh: could not summarise $1 — no utest report line, see $2.summary" >&2
+        cat "$2.summary" "$2.err" >&2
         echo "0 0 0 0" > "$2.nums"
         return 1
     fi
+    if [ "$ts_rc" -ne 0 ]; then
+        # The counts parsed, so a non-zero `test-summary` here is its
+        # exit-status reconciliation refusing, not a read failure. Forward
+        # the line it wrote: it says which way the two disagree.
+        grep '^exit-status disagreement:' "$2.summary" >&2 || true
+        return 2
+    fi
     return 0
+}
+
+# Every reason the run is not green, collected as it is found so the final
+# verdict can NAME them. The whole point of the line they feed: before it,
+# the last thing this script printed on a failing run was
+# `parity: counts not cross-checked (class parity OK: ...)`, and the only
+# red tokens anywhere were a `1` inside two long numeric lines and the
+# process exit code. Two slices in a row read a correct report and reached
+# opposite verdicts from it.
+: > "$work/reasons.txt"
+add_reason() {
+    printf '%s\n' "$1" >> "$work/reasons.txt"
 }
 
 sum_tests=0
 sum_asserts=0
 sum_fail=0
 sum_err=0
+partial=0
 s=0
 while [ "$s" -lt "$shards" ]; do
-    if ! summarise "$work/shard$s.log" "$work/shard$s"; then
+    shard_exit=$(cat "$work/shard$s.rc" 2> /dev/null || echo 1)
+    summary_rc=0
+    summarise "$work/shard$s.log" "$work/shard$s" "$shard_exit" || summary_rc=$?
+    if [ "$summary_rc" -eq 1 ]; then
         echo "suite-shard.sh: shard $s log is at $work/shard$s.log" >&2
         shard_rc=1
+        add_reason "shard $s could not be summarised"
     fi
 
     if ! read -r t a f e < "$work/shard$s.nums"; then
         echo "suite-shard.sh: shard $s produced no counts at all — see $work/shard$s.log" >&2
         shard_rc=1
+        add_reason "shard $s produced no counts"
         t=0
         a=0
         f=0
         e=0
     fi
     classes=$(wc -l < "$work/shard$s.list" | tr -d '[:space:]')
-    shard_exit=$(cat "$work/shard$s.rc" 2> /dev/null || echo 1)
     sum_tests=$((sum_tests + t))
     sum_asserts=$((sum_asserts + a))
     sum_fail=$((sum_fail + f))
     sum_err=$((sum_err + e))
 
-    printf 'shard %d: %4d classes / %5d tests / %6d assertions / %d failures / %d errors (exit %s)\n' \
-        "$s" "$classes" "$t" "$a" "$f" "$e" "$shard_exit"
+    # A shard whose report does not explain its own exit did not finish, so
+    # its counts are a PREFIX of what it was asked to run, not a result. The
+    # marker rides on the shard's own line because that is the line whose
+    # `0 failures / 0 errors` would otherwise be read as green.
+    note=''
+    if [ "$summary_rc" -eq 2 ]; then
+        partial=1
+        note='  <-- did NOT finish: these counts are partial'
+        add_reason "shard $s exited $shard_exit with no failing test in its report — it did not finish"
+    fi
+    printf 'shard %d: %4d classes / %5d tests / %6d assertions / %d failures / %d errors (exit %s)%s\n' \
+        "$s" "$classes" "$t" "$a" "$f" "$e" "$shard_exit" "$note"
+    # The locus `test-summary` already computed for a red shard, which this
+    # script used to compute and throw away — without it, localising a
+    # failure means opening the shard log by hand.
+    if [ "$f" -ne 0 ] || [ "$e" -ne 0 ]; then
+        # `s/^first /` and not an alternation over `failure|error`: BSD sed's
+        # BRE has no `\|`, so the alternation form matched NOTHING on macOS and
+        # printed nothing at all — silently, since a `sed -n` that matches
+        # nothing is a successful command.
+        sed -n "s/^first /  shard $s first /p" "$work/shard$s.summary"
+        add_reason "shard $s is red ($f failures / $e errors)"
+    fi
 
     if [ "$t" -eq 0 ]; then
         echo "suite-shard.sh: shard $s reported 0 tests — its filter matched nothing, or the run aborted before the report (see $work/shard$s.log)" >&2
         shard_rc=1
+        add_reason "shard $s reported 0 tests"
     fi
     if [ "$shard_exit" -ne 0 ]; then
         shard_rc=1
@@ -406,6 +476,10 @@ done
 printf -- '--- suite-shard: %d classes / %d tests / %d assertions / %d failures / %d errors in %d.%03ds across %d shards ---\n' \
     "$total_classes" "$sum_tests" "$sum_asserts" "$sum_fail" "$sum_err" \
     "$((elapsed_ms / 1000))" "$((elapsed_ms % 1000))" "$shards"
+
+if [ "$partial" -eq 1 ]; then
+    echo "suite-shard.sh: the totals above are a SUM OF WHAT RAN, not a total — at least one shard did not finish" >&2
+fi
 
 if [ "$sum_fail" -ne 0 ] || [ "$sum_err" -ne 0 ]; then
     shard_rc=1
@@ -429,7 +503,9 @@ if [ "$verify" -eq 1 ]; then
     # totals and reported as a parity failure the run did not cause.
     mono_rc=0
     APQ_TEST= node "$test_js" > "$work/mono.log" 2>&1 || mono_rc=$?
-    if summarise "$work/mono.log" "$work/mono" && read -r mt ma mf me < "$work/mono.nums"; then
+    mono_summary_rc=0
+    summarise "$work/mono.log" "$work/mono" "$mono_rc" || mono_summary_rc=$?
+    if [ "$mono_summary_rc" -ne 1 ] && read -r mt ma mf me < "$work/mono.nums"; then
         # The monolith's own verdict is the point of paying for it: it is
         # the only arm that can catch an ordering-dependent failure the
         # shards separated. Comparing counts while discarding its exit
@@ -437,17 +513,20 @@ if [ "$verify" -eq 1 ]; then
         if [ "$mono_rc" -ne 0 ] || [ "$mf" -ne 0 ] || [ "$me" -ne 0 ]; then
             echo "suite-shard.sh: the monolith run is RED (exit $mono_rc, $mf failures, $me errors) while the shards are green — see $work/mono.log" >&2
             shard_rc=1
+            add_reason "the monolith run is RED (exit $mono_rc, $mf failures, $me errors) while the shards are green"
             parity_note="monolith run RED ($mt tests / $ma assertions / $mf failures / $me errors)"
         elif [ "$mt" -eq "$sum_tests" ] && [ "$ma" -eq "$sum_asserts" ]; then
             parity_note="counts verified against a monolith run ($mt tests / $ma assertions)"
         else
             echo "suite-shard.sh: COUNT PARITY FAIL — shards $sum_tests/$sum_asserts vs monolith $mt/$ma" >&2
             shard_rc=1
+            add_reason "count parity FAILED — shards $sum_tests/$sum_asserts vs monolith $mt/$ma"
             parity_note="counts DIVERGED from the monolith run ($mt tests / $ma assertions)"
         fi
     else
         echo "suite-shard.sh: could not summarise the monolith run — see $work/mono.log" >&2
         shard_rc=1
+        add_reason "the monolith run could not be summarised"
         parity_note="monolith run could not be summarised"
     fi
 elif [ -n "$expect" ]; then
@@ -456,6 +535,7 @@ elif [ -n "$expect" ]; then
     else
         echo "suite-shard.sh: COUNT PARITY FAIL — shards $sum_tests/$sum_asserts vs --expect $expect_tests/$expect_asserts" >&2
         shard_rc=1
+        add_reason "count parity FAILED — shards $sum_tests/$sum_asserts vs --expect $expect_tests/$expect_asserts"
         parity_note="counts DIVERGED from --expect $expect"
     fi
 fi
@@ -465,6 +545,23 @@ if [ -s "$work/advisories.txt" ]; then
 fi
 
 echo "parity: $parity_note"
+
+# The LAST line, always, and the only one that has to be read: everything
+# above it is a measurement, and a measurement of a failing run still looks
+# like a table of numbers. `parity: ... class parity OK ...` used to be the
+# last thing a red run printed, and "class parity" is a statement about the
+# PLAN — every registered class was placed exactly once — which stays true
+# while a shard dies with a third of the suite unrun.
+if [ "$shard_rc" -eq 0 ]; then
+    printf 'suite-shard: PASS — %d classes / %d tests / %d assertions over %d shards\n' \
+        "$total_classes" "$sum_tests" "$sum_asserts" "$shards"
+else
+    reasons=$(awk 'NR > 1 { printf "; " } { printf "%s", $0 } END { print "" }' "$work/reasons.txt")
+    if [ -z "$reasons" ]; then
+        reasons="see the messages above"
+    fi
+    echo "suite-shard: FAILED — $reasons"
+fi
 
 rc=$shard_rc
 exit "$rc"

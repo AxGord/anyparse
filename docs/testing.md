@@ -40,30 +40,34 @@ and it registers nothing by hand — see "The registration layer is generated" b
 
 `test/unit/` was ONE package holding 780 modules. It is now laid out to mirror
 `src/anyparse/*`: **a test class lives in the `unit.<pkg>` that mirrors the
-`anyparse.<pkg>` it primarily exercises.** 760 registered classes:
+`anyparse.<pkg>` it primarily exercises.** 795 registered classes (regenerate
+this table with `node bin/test.js --list-classes`, never by hand — the total
+below is the sum of the column and both go stale within a slice):
 
 | package | classes | mirrors | layer |
 |---|---:|---|---|
-| `unit.grammar.haxe` | 340 | `anyparse/grammar/haxe` (+ `checkstyle`, `format`) | 1, 3 — the Haxe grammar, its trivia and its writer |
-| `unit.check` | 252 | `anyparse/check` (+ `config`) | 1 — the analysis/check framework and every rule |
-| `unit.query` | 104 | `anyparse/query` (+ `format`) | 1 — the hxq engine: ops, addressing, symbol index, resolution |
-| `unit.cli` | 37 | `anyparse/query/Cli` | **6 — end-to-end**: a test that drives `Cli.run` on a temp file |
-| `unit.format` | 6 | `anyparse/format` (+ `wrap`, `comment`, `text`, `binary`) | 1, 3 |
+| `unit.grammar.haxe` | 346 | `anyparse/grammar/haxe` (+ `checkstyle`, `format`) | 1, 3 — the Haxe grammar, its trivia and its writer |
+| `unit.check` | 256 | `anyparse/check` (+ `config`) | 1 — the analysis/check framework and every rule |
+| `unit.query` | 115 | `anyparse/query` (+ `format`) | 1 — the hxq engine: ops, addressing, symbol index, resolution |
+| `unit.cli` | 41 | `anyparse/query/Cli` | **6 — end-to-end**: a test that drives `Cli.run` on a temp file |
+| `unit.format` | 8 | `anyparse/format` (+ `wrap`, `comment`, `text`, `binary`) | 1, 3 |
+| `unit.lowering` | 8 | `anyparse/macro` (+ `strategy`) | 1 — `macro` is a Haxe keyword, so the package is `lowering` |
 | `unit.grammar` | 5 | `anyparse/grammar/{json,ar,sexpr}` | 1, 3 — the small grammars |
 | `unit.core` | 4 | `anyparse/core` | 1 — the Doc IR and its renderer |
-| `unit.lowering` | 3 | `anyparse/macro` (+ `strategy`) | 1 — `macro` is a Haxe keyword, so the package is `lowering` |
 | `unit.runtime` | 3 | `anyparse/runtime` | 1 |
-| `unit` (root) | 6 | — | INTEGRATION and suite hygiene, listed below |
+| `unit` (root) | 9 | — | INTEGRATION and suite hygiene, listed below |
 
 Two package dirs carry no test class and stay where they are: `unit.miniblock`
 and `unit.miniblockstrict` are the mini grammars the Star-primitive tests parse.
 
-**The root is the residue, and it is named.** Six registered classes plus five
+**The root is the residue, and it is named.** Nine registered classes plus five
 helper modules stay in `unit` because they answer to no single package:
 `DeadTestGuardTest` and `TestDiscoveryParityTest` (suite hygiene — they read
-`test/` itself), `DiscoveryOnlyProbeTest` (the pin that no hand-written line may
-name), `LexicalRegionAgreementTest` (asserts that the grammar's regions and the
-query layer's AGREE — moving it to either would name a side),
+`test/` itself), `MutationArmsTest`, `MutationArmAddressTest` and
+`ProseClaimCensusTest` (the same, over the arm registry, the arms' addresses and
+the prose-claim census), `DiscoveryOnlyProbeTest` (the pin that no hand-written
+line may name), `LexicalRegionAgreementTest` (asserts that the grammar's regions
+and the query layer's AGREE — moving it to either would name a side),
 `ExtensionMethodsExtractionTest` (the same, across `grammar.haxe` and `query`)
 and `SpanModeProbe` (a span probe that is also a fixture for both); plus
 `SourceTree`, `BuildDefines`, `CheckFixture`, `QueryTestHelpers` and `SeamEdit`,
@@ -405,7 +409,7 @@ The trade is that a macro-module arm's member check moves from a build ERROR to 
 
 Two facts the check paid for. **The matcher has to be `Patch`'s, not a substring test:** a plain `indexOf` gate would have wrongly failed **15 of 90** fragment arms, because stored fragments are copied out of `hxq show --select`, which DEDENTS its output — byte-exactness against the file is the exception, not the rule, and `Patch` is the component that already knows this (`references/ops.md`: leading indentation is not part of the match). And a **sixth arm-authoring blind spot**, alongside the five FORCE-renderer ones: a member declared on a SUB-MODULE type cannot be addressed at all. A record's `type` is read twice with two different meanings — as the class the typer resolves, and as the PATH of the file `tools/mutation-arm.sh` patches — and for a sub-module type those two disagree by construction.
 
-At the S120 merge the registry stands at **140 arms / 220 pins**, against **271** prose claims.
+At the S122 merge the registry stands at **141 arms / 221 pins** over **795** registered classes, against **271** prose claims. Read them off the binary (`node bin/test.js --list-arms|--list-pins|--list-classes|--list-claims`) rather than out of this line — every one of the four moves within a slice or two.
 
 **Running one is one command.**
 
@@ -1654,6 +1658,123 @@ Exit status is 0 only when every shard is green *and* parity holds. A red shard,
 **When to shard, when not.** Shard the full battery during a slice — after the `APQ_TEST`-filtered edit loop, when you want the whole suite as a checkpoint. Run the **monolith** for the final pre-commit run of a slice or campaign, and any time the shard plan itself changed (a new sticky-state test, a new fixed shared path, a new class whose name overlaps another).
 
 Sharding moves the suite along two axes at once, and they fail in opposite directions. It changes **ordering** — cross-class effects like a warm cache one class leaves for the next, or a first-in-pays-the-warm-up cost, appear or vanish depending on which classes share a process, so a bug that only fires when A runs before B is invisible to a run that puts them in different processes. And it adds **concurrency** that the monolith never had: classes that used to be merely sequential now run simultaneously against one working tree, one `/tmp`, one `$HOME`. The monolith is the insurance against the first; the sticky group is the insurance against the second. One monolith per slice buys the first cheaply — nothing buys the second except keeping the shared-path inventory honest.
+
+### The shard runner's last line is a verdict, and each shard is checked against its own exit code
+
+Two slices in a row reported that `tools/suite-shard.sh` disagreed with itself,
+and the two reports contradicted each other — one said the aggregate claimed a
+failure the per-shard lines denied, the other that the shards were green while
+the monolith caught the failure. S122 reproduced both by injecting a known
+failing assertion into a named class (`unit.core.BodyGroupPrefixChargeConsumerTest`,
+shard 3 of 4) and re-running at `-n 1`, `-n 4` and `-n 8`. **Neither was a
+defect.** At `-n 4` the run printed
+
+```
+shard 0:  202 classes /  3206 tests /   7516 assertions / 0 failures / 0 errors (exit 0)
+shard 1:  196 classes /  3372 tests /   6615 assertions / 0 failures / 0 errors (exit 0)
+shard 2:  198 classes /  3791 tests /  10196 assertions / 0 failures / 0 errors (exit 0)
+shard 3:  198 classes /  3764 tests /  21429 assertions / 1 failures / 0 errors (exit 1)
+--- suite-shard: 794 classes / 14133 tests / 45756 assertions / 1 failures / 0 errors in 14.256s across 4 shards ---
+```
+
+The aggregate is the SUM. `0 + 0 + 0 + 1 = 1`, the failing shard's own line
+carries the `1` and the `(exit 1)`, and the same holds at 1 and at 8 shards.
+The second report is the `--verify` arm doing its job: a monolith that exits
+non-zero while every shard is green already prints
+`suite-shard.sh: the monolith run is RED (exit N, ...) while the shards are green`
+on stderr and `parity: monolith run RED (...)` on stdout. **Both accounts were
+artefacts of reading a different line**, which makes the defect the OUTPUT, not
+the counting.
+
+Probing the third hypothesis — is a shard that DIES counted at all? — found the
+real one. A test double that killed shard 0 after a single result row produced:
+
+```
+shard 0:  202 classes /     1 tests /      1 assertions / 0 failures / 0 errors (exit 1)
+--- suite-shard: 794 classes / 10928 tests / 38241 assertions / 1 failures / 0 errors ... ---
+parity: counts not cross-checked (class parity OK: 794 placed; producer count == REGISTERED_CLASSES (794))
+```
+
+3205 tests never ran. Every printed count reads green, stderr carried NOTHING,
+and the last line of the whole run said `class parity OK`. That note is true and
+is a statement about the PLAN — every registered class was dealt onto exactly
+one shard — which stays true while a shard dies with a quarter of the suite
+unrun. The cause: `apq test-summary` parsed the one surviving
+`testName: OK .` row into `1 tests / 1 assertions / 0 failures / 0 errors` and
+exited **0**, so the caller added a truncated prefix to its total as though the
+missing tests had passed. Only `(exit 1)` and the process exit code dissented.
+
+Three changes, all in the reporting layer:
+
+- **`apq test-summary --exit-status <N>`** hands the parser the status the run
+  actually returned and reconciles the two. A non-zero status with nothing
+  failing in the report, or a zero status with failures in it, prints an
+  `exit-status disagreement:` line after the counts and exits 1. The counts line
+  is printed either way — a caller that parses it must keep getting it, so a
+  disagreement is an extra line, never a withheld answer. Covered by
+  `unit.cli.ApqTestSummaryExitStatusCliTest` (7 cases, both directions plus the
+  no-flag control), and by arm `M-EXIT-STATUS-AGREES`.
+- **The shard line names a shard that did not finish**, and its counts are
+  marked partial:
+  `shard 0: 202 classes / 1 tests / 1 assertions / 0 failures / 0 errors (exit 1)  <-- did NOT finish: these counts are partial`,
+  with `the totals above are a SUM OF WHAT RAN, not a total` on stderr.
+- **The last line is always a verdict** — `suite-shard: PASS — 794 classes /
+  14132 tests / 45755 assertions over 4 shards`, or
+  `suite-shard: FAILED — shard 3 is red (1 failures / 0 errors)`. Read that one;
+  every line above it is a measurement, and a measurement of a red run still
+  reads as a table of numbers. A red shard also gets its locus printed on stdout
+  (`  shard 3 first failure: <test>  line:N  <message>`) — `test-summary`
+  already computed it and the script used to throw it away.
+
+The opt-in `--verify` design is unchanged and is not the bug: a monolith
+cross-check would defeat the sharding, and
+`parity: counts not cross-checked (class parity OK: N placed)` is a statement of
+what the run did.
+
+One trap paid for on the way, worth knowing for any shell in this repo:
+**BSD `sed`'s BRE has no `\|`**. The first cut of the locus line used
+`s/^first \(failure\|error\):/…/p`, which matched nothing on macOS and printed
+nothing at all — silently, because a `sed -n` that matches nothing is a
+successful command. A reporting fix that reports nothing is the same class of
+defect it was fixing.
+
+### A span is a CODEPOINT offset — a census that slices bytes measures a different file
+
+`Span.from`/`Span.to`, and therefore every `@from-to` in `hxq ast --spans`, count
+**codepoints**, not bytes. On a file whose earlier lines are pure ASCII the two
+agree, which is what makes this expensive: a census works on hundreds of files
+and gets a plausible number.
+
+```
+class C {
+
+	// ω-ω-ω
+	public function f(): Void {}
+
+}
+```
+
+`hxq ast --spans` answers `(Public @22-28)`; `public` starts at **byte 25** —
+three `ω` at two bytes each. A byte-offset slice of that member starts three
+bytes early and picks up the tail of the comment.
+
+Measured cost: S117 built a purity census that sliced member bodies by byte
+offset and reported **34 pure methods in `WriterLowering` and 19 in `Lowering`**.
+Slicing by codepoints gives **0 and 5**, and those 5 are exactly the leaves an
+earlier slice had already named. It nearly published a refutation that was its
+own arithmetic, and caught it only because the number looked too good. This
+codebase makes the trap likelier than most: the `ω-` markers used in comments
+are multi-byte and they sit ABOVE the members a census wants to read.
+
+The helper already exists and it is one command: **`hxq source <file> --select
+'<Kind>:<name>'`** prints exactly that node's raw source. A census that slices
+the file itself is reimplementing it — and reimplementing the unit conversion
+too. When a census genuinely needs its own slicing, decode to a string first
+(`bytes.decode('utf-8')` in Python, `File.getContent` in Haxe) and index THAT;
+never index the byte buffer.
+
+`hxq ast --help` used to call `--spans` a "byte-range annotation", which is where
+at least one census got the idea. It now says codepoint.
 
 ## The per-slice battery
 
