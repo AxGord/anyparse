@@ -1301,7 +1301,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-ELSE-SWITCH-COMMENT-GLUE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchCases',
 			'M-ELSE-SWITCH-TESTS-NONE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchTests',
 			'M-PEB-WS-REWIND-TRYPARSE-OFF :: anyparse.macro.StarLoopLowering#buildTryparseSepLoop',
-			'M-PEB-WS-REWIND-SEPSTARTS-OFF :: anyparse.macro.Lowering#lowerStarBlockEndedSepStarts'
+			'M-PEB-WS-REWIND-SEPSTARTS-OFF :: anyparse.macro.StarFieldLowering#lowerStarBlockEndedSepStarts'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

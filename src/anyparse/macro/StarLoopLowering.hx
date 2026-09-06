@@ -18,11 +18,12 @@ import anyparse.macro.ParseDispatchLowering.*;
  * What is NOT here is the DISPATCH that picks between those shapes.
  * `emitStarFieldSteps`, `emitOptionalStarFieldSteps`,
  * `emitOptionalKwStarFieldSteps`, `emitTriviaStarFieldSteps`,
- * `emitNonTriviaCloseSteps` and the `lowerStar*Branch` family all read
- * the build's `LoweringCtx` and stay in `Lowering`, beside the
- * struct-field Star emitter they pair with — the four-site Star+sep
- * audit (`Lowering.emitStarFieldSteps` + Case 4, `WriterLowering`'s two)
- * keeps both of its `Lowering` halves in one file. Every member is
+ * `emitNonTriviaCloseSteps` and the `lowerStar*Branch` family all live in
+ * `StarFieldLowering`, together, because they are the two parse-side
+ * halves of the four-site Star+sep audit
+ * (`StarFieldLowering.emitStarFieldSteps` + the `lowerStar*Branch`
+ * leaves, `WriterLowering`'s two); only `lowerEnumBranch`'s Case 4, the
+ * dispatch between them, stays in `Lowering`. Every member is
  * static and `Lowering` reaches them unqualified through
  * `import anyparse.macro.StarLoopLowering.*;` plus a class-level
  * `@:access`, so the move rewrote no call site.

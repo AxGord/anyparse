@@ -896,8 +896,8 @@ The same seven-line block is spliced by **four** macro members — `hxq lit '_pe
 |---|---|---|---:|---:|
 | close-peek struct field | `StarLoopLowering#buildBlockEndedByteCheck` | `HxFnBlock.stmts` | **39** | 233 |
 | `@:tryparse`, no close literal | `StarLoopLowering#buildTryparseSepLoop` | `HxConditionalStmt.body` / `elseBody`, `HxElseifStmt.body`, both `HxCondSplice*Open.body` | **6** | 17 |
-| enum branch, lead/trail, `sepStartsElement` | `Lowering#lowerStarBlockEndedSepStarts` | `HxStatement.BlockStmt`, `HxExpr.BlockExpr`, `HxDoWhileBody.BlockBody` | **13** | 46 |
-| enum branch, lead/trail, no `sepStartsElement` | `Lowering#lowerStarBlockEndedSepLast` | `unit.miniblock.MiniBlock.Block` | **0** | 0 |
+| enum branch, lead/trail, `sepStartsElement` | `StarFieldLowering#lowerStarBlockEndedSepStarts` | `HxStatement.BlockStmt`, `HxExpr.BlockExpr`, `HxDoWhileBody.BlockBody` | **13** | 46 |
+| enum branch, lead/trail, no `sepStartsElement` | `StarFieldLowering#lowerStarBlockEndedSepLast` | `unit.miniblock.MiniBlock.Block` | **0** | 0 |
 
 It is the same population, not a different measurement: the byte the rewind lands on splits 47 `}`
 / 6 `;` / 5 on a comment's last character, exactly S111's split, and all 58 carry `p=true` so the
@@ -915,7 +915,7 @@ block reaches `lowerStarBlockEndedSepStarts`, a `#if js … #end` region reaches
 | arm | member | blast, `--jobs 1`, whole suite |
 |---|---|---:|
 | `M-PEB-WS-REWIND-TRYPARSE-OFF` | `StarLoopLowering#buildTryparseSepLoop` | **1**, its own pin, `FAILURE FF` |
-| `M-PEB-WS-REWIND-SEPSTARTS-OFF` | `Lowering#lowerStarBlockEndedSepStarts` | **1**, its own pin, `FAILURE FF` |
+| `M-PEB-WS-REWIND-SEPSTARTS-OFF` | `StarFieldLowering#lowerStarBlockEndedSepStarts` | **1**, its own pin, `FAILURE FF` |
 
 `unit.lowering.StarBlockEndedWsRewindSitesTest` is the pair of fixtures plus a plain twin for each
 — a body whose `;` IS its own last byte — and the twins stay green under either arm, which is the

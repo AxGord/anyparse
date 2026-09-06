@@ -18,14 +18,14 @@ import utest.Test;
  * - `StarLoopLowering.buildTryparseSepLoop` — the `@:tryparse` Star with no close
  *   literal, which `HxConditionalStmt.body` / `elseBody`, `HxElseifStmt.body` and the
  *   two `HxCondSplice*Open.body` fields compile to. A `#if` region's statement list.
- * - `Lowering.lowerStarBlockEndedSepStarts` — the lead/trail ENUM-branch Star, which
+ * - `StarFieldLowering.lowerStarBlockEndedSepStarts` — the lead/trail ENUM-branch Star, which
  *   `HxStatement.BlockStmt`, `HxExpr.BlockExpr` and `HxDoWhileBody.BlockBody` compile
  *   to. A nested `{ … }` block.
  *
  * Instrumenting all four loops over `fmt --list --one-pass src test tools` (1 754 files)
  * splits the 58 fires S111 recorded as one site's: 39 close-peek, 6 tryparse, 13
  * enum-branch, 0 for the fourth. Over the whole suite the same probe reads 233 / 17 / 46 / 0.
- * The fourth site — `Lowering.lowerStarBlockEndedSepLast`, the enum-branch Star WITHOUT
+ * The fourth site — `StarFieldLowering.lowerStarBlockEndedSepLast`, the enum-branch Star WITHOUT
  * `sepStartsElement` — is live but unreachable by the rewind: its byte check is evaluated
  * 11 times suite-wide and the rewind moves in none of them, because the only grammar that
  * routes to it (`unit.miniblock.MiniBlock`) has no element rule that can leave trailing

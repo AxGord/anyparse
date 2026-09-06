@@ -21,9 +21,10 @@ import haxe.macro.Expr;
  * `gateMultiVarMoreParts` are the two gates a Star's emitted `parts` can be
  * wrapped in.
  *
- * ⚠️ Star emission FORKS across FOUR sites — `Lowering.emitStarFieldSteps`
- * and its `lowerEnumBranch` Case 4 branch on the parse side,
- * `emitWriterStarField` and `lowerEnumStar` on the writer side. All four
+ * ⚠️ Star emission FORKS across FOUR sites —
+ * `StarFieldLowering.emitStarFieldSteps` and the `lowerStar*Branch` leaves
+ * beside it on the parse side, `emitWriterStarField` and `lowerEnumStar`
+ * on the writer side. All four
  * stayed where they were; nothing here is reachable from `lowerEnumStar`,
  * measured on the module's own call graph, so no fork half was separated
  * from its twin by this module's existence. A change to Star+sep emission

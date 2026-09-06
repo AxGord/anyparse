@@ -109,9 +109,11 @@ using anyparse.macro.MetaInspect;
  * four-md5 float set an unmoved tree produces, which is the same `cmp`
  * proof the purity moves had.
  *
- * ⚠️ Star emission FORKS across FOUR sites — `Lowering.emitStarFieldSteps`
- * and its `lowerEnumBranch` Case 4 branch on the parse side,
- * `emitWriterStarField` and `lowerEnumStar` here. Both writer forks stayed
+ * ⚠️ Star emission FORKS across FOUR sites —
+ * `StarFieldLowering.emitStarFieldSteps` and the `lowerStar*Branch` leaves
+ * beside it on the parse side (`Lowering.lowerEnumBranch`'s Case 4 is the
+ * dispatch between those two, not a fifth site), `emitWriterStarField` and
+ * `lowerEnumStar` here. Both writer forks stayed
  * in this module deliberately: an extraction that took one and left the
  * other would put the pair in two files with nothing naming the other
  * half. `WriterStarPadLowering` holds plain-Star LEAF emitters taken out
