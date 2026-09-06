@@ -179,6 +179,8 @@ class CommentOwnerGuardSliceTest extends Test {
 	 * comment" rather than on "the comment changed sides" would refuse this, and with it every
 	 * fixer that edits a commented region at all.
 	 */
+	@:pin('control')
+	@:killer('M-CARRY-CROSSING-ANY-SIDE')
 	public function testACommentThatKeepsItsPlaceUnderACarryIsAccepted(): Void {
 		final text: String = assertOk(SeamEdit.replaceCarrying(CARRY_SOURCE, FOLDED_REGION, REWRITTEN_IN_PLACE, ['gate()', '11', '22']));
 		Assert.isTrue(text.indexOf('return 11;\n\t\t// why zero\n\t\treturn 22 + 1;') >= 0, 'the comment did not keep its place:\n$text');

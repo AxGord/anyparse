@@ -1561,6 +1561,70 @@
 			"method": "buildBeforeLeadingSep",
 			"force": "triviaSepExpr",
 			"note": "a bare non-first Ref emits the plain inter-field separator, so the comments captured in the BeforeLeading gap - a multiline block comment between a member modifier and the `var` keyword - never reach the output"
+		},
+		{
+			"name": "M-SETMOD-MODULE-BY-TYPE-KINDS",
+			"type": "anyparse.query.SetModifier",
+			"method": "isModuleLevel",
+			"find": "\tfinal regionKind: Null<String> = shape.conditionalMemberKind;\n\tfor (i in 1...path.length - 1) if (path[i].kind != regionKind) return false;",
+			"replace": "\tfinal typeKinds: Array<String> = shape.typeDeclKinds ?? [];\n\tfor (i in 1...path.length - 1) if (typeKinds.contains(path[i].kind)) return false;",
+			"note": "module level is decided by RefShape.typeDeclKinds instead of by the path holding nothing but conditional regions, so an `enum abstract` member — a kind that list does not carry — is called module-level and `+public` on it is refused"
+		},
+		{
+			"name": "M-SETMOD-GUARDED-ANY-VISIBILITY",
+			"type": "anyparse.query.SetModifier",
+			"method": "guardedCollision",
+			"find": "\t\tfor (keyword in guarded) if (keyword == name || (visibility.contains(keyword) && visibility.contains(name)))",
+			"replace": "\t\tfor (keyword in guarded) if (keyword == name || visibility.contains(name))",
+			"note": "any keyword guarded by a conditional region in the run collides with a visibility change, so a region OUTSIDE the splice — ahead of the whole run, or between the run and the declaration — stops being served"
+		},
+		{
+			"name": "M-META-ELEMENT-ANY-COND-REGION",
+			"type": "anyparse.query.ElementSpan",
+			"method": "isAnnotationElement",
+			"find": "\t\t|| (node.kind == MemberKinds.CONDITIONAL_REGION_KIND && node.children.length > 0\n\t\t\t&& node.children.foreach(c -> MemberKinds.META_KINDS.contains(c.kind)));",
+			"replace": "\t\t|| (node.kind == MemberKinds.CONDITIONAL_REGION_KIND && node.children.length > 0);",
+			"note": "every non-empty conditional region reads as an annotation element, so a `#if debug public #end` modifier region stops being the declaration's first token and an edit addressed at it no longer takes the member"
+		},
+		{
+			"name": "M-CUT-DOC-KEPT-BY-ANY-PREFIX",
+			"type": "anyparse.query.ElementSpan",
+			"method": "elementCut",
+			"find": "\tfinal span: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;",
+			"replace": "\tfinal span: Span = withDoc && !isDeclPrefixSibling(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;",
+			"note": "the doc exception widens from annotations to every declaration prefix sibling, so a cursor on a bare modifier removes the member and leaves its doc block behind to document the next one"
+		},
+		{
+			"name": "M-MOVE-CANONICALISE-ALWAYS",
+			"type": "anyparse.query.cli.command.MoveCommand",
+			"method": "canonicalMoveChange",
+			"find": "\tif (!CanonicalEdit.isWriterCanonical(original, plugin, opts)) return change;",
+			"replace": "",
+			"note": "a move canonicalises every file it writes, so a source that was already non-canonical on disk is reformatted by an edit that asked only for a splice"
+		},
+		{
+			"name": "M-QUALPATH-COMMENT-COUNTED",
+			"type": "anyparse.query.NameMentionScan",
+			"method": "qualifiedPathMention",
+			"find": "\t\tif (beforeOk && afterOk && !OccurrenceScan.offsetWithinAny(at, comments) && !OccurrenceScan.offsetWithinAny(at, excluded))",
+			"replace": "\t\tif (beforeOk && afterOk && !OccurrenceScan.offsetWithinAny(at, excluded))",
+			"note": "a fully-qualified path written inside a COMMENT counts as a mention again, so a move is refused over a doc line — the direction the string spelling, which nothing repairs, is the refusal's actual job"
+		},
+		{
+			"name": "M-CARRY-CROSSING-ANY-SIDE",
+			"type": "anyparse.query.CommentOwnerGuard",
+			"method": "crossedCarry",
+			"find": "\t\tif (codeFirstInSource == (placed[k].to <= hit.at)) continue;",
+			"replace": "",
+			"note": "every declared carry counts as crossed whether or not the comment changed sides, so an in-place rewrite that keeps its comment between the same two carried ranges is refused"
+		},
+		{
+			"name": "M-STRUCT-BUILTIN-BY-NAME",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "structuralConformancePins",
+			"find": "\t\t\tif (\n\t\t\t\tmembers.contains(field)\n\t\t\t\t&& familyDeclaresEveryMember(typeName, [for (n in members) { name: n, typeSource: null, host: null }], [])\n\t\t\t)\n\t\t\t\treturn true;",
+			"replace": "\t\t\tif (\n\t\t\t\tmembers.contains(field)\n\t\t\t)\n\t\t\t\treturn true;",
+			"note": "a builtin structural type is matched by member NAME instead of by its whole member set, so a class declaring `hasNext` alone reads as an Iterator and its field is refused finalization"
 		}
 	]
 }

@@ -47,6 +47,8 @@ final class NameMentionScanTest extends Test {
 	 * nothing in the repair walk rewrites one, so it stays a reference on both sides of the question
 	 * — the same split S80 fixed `qualifiedPathRefusal` to.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-NAMESCAN-COMMENT-COUNTED')
 	public function testACommentOnlyDestinationMentionDoesNotContestTheCarry(): Void {
 		inline function moveInto(destBody: String): MoveResult {
 			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', [
@@ -76,6 +78,8 @@ final class NameMentionScanTest extends Test {
 	 * `p.Mover` inside `Type.resolveClass` is broken by the move and nothing repairs it: refusing is
 	 * the right answer, and it is the OPPOSITE direction from the comment control beside it.
 	 */
+	@:pin('control')
+	@:killer('M-QUALPATH-COMMENT-COUNTED')
 	public function testAStringSpellingTheQualifiedPathStillRefusesWhileACommentDoesNot(): Void {
 		inline function moveOver(docBody: String): MoveResult {
 			return MoveSymbol.moveType('p/Mover.hx', 3, 7, 'q/Host.hx', [

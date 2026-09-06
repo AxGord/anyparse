@@ -1275,6 +1275,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
+			'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control :: '
+			+ 'M-CARRY-CROSSING-ANY-SIDE',
 			'unit.query.CommentOwnerGuardSliceTest#testHoistingACommentPastSurvivingCodeIsRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused :: guard :: M-COMMENT-HOIST-BLIND',
 			'unit.query.CommentOwnerGuardSliceTest#testWeldingTwoCommentBlocksIsRefused :: control :: M-COMMENT-WELD-BLIND',
@@ -1294,6 +1296,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ExtractInterfaceSliceTest#testGuardedImplementsRefused :: control :: M-EI-DUP-IMPL-ALLOWED,M-EI-GUARD-FLAT-SCAN',
 			'unit.query.ExtractInterfaceSliceTest#testQualifiedSameNameDoesNotBlock :: control :: M-EI-IMPL-ANY-REFUSED',
 			'unit.query.ExtractInterfaceSliceTest#testSecondInterfaceStillExtracts :: control :: M-EI-IMPL-ANY-REFUSED',
+			'unit.query.MakeFinalSliceTest#testHalfIteratorShapeStillFinal :: control :: M-STRUCT-BUILTIN-BY-NAME',
+			'unit.query.MetaElementSpanSliceTest#testRemoveConditionalModifierRegionStillTakesTheMember :: control :: '
+			+ 'M-META-ELEMENT-ANY-COND-REGION',
+			'unit.query.MetaElementSpanSliceTest#testRemoveModifierStillTakesTheMemberDoc :: control :: M-CUT-DOC-KEPT-BY-ANY-PREFIX',
+			'unit.query.MoveCanonicalOutputSliceTest#testMoveLeavesANonCanonicalSourceUnformatted :: control :: M-MOVE-CANONICALISE-ALWAYS',
 			'unit.query.MoveFamilyCaptureTest#testABareWildcardCallerIsRepointedByteIdentically :: control :: M-WILDCARD-REPOINT-NONE',
 			'unit.query.MoveFamilyCaptureTest#testALocalShadowKeepsItsBareReadByteIdentically :: control :: M-WILDCARD-BINDING-BLIND',
 			'unit.query.MoveFamilyCaptureTest#testARivalWildcardKeepsItsBareCallerByteIdentically :: control :: '
@@ -1320,6 +1327,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MoveSymbolSliceTest#testPrivateSiblingMainTypeIsNotABinding :: control :: M-MOVE-PRIVATE-SIBLING-BINDS',
 			'unit.query.MoveSymbolSliceTest#testTheDestinationCollisionScanReadsTheDestinationsOwnComments :: control :: '
 			+ 'M-MOVE-NAMESCAN-FULLSTOP-BLIND',
+			'unit.query.NameMentionScanTest#testACommentOnlyDestinationMentionDoesNotContestTheCarry :: control :: '
+			+ 'M-MOVE-NAMESCAN-COMMENT-COUNTED',
+			'unit.query.NameMentionScanTest#testAStringSpellingTheQualifiedPathStillRefusesWhileACommentDoesNot :: control :: '
+			+ 'M-QUALPATH-COMMENT-COUNTED',
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesABareKeyword :: control :: M-NEWFILE-BARE-KEYWORD-WRAPPED',
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: control :: M-NEWFILE-IMPORT-ANY-LINE',
 			'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: control :: M-NEWFILE-IMPORT-DOUBLED',
@@ -1339,6 +1350,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
+			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
+			+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
+			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
 			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO'
 		], TestRegistry.pins(), 'the pin annotations, with their roles and killing arms');
@@ -1555,7 +1569,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-KEEP-ELSEIF-ALWAYS-GLUED',
 			'M-BEFORE-KW-TRAILING-DROP',
 			'M-BEFORE-KW-LEADING-DROP',
-			'M-BEFORE-LEADING-COMMENT-DROP'
+			'M-BEFORE-LEADING-COMMENT-DROP',
+			'M-SETMOD-MODULE-BY-TYPE-KINDS',
+			'M-SETMOD-GUARDED-ANY-VISIBILITY',
+			'M-META-ELEMENT-ANY-COND-REGION',
+			'M-CUT-DOC-KEPT-BY-ANY-PREFIX',
+			'M-MOVE-CANONICALISE-ALWAYS',
+			'M-QUALPATH-COMMENT-COUNTED',
+			'M-CARRY-CROSSING-ANY-SIDE',
+			'M-STRUCT-BUILTIN-BY-NAME'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
