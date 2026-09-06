@@ -1094,6 +1094,13 @@
 			"find": "final outer: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(p);\nif (outer == null || outer.nameNode != host) break;",
 			"replace": "if (p.children.length != 1) break;",
 			"note": "the climb asks \"is my parent a single-child node\" again instead of asking for a type declaration, so a #if region wrapping one type is climbed through and the entry lands above the directive"
+		},
+		{
+			"name": "M-EXIT-STATUS-AGREES",
+			"type": "anyparse.query.cli.command.TestSummaryCommand",
+			"method": "reconcileExitStatus",
+			"force": "EXIT_OK",
+			"note": "a transcript is never reconciled against the exit status its runner returned, so a shard killed mid-run summarises green again and its partial counts enter the aggregate as if the missing tests had passed"
 		}
 	]
 }

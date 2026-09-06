@@ -64,6 +64,7 @@ final class TestSummaryCommand implements CliCommand {
 	 */
 	private static function runTestSummary(args: Array<String>): Int {
 		var sourcePath: Null<String> = null;
+		var exitStatus: Null<Int> = null;
 		var i: Int = 0;
 		while (i < args.length) {
 			final a: String = args[i];
@@ -74,6 +75,13 @@ final class TestSummaryCommand implements CliCommand {
 				case '--lang':
 					// Shim invariance — apq test-summary doesn't use a plugin.
 					CliArgs.expectValue(args, ++i, '--lang');
+				case '--exit-status':
+					final rawStatus: String = CliArgs.expectValue(args, ++i, '--exit-status');
+					exitStatus = Std.parseInt(rawStatus);
+					if (exitStatus == null) {
+						CliIo.stderr('apq test-summary: --exit-status wants an integer, got "$rawStatus"\n');
+						return EXIT_USAGE;
+					}
 				case _:
 					if (sourcePath != null) {
 						CliIo.stderr('apq test-summary: only one positional source supported (got "$sourcePath" and "$a")\n');
@@ -133,11 +141,54 @@ final class TestSummaryCommand implements CliCommand {
 			final label: String = ff.kind == TestSummaryFailureKind.Error ? 'error' : 'failure';
 			CliIo.sysPrint('first $label: $classQual${ff.testName}$lineFrag$msgFrag\n');
 		}
-		return EXIT_OK;
+		return exitStatus == null ? EXIT_OK : reconcileExitStatus((exitStatus: Int), result, src);
+	}
+
+	/**
+	 * Reconcile a transcript against the exit status its RUNNER returned —
+	 * `--exit-status <N>`, the only reader of which is `tools/suite-shard.sh`,
+	 * one call per shard.
+	 *
+	 * A transcript is not self-validating. Counting it answers what it SAYS;
+	 * it cannot answer whether the process that wrote it got to the end. The
+	 * two disagreements this catches are the same defect pointing opposite
+	 * ways, and each prints a report that reads GREEN on its own:
+	 *
+	 *  - exited non-zero, reports no failing test — the run died before
+	 *    finishing (measured: a shard killed after one row summarised to
+	 *    `1 tests / 1 assertions / 0 failures / 0 errors` at exit 0, and the
+	 *    caller then added those counts to its total as if 3205 missing tests
+	 *    had passed);
+	 *  - exited zero, reports failures — the runner swallowed its own verdict.
+	 *
+	 * The counts line is still printed either way: a caller that parses it
+	 * must keep getting it, and the disagreement is an EXTRA line plus a
+	 * non-zero exit, never a withheld answer.
+	 */
+	private static function reconcileExitStatus(status: Int, result: TestSummaryResult, src: String): Int {
+		final red: Int = result.failures + result.errors;
+		// The whole contract in one line: a run exits non-zero exactly when its
+		// report names a failing test. Written as the equivalence rather than as
+		// two negated branches so the agreeing case is the guard and neither
+		// disagreement has to be spelled twice.
+		if ((status != 0) == (red > 0)) return EXIT_OK;
+		if (status != 0) {
+			CliIo.sysPrint(
+				'exit-status disagreement: the run exited $status while its transcript reports 0 failures / 0 errors — '
+				+ 'the report does not explain the exit (a run that died before finishing, a filter that matched nothing, '
+				+ 'or a failure that never reached stdout) ($src)\n'
+			);
+			return EXIT_RUNTIME;
+		}
+		CliIo.sysPrint(
+			'exit-status disagreement: the run exited 0 while its transcript reports '
+			+ '${result.failures} failures / ${result.errors} errors ($src)\n'
+		);
+		return EXIT_RUNTIME;
 	}
 
 	private static function printTestSummaryUsage(): Void {
-		CliIo.sysPrint('Usage: apq test-summary [<file> | -]\n');
+		CliIo.sysPrint('Usage: apq test-summary [<file> | -] [--exit-status <N>]\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Parse a utest stdout transcript and report tests / assertions / failures /\n');
 		CliIo.sysPrint('errors. Source resolution:\n');
@@ -156,6 +207,12 @@ final class TestSummaryCommand implements CliCommand {
 		CliIo.sysPrint('Exits 0 on a countable parse and 1 on a transcript that yields no counts\n');
 		CliIo.sysPrint('at all — the test runner\'s own exit code stays the authoritative\n');
 		CliIo.sysPrint('pass/fail signal.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('--exit-status <N> hands over the exit status the runner actually returned\n');
+		CliIo.sysPrint('and reconciles it with the transcript: a non-zero status with no failing\n');
+		CliIo.sysPrint('test in the report (the run died before finishing), or a zero status with\n');
+		CliIo.sysPrint('failures in it, prints an `exit-status disagreement:` line after the counts\n');
+		CliIo.sysPrint('and exits 1. The counts line is printed either way.\n');
 	}
 	#end
 
