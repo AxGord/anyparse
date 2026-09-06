@@ -1658,6 +1658,68 @@ in `new`, so it IS flagged". Those six now carry the pin the sweep proved, takin
 7 pins to 13. None of them contributed a census row, so this half of the tranche moves the
 number by nothing and records a coupling that nothing recorded before.
 
+### 232 stays 232: the arm registry answers none of the 44 pure controls left in one fence (S131)
+
+The census's own rule says only a PURE `control` row can leave — a `control,base` row that
+gains a pin merely becomes `:: base` — and S129's cheapest row cost no new arm at all: measured
+against an arm the registry already declared, it died there and needed a `@:killer`. S131 asked
+that question exhaustively of one fence and got a NO, which is worth recording with its number
+rather than re-asking next slice.
+
+At `2d39cdf1` the census is **232**. **116** of those rows lie in `unit.query` (75),
+`unit.grammar` (34), `unit.format` (4) and `unit.cli` (3); **44 of the 116 are pure `control`**,
+the only rows that can leave.
+
+**24 declared arms, run whole-suite, killed 0 of the 44.** The arms were picked by mechanism
+match against the fixtures' own docs — the doc/`docSplittingEdit` family
+(`M-DOCSPLIT-COVERING-TOO`, `M-DOCSPLIT-OWNER-ANY`, `M-DOCSPAN-BANNER-IS-DOC`,
+`M-CUT-DOC-KEPT-BY-ANY-PREFIX`), the comment-owner guard (`M-COMMENT-HOIST-BLIND`,
+`M-COMMENT-WELD-BLIND`, `M-COMMENT-CARRY-REFUSES`, `M-CARRY-CROSSING-ANY-SIDE`), the element-cut
+family (`M-META-ELEMENT-ANY-COND-REGION`, `M-REMOVE-CUT-ANNOTATIONS-NONE`,
+`M-REMOVE-CUT-SUBJECT-RAW`), `M-PATCH-SHAPE-ALWAYS-SURVIVES`, the nine `M-SSB-*` brace arms and
+the four `BodyFit` / `WrapList` width arms (`M-CHAIN-STAIRCASE-OFF`, `M-PAREN-PIN-NONE`,
+`M-ARROW-HEAD-WIDTH-NONE`, `M-FIRST-LINE-FIT`, `M-CUDDLE-OFF`). Every one came back KILLED on its
+own pins; not one `+extra` row was a census row.
+
+**The single apparent hit was LOAD, and the flake tell reproduced exactly.** At `--jobs 4`
+`M-CARRY-CROSSING-ANY-SIDE` reported **8** failures, among them
+`unit.query.ImplicitStdScopeTest#testConfigLessUnresolvableImportStaysInfoAndSurvivesFix` — a
+census row, and six of the eight extras were oracle / resolution e2e fixtures. The same arm at
+`--jobs 1` reported **2**: its own pin plus the constant `MutationArmAddressTest` extra every
+fragment arm carries. Quote the serial number.
+
+**Why the residue is structural, on a second and disjoint population.** Reading all 44 docs, at
+least **14** state in their own prose that they hold with the mechanism reverted — "CONTROL,
+green on both sides", "byte-identical with the gate reverted", "passes with the slice reverted",
+"CONTROL, not a discrimination", "Nothing in the guard flips this one". A fixture no mutation can
+kill cannot carry a `@:killer`, and `@:pin('control')` without one is a build error, so those
+rows have nowhere to go by construction. That is S126's verdict, re-measured on a set that shares
+no class with the one it was measured on.
+
+**One row names a killer nobody can declare locally.**
+`HxGroupRestProbeStructStarTest#testTypeParamsExactlyOnTheLimitStayFlat` says it outright: "no
+arm that turns the rest probe OFF can flip this one: its killer is the opposite mutation, an
+off-by-one that loosens the fit predicate (`>` to `>=` in the exceeds check)". There is no member
+to cut — `exceedsMaxLineLength` reaches `WrapList.matchesWithLineLengthState` as a BOOLEAN
+PARAMETER the renderer computes at layout time through its column-aware probe, so the arm would
+be a global width off-by-one in `Renderer`, whose blast is every wrap fixture in the suite.
+Recorded, not declared: an arm whose kill set is "most of the suite" makes every pin naming it
+say the same thing, which is the total-veto shape the `prefer-final` tranche above already
+rejected.
+
+**A predicate narrowing, measured and REFUSED.** `ProseClaims` reads the word `control` and
+blanks its code senses (`control flow`, `control head`, …). It cannot read DIRECTION: **26 of the
+232** rows' docs mention a control that is some OTHER fixture — "Its control is
+`testSiblingReferenceQualifiedWithAccess` above", "the plain `ForExpr` line below is the
+control", "the control is the same carry with nothing at the destination to collide with". Those
+docs claim no role for the fixture that carries them, so on the face of it they are the same kind
+of false positive `CODE_SENSES` exists to remove. They are not: the discriminator is direction,
+and the same words carry both readings — "The control for the test above: a field type resolvable
+NOWHERE …" IS a self-claim, in a doc that also names another fixture. A phrase list that cannot
+tell "I am the control for X" from "X is my control" would suppress real claims, which is a worse
+detector than the one that exists. The 26 stay on the list, and the number is here so the next
+slice does not re-derive it.
+
 ### The 38 class-doc claims get no type-level pin — measured, not preferred
 
 `ProseClaims` is asked of `ClassField.doc` and never of a `ClassType`'s, so a claim in
