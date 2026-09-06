@@ -340,14 +340,14 @@
 		},
 		{
 			"name": "M-CURLY-CTORS-NONE",
-			"type": "anyparse.macro.WriterLowering",
+			"type": "anyparse.macro.WriterCtorPatternLowering",
 			"method": "collectCurlyBlockCtorPatterns",
 			"force": "[]",
 			"note": "no branch ctor reads as a CURLY block, so the shape-aware separator sends every value-`if` branch to the hardline arm and the `} else` join stops firing"
 		},
 		{
 			"name": "M-SBE-UNGATED",
-			"type": "anyparse.macro.WriterLowering",
+			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "semicolonBeforeSiblingWrap",
 			"find": "final emit: Expr = dropTest == null ? policyDispatch : macro (_sbeSibling && $dropTest ? _de() : $policyDispatch);",
 			"replace": "final emit: Expr = dropTest == null ? policyDispatch : macro ($dropTest ? _de() : $policyDispatch);",
@@ -712,7 +712,7 @@
 		},
 		{
 			"name": "M-BRACKET-GLUE-NONE",
-			"type": "anyparse.macro.WriterLowering",
+			"type": "anyparse.macro.WriterCtorPatternLowering",
 			"method": "buildBracketBodyGlueTest",
 			"force": "null",
 			"note": "no branch value ever reads as a bracket block the knob may hug, so a `[`-valued branch stops joining its head and the close stops cuddling the `else`"
@@ -1135,7 +1135,7 @@
 		},
 		{
 			"name": "M-SEPSTAR-RESTPROBE-UNGATED",
-			"type": "anyparse.macro.WriterLowering",
+			"type": "anyparse.macro.WriterStarEmitLowering",
 			"method": "emitSepStarList",
 			"find": "final groupRestProbeExpr: Expr = groupRestProbe ? (macro !opt._suppressPatternRestProbe) : (macro false);",
 			"replace": "final groupRestProbeExpr: Expr = macro $v{groupRestProbe};",
@@ -1432,7 +1432,7 @@
 		},
 		{
 			"name": "M-SSB-TRAILOPT-REEMIT",
-			"type": "anyparse.macro.WriterLowering",
+			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "emitMandatoryRefTrail",
 			"find": "\tif (\n\t\t!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null\n\t\t|| child.fmtHasFlag('dropSingleStmtBraces')\n\t)\n\t\treturn;",
 			"replace": "\tif (!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null) return;",
@@ -1464,7 +1464,7 @@
 		},
 		{
 			"name": "M-ELSE-SEP-EXPR-BLIND",
-			"type": "anyparse.macro.WriterLowering",
+			"type": "anyparse.macro.WriterFieldSepLowering",
 			"method": "sameLineSeparatorShapeAware",
 			"find": "\t\tmacro (\n\t\t\t!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)\n\t\t\t\t? _dhl()\n\t\t\t\t: ${c.flagBased}\n\t\t);",
 			"replace": "\t\tmacro (\n\t\t\topt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)\n\t\t\t\t? _dhl()\n\t\t\t\t: ${c.flagBased}\n\t\t);",
@@ -1541,7 +1541,7 @@
 		},
 		{
 			"name": "M-BEFORE-KW-TRAILING-DROP",
-			"type": "anyparse.macro.WriterLowering",
+			"type": "anyparse.macro.WriterFieldSepLowering",
 			"method": "beforeKwSeparator",
 			"find": "\tfinal sepExpr: Expr = beforeKwTrailingExpr != null\n\t\t? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)\n\t\t: sepWithBeforeKwExpr;",
 			"replace": "\tfinal sepExpr: Expr = sepWithBeforeKwExpr;",
@@ -1549,7 +1549,7 @@
 		},
 		{
 			"name": "M-BEFORE-KW-LEADING-DROP",
-			"type": "anyparse.macro.WriterLowering",
+			"type": "anyparse.macro.WriterFieldSepLowering",
 			"method": "beforeKwSeparator",
 			"find": "\tfinal sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null\n\t\t? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)\n\t\t: sepBaseExpr;",
 			"replace": "\tfinal sepWithBeforeKwExpr: Expr = sepBaseExpr;",
