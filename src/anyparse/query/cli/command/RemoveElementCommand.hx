@@ -123,8 +123,15 @@ final class RemoveElementCommand implements CliCommand {
 		final pos: Null<Position> = CliEdit.resolveAddressPos('remove-element', source, plugin, posSpec, selectExpr, matchExpr, nth);
 		if (pos == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		// The address is unambiguous — `FnMember:f` and `MetaCall:@:pin` each remove exactly
+		// what they name — and the op still reported both as `wrote <file>`. That line is what
+		// made an address resolving one declaration outward indistinguishable from the edit
+		// that was meant: a twenty-line test with a doc and two annotations left the file and
+		// nothing in the transcript said so. Naming the cut costs no behaviour and no ceremony.
+		final removed: Null<String> = RemoveElement.describeRemoval(source, pos.line, pos.col, plugin, withDoc);
 		return CliEdit.finishEdit(
-			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson)
+			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson),
+			removed
 		);
 	}
 

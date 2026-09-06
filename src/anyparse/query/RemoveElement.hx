@@ -62,4 +62,23 @@ final class RemoveElement {
 			: ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}
 
+	/**
+	 * The one line a removal owed its caller: what the cut at `line:col` takes, named and
+	 * counted, for the op to print beside the file it wrote.
+	 *
+	 * Null when the address resolves to no element — `removeElement` re-resolves and
+	 * reports the real error, and a description is not the place to fail. Pass the op's
+	 * own CACHING plugin: the parse here is then the parse the edit makes.
+	 */
+	public static function describeRemoval(source: String, line: Int, col: Int, plugin: GrammarPlugin, withDoc: Bool = true): Null<String> {
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
+		if (tree == null) return null;
+		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(
+			tree, source, Span.offsetOf(source, line, col)
+		);
+		if (hit == null) return null;
+		final nodeSpan: Null<Span> = hit.node.span;
+		return nodeSpan == null ? null : ElementSpan.describeCut(source, hit.node, hit.parent, nodeSpan, withDoc, plugin);
+	}
+
 }

@@ -409,7 +409,7 @@ The trade is that a macro-module arm's member check moves from a build ERROR to 
 
 Two facts the check paid for. **The matcher has to be `Patch`'s, not a substring test:** a plain `indexOf` gate would have wrongly failed **15 of 90** fragment arms, because stored fragments are copied out of `hxq show --select`, which DEDENTS its output — byte-exactness against the file is the exception, not the rule, and `Patch` is the component that already knows this (`references/ops.md`: leading indentation is not part of the match). And a **sixth arm-authoring blind spot**, alongside the five FORCE-renderer ones: a member declared on a SUB-MODULE type cannot be addressed at all. A record's `type` is read twice with two different meanings — as the class the typer resolves, and as the PATH of the file `tools/mutation-arm.sh` patches — and for a sub-module type those two disagree by construction.
 
-At the S123 merge the registry stands at **174 arms / 263 pins** over **795** registered classes, against **248** prose claims. Read them off the binary (`node bin/test.js --list-arms|--list-pins|--list-classes|--list-claims`) rather than out of this line — every one of the four moves within a slice or two.
+At the S125 merge the registry stands at **192 arms / 307 pins** over **795** registered classes, against **241** prose claims. Read them off the binary (`node bin/test.js --list-arms|--list-pins|--list-classes|--list-claims`) rather than out of this line — every one of the four moves within a slice or two.
 
 **Running one is one command.**
 
@@ -1371,6 +1371,43 @@ is what identified their killer without writing a fourteenth and fifteenth cut.
 `vacuity` are censused, not gated toward a fix). Reading those four as unfinished work is
 reading the census wrong: they are the fixed floor a `control`-and-`arm` tranche leaves
 behind, and this class is now AT that floor.
+
+### 248 to 241: the `prefer-final` abstract-rebind tranche, and the class hits ZERO (S125)
+
+`PreferFinalAbstractMethodCheckTest` was the largest family of PURE `control` rows left — the
+only kind that can LEAVE the census, since a `control,base` line merely becomes `:: base`. It
+carried **7 of the 123** pure-control rows and no `base` or `vacuity` row at all, so its floor
+is zero and it reached it: the census went **248 → 241** and the class contributes no line.
+
+Four arms carry all seven, and every cut is a real seam of the abstract-rebind suppression the
+class exists to bound:
+
+| arm | cut | its pins | verdict (`--fast`) |
+|---|---|---|---|
+| `M-PFF-CALLSCAN-ALWAYS` | `CtorFieldWrite#methodCalledOn` force `true` | `testPlainFieldStillFlagged`, `testPlainLocalStillFlagged` | KILLED, 1 extra |
+| `M-PFF-STDLIB-SAFE-NONE` | `abstractMethodMayMutate`, the final-safe whitelist arm becomes `true` | `testStdlibArrayFieldMethodCallStillFlagged`, `testStdlibStringFieldMethodCallStillFlagged` | KILLED, 2 extra |
+| `M-PFF-REBIND-UNRESOLVED` | same member, `abstractRebindsThis` is never asked | `testClassTypedFieldMethodCallStillFlagged`, `testPrivateCtorOnlyNoMetaStillFlagged` | KILLED, 4 extra |
+| `M-SCOPE-LIBRARY-DROPPED` | `CachingGrammarPlugin#resolutionFiles` drops the library half | `testResolutionScopeResolvesLibraryType` | KILLED, 0 extra |
+
+**The seams were picked so the four do NOT collapse into one.** A single `force true` on
+`abstractMethodMayMutate` kills all seven at once — both rules route their mutation signal
+through it — which is a total veto and would have made every pin in the class say the same
+thing. Splitting it three ways along the member's own decision points gives each control a cut
+that discriminates it: the call scan gates the bindings nothing calls, the whitelist arm gates
+the stdlib types, and the resolution arm gates the types the index CAN answer for. Each of the
+three leaves the other two's pins green.
+
+**`M-SCOPE-LIBRARY-DROPPED` is narrower than the arm that also killed its pin.**
+`testResolutionScopeResolvesLibraryType` came up in `M-PFF-REBIND-UNRESOLVED`'s `+extra`, which
+would have been an easy pairing — but that arm takes six fixtures down and this one takes
+exactly its own. The pin names the narrow cut.
+
+**The `+extra` column paid for six more pins.** Every extra row across the four sweeps was a
+fixture in the same class whose own doc already describes the arm's seam — "a method REFERENCE
+(no call) … still flagged", "let the caller's stdlib whitelist decide", "the `this =` lives only
+in `new`, so it IS flagged". Those six now carry the pin the sweep proved, taking the class from
+7 pins to 13. None of them contributed a census row, so this half of the tranche moves the
+number by nothing and records a coupling that nothing recorded before.
 
 ### The 38 class-doc claims get no type-level pin — measured, not preferred
 

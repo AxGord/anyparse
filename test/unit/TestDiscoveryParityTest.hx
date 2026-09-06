@@ -1005,6 +1005,22 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesSubtypedContainer :: control :: M-HASSUBTYPE-FALSE',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testAbstractFieldNoCallStillFlagged :: control :: M-PFF-CALLSCAN-ALWAYS',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testClassTypedFieldMethodCallStillFlagged :: control :: M-PFF-REBIND-UNRESOLVED',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testCtorOnlyAbstractFieldFlagged :: control :: M-PFF-REBIND-UNRESOLVED',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testCtorOnlyAbstractLocalFlagged :: control :: M-PFF-REBIND-UNRESOLVED',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testForwardToAliasedUnderlyingWhitelistedNameFlagged :: control :: '
+			+ 'M-PFF-STDLIB-SAFE-NONE',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testForwardToAliasedUnderlyingWhitelistedNameLocalFlagged :: control :: '
+			+ 'M-PFF-STDLIB-SAFE-NONE',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testForwardToClassAbstractFieldFlagged :: control :: M-PFF-REBIND-UNRESOLVED',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testPlainFieldStillFlagged :: control :: M-PFF-CALLSCAN-ALWAYS',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testPlainLocalStillFlagged :: control :: M-PFF-CALLSCAN-ALWAYS',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testPrivateCtorOnlyNoMetaStillFlagged :: control :: M-PFF-REBIND-UNRESOLVED',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testResolutionScopeResolvesLibraryType :: control :: M-SCOPE-LIBRARY-DROPPED',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testStdlibArrayFieldMethodCallStillFlagged :: control :: M-PFF-STDLIB-SAFE-NONE',
+			'unit.check.PreferFinalAbstractMethodCheckTest#testStdlibStringFieldMethodCallStillFlagged :: control :: '
+			+ 'M-PFF-STDLIB-SAFE-NONE',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testFlatTwoBranchStillNotFlagged :: control :: M-TERMINAL-RUNGS-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts'
 			+ ' :: control :: M-PIEC-SPINE-CLAIM-ANY',
@@ -1041,6 +1057,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
+			'unit.cli.AddressCliTest#testRemoveElementReportFollowsKeepDoc :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
+			'unit.cli.AddressCliTest#testRemoveElementReportNamesWhatTheCutTook :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
+			'unit.cli.AddressCliTest#testRemoveElementReportOnAModifierPositionNamesTheDeclaration :: control :: M-REMOVE-CUT-SUBJECT-RAW',
 			'unit.cli.ApqTestSummaryExitStatusCliTest#testTruncatedTranscriptDisagreesWithANonZeroExit :: control :: M-EXIT-STATUS-AGREES',
 			'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
 			'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
@@ -1505,7 +1524,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-SSB-ELSE-SPINE-STOP',
 			'M-SSB-FRAME-BLANKET',
 			'M-EICR-AFTERCOND-RESET',
-			'M-ELSE-SEP-EXPR-BLIND'
+			'M-ELSE-SEP-EXPR-BLIND',
+			'M-REMOVE-CUT-ANNOTATIONS-NONE',
+			'M-REMOVE-CUT-SUBJECT-RAW',
+			'M-PFF-CALLSCAN-ALWAYS',
+			'M-PFF-STDLIB-SAFE-NONE',
+			'M-PFF-REBIND-UNRESOLVED',
+			'M-SCOPE-LIBRARY-DROPPED'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
