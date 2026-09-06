@@ -198,10 +198,11 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 
 | module | inventory flags it names |
 |---|---|
-| `WriterStarEmitLowering` | 58 |
 | `WriterRefFieldLowering` | 45 |
 | `WriterTriviaStarDispatch` | 43 |
+| `WriterStarEmitLowering` | 40 |
 | `WriterKwRefLowering` | 31 |
+| `WriterTriviaStarEmitLowering` | 28 |
 | `WriterCtorBlankLowering` | 17 |
 | `WriterLowering` | 17 |
 | `WriterRefLeadLowering` | 17 |
@@ -239,9 +240,13 @@ own, so splitting by flag would mean rewriting the emitters. What the `Writer*Lo
 modules below `WriterLowering` in the table are is a split by SHAPE FAMILY, which is code
 motion: each is one region of that module's call graph moved whole, with the flags its
 emitters happened to ask travelling along. Reading a family's row therefore tells you how
-`@:fmt`-dense that shape is, not that the flag belongs to it. That the two biggest rows are
-now `WriterStarEmitLowering` (58) and `WriterRefFieldLowering` (45) is the same fact stated
-after the split: those two shapes are where the flags always were.
+`@:fmt`-dense that shape is, not that the flag belongs to it. That the biggest rows are now
+`WriterRefFieldLowering` (45), `WriterTriviaStarDispatch` (43) and `WriterStarEmitLowering`
+(40) is the same fact stated after the split: those shapes are where the flags always were.
+The two Star rows add to 68 where one row held 58, and that is the counting rule showing
+through rather than an error: `WriterStarEmitLowering` fell 58 -> 40 when S137 took its
+trivia routes into `WriterTriviaStarEmitLowering` (28), and ten of the 58 are asked on BOTH
+sides of that seam, so they are now named twice.
 
 `WriterRefLeadLowering`, `WriterCondWrapLowering`, `WriterTriviaSlotLowering`,
 `WriterBraceSymmetryLowering`, plus a fifth, `WriterStarPadLowering`, that names no
@@ -369,6 +374,75 @@ handler whose grammar declaration was DELETED.
 least one module, the module list and the per-module counts match the scan, and the four
 handler-only flags are named-but-undeclared. Change any of it and the test says which line
 of this file to edit. That is how `clearBracePolicy` was found.
+
+### What a split has to pass
+
+Two questions, in this order, and the second one is a veto rather than a preference.
+
+**Is it a LAYER or a FAMILY?** A layer has a SMALL dependency surface and SEVERAL unrelated
+callers: the boundary buys something, because the thing behind it can be asked for by name
+from anywhere. A family is one closed region of a call graph with a single inbound edge that
+takes the producer's whole bundle: the boundary buys SIZE, and a module that is one has to
+say so in its own header rather than dress a size split as a responsibility. The test is
+mechanical — count the inbound call sites, and count how much of the bundle the moved code
+actually reads.
+
+This codebase had already WRITTEN a layer down before anyone named it. `_bodyPolicy`,
+`_ctorBlank`, `_arrowValueIf` and `_braceSym` are bound closures assembled in
+`WriterLowering`'s constructor and handed to four sibling modules; the members those four
+closures reach are exactly what became `WriterCtorPatternLowering`, and the closure list was
+the evidence that they had multiple unrelated callers. Read a constructor's bundle
+assignments before proposing a seam: a layer usually already has one.
+
+The size splits are legitimate too, and they are recognisable by what they take:
+`WriterStarPadLowering` takes `PlainStarCtx` and holds LEAVES; `StarFieldLowering` takes
+`StructSeqLowering`'s own `StructSeqCtx` unchanged because it is the same rule shape and the
+same state; `WriterTriviaStarEmitLowering` (S137) takes `WriterStarEmitLowering`'s whole
+`StarEmitCtx` and reads seven of its fifteen fields, which is why its header calls itself a
+size split and names the cap it relieved.
+
+**Does it move a FORK half away from its twin?** Star emission forks across FOUR sites —
+`StarFieldLowering.emitStarFieldSteps` and the `lowerStar*Branch` leaves beside it on the
+parse side, `emitWriterStarField` (struct field) and `lowerEnumStar` (enum ctor) on the
+writer side. Adding anything to Star emission means editing all four, so a split that puts
+two of them in different modules with nothing naming the other half is REFUSED, and an
+earlier slice that took one and left the other had to move five leaves back. The two writer
+halves live together in `WriterStarEmitLowering` and its header names the parse pair.
+
+What that constraint does NOT forbid is taking a leaf or a sub-tree out from under ONE fork
+half, and the discriminator is the call graph, not the topic. `WriterStarPadLowering` was
+admissible because none of its members is reachable from `lowerEnumStar`;
+`WriterTriviaStarEmitLowering` was admissible for the same reason, measured the same way —
+`emitTriviaStar` and its four descendants have exactly one inbound edge (`emitWriterStarField`
+at one site), call nothing else in the module, and the enum arm reaches its own trivia emit
+through `lowerEnumStarTrivia` / `triviaSepStarBuild` / `triviaBlockStarBuild`, sharing no
+member with them. Both fork halves and the whole enum arm stayed. S137 also re-derived the
+seam S133 had named for it and found it one member wider than recorded: the tryparse route's
+two sep-override builders (`buildTryparseSepOverrides`,
+`buildCloseTrailingFirstSepOverride`) are private to `emitTriviaTryparseStar`, so the closed
+region is 5 members / 532 lines, not 3 / 404. `WriterStarEmitLowering` is 1957 lines / 25
+members before and 1425 / 20 after, against a 2000-line `oversized-type` cap it was 43 lines
+under.
+
+**The module-level typedefs under `WriterLowering` are not a shared vocabulary, and the
+question is settled.** Its 52 module-level typedefs look like a block waiting for a home;
+measured, they are 93 point-to-point edges to 20 consumer modules, and 29 of the 52 have
+exactly ONE consumer, 51 of 52 at most five (`PrevBodyInfo`, the maximum, has five). Every
+one of them is the bundle `WriterLowering`'s constructor BUILDS and hands to one collaborator,
+so the declaration sits at the producing end; only `FieldMeta` has no external consumer at
+all. A dedicated module would give twenty modules a second dependency to name in place of one
+they already have, and typedefs do not count toward the `oversized-type` line extent, so
+there is no size argument either. Leave them.
+
+⚠️ **The instrument that answers this is NOT `hxq uses` / `lit` / `mentions`.** A type
+annotation on a PARAMETER or a LOCAL declaration is not projected into the query tree at all
+(`probe 'function f(c: Mod.T) { final m: Mod.T = null; }'` gives `(Required c)` and
+`(FinalStmt m …)` with no type child), so a type referenced only there is invisible to all
+three. A `uses`+`lit` census over this tree reported ELEVEN of these typedefs as dead; every
+one of the eleven is live, each read by exactly one sibling module through a qualified
+`WriterLowering.<T>` parameter or local annotation, and the Haxe compiler is what said so.
+For a deadness question about a type, dump the sources and search the TEXT, or delete and
+build.
 
 ## Planned strategies
 
