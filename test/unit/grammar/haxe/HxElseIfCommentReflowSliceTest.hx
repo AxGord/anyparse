@@ -223,6 +223,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	}
 
 	/** A bare then-body on the next line takes the comment after the condition's `)`. */
+	@:pin('control')
+	@:killer('M-EICR-AFTERCOND-RESET')
 	public function testBareBodyElseIfTrailsCommentAfterCondition(): Void {
 		Assert.equals(BARE_REFLOWED, reflow(BARE_SRC));
 	}

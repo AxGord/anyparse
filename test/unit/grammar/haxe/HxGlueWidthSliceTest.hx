@@ -108,6 +108,8 @@ final class HxGlueWidthSliceTest extends Test {
 	private static final BROKEN_LINES: String = '\t\tfor (subItem in listedThings)\n'
 		+ '\t\t\tif (subItem.kind == ItemData.KIND_SUBSTITUTE /*&& cast( subItem, ItemBase ).markedOnDeck*/) {';
 
+	@:pin('control')
+	@:killer('M-GLUE-NEVER-BREAKS')
 	public function testOverWideGluedHeaderBreaksTheBody(): Void {
 		// The reported symptom: the glued header line is 131 columns against a
 		// 130-column limit, and nothing inside the body can shorten it — the
@@ -125,6 +127,8 @@ final class HxGlueWidthSliceTest extends Test {
 		Assert.isTrue(out.indexOf(GLUED_LINE) != -1, 'a glued line exactly at the limit must stay glued: <$out>');
 	}
 
+	@:pin('control')
+	@:killer('M-GLUE-NEVER-BREAKS')
 	public function testBreakIsTakenWhenItJustFixesTheOverflow(): Void {
 		// Lower edge of gate 2: the broken body line is 105 columns, so at a
 		// 105-column limit the move still resolves the overflow and is taken.
@@ -185,6 +189,8 @@ final class HxGlueWidthSliceTest extends Test {
 		Assert.equals(write(GLUE_SRC, wide), write(GLUE_SRC_BROKEN, wide), 'the same must hold on the glue side of the boundary');
 	}
 
+	@:pin('control')
+	@:killer('M-GLUE-NEVER-BREAKS')
 	public function testCaseBodyGlueInheritsTheSameAnswer(): Void {
 		// The shared seam: the case-body Star reaches `BodyFit.fitLineLayout`
 		// by a different writer path than the `forBody` fixture above, and gets
@@ -204,6 +210,8 @@ final class HxGlueWidthSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-GLUE-NEVER-BREAKS')
 	public function testReturnBodyGlueInheritsTheSameAnswer(): Void {
 		// The third emitter: `buildBodyFitExpr`'s single-line-flag arm, reached
 		// by `returnBody` and NOT by either fixture above (the `for` fixture
@@ -225,6 +233,8 @@ final class HxGlueWidthSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-GLUE-NEVER-BREAKS')
 	public function testGlueTurnedBreakIsNotASiblingSymmetryTrigger(): Void {
 		// ω-case-sibling-symmetry's contract, preserved: a GLUE outcome is not
 		// a spread trigger, and turning one into a break must not make it one.

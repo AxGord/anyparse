@@ -140,6 +140,8 @@ final class HxSoleArgGluedCloseDedentTest extends Test {
 	 * unconditionally — so a future widening of the tail walk has something to go
 	 * red on.
 	 */
+	@:pin('control')
+	@:killer('M-ELSE-SEP-EXPR-BLIND')
 	public function testSoleArgClosingOnContentKeepsTheGluedClose(): Void {
 		final src: String = 'class ContentTail {\n\tfunction f() {\n\t\treturn MathTools.cabs(if (ms != 0) {\n\t\t\tif (ms % 10 != 0) 1;\n'
 			+ '\t\t\telse if (ms % 100 != 0) 10;\n\t\t\telse 100;\n\t\t} else if (seconds != 0) fromSecond'

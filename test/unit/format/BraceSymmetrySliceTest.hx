@@ -37,12 +37,16 @@ class BraceSymmetrySliceTest extends Test {
 	private static final MACRO_TRY: String =
 		'class C {\n\tmacro function f() {\n\t\te = macro try $$b{exprs} catch (err:Dynamic) {\n\t\t\tq();\n\t\t\tr();\n\t\t};\n\t}\n}';
 
+	@:pin('control')
+	@:killer('M-SSB-SYMMETRY-ONLY-BLIND')
 	public function testThenBracedElseBareGainsBraces(): Void {
 		final out: String = HxWriteFixture.triviaWrite(wrap('if (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr();'), SYMMETRIC);
 		Assert.isTrue(out.indexOf('} else {') != -1, 'the bare else must gain braces in: <$out>');
 		Assert.isTrue(out.indexOf('r();') != -1, 'its statement must survive in: <$out>');
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-SYMMETRY-ONLY-BLIND')
 	public function testThenBareElseBracedGainsBraces(): Void {
 		final out: String = HxWriteFixture.triviaWrite(wrap('if (a)\n\t\t\tp();\n\t\telse {\n\t\t\tq();\n\t\t\tr();\n\t\t}'), SYMMETRIC);
 		Assert.isTrue(out.indexOf('if (a) {') != -1, 'the bare then must gain braces in: <$out>');

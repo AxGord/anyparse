@@ -94,6 +94,8 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 	}
 
 	/** The reported site glues its `({` to the `if` head under the knob. */
+	@:pin('control')
+	@:killer('M-PAREN-PIN-NONE')
 	public function testComprehensionFilterBodyGluesToTheIfHead(): Void {
 		Assert.equals(COMPREHENSION_GLUED, triviaWrite(COMPREHENSION_BELOW, GLUE_ON));
 	}
@@ -104,6 +106,8 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 	}
 
 	/** The glued layout is a fixed point - a second write neither re-breaks it nor packs it further. */
+	@:pin('control')
+	@:killer('M-PAREN-PIN-NONE')
 	public function testGluedBodyIsIdempotent(): Void {
 		Assert.equals(COMPREHENSION_GLUED, triviaWrite(COMPREHENSION_GLUED, GLUE_ON));
 	}
@@ -126,6 +130,8 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 	}
 
 	/** The arrow-lambda body takes the same answer as a construct body — it is the other after-the-header placement. */
+	@:pin('control')
+	@:killer('M-PAREN-PIN-NONE')
 	public function testArrowLambdaBodyGluesAfterTheArrow(): Void {
 		Assert.equals(ARROW_BODY_GLUED, triviaWrite(ARROW_BODY_BELOW, GLUE_ON));
 		Assert.equals(ARROW_BODY_GLUED, triviaWrite(ARROW_BODY_GLUED, GLUE_ON));
