@@ -1243,5 +1243,100 @@
 			"force": "true",
 			"note": "every initializer identifier reads as re-bound before the read, so a binder under a DIFFERENT name is treated as a capture"
 		}
+,
+		{
+			"name": "M-SSB-CHAIN-TAIL-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "chainForcesBraces",
+			"find": "\treturn cur != null && keepsBraces(cur, drop, symmetry, suppress, false, false, false);",
+			"replace": "\treturn false;",
+			"note": "the chain scan stops probing the FINAL else branch, so an asymmetry that only the tail of an else-if chain carries no longer forces the earlier branches to keep their braces"
+		},
+		{
+			"name": "M-SSB-ELEM-TRAIL-COMMENT-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "hoistTrailingComment",
+			"find": "\tfinal own: Null<String> = elem.trailingComment;",
+			"replace": "\tfinal own: Null<String> = null;",
+			"note": "the de-braced statements OWN same-line trailing comment is never read, so only a block openTrailing comment can travel and the else-body splice loses its comment"
+		},
+		{
+			"name": "M-SSB-SYMMETRY-ONLY-BLIND",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "keepsBraces",
+			"find": "\treturn if (!drop)\n\t\tsymmetry && Type.enumConstructor(cast body) == 'BlockStmt'",
+			"replace": "\treturn if (!drop)\n\t\tfalse",
+			"note": "under symmetry-only (`singleStatementBraces: symmetric`) no body reads as brace-keeping, so the repair direction never sees a braced sibling to mirror"
+		},
+		{
+			"name": "M-CHAIN-STAIRCASE-OFF",
+			"type": "anyparse.format.BodyFit",
+			"method": "chainStaircase",
+			"find": "\tif (second == null || chainBodyInner(second) == null) return sameLine;",
+			"replace": "\tif (second == null || chainBodyInner(second) == null) return sameLine;\n\treturn sameLine;",
+			"note": "a chain of three links or more never staircases, so an over-long chain keeps the same-line layout instead of breaking every link"
+		},
+		{
+			"name": "M-PAREN-PIN-NONE",
+			"type": "anyparse.format.BodyFit",
+			"method": "pinParenGlued",
+			"force": "null",
+			"note": "no glued body carries a pinnable collapse probe, so the arrow-continuation rescue has nothing to pin and the body breaks instead of gluing"
+		},
+		{
+			"name": "M-ARROW-HEAD-WIDTH-NONE",
+			"type": "anyparse.format.BodyFit",
+			"method": "arrowConstructHeadWidth",
+			"force": "NO_CONSTRUCT_HEAD",
+			"note": "a multi-line arrow body reports no construct head, so the glue threshold stops discounting the head width and an overflowing block-`if` body is measured whole"
+		},
+		{
+			"name": "M-GLUE-NEVER-BREAKS",
+			"type": "anyparse.format.BodyFit",
+			"method": "glueLayout",
+			"find": "\treturn lineWidth <= 0 ? glued : Doc.IfGluedFirstLineExceeds(lineWidth, cols, breakLayout(cols, body), glued);",
+			"replace": "\treturn glued;",
+			"note": "the glued body is emitted with no width test at all, so a header whose glued first line overflows never falls back to the break layout"
+		},
+		{
+			"name": "M-SSB-TRAILOPT-REEMIT",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "emitMandatoryRefTrail",
+			"find": "\tif (\n\t\t!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null\n\t\t|| child.fmtHasFlag('dropSingleStmtBraces')\n\t)\n\t\treturn;",
+			"replace": "\tif (!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null) return;",
+			"note": "a brace-droppable field re-emits its `@:trailOpt` slot again, so the redundant `;` a for/if body carried comes back and holds the braces the drop had earned"
+		},
+		{
+			"name": "M-SSB-ELSE-SPINE-STOP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "elseTailDanglingIf",
+			"find": "\treturn elseBody == null || tailDanglingIf(elseBody);",
+			"replace": "\treturn true;",
+			"note": "a trailing `if` that HAS its own `else` still reads as dangling, so the spine walk stops continuing into that else branch and the body keeps braces it does not need"
+		},
+		{
+			"name": "M-SSB-FRAME-BLANKET",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "deBraceBodyAccess",
+			"find": "\t\t\t&& !anyparse.format.SingleStmtBraces.keepsBraces(\n\t\t\t\t$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true\n\t\t\t));",
+			"replace": "\t\t\t&& !(false && anyparse.format.SingleStmtBraces.keepsBraces(\n\t\t\t\t$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true\n\t\t\t)));",
+			"note": "the suppress frame is armed without the span-precision probe, so a then-body that renders WITH its braces still gates every unwrap nested inside it"
+		},
+		{
+			"name": "M-EICR-AFTERCOND-RESET",
+			"type": "anyparse.format.ElseIfCommentReflow",
+			"method": "scanItems",
+			"find": "\t\tcase Scanning(next):\n\t\t\tseenCond = next;",
+			"replace": "\t\tcase Scanning(_):",
+			"note": "the after-condition flag is not threaded from one sibling to the next, so a comment anchor that sits past the condition in a LATER item is never recognised"
+		},
+		{
+			"name": "M-ELSE-SEP-EXPR-BLIND",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "sameLineSeparatorShapeAware",
+			"find": "\t\tmacro (\n\t\t\t!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)\n\t\t\t\t? _dhl()\n\t\t\t\t: ${c.flagBased}\n\t\t);",
+			"replace": "\t\tmacro (\n\t\t\topt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)\n\t\t\t\t? _dhl()\n\t\t\t\t: ${c.flagBased}\n\t\t);",
+			"note": "the semicolon-next-line `else` rule stops asking whether it is at expression position, so a value-`if` inside a case body is governed by the statement rule"
+		}
 	]
 }

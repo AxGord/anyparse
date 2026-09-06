@@ -41,6 +41,8 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 	 * continuation indent, where its condition fits on one line again (glued head 148
 	 * columns, broken head 119).
 	 */
+	@:pin('control')
+	@:killer('M-ARROW-HEAD-WIDTH-NONE')
 	public function testOverflowingBlockIfBreaksAfterArrow(): Void {
 		final src: String = 'class M {\n\tfunction f() {\n'
 			+ '\t\towner?.forEachEntry(entryUser -> if (checkEntryForPending(entryUser, lostBatch) && !bucket.exists((u:EntryUserType) '

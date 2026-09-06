@@ -76,6 +76,8 @@ final class HxChainStaircaseSliceTest extends Test {
 	/** The torn shape the gate exists to remove — the condition paren opened mid-chain. */
 	private static final TORN_CONDITION: String = 'if (\n\t\t\tinfo.varName == matchedVar\n\t\t)';
 
+	@:pin('control')
+	@:killer('M-CHAIN-STAIRCASE-OFF')
 	public function testWholeChainOverTheLimitStaircases(): Void {
 		// The chain's one-line form is 123 columns; at 122 it does not fit, so
 		// the top two links go to their own lines and the last keeps its glue.
@@ -100,6 +102,8 @@ final class HxChainStaircaseSliceTest extends Test {
 		}
 	}
 
+	@:pin('control')
+	@:killer('M-CHAIN-STAIRCASE-OFF')
 	public function testTornConditionParenIsGone(): Void {
 		// The reported symptom, under a `conditionWrapping` cascade: the chain
 		// glued until the innermost `if` had nothing left to break but its own
@@ -114,6 +118,8 @@ final class HxChainStaircaseSliceTest extends Test {
 		}
 	}
 
+	@:pin('control')
+	@:killer('M-CHAIN-STAIRCASE-OFF')
 	public function testFiveLinkChainStaircasesAsOneShape(): Void {
 		// Every link but the last installs a gate of its own, so the OUTER
 		// link's classifier has to read THROUGH a gate to see the chain below
@@ -135,6 +141,8 @@ final class HxChainStaircaseSliceTest extends Test {
 		Assert.isTrue(out.indexOf(CHAIN_LINE) != -1, '`same` must keep the unconditional glue: <$out>');
 	}
 
+	@:pin('control')
+	@:killer('M-CHAIN-STAIRCASE-OFF')
 	public function testIsIdempotentAcrossThreePasses(): Void {
 		final json: String = fitJson(122);
 		final once: String = write(CHAIN_SRC, json);

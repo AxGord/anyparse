@@ -75,6 +75,8 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 		Assert.isTrue(out.indexOf('if (c) foo();') == -1, 'ifBody=Same must NOT override expressionIfBody at expression-position: <$out>');
 	}
 
+	@:pin('control')
+	@:killer('M-ELSE-SEP-EXPR-BLIND')
 	public function testElseBodyDualFlagDispatchesAtExpressionPosition(): Void {
 		// `else`-body uses the paired knob `expressionElseBody`.
 		// Expression-position via return-switch case body —

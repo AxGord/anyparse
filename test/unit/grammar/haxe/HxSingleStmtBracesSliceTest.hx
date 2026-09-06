@@ -83,6 +83,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-CHAIN-TAIL-OFF')
 	public inline function testIfElseAsymmetryKeepsBothBraced(): Void {
 		// A single-statement then-branch must NOT de-brace while its else-branch keeps braces —
 		// `if (b) return true; else { … }` is an asymmetric-brace violation. Keep both braced.
@@ -149,6 +151,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TRAILOPT-REEMIT')
 	public inline function testTrailingSemiTerminalElseIfDropsSemiAndDeBraces(): Void {
 		// The terminal else-if then-body carried the enclosing statement's redundant
 		// trailing `;`. Now that the slot never re-emits, no branch is held braced by it,
@@ -210,6 +214,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		roundTrip('class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true\n\t\t}\n\t\treturn false;\n\t}\n}');
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TRAILOPT-REEMIT')
 	public inline function testTrailingEmptyStmtAfterForDropsSemiAndDeBraces(): Void {
 		// `for (...) { stmt; };` — the trailing `;` sits in the body's own
 		// `@:trailOpt(';')` slot, where it can only ever be REDUNDANT (the inner
@@ -222,6 +228,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-TRAILOPT-REEMIT')
 	public inline function testTrailingEmptyStmtAfterIfDropsSemiAndDeBraces(): Void {
 		assertFmt(
 			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t};\n\t}\n}',
@@ -333,6 +341,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-CHAIN-TAIL-OFF')
 	public inline function testBareThenOppositeBracedElseGetsBraces(): Void {
 		// The mirror direction: the else-branch keeps its braces, so the BARE
 		// then-branch gains its own.
@@ -512,6 +522,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-ELEM-TRAIL-COMMENT-NONE')
 	public inline function testTrailingCommentElseBodyDeBraces(): Void {
 		// The else-body splice hoists its own trailing comment too (a separate writer path
 		// from the mandatory then / for / while bodies). Both branches de-brace symmetrically.
@@ -580,6 +592,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-ELSE-SPINE-STOP')
 	public inline function testTrailingIfWithOwnElseDeBraces(): Void {
 		// The else-consuming refinement: the trailing `if` already HAS an `else`, so it
 		// cannot take a second one and the spine walk continues into that else branch,
@@ -604,6 +618,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-FRAME-BLANKET')
 	public inline function testBracedThenBodySealsNestedGuardLoop(): Void {
 		// Gate 5 span-precision, frame-arming half: the then-body is multi-statement and
 		// keeps its braces, whose `}` seals the subtree - so the nested `for` body de-braces

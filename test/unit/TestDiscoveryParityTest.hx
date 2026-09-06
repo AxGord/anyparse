@@ -1049,18 +1049,26 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheSemicolonDropAlsoHoldsUnderExpressionIfNext :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheStatementAndValueSkipListsAgree :: control :: M-SSB-VALUE-WRAP-OFF',
+			'unit.format.BraceSymmetrySliceTest#testThenBareElseBracedGainsBraces :: control :: M-SSB-SYMMETRY-ONLY-BLIND',
+			'unit.format.BraceSymmetrySliceTest#testThenBracedElseBareGainsBraces :: control :: M-SSB-SYMMETRY-ONLY-BLIND',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testACommentBetweenElseAndSwitchDeclinesTheGlue'
 			+ ' :: control :: M-ELSE-SWITCH-COMMENT-GLUE',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testAnElseIfChainEndingInElseSwitch :: control :: M-ELSE-SWITCH-TESTS-NONE',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testSamePlacesTheSwitchOnTheElseLine :: control :: M-ELSE-SWITCH-TESTS-NONE',
+			'unit.grammar.haxe.HxArrowBlockIfOverflowSliceTest#testOverflowingBlockIfBreaksAfterArrow'
+			+ ' :: control :: M-ARROW-HEAD-WIDTH-NONE',
 			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember'
 			+ ' :: control :: M-BLANK-MULTILINE-OFF',
 			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBetweenMultilineAndSingleLine'
 			+ ' :: control :: M-BLANK-MULTILINE-OFF',
 			'unit.grammar.haxe.HxCallGroupRestProbeCasePatternTest#testCasePatternCtorInsideACollectionStaysGlued'
 			+ ' :: control :: M-PATTERN-RESTPROBE-UNSET',
+			'unit.grammar.haxe.HxChainStaircaseSliceTest#testFiveLinkChainStaircasesAsOneShape :: control :: M-CHAIN-STAIRCASE-OFF',
+			'unit.grammar.haxe.HxChainStaircaseSliceTest#testIsIdempotentAcrossThreePasses :: control :: M-CHAIN-STAIRCASE-OFF',
+			'unit.grammar.haxe.HxChainStaircaseSliceTest#testTornConditionParenIsGone :: control :: M-CHAIN-STAIRCASE-OFF',
+			'unit.grammar.haxe.HxChainStaircaseSliceTest#testWholeChainOverTheLimitStaircases :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine'
 			+ ' :: control :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLinePullsUpABodyThatFits :: control :: M-NO-WIRE',
@@ -1088,6 +1096,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testOpenerCloserPairKeepsOpenerACondSpliceStmt'
 			+ ' :: control :: M-COND-BLOCK-TAIL-NEVER',
 			'unit.grammar.haxe.HxConditionalExprFitSliceTest#testOverwideGluedBreaksAtDirectiveSeams :: control :: M-NEWLINE-SIGNALS-NONE',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBareBodyElseIfTrailsCommentAfterCondition'
+			+ ' :: control :: M-EICR-AFTERCOND-RESET',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly'
 			+ ' :: control :: M-EICR-BOUNDARY-SKIP',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testChainReflowsEveryLinkIndependently :: control :: M-EICR-BOUNDARY-SKIP',
@@ -1118,18 +1128,32 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testLineCommentHeaderLeavesDocAttached'
 			+ ' :: control :: M-FILEHEADER-ANY-COMMENT-KIND,M-FILEHEADER-ANY-COMMENT',
 			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testNoFileHeaderBlankWithoutImports :: control :: M-FILEHEADER-HEAD-ALWAYS-PIU',
+			'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testArrowLambdaBodyGluesAfterTheArrow :: control :: M-PAREN-PIN-NONE',
+			'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testComprehensionFilterBodyGluesToTheIfHead :: control :: M-PAREN-PIN-NONE',
+			'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testGluedBodyIsIdempotent :: control :: M-PAREN-PIN-NONE',
+			'unit.grammar.haxe.HxGlueWidthSliceTest#testBreakIsTakenWhenItJustFixesTheOverflow :: control :: M-GLUE-NEVER-BREAKS',
+			'unit.grammar.haxe.HxGlueWidthSliceTest#testCaseBodyGlueInheritsTheSameAnswer :: control :: M-GLUE-NEVER-BREAKS',
+			'unit.grammar.haxe.HxGlueWidthSliceTest#testGlueTurnedBreakIsNotASiblingSymmetryTrigger :: control :: M-GLUE-NEVER-BREAKS',
+			'unit.grammar.haxe.HxGlueWidthSliceTest#testOverWideGluedHeaderBreaksTheBody :: control :: M-GLUE-NEVER-BREAKS',
+			'unit.grammar.haxe.HxGlueWidthSliceTest#testReturnBodyGlueInheritsTheSameAnswer :: control :: M-GLUE-NEVER-BREAKS',
 			'unit.grammar.haxe.HxGroupRestProbeStructStarTest#testCasePatternTypeParamsDeclineTheRestProbe'
 			+ ' :: control :: M-PATTERN-RESTPROBE-UNSET,M-SEPSTAR-RESTPROBE-UNGATED',
 			'unit.grammar.haxe.HxGroupRestProbeStructStarTest#testObjectLiteralPatternDeclinesTheRestProbeInBothWriters'
 			+ ' :: control :: M-PATTERN-RESTPROBE-UNSET,M-TRIVIASEP-RESTPROBE-UNGATED,M-SEPSTAR-RESTPROBE-UNGATED',
+			'unit.grammar.haxe.HxIfExprCondWrapSliceTest#testArrowBodyIfOverflowChainExplodesCond :: control :: M-ARROW-HEAD-WIDTH-NONE',
+			'unit.grammar.haxe.HxIfExprCondWrapSliceTest#testExplodedSourceIsIdempotent :: control :: M-ARROW-HEAD-WIDTH-NONE',
+			'unit.grammar.haxe.HxIfStmtExprPositionDispatchTest#testElseBodyDualFlagDispatchesAtExpressionPosition'
+			+ ' :: control :: M-ELSE-SEP-EXPR-BLIND',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testBrokenShapeIsIdempotent :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testForIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testGuardIfWithoutElseStaysGlued :: control :: M-LOOPIF-ALWAYS',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testNonLoopAndNonIfBodiesUnchanged :: control :: M-LOOPIF-ALWAYS',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenIfGetsBracesAdded :: control :: M-SSB-WRAP-DIRECTION',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenOppositeBracedElseGetsBraces :: control :: M-SSB-CHAIN-TAIL-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBracedCatchBodySealsTryCatchBeforeElse'
 			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBracedThenBodySealsNestedGuardLoop :: control :: M-SSB-FRAME-BLANKET',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testChainKeeperForcesBracesOnEveryBareBranch :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDanglingElseThroughLoopBodyKeepsBraces'
 			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
@@ -1139,6 +1163,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testElseIfChainLinkNotWrapped :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces'
 			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testIfElseAsymmetryKeepsBothBraced :: control :: M-SSB-CHAIN-TAIL-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testIfElseIfChainKeepsBracesWhenAnyBranchMulti :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testOpenTrailingCommentTravelsWithTheStatement'
 			+ ' :: control :: M-SSB-OPEN-TRAIL-NONE',
@@ -1146,11 +1171,21 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSuppressFrameDoBodyStillUnwraps :: control :: M-SSB-DOBODY-KEEP',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSuppressedFrameChainBracesEveryBranch :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSwitchSealedInnerIfDeBraces :: control :: M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentElseBodyDeBraces :: control :: M-SSB-ELEM-TRAIL-COMMENT-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentForBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentIfBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentWhileBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingEmptyStmtAfterForDropsSemiAndDeBraces'
+			+ ' :: control :: M-SSB-TRAILOPT-REEMIT',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingEmptyStmtAfterIfDropsSemiAndDeBraces'
+			+ ' :: control :: M-SSB-TRAILOPT-REEMIT',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingIfWithOwnElseDeBraces :: control :: M-SSB-ELSE-SPINE-STOP',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingSemiTerminalElseIfDropsSemiAndDeBraces'
+			+ ' :: control :: M-SSB-TRAILOPT-REEMIT',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testValueIfBareElseGainsBraces :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testValueIfBareThenGainsBraces :: control :: M-SSB-VALUE-WRAP-OFF',
+			'unit.grammar.haxe.HxSoleArgGluedCloseDedentTest#testSoleArgClosingOnContentKeepsTheGluedClose'
+			+ ' :: control :: M-ELSE-SEP-EXPR-BLIND',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBareCatchDeBracesWithoutAWrapPass'
 			+ ' :: control :: M-SSB-BARE-ILLEGAL,M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBracedGroupDeBraces'
@@ -1418,7 +1453,19 @@ class TestDiscoveryParityTest extends Test {
 			'M-JSUL-BARE-IDENT-NOT-SAFE',
 			'M-JSUL-LOCAL-CAPTURE-ANY',
 			'M-JSUL-UNINDEXED-NAME-ALWAYS',
-			'M-JSUL-INIT-IDENT-ALWAYS-REBOUND'
+			'M-JSUL-INIT-IDENT-ALWAYS-REBOUND',
+			'M-SSB-CHAIN-TAIL-OFF',
+			'M-SSB-ELEM-TRAIL-COMMENT-NONE',
+			'M-SSB-SYMMETRY-ONLY-BLIND',
+			'M-CHAIN-STAIRCASE-OFF',
+			'M-PAREN-PIN-NONE',
+			'M-ARROW-HEAD-WIDTH-NONE',
+			'M-GLUE-NEVER-BREAKS',
+			'M-SSB-TRAILOPT-REEMIT',
+			'M-SSB-ELSE-SPINE-STOP',
+			'M-SSB-FRAME-BLANKET',
+			'M-EICR-AFTERCOND-RESET',
+			'M-ELSE-SEP-EXPR-BLIND'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1466,7 +1513,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-FILEHEADER-ANY-COMMENT :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
 			'M-FILEHEADER-ANY-COMMENT-KIND :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
 			'M-FILEHEADER-NO-TWO-COMMENT-ARM :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
-			'M-FILEHEADER-COND-OPAQUE :: anyparse.macro.TriviaEofLowering#triviaEofHeadIsPiuExpr'
+			'M-FILEHEADER-COND-OPAQUE :: anyparse.macro.TriviaEofLowering#triviaEofHeadIsPiuExpr',
+			'M-SSB-TRAILOPT-REEMIT :: anyparse.macro.WriterLowering#emitMandatoryRefTrail',
+			'M-SSB-FRAME-BLANKET :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
+			'M-ELSE-SEP-EXPR-BLIND :: anyparse.macro.WriterLowering#sameLineSeparatorShapeAware'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
