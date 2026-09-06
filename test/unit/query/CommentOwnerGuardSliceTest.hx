@@ -67,6 +67,8 @@ class CommentOwnerGuardSliceTest extends Test {
 	 * and `// why b` now stands above `c()`. Flipped by deleting the `CommentOwnerGuard` call in
 	 * `CanonicalEdit.canonicalize`.
 	 */
+	@:pin('control')
+	@:killer('M-COMMENT-WELD-BLIND')
 	public function testWeldingTwoCommentBlocksIsRefused(): Void {
 		switch SeamEdit.replace(TWO_BLOCKS, 'b();', '') {
 			case Ok(text):
@@ -84,6 +86,8 @@ class CommentOwnerGuardSliceTest extends Test {
 	 * comments in front of it. The statement survives; what does not survive is its position
 	 * between the two comments.
 	 */
+	@:pin('control')
+	@:killer('M-COMMENT-WELD-BLIND')
 	public function testHoistingACommentPastSurvivingCodeIsRefused(): Void {
 		switch SeamEdit.replace(TWO_BLOCKS, '// why b\n\t\tb();\n\t\t// why c\n\t\tc();', '// why b\n\t\t// why c\n\t\tb();\n\t\tc();') {
 			case Ok(text):

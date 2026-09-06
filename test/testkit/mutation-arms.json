@@ -1101,6 +1101,147 @@
 			"method": "reconcileExitStatus",
 			"force": "EXIT_OK",
 			"note": "a transcript is never reconciled against the exit status its runner returned, so a shard killed mid-run summarises green again and its partial counts enter the aggregate as if the missing tests had passed"
+		},
+		{
+			"name": "M-COMMENT-WELD-BLIND",
+			"type": "anyparse.query.CommentOwnerGuard",
+			"method": "detachedComment",
+			"force": "null",
+			"note": "the weld criterion answers for nothing, so an edit that closes two comment blocks over the code that stood between them passes the seam"
+		},
+		{
+			"name": "M-PATTERN-RESTPROBE-UNSET",
+			"type": "anyparse.grammar.haxe.HxCasePattern",
+			"method": "@:fmt",
+			"kind": "MetaCall",
+			"find": "@:fmt(suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe)",
+			"replace": "@:fmt(suppressCallRestProbe, suppressComplexItems)",
+			"note": "the pattern subtree never declines the rest-of-line fit bias, so a ctor below a collection pattern is charged the trailing guard and breaks its own args"
+		},
+		{
+			"name": "M-SEPSTAR-RESTPROBE-UNGATED",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "emitSepStarList",
+			"find": "final groupRestProbeExpr: Expr = groupRestProbe ? (macro !opt._suppressPatternRestProbe) : (macro false);",
+			"replace": "final groupRestProbeExpr: Expr = macro $v{groupRestProbe};",
+			"note": "the non-trivia struct-Star dispatch goes back to the macro-time constant, so a list below a case pattern charges the trailing guard to its own fit again"
+		},
+		{
+			"name": "M-TRIVIASEP-RESTPROBE-UNGATED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "groupRestProbe: $v{c.groupRestProbe} && !opt._suppressPatternRestProbe,",
+			"replace": "groupRestProbe: $v{c.groupRestProbe},",
+			"note": "the trivia dispatch stops reading the pattern flag, so a @:trivia Star below a case pattern rest-probes while the plain writer does not"
+		},
+		{
+			"name": "M-FILEHEADER-HEAD-NOT-PIU",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofHeadIsPiuExpr",
+			"find": "_headIsPiu = true;",
+			"replace": "_headIsPiu = false;",
+			"note": "no module head ever classifies as package / import / using, so a real file header above one of them loses its blank line"
+		},
+		{
+			"name": "M-FILEHEADER-HEAD-ALWAYS-PIU",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofHeadIsPiuExpr",
+			"find": "_headIsPiu = true;\ncase _:",
+			"replace": "_headIsPiu = true;\ncase _:\n_headIsPiu = true;",
+			"note": "every module head classifies as package / import / using, so a lone doc comment above a type is treated as a file header and a blank splits it from what it documents"
+		},
+		{
+			"name": "M-FILEHEADER-ANY-DECL",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofFileheaderBlanksExpr",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _ci == 0 && _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _ci == 0 && _isBlock",
+			"note": "the first-decl guard goes, so a doc comment leading the SECOND declaration is read as the module's file header"
+		},
+		{
+			"name": "M-FILEHEADER-ANY-COMMENT",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofFileheaderBlanksExpr",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _ci == 0 && _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _isBlock",
+			"note": "the first-comment guard goes, so the SECOND comment of a leading run is a file header too and a type's own doc is split from it"
+		},
+		{
+			"name": "M-FILEHEADER-ANY-COMMENT-KIND",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofFileheaderBlanksExpr",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _ci == 0 && _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _ci == 0",
+			"note": "the block-comment guard goes, so a line-comment header takes the file-header blank the knob reserves for a block one"
+		},
+		{
+			"name": "M-FILEHEADER-NO-TWO-COMMENT-ARM",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofFileheaderBlanksExpr",
+			"find": "&& (_headIsPiu || _t.leadingComments.length >= 2);",
+			"replace": "&& _headIsPiu;",
+			"note": "the two-comments arm goes, so a header comment standing above a type's own doc with no package / import / using anywhere keeps no blank between them"
+		},
+		{
+			"name": "M-FILEHEADER-COND-OPAQUE",
+			"type": "anyparse.macro.TriviaEofLowering",
+			"method": "triviaEofHeadIsPiuExpr",
+			"find": "case Conditional(_c):\nif (_c.body.length > 0)\n$condHeadClassify;",
+			"replace": "",
+			"note": "the module-head #if stops being transparent, so a file header above a guarded import block reads as leading a type and loses its blank"
+		},
+		{
+			"name": "M-JSUL-ANNOTATION-NEVER-NEUTRAL",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "annotationIsNeutral",
+			"find": "return sourceType != null && TypeResolver.stripWs(annotation) == sourceType;",
+			"replace": "return false;",
+			"note": "an annotation is never proven type-neutral, so a declaration whose annotation merely restates its source type stops collapsing"
+		},
+		{
+			"name": "M-JSUL-COMMENT-ANY-IN-FILE",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "commentInDroppedRegion",
+			"find": "return comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to);",
+			"replace": "return comments.length > 0;",
+			"note": "any comment in the file counts as one inside the deleted line, so a comment merely standing BETWEEN the two statements blocks the join"
+		},
+		{
+			"name": "M-JSUL-PATH-ALWAYS-CONDITIONAL",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "pathIsConditional",
+			"force": "true",
+			"note": "every read path counts as conditional, so a field chain on a straight-line path is refused as if it had moved under a branch"
+		},
+		{
+			"name": "M-JSUL-BARE-IDENT-NOT-SAFE",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "readPositionIsSafe",
+			"find": "evaluatedOnceEagerly(steps, s) && nothingImpureBefore(steps, s) && (init.kind == s.identKind || !pathIsConditional(steps, s));",
+			"replace": "evaluatedOnceEagerly(steps, s) && nothingImpureBefore(steps, s) && !pathIsConditional(steps, s);",
+			"note": "the bare-identifier exemption goes, so a plain local read is refused on a conditional path even though reading it has no effect at all"
+		},
+		{
+			"name": "M-JSUL-LOCAL-CAPTURE-ANY",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "readsMutableLocal",
+			"find": "return bindingFrom != null && TypeResolver.mayBeLocalOrParam(tree, bindingFrom, s.mutableKinds, []);",
+			"replace": "return bindingFrom != null;",
+			"note": "every local capture reads as a mutable one, so capturing an IMMUTABLE local stops collapsing along with the var case the gate exists for"
+		},
+		{
+			"name": "M-JSUL-UNINDEXED-NAME-ALWAYS",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "unindexedNameUse",
+			"force": "true",
+			"note": "every site reads as carrying an unindexed use of the name, so a shape with no stray read past the pair is refused with the ones that have one"
+		},
+		{
+			"name": "M-JSUL-INIT-IDENT-ALWAYS-REBOUND",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "initIdentRebound",
+			"force": "true",
+			"note": "every initializer identifier reads as re-bound before the read, so a binder under a DIFFERENT name is treated as a capture"
 		}
 	]
 }

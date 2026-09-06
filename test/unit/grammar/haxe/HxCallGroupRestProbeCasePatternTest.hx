@@ -163,12 +163,14 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 	 * holding each: `Wrap(` on the call flag, `Ctor(` on nothing but
 	 * `_suppressPatternRestProbe`, since the literal cleared the call flag above it.
 	 *
-	 * Killed by the arm that drops `suppressPatternRestProbe` from
-	 * `HxCasePattern.expr` (`case Wrap({key: Ctor(\n\t\t\t\talphaArg,\n…`, while
-	 * the outer `Wrap(` stays glued on the call flag); green under the arm that
-	 * drops `suppressCallRestProbe`, which is what makes it a discriminator
+	 * Killed by arm `M-PATTERN-RESTPROBE-UNSET`, which drops
+	 * `suppressPatternRestProbe` from `HxCasePattern.expr` (`case Wrap({key: Ctor(\n\t\t\t\talphaArg,\n…`,
+	 * while the outer `Wrap(` stays glued on the call flag); green under the arm
+	 * that drops `suppressCallRestProbe`, which is what makes it a discriminator
 	 * rather than a second copy of `testCasePatternCtorStaysGlued`.
 	 */
+	@:pin('control')
+	@:killer('M-PATTERN-RESTPROBE-UNSET')
 	public function testCasePatternCtorInsideACollectionStaysGlued(): Void {
 		final src: String = 'class C {\n\tstatic function f():Void {\n\t\tswitch v {\n\t\t\tcase Wrap({key: Ctor(alphaArg, '
 			+ 'betaArg)}) if (isReady):\n\t\t\t\tg();\n\t\t}\n\t}\n}';

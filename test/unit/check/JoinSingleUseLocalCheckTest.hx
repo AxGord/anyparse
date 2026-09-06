@@ -174,6 +174,8 @@ class JoinSingleUseLocalCheckTest extends Test {
 	}
 
 	/** Control: the same conditional-region shape with no unindexed read past `#end` still collapses. */
+	@:pin('control')
+	@:killer('M-JSUL-UNINDEXED-NAME-ALWAYS')
 	public function testConditionalRegionWithoutStrayReadStillFlagged(): Void {
 		final body: String = "#if A\n\t\tfinal x = _f;\n\t\tuse(x);\n\t\t#end\n\t\ttrace('plain');";
 		Assert.equals(1, violations(wrapField(body)).length);
@@ -200,6 +202,8 @@ class JoinSingleUseLocalCheckTest extends Test {
 	}
 
 	/** Control for the re-binding gate: a catch binder under a DIFFERENT name captures nothing. */
+	@:pin('control')
+	@:killer('M-JSUL-INIT-IDENT-ALWAYS-REBOUND')
 	public function testInitIdentNotReboundStillFlagged(): Void {
 		final body: String = 'final x = n;\n\t\ttry p catch (q:Dynamic) use(x);';
 		Assert.equals(1, violations(wrapParams(body)).length);
@@ -216,11 +220,15 @@ class JoinSingleUseLocalCheckTest extends Test {
 	}
 
 	/** Control: the same field chain on an UNCONDITIONAL path is evaluated either way, so it collapses. */
+	@:pin('control')
+	@:killer('M-JSUL-PATH-ALWAYS-CONDITIONAL')
 	public function testUnconditionalFieldChainStillFlagged(): Void {
 		Assert.equals(1, violations(wrapField('final x = _f.data;\n\t\tuse(x);')).length);
 	}
 
 	/** Control: a BARE identifier is safe on a conditional path -- reading it has no effect at all. */
+	@:pin('control')
+	@:killer('M-JSUL-BARE-IDENT-NOT-SAFE')
 	public function testConditionalBareIdentStillFlagged(): Void {
 		Assert.equals(1, violations(wrapField('final x = _f;\n\t\tif (_on) use(x);')).length);
 	}
@@ -244,6 +252,8 @@ class JoinSingleUseLocalCheckTest extends Test {
 	}
 
 	/** Control: capturing an immutable local is pure noise and still collapses. */
+	@:pin('control')
+	@:killer('M-JSUL-LOCAL-CAPTURE-ANY')
 	public function testImmutableLocalCaptureStillFlagged(): Void {
 		// Two findings, not one: the chain is `_f` -> `best` -> `b` and each link qualifies on its
 		// own; `readSwallowed` is what keeps `fix` from applying both in the same pass.
@@ -256,6 +266,8 @@ class JoinSingleUseLocalCheckTest extends Test {
 	}
 
 	/** Control for the annotation gate: an annotation that re-states the source type is type-neutral. */
+	@:pin('control')
+	@:killer('M-JSUL-ANNOTATION-NEVER-NEUTRAL')
 	public function testAnnotationRestatesSourceFlagged(): Void {
 		Assert.equals(1, violations(wrapTyped('private final _sub:Sub;', 'final x:Sub = _sub;\n\t\tuse(x);')).length);
 	}
@@ -285,6 +297,8 @@ class JoinSingleUseLocalCheckTest extends Test {
 	}
 
 	/** Control for the comment gate: a comment between the two statements rides along untouched. */
+	@:pin('control')
+	@:killer('M-JSUL-COMMENT-ANY-IN-FILE')
 	public function testCommentBetweenStatementsStillFlagged(): Void {
 		Assert.equals(1, violations(wrapField('final x = _f;\n\t\t// note\n\t\tuse(x);')).length);
 	}
@@ -380,6 +394,8 @@ class JoinSingleUseLocalCheckTest extends Test {
 	 * Control for the interpolation gate: the identical shape whose trailing statement holds no
 	 * `$x` still collapses, so the gate is not simply refusing anything with a trace after it.
 	 */
+	@:pin('control')
+	@:killer('M-JSUL-UNINDEXED-NAME-ALWAYS')
 	public function testTrailingStatementWithoutInterpolationStillFlagged(): Void {
 		Assert.equals(1, violations(wrapField("final x = _f;\n\t\tuse(x);\n\t\ttrace('got it');")).length);
 	}
