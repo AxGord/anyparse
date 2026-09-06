@@ -1998,9 +1998,12 @@ typedef RefShape = {
 	 * Haxe's explicit `Null<T>` wrapper (outer name `Null`). The
 	 * `possible-null-dereference` check flags a deref of a call whose callee is a
 	 * plain identifier binding to a function whose `TypeInfoProvider.returnTypes`
-	 * entry is one of these. `Dynamic` / `Any` are intentionally excluded — a
-	 * deref of an untyped result is not a clear NPE. Optional; unset drops the
-	 * call-return half of the check.
+	 * entry is one of these, and `unguarded-nullable-deref` reads the same set for a
+	 * DECLARATION side it is equally the answer to — a `var x: Null<T>` binding, via
+	 * `NullableSource.declaredNullable`. The name is historical; the fact is "the
+	 * outer nominal of the explicit nullable wrapper", wherever it is written.
+	 * `Dynamic` / `Any` are intentionally excluded — a deref of an untyped value is
+	 * not a clear NPE. Optional; unset drops the call-return half of the check.
 	 */
 	@:optional var nullableReturnMarkerTypes: Array<String>;
 

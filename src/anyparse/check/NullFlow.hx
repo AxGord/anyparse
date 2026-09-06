@@ -121,6 +121,14 @@ private typedef FlowCtx = {
 	var ownNames: Array<String>;
 	var source: String;
 	var nullableSourceRhs: Null<QueryNode -> Bool>;
+
+	/**
+	 * Whether a local `var` / `final` DECLARATION carries an explicitly nullable written
+	 * annotation. Asked only where the initializer gives the expression seed no opinion, so a
+	 * nullable source the walk has already ruled present is never re-seeded through the
+	 * annotation. Parameters are never asked (see `analyze`). Null for the consumers that pass none.
+	 */
+	var declaredNullable: Null<QueryNode -> Bool>;
 	var visit: (QueryNode, NullFacts) -> Void;
 }
 
@@ -267,14 +275,32 @@ final class NullFlow {
 	 * verbatim text (multi-binding declarations are detected textually). A
 	 * consumer inspects only the node kinds it cares about. A grammar lacking the
 	 * required shape fields makes this a no-op.
+	 *
+	 * `seed` recognises a nullable-source EXPRESSION (a `MaybeNull` initializer / right-hand side);
+	 * `declaredNullable` recognises a nullable LOCAL DECLARATION — one whose written annotation is
+	 * `Null<T>` — and seeds `MaybeNull` at the binding, so a local no nullable expression feeds still
+	 * carries the fact. The two are disjoint by construction: `declaredNullable` is consulted only
+	 * where `seed` has no opinion about the initializer, which is what keeps a `m.exists(k)`-proven
+	 * map read from being re-seeded through its annotation.
+	 *
+	 * PARAMETERS are deliberately NOT seeded from their annotation, for the reason
+	 * `nullableFlowExcludedCalls` exists: a parameter's nullability is a contract with CALLERS, and
+	 * this walk is caller-blind, so the dominant idiom — a `Null<T>` argument valid under a mode a
+	 * companion argument establishes (`f(subdivide: Bool, info: Null<Info>)`) — is safe by a
+	 * relational invariant no name-keyed flow can model. Measured over two trees: seeding parameters
+	 * added 10 findings, 9 of them that one shape in a single file and the tenth already carrying the
+	 * author's own `@:nullSafety(Off)`.
 	 */
 	public static function analyze(
-		root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void, ?seed: (QueryNode) -> Bool
+		root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void, ?seed: (QueryNode) -> Bool,
+		?declaredNullable: (QueryNode) -> Bool
 	): Void {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null) return;
 		final id: String = identKind;
-		forEachFunctionUnit(root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed));
+		forEachFunctionUnit(
+			root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed, declaredNullable)
+		);
 	}
 
 	/**
@@ -493,7 +519,7 @@ final class NullFlow {
 	 */
 	private static function analyzeBody(
 		body: QueryNode, shape: RefShape, source: String, identKind: String, paramNames: Array<String>,
-		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>
+		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
@@ -540,6 +566,7 @@ final class NullFlow {
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds, nestedFnKinds)),
 			source: source,
 			nullableSourceRhs: seed,
+			declaredNullable: declaredNullable,
 			visit: visit
 		};
 		final state: FlowState = emptyState();
@@ -712,11 +739,17 @@ final class NullFlow {
 			return;
 		}
 		final init: Null<QueryNode> = declInit(node, ctx.declTypeChildKinds);
+		final nullableInit: Bool = isNullableSourceRhs(init, ctx);
 		if (isNonNullRhs(init, ctx))
 			markNonNull(state, name);
 		else if (isNullLitRhs(init, ctx))
 			markKnown(state, name);
-		else if (isNullableSourceRhs(init, ctx) && !indexPresentIn(init, state, ctx))
+		else if (nullableInit && !indexPresentIn(init, state, ctx))
+			markMaybe(state, name);
+		// The written annotation is asked LAST, and only where the initializer said nothing: a
+		// nullable source an `m.exists(k)` guard proves present must stay silent, and its declaration
+		// is `Null<V>` all the same.
+		else if (!nullableInit && isDeclaredNullable(node, ctx))
 			markMaybe(state, name);
 		else
 			clearName(state, name);
@@ -1016,6 +1049,12 @@ final class NullFlow {
 	private static function isNullableSourceRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
 		final seed: Null<(QueryNode) -> Bool> = ctx.nullableSourceRhs;
 		return rhs != null && seed != null && seed(rhs);
+	}
+
+	/** Whether `decl`, a local `var` / `final` declaration, carries an explicitly nullable written annotation. */
+	private static function isDeclaredNullable(decl: QueryNode, ctx: FlowCtx): Bool {
+		final declared: Null<(QueryNode) -> Bool> = ctx.declaredNullable;
+		return declared != null && declared(decl);
 	}
 
 	/** Clear every name written anywhere in `node`'s subtree (any write-kind whose first child is a plain identifier) on both polarities. */

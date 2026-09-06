@@ -11,8 +11,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 /**
- * Flags a dereference whose receiver is a local **bound from a nullable source** and
- * not null-checked on the path reaching the access — a possible NPE. The
+ * Flags a dereference whose receiver is a local **bound from a nullable source, or declared
+ * `Null<T>`** and not null-checked on the path reaching the access — a possible NPE. The
  * flow-sensitive (mechanism-A) sibling of the point-wise `possible-null-dereference`
  * (mechanism B): where B sees only a deref of the nullable EXPRESSION itself
  * (`m[k].f`), this catches the binding-then-use B is structurally blind to —
@@ -20,11 +20,16 @@ import anyparse.runtime.Span;
  *
  * ## How it works
  *
- * A `NullFlow` walk seeds a `MaybeNull` fact whenever a local is assigned a nullable
- * source (`NullableSource.describe` over the
- * file's `declaredTypes` / `returnTypes`, with `CheckScan.typeNominalResolver` behind
- * them for a receiver no annotation names — a `Map`-family index or `.get`, or a
- * `Null<T>`-returning call). The length-guarded collection accessors (`Array` / `List` `pop` / `shift` / `first` / `last`) are excluded from the seed — their dominant `while (c.length > 0) c.pop()` idiom is safe by a guard flow cannot model, so seeding them would be a systematic false positive; the point-wise `possible-null-dereference` still flags them at `Info`. The fact is narrowed away by the same guards the engine already models — an
+ * A `NullFlow` walk seeds a `MaybeNull` fact from two independent sides. The EXPRESSION side
+ * fires whenever a local is assigned a nullable source (`NullableSource.describe` over the
+ * file's `declaredTypes` / `returnTypes`, with `CheckScan.typeNominalResolver` behind them for a
+ * receiver no annotation names — a `Map`-family index or `.get`, or a `Null<T>`-returning call).
+ * The DECLARATION side (`NullableSource.declaredNullable`) fires on a local whose written
+ * annotation is `Null<T>` and whose initializer the expression side has no opinion about, so a
+ * receiver no nullable expression ever feeds still carries the fact; where the expression side
+ * DOES have an opinion its verdict stands, which is what keeps an `m.exists(k)`-proven map read
+ * silent even though its declaration reads `Null<V>`. Parameters are not seeded from their
+ * annotation — `NullFlow.analyze` documents the measurement behind that. The length-guarded collection accessors (`Array` / `List` `pop` / `shift` / `first` / `last`) are excluded from the seed — their dominant `while (c.length > 0) c.pop()` idiom is safe by a guard flow cannot model, so seeding them would be a systematic false positive; the point-wise `possible-null-dereference` still flags them at `Info`. The fact is narrowed away by the same guards the engine already models — an
  * `if (u != null)` arm, an early `if (u == null) return;`, an `&&` right side, a
  * non-null reassignment, a `??=`, a `switch` branch after a `case null:`, a `case _ if (u != null):` guard, and a `nullAssertionCalls` helper (`Assert.notNull(u)`) — so a guarded deref is a safe miss. Only a function
  * unit's own names (parameters / locals) are tracked, so a field / static / `this` receiver is never reported. Residual false positives remain where the non-null guarantee lives in a value / relational invariant the name-keyed flow cannot see — an `m.exists(k)` guard before `m[k]`, a key just written (`m[k] = v; var u = m[k];`), a key drawn from `m.keys()`, or an alias (`var v = u; if (v != null) u.f;`); these are report-only Warning residuals, suppressible via `// noqa` or `apqlint.json`.
@@ -62,7 +67,7 @@ final class UnguardedNullableDeref implements Check {
 
 	public function description(): String {
 		return 'a dereference of a local bound from a nullable source (map[key] / Map.get, Null<T>-returning call) '
-			+ 'with no null check on the path — a possible NPE';
+			+ 'or declared Null<T>, with no null check on the path — a possible NPE';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -97,7 +102,10 @@ final class UnguardedNullableDeref implements Check {
 			);
 			final seed: (QueryNode) -> Bool = rhs ->
 				NullableSource.describe(rhs, root, declaredTypes, returnTypes, cfgValue, index, nominalOf) != null;
-			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> checkDeref(violations, entry.file, node, facts, ctx), seed);
+			final declaredNullable: (QueryNode) -> Bool = decl -> NullableSource.declaredNullable(decl, declaredTypes, cfgValue);
+			NullFlow.analyze(
+				tree, shape, entry.source, (node, facts) -> checkDeref(violations, entry.file, node, facts, ctx), seed, declaredNullable
+			);
 		}
 		return violations;
 	}

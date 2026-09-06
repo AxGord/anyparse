@@ -4,6 +4,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.runtime.Span;
 
 /**
  * Recognises whether an expression is a **provably-nullable source** — the shared
@@ -102,6 +103,27 @@ final class NullableSource {
 		) ?? returnCallSource(receiver, root, returnTypes, cfg) ?? crossFileReturnCallSource(
 			receiver, root, declaredTypes, cfg, index, nominalOf
 		);
+	}
+
+	/**
+	 * Whether `decl` — a local `var` / `final` declaration — is DECLARED with an explicitly nullable
+	 * wrapper (`Null<T>`, `cfg.returnMarkers`). The declaration-side nullable source: no initializer is
+	 * read and no type is inferred, only the annotation the author wrote, looked up in `declaredTypes`
+	 * under the declaration's own `span.from` (the binding offset that map is keyed by).
+	 *
+	 * Point-wise this predicate is nearly all noise — measured on the Pony fork, 346 dereferences of a
+	 * `Null<T>`-declared bare identifier, of which 209 of the 259 a flow can reach are already narrowed
+	 * by a guard. It is usable only as a `NullFlow` SEED, where the engine narrows those away; `NullFlow`
+	 * also decides WHICH declarations it asks about (locals, never parameters — see its `analyze` doc).
+	 *
+	 * `Dynamic` / `Any` are excluded by construction: `cfg.returnMarkers` holds the explicit wrapper
+	 * alone, and a deref of an untyped value is not a clear NPE.
+	 */
+	public static function declaredNullable(decl: QueryNode, declaredTypes: Map<Int, String>, cfg: NullableSourceCfg): Bool {
+		final span: Null<Span> = decl.span;
+		if (span == null || cfg.returnMarkers.length == 0) return false;
+		final declared: Null<String> = declaredTypes[span.from];
+		return declared != null && cfg.returnMarkers.contains(declared);
 	}
 
 	/**
