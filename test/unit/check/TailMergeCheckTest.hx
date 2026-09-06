@@ -150,6 +150,12 @@ class TailMergeCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The fall reset at every non-block, non-`if` node, asked where it is load-bearing: with
+	 * the reset gone the switch hands its own run to the arm and this branch is flagged.
+	 */
+	@:pin('control')
+	@:killer('M-TAILMERGE-FALL-KEPT')
 	public function testSwitchCaseOutOfScope(): Void {
 		// The `if` sits INSIDE a case body, so the fall reset at the switch is the only
 		// thing standing between its branch and the run after the whole switch.
@@ -160,6 +166,26 @@ class TailMergeCheckTest extends Test {
 				+ '\t\t\t\t\thelper(v);\n\t\t\t\t\treturn v;\n\t\t\t\t}\n\t\t\tcase _:\n\t\t\t\twork2();\n\t\t}\n\t\thelper(v);\n'
 				+ '\t\treturn v;\n\t}\n}'
 			).length
+		);
+	}
+
+	/**
+	 * A duplicated tail on a SWITCH ARM itself, standing beside the same duplication on an
+	 * `if` branch in one source. Exactly ONE finding — the `if` one — so the fixture is red
+	 * for a walk that reports nothing (0) and red for one widened to arms (2), and the applied
+	 * edit states both halves in one string: the arm keeps its copy, the branch loses it.
+	 */
+	public function testSwitchArmTailNotFlaggedWhileTheIfShapeIs(): Void {
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tswitch (k) {\n\t\t\tcase 1:\n\t\t\t\twork();\n'
+			+ '\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\tcase _:\n\t\t\t\twork2();\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n'
+			+ '\tfunction g(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper(v);\n\t\t\treturn v;\n\t\t}\n'
+			+ '\t\thelper(v);\n\t\treturn v;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(
+			'class C {\n\tfunction f(v:String):String {\n\t\tswitch (k) {\n\t\t\tcase 1:\n\t\t\t\twork();\n'
+			+ '\t\t\t\thelper(v);\n\t\t\t\treturn v;\n\t\t\tcase _:\n\t\t\t\twork2();\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n'
+			+ '\tfunction g(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t}\n\t\thelper(v);\n\t\treturn v;\n\t}\n}',
+			CanonicalEdit.applyEdits(src, edits(src))
 		);
 	}
 
@@ -174,6 +200,12 @@ class TailMergeCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The REFUSING half of the literal pair, and the arm's killer: with the structural test
+	 * gone, `normalizeSpan` alone equates the two literals and this reports 1.
+	 */
+	@:pin('control')
+	@:killer('M-TAILMERGE-NORM-ONLY')
 	public function testStructuralIdentityHalfNeeded(): Void {
 		// `normalizeSpan` collapses the whitespace INSIDE the string literal, so only
 		// `structurallyEqual` tells `helper("a  b")` from `helper("a b")`.
@@ -182,6 +214,21 @@ class TailMergeCheckTest extends Test {
 			violations(
 				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper("a  b");\n\t\t\treturn v;\n\t\t}\n'
 				+ '\t\thelper("a b");\n\t\treturn v;\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * The FIRING half of the same pair — the twin the negative above needs to say anything.
+	 * Alone, `Assert.equals(0, ...)` on differing literals is satisfied by a check that finds
+	 * nothing at all; the pair is 1 / 0, so it takes a working walk to hold both.
+	 */
+	public function testIdenticalStringLiteralTailFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper("a  b");\n\t\t\treturn v;\n\t\t}\n'
+				+ '\t\thelper("a  b");\n\t\treturn v;\n\t}\n}'
 			).length
 		);
 	}

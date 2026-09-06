@@ -1625,6 +1625,38 @@
 			"find": "\t\t\tif (\n\t\t\t\tmembers.contains(field)\n\t\t\t\t&& familyDeclaresEveryMember(typeName, [for (n in members) { name: n, typeSource: null, host: null }], [])\n\t\t\t)\n\t\t\t\treturn true;",
 			"replace": "\t\t\tif (\n\t\t\t\tmembers.contains(field)\n\t\t\t)\n\t\t\t\treturn true;",
 			"note": "a builtin structural type is matched by member NAME instead of by its whole member set, so a class declaring `hasNext` alone reads as an Iterator and its field is refused finalization"
+		},
+		{
+			"name": "M-PIA-OBJLIT-SET-FLAGGED",
+			"type": "anyparse.check.PreferIndexAccess",
+			"method": "structuralMatch",
+			"find": "if (isSet && cfg.objectLiteralKind != null && call.children[2].kind == cfg.objectLiteralKind) return null;",
+			"replace": "",
+			"note": "a `set` whose value argument is an OBJECT LITERAL is matched again at the seam `run` and `fix` share, so the fixer rewrites it to an index assignment Haxe rejects (`No @:arrayAccess function for haxe.ds.Map accepts arguments of String and { ... }`)"
+		},
+		{
+			"name": "M-TAILMERGE-NORM-ONLY",
+			"type": "anyparse.check.TailMerge",
+			"method": "sameStatement",
+			"find": "if (!MemberKinds.structurallyEqual(a, b)) return false;",
+			"replace": "",
+			"note": "statement identity is decided by whitespace-normalized source alone, so two calls differing only INSIDE a string literal read as the same statement and a tail that is not duplicated is reported"
+		},
+		{
+			"name": "M-TAILMERGE-FALL-KEPT",
+			"type": "anyparse.check.TailMerge",
+			"method": "visit",
+			"find": "for (c in node.children) visit(c, EMPTY_FALL, source, seams, out);",
+			"replace": "for (c in node.children) visit(c, fall, source, seams, out);",
+			"note": "the fall-through run is handed to EVERY node's children instead of being reset, so a loop body, a switch arm, a catch body and a lambda all look like they complete into the run after the construct"
+		},
+		{
+			"name": "M-NAMING-SKIPSCAN-REPORT-INDEX",
+			"type": "anyparse.check.Naming",
+			"method": "crossFileCandidate",
+			"find": "final unreadable: Array<String> = resolutionIndex.text.skippedFilesMentioning([decl.name, ownerName, targetName], declFile);",
+			"replace": "final unreadable: Array<String> = index.text.skippedFilesMentioning([decl.name, ownerName, targetName]);",
+			"note": "the cross-file rename asks the REPORT index about unreadable files again, so a skip-parsing project module outside the lint scope stops refusing a rename it can invalidate"
 		}
 	]
 }

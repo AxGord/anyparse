@@ -37,6 +37,13 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	private static final CLAIM_SUB_SRC: String =
 		'package pkg;\nclass B extends A {\n\tprivate var Caps:Int = 2;\n\tpublic function b():Int { return Caps; }\n}';
 
+	/** A skip-parsing PROJECT source the lint scope does not hold, but the resolution roots do. */
+	private static final OUT_OF_SCOPE_BROKEN: String =
+		'package pkg;\nclass Broken {\n\tpublic function g():Int { return shape + ((( ; }\n}';
+
+	/** The same unreadable bytes as a THIRD-PARTY source — it spells the member and cannot be read. */
+	private static final LIBRARY_BROKEN: String = 'package ext;\nclass BrokenLib {\n\tpublic function g():Int { return shape + ((( ; }\n}';
+
 	/**
 	 * HALF-APPLIED HAZARD: the subtype's simple name is AMBIGUOUS in the scope (a secondary type
 	 * elsewhere in the set shares it), so the positive `isSubtype` proof MISSES - it needs a unique
@@ -828,6 +835,42 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	}
 
 	/**
+	 * The same question asked of the RESOLUTION scope rather than of the lint scope, in the two
+	 * directions that scope splits.
+	 *
+	 * A PROJECT module outside the lint scope is where an unreadable reference this rename would
+	 * break hides: the report index cannot hold it, so the refusal it deserves was never raised.
+	 * A THIRD-PARTY source that merely SPELLS the member is the opposite hazard — widening the
+	 * scan admits every skip-parsing haxelib — and `declFile` narrows it back out, since a
+	 * dependency cannot name a type the project declares.
+	 *
+	 * Three arms in one fixture so neither half can pass alone: the first proves the rename is
+	 * reachable at all, and the second and third disagree about the same bytes on the strength of
+	 * WHICH half of the scope holds them.
+	 */
+	@:pin('control')
+	@:killer('M-NAMING-SKIPSCAN-REPORT-INDEX')
+	@:killer('M-SKIPSCAN-SCOPEWIDE')
+	public function testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles(): Void {
+		final report: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}'
+			},
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
+		];
+		Assert.equals(1, scopedRenameCount(report, [], []), 'nothing unreadable anywhere, so the rename applies');
+		Assert.equals(
+			0, scopedRenameCount(report, [{ file: 'pkg/Broken.hx', source: OUT_OF_SCOPE_BROKEN }], []),
+			'a skip-parsed PROJECT root spelling the member refuses a rename the lint scope alone cannot see'
+		);
+		Assert.equals(
+			1, scopedRenameCount(report, [], [{ file: 'ext/BrokenLib.hx', source: LIBRARY_BROKEN }]),
+			'a skip-parsed THIRD-PARTY source spelling the member is narrowed out by the owner'
+		);
+	}
+
+	/**
 	 * The second name the gate asks about: this file never spells `shape`, but it does spell `C` — so
 	 * it may declare a subtype of the owner, or a SECOND type carrying that simple name, which is the
 	 * very ambiguity `declaringFiles(ownerName).length != 1` refuses on for files the index could
@@ -938,6 +981,21 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
 		], 'pkg/C.hx', true);
 		Assert.stringContains('`@:allow`', real);
+	}
+
+	/** The cross-file renames `report` yields under a resolution scope split into `roots` and `library`. */
+	private function scopedRenameCount(
+		report: Array<{ file: String, source: String }>, roots: Array<{ file: String, source: String }>,
+		library: Array<{ file: String, source: String }>
+	): Int {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionScope({
+			declared: true,
+			sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(roots.concat(library)) }
+		});
+		final index: SymbolIndex = SymbolIndex.build(report, plugin);
+		final check: Naming = new Naming();
+		return check.crossFileFix(report, check.run(report, plugin), plugin, index).length;
 	}
 
 	/**
