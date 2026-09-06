@@ -759,7 +759,7 @@
 		},
 		{
 			"name": "M-PEB-WS-REWIND-SEPSTARTS-OFF",
-			"type": "anyparse.macro.Lowering",
+			"type": "anyparse.macro.StarFieldLowering",
 			"method": "lowerStarBlockEndedSepStarts",
 			"find": "_bc == ' '.code || _bc == '\\t'.code || _bc == '\\n'.code || _bc == '\\r'.code",
 			"replace": "false",

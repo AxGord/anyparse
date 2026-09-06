@@ -203,12 +203,15 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterKwRefLowering` | 31 |
 | `WriterCtorBlankLowering` | 17 |
 | `WriterRefLeadLowering` | 17 |
-| `Lowering` | 16 |
 | `WriterPrattLowering` | 14 |
 | `WriterPolicyLowering` | 10 |
 | `TriviaPairSlots` | 9 |
 | `TriviaPairAltCtor` | 8 |
+| `StructSeqLowering` | 7 |
 | `WriterBraceSymmetryLowering` | 6 |
+| `PrattPostfixLowering` | 4 |
+| `Lowering` | 3 |
+| `StarFieldLowering` | 3 |
 | `WriterBodyPolicyLowering` | 3 |
 | `WriterCodegen` | 2 |
 | `WriterBlankLowering` | 2 |
@@ -279,6 +282,50 @@ slot-name constants, which is why the name vocabulary stayed and the three quest
 families (`TriviaPairAltCtor` — which extra positional argument an Alt branch shape earns;
 `TriviaPairSlots` — which trivia slot a struct field earns; `TriviaPairConverters` — how a
 paired value converts to and from its raw sibling) left instead.
+
+`WriterLowering`'s row did NOT move, and the reason is a measurement rather than an
+omission. Its purity axis is genuinely spent: a state census over its 94 methods finds ZERO
+that are transitively pure, so nothing is left that `private function` → `private static`
+would move for free. (Beware the instrument here — an offset census that slices member
+bodies by BYTE rather than by codepoint reports 34 pure methods on this file, because the
+`ω-` comment markers are multi-byte; the same run reports 19 for `Lowering` where the true
+answer is the 5 purity leaves S83 deliberately left. Slice by codepoint and both numbers
+collapse to the recorded ones.)
+
+What remains is the family axis, and it is priced: five exclusive call-graph regions cover
+84 of the 112 members — Seq-field 30 / 1738 lines, Ref-field 22 / 1547, Star emit 16 /
+1200, Alt branch 11 / 805, Terminal-and-by-name 5 / 237. Clearing BOTH caps needs 62
+members and 3869 lines out, i.e. at least three of the five. Two obstacles price that as a
+slice of its own rather than a tail of this one. First, the two largest regions are
+MUTUALLY entangled: seven of the nine members Ref-field reaches outside itself
+(`sameLineSeparator`, `beforeKwSeparator`, `padTrailingDoc`, `buildBareRefLeadingSep`,
+`beforeTrailSlotAccess`, `findCtorPattern`, `collectBlockCtorPatterns`) are members of the
+Seq-field region, so extracting both means one bundle carrying the other's — the shape
+`KwRefCtx` already has, but now on the critical path rather than at a leaf. Second, the
+Star-emit region contains `emitWriterStarField` and NOT `lowerEnumStar`, which sits in the
+Alt-branch region; taking Star emit alone would separate the two writer halves of the
+four-site Star fork, which this module's own header refuses by name. So the honest split is
+Seq-field + Ref-field + Star emit together, three bundles with a dependency edge between
+two of them — roughly three times the code motion the `Lowering` split above cost, and not
+something to bolt onto it.
+
+`Lowering`'s row fell from 16 to 3 on a FOURTH axis, and it is the parse side's first
+split by RULE SHAPE. `lowerRule` dispatches a top-level type on four shapes, and until now
+every emitter for all four lived in one 4801-line type: `TerminalParseLowering` now carries
+the `EReg`-and-decode shape (and names no inventory flag at all, so it has no row — a
+terminal rule's parse body has no layout to ask about), `StructSeqLowering` the typedef Seq
+walk and its per-field emit, `StarFieldLowering` the six repetition emitters underneath it,
+and `PrattPostfixLowering` the two operator-precedence loops. Every member that reads state
+takes the state-carrying shape: `private static` with a ctx bundle as the first argument,
+built once in `Lowering`'s constructor, carrying the fields the family reads plus the
+naming vocabulary that stayed behind (`parseFnName`, `isTriviaBearing`, `ruleReturnCT`, …)
+as bound closures. `StarFieldLowering` is the one that is a SIZE split rather than a new
+responsibility — same rule shape, same state, so it takes `StructSeqLowering`'s own
+`StructSeqCtx` unchanged instead of declaring a bundle of its own. It is also where the
+five purity leaves S83 deliberately left behind finally went: they are the enum-ctor half
+of the four-site Star+sep audit and `emitStarFieldSteps` is the struct-field half, so
+putting both in `StarFieldLowering` keeps that audit ONE read — which is the reason S83
+gave for not moving them, honoured rather than dropped.
 
 **Four flags are handler-only** — a macro module names them, no shipped grammar declares
 them, so they are absent from the inventory above: `blankLinesBeforeCtor` and
