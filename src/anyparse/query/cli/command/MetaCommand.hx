@@ -133,12 +133,11 @@ final class MetaCommand implements CliCommand {
 		if (allEntries.length == 0)
 			CliIo.stderr('${CliWalk.emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
 
-		var totalHits: Int = 0;
-		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = CliWalk.effectiveAutoLimit('meta', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> = CliWalk.limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-		);
+		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> =
+			CliWalk.capAndReport(
+				'meta', allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+				paths.length
+			);
 		if (o.json) {
 			CliIo.sysPrint(Json.renderMeta(shown));
 		} else {

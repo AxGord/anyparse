@@ -362,6 +362,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqFromFileCliTest',
 		'unit.cli.ApqHxqDxV10CliTest',
 		'unit.cli.ApqHxqDxV8CliTest',
+		'unit.cli.ApqLitCapHitCliTest',
 		'unit.cli.ApqLitCommentsCliTest',
 		'unit.cli.ApqLitDirectivesCliTest',
 		'unit.cli.ApqMetaCliTest',
