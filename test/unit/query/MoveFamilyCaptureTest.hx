@@ -490,9 +490,11 @@ final class MoveFamilyCaptureTest extends Test {
 	 * RED at base on both halves: the changed-file count (2, not 3) and, once that is satisfied,
 	 * `a/User.hx`'s bytes. `stays(2)` is the discriminator inside the file — it comes through the
 	 * SAME wildcard and is not moved, so a repoint that qualified by import rather than by member
-	 * would rewrite it too. Killed by the arm `no-wildcard-repoint` (drop the
-	 * `collectWildcardBareEdits` call from `move`).
+	 * would rewrite it too. Killed by arm `M-WILDCARD-REPOINT-NONE`, which empties
+	 * `collectWildcardBareEdits`.
 	 */
+	@:pin('control')
+	@:killer('M-WILDCARD-REPOINT-NONE')
 	public function testABareWildcardCallerIsRepointedByteIdentically(): Void {
 		final scope: Array<{ file: String, source: String }> = [
 			{
@@ -536,9 +538,11 @@ final class MoveFamilyCaptureTest extends Test {
 	 *
 	 * RED at base (2 changed files, not 3, and `a/Wild.hx` absent). The discriminator for the
 	 * ordering filter is the COUNT: dropping it repoints `a/Rival.hx` too and the list grows to 4.
-	 * Killed by the arm `no-rival-order-filter` (drop the `providers.exists` clause from
-	 * `DependencyCarry.wildcardBareReferences`).
+	 * Killed by arm `M-WILDCARD-RIVAL-ORDER-BLIND`, which drops the `providers.exists` clause from
+	 * `DependencyCarry.wildcardBareReferences`.
 	 */
+	@:pin('control')
+	@:killer('M-WILDCARD-RIVAL-ORDER-BLIND')
 	public function testARivalWildcardKeepsItsBareCallerByteIdentically(): Void {
 		final scope: Array<{ file: String, source: String }> = [
 			{
@@ -591,9 +595,11 @@ final class MoveFamilyCaptureTest extends Test {
 	 *
 	 * RED at base (2 changed files, not 3). The local read is the discriminator, and it is a BYTE one:
 	 * an arm that drops the binding test keeps the count at 3 and only the file's bytes move. Killed
-	 * by the arm `no-binding-filter` (drop `h.bindingSpan == null` from
-	 * `DependencyCarry.wildcardBareReferences`).
+	 * by arm `M-WILDCARD-BINDING-BLIND`, which drops `h.bindingSpan == null` from
+	 * `DependencyCarry.wildcardBareReferences`.
 	 */
+	@:pin('control')
+	@:killer('M-WILDCARD-BINDING-BLIND')
 	public function testALocalShadowKeepsItsBareReadByteIdentically(): Void {
 		final scope: Array<{ file: String, source: String }> = [
 			{
@@ -638,9 +644,11 @@ final class MoveFamilyCaptureTest extends Test {
 	 *
 	 * GREEN at base, and says so: the base engine repoints no wildcard caller at all, so it cannot get
 	 * this one wrong either. It is here as the arm-discriminator for the binds-it filter — killed by
-	 * the arm `no-binds-filter` (drop `src.names.contains(name)` from
-	 * `DependencyCarry.wildcardBareReferences`), which repoints `a/User.hx` and takes the count to 3.
+	 * arm `M-WILDCARD-BINDS-BLIND`, which drops `src.names.contains(name)` from
+	 * `DependencyCarry.wildcardBareReferences` and repoints `a/User.hx` and takes the count to 3.
 	 */
+	@:pin('control')
+	@:killer('M-WILDCARD-BINDS-BLIND')
 	public function testASubModuleMoveRepointsNoWildcardCallerByteIdentically(): Void {
 		final scope: Array<{ file: String, source: String }> = [
 			{

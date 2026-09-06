@@ -27,9 +27,12 @@ class SymbolIndexRunMemoSliceTest extends Test {
 
 	/**
 	 * The supertype union map is built ONCE per index instance: the second ask hands back the very
-	 * same object. Green at base BY CONSTRUCTION only while the memo is written; killed by arm M2,
-	 * which drops the `_supertypeNames` assignment and rebuilds per call.
+	 * same object. Green at base BY CONSTRUCTION only while the memo is written; killed by arm
+	 * `M-SUPERTYPE-UNION-NOMEMO`, which drops the `_supertypeNames` assignment and rebuilds
+	 * per call.
 	 */
+	@:pin('control')
+	@:killer('M-SUPERTYPE-UNION-NOMEMO')
 	public function testSupertypeNameUnionIsBuiltOncePerIndex(): Void {
 		final index: SymbolIndex = build([
 			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {}' },
@@ -114,9 +117,11 @@ class SymbolIndexRunMemoSliceTest extends Test {
 	 * THE mechanism pin for the hoist: the confinement gate reads the INDEX's slot rather than
 	 * rescanning the source itself. Seeding the slot with an answer the text does not support flips
 	 * the gate — which it can only do if the gate goes through `sourceCarriesAllowGrant`. Green at
-	 * base BY CONSTRUCTION; killed by arm M3, which puts the direct `carriesAllowGrant(source)` call
-	 * back into `privateMemberScanIsSound`.
+	 * base BY CONSTRUCTION; killed by arm `M-GRANT-SLOT-UNREAD`, which stops
+	 * `privateMemberScanIsSound` asking the index for the answer at all.
 	 */
+	@:pin('control')
+	@:killer('M-GRANT-SLOT-UNREAD')
 	public function testConfinementGateReadsTheIndexGrantSlot(): Void {
 		final plain: String = 'package p;\nclass B {\n\tprivate var x: Int = 1;\n}';
 		final index: SymbolIndex = build([{ file: 'p/B.hx', source: plain }]);

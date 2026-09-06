@@ -146,8 +146,10 @@ class ExtractInterfaceSliceTest extends Test {
 	 *
 	 * RED at base: the header splice appended a clause without reading the ones already
 	 * there, so a re-run produced `class S implements IS implements IS`, at rc 0 and past
-	 * the parse gate because the header still parses. Killed by arm M1.
+	 * the parse gate because the header still parses. Killed by arm `M-EI-DUP-IMPL-ALLOWED`.
 	 */
+	@:pin('control')
+	@:killer('M-EI-DUP-IMPL-ALLOWED')
 	public function testAlreadyImplementsRefused(): Void {
 		final src: String = 'package pkg;\n\nclass S implements IS {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
 		switch ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS2.hx', null, src, plugin()) {
@@ -162,9 +164,11 @@ class ExtractInterfaceSliceTest extends Test {
 	 * The refusal is EXACT-NAME, so a class already implementing a DIFFERENT interface
 	 * still extracts and the two clauses stand side by side.
 	 *
-	 * Green at base by construction; killed by arm M2, which widens the refusal to any
-	 * `implements` clause.
+	 * Green at base by construction; killed by arm `M-EI-IMPL-ANY-REFUSED`, which widens the
+	 * refusal to any `implements` clause.
 	 */
+	@:pin('control')
+	@:killer('M-EI-IMPL-ANY-REFUSED')
 	public function testSecondInterfaceStillExtracts(): Void {
 		final src: String = 'package pkg;\n\nclass S implements IA {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IB', 'pkg/IB.hx', null, src);
@@ -175,8 +179,10 @@ class ExtractInterfaceSliceTest extends Test {
 	/**
 	 * A QUALIFIED clause of the same simple name does not block the extraction: only a
 	 * type resolution could tell `other.IS` and a local `IS` apart, and the pair is legal
-	 * Haxe. Green at base by construction; killed by arm M2 the same way.
+	 * Haxe. Green at base by construction; killed by arm `M-EI-IMPL-ANY-REFUSED` the same way.
 	 */
+	@:pin('control')
+	@:killer('M-EI-IMPL-ANY-REFUSED')
 	public function testQualifiedSameNameDoesNotBlock(): Void {
 		final src: String = 'package pkg;\n\nclass S implements other.IS {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
@@ -187,8 +193,12 @@ class ExtractInterfaceSliceTest extends Test {
 	/**
 	 * A clause behind `#if` counts: it is a child of the `Conditional`, not of the form
 	 * node, so the flat scan missed it and the header gained a second clause that is a
-	 * duplicate on every target the condition selects. Killed by arm M16.
+	 * duplicate on every target the condition selects. Killed by arm `M-EI-GUARD-FLAT-SCAN`, and by
+	 * `M-EI-DUP-IMPL-ALLOWED` along with its unguarded twin.
 	 */
+	@:pin('control')
+	@:killer('M-EI-DUP-IMPL-ALLOWED')
+	@:killer('M-EI-GUARD-FLAT-SCAN')
 	public function testGuardedImplementsRefused(): Void {
 		final src: String =
 			'package pkg;\n\nclass S\n#if sys\nimplements IS\n#end\n{\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';

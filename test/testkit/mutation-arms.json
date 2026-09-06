@@ -882,6 +882,218 @@
 			"find": "var at: Int = to;\n\t\twhile (true) {\n\t\t\twhile (at > from && text.isSpace(at - 1)) at--;\n\t\t\tfinal opens: Null<Int> = comments[at];\n\t\t\tif (opens == null || opens < from) return at;\n\t\t\tat = opens;\n\t\t}",
 			"replace": "var at: Int = to;\n\t\twhile (at > from && text.isSpace(at - 1)) at--;\n\t\treturn at;",
 			"note": "a node span's trailing trivia is trimmed of WHITESPACE only, so a trailing line comment leaves the two sides carrying different amounts of it and an ordinary sole-catch removal becomes a refusal"
+		},
+		{
+			"name": "M-ARM-FRAGMENT-NONE",
+			"type": "anyparse.query.Patch",
+			"method": "occurrences",
+			"find": "return locate(slice, oldText, kind, '', true).ranges.length;",
+			"replace": "return 0;",
+			"note": "the fragment matcher answers zero for every arm, so the walk that asks whether a stored cut still applies stops discriminating a live fragment from a rotted one"
+		},
+		{
+			"name": "M-SUPERTYPE-UNION-NOMEMO",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "supertypeNameUnion",
+			"find": "_supertypeNames = names;",
+			"replace": "",
+			"note": "the supertype union is rebuilt on every ask, so a run that reads it once per finding pays a whole-index walk each time"
+		},
+		{
+			"name": "M-GRANT-SLOT-UNREAD",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "privateMemberScanIsSound",
+			"find": "return !index.text.skippedMayReference(member) && !index.text.sourceCarriesAllowGrant(source);",
+			"replace": "return !index.text.skippedMayReference(member);",
+			"note": "the confinement gate stops asking the index for its @:allow answer, so the run-scoped slot the scan was hoisted into is no longer read"
+		},
+		{
+			"name": "M-EI-DUP-IMPL-ALLOWED",
+			"type": "anyparse.query.ExtractInterface",
+			"method": "extract",
+			"find": "if (implementsClauseFor(declNN, ifaceName) != null)\nreturn Err('class \"$srcTypeName\" already implements \"$ifaceName\" — refusing (nothing written)');",
+			"replace": "",
+			"note": "a class that already implements the interface is extracted again, so a re-run splices a second clause and the header carries it twice"
+		},
+		{
+			"name": "M-EI-GUARD-FLAT-SCAN",
+			"type": "anyparse.query.ExtractInterface",
+			"method": "clauseIn",
+			"find": "if (node.kind != 'Conditional') continue;\nfinal guarded: Null<QueryNode> = clauseIn(node.children, ifaceName);\nif (guarded != null) return guarded;",
+			"replace": "",
+			"note": "the clause scan stops descending into a conditional region, so a clause behind #if is invisible and the header gains a duplicate on every target the condition selects"
+		},
+		{
+			"name": "M-EI-IMPL-ANY-REFUSED",
+			"type": "anyparse.query.ExtractInterface",
+			"method": "clauseIn",
+			"find": "if (node.kind == 'ImplementsClause') for (named in node.children) if (named.name == ifaceName) return node;",
+			"replace": "if (node.kind == 'ImplementsClause') return node;",
+			"note": "the refusal widens from the named interface to any implements clause at all, so a class implementing something else can no longer be extracted from"
+		},
+		{
+			"name": "M-WILDCARD-REPOINT-NONE",
+			"type": "anyparse.query.MoveMember",
+			"method": "collectWildcardBareEdits",
+			"find": "final statics: Array<String> = [for (m in prep.moved) if (m.isStatic) m.name];",
+			"replace": "final statics: Array<String> = [];",
+			"note": "a caller that reached the moved static as a bare name through the source module's own wildcard import is not repointed, and the move reports Ok over a call that no longer resolves"
+		},
+		{
+			"name": "M-WILDCARD-BINDING-BLIND",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "wildcardBareReferences",
+			"find": "if (h.kind != RefKind.Decl && h.bindingSpan == null) { name: name, span: h.span, interpolated: h.interpolated }",
+			"replace": "if (h.kind != RefKind.Decl) { name: name, span: h.span, interpolated: h.interpolated }",
+			"note": "a bare read the file binds itself is treated as a wildcard reference, so a local of the moved member's name is qualified into a call"
+		},
+		{
+			"name": "M-WILDCARD-RIVAL-ORDER-BLIND",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "wildcardBareReferences",
+			"find": "if (src.names.contains(name) && !providers.exists(o ->\no.module != srcModule && o.imp.span.from > srcAt && o.names.contains(name)\n))",
+			"replace": "if (src.names.contains(name))",
+			"note": "a later wildcard import providing the same name no longer wins, so a caller that never meant the source module is repointed too"
+		},
+		{
+			"name": "M-WILDCARD-BINDS-BLIND",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "wildcardBareReferences",
+			"find": "if (src.names.contains(name) && !providers.exists(o ->",
+			"replace": "if (!providers.exists(o ->",
+			"note": "the source wildcard is credited with names it does not bind, so a bare call resolved through some other import is repointed at the destination"
+		},
+		{
+			"name": "M-NEWFILE-IMPORT-DOUBLED",
+			"type": "anyparse.query.NewFile",
+			"method": "importStatement",
+			"find": "return path == '' ? null : '$keyword $path;';",
+			"replace": "return path == '' ? null : '$keyword $line;';",
+			"note": "a whole import line is wrapped a second time, so `@@ imports` writes `import import x.Y;;` and the failure surfaces as a column in generated text"
+		},
+		{
+			"name": "M-NEWFILE-IMPORT-ANY-LINE",
+			"type": "anyparse.query.NewFile",
+			"method": "importStatement",
+			"find": "return isModulePath(line) ? 'import $line;' : null;",
+			"replace": "return 'import $line;';",
+			"note": "a line that is neither a module path nor an import statement reaches assembly instead of being refused by name"
+		},
+		{
+			"name": "M-NEWFILE-BARE-KEYWORD-WRAPPED",
+			"type": "anyparse.query.NewFile",
+			"method": "importStatement",
+			"find": "for (keyword in ['import', 'using']) if (line == keyword || line.startsWith('$keyword ')) {",
+			"replace": "for (keyword in ['import', 'using']) if (line.startsWith('$keyword ')) {",
+			"note": "a bare `import` with no path falls through to the bare-path branch and becomes `import import;`, which parses and means nothing"
+		},
+		{
+			"name": "M-PATCH-COMMENT-SHAPE-CHECKED",
+			"type": "anyparse.query.Patch",
+			"method": "verbatimSpliceIntact",
+			"find": "if (region != StringLit && region != RegexLit) continue;",
+			"replace": "if (region == null) continue;",
+			"note": "a comment goes back through the per-line shape check the writer's own re-guttering cannot pass, so a well-formed doc payload reads as corruption"
+		},
+		{
+			"name": "M-PATCH-SHAPE-ALWAYS-SURVIVES",
+			"type": "anyparse.query.Patch",
+			"method": "shapeSurvives",
+			"force": "true",
+			"note": "the per-line shape check accepts everything, so a replacement whose lines shift by different amounts inside a string literal is written"
+		},
+		{
+			"name": "M-ADDMETA-NO-WRAPPER-CLIMB",
+			"type": "anyparse.query.AddMeta",
+			"method": "declarationHost",
+			"find": "if (outer == null || outer.nameNode != host) break;",
+			"replace": "if (outer == null || outer.nameNode == host) break;",
+			"note": "the climb past a modifier wrapper is inverted, so `final class X` takes its entry inside the wrapper and the header no longer parses"
+		},
+		{
+			"name": "M-ADDMETA-ZERO-WIDTH-INSERT",
+			"type": "anyparse.query.AddMeta",
+			"method": "addMeta",
+			"find": "span: new Span(atNN, atNN + 1),\ntext: '$text\\n${lineIndentAt(source, atNN)}${source.charAt(atNN)}'",
+			"replace": "span: new Span(atNN, atNN),\ntext: '$text\\n${lineIndentAt(source, atNN)}'",
+			"note": "the entry is spliced as a zero-width insert again, so the doc-splitting guard refuses every annotation on a documented declaration"
+		},
+		{
+			"name": "M-ADDMETA-CLI-UNROUTED",
+			"type": "anyparse.query.cli.command.AddMetaCommand",
+			"method": "name",
+			"force": "'add-meta-unrouted'",
+			"note": "the CLI no longer answers to `add-meta`, so the dispatch, argument parsing and --write half of the op has no test reaching it"
+		},
+		{
+			"name": "M-CLI-COMMANDS-MEMOISED",
+			"type": "anyparse.query.cli.CliRegistry",
+			"method": "CliRegistry",
+			"kind": "ClassDecl",
+			"find": "/** Every registered command, in the order `apq --help` would list them. */\npublic static function commands(): Array<CliCommand> {\nreturn [",
+			"replace": "private static var _memo: Array<CliCommand> = [];\n\n/** Every registered command, in the order `apq --help` would list them. */\npublic static function commands(): Array<CliCommand> {\nif (_memo.length > 0) return _memo;\nreturn _memo = [",
+			"note": "the registry memoises its command objects into process-scoped state, so every run of the CLI shares one instance of each command"
+		},
+		{
+			"name": "M-CLI-REQUIREMATCH-STATIC",
+			"type": "anyparse.query.cli.CliContext",
+			"method": "CliContext",
+			"kind": "ClassDecl",
+			"find": "public function new(requireMatch: Bool) {\nthis.requireMatch = requireMatch;\n}",
+			"replace": "private static var _sticky: Bool = false;\n\npublic function new(requireMatch: Bool) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;\n}",
+			"note": "the per-run flag gains a static backing, so one invocation's --exit-on-empty survives into the next one in the same process"
+		},
+		{
+			"name": "M-PTR-RIDES-NEVER",
+			"type": "anyparse.check.PreferTernaryReturn",
+			"method": "ridesItsBranch",
+			"force": "false",
+			"note": "a guard-line trailing comment no longer counts as riding its own branch, so the cascade narrowing refuses a fold the march would have carried correctly"
+		},
+		{
+			"name": "M-PTR-CASCADE-NEVER-STRANDS",
+			"type": "anyparse.check.PreferTernaryReturn",
+			"method": "strandsCascadeComment",
+			"force": "false",
+			"note": "the cascade narrowing never fires, so an own-line comment between two rungs is hoisted off the gate it explains"
+		},
+		{
+			"name": "M-TERMINAL-RUNGS-ANY",
+			"type": "anyparse.check.AssignmentTreeHoist",
+			"method": "terminalTernaryRungs",
+			"force": "1",
+			"note": "every assignment r-value answers as a ternary tail, so the widened gate claims sites that belong to prefer-ternary-assignment"
+		},
+		{
+			"name": "M-PIEC-SPINE-CLAIM-ANY",
+			"type": "anyparse.check.PreferIfExpressionChain",
+			"method": "spineClaimed",
+			"force": "true",
+			"note": "every chain head reads as claimed by simplify-boolean-ternary, so the deferral fires on chains that check never touches"
+		},
+		{
+			"name": "M-ORPHAN-ARMS-SHARE-REASON",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "reportOrphan",
+			"find": "'a supertype did not resolve in scope, so the property\\'s absence is not proven and the method cannot be deleted'",
+			"replace": "'a file in scope did not parse, so the property\\'s absence is not proven and the method cannot be deleted'",
+			"note": "the two report-only arms decline with one sentence, so the ledger no longer says which fact stopped the edit"
+		},
+		{
+			"name": "M-LINTFIX-ACCEPTED-BLAMED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintPass",
+			"find": "case Ok(text, rewrites):\nsettled = { text: text, rewrites: rewrites };",
+			"replace": "case Ok(text, rewrites):\nif (!noted.contains(entry.file)) noted.push(entry.file);\nsettled = { text: text, rewrites: rewrites };",
+			"note": "a file whose whole edit set the gate accepted is still counted as refused, so the run summary blames a rule nothing declined"
+		},
+		{
+			"name": "M-ADDMETA-LOOSE-WRAPPER-CLIMB",
+			"type": "anyparse.query.AddMeta",
+			"method": "declarationHost",
+			"find": "final outer: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(p);\nif (outer == null || outer.nameNode != host) break;",
+			"replace": "if (p.children.length != 1) break;",
+			"note": "the climb asks \"is my parent a single-child node\" again instead of asking for a type declaration, so a #if region wrapping one type is climbed through and the entry lands above the directive"
 		}
 	]
 }

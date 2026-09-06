@@ -111,9 +111,11 @@ class CliCommandSeamTest extends Test {
 	 * CONTROL at base `cbde910e`, where `dispatch` reset its `private static var`
 	 * on entry — the pin exists because moving that flag onto `CliContext` is
 	 * what removes the static, and nothing else would notice it coming back.
-	 * KILLED by giving `CliContext.requireMatch` a static backing, or by
-	 * dropping the reset that still serves the 66 unmigrated commands.
+	 * KILLED by arm `M-CLI-REQUIREMATCH-STATIC`, which gives
+	 * `CliContext.requireMatch` a static backing.
 	 */
+	@:pin('control')
+	@:killer('M-CLI-REQUIREMATCH-STATIC')
 	public function testTheRequireMatchFlagDoesNotSurviveItsRun(): Void {
 		#if nodejs
 		final file: String = CliFixture.write('seam_ctx', 'enum E {\n\tRed;\n}\n');
@@ -135,8 +137,10 @@ class CliCommandSeamTest extends Test {
 	 *
 	 * A `static final COMMANDS` would be process-scoped state holding objects
 	 * every run shares, which is the invariant-1 shape however stateless the
-	 * implementations happen to be today. KILLED by memoising `commands()`.
+	 * implementations happen to be today. KILLED by arm `M-CLI-COMMANDS-MEMOISED`.
 	 */
+	@:pin('control')
+	@:killer('M-CLI-COMMANDS-MEMOISED')
 	public function testTheRegistryHandsOutAFreshCommandPerCall(): Void {
 		final first: Array<CliCommand> = CliRegistry.commands();
 		final second: Array<CliCommand> = CliRegistry.commands();

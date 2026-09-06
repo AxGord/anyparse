@@ -549,7 +549,10 @@ class AddressTest extends Test {
 	 * hands back are identical either way, so this counter is the only thing that can tell a live
 	 * memo from a dead one — and it HAS been dead: an autofix pass read the two captured locals the
 	 * class replaces as dead stores, and every JSON-report finding paid a whole-tree index from
-	 * then on. Green at base BY CONSTRUCTION only if the memo is written; killed by arm M1.
+	 * then on. Green at base BY CONSTRUCTION only if the memo is written; killed by nothing the arm registry can
+	 * address: `addressAt` is declared on the SUB-MODULE type `TreeAddresser`, and an arm's
+	 * `type` is read both as the class the typer is asked for and as the path of the file the
+	 * runner patches, which for a sub-module type name is a file that does not exist.
 	 */
 	public function testTreeAddresserBuildsOneIndexForAWholeTree(): Void {
 		final fixture: IndexFixture = indexFixture();

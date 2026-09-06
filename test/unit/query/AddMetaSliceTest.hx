@@ -33,8 +33,10 @@ class AddMetaSliceTest extends Test {
 	/**
 	 * The entry lands BELOW the declaration's doc comment — the position `add-element
 	 * --before` cannot reach, because clearing the doc is right for a sibling and wrong
-	 * for an annotation. Killed by arm M6.
+	 * for an annotation. Killed by arm `M-ADDMETA-ZERO-WIDTH-INSERT`.
 	 */
+	@:pin('control')
+	@:killer('M-ADDMETA-ZERO-WIDTH-INSERT')
 	public function testTypeEntryLandsBelowTheDoc(): Void {
 		assertMeta(
 			'/**\n * About C.\n */\nclass C {\n\n\tfunction f():Void {}\n\n}\n', BySelector('ClassDecl:C'), '@:keep',
@@ -44,8 +46,10 @@ class AddMetaSliceTest extends Test {
 
 	/**
 	 * A `final class` — the shape whose `FinalDecl` wrapper made every other op emit
-	 * `final @:keep class C`, which does not parse. Killed by arm M7.
+	 * `final @:keep class C`, which does not parse. Killed by arm `M-ADDMETA-NO-WRAPPER-CLIMB`.
 	 */
+	@:pin('control')
+	@:killer('M-ADDMETA-NO-WRAPPER-CLIMB')
 	public function testFinalClassWrapperIsLifted(): Void {
 		assertMeta(
 			'final class C {\n\n\tfunction f():Void {}\n\n}\n', BySelector('ClassDecl:C'), '@:nullSafety(Strict)',
@@ -124,8 +128,10 @@ class AddMetaSliceTest extends Test {
 	 * earlier, which a `#if` region wrapping one type also is — so the entry landed
 	 * above the `#if` line, and on a target where the condition is false it annotated
 	 * whatever declaration follows `#end`. rc 0, past the parse gate, silently the wrong
-	 * type. Killed by arm M15.
+	 * type. Killed by arm `M-ADDMETA-LOOSE-WRAPPER-CLIMB`.
 	 */
+	@:pin('control')
+	@:killer('M-ADDMETA-LOOSE-WRAPPER-CLIMB')
 	public function testGuardedTypeKeepsTheEntryInsideTheGuard(): Void {
 		assertMeta(
 			'#if sys\nfinal class C {\n\n\tfunction f():Void {}\n\n}\n#end\n\nfinal class After {\n\n\tfunction g():Void {}\n\n}\n',
@@ -168,8 +174,10 @@ class AddMetaSliceTest extends Test {
 	/**
 	 * The CLI end of the op: dispatch, argument parsing, `hxformat.json` discovery and
 	 * `--write`. The pure tests above cannot see a missing `case 'add-meta'`. Killed by
-	 * arm M10.
+	 * arm `M-ADDMETA-CLI-UNROUTED`.
 	 */
+	@:pin('control')
+	@:killer('M-ADDMETA-CLI-UNROUTED')
 	public function testCliWritesTheEntry(): Void {
 		final dir: String = tmpDir();
 		final p: String = '$dir/Target.hx';

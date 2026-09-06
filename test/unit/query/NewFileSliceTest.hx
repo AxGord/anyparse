@@ -405,8 +405,10 @@ class NewFileSliceTest extends Test {
 	 * RED at base: the section wrapped every line unconditionally, producing
 	 * `import import haxe.io.Bytes;;`, and the failure surfaced two layers later as
 	 * `assembled source does not parse: error at 2:15: unexpected input (expected //)` —
-	 * a column inside a source the caller never wrote. Killed by arm M8.
+	 * a column inside a source the caller never wrote. Killed by arm `M-NEWFILE-IMPORT-DOUBLED`.
 	 */
+	@:pin('control')
+	@:killer('M-NEWFILE-IMPORT-DOUBLED')
 	public function testImportsSectionTakesStatements(): Void {
 		final text: String = okText(create({
 			className: 'Impl',
@@ -423,8 +425,10 @@ class NewFileSliceTest extends Test {
 	/**
 	 * A keyword with no path is refused rather than wrapped: matching only `'import '`
 	 * let a bare `import` reach the bare-path branch and become `import import;`, which
-	 * parses and means nothing. Killed by arm M17.
+	 * parses and means nothing. Killed by arm `M-NEWFILE-BARE-KEYWORD-WRAPPED`.
 	 */
+	@:pin('control')
+	@:killer('M-NEWFILE-BARE-KEYWORD-WRAPPED')
 	public function testImportsSectionRefusesABareKeyword(): Void {
 		final res: NewFileResult = create({
 			className: 'Impl',
@@ -455,8 +459,10 @@ class NewFileSliceTest extends Test {
 	/**
 	 * A line that is neither spelling is refused BY NAME, before assembly — the whole
 	 * point of the change is that the diagnostic stops being a column in generated text.
-	 * Killed by arm M9.
+	 * Killed by arm `M-NEWFILE-IMPORT-ANY-LINE`.
 	 */
+	@:pin('control')
+	@:killer('M-NEWFILE-IMPORT-ANY-LINE')
 	public function testImportsSectionRefusesAnUnusableLine(): Void {
 		// BOTH fixtures, because the first cut refused only a line carrying a `;` — one
 		// leak of the class, not the class. Without the second, `this is not a path`

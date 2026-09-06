@@ -381,9 +381,11 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * counted as skipped.
 	 *
 	 * Green at base by arithmetic — the salvage runs ONLY in the `Err` arm, which this input never
-	 * reaches, so the pass is byte-identical to the base's. Killed by running the salvage
-	 * unconditionally, or by blaming a rule the gate never refused.
+	 * reaches, so the pass is byte-identical to the base's. Killed by arm `M-LINTFIX-ACCEPTED-BLAMED`,
+	 * which counts an accepted file as refused.
 	 */
+	@:pin('control')
+	@:killer('M-LINTFIX-ACCEPTED-BLAMED')
 	public function testAnAcceptedFileIsWrittenAndBlamesNobody(): Void {
 		#if (sys || nodejs)
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());

@@ -598,9 +598,13 @@ class PreferIfExpressionChainCheckTest extends Test {
 	 *
 	 * Only the LAST rung's value folds; an earlier one is copied verbatim into its branch, so the
 	 * chain rewrite does not consume it and the deferral must not fire. Green at base by
-	 * arithmetic — neither the head nor any spine node is claimed there — and killed by widening
-	 * the deferral to every ternary under the head.
+	 * arithmetic — neither the head nor any spine node is claimed there — and killed by arm `M-PIEC-SPINE-CLAIM-ANY`,
+	 * which makes every chain head read as claimed. Nothing in the suite tells that
+	 * widening apart from one reaching every ternary under the head, so one arm answers
+	 * for both readings.
 	 */
+	@:pin('control')
+	@:killer('M-PIEC-SPINE-CLAIM-ANY')
 	public function testBooleanReducibleUnfoldedRungStillConverts(): Void {
 		Assert.equals(1, violations(BOOL_REDUCIBLE_UNFOLDED_RUNG).length);
 		Assert.equals(
@@ -614,8 +618,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 	 *
 	 * Green at base by arithmetic — the deferral asks `SimplifyBooleanTernary.claimedSpans`, which
 	 * holds nothing for a chain no boolean literal appears in, so the added gate cannot fire here.
-	 * Killed by widening the deferral to every chain head.
+	 * Killed by arm `M-PIEC-SPINE-CLAIM-ANY`, which widens the deferral to every chain head.
 	 */
+	@:pin('control')
+	@:killer('M-PIEC-SPINE-CLAIM-ANY')
 	public function testChainWithNoBooleanLeafStillFlagged(): Void {
 		Assert.equals(1, violations(NON_BOOLEAN_CHAIN_HEAD).length);
 		final es: Array<{ span: Span, text: String }> = edits(NON_BOOLEAN_CHAIN_HEAD);

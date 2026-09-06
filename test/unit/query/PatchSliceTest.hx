@@ -693,8 +693,10 @@ class PatchSliceTest extends Test {
 	 * post-writer result and demanded ONE shared shift across the run, so every payload
 	 * the writer re-guttered read as the per-line corruption the check exists to catch —
 	 * measured on the base build, 302 of 343 leading-whitespace combinations over this
-	 * very shape were refused. Killed by arm M3.
+	 * very shape were refused. Killed by arm `M-PATCH-COMMENT-SHAPE-CHECKED`.
 	 */
+	@:pin('control')
+	@:killer('M-PATCH-COMMENT-SHAPE-CHECKED')
 	public function testDocPayloadWithASpaceGutterApplies(): Void {
 		final source: String = 'class C {\n\n\t/**\n\t * Old.\n\t */\n\tfunction f():Void {}\n\n}\n';
 		final expected: String = 'class C {\n\n\t/**\n\t * New.\n\t */\n\tfunction f():Void {}\n\n}\n';
@@ -707,8 +709,11 @@ class PatchSliceTest extends Test {
 	 * gutter, where `trim()` keeps it and the run match compares it byte for byte.
 	 *
 	 * RED at base for the same reason as the test above, and it carries the second half
-	 * of the claim: killed by arm M3, which puts a comment back through the shape check.
+	 * of the claim: killed by arm `M-PATCH-COMMENT-SHAPE-CHECKED`, which puts a
+	 * comment back through the shape check.
 	 */
+	@:pin('control')
+	@:killer('M-PATCH-COMMENT-SHAPE-CHECKED')
 	public function testDocCodeSampleIndentationSurvives(): Void {
 		final source: String = 'class C {\n\n\t/**\n\t * Example:\n\t *     final x = 1;\n\t */\n\tfunction f():Void {}\n\n}\n';
 		final expected: String = 'class C {\n\n\t/**\n\t * Example:\n\t *         final deeper = 1;\n\t */\n\tfunction f():Void {}\n\n}\n';
@@ -729,8 +734,10 @@ class PatchSliceTest extends Test {
 	 *
 	 * The fragment is written with leading spaces so the byte-exact arm misses it and
 	 * the dedent-tolerant arm — the only one whose indentation this op synthesises —
-	 * owns the match. Killed by arm M5.
+	 * owns the match. Killed by arm `M-PATCH-SHAPE-ALWAYS-SURVIVES`.
 	 */
+	@:pin('control')
+	@:killer('M-PATCH-SHAPE-ALWAYS-SURVIVES')
 	public function testStringLiteralPerLineIndentStillRefused(): Void {
 		final source: String = 'class C {\n\tfunction f():String {\n\t\treturn \'\n  a\n  b\';\n\t}\n}\n';
 		switch Patch.patchNode(
