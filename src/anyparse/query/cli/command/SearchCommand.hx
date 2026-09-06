@@ -166,12 +166,11 @@ final class SearchCommand implements CliCommand {
 		// kind even appears in the scanned input.
 		if (o.explain && allEntries.length == 0) searchExplainHistogram(parsed.root.kind, collected.kindCounts);
 
-		var totalHits: Int = 0;
-		for (e in allEntries) totalHits += e.matches.length;
-		final cappedLimit: Int = CliWalk.effectiveAutoLimit('search', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, matches: Array<Match> }> = CliWalk.limitEntries(
-			allEntries, cappedLimit, e -> e.matches.length, (e, k) -> {file: e.file, source: e.source, matches: e.matches.slice(0, k) }
-		);
+		final shown: Array<{ file: String, source: String, matches: Array<Match> }> =
+			CliWalk.capAndReport(
+				'search', allEntries, o.limit, e -> e.matches.length,
+				(e, k) -> {file: e.file, source: e.source, matches: e.matches.slice(0, k) }, paths.length
+			);
 		renderSearchResults(shown, o.json, o.flat);
 		return ctx.emptyExit(allEntries.length == 0);
 	}

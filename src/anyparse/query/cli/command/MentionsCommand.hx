@@ -285,12 +285,11 @@ final class MentionsCommand implements CliCommand {
 			litEntries.push({ file: entry.path, source: entry.source, hits: hits });
 		}
 		if (litEntries.length == 0) return false;
-		var totalHits: Int = 0;
-		for (e in litEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = CliWalk.effectiveAutoLimit('mentions', limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.limitEntries(
-			litEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-		);
+		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> =
+			CliWalk.capAndReport(
+				'mentions', litEntries, limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+				valueTrees.length
+			);
 		CliIo.sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
 		for (entry in shown) CliIo.sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		return true;

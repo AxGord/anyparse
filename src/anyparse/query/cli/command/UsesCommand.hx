@@ -106,12 +106,11 @@ final class UsesCommand implements CliCommand {
 		if (allEntries.length == 0)
 			CliIo.stderr('${CliWalk.emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
 
-		var totalHits: Int = 0;
-		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = CliWalk.effectiveAutoLimit('uses', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> = CliWalk.limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-		);
+		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> =
+			CliWalk.capAndReport(
+				'uses', allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+				paths.length
+			);
 		for (entry in shown)
 			CliIo.sysPrint(
 				Text.renderUses(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat, plugin.lexicalRegions(entry.source))

@@ -182,11 +182,9 @@ final class LitCommand implements CliCommand {
 			);
 		}
 
-		var totalHits: Int = 0;
-		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = CliWalk.effectiveAutoLimit('lit', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.capAndReport(
+			'lit', allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+			paths.length
 		);
 		for (entry in shown) CliIo.sysPrint(Lit.render(entry.file, entry.source, entry.hits, o.flat));
 		return ctx.emptyExit(allEntries.length == 0);

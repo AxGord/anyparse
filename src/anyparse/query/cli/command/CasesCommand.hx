@@ -120,12 +120,11 @@ final class CasesCommand implements CliCommand {
 				'${CliWalk.emptyWalkerNudge('cases', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n'
 			);
 
-		var totalHits: Int = 0;
-		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = CliWalk.effectiveAutoLimit('cases', limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<CasesHit> }> = CliWalk.limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-		);
+		final shown: Array<{ file: String, source: String, hits: Array<CasesHit> }> =
+			CliWalk.capAndReport(
+				'cases', allEntries, limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+				paths.length
+			);
 		for (entry in shown) CliIo.sysPrint(Cases.render(entry.file, entry.source, entry.hits, flat));
 		return ctx.emptyExit(allEntries.length == 0);
 	}

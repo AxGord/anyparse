@@ -137,11 +137,9 @@ final class RefsCommand implements CliCommand {
 		if (collected.memberAccesses > 0)
 			CliIo.stderr('${CliWalk.memberAccessNudge('refs', nameStr, collected.memberAccesses, collected.bindings)}\n');
 
-		var totalHits: Int = 0;
-		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = CliWalk.effectiveAutoLimit('refs', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> = CliWalk.limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> = CliWalk.capAndReport(
+			'refs', allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+			paths.length
 		);
 		if (o.json) {
 			CliIo.sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource, plugin.lexicalRegions));

@@ -75,19 +75,39 @@ final class CliWalk {
 	/**
 	 * Walker flood guard. When the caller did NOT pass `--limit` (`limit < 0`)
 	 * and the total hit count exceeds `AUTO_LIMIT_THRESHOLD`, returns the
-	 * threshold AND prints a stderr nudge so the user sees the truncation
-	 * happened. Otherwise returns `limit` unchanged.
+	 * threshold so the caller trims to it. Otherwise returns `limit` unchanged.
+	 * Purely numeric — the caller reports any resulting truncation via
+	 * `reportCapHit` once it knows what `limitEntries` actually trimmed.
 	 *
-	 * Killer case: `apq lit '/*' src/ --any-kind` would flood ~165KB of leaf hits; the guard caps to `AUTO_LIMIT_THRESHOLD` automatically and surfaces the count so the user can re-run with an explicit `--limit N`
-	 * for a precise budget.
+	 * Killer case: `apq lit '/*' src/ --any-kind` would flood ~165KB of leaf
+	 * hits; the guard caps to `AUTO_LIMIT_THRESHOLD` automatically, and
+	 * `reportCapHit` surfaces the count so the user can re-run with an
+	 * explicit `--limit N` for a precise budget.
 	 *
 	 * `--limit 0` (any explicit value) is honoured verbatim — the guard
 	 * only fires on the implicit "no limit" default.
 	 */
-	public static function effectiveAutoLimit(cmdName: String, limit: Int, totalHits: Int): Int {
+	public static function effectiveAutoLimit(limit: Int, totalHits: Int): Int {
 		if (limit >= 0 || totalHits <= AUTO_LIMIT_THRESHOLD) return limit;
-		CliIo.stderr('apq $cmdName: auto-capped to $AUTO_LIMIT_THRESHOLD of $totalHits hits — pass `--limit N` for an explicit cap.\n');
 		return AUTO_LIMIT_THRESHOLD;
+	}
+
+	/**
+	 * Fuses `effectiveAutoLimit` + `limitEntries` + `reportCapHit` — the exact pattern every walker
+	 * (`lit` / `refs` / `uses` / `meta` / `search` / `mentions` / `cases`) repeated at its own call
+	 * site: a `totalHits` fold over `allEntries`, the cap resolve + trim, then the note. One call
+	 * replaces both the cross-file duplication `hxq lint` flags on that repeated shape and the risk
+	 * of a caller wiring the cap without also wiring the note.
+	 */
+	public static function capAndReport<T:{ file: String }>(
+		cmd: String, allEntries: Array<T>, limit: Int, len: T -> Int, trim: (T, Int) -> T, totalFiles: Int
+	): Array<T> {
+		var totalHits: Int = 0;
+		for (e in allEntries) totalHits += len(e);
+		final cappedLimit: Int = effectiveAutoLimit(limit, totalHits);
+		final shown: Array<T> = limitEntries(allEntries, cappedLimit, len, trim);
+		reportCapHit(cmd, cappedLimit, totalHits, shown, totalFiles);
+		return shown;
 	}
 
 	/**
@@ -311,6 +331,30 @@ final class CliWalk {
 			prevLower = isLower;
 		}
 		return hasLetter && (mixedTransition || (hasUnderscore && (hasLower || hasUpper)));
+	}
+
+	/**
+	 * The walker's own "you are not seeing everything" line — ONE stderr note when `cappedLimit`
+	 * (an explicit `--limit N` or the `AUTO_LIMIT_THRESHOLD` default resolved by `effectiveAutoLimit`)
+	 * actually cut `allEntries` down to `shown`. Names the cap, how many files carry what got shown,
+	 * how many files the scan scope held, and the last file whose hits reached the output — the exact
+	 * spot a silent truncation reads as "the structure doesn't exist past here" (S106: an unannounced
+	 * `--limit 40` cut a whole-repo census alphabetically at one file, with nothing on stderr to say
+	 * so, and the census needed `--limit 9999` before anyone noticed).
+	 *
+	 * A no-op when nothing was capped: `cappedLimit < 0` (unbounded) or `totalHits <= cappedLimit`
+	 * (the whole result already fit). `--limit 0` still names the cap as `0` — pass the SAME
+	 * `totalHits` used to compute `cappedLimit`, from BEFORE `limitEntries` trims `shown`.
+	 */
+	private static function reportCapHit<T:{ file: String }>(
+		cmd: String, cappedLimit: Int, totalHits: Int, shown: Array<T>, totalFiles: Int
+	): Void {
+		if (cappedLimit < 0 || totalHits <= cappedLimit) return;
+		final lastPart: String = shown.length > 0 ? ' (last: ${shown[shown.length - 1].file})' : '';
+		CliIo.stderr(
+			'apq $cmd: stopped at --limit $cappedLimit after ${shown.length} of $totalFiles files$lastPart'
+			+ ' — pass a larger --limit for a census\n'
+		);
 	}
 
 	/**
