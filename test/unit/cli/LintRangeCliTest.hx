@@ -94,9 +94,14 @@ class LintRangeCliTest extends Test {
 		#end
 	}
 
-	/** CONTROL for the two below: a write op without `--fix` rewrites nothing. */
-	@:pin('control')
-	@:killer('M-LINT-RANGE-INERT')
+	/**
+	 * A write op without `--fix` rewrites nothing.
+	 *
+	 * Without this, the two below prove nothing: a run that fixed NOTHING AT ALL would
+	 * satisfy them too. It deliberately carries no `@:killer` — `M-LINT-RANGE-INERT`
+	 * disables the window, and a command that never asked for a fix has no window to
+	 * disable, so this one must stay GREEN under the very arm that reddens its siblings.
+	 */
 	public function testWriteWithoutFixChangesNothing(): Void {
 		#if (sys || nodejs)
 		final file: String = fixture();
@@ -123,7 +128,7 @@ class LintRangeCliTest extends Test {
 	}
 
 	/** THE discriminating one: a finding outside the changed lines survives the fix. */
-	@:pin('killer')
+	@:pin('control')
 	@:killer('M-LINT-RANGE-INERT')
 	public function testWriteFixLeavesAStandingFindingOutsideTheWindow(): Void {
 		#if (sys || nodejs)

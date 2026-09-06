@@ -1087,8 +1087,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.ApqTestSummaryExitStatusCliTest#testTruncatedTranscriptDisagreesWithANonZeroExit :: control :: M-EXIT-STATUS-AGREES',
 			'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
 			'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
-			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: killer :: M-LINT-RANGE-INERT',
-			'unit.cli.LintRangeCliTest#testWriteWithoutFixChangesNothing :: control :: M-LINT-RANGE-INERT',
+			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: '
 			+ 'M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
