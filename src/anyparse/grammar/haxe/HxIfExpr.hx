@@ -112,6 +112,14 @@ package anyparse.grammar.haxe;
  * suppress the shape-aware break (matches the gate at
  * `WriterLowering.hx:2670+`).
  *
+ * `@:fmt(elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'))` on BOTH branches
+ * (omega-else-switch) — the value-position twin of the statement form's meta, with the same
+ * two seams: a `switch` branch value glues to its keyword's line under `opt.elseSwitch ==
+ * Same`, and a glued THEN branch's close cuddles the following `else` through
+ * `PrevBodyInfo.headGlue`. Armed on `thenBranch` in S138, so a value-`if` whose two branches
+ * are both `switch` comes back symmetric rather than half-glued. `HxIfStmt` carries the
+ * fuller account.
+ *
  * `@:fmt(elseIf)` on `elseBranch` — when the body is itself an
  * `HxIfExpr` (recursive `else if (...)` chain), the body-placement
  * dispatch consults `opt.elseIf:KeywordPlacement` (default `Same`)
@@ -240,6 +248,7 @@ typedef HxIfExpr = {
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
 		inlineBlockBodyIfFlag('expressionIfWithBlocks'), bracketBodyGlueIfFlag('expressionIfWithBrackets'), propagateValueIfBranch,
 		arrowValueIfReflowSite, semicolonBeforeSibling('elseBranch', 'sameLineExpressionElse'),
+		elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'),
 		valueBraceSymmetry('elseBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'))
 	var thenBranch: HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,

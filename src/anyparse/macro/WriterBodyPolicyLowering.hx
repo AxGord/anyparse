@@ -609,8 +609,9 @@ final class WriterBodyPolicyLowering {
 	/**
 	 * omega-else-switch: the two GUARDED outer-switch arms a
 	 * `@:fmt(elseSwitch('<knobField>', '<ctor>'…))` field contributes - one for
-	 * `KeywordPlacement.Same` (the `switch` glues to the `else` line) and one for
-	 * `Next` (it moves to the next line at the outer indent).
+	 * `KeywordPlacement.Same` (the `switch` glues to its keyword's line, `else`
+	 * or `if (cond)` alike) and one for `Next` (it moves to the next line at the
+	 * outer indent).
 	 *
 	 * Guards rather than a nested switch on the knob, because the third value
 	 * `Keep` must mean "no opinion": a failed guard continues matching with the

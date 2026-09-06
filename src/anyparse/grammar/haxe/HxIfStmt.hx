@@ -100,6 +100,23 @@ package anyparse.grammar.haxe;
  * `optionalBodyFieldName` scan, so only the flag needs to be present
  * here — no explicit sibling reference.
  *
+ * `@:fmt(elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'))` on BOTH `thenBody`
+ * and `elseBody` (omega-else-switch) - when the branch value is a `switch` statement and
+ * `opt.elseSwitch` is `Same`, the resolved body policy is substituted with `Same`, so the
+ * `switch` glues to its keyword's line the way `elseIf` glues a nested `if`. It was armed on
+ * `elseBody` alone until S138; the user read a pair of `switch` branches coming back with one
+ * glued and one on its own line and named the defect himself - the two halves of one
+ * `if`/`else` must be laid out the same way.
+ *
+ * The THEN branch owns a SECOND seam the else branch never needed. A glued `switch` closes
+ * with a `}` in the `if` head's own column, so the `shapeAware` hardline below - which fires
+ * on every non-block ctor - would strand the `else` under a close it is flush with. The
+ * separator therefore asks the PREVIOUS FIELD whether it glued (`PrevBodyInfo.headGlue`,
+ * built where the body is emitted), never this field's meta, and routes a glued close to the
+ * `sameLineElse` policy exactly as a curly close is routed. Both seams decline together on a
+ * comment captured between the head and the `switch`, which is the same fail-closed answer
+ * `buildElseSwitchCases` gives the `else` side.
+ *
  * `@:fmt(dropSingleStmtBraces)` on BOTH `thenBody` and `elseBody` (ω-single-stmt-braces; also on `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body`) opts the field into the `opt.dropSingleStmtBraces` writer knob (JSON `whitespace.bracesConfig.singleStatementBraces: "remove"`): a `{ single; }` block body is substituted with its bare inner statement (via `anyparse.format.SingleStmtBraces.unwrapStmt`) before any layout / shape dispatch, so `if (c) { return x; }` emits as `if (c) return x;`. Trivia mode only; every safety gate (dangling-else incl. the `_ssbSuppress` then-body frame, comments, terminator presence, declaration scoping) fails closed — braces kept. Default off, byte-inert. Dangling else is resolved correctly by construction: the inner `if` greedily consumes the nearest `else`, leaving outer `if`s with no else branch.
  *
  * A bare non-`;`-terminated then-body before `else` (e.g.
@@ -124,9 +141,8 @@ package anyparse.grammar.haxe;
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose'),
 		captureCondOpenNewline) var cond: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy(
-		'ifBody', 'expressionIfBody'
-	), fitLineIfWithElse, clearElseIfBranch, dropSingleStmtBraces) var thenBody: HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), fitLineIfWithElse, clearElseIfBranch,
+		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces) var thenBody: HxStatement;
 	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, semicolonNextLineElse,
 		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'),
 		elseIfCommentReflow, fitLineIfWithElse, propagateElseIfBranch, dropSingleStmtBraces) var elseBody: Null<HxStatement>;

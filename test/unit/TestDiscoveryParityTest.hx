@@ -1088,10 +1088,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.format.BraceSymmetrySliceTest#testThenBracedElseBareGainsBraces :: control :: M-SSB-SYMMETRY-ONLY-BLIND',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
+			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testACommentBeforeTheThenSwitchDeclinesBothSeams :: control :: '
+			+ 'M-ELSE-SWITCH-CLOSE-COMMENT',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testACommentBetweenElseAndSwitchDeclinesTheGlue :: control :: '
 			+ 'M-ELSE-SWITCH-COMMENT-GLUE',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testAnElseIfChainEndingInElseSwitch :: control :: M-ELSE-SWITCH-TESTS-NONE',
+			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testSameGluesTheThenSwitchToItsIfHeadToo :: control :: '
+			+ 'M-ELSE-SWITCH-CLOSE-NONE',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testSamePlacesTheSwitchOnTheElseLine :: control :: M-ELSE-SWITCH-TESTS-NONE',
+			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testTheValueIfThenBranchGluesAsWell :: control :: M-ELSE-SWITCH-TESTS-NONE',
 			'unit.grammar.haxe.HxArrowBlockIfOverflowSliceTest#testOverflowingBlockIfBreaksAfterArrow :: control :: '
 			+ 'M-ARROW-HEAD-WIDTH-NONE',
 			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember :: control :: '
@@ -1479,6 +1484,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-BRACKET-GLUE-NONE',
 			'M-ELSE-SWITCH-COMMENT-GLUE',
 			'M-ELSE-SWITCH-TESTS-NONE',
+			'M-ELSE-SWITCH-CLOSE-NONE',
+			'M-ELSE-SWITCH-CLOSE-COMMENT',
 			'M-RENDER-SPAN-TOKENS',
 			'M-DUP-CODE-NORM-KEY',
 			'M-EXTRACT-REPEAT-RENDER-SPLIT',
@@ -1631,6 +1638,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-BRACKET-GLUE-NONE :: anyparse.macro.WriterCtorPatternLowering#buildBracketBodyGlueTest',
 			'M-ELSE-SWITCH-COMMENT-GLUE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchCases',
 			'M-ELSE-SWITCH-TESTS-NONE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchTests',
+			'M-ELSE-SWITCH-CLOSE-NONE :: anyparse.macro.WriterCtorPatternLowering#buildElseSwitchGlueTest',
+			'M-ELSE-SWITCH-CLOSE-COMMENT :: anyparse.macro.WriterRefFieldLowering#emitBodyPolicyBareRef',
 			'M-PEB-WS-REWIND-TRYPARSE-OFF :: anyparse.macro.StarLoopLowering#buildTryparseSepLoop',
 			'M-PEB-WS-REWIND-SEPSTARTS-OFF :: anyparse.macro.StarFieldLowering#lowerStarBlockEndedSepStarts',
 			'M-COND-BLOCK-TAIL-NEVER :: anyparse.grammar.haxe.HxCondBlockTailRaw#MetaCall:@:re',
