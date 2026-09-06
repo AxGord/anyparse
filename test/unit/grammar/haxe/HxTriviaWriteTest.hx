@@ -310,6 +310,8 @@ class HxTriviaWriteTest extends Test {
 	 * (own-line leading of `else`) and emitted on its own line, breaking
 	 * the source's `;-trailing-comment+else` shape.
 	 */
+	@:pin('control')
+	@:killer('M-BEFORE-KW-TRAILING-DROP')
 	public function testSameLineCommentBeforeElseAfterStmtRoundTrip(): Void {
 		final source: String =
 			'class Foo {\n\tfunction bar() {\n\t\tif (cond)\n\t\t\ta(); // first\n\t\telse\n\t\t\tb(); // second\n\t}\n}';
@@ -538,6 +540,8 @@ class HxTriviaWriteTest extends Test {
 	 * round-trips at the parent's indent level. Without the slice the
 	 * comment is dropped and the writer emits `} else { b; }` only.
 	 */
+	@:pin('control')
+	@:killer('M-BEFORE-KW-LEADING-DROP')
 	public function testOwnLineCommentBetweenBraceAndElseRoundTrip(): Void {
 		final source: String =
 			'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t}\n\t\t// before else\n\t\telse {\n\t\t\tb;\n\t\t}\n\t}\n}';
@@ -548,6 +552,8 @@ class HxTriviaWriteTest extends Test {
 	 * ω-trivia-before-kw — multiple own-line line comments between `}`
 	 * and `else` each render on their own indented line.
 	 */
+	@:pin('control')
+	@:killer('M-BEFORE-KW-LEADING-DROP')
 	public function testMultipleOwnLineCommentsBetweenBraceAndElseRoundTrip(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t}\n\t\t// first\n\t\t// second\n'
 			+ '\t\telse {\n\t\t\tb;\n\t\t}\n\t}\n}';

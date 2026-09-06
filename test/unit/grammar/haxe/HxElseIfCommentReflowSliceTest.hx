@@ -373,6 +373,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * asked for, so the reflow staying out is coherent - it is documented at every
 	 * doc site rather than silently absent.
 	 */
+	@:pin('control')
+	@:killer('M-KEEP-ELSEIF-ALWAYS-GLUED')
 	public function testKeepElsePolicyDisablesTheReflow(): Void {
 		Assert.equals(KEEP_ELSE_CANON, write(KEEP_ELSE_SRC, CONFIG_KEEP_ELSE));
 		Assert.equals(KEEP_ELSE_CANON, write(KEEP_ELSE_CANON, CONFIG_KEEP_ELSE));
@@ -441,6 +443,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	}
 
 	/** Byte-inertness for a config-less run - the default options never reflow. */
+	@:pin('control')
+	@:killer('M-KEEP-ELSEIF-ALWAYS-GLUED')
 	public function testDefaultOptionsAreByteInert(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(DEFAULT_CANON, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(DEFAULT_SRC), opts));

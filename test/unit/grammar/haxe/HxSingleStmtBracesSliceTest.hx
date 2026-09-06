@@ -182,6 +182,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-GATE8-ANY-POSITION')
 	public inline function testElseBlockSingleIfCollapsesToElseIf(): Void {
 		assertFmt(
 			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a) y(); else {\n\t\t\tif (c) x();\n\t\t}\n\t}\n}',
@@ -323,6 +325,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SSB-GATE8-ANY-POSITION')
 	public inline function testLoopBodyLoneIfStillUnbraces(): Void {
 		// Loop bodies are exempt from gate 8 — `for (…) if (…)` guard headers
 		// are the preferred style and keep de-bracing.
