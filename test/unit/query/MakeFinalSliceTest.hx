@@ -103,6 +103,8 @@ class MakeFinalSliceTest extends Test {
 	 * the set needs `next` too — so the same field in a class lacking it stays finalizable. A
 	 * gate keyed on the NAME rather than on the member set would refuse this one as well.
 	 */
+	@:pin('control')
+	@:killer('M-STRUCT-BUILTIN-BY-NAME')
 	public function testHalfIteratorShapeStillFinal(): Void {
 		final src: String =
 			'package pkg;\n\nclass Half {\n\tpublic var hasNext:Void->Bool;\n\tpublic function new(h:Void->Bool) { hasNext = h; }\n}';

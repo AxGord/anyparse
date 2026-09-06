@@ -112,6 +112,8 @@ final class MetaElementSpanSliceTest extends Test {
 	 * must still travel — the doc exception is for annotations only. Without this the
 	 * exception could be widened to every prefix sibling and nothing would notice.
 	 */
+	@:pin('control')
+	@:killer('M-CUT-DOC-KEPT-BY-ANY-PREFIX')
 	public function testRemoveModifierStillTakesTheMemberDoc(): Void {
 		final source: String = 'class C {\n\t/**\n\t * Doc.\n\t */\n\tpublic function f():Void {}\n\tpublic function g():Void {}\n}\n';
 		assertRemove(source, 5, 2, 'class C {\n\tpublic function g():Void {}\n}\n');
@@ -133,8 +135,12 @@ final class MetaElementSpanSliceTest extends Test {
 	 * CONTROL: a region holding a MODIFIER is not an annotation — `#if debug public
 	 * #end` reads as the declaration's first token exactly like a bare `public`, so
 	 * it still takes its member. Widening the exception to every conditional
-	 * modifier region, which is the obvious over-fix, flips this and nothing else.
+	 * modifier region, which is the obvious over-fix, flips this. Measured whole-suite,
+	 * `M-META-ELEMENT-ANY-COND-REGION` takes this fixture and one sibling
+	 * (`RemoveMemberDocSliceTest#testDocAboveTheGuardGoesWithTheMember`).
 	 */
+	@:pin('control')
+	@:killer('M-META-ELEMENT-ANY-COND-REGION')
 	public function testRemoveConditionalModifierRegionStillTakesTheMember(): Void {
 		final source: String = 'class C {\n#if debug\n\tpublic\n#end\n\tfunction f():Void {}\n\tpublic function g():Void {}\n}\n';
 		assertRemove(source, 2, 1, 'class C {\n\tpublic function g():Void {}\n}\n');

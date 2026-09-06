@@ -187,9 +187,13 @@ class SetModifierSliceTest extends Test {
 	/**
 	 * CONTROL for the refusal's edge: a region BEFORE the whole run, and a region BETWEEN the run
 	 * and the declaration, are both outside the splice and stay served. Widening the refusal to
-	 * "any conditional region in the run" flips exactly this — and would take with it the shape
+	 * "any conditional region in the run" flips this. Measured whole-suite,
+	 * `M-SETMOD-GUARDED-ANY-VISIBILITY` takes this fixture and two siblings in this
+	 * class, and nothing outside it. The widening would also take with it the shape
 	 * every one of Pony's ten conditional modifier regions actually has.
 	 */
+	@:pin('control')
+	@:killer('M-SETMOD-GUARDED-ANY-VISIBILITY')
 	public function testAConditionalRegionOutsideTheKeywordRunIsStillServed(): Void {
 		final before: String = 'package p;\nclass C {\n\t#if cpp\n\tinline\n\t#end\n\tpublic function f(): Int return 1;\n}';
 		Assert.isTrue(okText(SetModifier.setModifier(before, 6, 2, ['private'], true, new HaxeQueryPlugin())).contains('#if cpp'));
@@ -342,6 +346,8 @@ class SetModifierSliceTest extends Test {
 	 * — the kind list that looks like the answer — does not list `EnumAbstractDecl`, so a predicate
 	 * built on it calls this member module-level and refuses a change Haxe accepts.
 	 */
+	@:pin('control')
+	@:killer('M-SETMOD-MODULE-BY-TYPE-KINDS')
 	public function testAnEnumAbstractMemberStillTakesPublic(): Void {
 		final src: String = 'package p;\n\nenum abstract E(Int) {\n\tprivate static final X:Int = 1;\n}';
 		final text: String = okText(SetModifier.setModifier(src, 4, 2, ['public'], true, new HaxeQueryPlugin()));

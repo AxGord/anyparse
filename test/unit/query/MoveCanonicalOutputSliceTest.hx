@@ -63,9 +63,12 @@ final class MoveCanonicalOutputSliceTest extends Test {
 	/**
 	 * CONTROL: a source file that was ALREADY non-canonical is left exactly as the splice
 	 * produced it. Dropping the was-canonical half of the gate — canonicalising every written
-	 * file unconditionally, the obvious simpler spelling — flips this and nothing else, and it
-	 * is what keeps a move inside a foreign repo from reformatting code it did not touch.
+	 * file unconditionally, the obvious simpler spelling — flips this. Measured
+	 * whole-suite, `M-MOVE-CANONICALISE-ALWAYS` takes this fixture and the drifted-destination
+	 * twin below it, and nothing outside this class. It is what keeps a move inside a foreign repo from reformatting code it did not touch.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-CANONICALISE-ALWAYS')
 	public function testMoveLeavesANonCanonicalSourceUnformatted(): Void {
 		#if (sys || nodejs)
 		final drifted: String =
