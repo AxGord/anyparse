@@ -28,18 +28,26 @@ using Lambda;
  * and so is `Null<Int>` against `Int` in both directions. A type PARAMETER, `Dynamic` and an
  * anonymous-structure nominal are open by construction.
  *
- * Every structure here uses the SHORTHAND field form `x:Int`, and not by taste: the index records
- * no `typeSource` for the explicit `var x:Int;` form (`declaredTypeSources` keys the shorthand and
- * the optional `?x:Int` but not the `var`), so the refutation half is blind to it and the pin
- * survives — the conservative direction, and the residual this slice leaves open. Real structures
- * are written shorthand: all four the Pony fork withheld findings against are
- * (`{app:String, debug:Bool}`, `{d:EventDispatcher, n:String}`, `{min:Time, max:Time}`).
+ * Most structures here use the SHORTHAND field form `x:Int`, and for nine slices that was the only
+ * form the refutation could see. The index keyed a member's `typeSource` on the MEMBER node while
+ * the span-info walk keys it on the node carrying the annotation, and for the explicit
+ * `var x:T;` / `final x:T;` forms those are one node apart — the grammar wraps the declaration in
+ * an optional-marker node (`var ?x:T`) that owns the name and the type. Measured when that was
+ * fixed: 4653 of 5223 indexed anon-struct members read as unannotated, 2897 `var` plus 1756
+ * `final`, against 570 shorthand ones that did not; on the Pony fork, 38 of 264.
+ * `testExplicitVarFormStructureRefutesToo` is the discriminator and
+ * `SymbolIndexBuilder.typeInfoKeyOf` is the seam. The four structures the Pony fork withheld
+ * findings against are still written shorthand (`{app:String, debug:Bool}`,
+ * `{d:EventDispatcher, n:String}`, `{min:Time, max:Time}`).
  */
 @:nullSafety(Strict)
 class StructuralConformanceProofTest extends Test {
 
 	/** The one-member structure most fixtures here pin against. */
 	private static final S_INT: SourceFile = { file: 'S.hx', source: 'typedef S = { x:Int }' };
+
+	/** The same structure written in the EXPLICIT `var x:T;` form, whose declaration the grammar wraps. */
+	private static final S_INT_VAR: SourceFile = { file: 'S.hx', source: 'typedef S = { var x:Int; }' };
 
 	/** A two-member structure the owner cannot satisfy on its own. */
 	private static final S_INT_Y: SourceFile = { file: 'S.hx', source: 'typedef S = { x:Int, y:Int }' };
@@ -160,6 +168,41 @@ class StructuralConformanceProofTest extends Test {
 		// Leading assertion — the plain-class nominal in the same slot still pins.
 		Assert.equals(0, owner([S_INT, C_INT]), 'a plain nominal pins');
 		Assert.equals(0, owner([SHAPE, S_SHAPE, C_INT]), 'an anonymous-structure nominal refutes nothing');
+	}
+
+	/**
+	 * The explicit `var x:T;` field form refutes exactly as the shorthand does. The two are one
+	 * grammar node apart — the declaration a `var` / `final` anon field carries sits inside an
+	 * optional-marker wrapper (`var ?x:T`), and the span-info walk keys the type maps on THAT
+	 * node while the index used to read them at the member's own span. Every `var` and `final`
+	 * field in every indexed structure therefore read as unannotated (4653 of 5223 members on
+	 * this tree), and the refutation half could never fire on one.
+	 */
+	@:pin('control')
+	@:killer('M-STRUCT-ANON-VAR-KEY')
+	public function testExplicitVarFormStructureRefutesToo(): Void {
+		// Leading assertion — the same explicit-form structure still pins on the SAME type, so the
+		// fixture reaches the refutation rather than falling out of the member walk entirely.
+		Assert.equals(0, owner([S_INT_VAR, C_INT]), 'the explicit var form pins on the same type');
+		Assert.equals(1, owner([S_INT_VAR, C_STRING]), 'the explicit var form refutes a different type');
+	}
+
+	/**
+	 * The RESIDUAL, pinned rather than described: a nominal that resolves NOWHERE is compared by
+	 * its written simple name, so an out-of-scope `typedef MyInt = Int` refutes a `var x:Int` the
+	 * compiler unifies with it. That is the one shape `comparableNominalOf` is unsound for, and
+	 * this fixture is the only place it exists — a census of both trees moved 0 findings in
+	 * either direction when the default was flipped to OPEN, on the base engine and on this one.
+	 * The day a real instance appears, flipping the default becomes a behaviour change and the
+	 * arm below stops being a no-op on the corpus.
+	 */
+	@:pin('control')
+	@:killer('M-STRUCT-UNRESOLVED-OPEN')
+	public function testUnresolvableStructureMemberTypeRefutes(): Void {
+		// Leading assertion — with the alias IN scope the same two files pin, so the file set is
+		// what moves the answer, not the spelling.
+		Assert.equals(0, owner([ALIAS, S_ALIAS, C_INT]), 'MyInt resolves to Int and pins');
+		Assert.equals(1, owner([S_ALIAS, C_INT]), 'an unresolvable MyInt is compared as a name and refutes');
 	}
 
 	/** How many findings the rule reports against the owner file `C.hx`. */

@@ -610,6 +610,21 @@
 			"note": "`Dynamic` is compared as an ordinary nominal, so a structure member declared `Dynamic` refutes every type it unifies with"
 		},
 		{
+			"name": "M-STRUCT-ANON-VAR-KEY",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "typeInfoKeyOf",
+			"force": "own.from",
+			"note": "the type maps are keyed on the member node again, so every anon-structure `var x:T;` / `final x:T;` field reads as unannotated and the conformance refutation cannot fire on one"
+		},
+		{
+			"name": "M-STRUCT-UNRESOLVED-OPEN",
+			"type": "anyparse.query.StructuralTypes",
+			"method": "comparableNominalOf",
+			"find": "if (decl == null) return nominal;",
+			"replace": "if (decl == null) return null;",
+			"note": "a nominal that resolves nowhere is OPEN instead of compared by its written name, which is the sound reading for an out-of-scope alias and drops every refutation resting on an unresolved spelling"
+		},
+		{
 			"name": "M-STRUCT-ANON-CLOSED",
 			"type": "anyparse.query.StructuralTypes",
 			"method": "comparableNominalOf",
