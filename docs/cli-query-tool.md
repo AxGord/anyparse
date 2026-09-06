@@ -325,6 +325,20 @@ Distinct from the read-only query commands above: these **rewrite** source. With
 
 Run `apq <op> --help` for the full per-op flag reference and safety boundary. The hxq skill (`~/.claude/skills/hxq/SKILL.md`) carries the authoritative safety-boundary table for every mutation op.
 
+### `--fix` on a write op: the lint pass, scoped to the lines the write changed
+
+Eleven ops — `patch`, `replace-node`, `add-member`, `add-element`, `remove-element`, `remove-member`, `remove-import`, `add-meta`, `set-doc`, `set-comment`, `extract-method` — take `--fix` alongside `--write`. After the write lands and reports, the op lints the file it just wrote and applies the safe fixes. The op's own exit status is unaffected: the write already happened, so a lint that finds nothing, or refuses, must not turn a successful edit into a failure.
+
+Three things about it are load-bearing, and each was measured rather than assumed.
+
+**The scope is the lines the write CHANGED**, computed by trimming the common leading and trailing LINES between the file as it was and the text the op emitted, and printed (`apq: --fix over lines 9-10 of <file>`) so the reader can check it. Byte-level trimming was tried first and is wrong: it returns the minimal EDIT, which for an insertion is not line-aligned, so the window ran eight characters into the line *after* the insertion and `--fix` duly rewrote a standing finding there. Several changed regions still give their HULL — first differing line to last — which is wider than the truth; a multi-pair `patch` spanning a whole file narrows to almost nothing.
+
+**Why a scope at all**, given that a whole-file `--fix` over this repository changes nothing on an untouched file (measured: 0 edits in 0 files across five real files, with and without the oracle — the tree is a fixer fixed point): because that property is this tree's, not the tool's. On a codebase with fixable debt standing, an unscoped `--fix` behind a one-line edit rewrites code nobody asked about.
+
+**`--no-oracle` is hardcoded.** The compiler oracle is a project-wide build — 46.5s against 4.8s without it, measured on this tree — which no per-edit step can pay. The consequence is stated rather than hidden: with no oracle there is no revert net, so every `RiskyFix` and `OracleAssisted` rule stays report-only and only the SAFE half of the fixer can land behind someone's edit. `runLint` prints that it had no net.
+
+The window is a `lint` feature, not an op feature: `apq lint <file> --range <from>:<to>` takes a 1-based inclusive line window over a scope of exactly one file, and narrows the report AND `--fix` alike. It selects FINDINGS, never EDITS — a check whose fix is atomic across sites (`unused-parameter` rewrites the signature and every call-site argument) still writes wherever its own fix says, off a finding inside the window; clipping that would leave the file broken. Under `--fix` the window is re-applied on every fixed-point pass against the file's current bytes, so a fix that changes the line count shifts what a later pass sees — bounded, and documented on `LintRange`.
+
 ### `apq rewrite`: a template is a TREE, so it is spliced as one
 
 `apq rewrite <file> <pattern> <replacement>` matches with `search` syntax and splices

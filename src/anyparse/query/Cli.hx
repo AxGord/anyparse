@@ -7,6 +7,7 @@ import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliIo;
 import anyparse.query.cli.CliRegistry;
+import anyparse.query.cli.PostWriteFix;
 import anyparse.query.cli.WriteFailure;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
@@ -225,19 +226,27 @@ final class Cli {
 			return EXIT_OK;
 		}
 		final cmd: String = args[0];
-		var requireMatch: Bool = false;
-		final rest: Array<String> = [];
-		for (a in args.slice(1)) if (a == '--exit-on-empty' || a == '--require-match')
-			requireMatch = true;
-		else
-			rest.push(a);
 		final registered: Null<CliCommand> = CliRegistry.find(cmd);
 		if (registered == null) {
 			CliIo.stderr('apq: unknown subcommand "$cmd"\n');
 			printUsage();
 			return EXIT_USAGE;
 		}
-		return registered.run(rest, new CliContext(requireMatch));
+		// `--fix` is stripped ONLY for a command that declares `PostWriteFix`. `lint` owns a
+		// `--fix` of its own, over the whole scope and with its own fixed-point passes, and an
+		// unconditional strip here would swallow it — so the marker is what makes this legal,
+		// not the spelling of the flag. Resolving the command first is what allows the test.
+		final takesFix: Bool = registered is PostWriteFix;
+		var requireMatch: Bool = false;
+		var postWriteFix: Bool = false;
+		final rest: Array<String> = [];
+		for (a in args.slice(1)) if (a == '--exit-on-empty' || a == '--require-match')
+			requireMatch = true;
+		else if (takesFix && a == '--fix')
+			postWriteFix = true;
+		else
+			rest.push(a);
+		return registered.run(rest, new CliContext(requireMatch, postWriteFix));
 	}
 
 	private static function printUsage(): Void {

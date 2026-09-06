@@ -2,6 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.CliUsage;
+import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
@@ -42,7 +44,7 @@ typedef PatchOpts = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class PatchCommand implements CliCommand {
+final class PatchCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -55,7 +57,7 @@ final class PatchCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runPatch(args);
+		return runPatch(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -71,7 +73,7 @@ final class PatchCommand implements CliCommand {
 	 * node's source. Finalized like replace-node: writer-formatted, re-parse
 	 * validated, canonical-gated unless `--reformat`.
 	 */
-	private static function runPatch(args: Array<String>): Int {
+	private static function runPatch(args: Array<String>, fix: Bool): Int {
 		final o: PatchOpts = parsePatchArgs(args);
 		if (o.errExit != null) return o.errExit;
 		var payload: Null<String> = o.payload;
@@ -112,7 +114,7 @@ final class PatchCommand implements CliCommand {
 		// A multi-pair call is all-or-nothing, so a success line that names the count is
 		// the one thing that settles "did all of them land?" without re-reading the file.
 		return CliEdit.finishEdit(
-			'patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson, o.all),
+			'patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson, o.all), fix,
 			pairs.length > 1 ? '${pairs.length} fragment pairs applied' : null
 		);
 	}
@@ -267,6 +269,7 @@ final class PatchCommand implements CliCommand {
 		CliIo.sysPrint('==== old2 ==== new2 — matched against the ORIGINAL node text, ranges must\n');
 		CliIo.sysPrint('not overlap. The result is writer-formatted and re-parse-validated like\n');
 		CliIo.sysPrint('replace-node; the file must already be canonical unless --reformat is given.\n');
+		CliUsage.printPostWriteFixTail();
 	}
 
 }

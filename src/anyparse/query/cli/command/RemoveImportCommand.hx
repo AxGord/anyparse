@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
@@ -13,7 +14,7 @@ using StringTools;
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class RemoveImportCommand implements CliCommand {
+final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -26,7 +27,7 @@ final class RemoveImportCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runRemoveImport(args);
+		return runRemoveImport(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -40,7 +41,7 @@ final class RemoveImportCommand implements CliCommand {
 	 * a block comment directly above it goes too unless `--keep-doc` says otherwise.
 	 * The by-name counterpart of `remove-element`; backend of `lint --fix`.
 	 */
-	private static function runRemoveImport(args: Array<String>): Int {
+	private static function runRemoveImport(args: Array<String>, fix: Bool): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -94,7 +95,7 @@ final class RemoveImportCommand implements CliCommand {
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		return CliEdit.finishEdit(
-			'remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, withDoc, optsJson)
+			'remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, withDoc, optsJson), fix
 		);
 	}
 
@@ -108,6 +109,7 @@ final class RemoveImportCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --keep-doc      Leave the import\'s leading block comment behind\n');
 		CliUsage.printOptionsEditTail();
+		CliUsage.printPostWriteFixTail();
 	}
 
 }

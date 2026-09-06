@@ -2,6 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.CliUsage;
+import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
@@ -31,7 +33,7 @@ typedef AddMemberOpts = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class AddMemberCommand implements CliCommand {
+final class AddMemberCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -44,7 +46,7 @@ final class AddMemberCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAddMember(args);
+		return runAddMember(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -76,7 +78,7 @@ final class AddMemberCommand implements CliCommand {
 	 * name, a non-canonical file without `--reformat`, or an unparseable
 	 * result, exits non-zero with the file untouched.
 	 */
-	private static function runAddMember(args: Array<String>): Int {
+	private static function runAddMember(args: Array<String>, fix: Bool): Int {
 		final o: AddMemberOpts = parseAddMemberArgs(args);
 		if (o.errExit != null) return o.errExit;
 		var memberText: Null<String> = o.memberText;
@@ -104,7 +106,7 @@ final class AddMemberCommand implements CliCommand {
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = AddMember.addMember(source, typeStr, memberStr, o.reformat, plugin, optsJson);
-		return CliEdit.finishEdit('add-member', filePath, o.write, result);
+		return CliEdit.finishEdit('add-member', filePath, o.write, result, fix);
 	}
 
 	private static function printAddMemberUsage(): Void {
@@ -130,6 +132,7 @@ final class AddMemberCommand implements CliCommand {
 		CliIo.sysPrint('is refused: the result would not compile. An unknown / ambiguous type name,\n');
 		CliIo.sysPrint('a non-canonical file without --reformat, or an unparseable result, likewise\n');
 		CliIo.sysPrint('exits non-zero with the file untouched.\n');
+		CliUsage.printPostWriteFixTail();
 	}
 
 	private static function parseAddMemberArgs(args: Array<String>): AddMemberOpts {

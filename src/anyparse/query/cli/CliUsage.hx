@@ -24,6 +24,25 @@ final class CliUsage {
 		printWriteLangHelp();
 	}
 
+	/**
+	 * The `--fix` paragraph, for every op that declares `PostWriteFix`.
+	 *
+	 * Its own printer rather than a line inside `printEditOptionsTail`, because the two
+	 * sets are not the same: three ops share that tail, eleven carry `--fix`. One printer
+	 * per claim keeps a command from documenting an option it does not have.
+	 *
+	 * A trailing PARAGRAPH rather than a row in the Options block, because these eleven
+	 * help pages pad their option column to two different widths, and one shared row would
+	 * sit misaligned in whichever of them it did not match.
+	 */
+	public static function printPostWriteFixTail(): Void {
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('--fix: after a --write, lint what was just written and apply the safe fixes,\n');
+		CliIo.sysPrint('scoped to the LINES this write changed. It skips the compiler oracle (which\n');
+		CliIo.sysPrint('is a project-wide build), so RiskyFix and OracleAssisted rules stay\n');
+		CliIo.sysPrint('report-only: only the safe half of the fixer can land behind your edit.\n');
+	}
+
 	public static function printEditOptionsTail(): Void {
 		CliIo.sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
 		CliIo.sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');

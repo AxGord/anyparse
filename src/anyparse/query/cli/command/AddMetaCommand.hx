@@ -2,6 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.CliUsage;
+import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
@@ -39,7 +41,7 @@ typedef AddMetaOpts = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class AddMetaCommand implements CliCommand {
+final class AddMetaCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -52,7 +54,7 @@ final class AddMetaCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAddMeta(args);
+		return runAddMeta(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -66,7 +68,7 @@ final class AddMetaCommand implements CliCommand {
 	 * the declaration keyword. A duplicate NAME is refused. See `AddMeta` for why
 	 * neither `patch` nor `add-element` can reach that position.
 	 */
-	private static function runAddMeta(args: Array<String>): Int {
+	private static function runAddMeta(args: Array<String>, fix: Bool): Int {
 		final o: AddMetaOpts = parseAddMetaArgs(args);
 		if (o.errExit != null) return o.errExit;
 		final file: Null<String> = o.file;
@@ -87,7 +89,7 @@ final class AddMetaCommand implements CliCommand {
 		);
 		if (target == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
-		return CliEdit.finishEdit('add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson));
+		return CliEdit.finishEdit('add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson), fix);
 	}
 
 	/** The all-default `AddMetaOpts` carrying a terminal exit code, for the `-h` / bad-flag arms. */
@@ -196,6 +198,7 @@ final class AddMetaCommand implements CliCommand {
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint("To REMOVE one: apq remove-element <file> --select 'MetaCall:@:name' --write\n");
 		CliIo.sysPrint("(or 'Meta:@:name' for an entry with no arguments).\n");
+		CliUsage.printPostWriteFixTail();
 	}
 
 }

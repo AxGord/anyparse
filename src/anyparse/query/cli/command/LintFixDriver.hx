@@ -12,6 +12,7 @@ import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
+import anyparse.query.cli.command.LintCommand.LintRange;
 import anyparse.query.cli.command.LintFixVerify.RiskyFixOutcome;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
@@ -59,7 +60,7 @@ final class LintFixDriver {
 
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, ?resolution: ResolutionScope, ?oracleHxml: String, ?oracleDir: String
+		applyEnablement: Bool, range: Null<LintRange>, ?resolution: ResolutionScope, ?oracleHxml: String, ?oracleDir: String
 	): Int {
 		final oracleConfigured: Bool = oracleHxml != null;
 		final split: CheckPartition = LintCommand.partitionChecks(checks, oracleConfigured);
@@ -118,7 +119,7 @@ final class LintFixDriver {
 				passes++;
 				final pass: LintPassResult = applyLintPass(
 					active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile,
-					passes, noted, notedRewrites, changedFiles, ledger, coupled
+					passes, noted, notedRewrites, changedFiles, ledger, coupled, range
 				);
 				fixedCount += pass.fixedDelta;
 				active = pass.nextActive;
@@ -231,7 +232,7 @@ final class LintFixDriver {
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, notedRewrites: Array<String>,
-		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>
+		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, range: Null<LintRange>
 	): LintPassResult {
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
@@ -243,8 +244,16 @@ final class LintFixDriver {
 		final index: SymbolIndex = SymbolIndex.build(files, cached);
 		final resolutionFiles: Null<Array<{ file: String, source: String }>> = cached.resolutionFiles();
 		if (resolutionFiles != null) cached.setResolutionIndex(SymbolIndex.build(resolutionFiles, cached, cached.thirdPartyFiles()));
-		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement);
-		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
+		// The `--range` window is applied HERE, on the pass's own sources, and nowhere else in
+		// the fix path: one filter point is what keeps the flag from meaning different things to
+		// the report and to the fixer. Re-measured every pass, because a pass rewrites the file
+		// it reads — see `LintRange` for the drift that buys and why it is bounded.
+		final sourceOf: (String) -> Null<String> = f -> fileSourceOf(files, f);
+		final violations: Array<Violation> = LintCommand.withinRange(
+			Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement), sourceOf, range
+		);
+		for (v in LintCommand.withinRange(Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement), sourceOf, range))
+			violations.push(v);
 		// The FIRST pass's report is the one a reader compares `fixed N` against: later passes see
 		// only what an earlier edit exposed. Recorded here so the run can say WHICH rules reported
 		// and — through the decline half of the same ledger, filled in below where each `fix` is
@@ -876,7 +885,8 @@ final class LintFixDriver {
 	 */
 	public static function runLintFix(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracleHxml: Null<String>, oracleDir: Null<String>, noOracle: Bool
+		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracleHxml: Null<String>, oracleDir: Null<String>, noOracle: Bool,
+		range: Null<LintRange>
 	): Int {
 		FmtCommand.warnCommentGuardDeclined();
 		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
@@ -884,8 +894,8 @@ final class LintFixDriver {
 		final notice: Null<String> = LintFixSafePass.netNotice(oracleHxml, noOracle);
 		if (notice != null) CliIo.stderr(notice);
 		return !noOracle
-			? applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir)
-			: applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, resolution);
+			? applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, resolution, oracleHxml, oracleDir)
+			: applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, resolution);
 	}
 
 }
