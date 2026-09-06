@@ -40,11 +40,23 @@ import anyparse.runtime.Span;
  *
  * ## Point-wise, not flow-sensitive
  *
- * There is no narrowing: `if (m.exists(k)) m[k].field`, `if (arr.length > 0)
- * arr.pop().f` and a guarded `findUser().f` are still flagged, since the guard is
- * invisible without flow. That is why the severity is `Info` (advisory), not the
- * `Warning` the flow-sensitive engine earns. A cross-file `Type.static()` / `obj.method()` return IS now resolved via `MemberLookup.returnNominalOf` (conservative under a simple-name collision); a bare `this.f()` stays a safe miss. Macro-reification subtrees
- * (`RefShape.opaqueKinds`) are not descended into.
+ * There is no narrowing, with ONE exception. `if (arr.length > 0) arr.pop().f` and a
+ * guarded `findUser().f` are still flagged, since the guard is invisible without flow —
+ * that is why the severity is `Info` (advisory), not the `Warning` the flow-sensitive
+ * engine earns. The exception is the map-membership guard `m.exists(k)`, which
+ * `NullFlow` already models for the flow check's seed: this check asks it, through
+ * `NullFacts.indexPresent`, for the map reads a dominating guard proves present, and
+ * skips them. Measured on the Pony fork, that blindness was reporting 15 sites the
+ * author had guarded — a fifth of the rule's findings — and it would have reported the
+ * whole `exists()`-guarded residue the field-path work is about to make reachable. The
+ * guard must match BOTH operands by source text, so `if (m.exists(k)) m[j].f` stays
+ * flagged, and every non-`exists` route to presence (a conditional write
+ * `if (!m.exists(k)) m[k] = v;`, a key drawn from `m.keys()`) stays flagged too.
+ *
+ * A cross-file `Type.static()` / `obj.method()` return IS now resolved via
+ * `MemberLookup.returnNominalOf` (conservative under a simple-name collision); a bare
+ * `this.f()` stays a safe miss. Macro-reification subtrees (`RefShape.opaqueKinds`) are
+ * not descended into.
  */
 @:nullSafety(Strict)
 final class PossibleNullDereference implements Check {
@@ -73,12 +85,6 @@ final class PossibleNullDereference implements Check {
 		// The RESOLUTION index, not the report one — `NullableSource`'s class doc says why, and why
 		// the exclusion list has to be re-applied inside the arc once it is this wide.
 		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
-		final ctx: Ctx = {
-			derefKinds: derefKinds,
-			opaqueKinds: shape.opaqueKinds ?? [],
-			cfg: cfgValue,
-			index: index
-		};
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -88,6 +94,13 @@ final class PossibleNullDereference implements Check {
 			final nominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
 				entry.source, plugin, tree, entry.file, index, true
 			);
+			final ctx: Ctx = {
+				derefKinds: derefKinds,
+				opaqueKinds: shape.opaqueKinds ?? [],
+				cfg: cfgValue,
+				index: index,
+				guarded: existsGuardedReads(tree, shape, entry.source)
+			};
 			walk(violations, entry.file, tree, tree, declaredTypes, returnTypes, nominalOf, ctx);
 		}
 		return violations;
@@ -100,6 +113,26 @@ final class PossibleNullDereference implements Check {
 		return [];
 	}
 
+	/**
+	 * The span keys of every map read `m[k]` a dominating `m.exists(k)` guard proves present
+	 * in `tree` — the receivers this check must NOT report, collected by asking `NullFlow`,
+	 * the one exists-guard model in the analysis layer, rather than re-deriving the guard here.
+	 *
+	 * A flow walk is the only thing that can answer it: the guard may sit in an enclosing
+	 * `if`, in an early-returning `if (!m.exists(k)) return;` before the read, or in the left
+	 * operand of the `&&` the read itself is the right operand of. The walk covers function
+	 * units only, so a read in a field initializer keeps today's point-wise behaviour — it has
+	 * no flow to be guarded by.
+	 */
+	private static function existsGuardedReads(tree: QueryNode, shape: RefShape, source: String): Map<String, Bool> {
+		final out: Map<String, Bool> = [];
+		NullFlow.analyze(tree, shape, source, (node, facts) -> {
+			final span: Null<Span> = node.span;
+			if (span != null && facts.indexPresent(node)) out['${span.from}:${span.to}'] = true;
+		});
+		return out;
+	}
+
 	/** Walk `node`, flagging a deref whose receiver is a nullable source. */
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>,
@@ -108,7 +141,9 @@ final class PossibleNullDereference implements Check {
 		if (ctx.opaqueKinds.contains(node.kind)) return;
 		if (ctx.derefKinds.contains(node.kind) && node.children.length >= 1) {
 			final span: Null<Span> = node.span;
-			if (span != null) {
+			final receiverSpan: Null<Span> = node.children[0].span;
+			final guarded: Bool = receiverSpan != null && ctx.guarded.exists('${receiverSpan.from}:${receiverSpan.to}');
+			if (span != null && !guarded) {
 				final source: Null<String> = NullableSource.describe(
 					node.children[0], root, declaredTypes, returnTypes, ctx.cfg, ctx.index, nominalOf
 				);
@@ -126,10 +161,13 @@ final class PossibleNullDereference implements Check {
 
 }
 
-/** Resolved per-run constants threaded through the recursive walk. */
+/**
+ * Resolved constants threaded through the recursive walk — per-run except `guarded`, the per-FILE set of exists-guarded map-read span keys `existsGuardedReads` collects.
+ */
 private typedef Ctx = {
 	var derefKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var cfg: NullableSourceCfg;
 	var index: Null<SymbolIndex>;
+	var guarded: Map<String, Bool>;
 };

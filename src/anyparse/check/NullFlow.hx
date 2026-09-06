@@ -5,19 +5,28 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
+import anyparse.runtime.Span;
 
 using Lambda;
+using StringTools;
 
 /**
  * The null facts holding at one visited node's entry, queried by a consumer.
  * `nonNull(name)` answers whether `name` is provably non-null by flow there;
- * `isNull(name)` whether it is provably null; `isMaybeNull(name)` whether it came from a nullable source and is not yet narrowed non-null (a mechanism-A seed, empty for the flow checks that pass none). Both honour the closure-captured
+ * `isNull(name)` whether it is provably null; `isMaybeNull(name)` whether it came from a nullable source and is not yet narrowed non-null (a mechanism-A seed, empty for the flow checks that pass none). All three honour the closure-captured
  * exclusion. At most one of the three accessors is ever true for a given name (`NonNull`, `Null`, `MaybeNull`, or — none true — `Unknown`).
+ *
+ * `indexPresent(node)` is the one name-free accessor: it answers whether `node` is a map
+ * read `m[k]` whose (map, key) pair a dominating `m.exists(k)` guard proves present here.
+ * It reports the same `present` fact the `MaybeNull` seed consults, so the point-wise
+ * `possible-null-dereference` and the flow-sensitive `unguarded-nullable-deref` read ONE
+ * exists-guard model rather than two.
  */
 typedef NullFacts = {
 	var nonNull: String -> Bool;
 	var isNull: String -> Bool;
 	var isMaybeNull: String -> Bool;
+	var indexPresent: QueryNode -> Bool;
 }
 
 /**
@@ -45,8 +54,10 @@ private typedef PredicateFact = {
 /** An unordered pair of plain own-name locals proven to hold the same reference (a direct `v = u` copy) — narrowing either narrows both, until one is written, captured, or re-aliased. */
 private typedef AliasPair = { a: String, b: String };
 
-/** A map/key pair proven present by an enclosing `if (m.exists(k))` guard — a following same-map/key `var u = m[k]` binding is not seeded `MaybeNull` (`maybe`-only). */
-private typedef ExistsFact = { map: String, key: String };
+/**
+ * A map/key pair proven present by a dominating `m.exists(k)` guard: the two operand expressions by their verbatim source text, plus `names` — every identifier either of them mentions, so any write to one kills the fact. Both operands must be PURE REF PATHS (identifier, field access, index access, a leaf literal), never a call: text identity plus the write-kill is the whole soundness argument, and a call could answer a different map on the second evaluation. A same-map/key `m[k]` read under the guard is not seeded `MaybeNull`, and `NullFacts.indexPresent` reports it to the point-wise consumer.
+ */
+private typedef ExistsFact = { map: String, key: String, names: Array<String> };
 
 /**
  * Per-function context for one `NullFlow` walk: the grammar-derived node-kind
@@ -174,9 +185,13 @@ private typedef FlowCtx = {
  *   predicate (`ok => u != null`), so branching on it narrows the compared name
  *   (De Morgan mirror in the else-arm); a direct plain ident-to-ident copy
  *   (`var v = u`) records a bidirectional alias, so narrowing one side narrows
- *   the other; an `if (m.exists(k))` guard marks the pair present so a then-arm
- *   `var u = m[k]` is not seeded `MaybeNull` (seed-gated — inert for seed-less
- *   consumers). Every fact dies on ANY write to a name it mentions (including
+ *   the other; an `m.exists(k)` test marks the pair present on
+ *   the branch it holds — the then-arm of a positive test, the else-arm (and so the
+ *   fall-through of `if (!m.exists(k)) return;`) of a negated one, and either side of a
+ *   short-circuit whose left operand is one — so a `var u = m[k]` there is not seeded
+ *   `MaybeNull` and `NullFacts.indexPresent` reports the same pair to the point-wise check.
+ *   Operands are PURE REF PATHS compared by source text (`a.b.map`, `outer[i]`), never
+ *   calls. Every fact dies on ANY write to a name it mentions (including
  *   `??=`, whose target may be reassigned), on capture (never established for a
  *   closure-mutated name), at shadow entry/exit, and at any join where it does
  *   not hold on both arms. A conjunctive Bool RHS (`ok = a != null && …`, with no `||` anywhere) seeds a one-way `compound` predicate per null-comparison conjunct — narrowing only in the then-arm; a Bool-to-Bool copy (`var ok2 = ok`) aliases the two, so a predicate launders transitively through the alias closure; and a `!(…)` guard flips both the comparison polarity and the combine operator (De Morgan), unwinding nested negations. Anything else — a field or call RHS, or any `||` inside an otherwise-conjunctive RHS — establishes nothing (a refusal is only a safe miss).
@@ -451,6 +466,12 @@ final class NullFlow {
 		for (e in next.present) state.present.push(e);
 	}
 
+	/** The verbatim source text of `node`, trimmed — the identity an `ExistsFact` compares its operands by; `''` for a span-less node, which `existsGuardFact` refuses. */
+	private static inline function pathText(node: QueryNode, source: String): String {
+		final span: Null<Span> = node.span;
+		return span == null ? '' : source.substring(span.from, span.to).trim();
+	}
+
 	/** A fresh all-`Unknown` flow state — every fact set empty. */
 	private static inline function emptyState(): FlowState {
 		return {
@@ -695,7 +716,7 @@ final class NullFlow {
 			markNonNull(state, name);
 		else if (isNullLitRhs(init, ctx))
 			markKnown(state, name);
-		else if (isNullableSourceRhs(init, ctx) && !suppressedByExists(init, state, ctx))
+		else if (isNullableSourceRhs(init, ctx) && !indexPresentIn(init, state, ctx))
 			markMaybe(state, name);
 		else
 			clearName(state, name);
@@ -714,14 +735,11 @@ final class NullFlow {
 		final elseArm: Null<QueryNode> = node.children.length > 2 ? node.children[2] : null;
 		walk(cond, state, ctx);
 		// Then-arm: narrow by the condition's conjuncts — `!= null` proves non-null,
-		// `== null` proves null — walked to its exit state.
+		// `== null` proves null — walked to its exit state. The exists-guards (feature 3) ride
+		// the same decomposition inside `narrowedCopy`, so BOTH arms get them: the then-arm from
+		// a positive `m.exists(k)` conjunct, the else-arm — and hence the fall-through of an
+		// early-returning `if (!m.exists(k)) return;` — from a negated disjunct.
 		final thenState: FlowState = narrowedCopy(cond, state, ctx, ctx.notEqKind, ctx.eqKind, BOOL_AND_KIND);
-		// Exists-guard (feature 3): `if (m.exists(k))` marks (m, k) present in the then-arm, so a
-		// `var u = m[k]` there is not seeded MaybeNull. Seed-gated — inert (empty) for the six base checks.
-		if (ctx.nullableSourceRhs != null) {
-			final ex: Null<ExistsFact> = isExistsGuard(cond, ctx);
-			if (ex != null) thenState.present.push(ex);
-		}
 		walk(thenArm, thenState, ctx);
 		// An unbraced arm declaration (`if (c) var v = null;`) never passes through
 		// `handleBlock`'s exit clearing — drop its facts before the join.
@@ -773,7 +791,8 @@ final class NullFlow {
 		final facts: NullFacts = {
 			nonNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n),
 			isNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.known.contains(n),
-			isMaybeNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.maybe.contains(n)
+			isMaybeNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.maybe.contains(n),
+			indexPresent: n -> indexPresentIn(n, state, ctx)
 		};
 		ctx.visit(node, facts);
 	}
@@ -1045,6 +1064,14 @@ final class NullFlow {
 		// Feature 2: a narrowed name narrows every local aliased to it, same polarity.
 		expandAliases(base, nonNull);
 		expandAliases(base, known);
+		// Feature 3: an `m.exists(k)` test of the polarity this branch holds marks the pair
+		// present, so a map read under the guard is neither seeded `MaybeNull` nor reported
+		// point-wise. `wantNegated` mirrors the null-comparison duality this call already
+		// carries: the then-arm / `&&` right side (`combineKind == 'And'`) consumes a POSITIVE
+		// test, the else-arm / `||` right side the negation of one.
+		final present: Array<ExistsFact> = [];
+		collectExists(cond, present, ctx, combineKind, combineKind == BOOL_OR_KIND);
+		for (e in present) if (!e.names.exists(n -> written.contains(n))) out.present.push(e);
 		for (n in nonNull) if (!written.contains(n)) markNonNull(out, n);
 		for (n in known) if (!written.contains(n)) markKnown(out, n);
 		return out;
@@ -1171,7 +1198,7 @@ final class NullFlow {
 	private static function killAuxFacts(state: FlowState, name: String): Void {
 		if (state.predicates.length > 0) state.predicates = [for (p in state.predicates) if (p.bool != name && p.target != name) p];
 		if (state.aliases.length > 0) state.aliases = [for (a in state.aliases) if (a.a != name && a.b != name) a];
-		if (state.present.length > 0) state.present = [for (e in state.present) if (e.map != name && e.key != name) e];
+		if (state.present.length > 0) state.present = [for (e in state.present) if (!e.names.contains(name)) e];
 	}
 
 	/**
@@ -1281,12 +1308,14 @@ final class NullFlow {
 	}
 
 	/**
-	 * Feature 3: whether `cond` is exactly a `m.exists(k)` membership test on plain idents
-	 * — returns the (map, key) pair, else null. Neither ident may be closure-captured.
-	 * Marks the pair present in the guarded then-arm so a following `var u = m[k]` is not
-	 * seeded `MaybeNull`.
+	 * Feature 3: the `m.exists(k)` membership test `cond` states, as an `ExistsFact`, else null.
+	 * Both operands may be any PURE REF PATH — `m`, `this.m`, `a.b.model.subactions`,
+	 * `outer[i]` — and are identified by their verbatim source text; the key may also be a
+	 * literal. No identifier either operand mentions may be closure-captured. The fact marks
+	 * the pair present on the guarded branch, so a `var u = m[k]` there is not seeded
+	 * `MaybeNull` and a `m[k].f` there is not reported point-wise.
 	 */
-	private static function isExistsGuard(rawCond: QueryNode, ctx: FlowCtx): Null<ExistsFact> {
+	private static function existsGuardFact(rawCond: QueryNode, ctx: FlowCtx): Null<ExistsFact> {
 		if (ctx.callKind == null || ctx.fieldAccessKind == null || ctx.mapExistsMethods.length == 0) return null;
 		final cond: QueryNode = BoolExprShape.unwrapParens(rawCond, ctx.parenKind);
 		if (cond.kind != ctx.callKind || cond.children.length != 2) return null;
@@ -1296,31 +1325,101 @@ final class NullFlow {
 			return null;
 		final recv: QueryNode = callee.children[0];
 		final key: QueryNode = cond.children[1];
-		final mapName: Null<String> = recv.name;
-		final keyName: Null<String> = key.name;
-		return if (recv.kind != ctx.identKind || key.kind != ctx.identKind || mapName == null || keyName == null)
-			null
-		else if (ctx.captured.contains(mapName) || ctx.captured.contains(keyName))
-			null
-		else
-			{ map: mapName, key: keyName };
+		if (!pureRefPath(recv, ctx) || !pureRefPath(key, ctx)) return null;
+		final mapText: String = pathText(recv, ctx.source);
+		final keyText: String = pathText(key, ctx.source);
+		if (mapText == '' || keyText == '') return null;
+		final names: Array<String> = [];
+		collectPathNames(recv, names, ctx);
+		collectPathNames(key, names, ctx);
+		for (n in names) if (ctx.captured.contains(n)) return null;
+		return { map: mapText, key: keyText, names: names };
 	}
 
 	/**
-	 * Feature 3: whether `init` is a `m[k]` index access whose (map, key) is proven present
-	 * by an enclosing exists-guard in `state`, so the nullable-source seed is suppressed for
-	 * it (`maybe`-only — the six base checks never reach this).
+	 * Whether `node` is a PURE REF PATH — a constant, an identifier, a field access, an index
+	 * access, or a parenthesized one of those. Everything else — a call above all — is refused,
+	 * because an `ExistsFact` identifies its operands by SOURCE TEXT, and two evaluations of
+	 * `f().m` may answer two different maps while spelling the same.
+	 *
+	 * The two accepted classes are what an exists-guard's operands are ever made of: the map is
+	 * a path (`m`, `this.m`, `a.b.model.subactions`, `outer[i]`), the key a path or a constant
+	 * (`m.exists('fix')` guarding `m['fix']` is the commonest form in real code). Nothing else
+	 * is admitted, so a shape nobody has thought of fails closed rather than leaking in.
 	 */
-	private static function suppressedByExists(rawInit: Null<QueryNode>, state: FlowState, ctx: FlowCtx): Bool {
-		if (rawInit == null || ctx.indexAccessKind == null) return false;
-		final init: QueryNode = BoolExprShape.unwrapParens(rawInit, ctx.parenKind);
-		if (init.kind != ctx.indexAccessKind || init.children.length < 2) return false;
-		final recv: QueryNode = init.children[0];
-		final key: QueryNode = init.children[1];
-		final mapName: Null<String> = recv.name;
-		final keyName: Null<String> = key.name;
-		return recv.kind == ctx.identKind && key.kind == ctx.identKind && mapName != null && keyName != null
-			&& state.present.exists(e -> e.map == mapName && e.key == keyName);
+	private static function pureRefPath(node: QueryNode, ctx: FlowCtx): Bool {
+		if (constantExpr(node, ctx)) return true;
+		final kind: String = node.kind;
+		final structural: Bool = kind == ctx.identKind || kind == ctx.fieldAccessKind || kind == ctx.indexAccessKind
+			|| (ctx.parenKind != null && kind == ctx.parenKind);
+		return structural && node.children.foreach(c -> pureRefPath(c, ctx));
+	}
+
+	/**
+	 * Whether `node`'s whole subtree reads no name and calls nothing — its source text IS its
+	 * value. That is the grammar-agnostic spelling of "a literal", which matters because a
+	 * literal is not always a leaf: Haxe projects the key `'fix'` as
+	 * `SingleStringExpr(Literal fix)`, and a leaf-only test refused every
+	 * `if (m.exists('fix')) m['fix'].f` in the corpus. An interpolated string or a
+	 * `new` expression mentions an identifier and is refused — a safe miss.
+	 */
+	private static function constantExpr(node: QueryNode, ctx: FlowCtx): Bool {
+		return node.kind != ctx.identKind && node.kind != ctx.callKind && node.children.foreach(c -> constantExpr(c, ctx));
+	}
+
+	/** Collect into `out` every identifier name `node`'s subtree mentions — the kill set of an `ExistsFact` built from it. */
+	private static function collectPathNames(node: QueryNode, out: Array<String>, ctx: FlowCtx): Void {
+		final name: Null<String> = node.name;
+		if (node.kind == ctx.identKind && name != null && !out.contains(name)) out.push(name);
+		for (c in node.children) collectPathNames(c, out, ctx);
+	}
+
+	/**
+	 * Collect into `out` every `m.exists(k)` test a condition proves TRUE for one branch,
+	 * decomposed exactly as `collectNarrow` decomposes null comparisons: the then-arm via
+	 * `('And', wantNegated = false)` — each positive conjunct — and the else-arm via
+	 * `('Or', wantNegated = true)`, where the branch holds the condition's negation and so a
+	 * NEGATED disjunct (`if (!m.exists(k)) return;`) is what proves presence. A `!` flips both
+	 * the wanted polarity and the combining operator (De Morgan), a parenthesized wrapper is
+	 * descended, and any other shape proves nothing.
+	 */
+	private static function collectExists(
+		cond: QueryNode, out: Array<ExistsFact>, ctx: FlowCtx, combineKind: String, wantNegated: Bool
+	): Void {
+		final kind: String = cond.kind;
+		if (kind == combineKind) {
+			for (c in cond.children) collectExists(c, out, ctx, combineKind, wantNegated);
+		} else if (ctx.parenKind != null && kind == ctx.parenKind && cond.children.length == 1) {
+			collectExists(cond.children[0], out, ctx, combineKind, wantNegated);
+		} else if (ctx.notKind != null && kind == ctx.notKind && cond.children.length == 1) {
+			collectExists(cond.children[0], out, ctx, combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND, !wantNegated);
+		} else if (!wantNegated) {
+			final fact: Null<ExistsFact> = existsGuardFact(cond, ctx);
+			if (fact != null) out.push(fact);
+		}
+	}
+
+	/**
+	 * Feature 3: whether `node` is a map read `m[k]` whose (map, key) pair a dominating
+	 * exists-guard in `state` proves present. The ONE presence predicate: the `MaybeNull`
+	 * seed asks it about a declaration's right-hand side, and `NullFacts.indexPresent`
+	 * hands the same answer to the point-wise `possible-null-dereference`.
+	 *
+	 * Residual, shared with every other consumer of these facts and inherited from the
+	 * name-keyed lattice: a mutation that removes the key without writing either operand's
+	 * NAME — `m.remove(k)`, a call that clears the map — leaves the fact standing. Widening
+	 * the kill to any call on the map would trade that for silence on the guard's own test.
+	 */
+	private static function indexPresentIn(rawNode: Null<QueryNode>, state: FlowState, ctx: FlowCtx): Bool {
+		if (rawNode == null || ctx.indexAccessKind == null || state.present.length == 0) return false;
+		final node: QueryNode = BoolExprShape.unwrapParens(rawNode, ctx.parenKind);
+		if (node.kind != ctx.indexAccessKind || node.children.length < 2) return false;
+		final recv: QueryNode = node.children[0];
+		final key: QueryNode = node.children[1];
+		if (!pureRefPath(recv, ctx) || !pureRefPath(key, ctx)) return false;
+		final mapText: String = pathText(recv, ctx.source);
+		final keyText: String = pathText(key, ctx.source);
+		return mapText != '' && keyText != '' && state.present.exists(e -> e.map == mapText && e.key == keyText);
 	}
 
 	/**

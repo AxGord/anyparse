@@ -197,6 +197,142 @@ class PossibleNullDereferenceTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/**
+	 * The guard this check was blind to until S135: `NullFlow` already modelled `m.exists(k)`
+	 * for the flow check's seed, and the point-wise walk never asked it. Measured on the Pony
+	 * fork, 15 of 65 findings were sites the author had guarded.
+	 */
+	public function testExistsGuardedThenArmNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Int>, k:String) { if (m.exists(k)) m[k].foo(); } }').length);
+	}
+
+	/**
+	 * The early-return spelling — the guard lives in the ELSE arm of a negated test, and the
+	 * read is the fall-through. The real site is `pony/src/pony/LangTable.hx:92`.
+	 */
+	public function testExistsGuardedEarlyReturnNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Int>, k:String) { if (!m.exists(k)) return; m[k].foo(); } }').length
+		);
+	}
+
+	/** A conjunct of the guarding condition — `pony/src/pony/flash/starling/converter/AtlasCreator.hx:68`. */
+	public function testExistsGuardedAmongConjunctsNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Int>, k:String, b:Bool) { if (!b && m.exists(k)) m[k].foo(); } }').length
+		);
+	}
+
+	/**
+	 * The read sits in the RIGHT operand of the `&&` whose left operand is the guard, so no arm
+	 * of any `if` contains it — `AtlasCreator.hx:64`. The `||` mirror (`!m.exists(k) || m[k].f`)
+	 * is `AtlasCreator.hx:96`.
+	 */
+	public function testExistsGuardedShortCircuitOperandsNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Int>, k:String) { if (m.exists(k) && m[k].ok()) trace(1); } }').length
+		);
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Int>, k:String) { if (!m.exists(k) || m[k].ok()) trace(1); } }').length
+		);
+	}
+
+	/**
+	 * A CONSTANT key. The commonest real spelling (`args.exists('fix')` guarding `args['fix']`,
+	 * five sites across the `mmodels` actions) and the one a leaf-only purity test misses:
+	 * Haxe projects `'fix'` as `SingleStringExpr(Literal fix)`, which is not a leaf.
+	 */
+	public function testExistsGuardedConstantKeyNotFlagged(): Void {
+		Assert.equals(0, violations("class C { function f(m:Map<String,Int>) { if (m.exists('fix')) m['fix'].foo(); } }").length);
+	}
+
+	/**
+	 * The shape S132 measured as the whole valuable residue of the type-resolver's "don't know"
+	 * set: a Map behind a multi-hop field path across files, guarded by `exists`. Seven of the
+	 * ten positions whose answer would change a finding are this, and closing the field-path gap
+	 * without this guard would have shipped all seven as false positives.
+	 *
+	 * Both halves are asserted together because either alone is vacuous: the guarded half passes
+	 * on its own whenever the resolver simply cannot type the path.
+	 */
+	public function testFieldPathMapExistsGuardedNotFlagged(): Void {
+		final decls: Array<{ file: String, source: String }> = [
+			{ file: 'Inner.hx', source: 'class Inner { public var subactions:Map<String,Int>; }' },
+			{ file: 'Mid.hx', source: 'class Mid { public var model:Inner; }' }
+		];
+		Assert.equals(
+			1,
+			violationsFiles(decls.concat([
+				{ file: 'C.hx', source: 'class C { function f(a:Mid, name:String) { a.model.subactions[name].tpl(); } }' }
+			])).length,
+			'the unguarded multi-hop path IS reported — without this half the guarded one is vacuous'
+		);
+		Assert.equals(
+			0,
+			violationsFiles(decls.concat([
+				{
+					file: 'C.hx',
+					source: 'class C { function f(a:Mid, name:String) { if (a.model.subactions.exists(name)) '
+					+ 'a.model.subactions[name].tpl(); } }'
+				}
+			])).length,
+			'the same read under its own exists-guard is not'
+		);
+	}
+
+	/** The guard proves `k` present, not `k2` — a blanket silencer would swallow this. */
+	public function testExistsGuardWrongKeyStillFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { function f(m:Map<String,Int>, k:String, k2:String) { if (m.exists(k)) m[k2].foo(); } }').length
+		);
+	}
+
+	/** The guard proves membership in `m`, not in `n`. */
+	public function testExistsGuardWrongMapStillFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { function f(m:Map<String,Int>, n:Map<String,Int>, k:String) { if (m.exists(k)) n[k].foo(); } }').length
+		);
+	}
+
+	/** The read precedes the guard, so nothing dominates it. */
+	public function testExistsGuardAfterReadStillFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { function f(m:Map<String,Int>, k:String) { m[k].foo(); if (m.exists(k)) trace(1); } }').length
+		);
+	}
+
+	/** Rewriting either operand between guard and read kills the fact — the name-keyed invalidation. */
+	public function testExistsGuardOperandRewrittenStillFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(m:Map<String,Int>, k:String) { if (m.exists(k)) { k = other(); m[k].foo(); } } '
+				+ 'function other():String return ""; }'
+			).length
+		);
+	}
+
+	/**
+	 * A key made present by a CONDITIONAL WRITE rather than by a test of its own is a different
+	 * fact and stays reported — the boundary of what this guard claims. Two real sites
+	 * (`AtlasCreator.hx:103` / `:214`) are this shape and remain false positives on purpose,
+	 * rather than being swept in by a looser predicate.
+	 */
+	public function testConditionalWriteNotAGuardStillFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { function f(m:Map<String,Int>, k:String) { if (!m.exists(k)) m[k] = 1; m[k].foo(); } }').length
+		);
+	}
+
+	/** A membership test whose receiver is a CALL cannot be identified by text — refused, so the read stays reported. */
+	public function testExistsGuardOnCallReceiverStillFlagged(): Void {
+		Assert.equals(
+			1,
+			violations('class C { function f(k:String) { if (mk().exists(k)) mk()[k].foo(); } function mk():Map<String,Int> return null; }')
+				.length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PossibleNullDereference().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

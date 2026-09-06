@@ -502,6 +502,34 @@ class UnguardedNullableDerefTest extends Test {
 		);
 	}
 
+	/**
+	 * The exists-guard widened by S135: an EARLY-RETURN test, and a key that is a field path
+	 * rather than a plain ident. The real site is
+	 * `pony/src/pony/ui/touch/starling/touchManager/touchInputs/StarlingTouchInputVisualized.hx:69`,
+	 * which this rule reported twice until the guard reached both shapes. The control asserts
+	 * the same binding IS seeded without the guard, so neither half is vacuous.
+	 */
+	public function testExistsGuardEarlyReturnPathKeySuppressed(): Void {
+		Assert.equals(
+			1, violations('class C { function f(m:Map<String,Foo>, t:Foo) { var u = m[t.id]; u.foo; } }').length,
+			'the unguarded binding is seeded MaybeNull'
+		);
+		Assert.equals(
+			0,
+			violations('class C { function f(m:Map<String,Foo>, t:Foo) { if (!m.exists(t.id)) return; var u = m[t.id]; u.foo; } }').length,
+			'the early-return exists-guard on a field-path key proves it present'
+		);
+	}
+
+	/** A guard on a DIFFERENT field path proves nothing about this one. */
+	public function testExistsGuardWrongPathKeyFlagged(): Void {
+		Assert.equals(
+			1,
+			violations('class C { function f(m:Map<String,Foo>, t:Foo) { if (!m.exists(t.other)) return; var u = m[t.id]; u.foo; } }')
+				.length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
