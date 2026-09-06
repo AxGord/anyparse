@@ -325,12 +325,7 @@ final class Patch {
 		if (resolved == null) return null;
 		final node: QueryNode = resolved;
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		if (parent == null) return node;
-		final siblings: Array<QueryNode> = parent.children;
-		var i: Int = siblings.indexOf(node);
-		if (i < 0) return node;
-		while (i < siblings.length && ElementSpan.isDeclPrefixSibling(siblings[i])) i++;
-		return i < siblings.length ? siblings[i] : null;
+		return parent == null ? node : ElementSpan.declAfterPrefixRun(node, parent);
 	}
 
 	/**

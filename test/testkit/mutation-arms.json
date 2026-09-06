@@ -1454,6 +1454,51 @@
 			"find": "\t\tmacro (\n\t\t\t!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)\n\t\t\t\t? _dhl()\n\t\t\t\t: ${c.flagBased}\n\t\t);",
 			"replace": "\t\tmacro (\n\t\t\topt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)\n\t\t\t\t? _dhl()\n\t\t\t\t: ${c.flagBased}\n\t\t);",
 			"note": "the semicolon-next-line `else` rule stops asking whether it is at expression position, so a value-`if` inside a case body is governed by the statement rule"
+		},
+		{
+			"name": "M-REMOVE-CUT-ANNOTATIONS-NONE",
+			"type": "anyparse.query.ElementSpan",
+			"method": "annotationPrefixCount",
+			"force": "0",
+			"note": "the removal report counts no annotations, so a member cut that carries two `@:meta` siblings out of the file is described as if the address had named everything it took"
+		},
+		{
+			"name": "M-REMOVE-CUT-SUBJECT-RAW",
+			"type": "anyparse.query.ElementSpan",
+			"method": "cutSubject",
+			"force": "node",
+			"note": "the removal report names the node the cursor resolved rather than the declaration the group fold removes, so a position on a modifier keyword reports `Public` and says nothing about the member that left"
+		},
+		{
+			"name": "M-PFF-CALLSCAN-ALWAYS",
+			"type": "anyparse.query.CtorFieldWrite",
+			"method": "methodCalledOn",
+			"force": "true",
+			"note": "every binding reads as having a method called on it, so the abstract-rebind suppression runs on bindings nothing calls and prefer-final / prefer-final-field stop suggesting on a plainly never-reassigned one"
+		},
+		{
+			"name": "M-PFF-STDLIB-SAFE-NONE",
+			"type": "anyparse.query.CtorFieldWrite",
+			"method": "abstractMethodMayMutate",
+			"find": "\treturn resolvedRebind ?? !finalSafeStdlibTypes.contains(declType);",
+			"replace": "\treturn resolvedRebind ?? true;",
+			"note": "an unresolved declared type is assumed to rebind `this`, so the final-safe stdlib whitelist stops rescuing an Array / String / Bytes binding a method is called on"
+		},
+		{
+			"name": "M-PFF-REBIND-UNRESOLVED",
+			"type": "anyparse.query.CtorFieldWrite",
+			"method": "abstractMethodMayMutate",
+			"find": "\tfinal resolvedRebind: Null<Bool> = idx?.traits.abstractRebindsThis(declType, abstractKinds);",
+			"replace": "\tfinal resolvedRebind: Null<Bool> = null;",
+			"note": "the index is never asked whether the declared type rebinds `this`, so a resolved CLASS type and a ctor-only abstract both fall through to the whitelist and get suppressed as unprovable"
+		},
+		{
+			"name": "M-SCOPE-LIBRARY-DROPPED",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "resolutionFiles",
+			"find": "\treturn sources.report.concat(sources.library.entries());",
+			"replace": "\treturn sources.report;",
+			"note": "the resolution scope carries only the report half, so a library type is unresolvable again and a check reading the index answers as if no scope had been configured"
 		}
 	]
 }

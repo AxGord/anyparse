@@ -375,41 +375,11 @@ final class ElementSpan {
 	): EditResult {
 		if (targets.length == 0) return Err('no node to remove');
 		final edits: Array<{ span: Span, text: String }> = [];
-		// Hoisted, and LAZY: the scan is O(file) and every target asks it of the same source, but
-		// `trailingTrimmedSpan`'s one-byte guard answers most targets without needing it at all. The
-		// memo is a local of this call — run-scoped by construction, never a process-lifetime cache.
-		var scanned: Null<Array<LexRegion>> = null;
-		final regionsOf: () -> Array<LexRegion> = () -> {
-			final cached: Null<Array<LexRegion>> = scanned;
-			if (cached != null) return cached;
-			final fresh: Array<LexRegion> = plugin.lexicalRegions(source);
-			scanned = fresh;
-			return fresh;
-		};
+		final regionsOf: () -> Array<LexRegion> = lazyRegions(source, plugin);
 		for (target in targets) {
 			final nodeSpan: Null<Span> = target.node.span;
 			if (nodeSpan == null) return Err('the node to remove has no source span');
-			final group: Span = trailingTrimmedSpan(source, declGroupSpan(target.node, target.parent, nodeSpan), regionsOf);
-			// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
-			// stops short of it and the block is left in the file — where it silently becomes
-			// the documentation of whatever declaration follows. Removing it WITH the node is
-			// therefore the default; `withDoc = false` is the deliberate opt-out for a caller
-			// that keeps the comment on purpose. The line/comma extension then runs on top.
-			//
-			// A `@:meta` is the exception, and it is the same defect as the forward walk
-			// `declGroupSpan` no longer takes: the doc above an annotation documents the
-			// DECLARATION under it, which is staying. Removing an `@:access` off a real
-			// 79-line Pony class took the class's own `/** … */` with it — orphaning nothing,
-			// just deleting documentation the caller never addressed.
-			final span: Span = withDoc && !isAnnotationElement(target.node) ? docExtendedSpan(source, group, regionsOf(), true) : group;
-
-			var isComma: Bool = adjacentToComma(source, span);
-			final parent: Null<QueryNode> = target.parent;
-			if (!isComma && parent != null) isComma = MemberKinds.COMMA_CONTAINER_KINDS.contains(parent.kind);
-
-			// A comma list has no blank separators, so only the line branch gives one back.
-			final cut: Span = isComma ? commaExtendedSpan(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
-			edits.push({ span: cut, text: '' });
+			edits.push({ span: elementCut(source, target.node, target.parent, nodeSpan, withDoc, regionsOf).span, text: '' });
 		}
 		// A target nested in another — a member and the region holding it, two nested regions — is
 		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same
@@ -482,6 +452,148 @@ final class ElementSpan {
 		source: String, tree: QueryNode, node: QueryNode, nodeSpan: Span, regions: () -> Array<LexRegion>
 	): Span {
 		return trailingTrimmedSpan(source, declGroupSpan(node, TreePath.parentOf(tree, node), nodeSpan), regions);
+	}
+
+	/**
+	 * A once-per-call lazy `lexicalRegions` memo over `source`.
+	 *
+	 * The scan is O(file) and every consumer asks it of the same source, but
+	 * `trailingTrimmedSpan`'s one-byte guard answers most spans without needing it at all.
+	 * The memo is captured in the returned closure — run-scoped by construction, never a
+	 * process-lifetime cache.
+	 */
+	public static function lazyRegions(source: String, plugin: GrammarPlugin): () -> Array<LexRegion> {
+		var scanned: Null<Array<LexRegion>> = null;
+		return () -> {
+			final cached: Null<Array<LexRegion>> = scanned;
+			if (cached != null) return cached;
+			final fresh: Array<LexRegion> = plugin.lexicalRegions(source);
+			scanned = fresh;
+			return fresh;
+		};
+	}
+
+	/**
+	 * The exact span removing ONE element takes out of `source`, and the two things the
+	 * address did not name that go with it: the leading doc block and the annotations of
+	 * the declaration group.
+	 *
+	 * Public, and returning more than the span, because the REPORT is computed from it.
+	 * `remove-element` answered `wrote <file>` whatever it cut, so a selector aimed at an
+	 * annotation that landed on the method it annotates read exactly like a one-line
+	 * delete — a twenty-line test went with no line of output naming it. Re-deriving the
+	 * span for the message would have been a second, worse copy of this one.
+	 */
+	public static function elementCut(
+		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, regionsOf: () -> Array<LexRegion>
+	): { span: Span, doc: Bool, annotations: Int } {
+		final group: Span = trailingTrimmedSpan(source, declGroupSpan(node, parent, nodeSpan), regionsOf);
+		// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
+		// stops short of it and the block is left in the file — where it silently becomes
+		// the documentation of whatever declaration follows. Removing it WITH the node is
+		// therefore the default; `withDoc = false` is the deliberate opt-out for a caller
+		// that keeps the comment on purpose. The line/comma extension then runs on top.
+		//
+		// A `@:meta` is the exception, and it is the same defect as the forward walk
+		// `declGroupSpan` no longer takes: the doc above an annotation documents the
+		// DECLARATION under it, which is staying. Removing an `@:access` off a real
+		// 79-line Pony class took the class's own `/** … */` with it — orphaning nothing,
+		// just deleting documentation the caller never addressed.
+		final span: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;
+
+		var isComma: Bool = adjacentToComma(source, span);
+		if (!isComma && parent != null) isComma = MemberKinds.COMMA_CONTAINER_KINDS.contains(parent.kind);
+
+		// A comma list has no blank separators, so only the line branch gives one back.
+		final cut: Span = isComma ? commaExtendedSpan(source, span) : blankExtendedSpan(source, lineExtendedSpan(source, span));
+		return { span: cut, doc: span.from < group.from, annotations: annotationPrefixCount(node, parent) };
+	}
+
+	/**
+	 * What a removal at `node` takes, in the sentence `wrote <file>` was missing: the
+	 * element's kind and name, the LINES the cut spans, and the doc block and annotations
+	 * the group fold carries along.
+	 *
+	 * The address is not the defect this answers. `FnMember:f` and `MetaCall:@:pin` are
+	 * distinct selectors and each removes exactly what it names — measured. What the op
+	 * could not say was the SIZE and SHAPE of what it did, so an address that resolved one
+	 * declaration outward reported the same single line as the edit that was meant.
+	 *
+	 * A cut that stays inside one line counts as that one line: the unit is the line the
+	 * reader will look at, not the bytes.
+	 */
+	public static function describeCut(
+		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, plugin: GrammarPlugin
+	): String {
+		final cut: { span: Span, doc: Bool, annotations: Int } = elementCut(
+			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin)
+		);
+		final subject: QueryNode = cutSubject(node, parent);
+		final name: Null<String> = subject.name;
+		final what: String = name == null ? subject.kind : '${subject.kind} $name';
+		var lines: Int = 1;
+		var i: Int = cut.span.from;
+		final last: Int = cut.span.to - 1;
+		while (i < last) {
+			if (source.fastCodeAt(i) == '\n'.code) lines++;
+			i++;
+		}
+		final carried: Array<String> = [];
+		if (cut.doc) carried.push('its doc comment');
+		if (cut.annotations > 0) carried.push(counted(cut.annotations, 'annotation'));
+		final extra: String = carried.length == 0 ? '' : ', with ${carried.join(' and ')}';
+		return 'removed $what: ${counted(lines, 'line')}$extra';
+	}
+
+	/**
+	 * The first sibling at or after `node` that is NOT a declaration prefix — the forward walk
+	 * over the modifier / `@:meta` run, shared rather than copied.
+	 *
+	 * `null` when the run reaches the end of the sibling list without finding a declaration;
+	 * `node` itself when `node` is not among `parent`'s children, which is the shape a caller
+	 * that resolved the two separately has to be able to tell apart. The ENTRY condition is NOT
+	 * shared and each caller keeps its own: `declGroupSpan` and `cutSubject` stop on an
+	 * annotation element, while a doc block above an annotation run documents the declaration
+	 * under it, so `Patch.docOwnerNode` walks past it on purpose.
+	 */
+	public static function declAfterPrefixRun(node: QueryNode, parent: QueryNode): Null<QueryNode> {
+		final siblings: Array<QueryNode> = parent.children;
+		var i: Int = siblings.indexOf(node);
+		if (i < 0) return node;
+		while (i < siblings.length && isDeclPrefixSibling(siblings[i])) i++;
+		return i < siblings.length ? siblings[i] : null;
+	}
+
+	/** `n` with its noun, singular or plural — the one place the report's `s` is decided. */
+	private static inline function counted(n: Int, noun: String): String {
+		return n == 1 ? '$n $noun' : '$n ${noun}s';
+	}
+
+	/**
+	 * The DECLARATION a cut at `node` is really about — `node` itself for a statement, a
+	 * list element or an annotation, and the declaration that follows when `node` is one of
+	 * the modifier / `@:meta` siblings the cursor convention reads as its first token.
+	 *
+	 * The same forward walk `declGroupSpan` takes to find the span, asked for the node:
+	 * a report that named the `Public` keyword a position landed on would name the one part
+	 * of the group the reader already knows is not what left.
+	 */
+	private static function cutSubject(node: QueryNode, parent: Null<QueryNode>): QueryNode {
+		return parent == null || isAnnotationElement(node) ? node : declAfterPrefixRun(node, parent) ?? node;
+	}
+
+	/** How many ANNOTATIONS the declaration group at `node` carries ahead of its subject. */
+	private static function annotationPrefixCount(node: QueryNode, parent: Null<QueryNode>): Int {
+		if (parent == null || isAnnotationElement(node)) return 0;
+		final siblings: Array<QueryNode> = parent.children;
+		var i: Int = siblings.indexOf(cutSubject(node, parent));
+		if (i < 0) return 0;
+		var count: Int = 0;
+		while (i > 0 && isDeclPrefixSibling(siblings[i - 1])) {
+			i--;
+			if (isAnnotationElement(siblings[i])) count++;
+		}
+		return count;
 	}
 
 	/**

@@ -44,11 +44,15 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	/** Control: a plain never-reassigned field still earns the final suggestion. */
+	@:pin('control')
+	@:killer('M-PFF-CALLSCAN-ALWAYS')
 	public function testPlainFieldStillFlagged(): Void {
 		Assert.equals(1, fieldViolations('class C { private var _x:Int = 0; }').length);
 	}
 
 	/** Control: a field of a resolved CLASS type keeps the suggestion — a class method does not reassign the field. */
+	@:pin('control')
+	@:killer('M-PFF-REBIND-UNRESOLVED')
 	public function testClassTypedFieldMethodCallStillFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
 			'class D { public function nw() {} public function go():Void {} } class C {'
@@ -58,11 +62,15 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	/** Control: a stdlib `Array` field keeps the suggestion — `push` mutates contents, not the `final` binding. */
+	@:pin('control')
+	@:killer('M-PFF-STDLIB-SAFE-NONE')
 	public function testStdlibArrayFieldMethodCallStillFlagged(): Void {
 		Assert.equals(1, fieldViolations('class C { private var _a:Array<Int> = []; function r():Void _a.push(1); }').length);
 	}
 
 	/** Control: a stdlib `String` field keeps the suggestion — String is immutable. */
+	@:pin('control')
+	@:killer('M-PFF-STDLIB-SAFE-NONE')
 	public function testStdlibStringFieldMethodCallStillFlagged(): Void {
 		Assert.equals(1, fieldViolations('class C { private var _t:String = "x"; function r():String return _t.toUpperCase(); }').length);
 	}
@@ -73,6 +81,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	/** A method REFERENCE (no call) on an abstract-typed field does not mutate — still flagged. */
+	@:pin('control')
+	@:killer('M-PFF-CALLSCAN-ALWAYS')
 	public function testAbstractFieldNoCallStillFlagged(): Void {
 		Assert.equals(
 			1, fieldViolations('${ABSTRACT}class C { private var _s:Step = new Step(0); function r():Step->Void return null; }').length
@@ -89,11 +99,15 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	/** Control: a plain never-reassigned local still earns the final suggestion. */
+	@:pin('control')
+	@:killer('M-PFF-CALLSCAN-ALWAYS')
 	public function testPlainLocalStillFlagged(): Void {
 		Assert.equals(1, localViolations('class C { function r():Void { var n:Int = 5; trace(n); } }').length);
 	}
 
 	/** Ctor-only abstract field used via a non-mutating method call — the `this =` lives only in `new`, so it IS flagged. */
+	@:pin('control')
+	@:killer('M-PFF-REBIND-UNRESOLVED')
 	public function testCtorOnlyAbstractFieldFlagged(): Void {
 		Assert.equals(
 			1, fieldViolations('${CTOR_ONLY}class C { private var _b:Buf = new Buf(0); function r():Int return _b.read(); }').length
@@ -101,6 +115,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	/** Ctor-only abstract local used via a non-mutating method call — flagged, mirroring the field case. */
+	@:pin('control')
+	@:killer('M-PFF-REBIND-UNRESOLVED')
 	public function testCtorOnlyAbstractLocalFlagged(): Void {
 		Assert.equals(
 			1, localViolations('${CTOR_ONLY}class C { function r():Void { var b:Buf = new Buf(0); b.read(); trace(b); } }').length
@@ -127,6 +143,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	/** `@:forward` to a CLASS underlying — a forwarded call mutates the object, never the binding — so the ctor-only abstract field IS flagged. */
+	@:pin('control')
+	@:killer('M-PFF-REBIND-UNRESOLVED')
 	public function testForwardToClassAbstractFieldFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
 			'@:forward abstract W(Impl) { public inline function new(v:Impl) this = v; } class Impl { public function new() {} public '
@@ -159,6 +177,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	 * `CachingGrammarPlugin` resolution scope that unions the library source, `Window` resolves to a class
 	 * and the local IS flagged; the bare-plugin control (no scope) still misses it.
 	 */
+	@:pin('control')
+	@:killer('M-SCOPE-LIBRARY-DROPPED')
 	public function testResolutionScopeResolvesLibraryType(): Void {
 		final report: Array<{ file: String, source: String }> = [
 			{
@@ -211,6 +231,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	/** Control: a `private` ctor-only abstract with NO meta is still flagged — preserving the meta run across a modifier must not over-suppress a meta-less decl. */
+	@:pin('control')
+	@:killer('M-PFF-REBIND-UNRESOLVED')
 	public function testPrivateCtorOnlyNoMetaStillFlagged(): Void {
 		Assert.equals(
 			1,
@@ -232,6 +254,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	 * Discriminated against `testForwardToUnresolvedUnderlyingNotFlagged` above, whose abstract
 	 * (`W3`) is NOT on the whitelist: same unresolved underlying, still conservatively kept.
 	 */
+	@:pin('control')
+	@:killer('M-PFF-STDLIB-SAFE-NONE')
 	public function testForwardToAliasedUnderlyingWhitelistedNameFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
 			'@:forward abstract Bytes(HaxeBytes) { public inline function new(v:HaxeBytes) this = v; } class C {'
@@ -241,6 +265,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	}
 
 	/** The local mirror of the aliased-underlying case -- same unknown-not-unsafe resolution, same verdict. */
+	@:pin('control')
+	@:killer('M-PFF-STDLIB-SAFE-NONE')
 	public function testForwardToAliasedUnderlyingWhitelistedNameLocalFlagged(): Void {
 		final vs: Array<Violation> = localViolations(
 			'@:forward abstract Bytes(HaxeBytes) { public inline function new(v:HaxeBytes) this = v; } class C { function r():Void {'

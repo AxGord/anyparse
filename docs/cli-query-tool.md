@@ -488,6 +488,13 @@ Rules and properties:
   of `<Kind>` at the cursor.)
 - `lint --format json` records carry an `address` field — the finding's
   canonical selector, directly usable as an op's `--select` argument.
+- `remove-element` NAMES WHAT IT CUT on both the write and the preview line:
+  `wrote F.hx (removed FnMember f: 8 lines, with its doc comment and 2
+  annotations)`. The address is not the problem it solves — `FnMember:f` and
+  `Meta:@:keep` on the same declaration are distinct and each removes exactly
+  what it names, measured — the problem was that both reported `wrote <file>`,
+  so a selector typed while meaning the annotation ON a member read exactly like
+  the one-line edit that was meant. See "What a removal reports" below.
 - `remove-member` takes the same three forms and REDUCES the resolved node to
   the `(enclosing type, member)` NAME pair its by-name form takes, lifting an
   address that lands inside a body to the member holding it. The removal itself
@@ -499,6 +506,54 @@ Rules and properties:
   `remove-element`. (The ops that accept no address form are the ones whose
   target is not a node: `add-member` appends by `--type`, `add-import` /
   `remove-import` take a module path, `new` / `fmt` are whole-file.)
+
+### What a removal reports, and why it is a report rather than a refusal
+
+`apq remove-element --select 'FnMember:<name>'` removes that member together
+with its modifier / `@:meta` group and its leading doc block. That is its job —
+it is the DELETE verb of the op family — and the fold is what makes the file
+still parse afterwards. What it could not do until S125 was SAY so: a
+twenty-line annotated test and a one-line statement produced the identical
+`apq remove-element: wrote <file>`.
+
+Three fixes were on the table and the measurement picked the third.
+
+A **specificity rule** (refuse a member address when the member carries
+annotations, print both addresses) refuses an address that is already correct.
+Probed on one file: `--select 'FnMember:f'` removes the member and its group,
+`--select 'Meta:@:keep'` removes the annotation and leaves the doc block
+standing. Nothing is ambiguous; a refusal there costs a flag at every
+deliberate use and still says nothing about the un-annotated twenty-line member.
+
+A **confirmation threshold** (an unqualified member address that would take a
+doc, an annotation, or more than N lines needs an explicit flag) was measured
+against the codebase it would run in. Driving the op in preview mode over every
+`FnMember` in `src/anyparse/query` — 1647 members over 70 files — gives:
+
+| what the cut carries | members | share |
+|---|---|---|
+| a leading doc block | 1502 | 91.2 % |
+| an annotation | 1 | 0.1 % |
+| more than 10 lines | 1215 | 73.8 % |
+| doc, annotation, or more than 20 lines | 1513 | 91.9 % |
+| doc, annotation, or more than 5 lines | 1581 | 96.0 % |
+
+In a tree whose lint config enables `prefer-doc-comment`, "the member has a doc"
+is the norm and carries no signal. A gate firing on 92–96 % of correct uses is
+ceremony that gets bypassed by reflex, and the reflex is what the guard was for.
+
+So the fix is the **report**. It costs no behaviour: every deliberate removal
+works exactly as before, with no new flag, and the 17 `RemoveElementSliceTest`
+fixtures plus the 21 pre-existing `AddressCliTest` ones stay green untouched.
+And it is strictly wider than either refusal would have been — it fires for a
+position and a `--match` address too, and it names the DECLARATION rather than
+the node the cursor resolved, so a position landing on `public` reports
+`removed FnMember f`, not `removed Public`.
+
+The count is the LINES THE CUT SPANS, which is not always the file's line delta:
+removing the only statement of a block lets the writer collapse the block on top
+of the cut, so the file loses two lines where the report says one. The report
+describes the element that was addressed; `git diff` describes the file.
 
 ## Output formats
 

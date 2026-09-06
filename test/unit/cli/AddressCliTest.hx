@@ -37,6 +37,13 @@ class AddressCliTest extends Test {
 	 * are canonical-gated and a drifted fixture is refused before any of them decides anything.
 	 */
 	private static final MODULE_PRIVATE_FIXTURE: String = 'class C {}\n\nprivate typedef Helper = {\n\tvar n:Int;\n}\n';
+
+	/**
+	 * A member carrying everything a removal takes along that the address never names: a doc
+	 * block, two annotations, a modifier, and eight lines. The second member is the survivor.
+	 */
+	private static final DOC_ANNOTATED_FIXTURE: String = 'class C {\n\t/**\n\t * Doc.\n\t */\n\t@:keep\n\t@:noCompletion\n'
+		+ '\tpublic function f():Int {\n\t\treturn 1;\n\t}\n\n\tfunction g():Int\n\t\treturn 2;\n}\n';
 	#end
 
 	public function testAddElementAfterSelect(): Void {
@@ -398,6 +405,124 @@ class AddressCliTest extends Test {
 		final out: String = File.getContent(path);
 		Assert.isTrue(out.indexOf('@:keep') < 0, 'the annotation is removed');
 		Assert.isTrue(out.indexOf('private function f') >= 0, 'and the declaration it annotated is not');
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The removal report names WHAT left: the member's kind and name, the lines the cut spans,
+	 * and the doc block and annotations the declaration-group fold carries along — none of which
+	 * the caller's address mentioned.
+	 *
+	 * The shape this pins is the one that cost a slice twenty lines of test: `--select
+	 * 'FnMember:<name>'`, typed while meaning an annotation ON that member, removes the member,
+	 * and at base the entire transcript of that was `wrote <file>`. The address was never
+	 * ambiguous — the report was silent. Killed by arm M-REMOVE-CUT-ANNOTATIONS-NONE.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-CUT-ANNOTATIONS-NONE')
+	public function testRemoveElementReportNamesWhatTheCutTook(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_report', DOC_ANNOTATED_FIXTURE);
+		var rc: Int = -1;
+		final err: String = CliFixture.captureStderr(() -> rc = Cli.run(['remove-element', path, '--select', 'FnMember:f', '--write']));
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('function f') < 0, 'the member is gone');
+		Assert.isTrue(out.indexOf('function g') >= 0, 'and its neighbour is not');
+		#if nodejs
+		Assert.isTrue(
+			err.indexOf('removed FnMember f: 8 lines, with its doc comment and 2 annotations') >= 0, 'the report names the cut: $err'
+		);
+		#end
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The annotation address on the SAME member reports the annotation and nothing else — one
+	 * line, no doc block, no fold. Read beside the report above, that is what makes the two
+	 * addresses tell themselves apart in a transcript: the same file, the same declaration, two
+	 * reports that differ in kind, name and magnitude.
+	 *
+	 * The assertions span both halves on purpose. `Meta @:keep: 1 line` is a string only the
+	 * describer produces, and the absence of the fold clause is asserted against the same
+	 * message, so neither half can be satisfied by a report that says nothing at all.
+	 */
+	public function testRemoveElementReportOnAnAnnotationAddressNamesOnlyIt(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_report_meta', DOC_ANNOTATED_FIXTURE);
+		var rc: Int = -1;
+		final err: String = CliFixture.captureStderr(() -> rc = Cli.run(['remove-element', path, '--select', 'Meta:@:keep', '--write']));
+		Assert.equals(0, rc);
+		final out: String = File.getContent(path);
+		Assert.isTrue(out.indexOf('@:keep') < 0, 'the annotation is gone');
+		Assert.isTrue(out.indexOf('* Doc.') >= 0, 'and the doc block it sat under is not');
+		#if nodejs
+		Assert.isTrue(err.indexOf('removed Meta @:keep: 1 line') >= 0, 'the report names the annotation: $err');
+		Assert.isTrue(err.indexOf('doc comment') < 0, 'and claims no fold it did not make: $err');
+		#end
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A POSITION landing on a modifier keyword removes the declaration that keyword precedes, and
+	 * the report names THAT declaration — `FnMember f`, never the `Public` node the cursor
+	 * resolved. Reporting the resolved node would name the one part of the group the reader
+	 * already knows is not what left.
+	 *
+	 * Killed by arm M-REMOVE-CUT-SUBJECT-RAW.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-CUT-SUBJECT-RAW')
+	public function testRemoveElementReportOnAModifierPositionNamesTheDeclaration(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_report_mod', DOC_ANNOTATED_FIXTURE);
+		var rc: Int = -1;
+		// 7:2 is the `public` keyword — column 1 is the leading tab, and a bare line number would
+		// skip the prefix run and resolve the declaration directly.
+		final err: String = CliFixture.captureStderr(() -> rc = Cli.run(['remove-element', path, '7:2', '--write']));
+		Assert.equals(0, rc);
+		Assert.isTrue(File.getContent(path).indexOf('function f') < 0, 'the declaration goes with its modifier run');
+		#if nodejs
+		Assert.isTrue(err.indexOf('removed FnMember f:') >= 0, 'the report names the declaration, not the modifier: $err');
+		#end
+		FileSystem.deleteFile(path);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `--keep-doc` changes the cut, so it changes the report: three lines fewer and no doc-block
+	 * clause, with the annotations still named. The one assertion spans both, so a report that
+	 * dropped the clause by saying nothing cannot satisfy it.
+	 *
+	 * It reads the annotation count too, and that is how the sweep found it: it arrived as the
+	 * `+extra` row of the fixture two above rather than as a cut written for it. Killed by arm
+	 * M-REMOVE-CUT-ANNOTATIONS-NONE.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-CUT-ANNOTATIONS-NONE')
+	public function testRemoveElementReportFollowsKeepDoc(): Void {
+		#if (sys || nodejs)
+		final path: String = CliFixture.write('addr_report_keepdoc', DOC_ANNOTATED_FIXTURE);
+		var rc: Int = -1;
+		final err: String = CliFixture.captureStderr(() ->
+			rc = Cli.run(['remove-element', path, '--select', 'FnMember:f', '--keep-doc', '--write'])
+		);
+		Assert.equals(0, rc);
+		Assert.isTrue(File.getContent(path).indexOf('* Doc.') >= 0, 'the doc block stays behind');
+		#if nodejs
+		Assert.isTrue(err.indexOf('removed FnMember f: 5 lines, with 2 annotations') >= 0, 'the report follows the cut: $err');
+		#end
 		FileSystem.deleteFile(path);
 		#else
 		Assert.pass('non-sys target');
