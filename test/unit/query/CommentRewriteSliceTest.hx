@@ -400,6 +400,70 @@ class CommentRewriteSliceTest extends Test {
 		#end
 	}
 
+	/**
+	 * A find copied out of the NORMALIZED body carries the line break in front of its
+	 * bullet as a leading SPACE, and that space maps back to the end of the PREVIOUS raw
+	 * line — the splice used to eat the break and its ` * `, running two bullets into
+	 * one line while reporting success. Killed by arm `M-COMMENT-BOUNDARY-BREAK-KEPT`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-BOUNDARY-BREAK-KEPT')
+	public function testLeadingBreakSpaceKeepsTheLineBreak(): Void {
+		final text: String = okText(cr(bullets(), ' - M2 second item', ' - M2 SECOND item', false));
+		Assert.isTrue(text.contains(' * - M1 first item\n * - M2 SECOND item\n * - M3 third item'), text);
+	}
+
+	/**
+	 * The mirror boundary: a find ending on the folded break must not swallow the break
+	 * that FOLLOWS it either. This one is the arm that reads the needle at a normalized-body
+	 * offset, which is out of range for every match past offset 0 and left the trailing half
+	 * of the rule dead. Killed by arm `M-COMMENT-BOUNDARY-TRAIL-INDEX`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-BOUNDARY-TRAIL-INDEX')
+	public function testTrailingBreakSpaceKeepsTheLineBreak(): Void {
+		final text: String = okText(cr(bullets(), '- M2 second item ', '- M2 SECOND item ', false));
+		Assert.isTrue(text.contains(' * - M1 first item\n * - M2 SECOND item\n * - M3 third item'), text);
+	}
+
+	/**
+	 * A replacement that does not repeat the boundary space still lands on its own line —
+	 * the break is a POSITION the mapping keeps, not a character the replacement has to
+	 * re-supply. Killed by arm `M-COMMENT-BOUNDARY-BREAK-KEPT`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-BOUNDARY-BREAK-KEPT')
+	public function testLeadingBreakSpaceWithGutterlessReplacement(): Void {
+		final text: String = okText(cr(bullets(), ' - M2 second item', '- M2 SECOND item', false));
+		Assert.isTrue(text.contains(' * - M1 first item\n * - M2 SECOND item\n * - M3 third item'), text);
+	}
+
+	/**
+	 * A blank ` *` line folds into the SAME single space, so the leading-break case has to
+	 * carry a whole paragraph separator across, not just one newline.
+	 * Killed by arm `M-COMMENT-BOUNDARY-BREAK-KEPT`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-BOUNDARY-BREAK-KEPT')
+	public function testParagraphBreakSurvivesALeadingBreakSpaceFind(): Void {
+		final text: String = okText(cr(bullets(), ' - M1 first item', ' - M1 FIRST item', false));
+		Assert.isTrue(text.contains('Lead sentence.\n *\n * - M1 FIRST item'), text);
+	}
+
+	/**
+	 * The other side of the boundary rule: an EMPTY replacement is a deletion and has to take
+	 * the separator with it, or a removed bullet leaves a bare ` *` line behind. This is the
+	 * shape that made "always keep the break" the wrong fix.
+	 */
+	public function testEmptyReplacementStillConsumesTheBreak(): Void {
+		final text: String = okText(cr(bullets(), ' - M2 second item', '', false));
+		Assert.isTrue(text.contains(' * - M1 first item\n * - M3 third item'), text);
+	}
+
+	private inline function bullets(): String {
+		return '/**\n * Lead sentence.\n *\n * - M1 first item\n * - M2 second item\n * - M3 third item\n */\nclass C {}';
+	}
+
 	private function cr(src: String, find: String, replace: String, regex: Bool): EditResult {
 		return CommentRewrite.rewrite(src, find, replace, regex, true, new HaxeQueryPlugin());
 	}

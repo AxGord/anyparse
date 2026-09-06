@@ -478,6 +478,8 @@ class MoveSymbolSliceTest extends Test {
 	 * plain importer in the same scope is the control: it must still repoint the way it always
 	 * did, so a pass cannot come from the alias arm and the plain arm both going silent.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-ALIAS-SUFFIX-DROPPED')
 	public function testAliasImporterRepointedKeepingItsBinding(): Void {
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: 'package pkg;\n\nclass Foo {}' },
@@ -524,6 +526,8 @@ class MoveSymbolSliceTest extends Test {
 	 * exactly what they had written. The genuine fully-qualified reference is the control and must
 	 * still refuse.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-FQN-ALIAS-RAW')
 	public function testCrossPackageAliasImporterNotMistakenForAnFqnReference(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/A.hx', source: 'package pkg;\n\nclass Foo {}' },
@@ -585,6 +589,8 @@ class MoveSymbolSliceTest extends Test {
 	 * statement's own text — and the plain-import dependency is the control that must keep being
 	 * carried exactly as it always was, so a green run cannot come from the carry going silent.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-ALIAS-SUFFIX-DROPPED')
 	public function testAliasDependencyIsCarriedIntoTheDestination(): Void {
 		inline function destAfterMove(binding: String, denotes: String): String {
 			return changeFor(okChanges('q/Mover.hx', 5, 7, 'q/Host.hx', [
@@ -681,6 +687,8 @@ class MoveSymbolSliceTest extends Test {
 	 * sibling-package walk read `isMain`: a SUB-module type of a sibling module is not visible by
 	 * simple name (`Type not found : Dep` on 4.3.7), so it binds nothing and the move proceeds.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-PACKAGE-CHAIN-ANY')
 	public function testBareSamePackageDependencyIsPricedToo(): Void {
 		inline function move(extra: Array<{ file: String, source: String }>, host: String): MoveResult {
 			return MoveSymbol.moveType('p/Mover.hx', 5, 7, 'p/Host.hx', [
@@ -862,6 +870,8 @@ class MoveSymbolSliceTest extends Test {
 	 * The second arm is the control — the same file with the period removed answers identically,
 	 * which is what makes the first arm a statement about the regions rather than about the fixture.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-NAMESCAN-FULLSTOP-BLIND')
 	public function testACommentsTrailingPeriodDoesNotHideTheReferenceOwedARepairImport(): Void {
 		inline function repairedSourceFor(note: String): String {
 			final mover: String = 'package p;\n\nclass Keep {\n\n\tpublic function new() {}\n\n\tpublic function use(): Int {\n\t\t// $note'
@@ -901,6 +911,8 @@ class MoveSymbolSliceTest extends Test {
 	 * The control is the shape the qualification test is FOR: a genuinely qualified `q.Dep.tag()` in
 	 * the destination is not an unqualified reference and does not contest the carry.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-NAMESCAN-FULLSTOP-BLIND')
 	public function testTheDestinationCollisionScanReadsTheDestinationsOwnComments(): Void {
 		inline function moveInto(destBody: String): MoveResult {
 			final cursor: String = 'package p;\n\nimport q.Dep;\n\n/**\n * A doc block only the CURSOR file has.\n */\n'
@@ -1141,6 +1153,8 @@ class MoveSymbolSliceTest extends Test {
 	 * so the `isPrivate` filter is proved by MUTATION instead: drop `!t.isPrivate` from the same-package
 	 * rung and this test alone flips.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-PRIVATE-SIBLING-BINDS')
 	public function testPrivateSiblingMainTypeIsNotABinding(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 's/Date.hx', source: 'package s;\n\nprivate class Date {}\n\nclass DateHelper {}' },
@@ -1887,6 +1901,8 @@ class MoveSymbolSliceTest extends Test {
 	 * type is declared in that module now, and a module's own declaration is what the file reads it
 	 * off. Only a `using` loses something.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-USING-MIRROR-ANY-KIND')
 	public function testDestinationModuleImportGainsNothingForASecondaryMove(): Void {
 		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
 			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
@@ -1996,6 +2012,8 @@ class MoveSymbolSliceTest extends Test {
 	 * Forcing the container answer to "needed" flips the two region pins above; a no-op forward
 	 * blank-run scan flips this one.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-BLANKRUN-END-NOOP')
 	public function testCuttingAMiddleDeclarationLeavesExactlyOneSeparator(): Void {
 		final a: String = 'package pkg;\n\n#if macro\nclass A {\n\tpublic var a:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}'
 			+ '\n\nclass B {\n\tpublic var b:Int = 1;\n}\n#end\n';
@@ -2014,6 +2032,8 @@ class MoveSymbolSliceTest extends Test {
 	 * question with no container directive, so the trailing blank goes with the declaration.
 	 * Forcing the container answer to "separator needed" leaves it standing and flips this.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-SIBLINGS-TRUE')
 	public function testCuttingTheLastDeclarationOfAModuleTakesItsSeparator(): Void {
 		final a: String = 'package pkg;\n\nclass Keep {\n\tpublic var k:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}\n';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 7, 7, 'pkg/B.hx', [
@@ -2056,6 +2076,8 @@ class MoveSymbolSliceTest extends Test {
 	 * comment onto the previous declaration's closing brace, and flips exactly this. Found by a
 	 * review probe of this slice's own first cut, not by any pin it shipped with.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-CUT-TAKES-BOTH-RUNS')
 	public function testACutBeforeATrailingCommentKeepsOneSeparator(): Void {
 		final a: String =
 			'package pkg;\n\nclass Keep {\n\tpublic var k:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}\n\n// a trailing note\n';
@@ -2113,6 +2135,8 @@ class MoveSymbolSliceTest extends Test {
 	 * `needsSeparator` is the whole decision — forcing it false takes the leading blank and glues
 	 * `class B` onto `class A`'s brace.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-SIBLINGS-FALSE')
 	public function testAMiddleDeclarationWithOneBlankSideKeepsIt(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic var a:Int = 1;\n}\n\nclass Gone {\n\tpublic var g:Int = 1;\n}\nclass B {\n'
 			+ '\tpublic var b:Int = 1;\n}\n';
@@ -2151,6 +2175,8 @@ class MoveSymbolSliceTest extends Test {
 	 * DOES spell `Moved` — the walk's other two gates (the ladder answer and the name scan) cannot tell
 	 * this case from the one above.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-PACKAGE-CHAIN-ANY')
 	public function testASiblingPackageIsNotAnAncestorSoItIsLeftAlone(): Void {
 		final changes: Array<MoveChange> = okChanges('p/Moved.hx', 3, 7, 'p/Dest.hx', [
 			{ file: 'p/Moved.hx', source: 'package p;\n\nclass Moved {}' },
@@ -2238,6 +2264,8 @@ class MoveSymbolSliceTest extends Test {
 	 * scan to every upper-initial identifier flips it, and that arm was measured on the Pony census — 4
 	 * more refusals of 131 accepted, every one of them compile-proved correct, and ZERO changed diffs.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-RECEIVER-ANY-IDENT')
 	public function testAValuePositionIsStillNotPriced(): Void {
 		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 5, 7, 'p/Host.hx', [
 			{
@@ -2335,6 +2363,8 @@ class MoveSymbolSliceTest extends Test {
 	 * (`testACommentsTrailingPeriodDoesNotHideTheReferenceOwedARepairImport`) — comment-ADJACENT is
 	 * counted, comment-INTERIOR is not.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-NAMESCAN-COMMENT-COUNTED')
 	public function testACommentOnlyMentionIsNotAReference(): Void {
 		inline function repaired(body: String): String {
 			return changeFor(okChanges('p/Src.hx', 8, 7, 'p/Dest.hx', [
@@ -2759,6 +2789,8 @@ class MoveSymbolSliceTest extends Test {
 	 * is a reference the move breaks and nothing in the repair walk rewrites, which is the whole
 	 * reason the comment mask is comments-only and not `lexicalRegions` wholesale.
 	 */
+	@:pin('control')
+	@:killer('M-MOVE-FQN-COMMENT-MASK-NONE')
 	public function testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove(): Void {
 		inline function moveWith(readerBody: String): MoveResult {
 			return MoveSymbol.moveType('a/Thing.hx', 3, 7, 'b/Holder.hx', [

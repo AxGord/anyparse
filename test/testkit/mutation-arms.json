@@ -1242,6 +1242,123 @@
 			"method": "initIdentRebound",
 			"force": "true",
 			"note": "every initializer identifier reads as re-bound before the read, so a binder under a DIFFERENT name is treated as a capture"
+		},
+		{
+			"name": "M-COMMENT-BOUNDARY-BREAK-KEPT",
+			"type": "anyparse.query.CommentRewrite",
+			"method": "literalReplace",
+			"find": "final keepBreaks: Bool = replace.length > 0;",
+			"replace": "final keepBreaks: Bool = false;",
+			"note": "a match that begins or ends on a folded line break consumes it again, so a find copied out of the normalized body runs two comment lines into one"
+		},
+		{
+			"name": "M-COMMENT-BOUNDARY-TRAIL-INDEX",
+			"type": "anyparse.query.CommentRewrite",
+			"method": "literalReplace",
+			"find": "needle.fastCodeAt(needle.length - 1)",
+			"replace": "needle.fastCodeAt(last)",
+			"note": "the trailing guard reads the needle at a NORMALIZED-body offset, which is out of range for every match past offset 0, so only the leading half of the boundary rule survives"
+		},
+		{
+			"name": "M-MOVE-SIBLINGS-FALSE",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "hasSiblingsOnBothSides",
+			"force": "false",
+			"note": "no declaration ever reads as having siblings on both sides, so a middle declaration with a blank on exactly ONE side loses that blank and its neighbour is glued onto the previous closing brace"
+		},
+		{
+			"name": "M-MOVE-SIBLINGS-TRUE",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "hasSiblingsOnBothSides",
+			"force": "true",
+			"note": "every declaration reads as having siblings on both sides, so the separator a last declaration owns is left standing at the end of its container"
+		},
+		{
+			"name": "M-MOVE-CUT-TAKES-BOTH-RUNS",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "cutEditSpan",
+			"find": "if (needsSeparator || (leading && trailing)) return if (!leading || !trailing)",
+			"replace": "if (needsSeparator) return if (!leading || !trailing)",
+			"note": "a cut with a blank run on both sides takes BOTH, which is right only at a real container end and glues a trailing comment onto the previous declaration's closing brace"
+		},
+		{
+			"name": "M-MOVE-BLANKRUN-END-NOOP",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "blankRunEnd",
+			"force": "at",
+			"note": "the forward blank-run scan answers its own start, so a cut never takes the run that follows it and the removed declaration leaves a blank line behind"
+		},
+		{
+			"name": "M-MOVE-FQN-COMMENT-MASK-NONE",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "qualifiedPathRefusal",
+			"find": "final comments: Array<Span> = SourceComments.collectCommentRegions(lexicalRegions(source));",
+			"replace": "final comments: Array<Span> = [];",
+			"note": "the fully-qualified-path scan reads comments as code again, so a prose line naming the old path refuses a legitimate move"
+		},
+		{
+			"name": "M-MOVE-FQN-ALIAS-RAW",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "qualifiedPathRefusal",
+			"find": "if (SymbolIndex.pathImportedBy(imp) == path) imp.span];",
+			"replace": "if (imp.raw == path) imp.span];",
+			"note": "an alias statement's own span stops being excluded, because `raw` is the ALIAS, so `import p.A.Foo as F;` reads as a fully-qualified code reference and refuses the move"
+		},
+		{
+			"name": "M-MOVE-ALIAS-SUFFIX-DROPPED",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "importStatementText",
+			"find": "if (alias == null) return '$keyword $newImportPath;';",
+			"replace": "return '$keyword $newImportPath;';",
+			"note": "a repointed alias import loses its binding suffix, so a file that only ever names the type through the alias is left with no binding for it"
+		},
+		{
+			"name": "M-MOVE-PRIVATE-SIBLING-BINDS",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "packageOrTopLevelBinding",
+			"find": "if (t.name == name && t.isMain && !t.isPrivate) return fi.module;",
+			"replace": "if (t.name == name && t.isMain) return fi.module;",
+			"note": "a module-private main type counts as a same-package binding, which is a binding Haxe does not have, so the unnameable-source arm refuses a correct move"
+		},
+		{
+			"name": "M-MOVE-NAMESCAN-COMMENT-COUNTED",
+			"type": "anyparse.query.NameMentionScan",
+			"method": "sourceNamesAny",
+			"find": "final outside: Array<Span> = excluded.concat(comments);",
+			"replace": "final outside: Array<Span> = excluded;",
+			"note": "a comment INTERIOR counts as a reference again, so a doc block naming the moved type buys it a repair import no code asked for"
+		},
+		{
+			"name": "M-MOVE-NAMESCAN-FULLSTOP-BLIND",
+			"type": "anyparse.query.NameMentionScan",
+			"method": "sourceNamesAny",
+			"find": "return names.exists(n -> OccurrenceScan.referencedUnqualifiedInRange(source, n, 0, source.length, outside, comments));",
+			"replace": "return names.exists(n -> OccurrenceScan.referencedUnqualifiedInRange(source, n, 0, source.length, outside, []));",
+			"note": "a comment's own full stop reads as a qualifier, so a real code reference on the line BELOW a comment ending in a period stops counting"
+		},
+		{
+			"name": "M-MOVE-USING-MIRROR-ANY-KIND",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "destinationUsingMirror",
+			"find": "for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == sourceModule) {",
+			"replace": "for (imp in destInfo.imports) if (SymbolIndex.pathImportedBy(imp) == sourceModule) {",
+			"note": "a plain destination module IMPORT is mirrored like a `using`, so a secondary move writes the destination a statement for a type its own module now declares"
+		},
+		{
+			"name": "M-MOVE-PACKAGE-CHAIN-ANY",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "packageOrTopLevelBinding",
+			"find": "for (pkg in packageChainOf(info.pkg)) for (fi in files) if (fi.pkg == pkg && fi.file != info.file) {",
+			"replace": "for (pkg in packageChainOf(info.pkg)) for (fi in files) if (fi.file != info.file) {",
+			"note": "every package reads as an ancestor of every file, so a SIBLING package binds a name it never reached by a simple name"
+		},
+		{
+			"name": "M-MOVE-RECEIVER-ANY-IDENT",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "collectReceiverNames",
+			"find": "if (accessKinds.contains(node.kind)) for (child in node.children) {",
+			"replace": "if (true) for (child in node.children) {",
+			"note": "every upper-initial identifier is priced, not only a member-access receiver, so a VALUE position such as `Type.createInstance(Dep, [])` contests a destination binding it never named"
 		}
 ,
 		{

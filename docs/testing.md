@@ -409,7 +409,7 @@ The trade is that a macro-module arm's member check moves from a build ERROR to 
 
 Two facts the check paid for. **The matcher has to be `Patch`'s, not a substring test:** a plain `indexOf` gate would have wrongly failed **15 of 90** fragment arms, because stored fragments are copied out of `hxq show --select`, which DEDENTS its output — byte-exactness against the file is the exception, not the rule, and `Patch` is the component that already knows this (`references/ops.md`: leading indentation is not part of the match). And a **sixth arm-authoring blind spot**, alongside the five FORCE-renderer ones: a member declared on a SUB-MODULE type cannot be addressed at all. A record's `type` is read twice with two different meanings — as the class the typer resolves, and as the PATH of the file `tools/mutation-arm.sh` patches — and for a sub-module type those two disagree by construction.
 
-At the S122 merge the registry stands at **141 arms / 221 pins** over **795** registered classes, against **271** prose claims. Read them off the binary (`node bin/test.js --list-arms|--list-pins|--list-classes|--list-claims`) rather than out of this line — every one of the four moves within a slice or two.
+At the S123 merge the registry stands at **174 arms / 263 pins** over **795** registered classes, against **248** prose claims. Read them off the binary (`node bin/test.js --list-arms|--list-pins|--list-classes|--list-claims`) rather than out of this line — every one of the four moves within a slice or two.
 
 **Running one is one command.**
 
@@ -895,6 +895,55 @@ census as "the flake family", and serially they are ordinary `FAILURE`s whose me
 de-nesting the cut removed — real unpinned blast. The price is wall time: the two-arm pair is 57 s
 at `--jobs 4` and 104 s serial, and `M-CURLY-CTORS-NONE` alone is 51 s.
 
+#### A FRAGMENT arm's whole-suite blast always carries one constant row (S123)
+
+`unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode` asks, for every
+fragment arm in the registry, whether its stored `find` still occurs exactly once
+inside its member. Applying a fragment cut DELETES that text, so while an arm is
+applied its own row answers 0 and the check goes red. S121 spotted the shape;
+measured here at `43d31484` with 161 arms, `--jobs 1`, whole suite:
+
+| arm | cut | `testEveryFragmentArmStillCutsItsNode` in its blast |
+|---|---|---|
+| `M-COMMENT-BOUNDARY-TRAIL-INDEX` | fragment | yes, as `+extra` |
+| `M-KINDS` | fragment | yes, as `+extra` |
+| `M-ELSE-GATE` | fragment | yes, as `+extra` |
+| `M-MEMO-OFF` | fragment | yes, as `+extra` |
+| `M-ARM-FRAGMENT-NONE` | fragment | yes, as its OWN pin |
+| `M-ARM-ROW-OK` | force | no |
+| `M-SEAM-BLIND` | force | no |
+| `M-CUDDLE-OFF` | force | no |
+
+5 of 5 fragment, 0 of 3 force — a clean split, and it corrects one detail of the
+S121 note: `M-KINDS` is a FRAGMENT arm (`find`/`replace` on `HxComplexItems.kinds`),
+so it belongs on the top half of that table, not on the control half. The registry
+is **106 fragment / 55 force of 161** at that base, so two thirds of the arms carry
+the row, and 105 of them carry it as pure collateral.
+
+**Decision: the row stays, and the reading subtracts it.** Three measurements
+decide it against a carve-out that would teach the check to skip the arm currently
+applied.
+
+- **It never changes a verdict.** The row is `+extra`, never in an arm's expectation
+  set, so it can never produce a `MISMATCH`. `--fast` never runs the class at all —
+  it is only in the filter for the `M-ARM-*` arms — so the per-WAVE cadence never
+  sees it.
+- **It carries no information about the arm under test, and that is WHY it can be
+  subtracted rather than suppressed.** A fragment cut is applied by `hxq patch`,
+  which already requires the stored text to occur uniquely in the addressed node.
+  A rotted fragment therefore comes back `BUILD-FAIL`, not `SURVIVED` — the check's
+  answer for that one arm is known before the suite starts.
+- **A carve-out would cost a channel this layer exists to close.** The check has no
+  way to know which arm is applied except an environment variable written by the
+  harness; a variable left set in a shell then silences a real rot in an ordinary
+  run. That is prose retyped as metadata, one level down.
+
+One consequence to know when reading a row: `MutationVerdict.classify` reports
+`Survived` only on a fully green run (`header.ok`), so in whole-suite mode a
+fragment arm can never report `SURVIVED`. A dud fragment arm comes back `MISMATCH`
+with `(missing: <its pins>)` instead — same diagnosis, different word. `--fast`
+gives the clean `SURVIVED`.
+
 #### The rewind is emitted at FOUR sites, and 58 was three sites' sum (S113)
 
 S111 instrumented the block-ended whitespace rewind, read **58 fires** over `fmt --list
@@ -1273,6 +1322,55 @@ the role is a slightly weaker statement than it reads as. Fixtures whose role is
 not "control" can take any other role and still retire an `arm` claim, which is what
 `CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused` does with
 `@:pin('guard')` + `@:killer('M-COMMENT-HOIST-BLIND')`.
+
+### 261 to 248: the `MoveSymbol` tranche, and the residue is `base` by construction (S123)
+
+`MoveSymbolSliceTest` was the largest single family left in the census — **17 rows over
+137 fixtures**. Fourteen arms were written for it, thirteen declared and one deleted, and
+the tranche closed every `control` and `arm` claim in the class. The census went
+**261 → 248**; the file's own rows went **17 → 4**.
+
+| arm | cut | its pins | verdict (`--fast`) |
+|---|---|---|---|
+| `M-MOVE-SIBLINGS-FALSE` | force `false` | `testAMiddleDeclarationWithOneBlankSideKeepsIt` | KILLED, 4 extra |
+| `M-MOVE-SIBLINGS-TRUE` | force `true` | `testCuttingTheLastDeclarationOfAModuleTakesItsSeparator` | KILLED, 7 extra |
+| `M-MOVE-CUT-TAKES-BOTH-RUNS` | drop the `leading && trailing` arm of `cutEditSpan` | `testACutBeforeATrailingCommentKeepsOneSeparator` | KILLED, 0 extra |
+| `M-MOVE-BLANKRUN-END-NOOP` | force `blankRunEnd` to its own start | `testCuttingAMiddleDeclarationLeavesExactlyOneSeparator` | KILLED, 8 extra |
+| `M-MOVE-FQN-COMMENT-MASK-NONE` | empty comment mask in `qualifiedPathRefusal` | `testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove` | KILLED, 0 extra |
+| `M-MOVE-FQN-ALIAS-RAW` | `imp.raw` instead of `pathImportedBy` | `testCrossPackageAliasImporterNotMistakenForAnFqnReference` | KILLED, 4 extra |
+| `M-MOVE-ALIAS-SUFFIX-DROPPED` | drop the alias suffix from a repointed statement | `testAliasImporterRepointedKeepingItsBinding`, `testAliasDependencyIsCarriedIntoTheDestination` | KILLED, 4 extra |
+| `M-MOVE-PRIVATE-SIBLING-BINDS` | drop `!t.isPrivate` from the same-package rung | `testPrivateSiblingMainTypeIsNotABinding` | KILLED, 1 extra |
+| `M-MOVE-NAMESCAN-COMMENT-COUNTED` | comment regions out of the EXCLUSION set | `testACommentOnlyMentionIsNotAReference` | KILLED, 0 extra |
+| `M-MOVE-NAMESCAN-FULLSTOP-BLIND` | comment regions out of the QUALIFIER job | `testACommentsTrailingPeriodDoesNotHideTheReferenceOwedARepairImport`, `testTheDestinationCollisionScanReadsTheDestinationsOwnComments` | KILLED, 0 extra |
+| `M-MOVE-USING-MIRROR-ANY-KIND` | mirror a plain destination `import` like a `using` | `testDestinationModuleImportGainsNothingForASecondaryMove` | KILLED, 0 extra |
+| `M-MOVE-PACKAGE-CHAIN-ANY` | every package reads as an ancestor | `testASiblingPackageIsNotAnAncestorSoItIsLeftAlone`, `testBareSamePackageDependencyIsPricedToo` | KILLED, 16 extra |
+| `M-MOVE-RECEIVER-ANY-IDENT` | price every upper-initial identifier, not only a receiver | `testAValuePositionIsStillNotPriced` | KILLED, 0 extra |
+| ~~`M-MOVE-SIBLING-SUBTYPE-BINDS`~~ | drop `t.isMain` from the same-package rung | intended for `testBareSamePackageDependencyIsPricedToo` | **SURVIVED — deleted** |
+
+Two of those rows are the point of running an arm rather than declaring one.
+
+**`M-MOVE-SIBLING-SUBTYPE-BINDS` SURVIVED.** `testBareSamePackageDependencyIsPricedToo`'s
+doc says its second arm "is the one that made the sibling-package walk read `isMain`", so
+dropping `t.isMain` from `DependencyCarry.packageOrTopLevelBinding` looked like the cut its
+own prose named. It changes nothing the fixture can see. The arm was DELETED rather than
+kept as an unverified claim — an arm exists to kill a pin, and one that kills nothing is
+the "proof that proves nothing" this layer replaced. The pin was repointed to
+`M-MOVE-PACKAGE-CHAIN-ANY`, which the ten-arm sweep had already shown killing that fixture
+as collateral.
+
+**The `+extra` column paid for two pins.** `testAliasDependencyIsCarriedIntoTheDestination`
+and `testBareSamePackageDependencyIsPricedToo` both appeared in another arm's extras, which
+is what identified their killer without writing a fourteenth and fifteenth cut.
+
+**The residue is `base`, and `base` cannot be retired.** The four rows left —
+`testAnAmbientTopLevelDependencyIsNotACollision`, and the `base` halves of
+`testCuttingAMiddleDeclarationLeavesExactlyOneSeparator`,
+`testCuttingTheLastDeclarationOfAModuleTakesItsSeparator` and
+`testPrivateSiblingMainTypeIsNotABinding` — claim "green at base", which
+`ProseClaims.records` answers `false` for on purpose (see the class doc: `base` and
+`vacuity` are censused, not gated toward a fix). Reading those four as unfinished work is
+reading the census wrong: they are the fixed floor a `control`-and-`arm` tranche leaves
+behind, and this class is now AT that floor.
 
 ### The 38 class-doc claims get no type-level pin — measured, not preferred
 
@@ -3095,6 +3193,64 @@ defect, and no uniform shift can explain it.
 The general shape, worth asking of every new mutation op whose payload can reach a
 comment or a literal: **when an op writes into a region the writer COPIES rather
 than re-derives, the op is the last thing that can check it.**
+
+#### The same region, the other direction: a find copied out of the NORMALIZED body
+
+`hxq patch` writes INTO a comment. `hxq comment-rewrite` first has to FIND a place
+in one, and it matches against a normalized copy of the body — every line break,
+plus the ` * ` continuation after it, folded to a single space. That folding is
+what makes a multi-line find work at all, and it is also the only place in the
+tool where one normalized character stands for a run of raw ones.
+
+S121 hit the consequence while editing a bullet list and reported it as a measured
+fact. A find copied out of the normalized rendering carries the break in FRONT of
+its bullet as a leading space, and `normalizeCommentBody`'s index map sends that
+space back to the START of the run — the `\n` at the end of the PREVIOUS raw line.
+The splice therefore began there, ate the break and its ` * `, and ran two bullets
+into one line. Reproduced here on a four-line doc block: with
+`find = ' - M2 …'` the op printed `rewrote 1 file(s)`, exit 0, and left
+
+```
+ * - M1 the first bullet with some text - M2 the SECOND bullet with some text
+```
+
+Every gate stayed green, exactly as this section's opening paragraph predicts:
+the file parses, the writer re-emits the interior verbatim so `fmt --list` reports
+0 of 1, and no lint rule reads a continuation prefix. S121 only saw it because a
+FOURTH rewrite happened to trip the width guard.
+
+**Eight boundary shapes, measured before and after.** The fix is a POSITION
+mapping, not a match on the string: a leading or trailing break run stays where it
+is and the replacement's own boundary space stands for it. Only an EMPTY
+replacement — a deletion, which has to take its separator with it — still consumes
+the break, and that row is why "always keep the break" is the wrong fix: it leaves
+a bare ` *` line where a removed bullet was.
+
+| # | find / replace at the boundary | before | after |
+|---|---|---|---|
+| 1 | leading space, replacement keeps it | M1 and M2 run on | fixed |
+| 2 | no leading space (S121's workaround) | correct | unchanged |
+| 3 | leading space, EMPTY replacement | clean delete | unchanged |
+| 4 | trailing space, replacement keeps it | M2 and M3 run on | fixed |
+| 5 | leading space that maps to a REAL space | correct | unchanged |
+| 6 | leading space, replacement drops it | glued with no space at all | fixed |
+| 7 | leading space across a BLANK ` *` line | paragraph break destroyed | fixed |
+| 8 | break INTERIOR to the match (a multi-line find) | joins — documented | unchanged |
+
+Row 7 is the sharpest: `skipContinuation` swallows consecutive newlines, so a
+whole paragraph separator folds into the same single space and was destroyed by
+the same arithmetic. Row 8 is the half that must NOT change — a find spanning two
+lines is the op's documented multi-line capability, and its two fixtures
+(`testLiteralMultilineFindWithPrefixes`, `testLiteralMultilineFindWithoutPrefixes`)
+are the other side of the acceptance.
+
+Both boundaries are pinned, and separately: `M-COMMENT-BOUNDARY-BREAK-KEPT` cuts
+the rule as a whole (rows 1, 4, 6, 7 go red), `M-COMMENT-BOUNDARY-TRAIL-INDEX`
+restores an index confusion the first cut of this slice shipped — `needle` read at
+a NORMALIZED-body offset, out of range for every match past offset 0 — which left
+the trailing half of the rule DEAD while every leading fixture passed. That arm
+kills exactly one fixture and nothing else; it exists because the eight-row matrix
+caught the dead half and no single-boundary fixture could have.
 
 Every format-aware step is delegated to the CLI this project already builds —
 `apq lint-diff` for the blast radius, `apq sweep` for the corpus, `apq

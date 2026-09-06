@@ -931,9 +931,9 @@ class TestDiscoveryParityTest extends Test {
 	 * its own — this is the runtime half, and it is what keeps the metas from
 	 * being dropped in a refactor without anything noticing.
 	 *
-	 * One hundred and twenty-nine entries over thirty-four classes, and still not a conversion of the tree: sixteen
-	 * are the seam coverage for the fourteen rules S73 touched that its deciding arm cannot
-	 * reach (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
+	 * Two hundred and sixty-three entries over sixty-nine classes, and still not a conversion of the
+	 * tree: sixteen are the seam coverage for the fourteen rules S73 touched
+	 * that its deciding arm cannot reach (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
 	 * where the arm name is the whole point — it is the only record that the fixture reaches the
 	 * moved code, and deleting the fixture now fails HERE rather than silently.
 	 */
@@ -1242,6 +1242,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CommentOwnerGuardSliceTest#testHoistingACommentPastSurvivingCodeIsRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused :: guard :: M-COMMENT-HOIST-BLIND',
 			'unit.query.CommentOwnerGuardSliceTest#testWeldingTwoCommentBlocksIsRefused :: control :: M-COMMENT-WELD-BLIND',
+			'unit.query.CommentRewriteSliceTest#testLeadingBreakSpaceKeepsTheLineBreak :: control :: M-COMMENT-BOUNDARY-BREAK-KEPT',
+			'unit.query.CommentRewriteSliceTest#testLeadingBreakSpaceWithGutterlessReplacement :: control :: M-COMMENT-BOUNDARY-BREAK-KEPT',
+			'unit.query.CommentRewriteSliceTest#testParagraphBreakSurvivesALeadingBreakSpaceFind :: control :: '
+			+ 'M-COMMENT-BOUNDARY-BREAK-KEPT',
+			'unit.query.CommentRewriteSliceTest#testTrailingBreakSpaceKeepsTheLineBreak :: control :: M-COMMENT-BOUNDARY-TRAIL-INDEX',
 			'unit.query.CommentWeldDeletionSliceTest#testHoistingInsideAReplacementIsStillRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentWeldDeletionSliceTest#testWeldingAcrossTheRepeatedSeparatorIsStillRefused'
 			+ ' :: control :: M-COMMENT-WELD-BLIND',
@@ -1259,6 +1264,26 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-WILDCARD-RIVAL-ORDER-BLIND',
 			'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically'
 			+ ' :: control :: M-WILDCARD-BINDS-BLIND',
+			'unit.query.MoveSymbolSliceTest#testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove :: control :: '
+			+ 'M-MOVE-FQN-COMMENT-MASK-NONE',
+			'unit.query.MoveSymbolSliceTest#testACommentOnlyMentionIsNotAReference :: control :: M-MOVE-NAMESCAN-COMMENT-COUNTED',
+			'unit.query.MoveSymbolSliceTest#testACommentsTrailingPeriodDoesNotHideTheReferenceOwedARepairImport :: control :: '
+			+ 'M-MOVE-NAMESCAN-FULLSTOP-BLIND',
+			'unit.query.MoveSymbolSliceTest#testACutBeforeATrailingCommentKeepsOneSeparator :: control :: M-MOVE-CUT-TAKES-BOTH-RUNS',
+			'unit.query.MoveSymbolSliceTest#testAMiddleDeclarationWithOneBlankSideKeepsIt :: control :: M-MOVE-SIBLINGS-FALSE',
+			'unit.query.MoveSymbolSliceTest#testASiblingPackageIsNotAnAncestorSoItIsLeftAlone :: control :: M-MOVE-PACKAGE-CHAIN-ANY',
+			'unit.query.MoveSymbolSliceTest#testAValuePositionIsStillNotPriced :: control :: M-MOVE-RECEIVER-ANY-IDENT',
+			'unit.query.MoveSymbolSliceTest#testAliasDependencyIsCarriedIntoTheDestination :: control :: M-MOVE-ALIAS-SUFFIX-DROPPED',
+			'unit.query.MoveSymbolSliceTest#testAliasImporterRepointedKeepingItsBinding :: control :: M-MOVE-ALIAS-SUFFIX-DROPPED',
+			'unit.query.MoveSymbolSliceTest#testBareSamePackageDependencyIsPricedToo :: control :: M-MOVE-PACKAGE-CHAIN-ANY',
+			'unit.query.MoveSymbolSliceTest#testCrossPackageAliasImporterNotMistakenForAnFqnReference :: control :: M-MOVE-FQN-ALIAS-RAW',
+			'unit.query.MoveSymbolSliceTest#testCuttingAMiddleDeclarationLeavesExactlyOneSeparator :: control :: M-MOVE-BLANKRUN-END-NOOP',
+			'unit.query.MoveSymbolSliceTest#testCuttingTheLastDeclarationOfAModuleTakesItsSeparator :: control :: M-MOVE-SIBLINGS-TRUE',
+			'unit.query.MoveSymbolSliceTest#testDestinationModuleImportGainsNothingForASecondaryMove :: control :: '
+			+ 'M-MOVE-USING-MIRROR-ANY-KIND',
+			'unit.query.MoveSymbolSliceTest#testPrivateSiblingMainTypeIsNotABinding :: control :: M-MOVE-PRIVATE-SIBLING-BINDS',
+			'unit.query.MoveSymbolSliceTest#testTheDestinationCollisionScanReadsTheDestinationsOwnComments :: control :: '
+			+ 'M-MOVE-NAMESCAN-FULLSTOP-BLIND',
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesABareKeyword :: control :: M-NEWFILE-BARE-KEYWORD-WRAPPED',
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: control :: M-NEWFILE-IMPORT-ANY-LINE',
 			'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: control :: M-NEWFILE-IMPORT-DOUBLED',
@@ -1454,6 +1479,21 @@ class TestDiscoveryParityTest extends Test {
 			'M-JSUL-LOCAL-CAPTURE-ANY',
 			'M-JSUL-UNINDEXED-NAME-ALWAYS',
 			'M-JSUL-INIT-IDENT-ALWAYS-REBOUND',
+			'M-COMMENT-BOUNDARY-BREAK-KEPT',
+			'M-COMMENT-BOUNDARY-TRAIL-INDEX',
+			'M-MOVE-SIBLINGS-FALSE',
+			'M-MOVE-SIBLINGS-TRUE',
+			'M-MOVE-CUT-TAKES-BOTH-RUNS',
+			'M-MOVE-BLANKRUN-END-NOOP',
+			'M-MOVE-FQN-COMMENT-MASK-NONE',
+			'M-MOVE-FQN-ALIAS-RAW',
+			'M-MOVE-ALIAS-SUFFIX-DROPPED',
+			'M-MOVE-PRIVATE-SIBLING-BINDS',
+			'M-MOVE-NAMESCAN-COMMENT-COUNTED',
+			'M-MOVE-NAMESCAN-FULLSTOP-BLIND',
+			'M-MOVE-USING-MIRROR-ANY-KIND',
+			'M-MOVE-PACKAGE-CHAIN-ANY',
+			'M-MOVE-RECEIVER-ANY-IDENT',
 			'M-SSB-CHAIN-TAIL-OFF',
 			'M-SSB-ELEM-TRAIL-COMMENT-NONE',
 			'M-SSB-SYMMETRY-ONLY-BLIND',

@@ -116,6 +116,17 @@ final class CommentRewrite {
 	}
 
 	/**
+	 * True when the raw body position `at` opens a LINE-BREAK RUN — the one normalized
+	 * character that stands for more than itself, since `normalizeCommentBody` folds a
+	 * break plus every continuation prefix after it into a single space.
+	 */
+	private static inline function isBreakRun(body: String, at: Int): Bool {
+		if (at >= body.length) return false;
+		final c: Int = body.fastCodeAt(at);
+		return c == '\n'.code || c == '\r'.code;
+	}
+
+	/**
 	 * Whether `tok` is a doc block holding no line break — the shape whose closer would ride the last
 	 * content line once the replacement grows past one line.
 	 *
@@ -326,9 +337,10 @@ final class CommentRewrite {
 	 * continuations: the body is normalized (each `\n` + ` * ` doc prefix folded to
 	 * one space) for the search, and every non-overlapping match is projected back
 	 * to its span in the original body via the index map — so a phrase wrapped over
-	 * two ` * ` lines is found and replaced. Consuming the continuation between the two lines is safe because the replacement is
-	 * re-prefixed before it is spliced (`RefactorSupport.reflowIntoComment`) — the writer does
-	 * NOT re-wrap a comment interior, it re-emits it byte for byte, which is what made the raw
+	 * two ` * ` lines is found and replaced. Consuming the continuation BETWEEN two
+	 * matched lines is safe because the replacement is re-prefixed before it is
+	 * spliced (`RefactorSupport.reflowIntoComment`) — the writer does NOT re-wrap a
+	 * comment interior, it re-emits it byte for byte, which is what made the raw
 	 * splice a corruption no gate could see.
 	 *
 	 * `find` is normalised the SAME way, which is what makes a multi-line FIND work.
@@ -338,6 +350,16 @@ final class CommentRewrite {
 	 * body's own break is one SPACE there. The tool then reported "rewrote 0 file(s)",
 	 * which is indistinguishable from a find that is genuinely absent — the CLI now
 	 * says so in as many words.
+	 *
+	 * The same folding makes the match's OWN boundaries ambiguous, and that half was
+	 * wrong until S123. A find copied out of the normalized body — ` - M2 …`, a bullet
+	 * with the break in front of it — carries that break as its leading character, and
+	 * `map` sends it back to the END of the PREVIOUS raw line: the splice ate the break
+	 * and its ` * `, running two bullets into one line, with the op reporting success.
+	 * So the boundary is mapped as a POSITION, not as a matched character: a leading or
+	 * trailing break run stays where it is and the replacement's own boundary space
+	 * stands for it. Only an EMPTY replacement — a deletion, which has to take its
+	 * separator with it — still consumes the break.
 	 */
 	private static function literalReplace(body: String, find: String, replace: String): String {
 		final normalized: { text: String, map: Array<Int> } = SourceComments.normalizeCommentBody(body);
@@ -345,13 +367,29 @@ final class CommentRewrite {
 		final map: Array<Int> = normalized.map;
 		final needle: String = SourceComments.normalizeCommentBody(find).text;
 		if (needle.length == 0) return body;
+		final keepBreaks: Bool = replace.length > 0;
 		final buf: StringBuf = new StringBuf();
 		var cursor: Int = 0;
 		var hit: Int = norm.indexOf(needle, 0);
 		while (hit >= 0) {
-			buf.add(body.substring(cursor, map[hit]));
-			buf.add(replace);
-			cursor = map[hit + needle.length];
+			// `last` indexes the NORMALIZED body; `needle.length - 1` indexes the needle. Reading the
+			// needle at `last` is silently out of range for every match past offset 0 — the trailing
+			// half of this guard was dead until the matrix caught it.
+			final last: Int = hit + needle.length - 1;
+			var from: Int = map[hit];
+			var to: Int = map[hit + needle.length];
+			var text: String = replace;
+			if (keepBreaks && needle.fastCodeAt(0) == ' '.code && isBreakRun(body, map[hit])) {
+				from = map[hit + 1];
+				if (text.fastCodeAt(0) == ' '.code) text = text.substring(1);
+			}
+			if (keepBreaks && needle.length > 1 && needle.fastCodeAt(needle.length - 1) == ' '.code && isBreakRun(body, map[last])) {
+				to = map[last];
+				if (text.length > 0 && text.fastCodeAt(text.length - 1) == ' '.code) text = text.substring(0, text.length - 1);
+			}
+			buf.add(body.substring(cursor, from));
+			buf.add(text);
+			cursor = to;
 			hit = norm.indexOf(needle, hit + needle.length);
 		}
 		buf.add(body.substring(cursor));
