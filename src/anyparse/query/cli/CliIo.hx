@@ -51,6 +51,9 @@ final class CliIo {
 	 */
 	private static inline final PERMISSION_BITS: Int = 0xFFF;
 
+	/** Extension of the corpus fixture format — see `isHxtestPath`. */
+	private static inline final HXTEST_EXT: String = '.hxtest';
+
 	/**
 	 * Read a file as **source for parsing**. Same as `readFile` for plain
 	 * `.hx` files; auto-extracts the input section (between the 1st and
@@ -69,10 +72,34 @@ final class CliIo {
 		return readHxtestSectionOrRaw(path, 1);
 	}
 
+	/**
+	 * Whether `path` names a `.hxtest` corpus fixture — three `---`-separated
+	 * sections, not a source file. One place knows the extension, so a command
+	 * that must REFUSE such a path (`apq fmt`) and the readers that section-extract
+	 * it cannot drift apart on what one is.
+	 */
+	public static inline function isHxtestPath(path: String): Bool {
+		return path.endsWith(HXTEST_EXT);
+	}
+
 	public static inline function sysPrint(s: String): Void {
 		#if (sys || nodejs)
 		Sys.print(s);
 		#end
+	}
+
+	/**
+	 * Lexicographic order for `Array<String>.sort`, which takes no default
+	 * comparator — so every walker that wants a stable listing writes the same
+	 * three-branch ternary, and `duplicate-code` reports the copies.
+	 */
+	public static function compareStrings(a: String, b: String): Int {
+		return if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0;
 	}
 
 	public static function stderr(s: String): Void {
@@ -121,7 +148,7 @@ final class CliIo {
 	 */
 	public static function readHxtestSectionOrRaw(path: String, sectionIdx: Int): String {
 		final content: String = readFile(path);
-		if (!path.endsWith('.hxtest')) return content;
+		if (!isHxtestPath(path)) return content;
 		final parts: Array<String> = content.split('\n---\n');
 		if (parts.length != 3) return content;
 		var section: String = parts[sectionIdx];

@@ -445,6 +445,8 @@ A `SURVIVED` or `MISMATCH` row is evidence about the FIXTURE, not noise to retry
 
 **Cadence: `--all --fast` per WAVE, one arm on demand.** Two minutes is cheap enough to run at the end of a wave and far too expensive to run per slice — and the build-time checks already catch the failure a sweep would otherwise be needed for (an arm pointing at a member that no longer exists), for free, on every build. Run a single arm when you add or edit a pin, which is the moment its claim is actually being made. Reach for `--all` (whole suite) when the collateral census is the point — before a release, or when a refactor is supposed to have preserved a coupling.
 
+**The scratch directory a run leaves behind is documented** — `anyparse-mutarm.*` and the `anyparse-mutcheck.*` it drives, kept on a non-KILLED verdict with the path printed, removed otherwise, and swept at startup once their owner pid is gone: § "Scratch directories: every tool's, and who removes them".
+
 **One caveat on the whole-suite mode, measured.** Twenty-three concurrent full-suite runs at `--jobs 4` put the oracle-driven CLI end-to-end fixtures under load, and they flake there: across two `--all` sweeps of the same tree, 11 failure names appeared in one run and not the other — `unit.check.*OracleE2ETest`, `unit.check.OracleCacheTest`, `unit.cli.LintPerFileConfigCliTest`, `unit.check.NamingCheckMemberFixTest`, `unit.check.MagicNumberCheckTest.testRespectsIgnoreFromDisk`. That they are flakes rather than coupling is not a guess: `M-ARM-ROW-OK` cuts `test/testkit/MutationArms.hx`, a file no check reads, and five of its eleven "extras" in the first sweep were `unit.check.*`. Every VERDICT was stable across both sweeps; it is the `+extra` column that should be read as approximate. `--fast` has neither problem.
 
 #### Which seams an arm can OWN, decided by blast (S104)
@@ -1658,6 +1660,68 @@ in `new`, so it IS flagged". Those six now carry the pin the sweep proved, takin
 7 pins to 13. None of them contributed a census row, so this half of the tranche moves the
 number by nothing and records a coupling that nothing recorded before.
 
+### 232 stays 232: the arm registry answers none of the 44 pure controls left in one fence (S131)
+
+The census's own rule says only a PURE `control` row can leave — a `control,base` row that
+gains a pin merely becomes `:: base` — and S129's cheapest row cost no new arm at all: measured
+against an arm the registry already declared, it died there and needed a `@:killer`. S131 asked
+that question exhaustively of one fence and got a NO, which is worth recording with its number
+rather than re-asking next slice.
+
+At `2d39cdf1` the census is **232**. **116** of those rows lie in `unit.query` (75),
+`unit.grammar` (34), `unit.format` (4) and `unit.cli` (3); **44 of the 116 are pure `control`**,
+the only rows that can leave.
+
+**24 declared arms, run whole-suite, killed 0 of the 44.** The arms were picked by mechanism
+match against the fixtures' own docs — the doc/`docSplittingEdit` family
+(`M-DOCSPLIT-COVERING-TOO`, `M-DOCSPLIT-OWNER-ANY`, `M-DOCSPAN-BANNER-IS-DOC`,
+`M-CUT-DOC-KEPT-BY-ANY-PREFIX`), the comment-owner guard (`M-COMMENT-HOIST-BLIND`,
+`M-COMMENT-WELD-BLIND`, `M-COMMENT-CARRY-REFUSES`, `M-CARRY-CROSSING-ANY-SIDE`), the element-cut
+family (`M-META-ELEMENT-ANY-COND-REGION`, `M-REMOVE-CUT-ANNOTATIONS-NONE`,
+`M-REMOVE-CUT-SUBJECT-RAW`), `M-PATCH-SHAPE-ALWAYS-SURVIVES`, the nine `M-SSB-*` brace arms and
+the four `BodyFit` / `WrapList` width arms (`M-CHAIN-STAIRCASE-OFF`, `M-PAREN-PIN-NONE`,
+`M-ARROW-HEAD-WIDTH-NONE`, `M-FIRST-LINE-FIT`, `M-CUDDLE-OFF`). Every one came back KILLED on its
+own pins; not one `+extra` row was a census row.
+
+**The single apparent hit was LOAD, and the flake tell reproduced exactly.** At `--jobs 4`
+`M-CARRY-CROSSING-ANY-SIDE` reported **8** failures, among them
+`unit.query.ImplicitStdScopeTest#testConfigLessUnresolvableImportStaysInfoAndSurvivesFix` — a
+census row, and six of the eight extras were oracle / resolution e2e fixtures. The same arm at
+`--jobs 1` reported **2**: its own pin plus the constant `MutationArmAddressTest` extra every
+fragment arm carries. Quote the serial number.
+
+**Why the residue is structural, on a second and disjoint population.** Reading all 44 docs, at
+least **14** state in their own prose that they hold with the mechanism reverted — "CONTROL,
+green on both sides", "byte-identical with the gate reverted", "passes with the slice reverted",
+"CONTROL, not a discrimination", "Nothing in the guard flips this one". A fixture no mutation can
+kill cannot carry a `@:killer`, and `@:pin('control')` without one is a build error, so those
+rows have nowhere to go by construction. That is S126's verdict, re-measured on a set that shares
+no class with the one it was measured on.
+
+**One row names a killer nobody can declare locally.**
+`HxGroupRestProbeStructStarTest#testTypeParamsExactlyOnTheLimitStayFlat` says it outright: "no
+arm that turns the rest probe OFF can flip this one: its killer is the opposite mutation, an
+off-by-one that loosens the fit predicate (`>` to `>=` in the exceeds check)". There is no member
+to cut — `exceedsMaxLineLength` reaches `WrapList.matchesWithLineLengthState` as a BOOLEAN
+PARAMETER the renderer computes at layout time through its column-aware probe, so the arm would
+be a global width off-by-one in `Renderer`, whose blast is every wrap fixture in the suite.
+Recorded, not declared: an arm whose kill set is "most of the suite" makes every pin naming it
+say the same thing, which is the total-veto shape the `prefer-final` tranche above already
+rejected.
+
+**A predicate narrowing, measured and REFUSED.** `ProseClaims` reads the word `control` and
+blanks its code senses (`control flow`, `control head`, …). It cannot read DIRECTION: **26 of the
+232** rows' docs mention a control that is some OTHER fixture — "Its control is
+`testSiblingReferenceQualifiedWithAccess` above", "the plain `ForExpr` line below is the
+control", "the control is the same carry with nothing at the destination to collide with". Those
+docs claim no role for the fixture that carries them, so on the face of it they are the same kind
+of false positive `CODE_SENSES` exists to remove. They are not: the discriminator is direction,
+and the same words carry both readings — "The control for the test above: a field type resolvable
+NOWHERE …" IS a self-claim, in a doc that also names another fixture. A phrase list that cannot
+tell "I am the control for X" from "X is my control" would suppress real claims, which is a worse
+detector than the one that exists. The 26 stay on the list, and the number is here so the next
+slice does not re-derive it.
+
 ### The 38 class-doc claims get no type-level pin — measured, not preferred
 
 `ProseClaims` is asked of `ClassField.doc` and never of a `ClassType`'s, so a claim in
@@ -2037,7 +2101,7 @@ That list is derived, not remembered: `hxq lit 'probe' test/ --kind Literal` fin
 - The sticky list is hand-maintained (`ShardPlan.STICKY_CLASSES`), so every pinned name must still be registered — otherwise a rename un-pins a class in silence and the race comes back. The per-class weights next to it only balance the split; no gate reads them, so a stale weight costs balance and never correctness.
 - Test and assertion totals grow with every slice, so no literal is pinned in the script. Class parity plus the no-collision gate plus a non-empty, green shard is what makes the totals trustworthy; `--verify` (pays for a monolith run, and fails on a monolith that is red as well as on one that disagrees) and `--expect T/A` are the explicit cross-checks when you want the totals proved rather than argued.
 
-Exit status is 0 only when every shard is green *and* parity holds. A red shard, an empty shard, a collision, an unnameable registration, an un-pinned sticky class, a misplaced class or a count mismatch all exit non-zero and keep the work directory — the shard logs when the run got that far, the plan files when it refused earlier.
+Exit status is 0 only when every shard is green *and* parity holds. A red shard, an empty shard, a collision, an unnameable registration, an un-pinned sticky class, a misplaced class or a count mismatch all exit non-zero and keep the work directory — the shard logs when the run got that far, the plan files when it refused earlier. Kept, not leaked: on green the directory is removed, and `--keep` overrides both ways — see § "Scratch directories: every tool's, and who removes them".
 
 **When to shard, when not.** Shard the full battery during a slice — after the `APQ_TEST`-filtered edit loop, when you want the whole suite as a checkpoint. Run the **monolith** for the final pre-commit run of a slice or campaign, and any time the shard plan itself changed (a new sticky-state test, a new fixed shared path, a new class whose name overlaps another).
 
@@ -2181,6 +2245,80 @@ tools/battery.sh --allow-blast      # accept the blast movement it printed last 
 silence, and a battery that cannot tell "corpus clean" from "corpus not run"
 is worse than no corpus gate, so the script refuses rather than warns.
 
+### Scratch directories: every tool's, and who removes them
+
+Four tools create a directory under `TMPDIR`. Until S134 two of them never
+removed it, and on 2026-09-05 that reached 99 % disk — 51 GiB free of
+3.6 TiB — with 125 `anyparse-mutcheck.*` directories holding **46.6 GB**,
+one of them from a crashed run still holding **105 registered git
+worktrees** at a long-dead commit.
+
+| tool | prefix | success | failure / interrupt |
+|---|---|---|---|
+| `tools/battery.sh` | `apq-battery.` | removed | kept, path printed |
+| `tools/suite-shard.sh` | `apq-suite-shard.` | removed | kept, path printed |
+| `tools/mutation-check.sh` | `anyparse-mutcheck.` | removed when every track was KILLED | kept, path printed |
+| `tools/mutation-arm.sh` | `anyparse-mutarm.` | removed | kept, path printed |
+
+`--keep` on any of the four keeps it regardless — that is the debugging
+escape hatch, and `mutation-arm.sh --keep` forwards it to the
+`mutation-check.sh` it drives, so both directories survive together.
+
+**The recorded blame was half wrong.** `battery.sh` and `suite-shard.sh`
+were already correct: their scratch directory is deleted on green and kept
+on red BY DESIGN, so the ~2.8 GB of orphaned `apq-battery.*` was twenty
+failed or killed runs behaving as documented. The two that leaked
+unconditionally were `mutation-check.sh` — whose header said the workroot is
+"never deleted", at ~23 MB of private build per track, so one `--all` sweep
+of the 208 arms is **~4.8 GB kept forever** — and `mutation-arm.sh`, which
+`exec`ed into mutation-check and so took its own EXIT trap out of the
+process. It now runs mutation-check as a child.
+
+**SIGKILL is the half no trap closes**, and it is the common case here: the
+agent harness kills a session outright. Measured by SIGKILLing a 6-arm run:
+295 MB and 6 registered worktrees left, plus 25 orphaned `haxe`/`node`
+children still writing into the directory. So every one of the four sweeps
+orphans at STARTUP, in `tools/tmp-lifecycle.sh`.
+
+**The sweep predicate, and why it is safe with siblings running.** Several
+workers run these tools at once — the normal state of a campaign — so an
+age-only sweep would delete live work. A claimed directory carries a stamp
+naming its owner's pid, and a directory is swept only when all of:
+
+* its basename is one of this project's four prefixes plus mktemp's six
+  template characters, **directly** under the scratch root — every other
+  shape is refused out loud (five refusal shapes are exercised, including
+  the repo root and `$HOME`);
+* its stamped owner is gone (`kill -0` fails). A REUSED pid reads as alive,
+  so pid reuse can only ever make the sweep keep too much;
+* nothing has written into it for `TMPL_GRACE_SECONDS` (300) — the newest
+  mtime among its **top-level entries**, because a grandchild appending to a
+  track log does not move the directory's own mtime.
+
+A directory with no stamp predates the change; age is then all there is, so
+it needs `TMPL_LEGACY_SECONDS` (6h) of silence. That window is what protects
+a sibling still running a pre-fix copy out of their own worktree — which
+happened during S134 and is visible in `--list` as an owner-less row.
+
+**Deregistration, not just deletion.** `git worktree prune` only forgets
+entries whose directory is GONE, so a leaked directory keeps its
+registration alive indefinitely. Removal comes first and the prune second,
+never the reverse.
+
+`tools/tmp-lifecycle.sh --list` prints every scratch directory with its
+owner pid, ORPHAN/live verdict, idle seconds and size; `--sweep` runs the
+predicate by hand; `--help` is the whole rationale. `APQ_TMP_NO_SWEEP=1`
+turns the startup sweep off.
+
+**Two shell facts this cost, both worth knowing before editing any of these
+scripts.** A failing LAST command in an EXIT trap REPLACES the script's exit
+status — measured on bash 3.2.57, `exit 7` under such a trap exits 1, and so
+does `exit 0` — so every cleanup call inside a trap ends `|| true`, or a
+refused cleanup silently turns a green gate red. And an async child of a
+shell WITHOUT job control inherits SIGINT set to IGNORE, and a script cannot
+trap a signal ignored on entry: any A/B of the signal traps must run the
+target in the foreground or `set -m`, or both arms measure nothing.
+
 ### The shard plan's own producer is cross-checked against a hand-maintained count
 
 `tools/suite-shard.sh` derives everything — the plan, the filters, the class total —
@@ -2294,6 +2432,56 @@ list at a width where the chunk policy decides anything. Treat a corpus Δ0 as
 evidence that the fixtures' VERDICTS held, and reach for a byte capture — a
 `fmt --write` tree diffed against the other arm, or the unit pins for the
 mechanism you touched — when the question is whether the bytes held.
+
+### Reproducing the corpus census: `apq sweep --run`
+
+`781 pass / 120 fail / 43 skip-parse` is quoted as a gate in over a hundred
+slice reports, and until S131 the only thing that could produce it was a full
+`node bin/test.js` under `$ANYPARSE_HXFORMAT_FORK`. `apq sweep` read that run's
+snapshot back — it has never run the corpus — and `apq fmt`, the shipping
+formatter, could not open a `.hxtest` at all: it read the whole three-section
+file and answered `unexpected input`, which reads as a parser defect. A gate
+whose number nothing can re-derive is one bad refactor away from being
+decorative.
+
+```sh
+apq sweep --run                                # re-derive the census, ~0.7s
+apq sweep --run --diff bin/.last-sweep.json    # pair it against the snapshot
+apq sweep --run --corpus <dir> --save <path>   # a census of any fixture tree
+```
+
+`--run` walks every `.hxtest` under `$ANYPARSE_HXFORMAT_FORK/test/testcases`
+(or `--corpus <dir>`) and prints the SAME six-counter line the snapshot reader
+prints, from one copy of the formatting code, so the two forms can be compared
+by eye. `--save` writes the snapshot schema the harness writes, and `--diff`
+keys both sides through the same normaliser — so the pairing is per fixture,
+not per total. Measured on `2d39cdf1`: `946 of 946` fixtures agree, status for
+status, and the totals line is byte-identical to the harness's.
+
+It is a SECOND driver over the same engine, deliberately not a shared one. If
+`SweepCorpus` and `HxFormatterCorpusTest` ever disagree, `--diff` names the
+fixtures — which a shared predicate could not do.
+
+**What the gap actually was.** The measurement is worth recording, because four
+of the five hypotheses about it were wrong in a way that reads plausible:
+
+| Difference | Fixtures | What it did |
+|---|---|---|
+| the trailing `\n` | 779 of 781 PASS | `.hxtest` sections are padded with one `\n` that the reader strips from `expected`; the writer emits `finalNewline`, so a self-comparison is one byte long by construction and can never pass |
+| `disableFormatting` / `excludes` | 2 | driver-level meta-config: the fork's formatter never ran, so `expected` is empty and the writer must not run either |
+| the comment-loss guard | 5 | `writeRoundTrip` refuses to hand back output that dropped a comment; the harness calls the writer directly and compares the lossy bytes. Both call it FAIL — verified in both arms, since `APQ_ALLOW_COMMENT_LOSS=1` turns the refusal into the plain byte-diff and moves no count |
+| MALFORMED / SKIP\_CONFIG | 1 + 1 | one CLI error bucket where the harness has three |
+
+`apq writer-equals <fixture>.hxtest <same>.hxtest` was already the per-fixture
+predicate for everything except that first row — which is why it reported a
+byte-diff on 779 fixtures that PASS. `apq recon --probe <fixture>
+--writer-equals` already normalises the newline and is the single-fixture form;
+`--run` is the whole-corpus one.
+
+**`apq fmt` refuses a `.hxtest` by name** rather than reporting a parse failure,
+and names both replacements. The refusal is not cosmetic: `fmt --write` on a
+fixture, had it learned to read the input section, would have overwritten the
+fixture with a third of itself.
 
 ### The step graph: four branches, one join
 
