@@ -32,7 +32,6 @@ import utest.Test;
  * refusal; the other two are the true refusals that must survive the change, both written on the
  * SAME fixture so the duplicate `//` is present while they fire — a guard that had merely gone
  * blind would pass the first and fail these.
- *
  */
 class CommentWeldDeletionSliceTest extends Test {
 

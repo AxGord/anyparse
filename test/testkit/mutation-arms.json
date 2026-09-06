@@ -1182,6 +1182,59 @@
 			"find": "case Conditional(_c):\nif (_c.body.length > 0)\n$condHeadClassify;",
 			"replace": "",
 			"note": "the module-head #if stops being transparent, so a file header above a guarded import block reads as leading a type and loses its blank"
+		},
+		{
+			"name": "M-JSUL-ANNOTATION-NEVER-NEUTRAL",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "annotationIsNeutral",
+			"find": "return sourceType != null && TypeResolver.stripWs(annotation) == sourceType;",
+			"replace": "return false;",
+			"note": "an annotation is never proven type-neutral, so a declaration whose annotation merely restates its source type stops collapsing"
+		},
+		{
+			"name": "M-JSUL-COMMENT-ANY-IN-FILE",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "commentInDroppedRegion",
+			"find": "return comments.exists(tok -> tok.to > dropSpan.from && tok.from < dropSpan.to);",
+			"replace": "return comments.length > 0;",
+			"note": "any comment in the file counts as one inside the deleted line, so a comment merely standing BETWEEN the two statements blocks the join"
+		},
+		{
+			"name": "M-JSUL-PATH-ALWAYS-CONDITIONAL",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "pathIsConditional",
+			"force": "true",
+			"note": "every read path counts as conditional, so a field chain on a straight-line path is refused as if it had moved under a branch"
+		},
+		{
+			"name": "M-JSUL-BARE-IDENT-NOT-SAFE",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "readPositionIsSafe",
+			"find": "evaluatedOnceEagerly(steps, s) && nothingImpureBefore(steps, s) && (init.kind == s.identKind || !pathIsConditional(steps, s));",
+			"replace": "evaluatedOnceEagerly(steps, s) && nothingImpureBefore(steps, s) && !pathIsConditional(steps, s);",
+			"note": "the bare-identifier exemption goes, so a plain local read is refused on a conditional path even though reading it has no effect at all"
+		},
+		{
+			"name": "M-JSUL-LOCAL-CAPTURE-ANY",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "readsMutableLocal",
+			"find": "return bindingFrom != null && TypeResolver.mayBeLocalOrParam(tree, bindingFrom, s.mutableKinds, []);",
+			"replace": "return bindingFrom != null;",
+			"note": "every local capture reads as a mutable one, so capturing an IMMUTABLE local stops collapsing along with the var case the gate exists for"
+		},
+		{
+			"name": "M-JSUL-UNINDEXED-NAME-ALWAYS",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "unindexedNameUse",
+			"force": "true",
+			"note": "every site reads as carrying an unindexed use of the name, so a shape with no stray read past the pair is refused with the ones that have one"
+		},
+		{
+			"name": "M-JSUL-INIT-IDENT-ALWAYS-REBOUND",
+			"type": "anyparse.check.JoinSingleUseLocal",
+			"method": "initIdentRebound",
+			"force": "true",
+			"note": "every initializer identifier reads as re-bound before the read, so a binder under a DIFFERENT name is treated as a capture"
 		}
 	]
 }
