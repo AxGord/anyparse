@@ -675,8 +675,8 @@
 			"name": "M-OPAQUE-REGION-NODE-SPAN",
 			"type": "anyparse.query.CondRegionScan",
 			"method": "opaqueCondRegions",
-			"find": "out.push({ region: new Span(gaps[0].from, gaps[gaps.length - 1].to), gaps: gaps })",
-			"replace": "out.push({ region: new Span(span.from, span.to), gaps: gaps })",
+			"find": "final region: Span = new Span(gaps[0].from, gaps[gaps.length - 1].to);",
+			"replace": "final region: Span = new Span(span.from, span.to);",
 			"note": "the quoted region becomes the whole splice node, so a tail splice names the operand BEFORE its #if instead of the directive"
 		},
 		{
@@ -803,6 +803,85 @@
 			"find": "NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? [])",
 			"replace": "NullableSource.build(shape, [])",
 			"note": "nothing is excluded from the flow seed, so Reflect.copy and the length-guarded collection accessors seed MaybeNull again and every write through the result is a Warning"
+		},
+		{
+			"name": "M-DOCSPLIT-COVERING-TOO",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "docSplittingEdit",
+			"find": "if (edit.span.to != at || edit.text.indexOf('\\n') < 0 || edit.text.trim().length == 0) continue;",
+			"replace": "if (edit.text.indexOf('\\n') < 0 || edit.text.trim().length == 0) continue;",
+			"note": "the zero-width half of the doc-splitting predicate is gone, so an edit that COVERS the owner and owns what it covers is read as an insert between the doc and its declaration"
+		},
+		{
+			"name": "M-DOCSPLIT-BREAKLESS-TOO",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "docSplittingEdit",
+			"find": "if (edit.span.to != at || edit.text.indexOf('\\n') < 0 || edit.text.trim().length == 0) continue;",
+			"replace": "if (edit.span.to != at || edit.text.trim().length == 0) continue;",
+			"note": "the line-break half of the doc-splitting predicate is gone, so a modifier prepended on the owner's own line is read as a declaration inserted under its doc"
+		},
+		{
+			"name": "M-DOCSPLIT-OWNER-ANY",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "docSplittingEdit",
+			"find": "if (!SourceText.isIdentStartChar(next) && next != '@'.code && next != '#'.code) continue;",
+			"replace": "",
+			"note": "the positive criterion is gone, so an orphaned doc before the byte that CLOSES a body counts as documenting something and add-member's append is refused with a remedy it cannot perform"
+		},
+		{
+			"name": "M-DOCSPAN-BANNER-IS-DOC",
+			"type": "anyparse.query.ElementSpan",
+			"method": "docExtendedSpan",
+			"find": "if ((docOnly || !first) && !SourceComments.isDocOpener(source, open)) break;",
+			"replace": "if (!first && !SourceComments.isDocOpener(source, open)) break;",
+			"note": "a docOnly caller stops requiring `/**` on the FIRST block, so a licence banner or section header reads as the declaration's own doc"
+		},
+		{
+			"name": "M-BODYSLOT-AUTHORED-NEVER",
+			"type": "anyparse.query.BodySlotGuard",
+			"method": "reached",
+			"find": "final authored: Bool = finish.editEnd >= 0 && finish.editFrom <= limit;",
+			"replace": "final authored: Bool = false;",
+			"note": "a construct whose end sits inside the REPLACEMENT no longer reads as authored, so bracing a body around the following statement is refused as a swallow"
+		},
+		{
+			"name": "M-BODYSLOT-LIMIT-EDIT-END",
+			"type": "anyparse.query.BodySlotGuard",
+			"method": "limitOf",
+			"find": "return start.editEnd < 0 ? at.ends[start.pos] ?? -1 : ownedEnd(at, start.editFrom, start.editEnd);",
+			"replace": "return start.editEnd < 0 ? at.ends[start.pos] ?? -1 : start.editEnd;",
+			"note": "an inserted start is limited by the EDIT's own end rather than by the construct the replaced region owned, so a header rewritten over its own body reads as a dropped body"
+		},
+		{
+			"name": "M-BODYSLOT-LEAD-KEPT",
+			"type": "anyparse.query.BodySlotGuard",
+			"method": "emptiedChild",
+			"find": "if (blank(lead, plugin)) continue;",
+			"replace": "",
+			"note": "a slot whose demanding tokens the edit took away is still read as an emptied slot, so removing a whole `else` branch is refused as a reaching `if`"
+		},
+		{
+			"name": "M-COMMENT-HOIST-BLIND",
+			"type": "anyparse.query.CommentOwnerGuard",
+			"method": "hoistedComment",
+			"force": "null",
+			"note": "the carry criterion answers nothing, so an edit that hoists a comment across code it quotes verbatim is accepted"
+		},
+		{
+			"name": "M-COMMENT-CARRY-REFUSES",
+			"type": "anyparse.query.CommentOwnerGuard",
+			"method": "hoistedComment",
+			"find": "if (placed == null) continue;",
+			"replace": "if (placed == null) return 'the carry declaration does not hold';",
+			"note": "a carry declaration the replacement does not bear out becomes a refusal instead of no verdict, so the guard stops failing open on its producer's bookkeeping"
+		},
+		{
+			"name": "M-BODYSLOT-TRIM-WS-ONLY",
+			"type": "anyparse.query.BodySlotGuard",
+			"method": "trimmedEnd",
+			"find": "var at: Int = to;\n\t\twhile (true) {\n\t\t\twhile (at > from && text.isSpace(at - 1)) at--;\n\t\t\tfinal opens: Null<Int> = comments[at];\n\t\t\tif (opens == null || opens < from) return at;\n\t\t\tat = opens;\n\t\t}",
+			"replace": "var at: Int = to;\n\t\twhile (at > from && text.isSpace(at - 1)) at--;\n\t\treturn at;",
+			"note": "a node span's trailing trivia is trimmed of WHITESPACE only, so a trailing line comment leaves the two sides carrying different amounts of it and an ordinary sole-catch removal becomes a refusal"
 		}
 	]
 }

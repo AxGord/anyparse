@@ -1168,6 +1168,138 @@ the fourth contributes ONE — `BraceSymmetrySliceTest`, and that one line belon
 already retired by annotating it. So the wave could not move the number in either direction, and
 the census was checked BEFORE the pins landed rather than explained afterwards.
 
+### 283 at `9e7f9b6d`, and why 294 stood for nine slices — the split, measured
+
+S105, S106, S107, S111, S112, S113, S114, S115 and S116 each looked at this number
+and none moved it. The reason is not effort and it is not the classes each wave
+happened to touch; it is arithmetic that nobody had done. S118 did it.
+
+**There is no bucket that needs no arm.** `ProseClaims.records` retires a `control`
+claim ONLY for `roles.contains('control')`, and `TestDiscovery` refuses to build a
+`@:pin('control')` with no `@:killer`; it retires an `arm` claim for any killer at
+all, and refuses to build a `@:killer` with no `@:pin`. So both gateable kinds
+terminate at a declared registry row. The three-way split the arc had been assuming —
+existing arm / truthful non-control role / new arm — has an EMPTY middle:
+
+| of the 294 at `e8c14e66` | claims |
+|---|---|
+| retirable to zero (kinds ⊆ {`arm`, `control`}) | **169** |
+| — in a class whose subject already has a declared arm | **3** |
+| — needing a NEW registry row | **166** |
+| — retirable by a truthful role that needs no arm | **0** |
+| never fully retirable (some kind is `base` or `vacuity`) | **125** |
+
+**125 is the FLOOR, and that is new.** The census is a LIST compared line by line,
+and a line carries every kind its fixture claims. A fixture claiming `control,base`
+that gains `@:pin('control')` does not leave — its line becomes `:: base`. So the
+number can fall by at most the 169 whose every kind is gateable, and 294 was never
+going to reach zero. The 125 breaks down as 60 `base` alone, 28 `control,base`,
+14 `arm,base`, 11 `arm,control,base`, 11 `vacuity` and 1 `control,vacuity`.
+
+**And the arms are roughly one per claim.** The 169 are controls for DIFFERENT
+clauses by construction — that is what a control is for — so a wave of N claims
+costs on the order of N registry rows, not one shared cut. At the current
+5.9–6.3 s per arm, retiring all 169 would take `--all --fast` from ~11 minutes to
+~28. That cost, not oversight, is the whole explanation of the nine-slice plateau.
+
+**The nine-slice-old premise that annotated classes contribute zero claim lines is
+FALSE now.** Measured on `e8c14e66`: 46 classes carry pins, 107 contribute claim
+lines, and **5 classes are in both** — `PreferCaseGuardCheckTest`,
+`PreferStaticExtensionCheckTest`, `RedundantThisCheckTest`,
+`TrivialGetterShapeCollapseTest`, `BraceSymmetrySliceTest` — for 9 claim lines. The
+premise held when it was written and stopped holding without anyone re-measuring it.
+
+**What S118 retired, and how the arms were found.** Eleven lines, 294 -> 283, with
+eleven pins and ten registry rows. Not one arm was invented for the census: three
+guard families had already written the cut into their own fixture docs — "Flipped by
+dropping the `isDocOpener` clause", "Drop the `editEnd` test in `reached` and this
+goes red while every refusal above stays green", "Disable the lead test in
+`BodySlotGuard.emptiedChild` … (measured)" — so the rows transcribe a measurement
+somebody had already made and left as prose. All ten came back `KILLED`, nine of them
+with the narrowest reading (`KILLED`, no `+extra`, exactly their own pins):
+
+| arm | cut | pin it kills |
+|---|---|---|
+| `M-DOCSPLIT-COVERING-TOO` | `CanonicalEdit#docSplittingEdit`, zero-width clause dropped | `testReplacementStartingAtTheOwnerIsAccepted` |
+| `M-DOCSPLIT-BREAKLESS-TOO` | same member, line-break clause dropped | `testModifierInsertOnTheOwnersLineIsAccepted` |
+| `M-DOCSPLIT-OWNER-ANY` | same member, positive owner criterion deleted | `testAppendBeforeAClosingBraceIsAccepted` |
+| `M-DOCSPAN-BANNER-IS-DOC` | `ElementSpan#docExtendedSpan`, `docOnly` force dropped | `testBannerCommentIsNotGuarded` |
+| `M-BODYSLOT-AUTHORED-NEVER` | `BodySlotGuard#reached`, `authored` forced false | `testAllowsAuthoredBodyThatTakesInTheNextStatement` |
+| `M-BODYSLOT-LIMIT-EDIT-END` | `BodySlotGuard#limitOf`, limit becomes the edit's own end | `testAllowsHeaderRewriteOfBracelessConstruct` |
+| `M-BODYSLOT-LEAD-KEPT` | `BodySlotGuard#emptiedChild`, lead test deleted | three: the `else`-branch and both sole-`catch` controls |
+| `M-BODYSLOT-TRIM-WS-ONLY` | `BodySlotGuard#trimmedEnd`, comment tokens no longer trimmed | `testAllowsSoleCatchClauseRemovalWithATrailingComment` |
+| `M-COMMENT-HOIST-BLIND` | `CommentOwnerGuard#hoistedComment` forced null | `testHoistingAcrossADeclaredCarryIsRefused` |
+| `M-COMMENT-CARRY-REFUSES` | same member, the fail-open skip becomes a refusal | `testACarryDeclarationThatDoesNotHoldIsNotARefusal` |
+
+`M-BODYSLOT-LEAD-KEPT` is where the reading paid for itself. Its first run came back
+`KILLED … +extra: testAllowsSoleCatchClauseRemoval, …WithATrailingComment` — two
+sibling controls whose own docs had ALREADY said they reach the whitespace-lead rule.
+Reading the `+extra` column rather than filing it as collateral turned two more prose
+claims into pins, one of them with an arm of its own, and the re-run then came back
+with no `+extra` at all.
+
+**Two fixtures were deliberately left claiming.**
+`DocOwnerGuardSliceTest#testInsertAboveTheDocIsAccepted` says in its own doc "Nothing
+in the guard flips this one; it is here because a guard that refused the FIX would be
+a worse regression than the bug" — a fidelity guard, not a discriminator, and no
+truthful `@:killer` exists for it. `BodySlotGuardSliceTest#testAllowsWholeBracelessIfRemoval`
+pins a PAIR of deliberately redundant lines ("disabling the host-survival test alone,
+or the lead test alone, leaves this green … only disabling BOTH turns it red"), and an
+arm declares exactly one cut; expressing the pair would need a `find` spanning both
+lines and the two comment blocks between them, which rots on any edit to either.
+Both keep their prose claim, which is the correct outcome.
+
+**A fidelity-guard population exists and is visible in the prose.** `HxArrowBlockBodyOpenSliceTest`
+carries five `control` claims whose docs say, in as many words, "byte-identical with the
+gate reverted" and "byte-identical in every configuration". Those are guards, and no arm
+can kill them by construction. They are part of the 166, and they will never leave it.
+
+**One semantic drift worth knowing before the next wave.** The prose `control` claim
+means "this fixture is the control for a sibling"; the `@:pin('control')` ROLE has
+already broadened past that — `unit.MutationArmAddressTest#testEveryDeclaredArmAddressesALiveMember`
+is a primary fixture whose doc never calls itself a control, pinned `control` since S102.
+`ProseClaims.records` treats the two as the same word, so retiring a control claim with
+the role is a slightly weaker statement than it reads as. Fixtures whose role is genuinely
+not "control" can take any other role and still retire an `arm` claim, which is what
+`CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused` does with
+`@:pin('guard')` + `@:killer('M-COMMENT-HOIST-BLIND')`.
+
+### The 38 class-doc claims get no type-level pin — measured, not preferred
+
+`ProseClaims` is asked of `ClassField.doc` and never of a `ClassType`'s, so a claim in
+a class doc is invisible to `--list-claims`: **the 38 contribute ZERO of the 294**, and
+a type-level `@:pin` would not shrink the census by one line — it would open a second,
+currently uncounted population. That alone settles the cost side. The content settles the
+rest. Running the predicate over every class doc in `test/` (40 hits, of which 2 are the
+non-fixture `testkit.MutationArms` and `testkit.TestDiscovery`, leaving the 38):
+
+| of the 38 | classes |
+|---|---|
+| whose MEMBERS already claim the same kind | 18 |
+| whose members claim something, of any kind | 20 |
+| with no member claim at all | 18 |
+| already carrying member pins | 3 |
+
+And the ones with no member claim are mostly not fixture-role claims at all. Five are the
+predicate reading a KNOB: "`opt.functionTypeHaxe4:WhitespacePolicy` controls the spacing"
+(`HxArrowFnTypeSliceTest`), "Controls only the `IfStmt` ctor" (`HxElseIfOptionsTest`),
+"Four independent `SameLinePolicy` knobs … control whether" (`HxSameLineOptionsTest`),
+"`tryBody` controls …" (`HxTryBodyOptionsTest`), "upstream's `binopPolicy` controls every
+binary operator" (`HxTypeParamDefaultEqualsOptionsTest`). `CODE_SENSES` carries the
+control-flow senses a FIXTURE doc produces; a class doc describes the SUBJECT, and the
+subject of a formatter test is a knob that controls something. Extending the list for a
+population nothing censuses would be work for no gate.
+
+The rest are narrative INDEXES over the class's own members — "The eleven CONTROL tests
+are green on both sides by construction" (`BodySlotGuardSliceTest`), "Control tests pin
+that the rule stays useful" (`PreferFinalAbstractMethodCheckTest`), "the three controls
+here are the reason the predicate is not wider" (`DocOwnerGuardSliceTest`). A type-level
+`@:pin` on those would have to name ONE killer for a sentence covering N fixtures with N
+different discriminators, which is precisely the "records a role the fixture does not
+play" failure. The honest recording form for a class-doc claim is the member pins it
+summarises — and this slice paid that out on `DocOwnerGuardSliceTest`, whose class-doc
+sentence about "the three controls here" now stands over four annotated members.
+
 **Two of the four kinds are not gateable toward a fix, deliberately.** `arm` and
 `control` have an annotation that retires the line. `base` and `vacuity` have
 none, and inventing one would be prose retyped as metadata — the exact failure
@@ -1179,7 +1311,7 @@ them — are a register of what is still prose, not a queue.
 
 **The gate is a ratchet, and it is the suite rather than the build.**
 `unit.ProseClaimCensusTest.BASELINE` holds the baseline — 295 lines at `7331535c`,
-294 now; the fixture compares
+283 now; the fixture compares
 them against `TestRegistry.claims()`. A new claim without an annotation fails
 the suite, and so does an annotated one still listed. It is a list and not a
 count on purpose (S70: a scalar merged silently wrong across two branches).
