@@ -409,7 +409,7 @@ The trade is that a macro-module arm's member check moves from a build ERROR to 
 
 Two facts the check paid for. **The matcher has to be `Patch`'s, not a substring test:** a plain `indexOf` gate would have wrongly failed **15 of 90** fragment arms, because stored fragments are copied out of `hxq show --select`, which DEDENTS its output — byte-exactness against the file is the exception, not the rule, and `Patch` is the component that already knows this (`references/ops.md`: leading indentation is not part of the match). And a **sixth arm-authoring blind spot**, alongside the five FORCE-renderer ones: a member declared on a SUB-MODULE type cannot be addressed at all. A record's `type` is read twice with two different meanings — as the class the typer resolves, and as the PATH of the file `tools/mutation-arm.sh` patches — and for a sub-module type those two disagree by construction.
 
-At the S125 merge the registry stands at **192 arms / 307 pins** over **795** registered classes, against **241** prose claims. Read them off the binary (`node bin/test.js --list-arms|--list-pins|--list-classes|--list-claims`) rather than out of this line — every one of the four moves within a slice or two.
+At the S126 merge the registry stands at **198 arms / 319 pins** over **796** registered classes, against **241** prose claims, and the arms split **134 fragment / 64 force**. Read them off the binary (`node bin/test.js --list-arms|--list-pins|--list-classes|--list-claims`) rather than out of this line — every one of the five moves within a slice or two.
 
 **Running one is one command.**
 
@@ -998,6 +998,155 @@ which is the tautological-pin shape S66 recorded; it stays unarmed.
 slice's two pins land outside that blast, which is where S107's twelve and S111's seven landed
 too, so the count does not move. The claim census is unchanged at 294 for the usual reason: an
 annotated class contributes no claim line.
+
+#### Three never-probed MEMBERS, and a second module (S124)
+
+S111 said the next owner had to be a second MODULE rather than another gate of the
+894-line `SingleStmtBraces`, and half of that held. Twenty-two candidate cuts were
+rendered against `43d31484` and run over the WHOLE suite in ONE process — the flake
+tell is LOAD, so a serial run is an exact census — with the instrument controlled
+first by re-deriving `M-CURLY-CTORS-NONE` (50 failures, 0 `ERROR`, the distribution
+S113 recorded). Twelve owned a fixture and became arms; ten are refusals with their
+numbers. **The census moved 29 → 25.**
+
+- **`chainForcesBraces` reproduces S105's finding on a new member.** Cut whole it is
+  `M-SSB-CHAIN-OFF`'s territory; cut one probe at a time it is three owners of 2, 5
+  and 4 — and only the TAIL probe is a mechanism nothing else records, the head and
+  chain-middle probes landing inside `M-SSB-CHAIN-OFF`'s own set.
+- **`BodyFit` is the second module S111 asked for** — 763 lines, 22 members, one arm
+  before that slice. Four cuts there own four classes that had NO pin at all
+  (`HxChainStaircaseSliceTest`, `HxFitLineBodyGlueSliceTest`, `HxGlueWidthSliceTest`,
+  `HxArrowBlockIfOverflowSliceTest`), and three of its members — `chainStaircase`,
+  `chainBodyInner`, `isGlueSeparator` — kill the identical four fixtures, one
+  mechanism spelled at three depths.
+- **Refusals, each with its number:** `keepsBraces`'s gate-8 probe forced false takes
+  0 fixtures; `chainForcesBraces`'s chain-middle probe is a strict SUBSET of
+  `M-SSB-CHAIN-OFF`; `unwrapStmt`'s gate-8 wrap is identical to
+  `M-SSB-WRAP-DIRECTION`; `collectBracketBlockCtorPatterns` → `[]` is identical to
+  `M-BRACKET-GLUE-NONE`; `carriesCollapseProbe` is identical to `pinParenGlued` (its
+  only caller); `continuationRescuesArrowBody` is a subset of it; `scanItems`'s
+  refusal propagation is exactly the union of `M-EICR-HEADTEXT-ANY` and
+  `M-EICR-SOFTLINE-ANCHOR`; the semicolon-next-line `else` branch is a subset of
+  `M-EICR-HEADTEXT-ANY`; `isInlineExpr` → false takes 28 over 14 classes; the
+  else-switch `Next` guard widened to `true` owns one fixture.
+
+**"The module is exhausted" was too coarse.** S111 said to stop probing
+`SingleStmtBraces` gates; three never-probed MEMBERS of it still owned fixtures. What
+S105/S107/S111 had refuted was more gates of two specific HELPERS, not the file.
+
+**A replacement that changes LINE STRUCTURE can break a NEIGHBOURING arm's stored
+fragment.** Two arms may live in one member, and a `find` is matched against the
+member's own text: a replacement that deletes or merges lines can delete the text a
+sibling arm stores, and then the sibling comes back `BUILD-FAIL` (`hxq patch` refuses
+a fragment that does not occur) rather than saying anything about a fixture. S124 hit
+it and rewrote its replacement to preserve the line breaks. When two arms share a
+member, check the other one's `find` against your replacement before storing it — or
+keep the replacement line-for-line with the original, which is what makes the two
+independent.
+
+#### The residue is STRUCTURAL, and here is the number that says so (S126)
+
+Five slices worked the unpinned half of `M-CURLY-CTORS-NONE`'s blast down 47 → 34 →
+30 → 29 → 25. This slice asked the prior question — is what is left reducible at all?
+— and answered it with two measurements before writing a single arm.
+
+**Re-measured serially at `d91b8f43`: 50 failures, 0 `ERROR`, 25 pinned / 25
+unpinned** — S113's distribution again, unchanged. Seven of the 25 are outside a
+writer fence (4 `unit.cli.LintFixFixedPointCliTest`, 2 `unit.check.*`, 1
+`unit.query.AddElementSliceTest`), so 18 were in scope.
+
+**The first measurement: do the arms we already have reach them?** All **67** declared
+arms whose type is under `anyparse.format` / `anyparse.macro` / `anyparse.grammar`
+— the census arm itself among them, as the instrument check — were re-run with
+`APQ_TEST` narrowed to the eight classes that hold those 18, in three chunks of ~22
+at `--jobs 4`, two minutes each. The narrowing was controlled first:
+`M-CURLY-CTORS-NONE` under that filter kills **exactly the same 36 fixtures** it kills
+whole-suite inside those eight classes, set-for-set. Result: **1 of the 18** dies under
+any of the other 66, and it dies under two `HaxeFormatConfigLoader` arms that move the
+`sameLineExpressionElse` default rather than under anything addressing the knob it
+guards. Seventeen survive the entire declared writer/format arm set.
+
+**The second measurement: nine new cuts, each run over the WHOLE suite at `--jobs 1`.**
+Six owned a fixture; three were diffuse; and three more cuts came back with a blast of
+**zero**.
+
+| cut | blast, `--jobs 1`, whole suite | outcome |
+|---|---|---|
+| `SingleStmtBraces#deBracedElem` — gate 8's keep loses its then-position qualifier | 3, one class | `M-SSB-GATE8-ANY-POSITION` |
+| `WriterBodyPolicyLowering#buildBodyKeepLayout` — the `elseIf == Next` case dropped | 2, one class | `M-KEEP-ELSEIF-NEXT-OFF` |
+| … — the Keep elseIf switch defaults to the SAME layout | 2, one class | `M-KEEP-ELSEIF-ALWAYS-GLUED` |
+| `WriterLowering#beforeKwSeparator` — the BeforeKwTrailing layer dropped | **1**, its own pin | `M-BEFORE-KW-TRAILING-DROP` |
+| … — the BeforeKwLeading layer dropped | 2, one class | `M-BEFORE-KW-LEADING-DROP` |
+| `WriterTriviaSlotLowering#buildBeforeLeadingSep` → the plain separator | **0** | armed after writing the fixture — see below |
+| `SingleStmtBraces#keepsBraces` — the recursive sibling probe dropped | 22 over 4 classes | not armed — no single owner |
+| `SingleStmtBraces#needsSymmetryWrap` — the `siblingKeepsBraces` conjunct dropped | 32 over 6 classes | not armed — no single owner |
+| `SingleStmtBraces#innerSelfTerminates` — `BlockStmt` / `BlockBody` answer `true` | 54 | not armed — no single owner |
+| `SingleStmtBraces#chainForcesBraces` → `true` | 46 over 6 classes | not armed — no single owner |
+| `WriterBodyPolicyLowering#buildBodyCoreWrap` — `Keep` loses its precedence | 33 over 11 classes | not armed — no single owner |
+| … — the else-switch substitution loses its pass-through | 38 | not armed — no single owner |
+| `WriterLowering#emitOptionalKwBody` — the `AfterKw` slot read nulled | 31 | not armed — no single owner |
+| `SingleStmtBraces#singleCleanElem` — the close-trailing comment gate ignored | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#keepsBraces` — the gate-8 arm answers `false` instead of `drop` | **0** | not armed — no fixture at all |
+| `WriterLowering#valueIfFitSeam` — the block arm gains `_vifFit` | **0** | not armed — no fixture at all |
+| `WriterLowering#valueIfFitSeam` — the block arm never takes the soft gap | **0** | not armed — no fixture at all |
+| `WriterBodyPolicyLowering#buildElseSwitchCases` — the `Next` guard widened to `true` | 1, in `unit.check` | S124's row, reproduced; out of this slice's fence |
+
+**The zero rows are the sharper finding.** `valueIfFitSeam`'s block arm is documented
+as "ONE extra refusal the arrow knob does not need", and forcing it BOTH ways — the
+`LoopBodyShape` method — changes nothing the suite can see. So does dropping
+`singleCleanElem`'s close-trailing gate, and so does flipping `keepsBraces`'s gate-8
+arm. Three more live gates nothing exercises, alongside the four S105 named and the
+one S111 closed.
+
+**The fourth zero was closed rather than recorded.** `buildBeforeLeadingSep` wraps a
+bare non-first Ref's separator so the comments captured in the `BeforeLeading` gap
+reach the output; forcing it to the plain separator left all 14 148 tests green. The
+slot is not dead — it is corpus-only, exactly as S111's whitespace rewind was. The one
+shape that fills it is `lineends/issue_598_multiline_comment_var`: a block comment with
+an internal newline between a member's modifier run and its `var` keyword, which the
+modifier Star's `collectTrailingFull` refuses. On that shape the cut makes `hxq fmt`
+answer `the writer round trip would drop the comment`, while a one-line gap comment and
+a plain member stay byte-identical. `unit.lowering.BeforeLeadingCommentSlotTest` is that
+fixture plus those two guards, and `M-BEFORE-LEADING-COMMENT-DROP` then takes **1**
+fixture over the whole suite — its own pin, no `+extra`.
+
+**The census moves 25 → 22.** Three of the unpinned name an arm now:
+`HxSingleStmtBracesSliceTest#testElseBlockSingleIfCollapsesToElseIf`,
+`HxElseIfCommentReflowSliceTest#testDefaultOptionsAreByteInert` and
+`HxTriviaWriteTest#testSameLineCommentBeforeElseAfterStmtRoundTrip`. The other seven new
+pins land outside that blast, on four fixtures in two classes that had no pin at all
+(`HxElseIfOptionsTest`, plus two `HxTriviaWriteTest` own-line-comment round trips) and on
+the new class.
+
+**Verdict on the remaining 15: structural, and for three separable reasons.**
+
+- **Three are guards against a knob the grammar cannot deliver.**
+  `HxValueIfFitSliceTest#testStatementIfUntouched`,
+  `HxSemicolonBeforeElseSliceTest#testStatementIfSemicolonsUntouched` and
+  `HxValueIfBracketHugSliceTest#testAStatementIfKeepsItsOwnTerminatorAndBreak` assert that
+  a STATEMENT `if` is untouched by a value-`if` knob. `HxIfExpr` declares
+  `bracketBodyGlueIfFlag`, `inlineBlockBodyIfFlag`, `semicolonBeforeSibling`,
+  `valueBraceSymmetry` and `arrowValueIfReflowSite`; `HxIfStmt` declares NONE of them. The
+  separation is a grammar DECLARATION, not a runtime gate, so no cut of a mechanism can
+  reach them — the discriminating mutation is a second grammar, which is S66's
+  tautological-pin shape.
+- **Eight are the primary behaviour of a fail-closed classifier.** The
+  `HxSingleStmtBracesSliceTest` residue is the symmetric de-brace happy path and the "no
+  braces invented" counterweight. Every cut that reaches them reaches most of the class
+  with them: the sibling probe (22), the wrap conjunct (32), the chain probe forced on
+  (46). `testSuppressFrameSealedLoopBodyDeBraces` is the sharpest case — the module answers
+  "safe" through a CHAIN of independent verdicts (`tailSealed`, then `tailOperandIndex`,
+  then `containsIf`), so removing any ONE link leaves the next answering the same, which is
+  why `M-SSB-TAIL-SEALED-NONE` does not take it and why no single cut can.
+- **Four are inertness assertions on the default configuration.** A fixture whose whole
+  claim is "these bytes come back unchanged under the defaults" can only be killed by a cut
+  that moves default rendering, and every such cut this slice measured moved 22 to 54
+  fixtures at once.
+
+That is the end of this line of attack, and it is worth stating as a number rather than as
+a feeling: **17 of 18 survive all 66 existing writer arms, and of nine fresh cuts aimed at
+them only one owned one of them.** The next reduction of this census, if there is one, comes
+from a fixture being REWRITTEN to discriminate — S92's move — not from another arm.
 
 ## Macro-specific tests
 
