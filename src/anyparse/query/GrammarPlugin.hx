@@ -2058,10 +2058,23 @@ typedef RefShape = {
 	@:optional var assertFalseCalls: Array<String>;
 
 	/**
-	 * Map membership-test method names (`exists`) — inside the then-arm of
-	 * `if (m.exists(k))`, a following `var u = m[k]` binding of the SAME map and key
-	 * is not seeded `MaybeNull` (`maybe`-only, so the six base flow checks are
-	 * unaffected). Optional; unset disables the exists-guard suppression.
+	 * Map membership-test method names (`exists`) — the calls the flow engine reads as
+	 * a membership guard.
+	 *
+	 * An `m.exists(k)` test of the polarity a branch holds marks that (map, key) pair
+	 * PRESENT for the branch, so the guard reaches every shape a narrowing does: BOTH
+	 * arms of an `if` (a positive conjunct in the then-arm, a negated disjunct in the
+	 * else-arm — hence the fall-through of `if (!m.exists(k)) return;`), either side of
+	 * a short-circuit `&&` / `||`, and the body of a pre-test loop. Both operands may
+	 * be any PURE REF PATH (`m`, `this.m`, `a.b.model.subactions`, `outer[i]`) or a
+	 * constant, identified by their verbatim source text rather than by name, and no
+	 * identifier either operand mentions may be closure-captured.
+	 *
+	 * Under that fact a following `var u = m[k]` binding of the SAME map and key is not
+	 * seeded `MaybeNull`, and an `m[k].f` read there is not reported point-wise: one
+	 * exists-guard model, both mechanisms reading it. `maybe`-only, so the six base
+	 * flow checks are unaffected. Optional; unset disables the exists-guard
+	 * suppression.
 	 */
 	@:optional var mapExistsMethods: Array<String>;
 

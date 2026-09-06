@@ -1657,6 +1657,14 @@
 			"find": "final unreadable: Array<String> = resolutionIndex.text.skippedFilesMentioning([decl.name, ownerName, targetName], declFile);",
 			"replace": "final unreadable: Array<String> = index.text.skippedFilesMentioning([decl.name, ownerName, targetName]);",
 			"note": "the cross-file rename asks the REPORT index about unreadable files again, so a skip-parsing project module outside the lint scope stops refusing a rename it can invalidate"
+		},
+		{
+			"name": "M-EXISTS-GUARD-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "collectExists",
+			"find": "final kind: String = cond.kind;\n\t\tif (kind == combineKind) {",
+			"replace": "if (true) return;\n\t\tfinal kind: String = cond.kind;\n\t\tif (kind == combineKind) {",
+			"note": "no exists-guard fact is ever established, so every map read under `m.exists(k)` is reported point-wise and seeded MaybeNull again"
 		}
 	]
 }

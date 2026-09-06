@@ -509,6 +509,8 @@ class UnguardedNullableDerefTest extends Test {
 	 * which this rule reported twice until the guard reached both shapes. The control asserts
 	 * the same binding IS seeded without the guard, so neither half is vacuous.
 	 */
+	@:pin('control')
+	@:killer('M-EXISTS-GUARD-BLIND')
 	public function testExistsGuardEarlyReturnPathKeySuppressed(): Void {
 		Assert.equals(
 			1, violations('class C { function f(m:Map<String,Foo>, t:Foo) { var u = m[t.id]; u.foo; } }').length,
