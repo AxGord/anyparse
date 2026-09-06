@@ -729,7 +729,16 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// file already declaring it under this owner. Asked as `skippedFiles().length > 0` this refused
 		// EVERY cross-file rename in any scope holding one unparseable file, however unrelated; asked
 		// per NAME it refuses the renames a skipped file could actually invalidate, and names it.
-		final unreadable: Array<String> = index.text.skippedFilesMentioning([decl.name, ownerName, targetName]);
+		//
+		// Asked of the RESOLUTION index for the same reason the override family above is: it sees the
+		// files the lint scope does not, and a project module outside that scope is exactly where an
+		// unreadable reference this rename would break can hide. `declFile` is the per-owner narrowing
+		// `RawSourceScan.admits` applies - a THIRD-PARTY skipped source cannot reference a member the
+		// project declares, since the dependency points the other way - so widening the scan to the
+		// library adds no refusal of its own. With no resolution scope injected the two indexes are the
+		// same object and the third-party half is empty, which is the unnarrowed question this asked
+		// before.
+		final unreadable: Array<String> = resolutionIndex.text.skippedFilesMentioning([decl.name, ownerName, targetName], declFile);
 		return unreadable.length > 0 ? RenameRefusal.candidate(v, RenameRefusal.crossSkipParse(unreadable)) : {
 			declFile: declFile,
 			source: source,

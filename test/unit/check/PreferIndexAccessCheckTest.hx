@@ -451,6 +451,8 @@ class PreferIndexAccessCheckTest extends Test {
 	 * against this project's own `DefaultRepeatedArgument` / `RedundantLambdaWrapper` value
 	 * typedefs, which are all-`final`: the rewrite this check used to emit did not compile.
 	 */
+	@:pin('control')
+	@:killer('M-PIA-OBJLIT-SET-FLAGGED')
 	public function testObjectLiteralSetValueNotFlagged(): Void {
 		final source: String = src('var m:Map<String, Rec> = [];', 'm.set("a", { x: 1 });');
 		Assert.equals(0, violations(source).length);

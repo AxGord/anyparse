@@ -47,11 +47,23 @@ using StringTools;
  * function declaration, an expression — resets the run to empty for its children, which
  * is what makes loop bodies, `switch` cases, `catch` bodies and lambdas fail CLOSED: a
  * `break`-less loop body does not complete into the code after the loop (it iterates),
- * and a `case` body's continuation is the `switch`'s, not its own. So those are silently
- * out of scope by construction rather than by a special case. A macro-reification subtree
- * (`RefShape.opaqueKinds`) is not walked at all — its statements may be spliced into a
- * scope this walk never sees, so the run it appears to complete into is not the run it
- * will complete into.
+ * and a `case` body's trailing statements are the ARM'S VALUE wherever the switch
+ * stands in expression position, which this walk has no seam to tell from a statement
+ * one. So those are silently out of scope by construction rather than by a special
+ * case. A macro-reification subtree (`RefShape.opaqueKinds`) is not walked at all — its
+ * statements may be spliced into a scope this walk never sees, so the run it appears to
+ * complete into is not the run it will complete into.
+ *
+ * ## What this rule is not
+ *
+ * A duplicated tail on a SWITCH ARM is out of scope by that same reset, and that is the
+ * contract rather than a gap. The ADJACENT-arm shape — two arms carrying the same body —
+ * belongs to `redundant-case-body`; the run after the whole switch belongs to no rule,
+ * because deleting an arm's copy of it is only sound while the switch stands in statement
+ * position, and nothing here distinguishes the two. So a control built from two identical
+ * arm bodies fires `redundant-case-body` and NOT this rule, and the silence is the
+ * contract answering, not a miss — `testSwitchArmTailNotFlaggedWhileTheIfShapeIs` pins it
+ * against the same fixture's `if` twin.
  *
  * ## Gates
  *
@@ -63,7 +75,7 @@ using StringTools;
  *    `controlExitKinds`): a loop-exit tail is not worth the extra reasoning, and leaving it
  *    out costs only a missed finding.
  *  - IDENTITY — the branch's trailing statements and the fall-through run are
- *    token-identical, by `sameStatement`: `RefactorSupport.structurallyEqual` AND
+ *    token-identical, by `sameStatement`: `MemberKinds.structurallyEqual` AND
  *    whitespace-normalized source equality. Neither alone suffices — shape equality
  *    cannot see a comment sitting INSIDE a statement's span, and normalized source alone
  *    collapses whitespace inside string literals, equating `f("a  b")` with `f("a b")`.
@@ -100,7 +112,7 @@ using StringTools;
  * explanatory comment duplicated alongside the code is fine to drop; a unique one would
  * be lost), and no comment may sit between the last removed statement and the branch's
  * closing brace (a trailing `// …` there would be stranded). Nested findings are passed
- * through `RefactorSupport.dropContainedEdits` so no two deletions overlap.
+ * through `CanonicalEdit.dropContainedEdits` so no two deletions overlap.
  */
 @:nullSafety(Strict)
 final class TailMerge implements Check {
@@ -352,7 +364,7 @@ final class TailMerge implements Check {
 	/**
 	 * The names `stmts` bind directly — what a tail nested under them could be reading
 	 * instead of the outer binding of the same spelling. A statement declares when
-	 * `RefactorSupport.topLevelDeclaredNode` reaches a declaration through its metadata
+	 * `BinderScan.topLevelDeclaredNode` reaches a declaration through its metadata
 	 * wrappers (`@:meta var t = …` is an expression statement around a `VarExpr`, not a
 	 * `VarStmt`), which covers local variables in both statement and expression form; local
 	 * FUNCTIONS, plain and `inline`, bind a shadowing name the same way and are matched by
@@ -377,7 +389,7 @@ final class TailMerge implements Check {
 
 	/**
 	 * The declaration `stmt` is, unwrapped from any metadata: a local variable (statement or
-	 * expression form) via `RefactorSupport.topLevelDeclaredNode`, or a local function
+	 * expression form) via `BinderScan.topLevelDeclaredNode`, or a local function
 	 * (`localFunctionKinds` / `inlineFunctionKinds`) by kind. Null when `stmt` binds nothing.
 	 */
 	private static function declaredNode(stmt: QueryNode, seams: Seams): Null<QueryNode> {
@@ -595,7 +607,7 @@ private typedef Candidate = {
 /**
  * The grammar seams `TailMerge` resolves once per `run` / `fix`. The declaration trio feeds
  * the shadowing gate: `localDeclKinds` / `localDeclExprKinds` are the local VARIABLE forms
- * `RefactorSupport.topLevelDeclaredNode` unwraps `metaKinds` down to — and the only ones
+ * `BinderScan.topLevelDeclaredNode` unwraps `metaKinds` down to — and the only ones
  * whose projection can under-report a multi-declarator's names (`hasOpaqueDecl`) —
  * while `fnDeclKinds` are the local FUNCTION declarations, plain and `inline`, which bind a
  * shadowing name too but never come in multiples.

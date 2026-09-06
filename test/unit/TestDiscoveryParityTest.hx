@@ -994,6 +994,8 @@ class TestDiscoveryParityTest extends Test {
 			+ 'M-JSUL-UNINDEXED-NAME-ALWAYS',
 			'unit.check.JoinSingleUseLocalCheckTest#testUnconditionalFieldChainStillFlagged :: control :: M-JSUL-PATH-ALWAYS-CONDITIONAL',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
+			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
+			+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.NullableSourceResolutionScopeTest#testExcludedArrayPopStaysUnseeded :: control :: M-NULLABLE-INDEX-EXCLUSION',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
@@ -1026,6 +1028,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts :: control :: '
 			+ 'M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
+			'unit.check.PreferIndexAccessCheckTest#testObjectLiteralSetValueNotFlagged :: control :: M-PIA-OBJLIT-SET-FLAGGED',
 			'unit.check.PreferStaticExtensionCheckTest#testMessageKeepsATwoSpaceLiteral :: control :: M-RENDER-SPAN-TOKENS',
 			'unit.check.PreferStaticExtensionCheckTest#testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt :: control :: '
 			+ 'M-RENDER-SPAN-TOKENS',
@@ -1052,6 +1055,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testTypeParameterStructureMemberStillPins :: control :: M-STRUCT-TYPEPARAM-CLOSED',
 			'unit.check.StructuralConformanceProofTest#testUnresolvableStructureMemberTypeRefutes :: control :: M-STRUCT-UNRESOLVED-OPEN',
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
+			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
+			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 			+ 'M-SUPERDECLARES-FALSE',
@@ -1577,7 +1582,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-MOVE-CANONICALISE-ALWAYS',
 			'M-QUALPATH-COMMENT-COUNTED',
 			'M-CARRY-CROSSING-ANY-SIDE',
-			'M-STRUCT-BUILTIN-BY-NAME'
+			'M-STRUCT-BUILTIN-BY-NAME',
+			'M-PIA-OBJLIT-SET-FLAGGED',
+			'M-TAILMERGE-NORM-ONLY',
+			'M-TAILMERGE-FALL-KEPT',
+			'M-NAMING-SKIPSCAN-REPORT-INDEX'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
