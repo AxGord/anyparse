@@ -47,13 +47,16 @@ import utest.Test;
  *
  * Mutation arms named per assertion in the method docs below:
  *
- *  - M2 — drop `suppressPatternRestProbe` from `HxCasePattern.expr`, the flag's only
- *    grammar set-site.
- *  - M4 — `groupRestProbe: $v{false}` at the non-trivia dispatch. Its only killer in
- *    this class is `testTypeParamsRestProbeTheAssignmentTail`; both pattern tests
- *    survive it, because turning the probe off entirely also leaves a pattern flat.
- *  - M6 — strip `&& !opt._suppressPatternRestProbe` from `TriviaSepLowering`.
- *  - M7 — revert this slice's gate, restoring the macro-time constant.
+ *  - `M-PATTERN-RESTPROBE-UNSET` — drop `suppressPatternRestProbe` from
+ *    `HxCasePattern.expr`, the flag's only grammar set-site.
+ *  - M4, measured but NOT declared — `groupRestProbe: $v{false}` at the
+ *    non-trivia dispatch. Its only killer in this class is
+ *    `testTypeParamsRestProbeTheAssignmentTail`; both pattern tests survive
+ *    it, because turning the probe off entirely also leaves a pattern flat.
+ *  - `M-TRIVIASEP-RESTPROBE-UNGATED` — strip
+ *    `&& !opt._suppressPatternRestProbe` from `TriviaSepLowering`.
+ *  - `M-SEPSTAR-RESTPROBE-UNGATED` — revert this slice's gate, restoring
+ *    the macro-time constant.
  */
 @:nullSafety(Strict)
 final class HxGroupRestProbeStructStarTest extends Test {
@@ -135,13 +138,17 @@ final class HxGroupRestProbeStructStarTest extends Test {
 	 * BOTH writers. A pattern is a matching shape, not a value — it never owns the
 	 * line's overflow — so the whole `case` line now stays flat and long.
 	 *
-	 * Killed by reverting the gate (arm M7, `groupRestProbe: $v{groupRestProbe}`
-	 * back at the plain site: both assertions) and by arm M2 (drop
-	 * `suppressPatternRestProbe` from `HxCasePattern.expr`, which is what the gate
-	 * reads). NOT killed by M4 (`groupRestProbe: $v{false}`) — turning the probe
-	 * off entirely also leaves the line flat, which is why M4's killer is
+	 * Killed by arm `M-SEPSTAR-RESTPROBE-UNGATED` (revert the gate,
+	 * `groupRestProbe: $v{groupRestProbe}` back at the plain site: both
+	 * assertions) and by arm `M-PATTERN-RESTPROBE-UNSET` (drop
+	 * `suppressPatternRestProbe` from `HxCasePattern.expr`, which is what the
+	 * gate reads). NOT killed by M4 (`groupRestProbe: $v{false}`) — turning the
+	 * probe off entirely also leaves the line flat, which is why M4's killer is
 	 * `testTypeParamsRestProbeTheAssignmentTail` instead.
 	 */
+	@:pin('control')
+	@:killer('M-PATTERN-RESTPROBE-UNSET')
+	@:killer('M-SEPSTAR-RESTPROBE-UNGATED')
 	public function testCasePatternTypeParamsDeclineTheRestProbe(): Void {
 		final src: String = 'class C {\n\tstatic function f(): Void {\n\t\tswitch v {\n\t\t\tcase (x : Map<AlphaParam, '
 			+ 'BetaParam>) if (isReady && isSet):\n\t\t\t\tg();\n\t\t}\n\t}\n}';
@@ -166,12 +173,18 @@ final class HxGroupRestProbeStructStarTest extends Test {
 	 * neither assertion can be satisfied by something else breaking.
 	 *
 	 * Two dispatches, two independent killers, which is the whole point of
-	 * asserting them side by side: the trivia assertion dies under M6 (strip
-	 * `&& !opt._suppressPatternRestProbe` from `TriviaSepLowering`) and under M2
-	 * (drop the flag at its grammar set-site); the plain assertion dies under M7
-	 * (revert the gate) and under M2. Neither dies under M4, which turns the probe
+	 * asserting them side by side: the trivia assertion dies under arm
+	 * `M-TRIVIASEP-RESTPROBE-UNGATED` (strip `&& !opt._suppressPatternRestProbe`
+	 * from `TriviaSepLowering`) and under `M-PATTERN-RESTPROBE-UNSET` (drop the
+	 * flag at its grammar set-site); the plain assertion dies under
+	 * `M-SEPSTAR-RESTPROBE-UNGATED` (revert the gate) and under
+	 * `M-PATTERN-RESTPROBE-UNSET`. Neither dies under M4, which turns the probe
 	 * off on both paths and so satisfies both.
 	 */
+	@:pin('control')
+	@:killer('M-PATTERN-RESTPROBE-UNSET')
+	@:killer('M-TRIVIASEP-RESTPROBE-UNGATED')
+	@:killer('M-SEPSTAR-RESTPROBE-UNGATED')
 	public function testObjectLiteralPatternDeclinesTheRestProbeInBothWriters(): Void {
 		final src: String = 'class C {\n\tstatic function g():Void {\n\t\tswitch field.kind {\n\t\t\tcase FVar(t, {expr: '
 			+ 'E(tp), meta: mm}) if (isReady):\n\t\t\t\tg();\n\t\t}\n\t}\n}';

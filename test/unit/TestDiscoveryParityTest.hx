@@ -407,7 +407,6 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.JsonTypedParserTest',
 		'unit.grammar.haxe.AllmanProbe',
 		'unit.grammar.haxe.CheckstyleConfigLoaderTest',
-		'unit.grammar.haxe.CommentWeldDeletionSliceTest',
 		'unit.grammar.haxe.ComplexItemKindsSeamTest',
 		'unit.grammar.haxe.CondModProbe',
 		'unit.grammar.haxe.ElseSwitchPlacementSliceTest',
@@ -798,6 +797,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.ClustersTest',
 		'unit.query.CommentOwnerGuardSliceTest',
 		'unit.query.CommentRewriteSliceTest',
+		'unit.query.CommentWeldDeletionSliceTest',
 		'unit.query.CondBranchSplitTest',
 		'unit.query.CrossRenameMemberSliceTest',
 		'unit.query.CrossRenameSliceTest',
@@ -960,22 +960,22 @@ class TestDiscoveryParityTest extends Test {
 			'unit.ProseClaimCensusTest#testTheTwoUnrecordableKindsStayOnTheList :: control :: M-CLAIM-NOKINDS',
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
-			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs'
-			+ ' :: control :: M-DUP-CODE-NORM-KEY',
-			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup'
-			+ ' :: control :: M-EXTRACT-REPEAT-RENDER-SPLIT',
+			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control'
+			+ ' :: M-DUP-CODE-NORM-KEY',
+			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control'
+			+ ' :: M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
-			'unit.check.FieldWriteResolutionScopeTest#testLibraryStructureVetoesOnceStructuralJoins'
-			+ ' :: control :: M-CHECKINDEX-PROJECT-FINAL',
-			'unit.check.FieldWriteResolutionScopeTest#testOutOfScopePlainClassKeepsTheUnresolvedWritePoison'
-			+ ' :: control :: M-PLAINCLASS-SCOPEBLIND',
+			'unit.check.FieldWriteResolutionScopeTest#testLibraryStructureVetoesOnceStructuralJoins :: control'
+			+ ' :: M-CHECKINDEX-PROJECT-FINAL',
+			'unit.check.FieldWriteResolutionScopeTest#testOutOfScopePlainClassKeepsTheUnresolvedWritePoison :: control'
+			+ ' :: M-PLAINCLASS-SCOPEBLIND',
 			'unit.check.FieldWriteResolutionScopeTest#testProjectRootUnresolvedWriteVetoes :: control :: M-ROOTS-THIRDPARTY',
 			'unit.check.FieldWriteResolutionScopeTest#testResolvableLibraryInterfaceStopsVetoing :: control :: M-CHECKINDEX-PROJECT-FINAL',
-			'unit.check.FieldWriteResolutionScopeTest#testResolvableLibraryInterfaceStopsVetoingWriteRestriction'
-			+ ' :: control :: M-CHECKINDEX-PROJECT-READONLY',
+			'unit.check.FieldWriteResolutionScopeTest#testResolvableLibraryInterfaceStopsVetoingWriteRestriction :: control'
+			+ ' :: M-CHECKINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testSameSimpleNameThirdPartyTypeDoesNotVeto :: control :: M-DECLSITE-SCOPEWIDE',
-			'unit.check.FieldWriteResolutionScopeTest#testSkipParsingLibrarySourceDoesNotVetoProjectCandidate'
-			+ ' :: control :: M-SKIPSCAN-SCOPEWIDE',
+			'unit.check.FieldWriteResolutionScopeTest#testSkipParsingLibrarySourceDoesNotVetoProjectCandidate :: control'
+			+ ' :: M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly :: control :: M-WRITEINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
@@ -986,8 +986,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
-			'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows'
-			+ ' :: control :: M-ORPHAN-ARMS-SHARE-REASON',
+			'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows :: control'
+			+ ' :: M-ORPHAN-ARMS-SHARE-REASON',
 			'unit.check.PossibleNullDereferenceTest#testCallReturnPopFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
@@ -995,18 +995,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesSubtypedContainer :: control :: M-HASSUBTYPE-FALSE',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testFlatTwoBranchStillNotFlagged :: control :: M-TERMINAL-RUNGS-ANY',
-			'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts'
-			+ ' :: control :: M-PIEC-SPINE-CLAIM-ANY',
+			'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts :: control'
+			+ ' :: M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferStaticExtensionCheckTest#testMessageKeepsATwoSpaceLiteral :: control :: M-RENDER-SPAN-TOKENS',
-			'unit.check.PreferStaticExtensionCheckTest#testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt'
-			+ ' :: control :: M-RENDER-SPAN-TOKENS',
-			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail'
-			+ ' :: control :: M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
+			'unit.check.PreferStaticExtensionCheckTest#testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt :: control'
+			+ ' :: M-RENDER-SPAN-TOKENS',
+			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control'
+			+ ' :: M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
 			'unit.check.RedundantImportCheckTest#testSubTypeImportBesideItsModuleImportIsRedundant :: control :: M-DECLARINGFILES-EMPTY',
-			'unit.check.RedundantReplaceLoopCheckTest#testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter'
-			+ ' :: control :: M-EMPTY-B-ANY-NONEMPTY',
+			'unit.check.RedundantReplaceLoopCheckTest#testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter :: control'
+			+ ' :: M-EMPTY-B-ANY-NONEMPTY',
 			'unit.check.RedundantReplaceLoopCheckTest#testMultiCharSearchWithEmptyReplacementNotFlagged :: control :: M-SEAM-BLIND',
 			'unit.check.RedundantReplaceLoopCheckTest#testReplacementInsideSearchNotFlagged :: control :: M-SEAM-BLIND',
 			'unit.check.RedundantReplaceLoopCheckTest#testSeamReformingLiteralPairNotFlagged :: control :: M-SEAM-BLIND',
@@ -1023,8 +1023,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testTypeParameterStructureMemberStillPins :: control :: M-STRUCT-TYPEPARAM-CLOSED',
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
-			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor'
-			+ ' :: control :: M-SUPERDECLARES-FALSE',
+			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control'
+			+ ' :: M-SUPERDECLARES-FALSE',
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
@@ -1033,87 +1033,103 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
 			'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
-			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced'
-			+ ' :: control :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
+			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control'
+			+ ' :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheSemicolonDropAlsoHoldsUnderExpressionIfNext :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheStatementAndValueSkipListsAgree :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheGeneratedPredicateAnswersTheClassifier :: control :: M-KINDS',
 			'unit.grammar.haxe.ComplexItemKindsSeamTest#testTheTriviaFamilyCarriesTheSameEntry :: seam :: ',
-			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testACommentBetweenElseAndSwitchDeclinesTheGlue'
-			+ ' :: control :: M-ELSE-SWITCH-COMMENT-GLUE',
+			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testACommentBetweenElseAndSwitchDeclinesTheGlue :: control'
+			+ ' :: M-ELSE-SWITCH-COMMENT-GLUE',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testAnElseIfChainEndingInElseSwitch :: control :: M-ELSE-SWITCH-TESTS-NONE',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testSamePlacesTheSwitchOnTheElseLine :: control :: M-ELSE-SWITCH-TESTS-NONE',
-			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember'
-			+ ' :: control :: M-BLANK-MULTILINE-OFF',
-			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBetweenMultilineAndSingleLine'
-			+ ' :: control :: M-BLANK-MULTILINE-OFF',
-			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine'
-			+ ' :: control :: M-FIRST-LINE-FIT',
+			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember :: control'
+			+ ' :: M-BLANK-MULTILINE-OFF',
+			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBetweenMultilineAndSingleLine :: control'
+			+ ' :: M-BLANK-MULTILINE-OFF',
+			'unit.grammar.haxe.HxCallGroupRestProbeCasePatternTest#testCasePatternCtorInsideACollectionStaysGlued :: control'
+			+ ' :: M-PATTERN-RESTPROBE-UNSET',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine :: control'
+			+ ' :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLinePullsUpABodyThatFits :: control :: M-NO-WIRE',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testKeepReadsTheSourceBreak :: control :: M-ALWAYS-SAME',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testNextLayoutIsIdempotent :: control :: M-ALWAYS-SAME',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testNextPutsTheBodyOnItsOwnLine :: control :: M-NO-WIRE',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testSameKeepsAFlatBodyOnTheHeadLine :: control :: M-ALWAYS-NEXT',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testSamePullsTheBodyUpOntoTheHeadLine :: control :: M-NO-WIRE',
-			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testTheSpecificKeyOutranksTheExpressionIfFanout'
-			+ ' :: control :: M-FANOUT-FIRST',
+			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testTheSpecificKeyOutranksTheExpressionIfFanout :: control'
+			+ ' :: M-FANOUT-FIRST',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testFilterIfWithoutElseStillCuddles :: control :: M-CUDDLE-OFF',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyCuddles :: control :: M-ELSE-GATE',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyCuddlesWithTightBrackets :: control :: M-ELSE-GATE',
-			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyUnderFitLineLeavesTheHeadLine'
-			+ ' :: control :: M-FIRST-LINE-FIT',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testIfElseBodyUnderFitLineLeavesTheHeadLine :: control'
+			+ ' :: M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE',
-			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase'
-			+ ' :: control :: M-FIRST-LINE-FIT',
-			'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured'
-			+ ' :: control :: M-WORDOP-NO-RESTORE',
-			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody'
-			+ ' :: control :: M-COND-BLOCK-TAIL-NEVER',
-			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionKeepsHeadRawAndBodyStructural'
-			+ ' :: control :: M-COND-BLOCK-TAIL-NEVER',
-			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testOpenerCloserPairKeepsOpenerACondSpliceStmt'
-			+ ' :: control :: M-COND-BLOCK-TAIL-NEVER',
+			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase :: control'
+			+ ' :: M-FIRST-LINE-FIT',
+			'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control'
+			+ ' :: M-WORDOP-NO-RESTORE',
+			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control'
+			+ ' :: M-COND-BLOCK-TAIL-NEVER',
+			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionKeepsHeadRawAndBodyStructural :: control'
+			+ ' :: M-COND-BLOCK-TAIL-NEVER',
+			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testOpenerCloserPairKeepsOpenerACondSpliceStmt :: control'
+			+ ' :: M-COND-BLOCK-TAIL-NEVER',
 			'unit.grammar.haxe.HxConditionalExprFitSliceTest#testOverwideGluedBreaksAtDirectiveSeams :: control :: M-NEWLINE-SIGNALS-NONE',
-			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly'
-			+ ' :: control :: M-EICR-BOUNDARY-SKIP',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testBracedElseIfGluesAndTrailsCommentAfterOpenCurly :: control'
+			+ ' :: M-EICR-BOUNDARY-SKIP',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testChainReflowsEveryLinkIndependently :: control :: M-EICR-BOUNDARY-SKIP',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testCommentWithOpenDelimitersIsSafe :: control :: M-EICR-BOUNDARY-SKIP',
-			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testConditionWrapPolicySeesTheRelocatedComment'
-			+ ' :: control :: M-EICR-BOUNDARY-SKIP',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testConditionWrapPolicySeesTheRelocatedComment :: control'
+			+ ' :: M-EICR-BOUNDARY-SKIP',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testDeepRefusedChainStaysCorrect :: control :: M-EICR-HEADTEXT-ANY',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testEmptyThenBodyDoesNotMigrateTheComment :: control :: M-EICR-HEADTEXT-ANY',
-			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testExistingHeadTrailingCommentRefusesReflow'
-			+ ' :: control :: M-EICR-HEADTEXT-ANY',
-			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testInlineBodyPolicyLeavesNoAnchorAndRefuses'
-			+ ' :: control :: M-EICR-HEADTEXT-ANY',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testExistingHeadTrailingCommentRefusesReflow :: control'
+			+ ' :: M-EICR-HEADTEXT-ANY',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testInlineBodyPolicyLeavesNoAnchorAndRefuses :: control'
+			+ ' :: M-EICR-HEADTEXT-ANY',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testKnobOffKeepsEveryPreKnobLayout :: control :: M-EICR-KNOB-IGNORED',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testOverLongGluedHeadLineIsAccepted :: control :: M-EICR-BOUNDARY-SKIP',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testProbeShapedBodyRefusesReflow :: control :: M-EICR-SOFTLINE-ANCHOR',
 			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testReflowedFormsAreIdempotent :: control :: M-EICR-BOUNDARY-SKIP',
-			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testSingleStatementBraceRemovalAndReflowLandInOnePass'
-			+ ' :: control :: M-EICR-KNOB-IGNORED',
-			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testWrappedConditionAnchorsAfterTheOpenCurly'
-			+ ' :: control :: M-EICR-BOUNDARY-SKIP,M-EICR-KNOB-IGNORED',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testSingleStatementBraceRemovalAndReflowLandInOnePass :: control'
+			+ ' :: M-EICR-KNOB-IGNORED',
+			'unit.grammar.haxe.HxElseIfCommentReflowSliceTest#testWrappedConditionAnchorsAfterTheOpenCurly :: control'
+			+ ' :: M-EICR-BOUNDARY-SKIP,M-EICR-KNOB-IGNORED',
+			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testDocOnSecondDeclIsNotAFileHeader :: control :: M-FILEHEADER-ANY-DECL',
+			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testFileHeaderBlankBeforeConditionalImportBlock :: control'
+			+ ' :: M-FILEHEADER-COND-OPAQUE',
+			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testFileHeaderBlankBeforeLeadingImport :: control :: M-FILEHEADER-HEAD-NOT-PIU',
+			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testFileHeaderBlankBeforePackage :: control :: M-FILEHEADER-HEAD-NOT-PIU',
+			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testHeaderSeparatedFromDocButDocKeepsItsType :: control'
+			+ ' :: M-FILEHEADER-NO-TWO-COMMENT-ARM,M-FILEHEADER-ANY-COMMENT',
+			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testLineCommentHeaderLeavesDocAttached :: control'
+			+ ' :: M-FILEHEADER-ANY-COMMENT-KIND,M-FILEHEADER-ANY-COMMENT',
+			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testNoFileHeaderBlankWithoutImports :: control :: M-FILEHEADER-HEAD-ALWAYS-PIU',
+			'unit.grammar.haxe.HxGroupRestProbeStructStarTest#testCasePatternTypeParamsDeclineTheRestProbe :: control'
+			+ ' :: M-PATTERN-RESTPROBE-UNSET,M-SEPSTAR-RESTPROBE-UNGATED',
+			'unit.grammar.haxe.HxGroupRestProbeStructStarTest#testObjectLiteralPatternDeclinesTheRestProbeInBothWriters :: control'
+			+ ' :: M-PATTERN-RESTPROBE-UNSET,M-TRIVIASEP-RESTPROBE-UNGATED,M-SEPSTAR-RESTPROBE-UNGATED',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testBrokenShapeIsIdempotent :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testForIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testGuardIfWithoutElseStaysGlued :: control :: M-LOOPIF-ALWAYS',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testNonLoopAndNonIfBodiesUnchanged :: control :: M-LOOPIF-ALWAYS',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenIfGetsBracesAdded :: control :: M-SSB-WRAP-DIRECTION',
-			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBracedCatchBodySealsTryCatchBeforeElse'
-			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBracedCatchBodySealsTryCatchBeforeElse :: control'
+			+ ' :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testChainKeeperForcesBracesOnEveryBareBranch :: control :: M-SSB-CHAIN-OFF',
-			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDanglingElseThroughLoopBodyKeepsBraces'
-			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDanglingElseThroughLoopBodyKeepsBraces :: control'
+			+ ' :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDeepMixedElseIfChainKeepsAllBraced :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testDoWhileBodyUnbraced :: control :: M-SSB-DOBODY-KEEP',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testElseIfChainLaterBranchForcesEarlierBraces :: control :: M-SSB-CHAIN-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testElseIfChainLinkNotWrapped :: control :: M-SSB-CHAIN-OFF',
-			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces'
-			+ ' :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces :: control'
+			+ ' :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testIfElseIfChainKeepsBracesWhenAnyBranchMulti :: control :: M-SSB-CHAIN-OFF',
-			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testOpenTrailingCommentTravelsWithTheStatement'
-			+ ' :: control :: M-SSB-OPEN-TRAIL-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testOpenTrailingCommentTravelsWithTheStatement :: control'
+			+ ' :: M-SSB-OPEN-TRAIL-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSealedInnerIfDeBracesUnderTrailingElse :: control :: M-SSB-TAIL-SEALED-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSuppressFrameDoBodyStillUnwraps :: control :: M-SSB-DOBODY-KEEP',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testSuppressedFrameChainBracesEveryBranch :: control :: M-SSB-CHAIN-OFF',
@@ -1123,47 +1139,47 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testTrailingCommentWhileBodyDeBraces :: control :: M-SSB-TRAIL-COMMENT-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testValueIfBareElseGainsBraces :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testValueIfBareThenGainsBraces :: control :: M-SSB-VALUE-WRAP-OFF',
-			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBareCatchDeBracesWithoutAWrapPass'
-			+ ' :: control :: M-SSB-BARE-ILLEGAL,M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
-			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBracedGroupDeBraces'
-			+ ' :: control :: M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBareCatchDeBracesWithoutAWrapPass :: control'
+			+ ' :: M-SSB-BARE-ILLEGAL,M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBracedGroupDeBraces :: control'
+			+ ' :: M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testDanglingElseKeepsBraces :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testMultiStatementCatchBracesTheBareTry :: control :: M-SSB-TRY-SUBST-OFF',
-			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOnlyTheLastCatchKeepsItsTerminator'
-			+ ' :: control :: M-TRY-CATCHES-SYM-OFF,M-SSB-TRY-SUBST-OFF,M-SSB-TRY-DEBRACE-NONE',
-			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOverflowBreaksAtTheSeamNotInsideTheCall'
-			+ ' :: control :: M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
-			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody'
-			+ ' :: control :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOnlyTheLastCatchKeepsItsTerminator :: control'
+			+ ' :: M-TRY-CATCHES-SYM-OFF,M-SSB-TRY-SUBST-OFF,M-SSB-TRY-DEBRACE-NONE',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOverflowBreaksAtTheSeamNotInsideTheCall :: control'
+			+ ' :: M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody :: control'
+			+ ' :: M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testAnArrayLiteralBranchHugsTheHead :: control :: M-BRACKET-GLUE-NONE',
-			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheReportedComprehensionReachesTheTargetLayout'
-			+ ' :: control :: M-BRACKET-GLUE-NONE',
-			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheSemicolonClosedSourceReachesTheTargetLayout'
-			+ ' :: control :: M-BRACKET-GLUE-NONE',
-			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheSplitCloserCuddlesTheElseWithNoSemicolonToDrop'
-			+ ' :: control :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheReportedComprehensionReachesTheTargetLayout :: control'
+			+ ' :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheSemicolonClosedSourceReachesTheTargetLayout :: control'
+			+ ' :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheSplitCloserCuddlesTheElseWithNoSemicolonToDrop :: control'
+			+ ' :: M-BRACKET-GLUE-NONE',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheTargetLayoutIsIdempotent :: control :: M-BRACKET-GLUE-NONE',
-			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive'
-			+ ' :: control :: M-NONCURLY-SAME-DROP',
-			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak'
-			+ ' :: control :: M-EXPR-ELSE-PLAIN-SAME,M-NONCURLY-SAME-DROP',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive :: control'
+			+ ' :: M-NONCURLY-SAME-DROP',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak :: control'
+			+ ' :: M-EXPR-ELSE-PLAIN-SAME,M-NONCURLY-SAME-DROP',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnElseLessValueIfKeepsItsTerminator :: control :: M-SBE-UNGATED',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testAnObjectLiteralBranchKeepsItsOwnLine :: control :: M-ELSE-BODY-SAME',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testKeepStillPreservesTheSourceBreak :: control :: M-KEEP-JOINS',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheJoinedLayoutIsIdempotent :: control :: M-CURLY-CTORS-NONE',
-			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheReportedValueIfJoinsItsElseToTheCurlyClose'
-			+ ' :: control :: M-EXPR-ELSE-KEEP',
-			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheSemicolonBeforeElseGoesWithTheJoin'
-			+ ' :: control :: M-EXPR-ELSE-KEEP,M-EXPR-ELSE-PLAIN-SAME',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheReportedValueIfJoinsItsElseToTheCurlyClose :: control'
+			+ ' :: M-EXPR-ELSE-KEEP',
+			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheSemicolonBeforeElseGoesWithTheJoin :: control'
+			+ ' :: M-EXPR-ELSE-KEEP,M-EXPR-ELSE-PLAIN-SAME',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testTheStatementTwinKeepsTheLayoutItAlwaysHad :: guard :: ',
-			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyKeepsTheStatementAfterASwallowedTerminator'
-			+ ' :: control :: M-PEB-WS-REWIND-TRYPARSE-OFF',
+			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyKeepsTheStatementAfterASwallowedTerminator :: control'
+			+ ' :: M-PEB-WS-REWIND-TRYPARSE-OFF',
 			'unit.lowering.StarBlockEndedWsRewindSitesTest#testAConditionalBodyWithAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
-			'unit.lowering.StarBlockEndedWsRewindSitesTest#testANestedBlockKeepsTheStatementAfterASwallowedTerminator'
-			+ ' :: control :: M-PEB-WS-REWIND-SEPSTARTS-OFF',
+			'unit.lowering.StarBlockEndedWsRewindSitesTest#testANestedBlockKeepsTheStatementAfterASwallowedTerminator :: control'
+			+ ' :: M-PEB-WS-REWIND-SEPSTARTS-OFF',
 			'unit.lowering.StarBlockEndedWsRewindSitesTest#testANestedBlockWithAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
-			'unit.lowering.StarBlockEndedWsRewindTest#testASwallowedTerminatorBehindTrailingWhitespaceStillEndsTheStatement'
-			+ ' :: control :: M-PEB-WS-REWIND-OFF',
+			'unit.lowering.StarBlockEndedWsRewindTest#testASwallowedTerminatorBehindTrailingWhitespaceStillEndsTheStatement :: control'
+			+ ' :: M-PEB-WS-REWIND-OFF',
 			'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: ',
 			'unit.query.AddMetaSliceTest#testCliWritesTheEntry :: control :: M-ADDMETA-CLI-UNROUTED',
@@ -1176,7 +1192,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
+			'unit.query.CommentOwnerGuardSliceTest#testHoistingACommentPastSurvivingCodeIsRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused :: guard :: M-COMMENT-HOIST-BLIND',
+			'unit.query.CommentOwnerGuardSliceTest#testWeldingTwoCommentBlocksIsRefused :: control :: M-COMMENT-WELD-BLIND',
+			'unit.query.CommentWeldDeletionSliceTest#testHoistingInsideAReplacementIsStillRefused :: control :: M-COMMENT-WELD-BLIND',
+			'unit.query.CommentWeldDeletionSliceTest#testWeldingAcrossTheRepeatedSeparatorIsStillRefused :: control'
+			+ ' :: M-COMMENT-WELD-BLIND',
 			'unit.query.DocOwnerGuardSliceTest#testAppendBeforeAClosingBraceIsAccepted :: control :: M-DOCSPLIT-OWNER-ANY',
 			'unit.query.DocOwnerGuardSliceTest#testBannerCommentIsNotGuarded :: control :: M-DOCSPAN-BANNER-IS-DOC',
 			'unit.query.DocOwnerGuardSliceTest#testModifierInsertOnTheOwnersLineIsAccepted :: control :: M-DOCSPLIT-BREAKLESS-TOO',
@@ -1187,23 +1208,23 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ExtractInterfaceSliceTest#testSecondInterfaceStillExtracts :: control :: M-EI-IMPL-ANY-REFUSED',
 			'unit.query.MoveFamilyCaptureTest#testABareWildcardCallerIsRepointedByteIdentically :: control :: M-WILDCARD-REPOINT-NONE',
 			'unit.query.MoveFamilyCaptureTest#testALocalShadowKeepsItsBareReadByteIdentically :: control :: M-WILDCARD-BINDING-BLIND',
-			'unit.query.MoveFamilyCaptureTest#testARivalWildcardKeepsItsBareCallerByteIdentically'
-			+ ' :: control :: M-WILDCARD-RIVAL-ORDER-BLIND',
-			'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically'
-			+ ' :: control :: M-WILDCARD-BINDS-BLIND',
+			'unit.query.MoveFamilyCaptureTest#testARivalWildcardKeepsItsBareCallerByteIdentically :: control'
+			+ ' :: M-WILDCARD-RIVAL-ORDER-BLIND',
+			'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically :: control'
+			+ ' :: M-WILDCARD-BINDS-BLIND',
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesABareKeyword :: control :: M-NEWFILE-BARE-KEYWORD-WRAPPED',
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: control :: M-NEWFILE-IMPORT-ANY-LINE',
 			'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: control :: M-NEWFILE-IMPORT-DOUBLED',
 			'unit.query.OpaqueCondRegionScanTest#testACommentAfterTheEndStaysOutOfTheQuote :: control :: M-OPAQUE-REGION-TRIVIA-KEPT',
 			'unit.query.OpaqueCondRegionScanTest#testAPartlyRawRegionSaysSoAndQuotesOnlyItsRawBytes :: control :: M-REGION-INSIDE-NONE',
-			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote'
-			+ ' :: control :: M-OPAQUE-REGION-WS-GAP',
+			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote :: control'
+			+ ' :: M-OPAQUE-REGION-WS-GAP',
 			'unit.query.OpaqueCondRegionScanTest#testAnExplicitListBuildsNoNotes :: control :: M-REGION-NOTES-ALWAYS',
-			'unit.query.OpaqueCondRegionScanTest#testDanglingElseIsOpaqueWhileItsBraceIdenticalTwinIsNot'
-			+ ' :: control :: M-OPAQUE-REGION-NONE',
+			'unit.query.OpaqueCondRegionScanTest#testDanglingElseIsOpaqueWhileItsBraceIdenticalTwinIsNot :: control'
+			+ ' :: M-OPAQUE-REGION-NONE',
 			'unit.query.OpaqueCondRegionScanTest#testTheNoteNamesTheLineTheRegionAndTheReason :: control :: M-OPAQUE-REGION-NONE',
-			'unit.query.OpaqueCondRegionScanTest#testTheQuoteStartsAtTheIfEvenWhenTheNodeBeginsBeforeIt'
-			+ ' :: control :: M-OPAQUE-REGION-NODE-SPAN',
+			'unit.query.OpaqueCondRegionScanTest#testTheQuoteStartsAtTheIfEvenWhenTheNodeBeginsBeforeIt :: control'
+			+ ' :: M-OPAQUE-REGION-NODE-SPAN',
 			'unit.query.OpaqueCondRegionScanTest#testTheSplitTryReportsBothOfItsRegions :: control :: M-OPAQUE-REGION-NONE',
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
@@ -1366,7 +1387,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-PIEC-SPINE-CLAIM-ANY',
 			'M-ORPHAN-ARMS-SHARE-REASON',
 			'M-LINTFIX-ACCEPTED-BLAMED',
-			'M-ADDMETA-LOOSE-WRAPPER-CLIMB'
+			'M-ADDMETA-LOOSE-WRAPPER-CLIMB',
+			'M-COMMENT-WELD-BLIND',
+			'M-PATTERN-RESTPROBE-UNSET',
+			'M-SEPSTAR-RESTPROBE-UNGATED',
+			'M-TRIVIASEP-RESTPROBE-UNGATED',
+			'M-FILEHEADER-HEAD-NOT-PIU',
+			'M-FILEHEADER-HEAD-ALWAYS-PIU',
+			'M-FILEHEADER-ANY-DECL',
+			'M-FILEHEADER-ANY-COMMENT',
+			'M-FILEHEADER-ANY-COMMENT-KIND',
+			'M-FILEHEADER-NO-TWO-COMMENT-ARM',
+			'M-FILEHEADER-COND-OPAQUE'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1404,7 +1436,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-PEB-WS-REWIND-SEPSTARTS-OFF :: anyparse.macro.StarFieldLowering#lowerStarBlockEndedSepStarts',
 			'M-COND-BLOCK-TAIL-NEVER :: anyparse.grammar.haxe.HxCondBlockTailRaw#MetaCall:@:re',
 			'M-CLI-COMMANDS-MEMOISED :: anyparse.query.cli.CliRegistry#ClassDecl:CliRegistry',
-			'M-CLI-REQUIREMATCH-STATIC :: anyparse.query.cli.CliContext#ClassDecl:CliContext'
+			'M-CLI-REQUIREMATCH-STATIC :: anyparse.query.cli.CliContext#ClassDecl:CliContext',
+			'M-PATTERN-RESTPROBE-UNSET :: anyparse.grammar.haxe.HxCasePattern#MetaCall:@:fmt',
+			'M-SEPSTAR-RESTPROBE-UNGATED :: anyparse.macro.WriterLowering#emitSepStarList',
+			'M-TRIVIASEP-RESTPROBE-UNGATED :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch',
+			'M-FILEHEADER-HEAD-NOT-PIU :: anyparse.macro.TriviaEofLowering#triviaEofHeadIsPiuExpr',
+			'M-FILEHEADER-HEAD-ALWAYS-PIU :: anyparse.macro.TriviaEofLowering#triviaEofHeadIsPiuExpr',
+			'M-FILEHEADER-ANY-DECL :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
+			'M-FILEHEADER-ANY-COMMENT :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
+			'M-FILEHEADER-ANY-COMMENT-KIND :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
+			'M-FILEHEADER-NO-TWO-COMMENT-ARM :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
+			'M-FILEHEADER-COND-OPAQUE :: anyparse.macro.TriviaEofLowering#triviaEofHeadIsPiuExpr'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

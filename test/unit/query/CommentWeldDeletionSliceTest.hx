@@ -1,9 +1,8 @@
-package unit.grammar.haxe;
+package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import haxe.Exception;
-import unit.SeamEdit;
 import utest.Assert;
 import utest.Test;
 
@@ -34,9 +33,6 @@ import utest.Test;
  * SAME fixture so the duplicate `//` is present while they fire — a guard that had merely gone
  * blind would pass the first and fail these.
  *
- * ⚠️ PLACEMENT: the subject is `anyparse.query`, so this belongs in `unit.query` beside
- * `CommentOwnerGuardSliceTest`. It sits here because the wave that wrote it held only
- * `test/unit/grammar/haxe`; move it when nothing else is editing that package.
  */
 class CommentWeldDeletionSliceTest extends Test {
 
@@ -93,6 +89,8 @@ class CommentWeldDeletionSliceTest extends Test {
 	 * offset arithmetic — the queue this replaced would have drawn the owner from a block
 	 * two members away and named the wrong pair.
 	 */
+	@:pin('control')
+	@:killer('M-COMMENT-WELD-BLIND')
 	public function testWeldingAcrossTheRepeatedSeparatorIsStillRefused(): Void {
 		switch SeamEdit.replace(REPEATED_SEPARATOR, '\t\tx();\n', '') {
 			case Ok(text):
@@ -109,6 +107,8 @@ class CommentWeldDeletionSliceTest extends Test {
 	 * `prefer-ternary-return` shape — and the duplicate `//` sits outside the edit, unable to reach
 	 * the per-edit match.
 	 */
+	@:pin('control')
+	@:killer('M-COMMENT-WELD-BLIND')
 	public function testHoistingInsideAReplacementIsStillRefused(): Void {
 		switch SeamEdit.replace(REPEATED_SEPARATOR, '// why three\n\t\tx();\n\t\t// after', '// why three\n\t\t// after\n\t\tx();') {
 			case Ok(text):

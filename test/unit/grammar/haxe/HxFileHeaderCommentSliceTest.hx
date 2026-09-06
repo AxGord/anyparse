@@ -49,9 +49,11 @@ final class HxFileHeaderCommentSliceTest extends Test {
 
 	/**
 	 * Control — green at base BY CONSTRUCTION (a real file header above a
-	 * `package` decl is what the knob exists for). Killed by arm M3
-	 * (head-is-p/i/u forced false).
+	 * `package` decl is what the knob exists for). Killed by arm
+	 * `M-FILEHEADER-HEAD-NOT-PIU` (head-is-p/i/u forced false).
 	 */
+	@:pin('control')
+	@:killer('M-FILEHEADER-HEAD-NOT-PIU')
 	public function testFileHeaderBlankBeforePackage(): Void {
 		final src: String = '/* Header */\npackage foo;\n\nclass F {\n\tpublic function new() {}\n}';
 		final out: String = format(src);
@@ -60,8 +62,10 @@ final class HxFileHeaderCommentSliceTest extends Test {
 
 	/**
 	 * Control — green at base BY CONSTRUCTION (header above a leading
-	 * `import`, no `package`). Killed by arm M3.
+	 * `import`, no `package`). Killed by arm `M-FILEHEADER-HEAD-NOT-PIU`.
 	 */
+	@:pin('control')
+	@:killer('M-FILEHEADER-HEAD-NOT-PIU')
 	public function testFileHeaderBlankBeforeLeadingImport(): Void {
 		final src: String = '/* Header */\nimport haxe.ds.StringMap;\n\nclass F {\n\tpublic function new() {}\n}';
 		final out: String = format(src);
@@ -72,9 +76,13 @@ final class HxFileHeaderCommentSliceTest extends Test {
 	 * Control — green at base BY CONSTRUCTION. Two leading block comments
 	 * with no package / import / using anywhere: the `2+ comments` arm
 	 * separates header from doc, and the doc stays glued to its type.
-	 * Killed by arm M7 (the `2+ comments` arm dropped) and by arm M5 (the
-	 * first-comment guard dropped, which would also split doc from type).
+	 * Killed by arm `M-FILEHEADER-NO-TWO-COMMENT-ARM` (the `2+ comments` arm
+	 * dropped) and by arm `M-FILEHEADER-ANY-COMMENT` (the first-comment
+	 * guard dropped, which would also split doc from type).
 	 */
+	@:pin('control')
+	@:killer('M-FILEHEADER-NO-TWO-COMMENT-ARM')
+	@:killer('M-FILEHEADER-ANY-COMMENT')
 	public function testHeaderSeparatedFromDocButDocKeepsItsType(): Void {
 		final src: String = '/* Header */\n/**\n * Doc for F.\n */\nclass F {\n\tpublic function new() {}\n}';
 		final out: String = format(src);
@@ -84,8 +92,11 @@ final class HxFileHeaderCommentSliceTest extends Test {
 
 	/**
 	 * Control — green at base BY CONSTRUCTION (no p/i/u, one comment, so
-	 * the rule never fired). Killed by arm M2 (head-is-p/i/u forced true).
+	 * the rule never fired). Killed by arm
+	 * `M-FILEHEADER-HEAD-ALWAYS-PIU` (head-is-p/i/u forced true).
 	 */
+	@:pin('control')
+	@:killer('M-FILEHEADER-HEAD-ALWAYS-PIU')
 	public function testNoFileHeaderBlankWithoutImports(): Void {
 		final src: String = '/**\n * Doc for F.\n */\nclass F {\n\tpublic function new() {}\n}';
 		final out: String = format(src);
@@ -95,9 +106,13 @@ final class HxFileHeaderCommentSliceTest extends Test {
 	/**
 	 * Control — green at base BY CONSTRUCTION (a `//` header is not a
 	 * block comment, so neither the header slot nor the doc slot fires).
-	 * Killed by arm M6 (the block-comment guard dropped: the 2+-comments
-	 * arm then puts a blank after the `//` header) and by arm M5.
+	 * Killed by arm `M-FILEHEADER-ANY-COMMENT-KIND` (the block-comment guard
+	 * dropped: the 2+-comments arm then puts a blank after the `//` header)
+	 * and by arm `M-FILEHEADER-ANY-COMMENT`.
 	 */
+	@:pin('control')
+	@:killer('M-FILEHEADER-ANY-COMMENT-KIND')
+	@:killer('M-FILEHEADER-ANY-COMMENT')
 	public function testLineCommentHeaderLeavesDocAttached(): Void {
 		final src: String = '// header\n/**\n * Doc for F.\n */\nclass F {\n\tpublic function new() {}\n}\n\nimport haxe.ds.StringMap;';
 		final out: String = format(src);
@@ -107,9 +122,11 @@ final class HxFileHeaderCommentSliceTest extends Test {
 
 	/**
 	 * Control — green at base BY CONSTRUCTION (the doc leads the SECOND
-	 * decl, so the first-decl guard never held). Killed by arm M4 (the
-	 * first-decl guard dropped).
+	 * decl, so the first-decl guard never held). Killed by arm
+	 * `M-FILEHEADER-ANY-DECL` (the first-decl guard dropped).
 	 */
+	@:pin('control')
+	@:killer('M-FILEHEADER-ANY-DECL')
 	public function testDocOnSecondDeclIsNotAFileHeader(): Void {
 		final src: String =
 			'package foo;\n\n/**\n * Doc for F.\n */\nclass F {\n\tpublic function new() {}\n}\n\nimport haxe.ds.StringMap;';
@@ -130,10 +147,12 @@ final class HxFileHeaderCommentSliceTest extends Test {
 	/**
 	 * Control — green at base BY CONSTRUCTION, and the reason the head-decl
 	 * classification reaches THROUGH a module-head `#if`: a real file header
-	 * above a guarded import block still gets its blank. Killed by arm M8
-	 * (the conditional-transparent arm dropped, which is the naive
-	 * head-only fix).
+	 * above a guarded import block still gets its blank. Killed by arm
+	 * `M-FILEHEADER-COND-OPAQUE` (the conditional-transparent arm dropped,
+	 * which is the naive head-only fix).
 	 */
+	@:pin('control')
+	@:killer('M-FILEHEADER-COND-OPAQUE')
 	public function testFileHeaderBlankBeforeConditionalImportBlock(): Void {
 		final src: String = '/* Header */\n#if js\nimport a.A;\n#end\nimport b.B;\n\nclass F {\n\tpublic function new() {}\n}';
 		final out: String = format(src);
