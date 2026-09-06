@@ -296,7 +296,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	 * local function, else a member of the enclosing type. Null when nothing declares it.
 	 */
 	private static function bareSignature(name: String, enclosing: Null<Map<String, Signature>>, ctx: Ctx): Null<Signature> {
-		return ctx.scope.valueNames.exists(name) ? binderSignature(name, ctx) : ctx.scope.localFns.get(name) ?? enclosing?.get(name);
+		return ctx.scope.valueNames.exists(name) ? binderSignature(name, ctx) : ctx.scope.localFns[name] ?? enclosing?.get(name);
 	}
 
 	/**
@@ -498,13 +498,13 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	 * genuinely differ.
 	 */
 	private static function bind(scope: FileScope, name: String, node: QueryNode, seams: Seams): Void {
-		scope.valueNames.set(name, true);
-		scope.binderCounts.set(name, (scope.binderCounts[name] ?? 0) + 1);
+		scope.valueNames[name] = true;
+		scope.binderCounts[name] = (scope.binderCounts[name] ?? 0) + 1;
 		final span: Null<Span> = node.span;
 		if (span == null || !seams.reducibleBinderKinds.contains(node.kind)) return;
 		final spans: Array<Span> = scope.binderSpans[name] ?? [];
 		spans.push(span);
-		scope.binderSpans.set(name, spans);
+		scope.binderSpans[name] = spans;
 	}
 
 	private static function countParams(decl: QueryNode, seams: Seams): Int {

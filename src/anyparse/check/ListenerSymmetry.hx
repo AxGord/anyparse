@@ -6,6 +6,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using StringTools;
+
 /**
  * Flags a subscribe/unsubscribe listener method that lacks its symmetrical
  * twin. A method whose name matches `add<Xxx>Listener(s)` should have a
@@ -116,7 +118,7 @@ final class ListenerSymmetry implements Check {
 		for (m in members) if (m.isMethod) {
 			final twinName: Null<String> = twinOf(m.name, cfg);
 			if (twinName == null) continue;
-			final isAdd: Bool = StringTools.startsWith(m.name, 'add');
+			final isAdd: Bool = m.name.startsWith('add');
 			final twin: Null<ListenerMember> = byName[twinName];
 			if (twin == null)
 				out.push(finding(file, source, m.span, '\'${m.name}\' has no matching \'$twinName\' declared in this type'));

@@ -2835,14 +2835,13 @@ class Renderer {
 	 * incoming hardline-like emits.
 	 */
 	private static function flushPendingHardline(ctx: RenderCtx): Void {
-		if (ctx.pendingHardline >= 0) {
-			ctx.pendingOptSpace = null;
-			// The newline is what follows the held blank run, so it never gets written —
-			// `breakLine` drops it as its first statement, which is this deferred
-			// hardline's share of the invariant.
-			breakLine(ctx, ctx.pendingHardline, false);
-			ctx.pendingHardline = -1;
-		}
+		if (ctx.pendingHardline < 0) return;
+		ctx.pendingOptSpace = null;
+		// The newline is what follows the held blank run, so it never gets written —
+		// `breakLine` drops it as its first statement, which is this deferred
+		// hardline's share of the invariant.
+		breakLine(ctx, ctx.pendingHardline, false);
+		ctx.pendingHardline = -1;
 	}
 
 	/**

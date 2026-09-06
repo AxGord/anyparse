@@ -583,7 +583,7 @@ final class PreferComprehension implements Check {
 	 * conservative direction.
 	 */
 	private static function transcribeHeader(from: Int, to: Int, ctx: Ctx): Null<String> {
-		final header: String = StringTools.rtrim(ctx.source.substring(from, to));
+		final header: String = ctx.source.substring(from, to).rtrim();
 		final lastLine: Int = header.lastIndexOf('\n');
 		return SourceComments.textHasCommentMarker(header.substring(lastLine + 1)) ? null : header;
 	}

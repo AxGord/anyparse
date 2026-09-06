@@ -12,6 +12,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -267,8 +268,7 @@ final class NullableSwitchMissingNull implements Check {
 		final declared: Null<String> = ctx.declaredTypeSources[bindingFrom];
 		if (declared == null) return false;
 		final inner: String = unwrapNullable(declared, s);
-		for (hit in ctx.index.resolveTypeRefsFrom(inner, ctx.file)) if (s.taggedKinds.contains(hit.type.kind)) return true;
-		return false;
+		return ctx.index.resolveTypeRefsFrom(inner, ctx.file).exists(hit -> s.taggedKinds.contains(hit.type.kind));
 	}
 
 	/**

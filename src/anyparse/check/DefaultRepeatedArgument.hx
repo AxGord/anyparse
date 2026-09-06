@@ -321,7 +321,7 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 		final sources: Null<Map<Int, String>> = entry.declaredTypes;
 		if (span == null || sources == null) return null;
 		final hits: Array<RefHit> = entry.refs[name] ?? Refs.find(name, entry.tree, entry.shape);
-		entry.refs.set(name, hits);
+		entry.refs[name] = hits;
 		for (hit in hits) if (hit.span.from == span.from) {
 			final binding: Null<Span> = hit.bindingSpan;
 			return binding == null ? null : sources[binding.from];
@@ -349,8 +349,8 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 	private static function collectHosts(node: QueryNode, entry: Parsed, scope: Scope, seams: Seams): Void {
 		final name: Null<String> = node.name;
 		if (seams.typeHostKinds.contains(node.kind) && name != null) {
-			if (scope.seenTypes.exists(name)) scope.ambiguousTypes.set(name, true);
-			scope.seenTypes.set(name, true);
+			if (scope.seenTypes.exists(name)) scope.ambiguousTypes[name] = true;
+			scope.seenTypes[name] = true;
 			collectMembers(node, name, entry, scope, seams);
 		}
 		for (c in node.children) collectHosts(c, entry, scope, seams);
@@ -379,7 +379,7 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 				if (seams.functionKinds.contains(child.kind))
 					addMember(child, owner, name, run, blocked, entry, scope, seams);
 				else if (isInlineConstant(run, seams))
-					scope.constants.set('$owner.$name', true);
+					scope.constants['$owner.$name'] = true;
 			}
 			run.resize(0);
 			blocked = false;
@@ -390,7 +390,7 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 		decl: QueryNode, owner: String, name: String, run: Array<String>, blocked: Bool, entry: Parsed, scope: Scope, seams: Seams
 	): Void {
 		final key: String = '$owner.$name';
-		scope.memberOwners.set(name, (scope.memberOwners[name] ?? 0) + 1);
+		scope.memberOwners[name] = (scope.memberOwners[name] ?? 0) + 1;
 		if (scope.members.exists(key)) return;
 		final staticKind: Null<String> = seams.staticModifierKind;
 		scope.members.set(key, {
@@ -431,7 +431,7 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 			name != null && !isCallee && (node.kind == seams.identKind || node.kind == seams.fieldAccessKind)
 			&& scope.memberOwners.exists(name)
 		)
-			scope.valueReferenced.set(name, true);
+			scope.valueReferenced[name] = true;
 		for (i in 0...node.children.length) collectValueUses(node.children[i], node, i, scope, seams);
 	}
 

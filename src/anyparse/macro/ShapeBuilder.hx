@@ -119,7 +119,9 @@ class ShapeBuilder {
 		node.annotations[AnnotationKeys.BASE_TYPE_PATH] = typePathOfEnum(e);
 		node.annotations[AnnotationKeys.BASE_META] = e.meta.get();
 		for (name in e.names) {
-			final ef: EnumField = e.constructs.get(name);
+			final ef: EnumField = e.constructs[name] ?? Context.fatalError(
+				'ShapeBuilder: enum ${e.name} has no field for constructor $name', Context.currentPos()
+			);
 			final branch: ShapeNode = new ShapeNode(Seq);
 			branch.annotations[AnnotationKeys.BASE_CTOR] = name;
 			branch.annotations[AnnotationKeys.BASE_TYPE_PATH] = typePathOfEnum(e);

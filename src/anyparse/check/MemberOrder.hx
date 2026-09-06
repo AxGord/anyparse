@@ -531,8 +531,8 @@ final class MemberOrder implements Check implements ConfigAware {
 				}
 				final cond: Null<String> = m.condition;
 				if (cond != null) {
-					if (signature != '' && StringTools.trim(m.leadTrivia) != '') {
-						emit(StringTools.rtrim(m.leadTrivia), true);
+					if (signature != '' && m.leadTrivia.trim() != '') {
+						emit(m.leadTrivia.rtrim(), true);
 						hoisted = m.node;
 					}
 					emit('$ifKw $cond', hoisted == null);
@@ -969,7 +969,7 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/** Whether a line in `source[from,to)` starts (after indentation) with the conditional-open keyword - the gap begins a new construct rather than continuing one. */
 	private static function opensConstruct(source: String, from: Int, to: Int): Bool {
-		return source.substring(from, to).split('\n').exists(line -> StringTools.startsWith(StringTools.ltrim(line), '#if'));
+		return source.substring(from, to).split('\n').exists(line -> StringTools.ltrim(line).startsWith('#if'));
 	}
 
 	/**

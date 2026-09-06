@@ -465,9 +465,9 @@ final class PreferCaseGuard implements Check implements RiskyFix {
 	private static function bodyText(scan: Scan, then: QueryNode): Null<String> {
 		final span: Null<Span> = then.span;
 		if (span == null || then.kind == scan.seams.emptyStmtKind || containsConditional(then, scan.seams)) return null;
-		if (then.kind != scan.seams.blockStmtKind) return StringTools.trim(scan.source.substring(span.from, span.to));
+		if (then.kind != scan.seams.blockStmtKind) return scan.source.substring(span.from, span.to).trim();
 		if (then.children.length == 0) return null;
-		final interior: String = StringTools.trim(scan.source.substring(span.from + 1, span.to - 1));
+		final interior: String = scan.source.substring(span.from + 1, span.to - 1).trim();
 		return interior == '' ? null : interior;
 	}
 

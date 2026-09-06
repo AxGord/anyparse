@@ -253,7 +253,7 @@ final class PreferArrowCallback implements Check {
 	/** Whether the return-type hint's written source is exactly `Void`. */
 	private static function hintIsVoid(ctx: Ctx, hint: QueryNode): Bool {
 		final span: Null<Span> = hint.span;
-		return span != null && StringTools.trim(ctx.source.substring(span.from, span.to)) == 'Void';
+		return span != null && ctx.source.substring(span.from, span.to).trim() == 'Void';
 	}
 
 	/**
@@ -302,7 +302,7 @@ final class PreferArrowCallback implements Check {
 			final ps: Null<Span> = p.span;
 			if (ps == null) return null;
 			kept.push(ps);
-			paramTexts.push(StringTools.trim(ctx.source.substring(ps.from, ps.to)));
+			paramTexts.push(ctx.source.substring(ps.from, ps.to).trim());
 		}
 		final hint: Null<QueryNode> = parts.hint;
 		if (hint != null) {
@@ -705,7 +705,7 @@ final class PreferArrowCallback implements Check {
 		final s: String = stripOuterParens(typeSrc.trim());
 		final segs: Array<String> = splitTopArrows(s);
 		if (segs.length < 2) return null;
-		if (segs.length != 2 || !StringTools.startsWith(StringTools.trim(segs[0]), '('))
+		if (segs.length != 2 || !StringTools.trim(segs[0]).startsWith('('))
 			return segs.length - 1 != argCount || argIndex >= segs.length - 1 ? null : StringTools.trim(segs[argIndex]);
 		final interior: String = stripOuterParens(StringTools.trim(segs[0]));
 		// An empty interior is a zero-parameter list — splitTopCommas('') would report

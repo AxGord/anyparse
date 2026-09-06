@@ -489,7 +489,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	private static function newExprCandidate(node: QueryNode, parent: Null<QueryNode>, seams: Seams, out: Array<Candidate>): Void {
 		final site: Null<Site> = siteOf(node, seams);
 		if (site == null) return;
-		if (!StringTools.endsWith(StringTools.rtrim(site.text), EMPTY_ARGUMENT_LIST) || site.text.indexOf('#') != -1) return;
+		if (!site.text.rtrim().endsWith(EMPTY_ARGUMENT_LIST) || site.text.indexOf('#') != -1) return;
 		final nameAt: Int = constructedNameOffset(site.text, site.name);
 		if (nameAt == -1) return;
 		if (!seams.scope.mapFree) {
