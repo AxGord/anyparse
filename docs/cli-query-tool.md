@@ -112,6 +112,23 @@ A parameterized type reports every nominal name it contains:
 about). No scope/binding resolution — a type occurrence has no
 shadowing semantics. No cross-file resolution.
 
+A QUALIFIED spelling answers a simple `<type-name>` too. `pkg.Mod.T`
+reaches the tree as ONE node whose name is the whole dotted string, so an
+exact compare reported zero uses for a type every one of whose annotations
+went through its module path — and a deadness census built on that answer
+deleted eleven live sub-module typedefs, for `Type not found` in six
+modules. The match is on the LAST SEGMENT, not on the text: `Mod.WrapBodyOpts`
+does not answer `BodyOpts`. Each hit prints the spelling it found, so a
+same-simple-name type from another module is visible as one; pass the dotted
+name to pin a single module (a dotted query stays an exact compare). The
+same widening reaches the `uses` section of `mentions` and `blast`.
+
+It is deliberately OPT-IN at the API (`Uses.find(..., includeQualified)`)
+and off for the rewriters. Renaming `T` has to splice the last segment of
+`Mod.T` and must first prove the path resolves to THIS `T`; `CrossRename`
+owns that arithmetic (`RefactorSupport.qualifiedPaths` /
+`lastSegmentOffset`) and reads the walker for its plain-name arm only.
+
 Implementation note: the default parse tree (consumed by
 `ast`/`search`/`refs`/`meta`) drops type-position nodes from its
 CHILDREN to stay lean; `uses` runs on a separate projection

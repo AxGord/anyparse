@@ -227,7 +227,8 @@ final class BlastCommand implements CliCommand {
 		CliIo.sysPrint('Precise uses / refs sections are uncapped.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Change-impact checklist for a type. Unions three sections:\n');
-		CliIo.sysPrint('  uses  — type-position references (precise)\n');
+		CliIo.sysPrint('  uses  — type-position references (precise); a simple <type-name>\n');
+		CliIo.sysPrint('          also answers a QUALIFIED spelling of the same last segment\n');
 		CliIo.sysPrint('  refs  — value-binding references (precise)\n');
 		CliIo.sysPrint('  heuristic field-access — `expr.member` whose member name is\n');
 		CliIo.sysPrint('          a member of the type\'s decl. SUPERSET / name-based —\n');
@@ -297,7 +298,7 @@ final class BlastCommand implements CliCommand {
 				'blast', plugin.parseFileTypeRefs, entry.path, entry.source, singleFile, null, typeName
 			);
 			if (typeTree == null) continue;
-			final hits: Array<UsesHit> = Uses.find(typeName, typeTree, typeShape);
+			final hits: Array<UsesHit> = Uses.find(typeName, typeTree, typeShape, true);
 			if (hits.length == 0) continue;
 			any = true;
 			if (!usesHeader) {

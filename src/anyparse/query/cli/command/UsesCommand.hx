@@ -127,7 +127,10 @@ final class UsesCommand implements CliCommand {
 		CliIo.sysPrint('Finds type-position references — a field/var type annotation,\n');
 		CliIo.sysPrint('an enum-constructor parameter type, a type parameter. Sister of\n');
 		CliIo.sysPrint('`refs` (value bindings). `Array<T>` reports both `Array` and\n');
-		CliIo.sysPrint('`T`. For "where is X declared" use `refs --decls` / `ast --select`.\n');
+		CliIo.sysPrint('`T`. A simple <type-name> also answers a QUALIFIED spelling of\n');
+		CliIo.sysPrint('the same last segment (`Mod.T`, `pkg.Mod.T`) — the hit prints the\n');
+		CliIo.sysPrint('path found; pass the dotted name to pin one module. For "where is\n');
+		CliIo.sysPrint('X declared" use `refs --decls` / `ast --select`.\n');
 	}
 
 	private static function parseUsesArgs(args: Array<String>): UsesOpts {
@@ -201,7 +204,11 @@ final class UsesCommand implements CliCommand {
 				if (singleFile) return null;
 				continue;
 			}
-			final hits: Array<UsesHit> = Uses.find(name, tree, shape);
+			// `includeQualified`: a sub-module / cross-package type named through its
+			// module path (`WriterLowering.WrapBodyOpts`) is ONE node carrying the whole
+			// dotted string, so an exact-name walk reports zero uses for a type whose
+			// every annotation spells the path. A report wants those; see `Uses.find`.
+			final hits: Array<UsesHit> = Uses.find(name, tree, shape, true);
 			if (hits.length == 0) {
 				RefsCommand.collectNames(tree, candidateNames);
 				continue;

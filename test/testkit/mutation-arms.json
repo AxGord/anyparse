@@ -1695,6 +1695,30 @@
 			"find": "final kind: String = cond.kind;\n\t\tif (kind == combineKind) {",
 			"replace": "if (true) return;\n\t\tfinal kind: String = cond.kind;\n\t\tif (kind == combineKind) {",
 			"note": "no exists-guard fact is ever established, so every map read under `m.exists(k)` is reported point-wise and seeded MaybeNull again"
+		},
+		{
+			"name": "M-USES-EXACT-ONLY",
+			"type": "anyparse.query.Uses",
+			"method": "matches",
+			"find": "return nodeName == target || (includeQualified && target.indexOf('.') < 0 && SourceText.lastSegment(nodeName) == target);",
+			"replace": "return nodeName == target;",
+			"note": "a type named through its module path is invisible again, so a deadness census over `uses` calls a live sub-module type dead"
+		},
+		{
+			"name": "M-USES-TAIL-SUBSTRING",
+			"type": "anyparse.query.Uses",
+			"method": "matches",
+			"find": "SourceText.lastSegment(nodeName) == target",
+			"replace": "StringTools.endsWith(nodeName, target)",
+			"note": "the qualified tail is matched as text rather than on the segment boundary, so `Mod.WrapBodyOpts` answers a query for `BodyOpts`"
+		},
+		{
+			"name": "M-USES-QUALIFIED-DEFAULT",
+			"type": "anyparse.query.Uses",
+			"method": "find",
+			"find": "includeQualified: Bool = false",
+			"replace": "includeQualified: Bool = true",
+			"note": "the widened match becomes the default, so the rewriter arm of `CrossRename` is handed dotted paths it would splice whole"
 		}
 	]
 }
