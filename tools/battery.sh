@@ -18,6 +18,13 @@
 #                                     #   slice's "before" arm
 #   tools/battery.sh --base 29011103  # compare blast against a specific snapshot
 #   tools/battery.sh --allow-blast    # accept the blast movement printed above
+#   tools/battery.sh --keep           # keep the scratch directory even on green
+#
+# The scratch directory under TMPDIR is removed on a green run and kept, with
+# its path printed, on a red one or under `--keep`. A run that dies to SIGKILL
+# can clean up nothing, so the NEXT run of any of these tools sweeps what it
+# left — see tools/tmp-lifecycle.sh for the predicate that makes that safe
+# while siblings are running.
 #
 # The cache directory holds, per commit: a lint snapshot of each tree, the
 # corpus sweep snapshot, and a two-integer suite line. `--snapshot` writes
@@ -108,6 +115,7 @@ quick=0
 snapshot=0
 with_tm=1
 allow_blast=0
+keep_work=0
 jvm_mode=auto
 base_key=""
 cache_dir="${ANYPARSE_BLAST_CACHE:-$HOME/anyparse-blast-cache}"
@@ -130,6 +138,7 @@ while [ "$#" -gt 0 ]; do
         --snapshot)    snapshot=1; shift ;;
         --no-tm)       with_tm=0; shift ;;
         --allow-blast) allow_blast=1; shift ;;
+        --keep)        keep_work=1; shift ;;
         --jvm)         jvm_mode=always; shift ;;
         --no-jvm)      jvm_mode=never; shift ;;
         -h|--help)
@@ -151,7 +160,13 @@ script_dir=$(cd -P "$(dirname "$0")" && pwd)
 repo=$(cd -P "$script_dir/.." && pwd)
 cd "$repo"
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/apq-battery.XXXXXX")
+# Scratch-directory lifecycle — creation, the startup sweep for what a
+# SIGKILL left behind, and the predicate that keeps a sibling's live run
+# safe from it — all live in one place. See tools/tmp-lifecycle.sh.
+. "$script_dir/tmp-lifecycle.sh"
+tmpl_sweep "$repo"
+
+work=$(tmpl_claim apq-battery)
 verdict=0
 live_pids=""
 
@@ -171,13 +186,34 @@ cleanup() {
         echo "battery.sh: stopped with branches still running — logs kept in $work" >&2
         return
     fi
-    if [ "$verdict" -eq 0 ]; then
-        rm -rf "$work"
+    # `|| true` is load-bearing: a non-zero LAST command in an EXIT trap
+    # replaces the script's own exit status, so a refused discard would turn
+    # a green battery into `exit 1`. Measured on bash 3.2.57: `exit 7` under
+    # a trap whose last command returns 1 exits 1, and so does `exit 0`.
+    if [ "$verdict" -eq 0 ] && [ "$keep_work" -eq 0 ]; then
+        tmpl_discard "$work" || true
     else
         echo "battery.sh: logs kept in $work" >&2
     fi
 }
 trap cleanup EXIT
+# What this buys, measured on bash 3.2.57 rather than assumed. bash defers
+# a pending signal until the foreground child returns, and a
+# non-interactive shell with NO INT trap then resumes unless that child
+# itself died of the signal — so an EXIT trap alone is not a guarantee that
+# it runs. A minimal one-variable probe (same driver, same signal, only this
+# line differing) had the EXIT-only arm SWALLOW a SIGINT delivered during a
+# `sleep` child: the script kept going and had to be SIGKILLed, leaking.
+# On THIS script both arms did stop when interrupted during the plan stage
+# — the honest reading is that the trap makes the guarantee explicit and the
+# status deterministic (130, against bash's own 129 measured here), and
+# brings it in line with mutation-check.sh and mutation-arm.sh, which have
+# had this line all along. SIGTERM and SIGHUP already ran the EXIT trap.
+# SIGKILL never can, which is what tmpl_sweep above is for.
+# The consequence that is NOT cosmetic here: the EXIT trap is what kills
+# the still-running branch subshells (`kill $live_pids`). A trap that never
+# runs leaves four haxe/node branches behind writing into $work.
+trap 'exit 130' INT TERM HUP
 
 now_ms() {
     if command -v perl > /dev/null 2>&1; then

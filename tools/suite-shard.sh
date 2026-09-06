@@ -52,7 +52,11 @@
 # class that no longer exists, a class that landed in no shard or in two,
 # and a count mismatch under --verify/--expect all exit 1 or 2. Work files
 # are kept on any non-zero exit; on a plan-stage refusal that is the plan,
-# on a run-stage failure it is the per-shard logs.
+# on a run-stage failure it is the per-shard logs. On a green run the work
+# directory is removed. A run that dies to SIGKILL can clean up nothing, so
+# the NEXT run of any of these tools sweeps what it left behind — the
+# predicate that keeps that safe while siblings are running lives in
+# tools/tmp-lifecycle.sh.
 set -euo pipefail
 
 shards=4
@@ -166,20 +170,43 @@ if ! command -v hxq > /dev/null 2>&1; then
     exit 2
 fi
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/apq-suite-shard.XXXXXX")
+# Scratch-directory lifecycle — creation, the startup sweep for what a
+# SIGKILL left behind, and the predicate that keeps a sibling's live run
+# safe from it — all live in one place. See tools/tmp-lifecycle.sh.
+. "$script_dir/tmp-lifecycle.sh"
+tmpl_sweep "$repo"
+
+work=$(tmpl_claim apq-suite-shard)
 # `$?` is read at trap entry so that a `set -e` death anywhere — not only
 # the explicit `exit 1`s that set `rc` first — keeps the work directory the
 # failure messages point at.
 cleanup() {
     status=$?
+    # `|| true` is load-bearing: a non-zero LAST command in an EXIT trap
+    # replaces the script's own exit status, so a refused discard would turn
+    # a green shard run into `exit 1`.
     if [ "$keep" -eq 0 ] && [ "$status" -eq 0 ] && [ "$rc" -eq 0 ]; then
-        rm -rf "$work"
+        tmpl_discard "$work" || true
     else
         echo "suite-shard.sh: work files kept in $work" >&2
     fi
 }
 rc=0
 trap cleanup EXIT
+# What this buys, measured on bash 3.2.57 rather than assumed. bash defers
+# a pending signal until the foreground child returns, and a
+# non-interactive shell with NO INT trap then resumes unless that child
+# itself died of the signal — so an EXIT trap alone is not a guarantee that
+# it runs. A minimal one-variable probe (same driver, same signal, only this
+# line differing) had the EXIT-only arm SWALLOW a SIGINT delivered during a
+# `sleep` child: the script kept going and had to be SIGKILLed, leaking.
+# On THIS script both arms did stop when interrupted during the plan stage
+# — the honest reading is that the trap makes the guarantee explicit and the
+# status deterministic (130, against bash's own 129 measured here), and
+# brings it in line with mutation-check.sh and mutation-arm.sh, which have
+# had this line all along. SIGTERM and SIGHUP already ran the EXIT trap.
+# SIGKILL never can, which is what tmpl_sweep above is for.
+trap 'exit 130' INT TERM HUP
 
 # --- 1. the shard plan -------------------------------------------------
 #
