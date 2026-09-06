@@ -202,6 +202,8 @@ class PossibleNullDereferenceTest extends Test {
 	 * for the flow check's seed, and the point-wise walk never asked it. Measured on the Pony
 	 * fork, 15 of 65 findings were sites the author had guarded.
 	 */
+	@:pin('control')
+	@:killer('M-EXISTS-GUARD-BLIND')
 	public function testExistsGuardedThenArmNotFlagged(): Void {
 		Assert.equals(0, violations('class C { function f(m:Map<String,Int>, k:String) { if (m.exists(k)) m[k].foo(); } }').length);
 	}
@@ -210,6 +212,8 @@ class PossibleNullDereferenceTest extends Test {
 	 * The early-return spelling — the guard lives in the ELSE arm of a negated test, and the
 	 * read is the fall-through. The real site is `pony/src/pony/LangTable.hx:92`.
 	 */
+	@:pin('control')
+	@:killer('M-EXISTS-GUARD-BLIND')
 	public function testExistsGuardedEarlyReturnNotFlagged(): Void {
 		Assert.equals(
 			0, violations('class C { function f(m:Map<String,Int>, k:String) { if (!m.exists(k)) return; m[k].foo(); } }').length
@@ -255,6 +259,8 @@ class PossibleNullDereferenceTest extends Test {
 	 * Both halves are asserted together because either alone is vacuous: the guarded half passes
 	 * on its own whenever the resolver simply cannot type the path.
 	 */
+	@:pin('control')
+	@:killer('M-EXISTS-GUARD-BLIND')
 	public function testFieldPathMapExistsGuardedNotFlagged(): Void {
 		final decls: Array<{ file: String, source: String }> = [
 			{ file: 'Inner.hx', source: 'class Inner { public var subactions:Map<String,Int>; }' },

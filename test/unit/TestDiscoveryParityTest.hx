@@ -1004,6 +1004,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows :: control :: '
 			+ 'M-ORPHAN-ARMS-SHARE-REASON',
 			'unit.check.PossibleNullDereferenceTest#testCallReturnPopFlagged :: control :: M-NULLABLE-NO-CHAIN',
+			'unit.check.PossibleNullDereferenceTest#testExistsGuardedEarlyReturnNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
+			'unit.check.PossibleNullDereferenceTest#testExistsGuardedThenArmNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
+			'unit.check.PossibleNullDereferenceTest#testFieldPathMapExistsGuardedNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
@@ -1061,6 +1064,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 			+ 'M-SUPERDECLARES-FALSE',
+			'unit.check.UnguardedNullableDerefTest#testExistsGuardEarlyReturnPathKeySuppressed :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
@@ -1587,7 +1591,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-PIA-OBJLIT-SET-FLAGGED',
 			'M-TAILMERGE-NORM-ONLY',
 			'M-TAILMERGE-FALL-KEPT',
-			'M-NAMING-SKIPSCAN-REPORT-INDEX'
+			'M-NAMING-SKIPSCAN-REPORT-INDEX',
+			'M-EXISTS-GUARD-BLIND'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
