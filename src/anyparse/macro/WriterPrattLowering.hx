@@ -284,7 +284,7 @@ final class WriterPrattLowering {
 		final isChainNullCoal: Bool = opText == '??';
 		if (isTight || isAssign) return lowerInfixTightAssign(pc, c);
 		if (isChainBool || isChainAddSub || isChainNullCoal) return lowerInfixChain(pc, c);
-		// Asymmetric infix mirror of Lowering.lowerPrattLoop: when the
+		// Asymmetric infix mirror of PrattPostfixLowering.lowerPrattLoop: when the
 		// right child references a different enum (e.g. `Is(left:HxExpr,
 		// right:HxType)`), the right operand uses that type's own writer
 		// at its default ctxPrec (no precedence parenthesisation cross-

@@ -21,7 +21,7 @@ package anyparse.grammar.haxe;
  * backslash-aware class only if a real grammar site demands it.
  *
  * Like `HxPpCondLit`, this is captured as the matched substring
- * (quotes included) and routed through `Lowering.lowerTerminal` with
+ * (quotes included) and routed through `TerminalParseLowering.lowerTerminal` with
  * `@:rawString` so the slice round-trips byte-for-byte without the
  * Haxe string-unescape loop — a preprocessor diagnostic is not a Haxe
  * string literal, so `\n` etc. stay as literal backslash-n.

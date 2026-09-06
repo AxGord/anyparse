@@ -79,37 +79,32 @@ final class CommentOwnerGuard {
 		source: String, edits: Array<{ span: Span, text: String }>, spliced: String, regions: Array<LexRegion>, plugin: GrammarPlugin
 	): Null<String> {
 		if (spliced == source || edits.length == 0) return null;
-		final before: Array<Array<Span>> = blocksOf(source, SourceComments.collectCommentTokens(regions));
+		final tokens: Array<CommentToken> = SourceComments.collectCommentTokens(regions);
+		final before: Array<Array<Span>> = blocksOf(source, tokens);
 		if (before.length < 2 || !removesGapCode(edits, before)) return null;
 		final after: Array<Array<Span>> = blocksOf(spliced, SourceComments.collectCommentTokens(plugin.lexicalRegions(spliced)));
-		// Which source BLOCK each source comment belongs to, queued per comment TEXT: surviving
-		// comments keep their relative order, so taking the next unused entry for a text aligns the
-		// two sides without needing a diff. A text the result repeats more often than the source
-		// runs the queue dry and is treated as new, which is the direction that cannot invent a
-		// refusal. Keyed on the comment's FULL text, not on the excerpt the message quotes: two
-		// long comments sharing a 40-character prefix would otherwise share one queue, and a
-		// mis-drawn entry there is a refusal nobody could explain.
-		final queue: Map<String, Array<Int>> = [];
-		for (b in 0...before.length) for (span in before[b]) {
-			final key: String = source.substring(span.from, span.to);
-			final list: Null<Array<Int>> = queue[key];
-			if (list == null)
-				queue[key] = [b]
-			else
-				list.push(b);
-		}
-		final taken: Map<String, Int> = [];
+		// Which source BLOCK each result comment came from. For a comment NO edit covers that is
+		// arithmetic and not a guess: the splice copies those bytes, so its result offset is its
+		// source offset shifted by the edits that end before it, and the block is a lookup. Only a
+		// comment that lands INSIDE a replacement has to be matched by text, and then only against
+		// the comments THAT edit covers, so an edit elsewhere in the file cannot reach it.
+		//
+		// What this replaced was one queue per comment TEXT with one cursor per text across the
+		// whole file, and its doc argued only about the surplus a RESULT can carry ("runs the queue
+		// dry … cannot invent a refusal"). A deletion produces the opposite surplus: the removed
+		// member takes its comments with it, so every later occurrence of a repeated text — a bare
+		// `//` separator is the everyday case — drew the block of an EARLIER one, and a surviving
+		// two-comment block reported a weld between comments that never moved. Measured on S117:
+		// 11 of 44 whole-member deletions were refused that way, each naming code hundreds of lines
+		// from the deletion, and the workaround was to route them through `move-member`, which
+		// bypasses this seam rather than satisfying it.
+		final align: CommentAlignment = alignComments(source, edits, tokens, before);
 		for (block in after) {
 			var ownerBlock: Int = -1;
 			var ownerText: String = '';
 			for (span in block) {
-				final key: String = spliced.substring(span.from, span.to);
-				final list: Null<Array<Int>> = queue[key];
-				if (list == null) continue;
-				final at: Int = taken[key] ?? 0;
-				if (at >= list.length) continue;
-				taken[key] = at + 1;
-				final b: Int = list[at];
+				final b: Int = sourceBlock(spliced, span, align);
+				if (b < 0) continue;
 				if (ownerBlock < 0) {
 					ownerBlock = b;
 					ownerText = SourceText.regionExcerpt(spliced, span);
@@ -172,6 +167,12 @@ final class CommentOwnerGuard {
 		}
 		return null;
 	}
+
+	/**
+	 * The `CommentAlignment.copied` key — a result offset plus a length, written in one place so
+	 * the build side and the read side cannot drift.
+	 */
+	private static inline function offsetKey(at: Int, length: Int): String return '$at:$length';
 
 	/**
 	 * The comments of `source` that stand inside this edit's region, are not part of what it
@@ -250,14 +251,13 @@ final class CommentOwnerGuard {
 		return placed;
 	}
 
-
 	/**
 	 * The comment BLOCKS of `source`: maximal runs of `tokens` with only whitespace between
 	 * consecutive members, in source order. A trailing comment and the own-line comment on the
 	 * next line form one block, which is the conservative grouping — it can only merge blocks the
 	 * criterion would otherwise have compared, never split one.
 	 */
-	private static function blocksOf(source: String, tokens: Array<{ from: Int, to: Int, isLine: Bool }>): Array<Array<Span>> {
+	private static function blocksOf(source: String, tokens: Array<CommentToken>): Array<Array<Span>> {
 		final blocks: Array<Array<Span>> = [];
 		var current: Array<Span> = [];
 		var previous: Int = -1;
@@ -287,6 +287,69 @@ final class CommentOwnerGuard {
 		return false;
 	}
 
+	/**
+	 * Where each source comment lands in the splice, in the two forms the verdict needs: the result
+	 * offset of every comment no edit covers, and — per edit, in source order — the source block of
+	 * each comment that edit DOES cover, keyed by the comment's full text.
+	 *
+	 * The first half is exact, and it is the half a deletion used to break. Bytes outside every
+	 * edit are copied verbatim, so a comment there moves by the sum of the length changes of the
+	 * edits that end before it and nothing else; no text is compared, so no amount of repetition
+	 * elsewhere in the file can shift it. The second half is the only guess left and it is bounded
+	 * to one replacement: a text two covered comments from different blocks share resolves to `-1`
+	 * and yields no verdict, which is the fail-open direction the whole criterion takes.
+	 */
+	private static function alignComments(
+		source: String, edits: Array<{ span: Span, text: String }>, tokens: Array<CommentToken>, before: Array<Array<Span>>
+	): CommentAlignment {
+		final sorted: Array<{ span: Span, text: String }> = edits.copy();
+		sorted.sort((a, b) -> a.span.from != b.span.from ? a.span.from - b.span.from : a.span.to - b.span.to);
+		final blockOf: Map<Int, Int> = [];
+		for (b in 0...before.length) for (span in before[b]) blockOf[span.from] = b;
+		final placed: Array<PlacedEdit> = [];
+		var shift: Int = 0;
+		for (edit in sorted) {
+			placed.push({ at: edit.span.from + shift, length: edit.text.length, covered: [] });
+			shift += edit.text.length - (edit.span.to - edit.span.from);
+		}
+		final copied: Map<String, Int> = [];
+		var next: Int = 0;
+		shift = 0;
+		for (token in tokens) {
+			// Edits are disjoint and both walks run in source order, so the only edit that can
+			// still reach this token is the first one that does not end before it.
+			while (next < sorted.length && sorted[next].span.to <= token.from) {
+				shift += sorted[next].text.length - (sorted[next].span.to - sorted[next].span.from);
+				next++;
+			}
+			final block: Int = blockOf[token.from] ?? -1;
+			if (next < sorted.length && sorted[next].span.from < token.to) {
+				final key: String = source.substring(token.from, token.to);
+				final seen: Null<Int> = placed[next].covered[key];
+				placed[next].covered[key] = seen == null || seen == block ? block : -1;
+				continue;
+			}
+			copied[offsetKey(token.from + shift, token.to - token.from)] = block;
+		}
+		return { copied: copied, placed: placed };
+	}
+
+	/**
+	 * The source block of the comment `span` names in the SPLICE, or `-1` when nothing places it —
+	 * a comment the replacement invented, one whose text is not unique among the comments its edit
+	 * covers, or one the splice re-lexed into a different token.
+	 *
+	 * The offset lookup carries the length as well as the position, so a token that grew or shrank
+	 * where an edit ended right against it fails to match rather than answering for its neighbour.
+	 */
+	private static function sourceBlock(spliced: String, span: Span, align: CommentAlignment): Int {
+		final exact: Null<Int> = align.copied[offsetKey(span.from, span.to - span.from)];
+		if (exact != null) return exact;
+		for (edit in align.placed) if (span.from >= edit.at && span.to <= edit.at + edit.length)
+			return edit.covered[spliced.substring(span.from, span.to)] ?? -1;
+		return -1;
+	}
+
 }
 
 /**
@@ -304,4 +367,27 @@ typedef CommentToken = {
 typedef PlacedComment = {
 	final token: CommentToken;
 	final at: Int;
+}
+
+/**
+ * Where the splice put each source comment: `copied` answers for every comment no edit covers,
+ * keyed by its result offset and length; `placed` holds one entry per edit, in source order.
+ */
+typedef CommentAlignment = {
+	final copied: Map<String, Int>;
+	final placed: Array<PlacedEdit>;
+}
+
+/**
+ * One edit as the splice placed it — where its replacement starts in the result, how long it is,
+ * and the source block of each comment the edit covers, keyed by that comment's full text.
+ *
+ * A text shared by two covered comments from DIFFERENT blocks maps to `-1`. Inside a replacement
+ * the text is all there is to match on, and a queue drawn across the whole file is exactly what
+ * invented refusals on deletions; declining to answer keeps the ambiguity from becoming a verdict.
+ */
+typedef PlacedEdit = {
+	final at: Int;
+	final length: Int;
+	final covered: Map<String, Int>;
 }

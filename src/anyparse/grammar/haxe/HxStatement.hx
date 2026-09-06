@@ -561,7 +561,7 @@ enum HxStatement {
 	 * Why a statement ctor and NOT an `@:optional @:kw('#if')` else-slot
 	 * on `HxIfStmt`: an optional kw field COMMITS on its keyword and
 	 * never backtracks over the sub-rule
-	 * (`Lowering.emitOptionalRefLeadCommit`, D24), so an ordinary
+	 * (`StructSeqLowering.emitOptionalRefLeadCommit`, D24), so an ordinary
 	 * structured `#if` region that merely FOLLOWS an if-statement would
 	 * be swallowed by the slot with no way to hand it back to the
 	 * statement Star. Guarding the slot on a leading `else` INSIDE the

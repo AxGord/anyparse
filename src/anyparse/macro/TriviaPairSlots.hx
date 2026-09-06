@@ -86,7 +86,7 @@ final class TriviaPairSlots {
 		// PRESENT it needs the same `<field>BeforeNewline` /
 		// `<field>BeforeLeading` signals the mandatory field had, or the
 		// writer has nothing to reproduce the gap from. Spelled the same way as
-		// `Lowering.computeBeforeSlots` and `WriterLowering`'s `optBareSep` gate on
+		// `StructSeqLowering.computeBeforeSlots` and `WriterLowering`'s `optBareSep` gate on
 		// purpose — three places decide synthesise / capture / consume for one slot,
 		// and only an identical spelling makes the agreement checkable by eye.
 		return child.kind == Ref && ((
@@ -152,7 +152,7 @@ final class TriviaPairSlots {
 	 * Spelled as `isBareNonFirstRef` PLUS the opt-in on purpose, so the slot can
 	 * never be synthesised for a field whose writer seat would not read it —
 	 * the same synthesise / capture / consume agreement `BeforeNewline` keeps
-	 * across `Lowering.computeBeforeSlots` and `WriterLowering`.
+	 * across `StructSeqLowering.computeBeforeSlots` and `WriterLowering`.
 	 */
 	public static function isBeforeBlankRef(child: ShapeNode, parent: ShapeNode): Bool {
 		return isBareNonFirstRef(child, parent) && child.fmtReadStringArgs('keepBlankAfterStarCtor') != null;
@@ -360,7 +360,7 @@ final class TriviaPairSlots {
 	 * Independent of `@:trivia` (the gate fires for both trivia and plain
 	 * Stars) but coupled to the @:sep+@:tryparse no-trail shape — those
 	 * are the only Lowering / WriterLowering paths that interpret the
-	 * slot. Macro shape validation lives in `Lowering.emitStarFieldSteps`
+	 * slot. Macro shape validation lives in `StarFieldLowering.emitStarFieldSteps`
 	 * (fatalError on missing `:sep` / `:tryparse` / present `:trail`) and
 	 * `WriterLowering.emitWriterStarField` (fatalError on missing
 	 * `padLeading`).

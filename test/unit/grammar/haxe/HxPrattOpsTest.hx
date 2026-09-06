@@ -14,7 +14,7 @@ import utest.Assert;
  * baseline `+ - * /` set: `%` at prec 10 (a tier of its own, tighter
  * than `*` and `/`), the six comparison operators (`== != <= >= < >`)
  * at prec 5, `&&` at prec 4, and `||` at prec 3. Also guards the
- * longest-match sort inside `Lowering.lowerPrattLoop` that
+ * longest-match sort inside `PrattPostfixLowering.lowerPrattLoop` that
  * disambiguates `<=` vs `<` and `>=` vs `>` at dispatch time.
  *
  * The baseline `+ - * /` set stays covered by `HxPrattSliceTest`;

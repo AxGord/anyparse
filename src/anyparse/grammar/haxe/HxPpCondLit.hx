@@ -49,7 +49,7 @@ package anyparse.grammar.haxe;
  * expressible as a terminal `@:re`), so depth-limited nesting stays the
  * only option. Deepen it again when a real grammar site demands it.
  *
- * `@:rawString` routes the matched slice through `Lowering.lowerTerminal`
+ * `@:rawString` routes the matched slice through `TerminalParseLowering.lowerTerminal`
  * as the stored value without running the string-unescape loop — a
  * preprocessor condition is not a Haxe string literal, so `\n` etc.
  * stay as literal backslash-n in the captured text.

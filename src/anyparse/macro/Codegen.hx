@@ -302,7 +302,7 @@ class Codegen {
 	/**
 	 * ω-pratt-comment-stash — Trivia-mode twin of `skipWs` that captures
 	 * each consumed comment VERBATIM (open + body + optional close) into
-	 * `ctx.pendingTrivia.leadingComments`. Used by `Lowering.lowerPrattLoop`
+	 * `ctx.pendingTrivia.leadingComments`. Used by `PrattPostfixLowering.lowerPrattLoop`
 	 * (and `lowerPostfixLoop`) inside the matched-branch body where the
 	 * outer Pratt rewind-on-no-match cannot reach: once an operator has
 	 * matched, the post-op `skipWs` would otherwise drop any line/block
@@ -834,7 +834,7 @@ class Codegen {
 	/**
 	 * ω-keep-policy — tiny helper for source-shape capture. Scans the
 	 * input range `[from, to)` for a newline byte; used by the optional-
-	 * kw path in `Lowering.lowerStruct` to populate the synth
+	 * kw path in `StructSeqLowering.lowerStruct` to populate the synth
 	 * `<field>BeforeKwNewline` / `<field>BodyOnSameLine` slots that
 	 * drive the writer's `Keep` branches. Trivia-mode only.
 	 */
@@ -865,7 +865,7 @@ class Codegen {
 
 	/**
 	 * Companion predicate to `hasNewlineIn` for the word-op postfix
-	 * dispatch's own-line gate (`Lowering.buildPostfixOpMatchExpr`).
+	 * dispatch's own-line gate (`PrattPostfixLowering.buildPostfixOpMatchExpr`).
 	 * Reports whether the last non-whitespace byte BEFORE `pos` is a
 	 * block close `}`.
 	 *
@@ -912,7 +912,7 @@ class Codegen {
 
 	/**
 	 * Second half of the word-op postfix own-line gate
-	 * (`Lowering.buildPostfixOpMatchExpr`). `from` is the byte just past the
+	 * (`PrattPostfixLowering.buildPostfixOpMatchExpr`). `from` is the byte just past the
 	 * matched operator (`#if`); the scan skips the preprocessor CONDITION
 	 * ATOM and reports whether the fragment that follows it opens with an
 	 * INFIX operator byte.

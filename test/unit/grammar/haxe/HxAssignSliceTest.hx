@@ -11,7 +11,7 @@ import utest.Assert;
  *
  * Covers the right-associative Pratt operators at precedence 1. The
  * `Pratt.annotate` strategy accepts an optional third `@:infix` arg
- * (`'Left'` / `'Right'`, default `'Left'`), and `Lowering.lowerPrattLoop`
+ * (`'Left'` / `'Right'`, default `'Left'`), and `PrattPostfixLowering.lowerPrattLoop`
  * picks `nextMinPrec = prec` for right-associative branches instead of
  * `prec + 1` for left-associative, so same-prec chains fold right
  * instead of left.

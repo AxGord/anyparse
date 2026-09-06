@@ -28,7 +28,7 @@ import utest.Assert;
  * (`Map<String, Int>`), and recursive composition (`Foo<Bar<Baz>>`).
  *
  * The optional Star pattern is the first non-Ref consumer of `@:optional`
- * in the grammar — generated via `Lowering.emitOptionalStarFieldSteps`
+ * in the grammar — generated via `StarFieldLowering.emitOptionalStarFieldSteps`
  * on the parser side and a null-check wrapper in `WriterLowering` on the
  * writer side. Recursion composes naturally because the element rule is
  * `HxTypeRef` itself.

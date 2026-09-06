@@ -16,7 +16,7 @@ package anyparse.grammar.haxe;
  * `@:trail` — the top level of a Haxe file has no open / close
  * delimiters, just a sequence of declarations separated by
  * whitespace. The absence of `@:trail` on the Star field selects
- * the EOF-terminated loop variant in `Lowering.emitStarFieldSteps`
+ * the EOF-terminated loop variant in `StarFieldLowering.emitStarFieldSteps`
  * (see D22 in session_state.md): the generated parser keeps parsing
  * decls until `ctx.pos` reaches `ctx.input.length`. Any trailing
  * non-whitespace text fails the inner `parseHxTopLevelDecl` call and

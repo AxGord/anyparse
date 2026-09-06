@@ -21,7 +21,7 @@ package anyparse.grammar.haxe;
  * field access belonging to a following expression can never be
  * absorbed into the tag. `from String to String` keeps test
  * call-site literals compiling without explicit casts. `@:rawString`
- * routes the matched slice through `Lowering.lowerTerminal` without
+ * routes the matched slice through `TerminalParseLowering.lowerTerminal` without
  * the JSON-style unescape loop — meta tag names are not Haxe string
  * literals.
  */

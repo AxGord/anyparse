@@ -180,7 +180,7 @@ class WriterLowering {
 	/**
 	 * ω-orphan-prefix-member — the first-field escape read at three sites that
 	 * must agree on ONE answer: it also gates `TriviaTypeSynth.isBareNonFirstRef`
-	 * (synthesise the slot) and `Lowering.computeBeforeSlots` (capture it), so a
+	 * (synthesise the slot) and `StructSeqLowering.computeBeforeSlots` (capture it), so a
 	 * site spelling it differently would emit a read of a slot that does not
 	 * exist, or drop a separator whose signal was captured.
 	 */
@@ -742,7 +742,7 @@ class WriterLowering {
 	// -------- struct rule --------
 
 	/**
-	 * Mirror of `Lowering.shouldLowerByName` for the writer side. When
+	 * Mirror of `StructSeqLowering.shouldLowerByName` for the writer side. When
 	 * the resolved format has `fieldLookup == ByName + keySyntax ==
 	 * Quoted` and no struct field carries positional metadata
 	 * (`@:kw / @:lead / @:trail / @:sep`) or binary metadata, the
@@ -1145,7 +1145,7 @@ class WriterLowering {
 					// check so absence stays byte-silent.
 					//
 					// The first-field escape mirrors `TriviaTypeSynth.isBareNonFirstRef` and
-					// `Lowering.computeBeforeSlots` exactly, because those three decide
+					// `StructSeqLowering.computeBeforeSlots` exactly, because those three decide
 					// synthesise / capture / consume for the SAME slot and a field the first two
 					// admit but this one refuses would be captured and then silently dropped.
 					// `bodyPolicy` is the one shape that reaches a different emit branch
@@ -2162,7 +2162,7 @@ class WriterLowering {
 		// fork semantics for `#if cond, body` does NOT do).
 		//
 		// The slot lives on the trivia-paired typedef only (sister
-		// gate in `Lowering.lowerStruct` skips the plain-mode
+		// gate in `StructSeqLowering.lowerStruct` skips the plain-mode
 		// struct literal). Plain writer keeps the
 		// `_dt(' ')` pad — no slot
 		// to read.
@@ -2370,7 +2370,7 @@ class WriterLowering {
 		//       byte-wise so (a) misses, but the predicate accepts the
 		//       AST shape).
 		// Mirrors the parser-side blockEnded branch in
-		// `Lowering.emitStarFieldSteps`: byte-check `}`∪`;` (or-extended
+		// `StarFieldLowering.emitStarFieldSteps`: byte-check `}`∪`;` (or-extended
 		// `b == '}'.code || b == ';'.code || $predicateCall`). Predicate
 		// is omitted iff `lit.sepBlockEndedPredicate` is absent — the
 		// `false` fallback keeps the byte-check fast path untouched.
@@ -3680,7 +3680,7 @@ class WriterLowering {
 			//       whose byte-end `d` misses (a) but the predicate matches
 			//       the AST shape).
 			// Mirrors the struct-field plain-mode site at L3845-3880 and
-			// the parser-side blockEnded branch in `Lowering.emitStarFieldSteps`
+			// the parser-side blockEnded branch in `StarFieldLowering.emitStarFieldSteps`
 			// (`b == '}'.code || b == ';'.code || $predicateCall`).
 			// Strictly opt-in via `@:sep('text', tailRelax, blockEnded[('pred'[, sepStartsElement])])`.
 			final predicateName: Null<String> = branch.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE];
@@ -4253,7 +4253,7 @@ class WriterLowering {
 		// paths. Pairs with parent Alt-branch
 		// `@:fmt(forwardNewlineForBody)` (Case 3 omits post-kw
 		// `skipWs`) and `TriviaTypeSynth.isBareNonFirstRef` /
-		// `Lowering.hasBeforeNewlineSlot` first-field allowances.
+		// `StructSeqLowering.computeBeforeSlots` first-field allowances.
 		// Currently consumed by `HxTryCatchStmt.body` for
 		// `untypedBody=Keep` source-shape preservation.
 		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag(BEFORE_NEWLINE_SLOT_FIRST);
@@ -5127,7 +5127,7 @@ class WriterLowering {
 		// runtime ctor, built as a ternary chain falling through to the
 		// per-ctor default. The `<field>BeforeNewline` Keep-dispatch slot is
 		// read at the parent (where it IS captured, see `hasBeforeNewlineSlot`
-		// in `Lowering.lowerStruct`), NOT inside the kw-less branch. Consumers:
+		// in `StructSeqLowering.lowerStruct`), NOT inside the kw-less branch. Consumers:
 		// `HxFnDecl.body` for `('UntypedBlockBody', 'untypedBody')` and
 		// `('ExprBody', 'functionBody')`. Same/Next output stays byte-identical
 		// to the pre-slice inner-branch emission.
@@ -5421,7 +5421,7 @@ class WriterLowering {
 	/**
 	 * The `value.<field>BeforeTrail` access for a mandatory Ref carrying `@:trail`
 	 * in a trivia-bearing rule, or null when the field has no such slot. Gate and
-	 * host set mirror `Lowering.hasBeforeTrailSlotField` /
+	 * host set mirror `StructSeqLowering.hasBeforeTrailSlotField` /
 	 * `TriviaTypeSynth.isBeforeTrailRef` — the three must agree or the generated
 	 * writer reads a field the parser never pushed.
 	 */

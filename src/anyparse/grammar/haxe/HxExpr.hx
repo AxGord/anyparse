@@ -247,7 +247,7 @@ package anyparse.grammar.haxe;
  *
  * **Ternary branch** — mixfix `? :` operator. `@:ternary('?', ':', 1)`
  * declares the opening operator, middle separator, and precedence.
- * `Lowering.lowerPrattLoop` merges it into the operator dispatch chain
+ * `PrattPostfixLowering.lowerPrattLoop` merges it into the operator dispatch chain
  * alongside binary `@:infix` branches — longest-match sort (D33)
  * resolves `??` (len 2) vs `?` (len 1) automatically. Both middle
  * and right operands parse at `minPrec = 0` (full expression), so
@@ -317,7 +317,7 @@ package anyparse.grammar.haxe;
  * Declaration order inside each precedence level puts longer literals
  * first (`<=` before `<`, `>>>` before `>>` before `>`, `>>>=` before
  * `>>=`) for human readability. Correctness does NOT depend on this
- * order — `Lowering.lowerPrattLoop` sorts operators by literal length
+ * order — `PrattPostfixLowering.lowerPrattLoop` sorts operators by literal length
  * descending before emitting the dispatch chain, so the generated
  * parser always attempts the longer prefix first regardless of how
  * the grammar author orders the branches. Without that sort, input

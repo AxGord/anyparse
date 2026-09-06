@@ -324,7 +324,7 @@ class TriviaTypeSynth {
 	 * ω-condcomp-body-leading-sep — suffix for a `Bool` slot recording
 	 * whether the source had a leading separator INSIDE a `@:sep+@:tryparse`
 	 * (no-trail) Star body, between the enclosing keyword and the first
-	 * body element. Set by `Lowering.emitStarFieldSteps`'s pre-loop
+	 * body element. Set by `StarFieldLowering.emitStarFieldSteps`'s pre-loop
 	 * sep-peek; consumed by `WriterLowering.emitWriterStarField`'s
 	 * padLeading branch as a runtime gate that swaps the leading-pad
 	 * `_dt(' ')` for `_dt(', ')`. Synthesised only for Stars opting in via

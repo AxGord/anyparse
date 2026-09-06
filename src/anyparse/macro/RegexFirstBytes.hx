@@ -20,7 +20,7 @@ using StringTools;
  * is built as `^${pattern}`, and `|` binds looser than concatenation, so
  * `^A|B` parses as `(^A)|B` and anchors only the first alternative. What makes
  * a UNION over ALL top-level alternatives sound anyway is
- * `Lowering.lowerTerminal`'s `matchedPos().pos != 0` reject: the terminal
+ * `TerminalParseLowering.lowerTerminal`'s `matchedPos().pos != 0` reject: the terminal
  * accepts exactly the matches that begin AT the cursor, whichever alternative
  * produced them, so a first byte outside the union cannot start any accepted
  * match. That reject is why this answers a union where the previous

@@ -407,6 +407,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.JsonTypedParserTest',
 		'unit.grammar.haxe.AllmanProbe',
 		'unit.grammar.haxe.CheckstyleConfigLoaderTest',
+		'unit.grammar.haxe.CommentWeldDeletionSliceTest',
 		'unit.grammar.haxe.ComplexItemKindsSeamTest',
 		'unit.grammar.haxe.CondModProbe',
 		'unit.grammar.haxe.ElseSwitchPlacementSliceTest',

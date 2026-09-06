@@ -58,7 +58,7 @@ using Lambda;
  * The strategy is annotate-only. It writes `postfix.op` (the single
  * literal, or the open literal for the pair form) and, for the pair
  * form only, `postfix.close` (the close literal) onto the branch
- * `ShapeNode`. `lower()` returns `null`. `Lowering.lowerPostfixLoop`
+ * `ShapeNode`. `lower()` returns `null`. `PrattPostfixLowering.lowerPostfixLoop`
  * reads both keys at macro time, validates the branch shape against
  * the three supported variants, and emits the dispatch chain.
  *
