@@ -16,7 +16,13 @@
 # uncommitted work in the main tree is NOT seen — commit (or stash into
 # the patch) whatever the mutation is supposed to be measured against.
 #
-# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep]
+# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only]
+#
+# `--build-only` stops after the build: each track is applied, compiled and
+# reported as APPLIES or BUILD-FAIL, and no suite runs. That is not a weaker
+# mutation check, it is a different question — "can this cut even be compiled"
+# is what an arm being AUTHORED needs answered, and the whole suite is the
+# wrong instrument for it. `tools/mutation-arm.sh --check-apply` is the caller.
 #
 # For a mutation that a `@:killer` in the test tree NAMES, do not write a
 # manifest by hand: `tools/mutation-arm.sh <ARM>` renders the arm's record out
@@ -59,7 +65,12 @@
 #              typo'd filter would otherwise read as SURVIVED.
 #   WT-FAIL    `git worktree add` failed — nothing to patch or run.
 #   PATCH-FAIL `git apply` failed. Manifest/patch defect.
-#   BUILD-FAIL the patched tree does not compile — a useless mutation.
+#   BUILD-FAIL the patched tree does not compile — a useless mutation. The
+#              row names WHY, out of `apq mutation-verdict --build`:
+#              null-safety-structure / null-safety / inline-return /
+#              arm-registry / syntax / type / other.
+#   APPLIES    --build-only: the patched tree compiles. Nothing is claimed
+#              about any fixture — that is what a full track is for.
 #   RUN-FAIL   no usable transcript, or a red header whose rows the
 #              classifier could not name.
 #
@@ -147,7 +158,7 @@ parse_manifest() {
 # survive shell quoting. It ALWAYS exits 0, otherwise xargs aborts the
 # whole batch on the first failing mutation.
 run_track() {
-    local name=$1 manifest=$2 workroot=$3
+    local name=$1 manifest=$2 workroot=$3 build_only=${4:-0}
     local row filter expected wt build log verdict_file
     verdict_file="$workroot/$name.verdict"
     wt="$workroot/wt-$name"
@@ -166,7 +177,16 @@ run_track() {
     expected=$(printf '%s' "$row" | cut -f4)
 
     if ! "$wt/tools/worker-build.sh" "$build" test > "$workroot/$name.build.log" 2>&1; then
-        write_verdict "$verdict_file" "BUILD-FAIL" "$workroot/$name.build.log"
+        write_verdict "$verdict_file" "BUILD-FAIL" "$(build_detail "$workroot/$name.build.log")"
+        return 0
+    fi
+
+    # `--build-only` asks whether the cut COMPILES and stops there. It claims
+    # nothing about any fixture, which is why the verdict is not KILLED: an arm
+    # being authored has no fixture yet, and the suite would be answering a
+    # question nobody asked at ~2.5x the cost.
+    if [ "$build_only" -eq 1 ]; then
+        write_verdict "$verdict_file" "APPLIES" "the patched tree compiles"
         return 0
     fi
 
@@ -226,21 +246,38 @@ classify() {
     ( cd "$repo" && "$repo/bin/hxq" mutation-verdict "$log" --expect "$expected" )
 }
 
+# build_detail <build-log> -> one report-row cell naming WHY the build failed.
+#
+# A BUILD-FAIL row used to be a log path, so the reading always stopped there.
+# The cause comes from the same command as the verdict, and for the same reason:
+# the alternative is a `case` ladder in a shell function, which nothing can test.
+build_detail() {
+    local log=$1 classified cause line
+    if ! classified=$( cd "$repo" && "$repo/bin/hxq" mutation-verdict "$log" --build ); then
+        printf '%s' "$log"
+        return 0
+    fi
+    { IFS= read -r cause; IFS= read -r line; } <<EOF
+$classified
+EOF
+    printf '%s | %s (%s)' "$cause" "$line" "$log"
+}
+
 # --------------------------------------------------- child entry point
 
 if [ "${1:-}" = "--track" ]; then
-    if [ "$#" -ne 4 ]; then
-        echo "mutation-check.sh: --track needs <name> <manifest> <workroot>" >&2
+    if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
+        echo "mutation-check.sh: --track needs <name> <manifest> <workroot> [build-only]" >&2
         exit 2
     fi
-    run_track "$2" "$3" "$4"
+    run_track "$2" "$3" "$4" "${5:-0}"
     exit 0
 fi
 
 # -------------------------------------------------------- parent mode
 
 if [ "$#" -lt 1 ]; then
-    echo "usage: mutation-check.sh <manifest> [--jobs N]" >&2
+    echo "usage: mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only]" >&2
     exit 2
 fi
 
@@ -248,10 +285,15 @@ manifest=$1
 shift
 jobs=""
 keep=0
+build_only=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --keep)
             keep=1
+            shift
+            ;;
+        --build-only)
+            build_only=1
             shift
             ;;
         --jobs)
@@ -263,7 +305,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N or --keep)" >&2
+            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N, --keep or --build-only)" >&2
             exit 2
             ;;
     esac
@@ -400,7 +442,7 @@ EOF
 # Children always exit 0, so xargs failing here means xargs itself broke;
 # the report below turns a missing verdict into RUN-FAIL either way.
 if [ -n "$runnable" ]; then
-    if ! printf '%s' "$runnable" | xargs -P "$jobs" -I{} "$self" --track {} "$manifest" "$workroot"; then
+    if ! printf '%s' "$runnable" | xargs -P "$jobs" -I{} "$self" --track {} "$manifest" "$workroot" "$build_only"; then
         echo "mutation-check.sh: xargs reported a failure — see the per-track verdicts below" >&2
     fi
 fi
@@ -408,6 +450,7 @@ fi
 # ------------------------------------------------------------- report
 
 killed=0
+applies=0
 survived=0
 mismatch=0
 errors=0
@@ -422,6 +465,7 @@ while IFS=$'\t' read -r name patch filter expected; do
     fi
     case "$verdict" in
         KILLED) killed=$((killed + 1)) ;;
+        APPLIES) applies=$((applies + 1)) ;;
         SURVIVED) survived=$((survived + 1)); exit_code=1 ;;
         MISMATCH) mismatch=$((mismatch + 1)); exit_code=1 ;;
         *) errors=$((errors + 1)); exit_code=1 ;;
@@ -432,9 +476,13 @@ $rows
 EOF
 
 total_tracks=$(printf '%s\n' "$rows" | wc -l | tr -d ' ')
-echo "$total_tracks tracks: $killed killed, $survived survived, $mismatch mismatch, $errors error"
+if [ "$build_only" -eq 1 ]; then
+    echo "$total_tracks tracks: $applies applies, $errors did not build"
+else
+    echo "$total_tracks tracks: $killed killed, $survived survived, $mismatch mismatch, $errors error"
+fi
 if [ "$keep" -eq 0 ] && [ "$exit_code" -eq 0 ]; then
-    echo "workroot: $workroot (removed — every track was KILLED; --keep to keep it)"
+    echo "workroot: $workroot (removed — every track passed; --keep to keep it)"
 else
     echo "workroot: $workroot (logs and verdicts kept)"
 fi

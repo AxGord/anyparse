@@ -14,6 +14,8 @@
 # Usage:
 #   tools/mutation-arm.sh <ARM> [<ARM>...] [--jobs N] [--fast] [--keep]
 #   tools/mutation-arm.sh --all [--jobs N] [--fast] [--keep]
+#   tools/mutation-arm.sh <ARM>... --check-apply [--jobs N] [--keep]
+#   tools/mutation-arm.sh --all --check-apply [--jobs N] [--keep]
 #   tools/mutation-arm.sh --list
 #
 #   --all    every arm the registry declares.
@@ -26,6 +28,29 @@
 #            shared engine code, so what ELSE went red is part of the reading.
 #   --jobs N passed to tools/mutation-check.sh (default: its own max(1,min(4,cores/2))).
 #   --list   print the registry and exit.
+#   --check-apply
+#            AUTHORING mode: apply the cut and BUILD, no suite. Each arm is
+#            reported APPLIES or BUILD-FAIL with the cause named
+#            (`apq mutation-verdict --build`), and an arm whose cut cannot be
+#            RENDERED at all is a row rather than an abort, so `--all
+#            --check-apply` censuses the whole registry in one pass.
+#
+#            It exists because FOUR of the five known arm-authoring blind
+#            spots are answered by the tree — `unit.MutationArmAddressTest`
+#            walks the fragment half, the forced half and, since S147, the
+#            `inline` modifier — and the fifth is answered only by a COMPILER.
+#            S147 measured it: a `replace` that puts a
+#            narrowed nullable into an anonymous-structure literal builds
+#            nowhere and is visible to no walk over the record and the tree
+#            (`Null safety: Cannot unify { region : Null<Span>, … }`).
+#            Running the arm answers it, and this is the build half of that run
+#            alone. What it buys is NOT speed — measured on M-ADMITS-TRUE,
+#            whole suite 55.2 s, --fast 18.5 s, --check-apply 17.6 s, so
+#            dropping the suite saves 0.9 s and the haxe build is the whole
+#            cost. What it buys is that it does NOT require the arm to have a
+#            `@:killer` yet — the pin is written after the cut is known to
+#            compile — and that a failure is NAMED rather than handed over as
+#            a log path.
 #
 # What it does per arm: takes the arm's record, renders it into an
 # `hxq patch --select '<kind>:<method>'` payload, applies it inside a scratch
@@ -127,7 +152,7 @@ arm_pins() {
 # ---------------------------------------------------------------- arguments
 
 if [ "$#" -lt 1 ]; then
-    echo "usage: mutation-arm.sh <ARM>... | --all | --list [--jobs N] [--fast] [--keep]" >&2
+    echo "usage: mutation-arm.sh <ARM>... | --all | --list [--jobs N] [--fast] [--keep] [--check-apply]" >&2
     exit 2
 fi
 
@@ -136,6 +161,7 @@ jobs=""
 filter_mode="all-tests"
 want_all=0
 keep=0
+check_apply=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -144,6 +170,7 @@ while [ "$#" -gt 0 ]; do
             exit 0
             ;;
         --all) want_all=1; shift ;;
+        --check-apply) check_apply=1; shift ;;
         --fast) filter_mode="pinned-classes"; shift ;;
         --keep) keep=1; shift ;;
         --jobs)
@@ -191,6 +218,24 @@ workroot=$(tmpl_claim anyparse-mutarm)
 gen="$workroot/gen"
 manifest="$workroot/manifest"
 : > "$manifest"
+applyfail="$workroot/apply-fail"
+: > "$applyfail"
+
+# A cut that could not be RENDERED — the type resolves to no file, the body
+# offers no brace, `hxq patch` refuses, or the cut changes nothing.
+#
+# Outside --check-apply that is fatal, and deliberately so: a sweep of named
+# arms that silently skipped one would report a verdict for a set the caller
+# did not ask for. Under --check-apply it is a ROW — the mode exists to census
+# the registry, and the first unrenderable arm must not hide the other 225.
+gen_fail() {
+    if [ "$check_apply" -eq 1 ]; then
+        printf 'APPLY-FAIL  %-20s %s\n' "$1" "$2" >> "$applyfail"
+        return 0
+    fi
+    echo "mutation-arm.sh: $2" >&2
+    exit 2
+}
 
 # This directory used to survive every run, successful ones included: the
 # script `exec`ed into mutation-check.sh, which replaces the process and
@@ -244,8 +289,7 @@ for name in $names; do
         fi
     done
     if [ -z "$file" ]; then
-        echo "mutation-arm.sh: $name names $type, which is under neither src/ nor test/ at HEAD" >&2
-        exit 2
+        gen_fail "$name" "$name names $type, which is under neither src/ nor test/ at HEAD" && continue
     fi
 
     if [ "$cut_kind" = "FORCE" ]; then
@@ -288,8 +332,7 @@ const nl = src.indexOf("\n", open);
 if (nl < 0 || src.slice(open + 1, nl).trim() !== "") process.exit(1);
 process.stdout.write(src.slice(0, nl + 1));
 ' "$workroot/$name.node" > "$workroot/$name.hdr"; then
-            echo "mutation-arm.sh: $name: could not read the body brace of $type#$method out of $file — the member's braces do not balance, or its body opens mid-line" >&2
-            exit 2
+            gen_fail "$name" "$name: could not read the body brace of $type#$method out of $file — the member's braces do not balance, or its body opens mid-line" && continue
         fi
         {
             cat "$workroot/$name.hdr"
@@ -301,28 +344,36 @@ process.stdout.write(src.slice(0, nl + 1));
 
     if ! ( cd "$gen" && "$repo/bin/hxq" patch "$file" --select "$node_kind:$method" --write - < "$payload" ) \
         > "$workroot/$name.apply.log" 2>&1; then
-        echo "mutation-arm.sh: $name: the cut did not apply — $workroot/$name.apply.log" >&2
-        exit 2
+        gen_fail "$name" "$name: the cut did not apply — $workroot/$name.apply.log" && continue
     fi
     git -C "$gen" diff -- "$file" > "$workroot/$name.patch"
     if [ ! -s "$workroot/$name.patch" ]; then
-        echo "mutation-arm.sh: $name: the cut changed nothing — the registry describes the code as it already is" >&2
-        exit 2
+        gen_fail "$name" "$name: the cut changed nothing — the registry describes the code as it already is" && continue
     fi
     # Safe here and nowhere else: `$gen` is a worktree this script created from
     # HEAD seconds ago, and the only uncommitted thing in it is the cut just
     # made. Never spell this against a tree that holds work.
     git -C "$gen" checkout -- "$file"
 
-    expected=$(arm_pins "$name" "test")
-    if [ -z "$expected" ]; then
-        echo "mutation-arm.sh: $name: no @:killer in the generated registry names it — rebuild bin/test.js" >&2
-        exit 2
-    fi
-    if [ "$filter_mode" = "pinned-classes" ]; then
-        apq_filter=$(arm_pins "$name" "class")
-    else
+    # --check-apply asks the COMPILER, not the suite, so the arm needs no pin
+    # yet — which is the whole point: an arm is authored cut-first, and the
+    # `@:killer` that names it is written once the cut is known to compile.
+    # The manifest still records ALL and no expectation, so the same file can
+    # be re-run without --build-only.
+    if [ "$check_apply" -eq 1 ]; then
+        expected=""
         apq_filter="ALL"
+    else
+        expected=$(arm_pins "$name" "test")
+        if [ -z "$expected" ]; then
+            echo "mutation-arm.sh: $name: no @:killer in the generated registry names it — rebuild bin/test.js" >&2
+            exit 2
+        fi
+        if [ "$filter_mode" = "pinned-classes" ]; then
+            apq_filter=$(arm_pins "$name" "class")
+        else
+            apq_filter="ALL"
+        fi
     fi
     printf '%s | %s | %s | %s\n' "$name" "$workroot/$name.patch" "$apq_filter" "$expected" >> "$manifest"
 done
@@ -342,6 +393,21 @@ fi
 if [ "$keep" -eq 1 ]; then
     check_args="$check_args --keep"
 fi
+if [ "$check_apply" -eq 1 ]; then
+    check_args="$check_args --build-only"
+fi
 rc=0
-"$repo/tools/mutation-check.sh" "$manifest" $check_args || rc=$?
+if [ -s "$manifest" ]; then
+    "$repo/tools/mutation-check.sh" "$manifest" $check_args || rc=$?
+elif [ "$check_apply" -eq 0 ]; then
+    echo "mutation-arm.sh: nothing to run" >&2
+    rc=2
+fi
+# Printed AFTER the report so the two halves read as one census: a cut that
+# never became a patch is as much a defect of the record as one that did not
+# compile, and under --check-apply it is the only place it is reported.
+if [ -s "$applyfail" ]; then
+    cat "$applyfail"
+    rc=1
+fi
 exit "$rc"

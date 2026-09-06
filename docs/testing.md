@@ -432,6 +432,8 @@ At the S126 merge the registry stands at **198 arms / 319 pins** over **796** re
 tools/mutation-arm.sh <ARM> [<ARM>...]   # each over the whole suite
 tools/mutation-arm.sh --all              # every declared arm
 tools/mutation-arm.sh --all --fast       # only the classes that pin each arm
+tools/mutation-arm.sh <ARM> --check-apply  # apply the cut and BUILD only, no suite
+tools/mutation-arm.sh --all --check-apply  # the same over the whole registry
 tools/mutation-arm.sh --list             # the registry, one line per arm
 node bin/test.js --list-arms             # the same list, out of the generated registry
 ```
@@ -458,7 +460,7 @@ A `SURVIVED` or `MISMATCH` row is evidence about the FIXTURE, not noise to retry
 | `--all`, whole suite | 335 s | 23 killed |
 | `--all --fast` | 130 s | 23 killed |
 
-**Cadence: `--all --fast` per WAVE, one arm on demand.** Two minutes is cheap enough to run at the end of a wave and far too expensive to run per slice — and the build-time checks already catch the failure a sweep would otherwise be needed for (an arm pointing at a member that no longer exists), for free, on every build. Run a single arm when you add or edit a pin, which is the moment its claim is actually being made. Reach for `--all` (whole suite) when the collateral census is the point — before a release, or when a refactor is supposed to have preserved a coupling.
+**Cadence: `--check-apply` while AUTHORING, `--all --fast` per WAVE, one arm on demand.** A cut is compiled BEFORE it is claimed — `tools/mutation-arm.sh <ARM> --check-apply` answers the one question no walk over the record and the tree can (§ "The five arm-authoring blind spots"), and it runs before the arm has a `@:killer`, which is what makes it an authoring step rather than a cheaper sweep. For the SWEEPS, two minutes is cheap enough to run at the end of a wave and far too expensive to run per slice — and the build-time checks already catch the failure a sweep would otherwise be needed for (an arm pointing at a member that no longer exists), for free, on every build. Run a single arm when you add or edit a pin, which is the moment its claim is actually being made. Reach for `--all` (whole suite) when the collateral census is the point — before a release, or when a refactor is supposed to have preserved a coupling.
 
 **The scratch directory a run leaves behind is documented** — `anyparse-mutarm.*` and the `anyparse-mutcheck.*` it drives, kept on a non-KILLED verdict with the path printed, removed otherwise, and swept at startup once their owner pid is gone: § "Scratch directories: every tool's, and who removes them".
 
@@ -1264,6 +1266,136 @@ chain-guarded row; what it cannot do is discriminate it against a mechanism the 
 already own, because the only disagreement the chain has is the one an existing fixture was
 written for. The residue's chain half is not waiting on effort — it is waiting on a SECOND
 disagreement inside the chain, and the module does not have one today.
+
+#### The five arm-authoring blind spots, and which of them a WALK can see (S147)
+
+Five shapes have each cost a slice, and they had been collected as a LIST rather than as a
+verdict: a trailing `// noqa` on the signature line (S98) · a return type opening a brace of
+its own, `Null<{ … }>` (S104) · an unbalanceable body (S104) · an `inline` member (S96) · a
+narrowed nullable in an anonymous-structure literal (S147). S145 closed the first three for
+the 68 force arms by asking the TREE instead of a shell brace-balancer. This slice asked the
+remaining two the same way — which of the five can be named from the RECORD plus the TREE,
+with no compile of the cut — and got one yes and one no.
+
+| zone | first cost | who can name it | where |
+|---|---|---|---|
+| trailing `// noqa` on the signature line | S98 | the tree | `testEveryForceArmStillOpensABodyToCutInto` — nothing but whitespace after the body's brace |
+| a return type opening its own brace (`Null<{ … }>`) | S104 | the tree | the same walk — the body's `BlockBody` span, never a brace hunt |
+| an unbalanceable body | S104 | the tree | the same walk — the body node's KIND |
+| an `inline` member | S96 | the tree, since S147 | the same walk — the modifier group ahead of the member node |
+| a narrowed nullable in a structure literal | S147 | **the COMPILER, and nothing else** | `tools/mutation-arm.sh --check-apply` |
+
+**Four of the five, and the fourth landed LATENT** — the same shape as S145's: 0 of the 68
+force arms sit on an `inline` member, and 0 carry a `// noqa` on the signature line. The
+discriminating probe repoints `M-HASSUBTYPE-FALSE` at `SubtypeGraph#subtypeReferencesField`,
+which is `inline`: the walk reddens naming the member, and the very same cut, compiled,
+answers `inline-return | src/anyparse/query/SubtypeGraph.hx:92: characters 3-15 : Cannot
+inline a not final return`. The condition over-approximates in exactly one direction and that
+was measured too — an inline member NOBODY CALLS compiles with a leading `return`, because
+inlining happens at the CALL SITE and not at the declaration. An arm on an uncalled member has
+no behaviour to remove, so refusing it costs nothing.
+
+**The fifth is a TYPE question at a program point, and that is why no walk gets it.**
+Reproduced on a real member rather than argued: repointing `M-OPAQUE-REGION-NODE-SPAN` from
+its wrapper cut to the naive one — `"find": "region: region,"`, `"replace": "region: span,"`
+inside `CondRegionScan#opaqueCondRegions`, where `span` is the `Null<Span>` local the
+enclosing `if (span != null && …)` narrows — gives
+
+```
+src/anyparse/query/CondRegionScan.hx:107: lines 107-112 : Null safety: Cannot unify
+{ region : Null<anyparse.runtime.Span>, kind : String, gaps : Array<anyparse.runtime.Span>,
+  formatted : Array<anyparse.runtime.Span> } with anyparse.query.OpaqueCondRegion
+```
+
+and that record is INVISIBLE to everything the tree can be asked. Measured on a probe commit
+carrying exactly it: `haxe test-js.hxml` exits **0**, and the three arm walks — address,
+fragment, force — run **46 assertions, 0 failures**. The fragment walk is doing its job
+perfectly, which is the point: `region: region,` does occur exactly once inside the member.
+What it cannot know is what the REPLACEMENT will type as. The arm's stored cure is the wrapper
+`new Span(span.from, span.to)`, and the only thing that ever said the wrapper was needed was a
+run.
+
+**A candidate static predicate was measured, and it is unsound in both directions.** Its
+syntactic half is easy and narrow: of the 158 fragment arms, **5** have their cut on a
+structure-literal field-value line at all — `M-ADDMETA-ZERO-WIDTH-INSERT`,
+`M-TRIVIASEP-RESTPROBE-UNGATED`, `M-KEEP-ELSEIF-ALWAYS-GLUED`, `M-USES-QUALIFIED-DEFAULT`,
+`M-SHORTEN-IMPORT-THRESHOLD-ONE` — and **0** of those name an identifier the member declares
+`Null<T>`, so today the predicate fires on nothing and has nothing to catch. What stops it
+being shipped anyway is that its OTHER half is not a type lookup but Haxe's narrowing lattice,
+and four probes compiled against `src/` show the lattice deciding one syntactic shape four
+ways:
+
+| the value reaching a non-nullable structure field | result |
+|---|---|
+| a parameter narrowed by `if (x == null) return null;` | compiles |
+| a `Null<T>` FIELD narrowed by the same guard | compiles |
+| a parameter narrowed by a ternary condition | `Null safety: Cannot unify { … }` |
+| a local narrowed by `if (x != null && …)` — the real case | `Null safety: Cannot unify { … }` |
+
+A predicate that flags "a `Null<T>`-declared identifier in a structure-literal field" is a
+false alarm on rows 1–2 and a hit on rows 3–4, and nothing in the RECORD or the TREE separates
+them; `TypeResolver`/`SymbolIndex` answer what a name is DECLARED as, never what it is
+narrowed to at one position. Re-deriving that here would be the belt-and-braces text scan over
+an exact model, with the worse model. So the honest answer is the one this section is named
+for: for this zone a RUN is the only net — and the job is then to make the run cheap and its
+verdict NAMED.
+
+**`--check-apply`: apply the cut, BUILD, and stop.**
+
+```sh
+tools/mutation-arm.sh <ARM> --check-apply           # does this cut compile?
+tools/mutation-arm.sh --all --check-apply --jobs 8  # the whole registry, one pass
+```
+
+It reuses the whole track machinery rather than growing a second one:
+`tools/mutation-check.sh --build-only` creates the worktree at `HEAD`, applies the rendered
+patch and runs `tools/worker-build.sh <dir> test` — and then stops, with no suite. Three
+things it does that a full run does not:
+
+- **It needs no `@:killer`.** An arm is authored cut-first and the pin that names it is
+  written once the cut is known to compile, so `--check-apply` skips the expectation set
+  entirely. The manifest still records `ALL` and no expectation, so the same file re-runs as a
+  full check without `--build-only`.
+- **A `BUILD-FAIL` row NAMES the cause**, out of `apq mutation-verdict --build <log>`:
+  `null-safety-structure` · `null-safety` · `inline-return` · `arm-registry` · `syntax` ·
+  `type` · `other` · `no-error`. That classifier is Haxe (`anyparse.query.BuildFailure`,
+  covered by `unit.query.BuildFailureTest`) for the reason `MutationVerdict` is — the
+  alternative is a `case` ladder inside a shell function, and this repo has the receipts on
+  what that costs. `tools/mutation-check.sh` gained the same naming on its own `BUILD-FAIL`
+  rows, which used to be a bare log path.
+- **An arm whose cut cannot be RENDERED is a row, not an abort.** Outside `--check-apply` an
+  unrenderable record still exits 2 — a sweep of NAMED arms that silently skipped one would
+  report a verdict for a set the caller did not ask for — but a census must not let the first
+  bad record hide the other 225.
+
+`arm-registry` is not an exotic cause there: an arm added to the registry before its
+`@:killer` exists fails `TestDiscovery`'s own cross-check, and that is a build failure of the
+tree rather than of the cut. Naming it is what stops the authoring loop reading it as a defect
+in the cut.
+
+**What `--check-apply` buys is NOT speed, and the brief that asked for it said speed.**
+Measured on one arm (`M-ADMITS-TRUE`) on the same machine, back to back:
+
+| run | wall |
+|---|---|
+| `tools/mutation-arm.sh M-ADMITS-TRUE` (whole suite) | 55.2 s |
+| `… --fast` (only the classes that pin it) | 18.5 s |
+| `… --check-apply` (build only) | 17.6 s |
+
+Dropping the suite saves **0.9 s of 18.5**. The `haxe test-js-common.hxml` build IS the cost of
+a track, and it is unavoidable in every mode — so "make the run cheap" was the wrong axis, and
+this mode is worth having for two other reasons: it needs no `@:killer`, which is the only
+thing that makes it usable at the moment a cut is being written; and its verdict NAMES the
+cause instead of handing over a log path. Read the 3.1× against the whole-suite run as the
+honest figure, and expect nothing against `--fast`.
+
+**The whole registry, censused: `226 tracks: 226 applies, 0 did not build`** (`--all
+--check-apply --jobs 8`, ~19 min wall under concurrent load; a clean 8-arm batch at the same
+`--jobs` ran 30.9 s, i.e. 3.87 s per arm amortised, which puts an undisturbed full census
+around 15 min). So the fifth zone is LATENT today, exactly as the fourth is — every stored cut
+compiles, and what the mode buys is that the next one is checked before it is claimed rather
+than after a wave has gone green around it.
+
 
 ## Macro-specific tests
 
