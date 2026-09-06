@@ -137,7 +137,9 @@ final class MentionsCommand implements CliCommand {
 		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Every named-leaf occurrence of an identifier. Unions:\n');
-		CliIo.sysPrint('  uses  — type-position references (precise)\n');
+		CliIo.sysPrint('  uses  — type-position references (precise); a simple <name>\n');
+		CliIo.sysPrint('          also answers a QUALIFIED spelling of the same last\n');
+		CliIo.sysPrint('          segment (`Mod.T`), and the hit prints the path found\n');
 		CliIo.sysPrint('  refs  — value-binding references (precise)\n');
 		CliIo.sysPrint('  lit   — every other leaf with that exact name:\n');
 		CliIo.sysPrint('          case-patterns (`case Foo(_):` → IdentExpr),\n');
@@ -145,8 +147,9 @@ final class MentionsCommand implements CliCommand {
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Use this when refs/uses/blast return 0 but you know the\n');
 		CliIo.sysPrint('name appears (case-patterns are the canonical example —\n');
-		CliIo.sysPrint('blind to refs/uses/blast). All three sections are exact-\n');
-		CliIo.sysPrint('name and structural; no heuristic / no over-match.\n');
+		CliIo.sysPrint('blind to refs/uses/blast). All three sections are structural,\n');
+		CliIo.sysPrint('with no heuristic; the only over-match is a qualified path\n');
+		CliIo.sysPrint('whose last segment is the name but whose module is another.\n');
 	}
 
 	private static function parseMentionsArgs(args: Array<String>): MentionsOpts {
@@ -236,7 +239,7 @@ final class MentionsCommand implements CliCommand {
 				'mentions', plugin.parseFileTypeRefs, entry.path, entry.source, singleFile, null, target
 			);
 			if (typeTree == null) continue;
-			final hits: Array<UsesHit> = Uses.find(target, typeTree, typeShape);
+			final hits: Array<UsesHit> = Uses.find(target, typeTree, typeShape, true);
 			if (hits.length == 0) continue;
 			any = true;
 			if (!header) {

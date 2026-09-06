@@ -1287,6 +1287,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testTypeEntryLandsBelowTheDoc :: control :: M-ADDMETA-ZERO-WIDTH-INSERT',
+			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
+			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
+			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
+			'unit.query.ApqUsesTest#testQualifiedTailMatchesOnlyOnASegmentBoundary :: control :: M-USES-TAIL-SUBSTRING',
 			'unit.query.BodySlotGuardSliceTest#testAllowsAuthoredBodyThatTakesInTheNextStatement :: control :: M-BODYSLOT-AUTHORED-NEVER',
 			'unit.query.BodySlotGuardSliceTest#testAllowsHeaderRewriteOfBracelessConstruct :: control :: M-BODYSLOT-LIMIT-EDIT-END',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
@@ -1604,7 +1608,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TAILMERGE-NORM-ONLY',
 			'M-TAILMERGE-FALL-KEPT',
 			'M-NAMING-SKIPSCAN-REPORT-INDEX',
-			'M-EXISTS-GUARD-BLIND'
+			'M-EXISTS-GUARD-BLIND',
+			'M-USES-EXACT-ONLY',
+			'M-USES-TAIL-SUBSTRING',
+			'M-USES-QUALIFIED-DEFAULT'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

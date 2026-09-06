@@ -19,6 +19,8 @@ using Lambda;
  *    function parameter type;
  *  - parameterized type reports both the head and each parameter
  *    (`Array<HxVarMore>` → `Array` + `HxVarMore`);
+ *  - a QUALIFIED spelling of the same last segment (`pkg.Mod.T`), opt-in
+ *    so rewriters keep the exact answer;
  *  - gating by construction: the default `parseFile` tree carries NO
  *    type-ref nodes, so `Uses.find` over it is always empty (this is
  *    what keeps `ast`/`search`/`refs`/`meta` byte-identical).
@@ -168,6 +170,67 @@ class ApqUsesTest extends Test {
 		Assert.equals(1, viaParam.length, 'anon-in-anon in a type param expected once, got ${describe(viaParam)}');
 	}
 
+	// ======== Qualified spellings ========
+
+	@:pin('control')
+	@:killer('M-USES-EXACT-ONLY')
+	public function testQualifiedSubModuleTypeIsFoundBySimpleName(): Void {
+		// `pkg.Mod.Sub` reaches the type-ref tree as ONE `Named` leaf carrying the whole
+		// dotted string, so an exact-name walker never sees it — and a deadness census
+		// built on `uses` then called a live sub-module type dead (eleven of them, and
+		// `Type not found` in six modules).
+		final source: String = 'class X { function f(o:WriterLowering.WrapBodyOpts):Void {} }';
+		final hits: Array<UsesHit> = usesQualifiedIn(source, 'WrapBodyOpts');
+		Assert.equals(1, hits.length, 'qualified sub-module type ref expected, got ${describe(hits)}');
+		Assert.equals(
+			'WriterLowering.WrapBodyOpts', hits[0].name, 'the hit must carry the spelling found, not the query, got ${describe(hits)}'
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-USES-EXACT-ONLY')
+	public function testQualifiedSpellingsAcrossTypePositions(): Void {
+		// Every position the plain-name arm already covers must answer the qualified
+		// spelling too — a census that reaches only parameters is still unsound.
+		assertQualifiedProjects('class X { var m:pkg.Mod.T; }', 'field annotation');
+		assertQualifiedProjects('class X { function f():pkg.Mod.T return null; }', 'return type');
+		assertQualifiedProjects('class X { var m:Array<pkg.Mod.T>; }', 'type parameter');
+		assertQualifiedProjects('class X { function f(o:pkg.Mod.T):Void {} }', 'fn parameter');
+		assertQualifiedProjects('enum E { Ctor(d:pkg.Mod.T); }', 'enum-ctor parameter');
+		assertQualifiedProjects('class X extends pkg.Mod.T {}', 'extends heritage');
+	}
+
+	@:pin('control')
+	@:killer('M-USES-QUALIFIED-DEFAULT')
+	public function testQualifiedIsOptInSoRewritersKeepTheExactAnswer(): Void {
+		// `CrossRename` splices the LAST SEGMENT of a dotted path and resolves first
+		// which module the path names; it reads this walker for the plain-name arm
+		// only. Widening the default would make it rewrite `Mod.T` whole.
+		final source: String = 'class X { function f(o:WriterLowering.WrapBodyOpts):Void {} }';
+		Assert.equals(0, usesIn(source, 'WrapBodyOpts').length, 'the default walk must stay exact');
+	}
+
+	public function testDottedQueryStaysExact(): Void {
+		// A dotted target is already unambiguous — answering it through the last
+		// segment would report a same-simple-name type from another module.
+		final source: String = 'class X { var a:Mod.T; var b:Other.T; }';
+		Assert.equals(1, usesQualifiedIn(source, 'Mod.T').length, 'the dotted query must answer its own path');
+		Assert.equals(0, usesQualifiedIn(source, 'Nope.T').length, 'a dotted query must not answer a different module');
+		Assert.equals(
+			2, usesQualifiedIn(source, 'T').length, 'the simple query answers both, got ${describe(usesQualifiedIn(source, 'T'))}'
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-USES-TAIL-SUBSTRING')
+	public function testQualifiedTailMatchesOnlyOnASegmentBoundary(): Void {
+		// `endsWith` on the bare name would make `Mod.WrapBodyOpts` answer a query
+		// for `BodyOpts`; the split is on the last `.`, not on the text.
+		final source: String = 'class X { var m:Mod.WrapBodyOpts; }';
+		Assert.equals(0, usesQualifiedIn(source, 'BodyOpts').length, 'a mid-segment suffix must not match');
+		Assert.equals(1, usesQualifiedIn(source, 'WrapBodyOpts').length, 'the whole last segment must match');
+	}
+
 	// ======== Gating by construction ========
 
 	public function testDefaultParseFileTreeHasNoTypeRefs(): Void {
@@ -187,6 +250,16 @@ class ApqUsesTest extends Test {
 	private static function usesIn(source: String, name: String): Array<UsesHit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return Uses.find(name, plugin.parseFileTypeRefs(source), plugin.typeRefShape());
+	}
+
+	private static function usesQualifiedIn(source: String, name: String): Array<UsesHit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return Uses.find(name, plugin.parseFileTypeRefs(source), plugin.typeRefShape(), true);
+	}
+
+	private static function assertQualifiedProjects(source: String, label: String): Void {
+		final hits: Array<UsesHit> = usesQualifiedIn(source, 'T');
+		Assert.equals(1, hits.length, '$label: the qualified type must project exactly once, got ${describe(hits)}');
 	}
 
 	private static function assertAnonFieldTypeProjects(source: String, label: String): Void {
