@@ -657,6 +657,21 @@
 			"note": "the cross-file return arc asks the REPORT index again, so every member declared outside the reported files is unknown and the arc is dead where it matters"
 		},
 		{
+			"name": "M-DECL-NULLABLE-OVERRIDES-EXISTS",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleDecl",
+			"find": "else if (!nullableInit && isDeclaredNullable(node, ctx))",
+			"replace": "else if (isDeclaredNullable(node, ctx))",
+			"note": "the written annotation is consulted even where the initializer already had a verdict, so a map read an `m.exists(k)` guard proved present is seeded MaybeNull again through its `Null<V>` declaration"
+		},
+		{
+			"name": "M-DECL-NULLABLE-BLIND",
+			"type": "anyparse.check.NullableSource",
+			"method": "declaredNullable",
+			"force": "false",
+			"note": "the written `Null<T>` on a local declaration stops being evidence, so a receiver no nullable EXPRESSION feeds goes back to Unknown and the declaration-side half of the flow seed is dead"
+		},
+		{
 			"name": "M-NULLABLE-NO-CHAIN",
 			"type": "anyparse.check.NullableSource",
 			"method": "receiverTypeName",

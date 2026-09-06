@@ -177,6 +177,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.SimplifyBooleanTernaryCheckTest#testClaimedSpansHoldNothingForARealValuedTernary :: control',
 		'unit.check.TrivialGetterShapeCollapseTest#testAliasImportedSupertypeLeavesNoDanglingBackingRead :: control',
 		'unit.check.TrivialGetterShapeCollapseTest#testAliasImportedSupertypeRewritesBothFiles :: control',
+		'unit.check.UnguardedNullableDerefTest#testDeclaredNullableUnderExistsGuardNotFlagged :: vacuity',
 		'unit.check.UnguardedNullableDerefTest#testExistsGuardEarlyReturnPathKeySuppressed :: vacuity',
 		'unit.check.UnusedParameterCheckTest#testInlineHelperOwnParameterNotYetReached :: control',
 		'unit.check.UnusedPrivateCheckTest#testEmptyCtorKeptWhenSubtypeExtendsATypedefOfIt :: control',

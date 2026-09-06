@@ -1064,6 +1064,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 			+ 'M-SUPERDECLARES-FALSE',
+			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableLocalFlagged :: control :: M-DECL-NULLABLE-BLIND',
+			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableUnderExistsGuardNotFlagged :: control :: '
+			+ 'M-DECL-NULLABLE-OVERRIDES-EXISTS',
 			'unit.check.UnguardedNullableDerefTest#testExistsGuardEarlyReturnPathKeySuppressed :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
@@ -1464,6 +1467,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-NULLABLE-FLOW-REPORT-INDEX',
 			'M-NULLABLE-INDEX-EXCLUSION',
 			'M-NULLABLE-REPORT-INDEX',
+			'M-DECL-NULLABLE-OVERRIDES-EXISTS',
+			'M-DECL-NULLABLE-BLIND',
 			'M-NULLABLE-NO-CHAIN',
 			'M-NULLABLE-WRAPPER-OPAQUE',
 			'M-SAFENAV-NO-NARROW',

@@ -532,6 +532,91 @@ class UnguardedNullableDerefTest extends Test {
 		);
 	}
 
+	// --- The DECLARATION-side seed: a local whose written annotation is `Null<T>` ---
+
+	/**
+	 * A local DECLARED `Null<T>` is seeded `MaybeNull` even when nothing in its initializer says
+	 * so — the real site is `pony/src/pony/heaps/ui/gui/TextWithSplitter.hx:79`, `final e:
+	 * Null<FontChar> = font.getChar(cc); e.getKerningOffset(...)`. The control drops the
+	 * annotation and nothing else, so the pin cannot pass on the initializer alone.
+	 */
+	@:pin('control')
+	@:killer('M-DECL-NULLABLE-BLIND')
+	public function testDeclaredNullableLocalFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { function f(t:Tex) { final e: Null<Char> = t.getChar(1); e.width; } }').length,
+			'the written Null<Char> is the whole evidence'
+		);
+		Assert.equals(
+			0, violations('class C { function f(t:Tex) { final e = t.getChar(1); e.width; } }').length,
+			'without the annotation the same initializer says nothing'
+		);
+	}
+
+	/** A `Null<T>` local under an `if (e != null)` arm, and after an early `if (e == null) return;`, is narrowed. */
+	public function testDeclaredNullableGuardedNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function f(t:Tex) { final e: Null<Char> = t.getChar(1); if (e != null) e.width; } }').length
+		);
+		Assert.equals(
+			0, violations('class C { function f(t:Tex) { final e: Null<Char> = t.getChar(1); if (e == null) return; e.width; } }').length
+		);
+	}
+
+	/**
+	 * A PARAMETER declared `Null<T>` is NOT seeded from its annotation: nullability there is a
+	 * contract with callers this walk cannot see, and the dominant idiom is an argument valid
+	 * under a mode a companion argument establishes. Measured over two real trees, seeding
+	 * parameters added 10 findings of which 9 were that one shape.
+	 */
+	public function testDeclaredNullableParamNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(e: Null<Char>) { e.width; } }').length);
+	}
+
+	/**
+	 * The declaration seed must not undo the `m.exists(k)` guard: a map read the guard proves
+	 * present stays silent even though the binding it feeds is written `Null<V>`. The control is
+	 * the same declaration without the guard, so the suppression half is not vacuous.
+	 */
+	@:pin('control')
+	@:killer('M-DECL-NULLABLE-OVERRIDES-EXISTS')
+	public function testDeclaredNullableUnderExistsGuardNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { function f(m:Map<String,Foo>, k:String) { if (m.exists(k)) { final u: Null<Foo> = m[k]; u.foo; } } }')
+				.length,
+			'the exists-guard verdict on the initializer wins over the annotation'
+		);
+		Assert.equals(
+			1, violations('class C { function f(m:Map<String,Foo>, k:String) { final u: Null<Foo> = m[k]; u.foo; } }').length,
+			'without the guard the same declaration is seeded'
+		);
+	}
+
+	/** A write of an unknown value clears the seed — the annotation is evidence about the BINDING, not about every later value. */
+	public function testDeclaredNullableRewrittenNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(t:Tex) { var e: Null<Char> = t.getChar(1); e = t.other(); e.width; } }').length);
+	}
+
+	/**
+	 * An EXCLUDED nullable call reaches the flow again once the author annotated the binding
+	 * `Null<T>`: `nullableFlowExcludedCalls` covers what the seed INFERS about the dominant
+	 * `while (c.length > 0) c.pop()` idiom, not what the author wrote down. Over three real trees
+	 * the length-guarded idiom is never written WITH the annotation, while
+	 * `final entry: Null<Entry> = entries.first()` dereferenced inside an array literal is
+	 * (TM-Haxe4 `src/tests/unit/ZipTest.hx:143`) and is a real NPE. The residual: an annotated
+	 * length-guarded `pop` would be a false positive, unmeasured because no tree writes one.
+	 */
+	public function testDeclaredNullableExcludedCallStillFlagged(): Void {
+		Assert.equals(1, violations('class C { function f(arr:Array<Int>) { final u: Null<Int> = arr.pop(); u.foo; } }').length);
+	}
+
+	/** A non-`Null` annotation seeds nothing, `Dynamic` included — a deref of an untyped value is not a clear NPE. */
+	public function testNonNullableDeclarationNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(t:Tex) { final e: Char = t.getChar(1); e.width; } }').length);
+		Assert.equals(0, violations('class C { function f(t:Tex) { final e: Dynamic = t.getChar(1); e.width; } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
