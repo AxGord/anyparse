@@ -1594,8 +1594,8 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testTheDeferredArmCensusNamesTheMacroModuleArms(): Void {
 		Assert.same([
-			'M-CURLY-CTORS-NONE :: anyparse.macro.WriterLowering#collectCurlyBlockCtorPatterns',
-			'M-SBE-UNGATED :: anyparse.macro.WriterLowering#semicolonBeforeSiblingWrap',
+			'M-CURLY-CTORS-NONE :: anyparse.macro.WriterCtorPatternLowering#collectCurlyBlockCtorPatterns',
+			'M-SBE-UNGATED :: anyparse.macro.WriterRefFieldLowering#semicolonBeforeSiblingWrap',
 			'M-TRY-BODY-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryBraceSymmetryWrap',
 			'M-TRY-CATCHES-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryCatchesSymmetryWrap',
 			'M-NONCURLY-SAME-DROP :: anyparse.macro.WriterPolicyLowering#sameLineNonCurlyBlockPolicySwitch',
@@ -1608,7 +1608,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-SSB-CHAIN-OFF :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
 			'M-EICR-KNOB-IGNORED :: anyparse.macro.WriterBodyPolicyLowering#buildElseIfCommentReflowLayout',
 			'M-PEB-WS-REWIND-OFF :: anyparse.macro.StarLoopLowering#buildBlockEndedByteCheck',
-			'M-BRACKET-GLUE-NONE :: anyparse.macro.WriterLowering#buildBracketBodyGlueTest',
+			'M-BRACKET-GLUE-NONE :: anyparse.macro.WriterCtorPatternLowering#buildBracketBodyGlueTest',
 			'M-ELSE-SWITCH-COMMENT-GLUE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchCases',
 			'M-ELSE-SWITCH-TESTS-NONE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchTests',
 			'M-PEB-WS-REWIND-TRYPARSE-OFF :: anyparse.macro.StarLoopLowering#buildTryparseSepLoop',
@@ -1617,7 +1617,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-CLI-COMMANDS-MEMOISED :: anyparse.query.cli.CliRegistry#ClassDecl:CliRegistry',
 			'M-CLI-REQUIREMATCH-STATIC :: anyparse.query.cli.CliContext#ClassDecl:CliContext',
 			'M-PATTERN-RESTPROBE-UNSET :: anyparse.grammar.haxe.HxCasePattern#MetaCall:@:fmt',
-			'M-SEPSTAR-RESTPROBE-UNGATED :: anyparse.macro.WriterLowering#emitSepStarList',
+			'M-SEPSTAR-RESTPROBE-UNGATED :: anyparse.macro.WriterStarEmitLowering#emitSepStarList',
 			'M-TRIVIASEP-RESTPROBE-UNGATED :: anyparse.macro.TriviaSepLowering#triviaSepNoTriviaBranch',
 			'M-FILEHEADER-HEAD-NOT-PIU :: anyparse.macro.TriviaEofLowering#triviaEofHeadIsPiuExpr',
 			'M-FILEHEADER-HEAD-ALWAYS-PIU :: anyparse.macro.TriviaEofLowering#triviaEofHeadIsPiuExpr',
@@ -1626,13 +1626,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-FILEHEADER-ANY-COMMENT-KIND :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
 			'M-FILEHEADER-NO-TWO-COMMENT-ARM :: anyparse.macro.TriviaEofLowering#triviaEofFileheaderBlanksExpr',
 			'M-FILEHEADER-COND-OPAQUE :: anyparse.macro.TriviaEofLowering#triviaEofHeadIsPiuExpr',
-			'M-SSB-TRAILOPT-REEMIT :: anyparse.macro.WriterLowering#emitMandatoryRefTrail',
+			'M-SSB-TRAILOPT-REEMIT :: anyparse.macro.WriterRefFieldLowering#emitMandatoryRefTrail',
 			'M-SSB-FRAME-BLANKET :: anyparse.macro.WriterBraceSymmetryLowering#deBraceBodyAccess',
-			'M-ELSE-SEP-EXPR-BLIND :: anyparse.macro.WriterLowering#sameLineSeparatorShapeAware',
+			'M-ELSE-SEP-EXPR-BLIND :: anyparse.macro.WriterFieldSepLowering#sameLineSeparatorShapeAware',
 			'M-KEEP-ELSEIF-NEXT-OFF :: anyparse.macro.WriterBodyPolicyLowering#buildBodyKeepLayout',
 			'M-KEEP-ELSEIF-ALWAYS-GLUED :: anyparse.macro.WriterBodyPolicyLowering#buildBodyKeepLayout',
-			'M-BEFORE-KW-TRAILING-DROP :: anyparse.macro.WriterLowering#beforeKwSeparator',
-			'M-BEFORE-KW-LEADING-DROP :: anyparse.macro.WriterLowering#beforeKwSeparator',
+			'M-BEFORE-KW-TRAILING-DROP :: anyparse.macro.WriterFieldSepLowering#beforeKwSeparator',
+			'M-BEFORE-KW-LEADING-DROP :: anyparse.macro.WriterFieldSepLowering#beforeKwSeparator',
 			'M-BEFORE-LEADING-COMMENT-DROP :: anyparse.macro.WriterTriviaSlotLowering#buildBeforeLeadingSep'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}

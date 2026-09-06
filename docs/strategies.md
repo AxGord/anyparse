@@ -198,10 +198,12 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 
 | module | inventory flags it names |
 |---|---|
-| `WriterLowering` | 117 |
+| `WriterStarEmitLowering` | 58 |
+| `WriterRefFieldLowering` | 45 |
 | `WriterTriviaStarDispatch` | 43 |
 | `WriterKwRefLowering` | 31 |
 | `WriterCtorBlankLowering` | 17 |
+| `WriterLowering` | 17 |
 | `WriterRefLeadLowering` | 17 |
 | `WriterPrattLowering` | 14 |
 | `WriterPolicyLowering` | 10 |
@@ -209,6 +211,7 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `TriviaPairAltCtor` | 8 |
 | `StructSeqLowering` | 7 |
 | `WriterBraceSymmetryLowering` | 6 |
+| `WriterFieldSepLowering` | 6 |
 | `PrattPostfixLowering` | 4 |
 | `Lowering` | 3 |
 | `StarFieldLowering` | 3 |
@@ -223,19 +226,22 @@ in an emit body that cares (`if (child.fmtHasFlag('nestBody'))`, `firstFmtFlag(n
 | `WriterArrowValueIfLowering` | 1 |
 | `TriviaSlotNames` | 1 |
 | `WriterChainLowering` | 1 |
+| `WriterCtorPatternLowering` | 1 |
 | `WriterOptFanout` | 1 |
 
 Read the shape of it, not just the numbers. The counts sum to far more than 212 because a
 flag is named wherever it is asked, and several are asked in two emitters.
 
-`WriterLowering` still answers 117 of 212, and that number is not a per-flag split waiting
-to finish. The writer lowering is organised by grammar SHAPE — Star, Ref, Terminal, Alt
-branch, Pratt — and a flag is a branch INSIDE one of those emitters, not a unit of its own,
-so splitting by flag would mean rewriting the emitters. What the six `Writer*Lowering`
+`WriterLowering` answered 117 of 212 until S133, and that number was never a per-flag split
+waiting to finish. The writer lowering is organised by grammar SHAPE — Star, Ref, Terminal,
+Alt branch, Pratt — and a flag is a branch INSIDE one of those emitters, not a unit of its
+own, so splitting by flag would mean rewriting the emitters. What the `Writer*Lowering`
 modules below `WriterLowering` in the table are is a split by SHAPE FAMILY, which is code
 motion: each is one region of that module's call graph moved whole, with the flags its
 emitters happened to ask travelling along. Reading a family's row therefore tells you how
-`@:fmt`-dense that shape is, not that the flag belongs to it.
+`@:fmt`-dense that shape is, not that the flag belongs to it. That the two biggest rows are
+now `WriterStarEmitLowering` (58) and `WriterRefFieldLowering` (45) is the same fact stated
+after the split: those two shapes are where the flags always were.
 
 `WriterRefLeadLowering`, `WriterCondWrapLowering`, `WriterTriviaSlotLowering`,
 `WriterBraceSymmetryLowering`, plus a fifth, `WriterStarPadLowering`, that names no
@@ -292,22 +298,46 @@ bodies by BYTE rather than by codepoint reports 34 pure methods on this file, be
 answer is the 5 purity leaves S83 deliberately left. Slice by codepoint and both numbers
 collapse to the recorded ones.)
 
-What remains is the family axis, and it is priced: five exclusive call-graph regions cover
-84 of the 112 members — Seq-field 30 / 1738 lines, Ref-field 22 / 1547, Star emit 16 /
-1200, Alt branch 11 / 805, Terminal-and-by-name 5 / 237. Clearing BOTH caps needs 62
-members and 3869 lines out, i.e. at least three of the five. Two obstacles price that as a
-slice of its own rather than a tail of this one. First, the two largest regions are
-MUTUALLY entangled: seven of the nine members Ref-field reaches outside itself
-(`sameLineSeparator`, `beforeKwSeparator`, `padTrailingDoc`, `buildBareRefLeadingSep`,
-`beforeTrailSlotAccess`, `findCtorPattern`, `collectBlockCtorPatterns`) are members of the
-Seq-field region, so extracting both means one bundle carrying the other's — the shape
-`KwRefCtx` already has, but now on the critical path rather than at a leaf. Second, the
-Star-emit region contains `emitWriterStarField` and NOT `lowerEnumStar`, which sits in the
-Alt-branch region; taking Star emit alone would separate the two writer halves of the
-four-site Star fork, which this module's own header refuses by name. So the honest split is
-Seq-field + Ref-field + Star emit together, three bundles with a dependency edge between
-two of them — roughly three times the code motion the `Lowering` split above cost, and not
-something to bolt onto it.
+What remained was the family axis, and S117 priced it: five exclusive call-graph regions
+cover 84 of the 112 members — Seq-field 30 / 1738 lines, Ref-field 22 / 1547, Star emit
+16 / 1200, Alt branch 11 / 805, Terminal-and-by-name 5 / 237 (S133 reproduced all five from
+an independent census; the Terminal row matched to the member and the line). Clearing BOTH
+caps needs 62 members and 3869 lines out, i.e. at least three of the five, and S117 refused
+on two obstacles. The FIRST was that the two largest regions looked MUTUALLY entangled:
+seven of the nine members Ref-field reaches outside itself (`sameLineSeparator`,
+`beforeKwSeparator`, `padTrailingDoc`, `buildBareRefLeadingSep`, `beforeTrailSlotAccess`,
+`findCtorPattern`, `collectBlockCtorPatterns`) were read as members of the Seq-field region.
+
+The edges were real; that reading was not, and the discriminator is the campaign's own rule
+— judge a member by what it READS. None of the seven is a Seq-field member. Four
+(`sameLineSeparator`, `beforeKwSeparator`, `padTrailingDoc`, `buildBareRefLeadingSep`) read
+one field's `@:fmt` gap metadata and the trivia slot behind it: they answer "what `Doc` goes
+BETWEEN two emits", which is a LAYER both families stand on, and they are now
+`WriterFieldSepLowering` with `sameLineSeparatorShapeAware` and `valueIfFitSeam` beside
+them. Two (`findCtorPattern`, `collectBlockCtorPatterns`) read only `shape.rules` and answer
+"which Alt branches of this rule match a shape predicate, and what pattern does each
+project" — a second layer, and one already exported by bound closure to five sibling modules
+through `_bodyPolicy` / `_ctorBlank` / `_arrowValueIf` / `_braceSym`, which is a layer's
+signature written down before anyone named it. They are now `WriterCtorPatternLowering`,
+twelve neighbours included. The seventh, `beforeTrailSlotAccess`, is a plain Ref-field
+member that landed in a Seq-field bucket only because its two callers sit in two different
+Ref sub-families whose nearest common dominator is `lowerStruct`.
+
+With both layers named, the entanglement is gone rather than carried: `WriterRefFieldLowering`
+reaches NOTHING in the Seq walker — `lowerStruct` calls in at four sites and nothing calls
+back — and its bundle is eight fields with neither `shape` nor the format info in it. Three
+helpers that read as shared (`buildBodyPolicyForCtorChain`, `buildBoolFlagRawWriteCall`,
+`buildLeftCurlySepExpr`) turned out to have both their callers inside the family and came
+along, and `blockEndedPredCheck` / `arrayBracketInsidePolicySpace` did the same for the Star
+side. S117's SECOND obstacle — that the Star-emit region holds `emitWriterStarField` and not
+`lowerEnumStar` — was answered by taking BOTH: `WriterStarEmitLowering` carries the two
+writer halves of the four-site Star fork together and names the parse pair in its own header,
+which is more than a 7309-line file holding them 3200 lines apart was doing.
+
+`WriterLowering` is 112 members / 5869 lines before and 47 / 1508 after, and the
+`oversized-type` row is gone from the whole macro package. The proof of a pure decomposition
+is byte-identity: the corpus sweep is unchanged at 781 / 120 / 43 and two whole-repo Pony
+runs, base engine against this one, are identical file for file.
 
 `Lowering`'s row fell from 16 to 3 on a FOURTH axis, and it is the parse side's first
 split by RULE SHAPE. `lowerRule` dispatches a top-level type on four shapes, and until now
